@@ -7,8 +7,8 @@ import std;
 import telar.tbc;
 import telar.sys.posix;
 
-export import telar.base.memory.allocators;
-export import telar.platform.process;
+import telar.base.memory.allocators;
+import telar.platform.process;
 
 // What telar reads from a checkout without the native reader in telar.git: the files under
 // .git, HEAD and linked worktrees, and the git command run hardened against the repository.

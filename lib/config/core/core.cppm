@@ -7,12 +7,13 @@ export module telar.config.core;
 
 import std;
 import telar.tbc;
-export import telar.lua;
-export import telar.platform.paths;
+import telar.lua;
+import telar.platform.paths;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.

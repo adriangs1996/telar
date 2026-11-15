@@ -10,6 +10,9 @@ import telar.plugins;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.sys.posix;
+import telar.config.client;
+import telar.config.core;
+import telar.config.runtime;
 
 namespace telar::runtime::cli {
 

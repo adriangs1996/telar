@@ -1,6 +1,7 @@
 module telar.gui.transport.runtime_link;
 
 import std;
+import telar.base.text.utf8;
 
 namespace telar::gui {
 

@@ -18,6 +18,8 @@ import telar.base.history;
 import telar.base.text.utf8;
 import telar.gui.core.json_writer;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.config.core;
 
 // Interface: components/builtin_content.cppm
 export {

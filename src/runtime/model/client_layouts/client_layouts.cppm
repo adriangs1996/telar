@@ -42,6 +42,7 @@ import telar.runtime.terminal.control;
 import telar.client;
 import telar.platform.events;
 import telar.platform.net;
+import telar.config.core;
 
 // Interface: model/pending_clipboard.cppm
 export {

@@ -17,6 +17,7 @@ import telar.platform.fs;
 import telar.platform.process;
 import telar.tls;
 import telar.cli.base.command_error;
+import telar.base.memory.allocators;
 
 // Interface: cli_install.cppm
 export {

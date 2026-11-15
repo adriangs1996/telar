@@ -34,6 +34,7 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.proxy.runtime;
+import telar.platform.fs;
 
 using namespace telar;
 using namespace telar::runtime;

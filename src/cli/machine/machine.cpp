@@ -3,6 +3,7 @@ import telar.platform.sha256;
 import telar.sys.posix;
 
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.cli.base.command_error;
 import telar.cli.control_session;
 import telar.cli.server;
@@ -10,6 +11,7 @@ import telar.client;
 import telar.tls;
 
 import telar.tbc;
+import telar.platform.fs;
 
 namespace telar::runtime::cli::machine::assets {
 

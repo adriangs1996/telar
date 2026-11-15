@@ -25,6 +25,7 @@ import telar.runtime.tests.one_shot_allocator;
 import telar.runtime.terminal.text_reader;
 import telar.runtime.graphics.pane_media;
 import telar.vocabulary;
+import telar.config.core;
 
 using namespace telar;
 using namespace telar::runtime;

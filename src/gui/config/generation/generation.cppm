@@ -26,6 +26,9 @@ import telar.gui.core.primitives;
 import telar.gui.presentation.suggestion_geometry;
 import telar.plugins;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.config.core;
+import telar.config.gui;
 
 // Interface: config/action_description_reader.cppm
 export {

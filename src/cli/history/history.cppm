@@ -17,6 +17,7 @@ import telar.cli.server;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.cli.control_session;
+import telar.base.memory.allocators;
 
 // Interface: diagnostics_options.cppm
 export {

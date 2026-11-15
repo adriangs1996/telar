@@ -9,7 +9,7 @@ export module telar.lua;
 import std;
 import telar.tbc;
 
-export import telar.base.text.json;
+import telar.base.text.json;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;

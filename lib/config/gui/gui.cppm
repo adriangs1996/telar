@@ -2,8 +2,9 @@ export module telar.config.gui;
 
 import std;
 import telar.base.text;
-export import telar.base.memory.containers;
-export import telar.config.core;
+import telar.base.memory.containers;
+import telar.config.core;
+import telar.lua;
 
 // Interface: telar_config/gui_reader.cppm
 export {

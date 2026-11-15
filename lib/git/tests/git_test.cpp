@@ -15,6 +15,7 @@
 
 import std;
 import telar.git;
+import telar.base.memory.allocators;
 
 namespace {
 

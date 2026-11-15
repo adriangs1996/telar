@@ -1,5 +1,7 @@
 module telar.cli.hooks.command;
 
+import telar.config.core;
+
 namespace telar::runtime::cli::hooks {
 
   Object::Object(Memory& memory, JsonValue value, bool reject_duplicates)

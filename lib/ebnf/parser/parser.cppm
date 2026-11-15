@@ -3,7 +3,7 @@ export module telar.ebnf.parser;
 import std;
 import telar.tbc;
 
-export import telar.ebnf.lexer;
+import telar.ebnf.lexer;
 
 // Interface: parser.cppm
 export {

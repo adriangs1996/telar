@@ -7,7 +7,7 @@ export module telar.client;
 import std;
 import telar.tbc;
 
-export import telar.base.text.utf8;
+import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.sys.posix;

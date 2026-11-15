@@ -10,6 +10,8 @@ import telar.base.diagnostics;
 import telar.vocabulary;
 import telar.git.checkout;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: platform/git_repository.cppm
 export {

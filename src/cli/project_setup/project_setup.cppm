@@ -24,6 +24,7 @@ import telar.cli.plugin;
 import telar.cli.runtime_observer;
 import telar.cli.server;
 import telar.cli.control_session;
+import telar.base.memory.allocators;
 
 // Interface: pane_agent_options.cppm
 export {

@@ -5,6 +5,7 @@ import telar.cli.control_session;
 import telar.platform.sha256;
 import telar.sys.posix;
 import telar.sys.process;
+import telar.base.memory.containers;
 
 namespace telar::runtime::cli::config_receive {
 

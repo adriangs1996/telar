@@ -14,6 +14,8 @@ export import telar.runtime.platform.tunnel_sockets;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: tls/alpn_offer.cppm
 export {

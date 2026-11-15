@@ -18,6 +18,7 @@ import telar.cli.runtime_observer;
 import telar.platform.paths;
 import telar.platform.process;
 import telar.platform.sha256;
+import telar.base.memory.allocators;
 
 // Interface: machines/setup.cppm
 export {

@@ -5,13 +5,16 @@ export module telar.config.runtime;
 
 import std;
 import telar.tbc;
-export import telar.config.core;
-export import telar.plugins;
-export import telar.platform.events;
+import telar.config.core;
+import telar.plugins;
+import telar.platform.events;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.sys.posix;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.lua;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.

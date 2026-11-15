@@ -13,6 +13,7 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.platform.session_host;
+import telar.platform.events;
 
 // Interface: agents/prompt_budget.cppm
 export {

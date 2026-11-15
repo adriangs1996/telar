@@ -17,6 +17,7 @@ import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.vocabulary;
+import telar.base.memory.allocators;
 
 // Interface: redirect/log_interface.cppm
 export {

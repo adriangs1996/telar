@@ -17,6 +17,7 @@ import telar.base.text;
 import telar.base.text.utf8;
 import telar.gui.presentation.history_filter_geometry;
 import telar.wire.vocabulary;
+import telar.config.core;
 
 // Interface: components/node.cppm
 export {

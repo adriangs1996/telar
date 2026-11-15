@@ -2,7 +2,8 @@ export module telar.ebnf.matcher;
 
 import std;
 
-export import telar.ebnf.parser;
+import telar.ebnf.parser;
+import telar.ebnf.lexer;
 
 // Interface: matcher.cppm
 //

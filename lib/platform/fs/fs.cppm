@@ -6,7 +6,7 @@ export module telar.platform.fs;
 import std;
 import telar.tbc;
 
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 
 import telar.base.memory.sensitive;
 import telar.platform.error;

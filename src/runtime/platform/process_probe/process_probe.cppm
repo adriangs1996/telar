@@ -13,6 +13,7 @@ export import telar.config.runtime;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.base.memory.containers;
 
 // Interface: platform/process_arguments.cppm
 export {
