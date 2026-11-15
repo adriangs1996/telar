@@ -11,7 +11,7 @@ import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.runtime.config.loader;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.history.event;
 import telar.runtime.platform.background_executor;
 import telar.runtime.plugins.service;

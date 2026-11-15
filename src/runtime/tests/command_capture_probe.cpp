@@ -24,7 +24,7 @@ import telar.wire.vocabulary;
 import telar.config.core;
 import telar.platform.events;
 import telar.runtime.command_capture.tracker;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.shell_integration.token;
 import telar.runtime.terminal.control;

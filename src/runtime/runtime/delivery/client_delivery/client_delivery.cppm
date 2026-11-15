@@ -19,7 +19,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control.clipboard;
 import telar.runtime.terminal.text_reader;
 

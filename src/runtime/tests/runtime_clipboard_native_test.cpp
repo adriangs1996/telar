@@ -5,17 +5,6 @@ static_assert(true);
 
 #include "../../gui/tests/platform/private_clipboard.hpp"
 #include "../diagnostics/line.hpp"
-#include "../graphics/child_file.hpp"
-#include "../graphics/kitty_control.hpp"
-#include "../graphics/kitty_framing.hpp"
-#include "../graphics/media_budget.hpp"
-#include "../graphics/temporary_path.hpp"
-#include "../terminal/control/classification.hpp"
-#include "../terminal/control/parser.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include "../terminal/graphics_cursor.hpp"
-#include "../terminal/pty_response_queue.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -72,6 +61,7 @@ static_assert(true);
 
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
+import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.wire.clipboard;
 

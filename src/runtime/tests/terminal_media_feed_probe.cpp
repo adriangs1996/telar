@@ -14,7 +14,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.config.core;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.text_reader;

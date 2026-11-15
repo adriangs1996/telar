@@ -1,8 +1,8 @@
-#include "terminal/control/parameters.hpp"
-#include "terminal/control/parser.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <random>
+#include <cstdint>
+
+import std;
+import telar.base.memory.allocators;
+import telar.runtime.terminal.control;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -7,6 +7,7 @@ module telar.runtime.terminal.text_reader;
 
 import telar.ghostty.vt;
 import telar.runtime.terminal.grid;
+import telar.render.document;
 
 namespace telar::runtime {
 

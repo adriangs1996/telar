@@ -8,7 +8,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.vocabulary;
 import telar.platform.primitives;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 
 // Interface: graphics/atomic_frame.cppm
 export {

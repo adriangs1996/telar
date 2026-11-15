@@ -10,6 +10,7 @@ import telar.native.zlib;
 import telar.sys.process;
 
 import telar.runtime.terminal.control;
+import telar.render.document;
 
 namespace telar::runtime {
 

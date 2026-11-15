@@ -161,9 +161,15 @@ add_library(runtime-core STATIC
   runtime/runtime_telemetry/runtime_telemetry.cpp
   terminal/control/checksum/checksum.cpp
   terminal/control/clipboard/clipboard.cpp
+  terminal/control/control.cpp
   terminal/control/engine/engine.cpp
   terminal/control/glyph/glyph.cpp
+  terminal/control/graphics_payload.cpp
+  terminal/control/pty_response_queue.cpp
+  terminal/control/vt_state.cpp
+  terminal/ghostty/ghostty.cpp
   terminal/graphics_storage/graphics_storage.cpp
+  terminal/kitty/kitty.cpp
   terminal/osc_scanner/osc_scanner.cpp
   terminal/text_reader/cell_projection.cpp
   terminal/text_reader/text_reader.cpp

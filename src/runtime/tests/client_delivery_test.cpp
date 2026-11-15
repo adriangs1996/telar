@@ -47,7 +47,7 @@ import telar.base.text;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.client_peer;
 import telar.runtime.model.client_layouts;

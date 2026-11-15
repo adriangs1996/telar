@@ -22,7 +22,7 @@ import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.config.core;
 import telar.platform.primitives;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 export import telar.runtime.shell_integration.token;
 
 // Interface: model/client_role.cppm

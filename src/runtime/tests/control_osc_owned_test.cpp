@@ -1,10 +1,11 @@
-#include "fixtures/control_parser_156.hpp"
-#include "terminal/control/parser.hpp"
-#include <array>
+#include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <random>
-#include <source_location>
+
+import std;
+import telar.base.memory.allocators;
+import telar.runtime.terminal.control;
+
+#include "fixtures/control_parser_156.hpp"
 
 using namespace telar;
 using namespace telar::runtime;

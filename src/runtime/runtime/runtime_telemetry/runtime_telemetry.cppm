@@ -15,7 +15,7 @@ export import telar.runtime.platform.request_worker;
 import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.platform.fs;
 import telar.runtime.diagnostics.operation;

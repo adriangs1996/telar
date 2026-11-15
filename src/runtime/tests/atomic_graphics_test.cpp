@@ -15,7 +15,7 @@ static_assert(true);
 import std;
 import telar.base.text;
 import telar.platform.primitives;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.tests.check;
 import telar.runtime.graphics.pane_media;
 

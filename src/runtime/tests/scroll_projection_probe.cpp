@@ -20,7 +20,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;

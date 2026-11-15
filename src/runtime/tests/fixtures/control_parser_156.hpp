@@ -1,12 +1,7 @@
-// Frozen parser from ab35af576; differential oracle for owned OSC accumulation.
+// Frozen parser from ab35af576; differential oracle for owned OSC accumulation. The test that
+// includes it imports std, telar.base.memory.allocators and telar.runtime.terminal.control first,
+// which declare the sequences, the APC borrow and the allocators it uses.
 #pragma once
-
-#include "../../terminal/control/apc_borrow.hpp"
-#include "../../terminal/control/sequence.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include <array>
-#include <cstring>
-#include <utility>
 
 namespace telar::runtime::control {
 
