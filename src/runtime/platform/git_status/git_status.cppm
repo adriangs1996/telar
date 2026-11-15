@@ -6,10 +6,7 @@ export module telar.runtime.platform.git_status;
 import std;
 
 import telar.platform.process;
-import telar.base.diagnostics;
-import telar.vocabulary;
 import telar.git.checkout;
-import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 

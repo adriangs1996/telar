@@ -7,7 +7,6 @@ import std;
 import telar.sys.apple;
 import telar.sys.posix;
 
-import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.runtime.platform.frameworks;
 

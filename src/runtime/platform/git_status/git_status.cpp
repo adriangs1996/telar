@@ -1,5 +1,7 @@
 module telar.runtime.platform.git_status;
 
+import telar.vocabulary;
+
 namespace telar::runtime {
 
   GitRepository::GitRepository(ConcurrentMemory& memory, std::string_view root, Clock::time_point deadline, const std::atomic<bool>& cancelled)
