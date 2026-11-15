@@ -240,7 +240,7 @@ namespace {
       require(window.grabWindow().save(options.output, "PNG"), "Cannot save the final window");
     }
 
-    const QJsonObject result{{"iterations", static_cast<int>(options.iterations)}, {"warmup", static_cast<int>(options.warmup)}, {"blocks", static_cast<int>(options.blocks)}, {"cpu_ns", cpu}, {"wall_ns", wall}, {"separators_sha256", QString::fromLatin1(QCryptographicHash::hash(listed, QCryptographicHash::Sha256).toHex())}};
+    const QJsonObject result{{"iterations", static_cast<int>(options.iterations)}, {"warmup", static_cast<int>(options.warmup)}, {"blocks", static_cast<int>(options.blocks)}, {"cpu_ns", qint64{cpu}}, {"wall_ns", qint64{wall}}, {"separators_sha256", QString::fromLatin1(QCryptographicHash::hash(listed, QCryptographicHash::Sha256).toHex())}};
 
     std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
     return 0;

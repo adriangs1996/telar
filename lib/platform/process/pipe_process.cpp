@@ -6,6 +6,9 @@ import telar.sys.process;
 import telar.sys.socket;
 #if defined(__APPLE__)
 import telar.sys.apple;
+#else
+// Linux suppresses SIGPIPE on the input pipe the way it does on sockets.
+import telar.platform.net;
 #endif
 
 namespace telar::runtime {
