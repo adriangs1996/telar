@@ -1,6 +1,10 @@
 module telar.runtime.proxy.authenticate;
 
 import telar.sys.posix;
+import telar.base.memory.sensitive;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.primitives;
 
 namespace telar::runtime {
 

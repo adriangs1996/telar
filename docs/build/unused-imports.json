@@ -603,48 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/proxy/authenticate/authenticate.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.memory.sensitive",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.primitives"
-  ],
-  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cpp": [
-    "telar.native.brotli",
-    "telar.native.zlib",
-    "telar.native.zstd"
-  ],
-  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm": [
-    "telar.base.diagnostics",
-    "telar.native.brotli",
-    "telar.native.zlib",
-    "telar.native.zstd"
-  ],
-  "src/runtime/proxy/intercepted_relay/intercepted_relay.cpp": [
-    "telar.native.brotli",
-    "telar.native.zlib",
-    "telar.native.zstd"
-  ],
-  "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": [
-    "telar.base.diagnostics",
-    "telar.native.brotli",
-    "telar.native.zlib",
-    "telar.native.zstd"
-  ],
-  "src/runtime/proxy/relay_direction/relay_direction.cppm": [
-    "telar.platform.error",
-    "telar.platform.thread",
-    "telar.runtime.platform.signals",
-    "telar.runtime.platform.stream_read_buffer"
-  ],
-  "src/runtime/proxy/runtime/runtime.cpp": [
-    "telar.native.nghttp2"
-  ],
-  "src/runtime/proxy/runtime/runtime.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.sha256"
-  ],
   "src/runtime/redirect/ingress/ingress.cppm": [
     "telar.base.diagnostics",
     "telar.runtime.platform.request_worker"

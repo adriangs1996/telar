@@ -8,11 +8,6 @@ import telar.base.text;
 
 import telar.config.runtime;
 
-import telar.base.diagnostics;
-import telar.base.memory.sensitive;
-import telar.platform.error;
-import telar.platform.fs;
-import telar.platform.primitives;
 
 // Interface: proxy/secret.cppm
 export {
