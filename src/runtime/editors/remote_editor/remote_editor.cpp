@@ -4,9 +4,9 @@ module;
 module telar.runtime.editors.remote_editor;
 
 import std;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.sys.posix;
+import telar.wire.vocabulary;
 
 namespace telar::runtime {
 

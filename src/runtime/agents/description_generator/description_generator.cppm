@@ -12,12 +12,7 @@ import telar.base.memory.sensitive;
 import telar.platform.events;
 import telar.platform.process;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
-import telar.platform.primitives;
-import telar.platform.error;
-import telar.runtime.platform.process_probe;
-import telar.base.text;
 
 // Interface: agents/description_capture.cppm
 export {

@@ -603,37 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/agents/description_generator/description_generator.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text",
-    "telar.platform.error",
-    "telar.platform.primitives",
-    "telar.runtime.platform.process_probe"
-  ],
-  "src/runtime/agents/screen_inference/screen_inference.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/agents/snapshot/snapshot.cppm": [
-    "telar.client",
-    "telar.platform.error",
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/cli/server/server-tap.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
-  ],
-  "src/runtime/config/loader/loader.cppm": [
-    "telar.config.snapshot"
-  ],
-  "src/runtime/editors/remote_editor/remote_editor.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/editors/remote_editor/remote_editor.cppm": [
-    "telar.wire.vocabulary"
-  ],
   "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
     "telar.base.diagnostics",
     "telar.native.brotli",

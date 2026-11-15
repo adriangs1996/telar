@@ -6,11 +6,8 @@ import telar.tbc;
 import telar.config.runtime;
 
 import telar.runtime.terminal.text_reader;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.platform.session_host;
 import telar.platform.events;

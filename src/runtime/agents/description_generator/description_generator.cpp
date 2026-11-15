@@ -6,6 +6,9 @@ module telar.runtime.agents.description_generator;
 import std;
 import telar.sys.posix;
 import telar.tbc;
+import telar.base.text;
+import telar.platform.error;
+import telar.platform.primitives;
 
 namespace telar::runtime {
 
