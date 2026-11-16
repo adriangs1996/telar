@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "application_controller.hpp"
 #include "ui/activity/activity_controller.hpp"
-#include "ui/activity/machine_activity_target.hpp"
+#include "ui/foundation/models/machine_activity_target.hpp"
 #include <QString>
 #include <variant>
 
@@ -18,7 +18,8 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
-    if (peek_.open(target, identity, pointer_revision)) {
+    if (peek_.open(target)) {
+      activity_.showHover(identity, pointer_revision);
       showDialog(Dialog::peek);
       peek_.synchronize();
     }
@@ -27,7 +28,7 @@ namespace telar::gui::qt {
   void ApplicationController::selectActivity(const QString& identity, bool peek) {
     pending_activity_.reset();
     const auto* listed = activity_.target(identity);
-    if (listed == nullptr || !activity_.available(*listed) || (peek && !std::holds_alternative<MachineActivityTarget::Agent>(listed->owner))) {
+    if (listed == nullptr || !activityAvailable(store_, *listed) || (peek && !std::holds_alternative<MachineActivityTarget::Agent>(listed->owner))) {
       return;
     }
 
@@ -45,7 +46,7 @@ namespace telar::gui::qt {
     }
 
     const auto pending = *pending_activity_;
-    if (pending.window != window_generation_ || pending.target.source.machine.slot != store_.machines().active() || !activity_.available(pending.target)) {
+    if (pending.window != window_generation_ || pending.target.source.machine.slot != store_.machines().active() || !activityAvailable(store_, pending.target)) {
       pending_activity_.reset();
 
       return;

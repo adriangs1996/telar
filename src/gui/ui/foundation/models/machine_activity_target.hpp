@@ -14,6 +14,8 @@ import telar.gui.palette.navigation_label;
 
 namespace telar::gui::qt {
 
+  class Store;
+
   struct MachineActivityTarget {
     struct Agent {
       AgentNavigationTarget key;
@@ -35,5 +37,9 @@ namespace telar::gui::qt {
     std::uint64_t runtime_generation;
     std::variant<Agent, Command, Process> owner;
   };
+
+  // Whether the target is still there to select: its machine connected and shown, and its
+  // agent, process or worktree still listed.
+  [[nodiscard]] bool activityAvailable(const Store& store, const MachineActivityTarget& target);
 
 }

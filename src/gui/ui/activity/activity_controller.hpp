@@ -5,11 +5,11 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-#include "machine_activity_target.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "ui/design/elements/element_slots.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/machine_activity_target.hpp"
 #include "ui/store/store.hpp"
 #include <QAbstractItemModel>
 #include <QObject>
@@ -67,9 +67,6 @@ namespace telar::gui::qt {
 
     // What the card with this identity points at, while it is listed.
     [[nodiscard]] const MachineActivityTarget* target(const QString& identity) const;
-    // Whether the target is still there to select: its machine connected and shown, and its
-    // agent, process or worktree still listed.
-    [[nodiscard]] bool available(const MachineActivityTarget& target) const;
     [[nodiscard]] static QString identity(const MachineActivityTarget& target);
 
     [[nodiscard]] QString hovered() const;

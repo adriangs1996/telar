@@ -154,7 +154,7 @@ namespace telar::gui::qt {
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
         machine_chrome_(store_),
-        peek_(store_, activity_),
+        peek_(store_),
         prompt_(store_),
         documents_(store_),
         link_status_(store_),

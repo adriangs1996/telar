@@ -313,31 +313,6 @@ namespace telar::gui::qt {
     return row == targets_.end() ? nullptr : &row->target;
   }
 
-  bool ActivityController::available(const MachineActivityTarget& target) const {
-    const auto* client = store_.find(target.source);
-    const auto slot = target.source.machine.slot;
-    if (client == nullptr || client->runtime_generation != target.runtime_generation || !store_.machines().shown(slot) || !store_.machines().row(slot).live || !store_.machines().row(slot).enabled || client->phase != MachinePhase::connected || !client->session.ready()) {
-      return false;
-    }
-
-    if (const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner)) {
-      return std::ranges::any_of(client->session.agents(), [&](const auto& candidate) {
-        return candidate.pane_id == agent->key.pane_id && candidate.pane_generation == agent->key.pane_generation && candidate.session_id == agent->session;
-      });
-    }
-
-    if (const auto* process = std::get_if<MachineActivityTarget::Process>(&target.owner)) {
-      return std::ranges::any_of(client->session.paneList(), [&](const auto& pane) {
-        return pane.pane_id == process->pane_id && pane.pane_generation == process->pane_generation;
-      });
-    }
-
-    const auto command = std::get<MachineActivityTarget::Command>(target.owner);
-    const auto* row = client->session.workspaceList().worktree(command.worktree);
-
-    return row != nullptr && row->workspace && *row->workspace == command.workspace;
-  }
-
   QString ActivityController::hovered() const {
     return hovered_;
   }
@@ -360,7 +335,7 @@ namespace telar::gui::qt {
       }
 
       const auto* listed = target(identity);
-      if (listed == nullptr || !available(*listed)) {
+      if (listed == nullptr || !activityAvailable(store_, *listed)) {
         return;
       }
 

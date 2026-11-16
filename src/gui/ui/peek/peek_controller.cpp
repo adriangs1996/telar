@@ -22,10 +22,9 @@ import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 
-  PeekController::PeekController(Store& store, ActivityController& activity, QObject* parent)
+  PeekController::PeekController(Store& store, QObject* parent)
       : QObject(parent),
-        store_(store),
-        activity_(activity) {}
+        store_(store) {}
 
   void PeekController::setDisplay(const DisplayMetrics& display) {
     display_ = display;
@@ -36,7 +35,7 @@ namespace telar::gui::qt {
     window_generation_ = generation;
   }
 
-  bool PeekController::open(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
+  bool PeekController::open(const MachineActivityTarget& target) {
     const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner);
     if (agent == nullptr || !store_.session().openPeek(PeekTarget{.agent = agent->key, .session = agent->session})) {
       return false;
@@ -44,7 +43,6 @@ namespace telar::gui::qt {
 
     origin_ = Origin{.target = target, .window = window_generation_};
     editor_.clear();
-    activity_.showHover(identity, pointer_revision);
 
     return true;
   }
@@ -56,7 +54,7 @@ namespace telar::gui::qt {
   }
 
   bool PeekController::valid() const {
-    if (store_.dialog().kind != Store::Dialog::peek || !origin_ || origin_->window != window_generation_ || !activity_.available(origin_->target)) {
+    if (store_.dialog().kind != Store::Dialog::peek || !origin_ || origin_->window != window_generation_ || !activityAvailable(store_, origin_->target)) {
       return false;
     }
 
