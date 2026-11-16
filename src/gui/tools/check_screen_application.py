@@ -19,7 +19,7 @@ def replace_required(source, before, after, count=1):
 
 def main():
     root = Path(__file__).resolve().parents[3]
-    default_reader = root / 'lib/client/include/telar_client/codecs/telar_cells.hpp'
+    default_reader = root / 'lib/wire/include/telar_client/codecs/telar_cells.hpp'
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', required=True, type=Path)
     parser.add_argument('--before-screen', required=True, type=Path)

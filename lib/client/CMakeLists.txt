@@ -16,9 +16,9 @@ if(NOT TARGET telar-wire)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../wire" "${CMAKE_BINARY_DIR}/telar-wire")
 endif()
 
+# The telar_client/ textual headers are telar-wire's.
 telar_add_library(telar-client
   SOURCES client.cpp
-  INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar::base telar::sys telar::vocabulary telar::wire)
 
 telar_editor_flags(telar-client)

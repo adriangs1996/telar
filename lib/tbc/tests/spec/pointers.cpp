@@ -580,7 +580,7 @@ namespace pointers {
 
 // CASE: pointer.member_pointer_field
 // PAIR: pointer.member_pointer
-// SOURCE: lib/client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
+// SOURCE: lib/wire/include/telar_client/serializers/telar_serializer.hpp :: memberValue
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected field of a live caller object is observed in place; accept.
@@ -593,7 +593,7 @@ void memberPointerField(pointers::labeled& record) {
 
 // CASE: pointer.member_pointer_escape
 // PAIR: pointer.member_pointer
-// SOURCE: lib/client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
+// SOURCE: lib/wire/include/telar_client/serializers/telar_serializer.hpp :: memberValue
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected string belongs to a local object that dies when the function returns.

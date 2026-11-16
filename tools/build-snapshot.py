@@ -18,7 +18,7 @@ without building anything. It reads three things a configure writes:
 Paths are written relative to placeholders, so trees in different checkouts or
 build directories compare: $BUILD (the tree), $ROOT (the repository), $TOOLCHAIN,
 $QT and $DEPS (the shared caches, keeping their key directories) and $SDK. Paths
-are normalized lexically, so `lib/wire/../client/include` is `lib/client/include`.
+are normalized lexically, so `lib/wire/../base/include` is `lib/base/include`.
 
     build-snapshot.py record src/gui/out -o gui.json
     build-snapshot.py diff gui.json src/gui/out

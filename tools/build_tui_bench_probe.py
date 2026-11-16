@@ -52,7 +52,7 @@ def build(output, write_mode="split"):
     commands = [
         ["clang++", "-O2", "-std=c++23", "-Wall", "-Wextra", "-Werror",
          "-I", str(root / "src/runtime/tests"),
-         "-I", str(root / "lib/client/include"), "-I", str(root / "lib/base/include"),
+         "-I", str(root / "lib/wire/include"), "-I", str(root / "lib/base/include"),
          str(directory / "read_cpp_pane.cpp"), "-o", str(directory / "read-cpp-pane")],
         ["clang", "-dynamiclib", "-O2", "-fobjc-arc", "-framework", "AppKit",
          "-framework", "QuartzCore", "-framework", "Metal",

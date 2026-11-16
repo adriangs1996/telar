@@ -23,9 +23,9 @@ telar_add_library(telar-wire
     pane_io/pane_io.cpp
     vocabulary/vocabulary.cpp
     worktrees/worktrees.cpp
-  # The vocabulary's textual headers still live with the client's, because Qt adapters and
-  # other textual headers include them by that path.
-  INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/../client/include"
+  # The textual headers of the codecs, serializers and protocol messages its modules own,
+  # which Qt adapters, tests and global module fragments include as telar_client/....
+  INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar::base telar::vocabulary)
 
 telar_editor_flags(telar-wire)

@@ -521,18 +521,18 @@
     "lib/base/include/telar_base/memory/allocator.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/fixed_text.hpp": "Qt adapters include it; module units import its owner module",
     "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/codecs/telar_annotations.hpp": "Project macro header: the codec annotations _throw and _changes; includes nothing",
-    "lib/client/include/telar_client/codecs/telar_cells.hpp": "Included by other textual headers and tests; module units import its owner module",
-    "lib/client/include/telar_client/codecs/telar_codec.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/codecs/telar_value_codec.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/codecs/telar_wire.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/clients.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/pane_io.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/runtime.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/serializers/telar_cells.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/serializers/telar_frame.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/serializers/telar_serializer.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/codecs/telar_annotations.hpp": "Project macro header: the codec annotations _throw and _changes; includes nothing",
+    "lib/wire/include/telar_client/codecs/telar_cells.hpp": "Included by other textual headers and tests; module units import its owner module",
+    "lib/wire/include/telar_client/codecs/telar_codec.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/codecs/telar_value_codec.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/codecs/telar_wire.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/protocol/clients.hpp": "Qt adapters and tests include it; module units import its owner module",
+    "lib/wire/include/telar_client/protocol/pane_io.hpp": "Qt adapters and tests include it; module units import its owner module",
+    "lib/wire/include/telar_client/protocol/runtime.hpp": "Qt adapters and tests include it; module units import its owner module",
+    "lib/wire/include/telar_client/serializers/telar_cells.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/serializers/telar_frame.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/wire/include/telar_client/serializers/telar_serializer.hpp": "Qt adapters include it; module units import its owner module",
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
     "lib/config/include/telar_config/graphics/limits.hpp": "Qt adapters include it; module units import its owner module",
     "lib/config/include/telar_config/terminal/control/policy.hpp": "Qt adapters include it; module units import its owner module",
@@ -767,7 +767,7 @@
   },
   "macro_headers": [
     "lib/base/include/telar_base/diagnostics/config.hpp",
-    "lib/client/include/telar_client/codecs/telar_annotations.hpp",
+    "lib/wire/include/telar_client/codecs/telar_annotations.hpp",
     "lib/ghostty/include/telar_ghostty/modes.hpp",
     "lib/platform/include/telar_platform/trace_macro.hpp",
     "lib/tbc/include/tbc/annotations.hpp"
@@ -3131,23 +3131,23 @@
       "lib/vocabulary/include/telar_vocabulary/vocabulary.hpp"
     ],
     "lib/wire/vocabulary/vocabulary.cppm": [
-      "lib/client/include/telar_client/codecs/telar_cells.hpp",
-      "lib/client/include/telar_client/codecs/telar_codec.hpp",
-      "lib/client/include/telar_client/codecs/telar_value_codec.hpp",
-      "lib/client/include/telar_client/codecs/telar_wire.hpp",
-      "lib/client/include/telar_client/serializers/telar_cells.hpp",
-      "lib/client/include/telar_client/serializers/telar_frame.hpp",
-      "lib/client/include/telar_client/serializers/telar_messages.hpp",
-      "lib/client/include/telar_client/serializers/telar_serializer.hpp"
+      "lib/wire/include/telar_client/codecs/telar_cells.hpp",
+      "lib/wire/include/telar_client/codecs/telar_codec.hpp",
+      "lib/wire/include/telar_client/codecs/telar_value_codec.hpp",
+      "lib/wire/include/telar_client/codecs/telar_wire.hpp",
+      "lib/wire/include/telar_client/serializers/telar_cells.hpp",
+      "lib/wire/include/telar_client/serializers/telar_frame.hpp",
+      "lib/wire/include/telar_client/serializers/telar_messages.hpp",
+      "lib/wire/include/telar_client/serializers/telar_serializer.hpp"
     ],
     "lib/wire/clients/clients.cppm": [
-      "lib/client/include/telar_client/protocol/clients.hpp"
+      "lib/wire/include/telar_client/protocol/clients.hpp"
     ],
     "lib/wire/pane_io/pane_io.cppm": [
-      "lib/client/include/telar_client/protocol/pane_io.hpp"
+      "lib/wire/include/telar_client/protocol/pane_io.hpp"
     ],
     "lib/wire/runtime/runtime.cppm": [
-      "lib/client/include/telar_client/protocol/runtime.hpp"
+      "lib/wire/include/telar_client/protocol/runtime.hpp"
     ],
     "lib/tbc/tbc.cppm": [
       "lib/tbc/include/tbc/view.hpp"

@@ -178,7 +178,7 @@ def offline(f):
     assert contract["server_messages"]["execution_reply"] > 0
     if contract["schema_version"] == "cqp00004":
         assert contract["fingerprint"] == b"cqp00004".hex()
-        source = Path(__file__).resolve().parents[3] / "lib/client/include/telar_client/serializers/telar_messages.hpp"
+        source = Path(__file__).resolve().parents[3] / "lib/wire/include/telar_client/serializers/telar_messages.hpp"
         for enum, key in (("ClientTag", "client_requests"), ("ServerTag", "server_messages"), ("AgentStatus", "agent_statuses")):
             body = re.search(r"enum class " + enum + r" : Byte \{(.*?)\n  \};", source.read_text(), re.S)[1]
             entries = {name: int(value, 0) for name, value in re.findall(r"(\w+)\s*=\s*(0x[0-9a-f]+|\d+)", body)}
