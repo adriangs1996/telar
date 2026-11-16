@@ -206,8 +206,13 @@ Popup {
             anchors.fill: parent
             active: root.paletteMode
             sourceComponent: PalettePanel {
-                controller: telar
+                controller: telar.palette
+                colors: telar.colors
+                typography: telar.windowGeometry.typography
+                controlModifier: telar.controlModifier
                 ratio: root.ratio
+                onCancelled: telar.execute(WindowActions.Action.cancel)
+                onMachineEdited: (choice, action) => telar.editMachineResult(choice, action)
             }
         }
 
