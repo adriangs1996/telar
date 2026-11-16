@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "machine_activity_target.hpp"
+#include "application_controller.hpp"
 #include "ui/activity/activity_controller.hpp"
-#include "ui/app/application_controller.hpp"
+#include "ui/machines/machine_activity_target.hpp"
 #include <QString>
 #include <variant>
 
