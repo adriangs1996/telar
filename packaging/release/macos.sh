@@ -40,22 +40,21 @@ build() {
         ghostty=$("$root/tools/cpp" vt | tail -n 1)
     fi
 
-    # TELAR_RUNTIME_DISTRIBUTABLE links the non-system libraries statically
-    # and fails the build when any executable links outside the base system.
-    # shellcheck disable=SC2086
-    cmake -S "$root/src/runtime" -B "$stage/runtime" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-        -DTELAR_RUNTIME_DISTRIBUTABLE=ON -DBUILD_TESTING=OFF -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
+    # The dist preset links the non-system libraries statically and fails the
+    # build when any executable links outside the base system.
+    "$root/tools/cpp" configure dist -B "$stage/runtime" -- -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
         -DGHOSTTY_VT_ROOT="$ghostty"
-    cmake --build "$stage/runtime" --target distributable-linkage
+    "$root/tools/cpp" build dist -B "$stage/runtime" -- --target distributable-linkage
     cmake --install "$stage/runtime" --prefix "$stage/prefix"
 
     cargo build --release --locked --manifest-path "$root/tools/diagram-renderer/Cargo.toml" --target-dir "$stage/renderer"
     install -m 755 "$stage/renderer/release/telar-diagram-renderer" "$stage/prefix/bin/telar-diagram-renderer"
 
-    # shellcheck disable=SC2086
-    cmake -S "$root/src/gui" -B "$stage/gui" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
+    # The release preset with only the GUI, which the runtime above ships beside.
+    "$root/tools/cpp" configure release -B "$stage/gui" -- -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
+        -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF \
         -DGHOSTTY_VT_ROOT="$ghostty" -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$stage/qt-cache}"
-    cmake --build "$stage/gui" --target telar-gui telar-gui-command
+    "$root/tools/cpp" build release -B "$stage/gui" -- --target telar-gui telar-gui-command
 
     rm -rf "$stage/Telar.app"
     python3 "$root/src/gui/tools/package_macos.py" --release \

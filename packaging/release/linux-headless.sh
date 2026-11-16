@@ -37,9 +37,8 @@ if [ -z "${GHOSTTY_VT_ROOT:-}" ]; then
     ghostty=$("$root/tools/cpp" vt | tail -n 1)
 fi
 
-"$root/tools/cpp" exec -- cmake -S "$root/src/runtime" -B "$work/runtime" -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DTELAR_RUNTIME_DISTRIBUTABLE=ON -DBUILD_TESTING=OFF -DGHOSTTY_VT_ROOT="$ghostty"
-"$root/tools/cpp" exec -- cmake --build "$work/runtime" --target distributable-linkage
+"$root/tools/cpp" configure dist -B "$work/runtime" -- -DGHOSTTY_VT_ROOT="$ghostty"
+"$root/tools/cpp" build dist -B "$work/runtime" -- --target distributable-linkage
 "$root/tools/cpp" exec -- cmake --install "$work/runtime" --prefix "$work/$name"
 
 # An explicit target keeps crt-static off the build scripts and proc macros.

@@ -39,19 +39,15 @@ if [[ $command == build ]]; then
     --build-dir src/runtime/dependencies/ghostty \
     --prefix src/runtime/dependencies/install
 
-  cmake -S src/runtime -B src/runtime/out-vm -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  # The release preset with the distribution's Clang instead of the pinned toolchain.
+  cmake --preset release -B out/vm -DCMAKE_TOOLCHAIN_FILE= \
+    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
     -DGHOSTTY_VT_ROOT="$PWD/src/runtime/dependencies/install"
-  cmake --build src/runtime/out-vm --target telar-runtime telar telar-config-check --parallel 2
-
-  cmake -S src/gui -B src/gui/out-vm -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-    -DGHOSTTY_VT_ROOT="$PWD/src/runtime/dependencies/install"
-  cmake --build src/gui/out-vm --target telar-gui --parallel 2
+  cmake --build out/vm --target telar-runtime telar telar-config-check telar-gui --parallel 2
 
   mkdir -p .dev/vm/bin
   # The CLI starts the telar-runtime built beside it.
-  ln -sfn "$PWD/src/runtime/out-vm/telar" .dev/vm/bin/telar
+  ln -sfn "$PWD/out/vm/src/runtime/telar" .dev/vm/bin/telar
   printf 'Telar C++ is built. Run tools/vm/omarchy.py run from the host.\n'
 elif [[ $command == run ]]; then
   export PATH="$PWD/.dev/vm/bin:$PATH"
@@ -63,7 +59,7 @@ elif [[ $command == run ]]; then
   export XDG_RUNTIME_DIR
   export QSG_RHI_BACKEND=opengl
   export QT_QPA_PLATFORM=wayland
-  test -x src/gui/out-vm/telar-gui
+  test -x out/vm/src/gui/telar-gui
 
   desktop_startup_timeout_seconds=60
   desktop_probe_interval_seconds=1
@@ -90,7 +86,7 @@ elif [[ $command == run ]]; then
     --setenv=TELAR_HISTORY="$TELAR_HISTORY" --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
     --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" --setenv=QSG_RHI_BACKEND=opengl \
     --setenv=QT_QPA_PLATFORM=wayland \
-    "$PWD/src/gui/out-vm/telar-gui" --cwd "$PWD" "$@"
+    "$PWD/out/vm/src/gui/telar-gui" --cwd "$PWD" "$@"
 else
   printf 'Unknown operation: %s\n' "$command" >&2
   exit 2

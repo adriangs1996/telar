@@ -72,12 +72,12 @@ tools/vm/vm.py gui-smoke /tmp/telar-gui.png
 non-ignored files of the working tree and deletes stale guest sources; edit on
 the host.
 
-`build` runs `tools/cpp bootstrap`, then `just runtime-build out-vm Release` and
-`just gui-build out-vm Release` with the pinned toolchain, so the guest keeps
-its builds in `src/runtime/out-vm` and `src/gui/out-vm`.
+`build` runs `tools/cpp bootstrap`, then `just runtime-build release` and
+`just gui-build release` with the pinned toolchain, so the guest keeps its
+build in `out/release`.
 The first GUI build compiles the private Qt and takes a while. Sync leaves
 those directories, `.toolchain`, `.dependencies-cache`, `.qt-cache` and `.dev`
-alone. `run`, `gui-smoke` and `stop-runtime` use the CLI from `out-vm`, which
+alone. `run`, `gui-smoke` and `stop-runtime` use the CLI from `out/release`, which
 starts the `telar-runtime` beside it, with `telar-gui` on `PATH` and the
 runtime socket and history under `.dev/vm`.
 

@@ -48,10 +48,10 @@ if [ -z "${GHOSTTY_VT_ROOT:-}" ]; then
     ghostty=$("$root/tools/cpp" vt | tail -n 1)
 fi
 
-"$root/tools/cpp" exec -- cmake -S "$root/src/gui" -B "$work/gui" -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="$root/.toolchain/toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGHOSTTY_VT_ROOT="$ghostty" \
-    -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$root/.qt-cache}" -DTELAR_GUI_QT_JOBS="$(nproc)"
-"$root/tools/cpp" exec -- cmake --build "$work/gui" --target telar-gui telar-gui-command
+# The release preset with only the GUI; the headless archive brings the rest.
+"$root/tools/cpp" configure release -B "$work/gui" -- -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF \
+    -DGHOSTTY_VT_ROOT="$ghostty" -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$root/.qt-cache}" -DTELAR_GUI_QT_JOBS="$(nproc)"
+"$root/tools/cpp" build release -B "$work/gui" -- --target telar-gui telar-gui-command
 python3 "$root/src/gui/tools/package_linux.py" --build "$work/gui" --headless "$work/$name-headless" --output "$work/$name"
 
 find "$work/$name/bin" "$work/$name/lib" "$work/$name/plugins" "$work/$name/qml" -type f -name 'telar-gui*' -o -type f -name '*.so*' >"$work/elf"

@@ -31,13 +31,13 @@ CPUS = os.environ.get("TELAR_VM_CPUS", "4")
 SSH_PORT = int(os.environ.get("TELAR_VM_SSH_PORT", "2223"))
 USER = "telar"
 GUEST_SRC = "src/telar"
-# The guest builds into out-vm, which sync leaves alone, beside the host's own out.
-GUEST_BUILD = "out-vm"
-GUEST_CLI = f"src/runtime/{GUEST_BUILD}/telar"
+# The guest builds the release preset into out/release, which sync leaves alone.
+GUEST_PRESET = "release"
+GUEST_CLI = f"out/{GUEST_PRESET}/src/runtime/telar"
 # Run from the guest checkout: the CLI starts the telar-runtime built beside it
 # and `telar gui` finds telar-gui on PATH. .dev/ survives sync.
 GUEST_ENVIRONMENT = f'''mkdir -p -m 700 .dev/vm
-export PATH="$PWD/src/gui/{GUEST_BUILD}:$PATH"
+export PATH="$PWD/out/{GUEST_PRESET}/src/gui:$PATH"
 export TELAR_SOCKET="$PWD/.dev/vm/runtime.sock" TELAR_SOCKET_PATH="$PWD/.dev/vm/runtime.sock"
 export TELAR_HISTORY="$PWD/.dev/vm/history.db"
 '''
@@ -333,10 +333,7 @@ tar -xf - -C "$stage"
 mkdir -p "$HOME/{destination}"
 rsync -a --delete --exclude=/.toolchain/ --exclude=/.dependencies-cache/ \\
     --exclude=/.qt-cache/ --exclude=/.dev/ \\
-    --exclude=/src/runtime/dependencies/ \\
-    --exclude=/src/runtime/out-vm/ --exclude=/src/runtime/out/ \\
-    --exclude=/src/runtime/out-vm-debug/ \\
-    --exclude=/src/gui/out-vm/ --exclude=/src/gui/out/ \\
+    --exclude=/src/runtime/dependencies/ --exclude=/out/ --exclude=/out-*/ \\
     "$stage/" "$HOME/{destination}/"
 '''
     with subprocess.Popen(ssh("bash", "-c", script), stdin=subprocess.PIPE) as process:
@@ -361,8 +358,8 @@ def build():
 cd "$HOME/{GUEST_SRC}"
 tools/cpp bootstrap
 export PATH="$PWD/.toolchain/bin:$PATH"
-just runtime-build {GUEST_BUILD} Release
-just gui-build {GUEST_BUILD} Release
+just runtime-build {GUEST_PRESET}
+just gui-build {GUEST_PRESET}
 ''')
 
 
