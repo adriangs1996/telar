@@ -628,5 +628,63 @@
         }
       }
     }
+  },
+  "fb5": {
+    "commit": "85bd5be2b",
+    "date": "2026-11-17",
+    "machine": {
+      "system": "Darwin 25.6.0 arm64",
+      "cpus": 8,
+      "memory_mib": 16384
+    },
+    "note": "The runtime's test fixtures split by the domains they import: runtime-test-fixtures (none), runtime-test-client-peer (terminal, model, runtime) and runtime-test-http2 (http2); terminal/png_decoder.cpp, which defines what telar.runtime.terminal.kitty declares, moves from runtime-graphics to runtime-terminal. Measured at 85bd5be2b with that change, before this track was rebased onto build-ui-architecture at 4fefd3727, which changes the GUI's build only. Another agent shared the machine; builds were serialized with it.",
+    "incremental": {
+      "how": "Default target fully built, one no-op build, then touch the source and time tools/cpp build dev, the default target of the single tree. Hub and non-hub by transitive dependent domains in process_layers. Measured twice; the second run is in seconds_repeat. The load averages are the one-minute averages right after each build, raised by that build's own parallel links.",
+      "runtime hub": {
+        "domain": "transport",
+        "source": "src/runtime/transport/connection/connection.cpp",
+        "seconds": 3.2,
+        "compiled": 1,
+        "scanned": 1,
+        "archived": 1,
+        "linked": 31,
+        "steps": 36,
+        "seconds_repeat": 3.2,
+        "load_average": 10.6,
+        "fb4_linked": 32
+      },
+      "runtime non-hub": {
+        "domain": "editors",
+        "source": "src/runtime/editors/remote_editor/remote_editor.cpp",
+        "seconds": 1.8,
+        "compiled": 1,
+        "scanned": 1,
+        "archived": 1,
+        "linked": 7,
+        "steps": 12,
+        "seconds_repeat": 1.6,
+        "load_average": 10.5,
+        "fb4_linked": 28
+      }
+    },
+    "problems": {
+      "B12": {
+        "runtime": {
+          "how": "Binaries of out/dev, probes included, whose link line names the domain's archive, from tools/build-snapshot.py record before and after the split.",
+          "binaries_linking_runtime_editors": {
+            "before": 62,
+            "after": 7
+          },
+          "binaries_linking_runtime_runtime": {
+            "before": 62,
+            "after": 7
+          },
+          "binaries_linking_runtime_terminal": {
+            "before": 68,
+            "after": 19
+          }
+        }
+      }
+    }
   }
 }

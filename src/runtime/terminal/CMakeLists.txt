@@ -12,6 +12,7 @@ telar_add_domain(runtime terminal
     graphics_storage/graphics_storage.cpp
     kitty/kitty.cpp
     osc_scanner/osc_scanner.cpp
+    png_decoder.cpp
     text_reader/cell_projection.cpp
     text_reader/text_reader.cpp
   DEPS diagnostics platform)

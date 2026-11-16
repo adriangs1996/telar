@@ -85,6 +85,21 @@ function(telar_modules target)
   set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()
 
+# telar_process_settings(<out>): sets <out> to what a domain of the current process links
+# to compile and link as one, <process>-settings and the libraries it names. CMake compiles
+# the interfaces a target imports again with the target's flags when they differ (the GUI's
+# -ffp-contract=off), but only those of the libraries the target links itself, not those an
+# INTERFACE library brings. So a domain links the libraries of <process>-settings directly
+# as well, and passes them on to its importers.
+function(telar_process_settings out)
+  get_target_property(libraries ${TELAR_PROCESS}-settings INTERFACE_LINK_LIBRARIES)
+  set(settings ${TELAR_PROCESS}-settings)
+  if(libraries)
+    list(APPEND settings ${libraries})
+  endif()
+  set(${out} "${settings}" PARENT_SCOPE)
+endfunction()
+
 # telar_add_library(<name> [ALIAS <alias>] [SOURCES <file>...] [MACOS_SOURCES <file>...]
 #                   [LINUX_SOURCES <file>...] [EXCLUDE <folder>...] [INCLUDES <directory>...]
 #                   [DEPS <target>...] [CHECKS <check>...])
@@ -136,15 +151,7 @@ function(telar_add_domain process domain)
   if(NOT process STREQUAL TELAR_PROCESS)
     message(FATAL_ERROR "telar_add_domain(${process} ${domain}): declare it below the folder of telar_process(${process})")
   endif()
-  # CMake compiles the interfaces a target imports again with the target's flags when they
-  # differ (the GUI's -ffp-contract=off), but only those of the libraries the target links
-  # itself, not those an INTERFACE library brings. So the domain links the libraries of
-  # <process>-settings directly as well, and passes them on to its importers.
-  get_target_property(libraries ${process}-settings INTERFACE_LINK_LIBRARIES)
-  set(dependencies ${process}-settings)
-  if(libraries)
-    list(APPEND dependencies ${libraries})
-  endif()
+  telar_process_settings(dependencies)
   foreach(dependency IN LISTS domain_DEPS)
     if(dependency MATCHES "^[a-z0-9_]+$")
       set(dependency "telar::${process}::${dependency}")

@@ -1,7 +1,19 @@
-# Shared test fixtures are module interfaces. They link the domains they import, and
-# each test program links the fixtures and the domains it imports itself.
-file(GLOB runtime_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
-telar_add_test(runtime-test-fixtures STATIC SOURCES ${runtime_test_fixtures} LIBRARIES runtime-terminal runtime-model runtime-http2 runtime-runtime)
+# Shared test fixtures are module interfaces, in libraries split by the domains they import,
+# so a test relinks only when a domain it uses changes. Each test program links the fixture
+# libraries and the domains it imports itself. runtime-test-fixtures holds the fixtures that
+# import no domain, and compiles and links as the domains do.
+set(runtime_test_client_peer client_peer/client_peer.cppm)
+set(runtime_test_http2 http2_fixture/http2_fixture.cppm http2_oracle/http2_oracle.cppm
+  http2_oracle_stream/http2_oracle_stream.cppm)
+file(GLOB runtime_test_fixtures CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
+list(REMOVE_ITEM runtime_test_fixtures ${runtime_test_client_peer} ${runtime_test_http2})
+telar_process_settings(runtime_settings)
+telar_add_test(runtime-test-fixtures STATIC SOURCES ${runtime_test_fixtures}
+  LIBRARIES ${runtime_settings} telar::base telar::client telar::platform telar::tls telar::vocabulary telar::wire)
+target_compile_options(runtime-test-fixtures PUBLIC ${TELAR_PROCESS_OPTIONS})
+telar_add_test(runtime-test-client-peer STATIC SOURCES ${runtime_test_client_peer}
+  LIBRARIES runtime-terminal runtime-model runtime-runtime runtime-test-fixtures)
+telar_add_test(runtime-test-http2 STATIC SOURCES ${runtime_test_http2} LIBRARIES runtime-http2 runtime-test-fixtures)
 
 telar_add_test(event-loop-tests SOURCES event_loop_test.cpp LIBRARIES runtime-platform runtime-test-fixtures
   LABELS runtime.platform TIMEOUT 10)
@@ -48,7 +60,7 @@ telar_add_test(control-engine-tests SOURCES control_engine_test.cpp pty_response
   LABELS runtime.terminal)
 telar_add_test(control-kitty-colors-tests SOURCES control_kitty_colors_test.cpp LIBRARIES runtime-diagnostics runtime-terminal runtime-test-fixtures
   LABELS runtime.terminal)
-telar_add_test(runtime-clipboard-tests SOURCES runtime_clipboard_test.cpp LIBRARIES runtime-terminal runtime-model runtime-runtime runtime-test-fixtures
+telar_add_test(runtime-clipboard-tests SOURCES runtime_clipboard_test.cpp LIBRARIES runtime-terminal runtime-model runtime-runtime runtime-test-client-peer runtime-test-fixtures
   LABELS runtime.runtime TIMEOUT 15)
 if(APPLE AND TELAR_CLIPBOARD_NATIVE)
   target_sources(runtime-clipboard-tests PRIVATE runtime_clipboard_native_test.cpp
@@ -67,11 +79,11 @@ if(TELAR_CLIPBOARD_NATIVE AND TELAR_CLIPBOARD_INTEGRATION_TESTS AND CMAKE_SYSTEM
     "${TELAR_PROCESS_SOURCE_DIR}/tools/check_runtime_clipboard.py" --telar "$<TARGET_FILE:telar>"
     LABELS runtime.runtime TIMEOUT 60)
 endif()
-telar_add_test(control-clipboard-tests SOURCES control_clipboard_test.cpp LIBRARIES runtime-diagnostics runtime-transport runtime-platform runtime-terminal runtime-model runtime-runtime runtime-test-fixtures
+telar_add_test(control-clipboard-tests SOURCES control_clipboard_test.cpp LIBRARIES runtime-diagnostics runtime-transport runtime-platform runtime-terminal runtime-model runtime-runtime runtime-test-client-peer runtime-test-fixtures
   LABELS runtime.terminal)
 telar_add_test(control-graphics-tests SOURCES control_graphics_test.cpp LIBRARIES runtime-diagnostics runtime-platform runtime-terminal runtime-graphics runtime-model runtime-runtime runtime-test-fixtures
   LABELS runtime.terminal TIMEOUT 15)
-telar_add_test(control-desktop-tests SOURCES control_desktop_test.cpp LIBRARIES runtime-diagnostics runtime-platform runtime-terminal runtime-model runtime-runtime runtime-test-fixtures
+telar_add_test(control-desktop-tests SOURCES control_desktop_test.cpp LIBRARIES runtime-diagnostics runtime-platform runtime-terminal runtime-model runtime-runtime runtime-test-client-peer runtime-test-fixtures
   LABELS runtime.terminal)
 telar_add_test(worktree-lifecycle-probe PROBE SOURCES worktree_lifecycle_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(launch-probe PROBE SOURCES launch_probe.cpp LIBRARIES runtime-test-fixtures)
@@ -109,11 +121,11 @@ telar_add_test(runtime-tests
     graphics_limits_test.cpp atomic_graphics_test.cpp atomic_runtime_test.cpp proxy_policy_test.cpp http1_test.cpp http2_test.cpp
     exchange_capture_test.cpp capture_decode_test.cpp transport_capture_test.cpp proxy_authentication_test.cpp proxy_network_test.cpp
     proxy_resolution_test.cpp proxy_transport_test.cpp
-  LIBRARIES runtime-diagnostics runtime-transport runtime-config runtime-suggestions runtime-platform runtime-paths runtime-shell_integration runtime-workspaces runtime-worktrees runtime-metrics runtime-terminal runtime-history runtime-command_capture runtime-graphics runtime-agents runtime-vocabulary runtime-observation runtime-model runtime-http1 runtime-exchange_capture runtime-http2 runtime-proxy runtime-plugins runtime-editors runtime-persistence runtime-runtime runtime-test-fixtures
+  LIBRARIES runtime-diagnostics runtime-transport runtime-config runtime-suggestions runtime-platform runtime-paths runtime-shell_integration runtime-workspaces runtime-worktrees runtime-metrics runtime-terminal runtime-history runtime-command_capture runtime-graphics runtime-agents runtime-vocabulary runtime-observation runtime-model runtime-http1 runtime-exchange_capture runtime-http2 runtime-proxy runtime-plugins runtime-editors runtime-persistence runtime-runtime runtime-test-client-peer runtime-test-http2 runtime-test-fixtures
   LABELS runtime.runtime)
 telar_add_test(tab-holds-probe PROBE SOURCES tab_holds_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(tls-tests SOURCES tls_test.cpp tls_alpn_test.cpp tls_trust_test.cpp tls_session_test.cpp proxy_service_test.cpp proxy_trust_test.cpp
-  LIBRARIES runtime-platform runtime-vocabulary runtime-http2 runtime-tls runtime-proxy runtime-test-fixtures
+  LIBRARIES runtime-platform runtime-vocabulary runtime-http2 runtime-tls runtime-proxy runtime-test-http2 runtime-test-fixtures
   LABELS runtime.tls)
 telar_add_test(plugin-tests SOURCES plugin_test.cpp plugin_host_test.cpp plugin_channel_test.cpp plugin_package_test.cpp plugin_session_test.cpp plugin_service_test.cpp recycling_allocator_test.cpp
   LIBRARIES runtime-platform runtime-vocabulary runtime-plugins runtime-test-fixtures
@@ -123,7 +135,7 @@ telar_add_test(traffic-tests SOURCES traffic_test.cpp LIBRARIES runtime-vocabula
 telar_add_test(traffic-interface-probe SOURCES traffic_interface_probe.cpp LIBRARIES runtime-platform runtime-traffic runtime-test-fixtures
   TEST traffic-interface-fixture-tests ARGS --self-test LABELS runtime.traffic)
 if(APPLE)
-  telar_add_test(redirect-tests SOURCES redirect_test.cpp LIBRARIES runtime-platform runtime-vocabulary runtime-http runtime-http2 runtime-tls runtime-redirect runtime-traffic runtime-proxy runtime-test-fixtures
+  telar_add_test(redirect-tests SOURCES redirect_test.cpp LIBRARIES runtime-platform runtime-vocabulary runtime-http runtime-http2 runtime-tls runtime-redirect runtime-traffic runtime-proxy runtime-test-http2 runtime-test-fixtures
     LABELS runtime.redirect)
   telar_add_test(redirect-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/redirect_check_test.py"
     LABELS runtime.redirect)
@@ -136,7 +148,7 @@ telar_add_test(state-delivery-probe PROBE SOURCES state_delivery_probe.cpp LIBRA
 set_target_properties(state-delivery-probe PROPERTIES OUTPUT_NAME state-probe)
 
 telar_add_test(traffic-flow-tests SOURCES traffic_flow_test.cpp http1_test.cpp http2_test.cpp proxy_transport_test.cpp transport_capture_test.cpp
-  LIBRARIES runtime-platform runtime-vocabulary runtime-http1 runtime-exchange_capture runtime-http2 runtime-traffic runtime-proxy runtime-test-fixtures
+  LIBRARIES runtime-platform runtime-vocabulary runtime-http1 runtime-exchange_capture runtime-http2 runtime-traffic runtime-proxy runtime-test-http2 runtime-test-fixtures
   LABELS runtime.traffic)
 
 telar_add_test(http-message-tests SOURCES http_message_test.cpp http_interception_test.cpp LIBRARIES runtime-http1 runtime-http runtime-traffic runtime-proxy runtime-test-fixtures

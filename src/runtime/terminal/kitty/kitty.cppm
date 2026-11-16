@@ -394,7 +394,7 @@ export namespace telar::runtime {
     bool armed_ = false;
   };
 
-  // graphics/png_decoder.cpp defines these outside any module: its default limit is the screen's
+  // terminal/png_decoder.cpp defines these outside any module: its default limit is the screen's
   // from telar.runtime.terminal.graphics_storage, which imports the control module above this one.
   extern "C++" {
   void installPngDecoder();

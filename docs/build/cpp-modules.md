@@ -208,8 +208,8 @@ El inventario contiene 229 headers vivos, cada uno con su motivo concreto:
 - Fixtures y utilidades de tests: includes locales, macros de aserción y fixtures
   de compilación deliberadamente válida o inválida. No son APIs de aplicación.
   Los fixtures compartidos sin macros son interfaces de módulo
-  (`runtime-test-fixtures`, `cli-test-check`, `gui-test-fixtures`,
-  `gui-test-font-fixture`); sus importadores ya no reciben la biblioteca estándar
+  (`runtime-test-fixtures`, `runtime-test-client-peer`, `runtime-test-http2`,
+  `cli-test-check`, `gui-test-fixtures`, `gui-test-font-fixture`); sus importadores ya no reciben la biblioteca estándar
   textual. `assertions.hpp` sigue textual porque también la usan unidades `.mm`. Ningún importador llama a los
   `static inline` de libghostty-vt: no cruzan un import, así que `telar.ghostty.vt`
   captura los modos que construye `ghostty_mode_new` y `telar.ghostty.wuffs` llama a
