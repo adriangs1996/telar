@@ -37,7 +37,7 @@ def main():
     ui_headers = [*sorted((source / 'ui').rglob('*.hpp')), source / 'platform/environment.hpp']
     test_headers = sorted((source / 'tests').rglob('*.hpp'))
 
-    write_header_database(build, entries, ui_headers, source / 'ui/app/application.cpp', 'ui')
+    write_header_database(build, entries, ui_headers, source / 'ui/app/application_controller.cpp', 'ui')
     write_header_database(build, entries, test_headers, source / 'tests/quick_test.cpp', 'tests')
 
 

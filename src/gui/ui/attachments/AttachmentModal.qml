@@ -5,7 +5,7 @@ import QtQuick
 
 FocusScope {
     id: root
-    required property GuiController application
+    required property ApplicationController application
     readonly property var shelf: application.attachments.shelf
     readonly property var state: shelf.modal
     readonly property var regions: application.attachments.modalGeometry

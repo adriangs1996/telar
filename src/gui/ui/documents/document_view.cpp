@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "document_view.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QDesktopServices>
 #include <QKeyEvent>
 #include <QUrl>
@@ -116,7 +116,7 @@ namespace telar::gui::qt {
     }
 
     // The document a view shows, whether it shows, and what changes when it does.
-    const Document* findDocument(const Application* application, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
+    const Document* findDocument(const ApplicationController* application, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
       const auto* pane = application == nullptr ? nullptr : application->pane(pane_id);
 
       shown = false;
@@ -219,7 +219,7 @@ namespace telar::gui::qt {
 
   }
 
-  bool Application::documentKey(std::uint64_t pane_id, const QKeyEvent& event) {
+  bool ApplicationController::documentKey(std::uint64_t pane_id, const QKeyEvent& event) {
     const auto* current = pane(pane_id);
     if (current == nullptr || !current->document_shown) {
       return false;
@@ -257,7 +257,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void Application::measureInlineDocument(const QString& pane_id, qulonglong id, int rows) {
+  void ApplicationController::measureInlineDocument(const QString& pane_id, qulonglong id, int rows) {
     const auto pane = pane_id.toULongLong();
     if (rows > 0 && session().measureInline(pane, id, static_cast<std::uint32_t>(rows))) {
       emit terminalChanged(pane);
@@ -273,7 +273,7 @@ namespace telar::gui::qt {
   }
 
   void DocumentView::setApplication(QObject* application) {
-    auto* next = qobject_cast<Application*>(application);
+    auto* next = qobject_cast<ApplicationController*>(application);
     if (application_ == next) {
       return;
     }
@@ -284,13 +284,13 @@ namespace telar::gui::qt {
 
     application_ = next;
     if (application_ != nullptr) {
-      connect(application_, &Application::documentChanged, this, [this](qulonglong pane_id) {
+      connect(application_, &ApplicationController::documentChanged, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refresh();
         }
       });
 
-      connect(application_, &Application::documentScroll, this, [this](qulonglong pane_id, const QString& action) {
+      connect(application_, &ApplicationController::documentScroll, this, [this](qulonglong pane_id, const QString& action) {
         if (pane_id == pane_id_ && document_id_ == 0 && shown_) {
           emit scrollRequested(action);
         }

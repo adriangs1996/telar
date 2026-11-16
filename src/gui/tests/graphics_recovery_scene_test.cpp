@@ -17,7 +17,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
@@ -59,7 +59,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 
@@ -97,7 +97,7 @@ namespace {
     runtime.send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::end});
   }
 
-  QVariantMap paneChrome(Application& application) {
+  QVariantMap paneChrome(ApplicationController& application) {
     const auto* model = application.panes()->rows();
 
     return model->data(model->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("chrome")).toMap();
@@ -117,7 +117,7 @@ namespace {
       QVERIFY(listener.listen(endpoint));
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
 
       application.open(endpoint);
       QTRY_VERIFY_WITH_TIMEOUT(listener.hasPendingConnections(), wait_ms);
@@ -186,7 +186,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!label->isVisible(), wait_ms);
       QVERIFY(!paneChrome(application).value(QStringLiteral("imagesPaused")).toBool());
 
-      const QSignalSpy connection_changes{&application, &Application::diagnosticChanged};
+      const QSignalSpy connection_changes{&application, &ApplicationController::diagnosticChanged};
 
       runtime.send(GraphicsImageChunk{.header = resumed, .key = {.image_id = 1, .generation = 1}, .bytes = std::array<Byte, pixel_bytes>{}});
       QTRY_VERIFY_WITH_TIMEOUT(!application.connected(), wait_ms);

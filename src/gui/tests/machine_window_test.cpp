@@ -14,7 +14,7 @@ static_assert(true);
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include <QByteArray>
 #include <QColor>
@@ -124,7 +124,7 @@ static_assert(true);
 #include <memory>
 
 #include "application/dependencies.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
@@ -166,15 +166,15 @@ import telar.wire.layout;
 namespace telar::gui::test {
 
   struct MachineWindow {
-    static void armPlugin(qt::Application& application, qt::MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
+    static void armPlugin(qt::ApplicationController& application, qt::MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
       application.plugins_.owner_ = qt::PluginRunner::Owner{.source = source, .runtime_generation = runtime_generation, .execution = execution};
     }
 
-    static bool pendingPlugin(const qt::Application& application) {
+    static bool pendingPlugin(const qt::ApplicationController& application) {
       return application.plugins_.owner_.has_value();
     }
 
-    static void completePluginFailure(qt::Application& application, std::uint64_t execution) {
+    static void completePluginFailure(qt::ApplicationController& application, std::uint64_t execution) {
       PluginInvocation invocation;
 
       invocation.configuration_generation = application.configuration_source_.configurationGeneration();
@@ -184,7 +184,7 @@ namespace telar::gui::test {
       application.plugins_.pluginWorkerFinished(execution, invocation, result);
     }
 
-    static qt::MachineClientKey add(qt::Application& application, const QString& endpoint) {
+    static qt::MachineClientKey add(qt::ApplicationController& application, const QString& endpoint) {
       const auto slot = application.store_.machines().add({.label = "Build", .destination = "dev@build"});
       auto& client = application.createClient(slot);
 
@@ -194,50 +194,50 @@ namespace telar::gui::test {
       return client.key;
     }
 
-    static void select(qt::Application& application, MachineToken target) {
+    static void select(qt::ApplicationController& application, MachineToken target) {
       application.selectMachine(target);
     }
 
-    static qt::MachineClient& client(qt::Application& application, Machines::Slot slot) {
+    static qt::MachineClient& client(qt::ApplicationController& application, Machines::Slot slot) {
       return application.clientAt(slot);
     }
 
-    static void refreshActivity(qt::Application& application) {
+    static void refreshActivity(qt::ApplicationController& application) {
       application.activity_.synchronize();
     }
 
-    static std::uint64_t activityRebuilds(qt::Application& application) {
+    static std::uint64_t activityRebuilds(qt::ApplicationController& application) {
       return application.activity()->rebuilds();
     }
 
-    static bool pendingActivity(const qt::Application& application) {
+    static bool pendingActivity(const qt::ApplicationController& application) {
       return application.pending_activity_.has_value();
     }
 
-    static void pointerMoved(qt::Application& application) {
+    static void pointerMoved(qt::ApplicationController& application) {
       application.activity_.observePointer();
     }
 
-    static void pointerMoved(qt::Application& application, QPointF position) {
+    static void pointerMoved(qt::ApplicationController& application, QPointF position) {
       application.activity_.observePointer(true, position);
     }
 
-    static void rename(qt::Application& application, Machines::Slot slot, std::string_view label) {
+    static void rename(qt::ApplicationController& application, Machines::Slot slot, std::string_view label) {
       const auto& row = application.store_.machines().row(slot);
 
       application.store_.machines().update(slot, {.label = label, .destination = row.destination.view()});
       emit application.machinesChanged();
     }
 
-    static void recolor(qt::Application& application, Machines::Slot slot, std::string_view color) {
+    static void recolor(qt::ApplicationController& application, Machines::Slot slot, std::string_view color) {
       const auto& row = application.store_.machines().row(slot);
 
       application.store_.machines().update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
       emit application.machinesChanged();
     }
 
-    static qt::MachineClientKey reuse(qt::Application& application, Machines::Slot slot) {
-      application.retireMachine(slot, qt::Application::MachineRetirement::removed);
+    static qt::MachineClientKey reuse(qt::ApplicationController& application, Machines::Slot slot) {
+      application.retireMachine(slot, qt::ApplicationController::MachineRetirement::removed);
       application.store_.clients()[slot].reset();
       application.store_.machines().remove(slot);
       const auto added = application.store_.machines().add({.label = "Replacement", .destination = "dev@replacement"}, slot);
@@ -248,8 +248,8 @@ namespace telar::gui::test {
       return key;
     }
 
-    static auto capture(qt::Application& application) {
-      qt::Application::PresentedFrame frame;
+    static auto capture(qt::ApplicationController& application) {
+      qt::ApplicationController::PresentedFrame frame;
 
       application.prepareFrame(frame);
       const auto* pane = application.session().focusedPane();
@@ -261,15 +261,15 @@ namespace telar::gui::test {
       return frame;
     }
 
-    static void present(qt::Application& application, const auto& frame) {
+    static void present(qt::ApplicationController& application, const auto& frame) {
       application.present(frame);
     }
 
-    static qt::MachineClientKey replace(qt::Application& application, Machines::Slot slot) {
+    static qt::MachineClientKey replace(qt::ApplicationController& application, Machines::Slot slot) {
       return application.createClient(slot).key;
     }
 
-    static bool contains(const qt::Application& application, qt::MachineClientKey key) {
+    static bool contains(const qt::ApplicationController& application, qt::MachineClientKey key) {
       return application.findClient(key) != nullptr;
     }
   };
@@ -360,13 +360,13 @@ namespace {
 
 #endif
 
-  QVariantMap activityRow(Application& application, int row) {
+  QVariantMap activityRow(ApplicationController& application, int row) {
     const auto* model = application.activity()->rows();
 
     return model->data(model->index(row, 0), ListModel::record_role).toMap();
   }
 
-  QVariantMap activityNamed(Application& application, const QString& title) {
+  QVariantMap activityNamed(ApplicationController& application, const QString& title) {
     for (int row = 0; row < application.activity()->rows()->rowCount(); ++row) {
       const auto record = activityRow(application, row);
       if (record.value(QStringLiteral("title")).toString() == title) {
@@ -384,7 +384,7 @@ namespace {
   struct MachineFixture {
     ApplicationMemory application_memory;
     ApplicationAllocator& memory = application_memory.memory();
-    Application application{memory};
+    ApplicationController application{memory};
     MachineClientKey remote;
     std::unique_ptr<WireRuntime> local_runtime;
     std::unique_ptr<WireRuntime> remote_runtime;
@@ -540,13 +540,13 @@ namespace {
       QCOMPARE(shelf.items().size(), 1);
     }
 
-    static void verifyAttachmentHoverReactivation(Application& application, QQuickWindow& window) {
+    static void verifyAttachmentHoverReactivation(ApplicationController& application, QQuickWindow& window) {
       QVERIFY(!application.attachments()->shelf()->hoverReady());
       QTest::mouseMove(&window, window.contentItem()->boundingRect().topLeft().toPoint());
       QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->hoverReady(), wait_ms);
     }
 
-    static void verifyAttachmentModalHost(Application& application) {
+    static void verifyAttachmentModalHost(ApplicationController& application) {
       const auto modal_geometry = application.attachments()->modalGeometry();
       const auto modal_host = modal_geometry.value(QStringLiteral("host")).toRectF();
       const auto terminal_region = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
@@ -557,7 +557,7 @@ namespace {
       QVERIFY(modal_host.contains(modal_geometry.value(QStringLiteral("bounds")).toRectF()));
     }
 
-    static void verifyAttachmentBackdropOwnership(Application& application, QQuickWindow& window, const QString& identity) {
+    static void verifyAttachmentBackdropOwnership(ApplicationController& application, QQuickWindow& window, const QString& identity) {
       const auto host = application.attachments()->modalGeometry().value(QStringLiteral("host")).toRectF();
       const auto point = (host.topLeft() + QPointF{1, 1}).toPoint();
       const std::array buttons{Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
@@ -712,7 +712,7 @@ namespace {
     Q_SLOT static void attachmentShelfAndModalLoadFromTheRegisteredQmlModule() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QQuickWindow window;
       constexpr QSize size{800, 600};
 
@@ -965,7 +965,7 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      const QSignalSpy changed{&application, &Application::hostMetricsChanged};
+      const QSignalSpy changed{&application, &ApplicationController::hostMetricsChanged};
       constexpr std::uint8_t local_cpu = 11;
       constexpr std::uint8_t remote_cpu = 92;
       constexpr std::uint8_t replacement_cpu = 37;
@@ -1259,7 +1259,7 @@ namespace {
     Q_SLOT static void activityButtonsRoutePrimaryAndSecondaryOnPress() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QQuickWindow window;
       QQmlEngine engine;
       constexpr QSize size{400, 240};
@@ -1329,7 +1329,7 @@ namespace {
       application.peekActivity(key);
       QVERIFY(MachineWindow::pendingActivity(application));
       QVERIFY(finishOpening(*fixture.remote_runtime));
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
       QCOMPARE(application.activity()->hovered(), key);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 1, wait_ms);
       QCOMPARE(fixture.local_runtime->count(ClientTag::read_pane), 0);
@@ -1360,12 +1360,12 @@ namespace {
       QCOMPARE(message.mode, PaneTextMode::prompt);
       QCOMPARE(message.text, "Continue the remote task");
       QCOMPARE(fixture.local_runtime->count(ClientTag::send_pane_text), 0);
-      QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::none);
+      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::none);
       panel.reset();
       fixture.remote_runtime->send(RequestCompleted{.request_id = message.request_id});
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.requestsPending(), wait_ms);
       application.peekActivity(key);
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
       const auto stale_revision = application.peek()->state().value(QStringLiteral("revision")).toString();
 
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
@@ -1373,7 +1373,7 @@ namespace {
 
       ++agents.front().session_id.front();
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::none, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::none, wait_ms);
       application.peek()->search(QStringLiteral("/stop"));
       application.peek()->submit(stale_revision);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1402,14 +1402,14 @@ namespace {
       const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       application.peekActivity(key);
-      QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
+      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek);
       const auto retired = application.peek()->state().value(QStringLiteral("revision")).toString();
 
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
       const auto retired_read = fixture.local_runtime->last<ReadPane>();
 
       application.setWindow(replacement);
-      QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::none);
+      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::none);
       application.peek()->search(QStringLiteral("/stop"));
       application.peek()->submit(retired);
       QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1417,7 +1417,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, Machines::local_slot).session.requestsPending(), wait_ms);
       application.setWindow(window);
       application.peekActivity(key);
-      QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
+      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek);
       application.peek()->search(QStringLiteral("/stop"));
       application.peek()->submit(retired);
       QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1449,7 +1449,7 @@ namespace {
       QVERIFY(MachineWindow::pendingActivity(application));
       MachineWindow::pointerMoved(application);
       QVERIFY(finishOpening(*fixture.remote_runtime));
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
       QVERIFY(application.activity()->hovered().isEmpty());
     }
 
@@ -1519,7 +1519,7 @@ namespace {
 
       QVERIFY(!opening.launch);
       window->resize(latest_size);
-      application.execute(Application::Action::toggle_sidebar);
+      application.execute(ApplicationController::Action::toggle_sidebar);
       QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), latest_size.width(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("status")).toRectF().bottom(), latest_size.height(), wait_ms);
       const auto geometry_changed = [&] {
@@ -1735,7 +1735,7 @@ namespace {
       window.resize(tiny);
       QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialog())).arg(application.peek()->geometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
       QTest::keyClick(&window, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
     }
 
     Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {
@@ -1806,7 +1806,7 @@ namespace {
       fixture.remote_socket_->disconnectFromServer();
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("enabled")).toBool(), wait_ms);
       QCOMPARE(activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("statusWord")).toString(), QStringLiteral("offline"));
-      application.execute(Application::Action::select_agent, identity.toString());
+      application.execute(ApplicationController::Action::select_agent, identity.toString());
       QVERIFY(application.connected());
       QCOMPARE(application.pane(pane_id)->attached, true);
     }
@@ -1834,12 +1834,12 @@ namespace {
       agents.front().session_id.front() = 2;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(activityRow(application, 0).value(QStringLiteral("key")).toString() != retired, wait_ms);
-      application.execute(Application::Action::select_agent, retired);
+      application.execute(ApplicationController::Action::select_agent, retired);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QVERIFY(!MachineWindow::pendingActivity(application));
       const auto current = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
-      application.execute(Application::Action::select_agent, current);
+      application.execute(ApplicationController::Action::select_agent, current);
       QVERIFY(MachineWindow::pendingActivity(application));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
       QVERIFY(fixture.remote_runtime->last<OpenPane>().target.id != agent_pane);
@@ -1853,7 +1853,7 @@ namespace {
       QVERIFY(!MachineWindow::pendingActivity(application));
       QCOMPARE(fixture.remote_runtime->count(ClientTag::create_pane), 0);
       static_cast<void>(MachineWindow::replace(application, fixture.remote.machine.slot));
-      application.execute(Application::Action::select_agent, current);
+      application.execute(ApplicationController::Action::select_agent, current);
       QVERIFY(!MachineWindow::pendingActivity(application));
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 2);
     }
@@ -1881,7 +1881,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
-      application.execute(Application::Action::select_agent, retired);
+      application.execute(ApplicationController::Action::select_agent, retired);
       QVERIFY(MachineWindow::pendingActivity(application));
       tasks.front().workspace = replacement_workspace;
       fixture.remote_runtime->send(WorkspaceList{.revision = 2, .entries = projects, .worktrees = tasks});
@@ -1892,13 +1892,13 @@ namespace {
       const auto openings = fixture.remote_runtime->count(ClientTag::open_pane);
       const auto local_openings = fixture.local_runtime->count(ClientTag::open_pane);
 
-      application.execute(Application::Action::select_agent, retired);
+      application.execute(ApplicationController::Action::select_agent, retired);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::request_workspace_snapshot), workspace_requests);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), openings);
       const auto current = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       QVERIFY(current != retired);
-      application.execute(Application::Action::select_agent, current);
+      application.execute(ApplicationController::Action::select_agent, current);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), openings + 1, wait_ms);
       const auto opening = fixture.remote_runtime->last<OpenPane>();
 
@@ -1925,9 +1925,9 @@ namespace {
       agents.front().pane_id = agent_pane;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
-      application.execute(Application::Action::select_agent, activityRow(application, 0).value(QStringLiteral("key")).toString());
+      application.execute(ApplicationController::Action::select_agent, activityRow(application, 0).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
-      application.execute(Application::Action::cancel);
+      application.execute(ApplicationController::Action::cancel);
       QVERIFY(!MachineWindow::pendingActivity(application));
       QVERIFY(finishOpening(*fixture.local_runtime));
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
@@ -1970,11 +1970,11 @@ namespace {
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("After reconnect")).isEmpty(), wait_ms);
       QVERIFY(activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString() != old_agent);
-      application.execute(Application::Action::select_agent, old_agent);
+      application.execute(ApplicationController::Action::select_agent, old_agent);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QVERIFY(!MachineWindow::pendingActivity(application));
       QVERIFY(remote.session.panes().empty());
-      application.execute(Application::Action::select_agent, activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString());
+      application.execute(ApplicationController::Action::select_agent, activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
     }

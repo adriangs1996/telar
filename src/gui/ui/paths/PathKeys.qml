@@ -24,7 +24,7 @@ QtObject {
             root.controller.paths.move(event.key === Qt.Key_J ? 1 : -1);
             return true;
         case Qt.Key_H:
-            root.controller.execute(GuiController.Action.cancel);
+            root.controller.execute(ApplicationController.Action.cancel);
             return true;
         case Qt.Key_L:
             root.controller.paths.insert(false);

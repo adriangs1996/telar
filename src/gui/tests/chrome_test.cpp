@@ -15,7 +15,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/chrome/metrics_projection.hpp"
@@ -78,7 +78,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/chrome/metrics_projection.hpp"
@@ -326,7 +326,7 @@ namespace {
       configuration.close();
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
 
       application.loadConfiguration(configuration.fileName(), {}, {});
       QCOMPARE(application.error(), QString{});
@@ -433,7 +433,7 @@ namespace {
     Q_SLOT static void workspaceAndMachineStayVisibleInBothSidebarModes() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;

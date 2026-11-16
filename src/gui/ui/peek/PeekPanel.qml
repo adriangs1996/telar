@@ -33,7 +33,7 @@ Item {
         }
     }
 
-    Keys.onEscapePressed: root.controller.execute(GuiController.Action.cancel)
+    Keys.onEscapePressed: root.controller.execute(ApplicationController.Action.cancel)
 
     Connections {
         target: root.controller.peek
@@ -122,7 +122,7 @@ Item {
         Keys.onEnterPressed: root.controller.peek.submit(root.state.revision)
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
-                root.controller.execute(GuiController.Action.cancel);
+                root.controller.execute(ApplicationController.Action.cancel);
             }
         }
     }

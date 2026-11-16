@@ -185,7 +185,7 @@ contracts::statement opaqueConstructorRetained(contracts::database& owner) {
 
 // CASE: contract.elided_call_temporary
 // PAIR: contract.elided_call
-// SOURCE: src/gui/ui/app/application.hpp :: Application::session
+// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver is a temporary that dies before the result is read.
@@ -198,7 +198,7 @@ void elidedCallTemporary() {
 
 // CASE: contract.elided_call_receiver
 // PAIR: contract.elided_call
-// SOURCE: src/gui/ui/app/application.hpp :: Application::session
+// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver outlives the result; accept.
@@ -210,7 +210,7 @@ void elidedCallReceiver(const elision::registry& registry) {
 
 // CASE: contract.elided_definition_parameter
 // PAIR: contract.elided_definition
-// SOURCE: src/gui/ui/app/application.hpp :: Application::session
+// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its parameter, which callers that only see the declaration take for a borrow of the receiver.
@@ -222,7 +222,7 @@ const std::string& elision::registry::pick(const std::string& fallback) const {
 
 // CASE: contract.elided_definition_receiver
 // PAIR: contract.elided_definition
-// SOURCE: src/gui/ui/app/application.hpp :: Application::session
+// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its receiver's field; accept.
@@ -319,7 +319,7 @@ void selfFieldRelocatable() {
 
 // CASE: contract.self_field_mutation
 // PAIR: contract.self_field
-// SOURCE: src/gui/ui/app/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application_controller.cpp :: ApplicationController
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: A pinned object's labeled field keeps the object and a sibling, and the constructor then mutates the object; the internal borrows are not the object's, so nothing is invalidated; accept.

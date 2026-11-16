@@ -36,11 +36,11 @@ import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
 
-  class Application;
+  class ApplicationController;
 
   class KeyBindings final : public QObject {
   public:
-    explicit KeyBindings(Application& application);
+    explicit KeyBindings(ApplicationController& application);
     void setWindow(QQuickWindow& window);
     void configure(const InputConfiguration& configuration, const BindingMap<BindingAction>& map);
     bool route(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
@@ -97,7 +97,7 @@ namespace telar::gui::qt {
     void expire();
     void drain();
 
-    Application& application_;
+    ApplicationController& application_;
     Router router_;
     QPointer<QQuickWindow> window_;
     QElapsedTimer clock_;

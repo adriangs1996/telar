@@ -11,7 +11,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QString>
 #include <QtCore/qtmetamacros.h>
 #include <algorithm>
@@ -41,7 +41,7 @@ import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {
 
-  void Application::initializePlugins() {
+  void ApplicationController::initializePlugins() {
     connect(&plugins_, &PluginRunner::finished, this, [this](const PluginEffects& effects) {
       try {
         error_.clear();
@@ -51,10 +51,10 @@ namespace telar::gui::qt {
         fail(error);
       }
     });
-    connect(&plugins_, &PluginRunner::failed, this, &Application::reportFailure);
+    connect(&plugins_, &PluginRunner::failed, this, &ApplicationController::reportFailure);
   }
 
-  void Application::applyPluginEffects(const PluginEffects& effects) {
+  void ApplicationController::applyPluginEffects(const PluginEffects& effects) {
     for (const auto& effect : effects.effects()) {
       if (const auto* action = std::get_if<BindingAction>(&effect)) {
         executeBinding(*action);

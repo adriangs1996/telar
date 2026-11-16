@@ -11,7 +11,7 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "terminal_scene.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QWheelEvent>

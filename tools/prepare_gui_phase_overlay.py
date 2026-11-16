@@ -63,7 +63,7 @@ def prepare(output):
 ''')
     (output / 'gui_phase_trace.hpp').write_text(header)
 
-    path = 'src/gui/ui/app/application.cpp'
+    path = 'src/gui/ui/app/application_controller.cpp'
     source = read(path)
     source = replace_once(source, '  WindowImages::forWindow(window);\n', '''  WindowImages::forWindow(window);
   connect(&window, &QQuickWindow::beforeFrameBegin, this, [&window] {
@@ -89,10 +89,10 @@ def prepare(output):
     TELAR_PHASE_TRACE("pacer.decision", this, deferred, count);
 
     return deferred;''')
-    for signature, name in [('void Application::prepareFrame(PresentedFrame &frame)', 'application.prepare'),
-                            ('void Application::prepareTerminalFrames(PresentedFrame &frame)', 'application.prepared'),
-                            ('void Application::refreshPanes()', 'application.refresh_panes'),
-                            ('bool Application::executeNavigation(Action action, const QString &target)', 'application.navigate')]:
+    for signature, name in [('void ApplicationController::prepareFrame(PresentedFrame &frame)', 'application.prepare'),
+                            ('void ApplicationController::prepareTerminalFrames(PresentedFrame &frame)', 'application.prepared'),
+                            ('void ApplicationController::refreshPanes()', 'application.refresh_panes'),
+                            ('bool ApplicationController::executeNavigation(Action action, const QString &target)', 'application.navigate')]:
         anchor = signature + ' {\n'
         source = replace_once(source, anchor, anchor + f'  TELAR_PHASE_TRACE("{name}", this, 0, 0);\n')
     source = replace_once(source, '    const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);', '''    const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);

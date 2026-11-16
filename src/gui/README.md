@@ -34,9 +34,14 @@ tests and tools, only `ui`, the native adapters in `platform` and `main.cpp` inc
 Everything is one QML module, `Telar.Gui`, so a QML file imports it to use a type
 from another folder.
 
+A feature's state lives in its `*_controller` class, which reads the store and
+never calls `ApplicationController`. What acts on the session or the window stays
+in `ApplicationController`; its methods for a feature live in that folder's
+`*_commands.cpp`.
+
 | Folder | What lives there |
 | --- | --- |
-| `app` | `Application` (the `GuiController` QML sees), `Main.qml`, the runtime connection and window plumbing |
+| `app` | `ApplicationController`, which owns the window, the machines and the commands and hands each feature to its controller; `Main.qml`, the runtime connection and window plumbing |
 | `scene`, `controls`, `fonts` | Scene-graph primitives and shaders, reusable chrome and form controls, font loading |
 | `input`, `config` | Key bindings and pointer routing; Lua configuration loading |
 | `chrome`, `panes`, `terminal` | Sidebar, tabs and bars; pane headers and motion; the terminal item and its scene |

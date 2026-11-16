@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/deadline_timer.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QByteArray>
@@ -63,8 +63,8 @@ namespace telar::gui::qt {
 
   }
 
-  void Application::initializeNotifications() {
-    connect(this, &Application::notification, this, [this](const QString& message) {
+  void ApplicationController::initializeNotifications() {
+    connect(this, &ApplicationController::notification, this, [this](const QString& message) {
       const auto bytes = message.toUtf8();
 
       notifications_.publish({
@@ -76,9 +76,9 @@ namespace telar::gui::qt {
           .link = {},
       });
     });
-    connect(&notifications_, &NotificationsController::focusRestoreRequested, this, &Application::restoreTerminalFocus);
-    connect(&notifications_, &NotificationsController::focusRetireRequested, this, &Application::retireNotificationFocus);
-    connect(&notifications_, &NotificationsController::failed, this, &Application::reportFailure);
+    connect(&notifications_, &NotificationsController::focusRestoreRequested, this, &ApplicationController::restoreTerminalFocus);
+    connect(&notifications_, &NotificationsController::focusRetireRequested, this, &ApplicationController::retireNotificationFocus);
+    connect(&notifications_, &NotificationsController::failed, this, &ApplicationController::reportFailure);
     connect(&notifications_, &NotificationsController::linkRequested, this, [this](const QString& uri) {
       const auto bytes = uri.toUtf8();
 
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::initializeGraphicsRecovery() {
+  void ApplicationController::initializeGraphicsRecovery() {
     graphics_resume_timer_.setSingleShot(true);
     graphics_resume_timer_.setTimerType(Qt::PreciseTimer);
     connect(&graphics_resume_timer_, &QTimer::timeout, this, [this] {
@@ -103,11 +103,11 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::scheduleGraphicsRecovery() {
+  void ApplicationController::scheduleGraphicsRecovery() {
     scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, platform::AwakeClock::nowNanoseconds());
   }
 
-  void Application::retireNotificationFocus(QQuickItem* retiring_owner) {
+  void ApplicationController::retireNotificationFocus(QQuickItem* retiring_owner) {
     const auto* pane = session().focusedPane();
     if (pane == nullptr || !pane->attached || window_ == nullptr || (retiring_owner != nullptr && retiring_owner->window() != window_) || (!keyboardFocusVacant(*window_) && window_->activeFocusItem() != retiring_owner)) {
       return;
@@ -135,7 +135,7 @@ namespace telar::gui::qt {
         Qt::QueuedConnection);
   }
 
-  void Application::restoreTerminalFocus() {
+  void ApplicationController::restoreTerminalFocus() {
     const auto* pane = session().focusedPane();
     const auto terminal = pane != nullptr ? terminals_.value(pane->id) : nullptr;
     if (terminal && terminal->isVisible() && store_.dialog().kind == Dialog::none) {

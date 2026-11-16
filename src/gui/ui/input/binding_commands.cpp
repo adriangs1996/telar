@@ -14,7 +14,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/config/configuration_source.hpp"
 #include "ui/controls/native_form_field.hpp"
 #include <algorithm>
@@ -76,8 +76,8 @@ namespace telar::gui::qt {
 
   namespace {
 
-    std::optional<Application::Action> nativeAction(BindingActionKind kind) noexcept {
-      using Native = Application::Action;
+    std::optional<ApplicationController::Action> nativeAction(BindingActionKind kind) noexcept {
+      using Native = ApplicationController::Action;
       using Binding = BindingActionKind;
       constexpr auto actions = std::to_array<std::pair<Binding, Native>>({
           {Binding::new_tab, Native::new_tab},
@@ -152,7 +152,7 @@ namespace telar::gui::qt {
 
   }
 
-  QVariantList Application::commands() const {
+  QVariantList ApplicationController::commands() const {
     QVariantList commands;
 
     commands.reserve(static_cast<qsizetype>(palette_actions.size()));
@@ -172,7 +172,7 @@ namespace telar::gui::qt {
     return commands;
   }
 
-  QString Application::bindingShortcut(BindingActionKind action) const {
+  QString ApplicationController::bindingShortcut(BindingActionKind action) const {
     const auto key = key_bindings_.prefixedKeyForAction({.kind = action});
     if (!key) {
       return {};
@@ -184,11 +184,11 @@ namespace telar::gui::qt {
     return toQString(label.view());
   }
 
-  BindingContext Application::bindingContext() const {
+  BindingContext ApplicationController::bindingContext() const {
     return sessionBindingContext(session());
   }
 
-  std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) const {
+  std::optional<BindingRepeat> ApplicationController::bindingRepeat(BindingAction action) const {
     if (store_.dialog().kind != Dialog::none || components_.pickOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
       return {};
     }
@@ -203,7 +203,7 @@ namespace telar::gui::qt {
     return BindingRepeat{.interval_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(interval).count()), .owner = pane->id};
   }
 
-  bool Application::handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures) {
+  bool ApplicationController::handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures) {
     if (attachments_.interceptKey(event)) {
       return true;
     }
@@ -234,11 +234,11 @@ namespace telar::gui::qt {
     return key_bindings_.route(event, recipient, captures);
   }
 
-  void Application::interruptBindings() {
+  void ApplicationController::interruptBindings() {
     key_bindings_.interrupt();
   }
 
-  bool Application::runBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
+  bool ApplicationController::runBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     try {
       const bool configured = action.kind == BindingActionKind::extended || action.kind == BindingActionKind::command_tab;
       if (resolved != nullptr && ((configured && action.generation != configuration_source_.configurationGeneration()) || !resolved->contains(action) || !components_.actionsLive(*resolved))) {
@@ -274,7 +274,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::applyEffects(const ResolvedEffects<ApplicationAllocator>& effects) {
+  void ApplicationController::applyEffects(const ResolvedEffects<ApplicationAllocator>& effects) {
     const auto actions = std::span{effects.effects.actions}.first(effects.effects.length);
     if (std::ranges::any_of(actions, [&](const auto& effect) {
           return !supported(configuration_source_, effect, &effects.actions);
@@ -288,7 +288,7 @@ namespace telar::gui::qt {
   }
 
   // Releases keys typed while the Lua thread ran the binding, after applying its result.
-  void Application::luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply) {
+  void ApplicationController::luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply) {
     try {
       if (!stale) {
         if (!error.isEmpty()) {
@@ -305,7 +305,7 @@ namespace telar::gui::qt {
     key_bindings_.release(hold);
   }
 
-  void Application::executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
+  void ApplicationController::executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     pending_activity_.reset();
     if (action.kind != BindingActionKind::copy_mode) {
       copy_.leaveKeyboard();
@@ -367,7 +367,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::executeNamedAction(const NamedActionDescription& named) {
+  void ApplicationController::executeNamedAction(const NamedActionDescription& named) {
     if (const auto* definition = std::get_if<DefinitionActionDescription>(&named)) {
       if (definition->kind == DefinitionActionDescription::Kind::panel) {
         components_.togglePanel(definition->index, component_action_anchor_.value_or(QPointF{-1, -1}));
@@ -379,7 +379,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
+  void ApplicationController::executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     const auto notification = configuration_source_.notificationAction(action, resolved);
     if (!notification) {
       throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
@@ -388,7 +388,7 @@ namespace telar::gui::qt {
     notifications_.publish({.level = notification->level, .target = notification->target, .title = notification->title.view(), .message = notification->message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification->duration_ms) * NotificationInput::nanoseconds_per_millisecond});
   }
 
-  void Application::executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved) {
+  void ApplicationController::executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved) {
     const auto command = configuration_source_.commandTab(action, resolved);
     if (!command) {
       emit notification(QStringLiteral("That command tab expired"));
@@ -397,7 +397,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::applyExpression(const InputExpression& expression) {
+  void ApplicationController::applyExpression(const InputExpression& expression) {
     if (expression.kind == InputExpression::Kind::consume) {
       return;
     }
@@ -417,7 +417,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::scrollBinding(ScrollDirection direction) {
+  void ApplicationController::scrollBinding(ScrollDirection direction) {
     session().scrollFocused(direction);
     if (const auto* pane = session().focusedPane()) {
       emit terminalChanged(pane->id);

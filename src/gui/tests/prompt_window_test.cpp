@@ -13,7 +13,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/input/key_adapter.hpp"
 #include <QByteArray>
 #include <QColor>
@@ -124,7 +124,7 @@ static_assert(true);
 #include <memory>
 
 #include "application/dependencies.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #ifdef __APPLE__
 #include "ui/input/key_adapter.hpp"
 #include <QBuffer>
@@ -231,7 +231,7 @@ namespace {
     Q_SLOT static void lineEditsAndRunsCommands() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -449,7 +449,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     Q_SLOT static void separatorSettlesACommandThatEnds() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -509,7 +509,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     Q_SLOT static void lineHostsSearches() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -577,7 +577,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QKeyEvent search{QEvent::KeyPress, Qt::Key_R, NativeKeyAdapter::control_modifier};
 
       QCoreApplication::sendEvent(&terminal, &search);
-      QCOMPARE(application.lineSearch(), telar::gui::qt::Application::Dialog::history);
+      QCOMPARE(application.lineSearch(), telar::gui::qt::ApplicationController::Dialog::history);
       // The line also loads its suggestions from the history; the search's query is the line.
       QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::query_history) > queries && runtime.last<QueryHistory>().query == "git s", wait_ms);
       const auto query = runtime.last<QueryHistory>();
@@ -614,12 +614,12 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
       QCoreApplication::sendEvent(field, &escape);
-      QVERIFY((application.dialog() == telar::gui::qt::Application::Dialog::none));
+      QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
       QVERIFY(application.promptLine(pane_id)->editor().text().view() == "git s");
 
       // The path search starts from the word before the caret and writes the path over it.
-      application.execute(Application::Action::path_picker);
-      QCOMPARE(application.lineSearch(), telar::gui::qt::Application::Dialog::paths);
+      application.execute(ApplicationController::Action::path_picker);
+      QCOMPARE(application.lineSearch(), telar::gui::qt::ApplicationController::Dialog::paths);
       QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::find_paths) != 0, wait_ms);
       const auto find = runtime.last<FindPaths>();
 
@@ -640,7 +640,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
 
       QCoreApplication::sendEvent(field, &enter);
-      QVERIFY((application.dialog() == telar::gui::qt::Application::Dialog::none));
+      QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
       const std::string written{application.promptLine(pane_id)->editor().text().view()};
 
       QVERIFY2(written == "git src/main.cpp", written.c_str());
@@ -708,7 +708,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     Q_SLOT static void lineTurnsCompactWhenNarrow() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -844,7 +844,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application application{memory};
+      ApplicationController application{memory};
       const auto config = directory.filePath(QStringLiteral("config.lua"));
       QFile file{config};
 
@@ -1042,7 +1042,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         // / searches the command's output from the line under the pane, no dialog over it: the
         // matches arrive as the query is typed, and Enter leaves them for n and N.
         type(terminal, "/");
-        QTRY_VERIFY_WITH_TIMEOUT(application.dialog() == telar::gui::qt::Application::Dialog::copy_search && application.lineSearch() == telar::gui::qt::Application::Dialog::copy_search && line->property("searching").toBool(), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(application.dialog() == telar::gui::qt::ApplicationController::Dialog::copy_search && application.lineSearch() == telar::gui::qt::ApplicationController::Dialog::copy_search && line->property("searching").toBool(), runtime_wait_ms);
         QQuickItem* query = nullptr;
 
         QTRY_VERIFY_WITH_TIMEOUT((query = line->findChild<QQuickItem*>(QStringLiteral("scrollbackSearch"))) != nullptr, runtime_wait_ms);
@@ -1050,7 +1050,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         QTest::keyClick(&window, Qt::Key_3);
         QTRY_VERIFY2_WITH_TIMEOUT(application.copy()->searchState().value(QStringLiteral("count")).toInt() > 0, qPrintable(QStringLiteral("search %1").arg(QString::fromUtf8(QJsonDocument::fromVariant(application.copy()->searchState()).toJson(QJsonDocument::Compact)))), runtime_wait_ms);
         QTest::keyClick(&window, Qt::Key_Return);
-        QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::Application::Dialog::none) && application.copy()->active() && application.copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none) && application.copy()->active() && application.copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
         type(terminal, "q");
         QTRY_VERIFY_WITH_TIMEOUT(!application.copy()->active(), runtime_wait_ms);
         QKeyEvent back{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};

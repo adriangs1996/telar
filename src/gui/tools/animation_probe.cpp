@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
 #include "ui/controls/modal_reveal_layout.hpp"
@@ -38,7 +38,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
 #include "ui/controls/modal_reveal_layout.hpp"
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
   probe::observeAnimationPresentation();
   ApplicationMemory application_memory;
   ApplicationAllocator& memory = application_memory.memory();
-  std::unique_ptr<Application> client;
+  std::unique_ptr<ApplicationController> client;
   QQuickWindow window;
 
   window.resize(window_width, window_height);
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
   test::configureComponentWindow(window);
   window.setFlag(Qt::WindowStaysOnTopHint, true);
   if (parser.value(QStringLiteral("pacer")) == QStringLiteral("on")) {
-    client = std::make_unique<Application>(memory);
+    client = std::make_unique<ApplicationController>(memory);
     if (parser.isSet(QStringLiteral("config"))) {
       client->loadConfiguration(parser.value(QStringLiteral("config")), {}, {});
     }

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QDebug>
 #include <QPointF>
 #include <array>
@@ -13,7 +13,7 @@ static_assert(true);
 #include <string_view>
 
 #pragma once
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 
 import telar.gui.history.browser;
 import telar.gui.presentation.history_filter_geometry;
@@ -21,18 +21,18 @@ import telar.gui.presentation.history_filter_geometry;
 namespace telar::gui::test {
 
   struct HistoryPresentation {
-    static void renameTab(qt::Application& application, std::string_view label) {
+    static void renameTab(qt::ApplicationController& application, std::string_view label) {
       application.session().renameTab(label);
     }
 
-    [[nodiscard]] static bool current(qt::Application& application) {
+    [[nodiscard]] static bool current(qt::ApplicationController& application) {
       const auto& history = *application.history();
       const auto& surface = history.presented_surface_;
 
       return !history.loading() && surface.delivered && surface.generation == application.store_.dialog().generation && surface.revision == application.session().historyBrowser().revision();
     }
 
-    [[nodiscard]] static std::optional<QPointF> actionCenter(qt::Application& application, HistoryCardAction action) {
+    [[nodiscard]] static std::optional<QPointF> actionCenter(qt::ApplicationController& application, HistoryCardAction action) {
       const auto& surface = application.history()->presented_actions_;
       const auto& browser = application.session().historyBrowser();
       const HistoryChoice expected{.index = browser.state().selection, .revision = browser.revision()};
@@ -48,7 +48,7 @@ namespace telar::gui::test {
       return QPointF{(target->bounds.x + target->bounds.width / 2) / surface.scale, (target->bounds.y + target->bounds.height / 2) / surface.scale};
     }
 
-    static void describe(qt::Application& application) {
+    static void describe(qt::ApplicationController& application) {
       const auto& surface = application.history()->presented_surface_;
 
       qInfo() << "History presentation" << "delivered" << surface.delivered << "generation" << surface.generation << application.store_.dialog().generation << "revision" << surface.revision << application.session().historyBrowser().revision() << "rows" << surface.has_rows << "loading" << application.history()->loading();

@@ -12,7 +12,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
@@ -54,7 +54,7 @@ static_assert(true);
 #include <string_view>
 
 #include "application/dependencies.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
@@ -77,7 +77,7 @@ namespace {
   constexpr int idle_observation_ms = 50;
   constexpr std::uint64_t fixture_notification_duration_ns = 30'000'000'000;
 
-  QVariantMap properties(Application& client) {
+  QVariantMap properties(ApplicationController& client) {
     return {
         {QStringLiteral("width"), window_width},
         {QStringLiteral("height"), window_height},
@@ -97,7 +97,7 @@ namespace {
     Q_SLOT static void cardsKeepOriginalPlacementAndOutsideClicksDoNotDismiss() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       QQmlEngine engine;
 
@@ -145,7 +145,7 @@ namespace {
     Q_SLOT static void newestTwoCardsRetainPainterOrderAndOwnedText() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       QQmlEngine engine;
 
@@ -179,7 +179,7 @@ namespace {
     Q_SLOT static void anEmptyOverlayParksTheWindowAnimationTimer() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       QQmlEngine engine;
 
@@ -201,7 +201,7 @@ namespace {
     Q_SLOT static void pointerFocusAndHoverFollowTheTopmostControl() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       QQmlEngine engine;
 
@@ -254,13 +254,13 @@ namespace {
     Q_SLOT static void keyboardActionsActivateOnPress() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       QQmlEngine engine;
 
       window.resize(window_width, window_height);
       client.setWindow(window);
-      client.execute(Application::Action::toggle_sidebar);
+      client.execute(ApplicationController::Action::toggle_sidebar);
       const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
 
       overlay->setParentItem(window.contentItem());
@@ -309,7 +309,7 @@ namespace {
 
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       QQmlEngine engine;
 

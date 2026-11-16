@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/local_runtime_endpoint.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include <QCommandLineParser>
@@ -164,7 +164,7 @@ namespace {
     return destination ? std::optional{QString::fromUtf8(destination->data(), static_cast<qsizetype>(destination->size()))} : std::nullopt;
   }
 
-  void scheduleSmokeTest(const QCommandLineParser& parser, telar::gui::qt::Application& client, QQuickWindow& window) {
+  void scheduleSmokeTest(const QCommandLineParser& parser, telar::gui::qt::ApplicationController& client, QQuickWindow& window) {
     if (!parser.isSet(QStringLiteral("smoke-ms"))) {
       return;
     }
@@ -220,9 +220,9 @@ int main(int argc, char** argv) {
     telar::gui::ApplicationMemory application_memory;
     telar::gui::ApplicationAllocator& memory = application_memory.memory();
     const auto remote = initialMachine(parser, memory);
-    telar::gui::qt::Application client{memory};
+    telar::gui::qt::ApplicationController client{memory};
 
-    QObject::connect(&client, &telar::gui::qt::Application::machineLaunchFailed, &application, [](const QString& error) {
+    QObject::connect(&client, &telar::gui::qt::ApplicationController::machineLaunchFailed, &application, [](const QString& error) {
       std::cerr << "telar-gui: " << error.toStdString() << '\n';
       QGuiApplication::exit(EXIT_FAILURE);
     });

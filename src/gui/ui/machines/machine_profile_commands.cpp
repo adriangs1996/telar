@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/app/runtime_connection.hpp"
 #include "ui/app/window_identity.hpp"
@@ -59,15 +59,15 @@ namespace telar::gui::qt {
 
   }
 
-  void Application::initializeMachineProfiles() {
-    connect(this, &Application::machinesChanged, this, &Application::refreshMachinePicker);
+  void ApplicationController::initializeMachineProfiles() {
+    connect(this, &ApplicationController::machinesChanged, this, &ApplicationController::refreshMachinePicker);
 
     machine_retry_.setSingleShot(true);
     constexpr int profile_retry_ms = 1000;
 
     machine_retry_.setInterval(profile_retry_ms);
-    connect(&machine_profiles_, &MachineProfilesSource::changed, this, &Application::applyMachineProfiles);
-    connect(&machine_retry_, &QTimer::timeout, this, &Application::applyMachineProfiles);
+    connect(&machine_profiles_, &MachineProfilesSource::changed, this, &ApplicationController::applyMachineProfiles);
+    connect(&machine_retry_, &QTimer::timeout, this, &ApplicationController::applyMachineProfiles);
     connect(&machine_profiles_, &MachineProfilesSource::failed, this, [this] {
       const auto detail = machine_profiles_.error().toUtf8();
       const auto* const title = machine_profiles_.editError() ? "Machine not saved" : "machines.json not applied";
@@ -79,7 +79,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::openMachines(const QString& path) {
+  void ApplicationController::openMachines(const QString& path) {
     if (!clientAt(Machines::local_slot).identity_lease) {
       throw std::logic_error{"Open the local machine before loading profiles"};
     }
@@ -99,7 +99,7 @@ namespace telar::gui::qt {
     machine_profiles_.open(path, QString::fromUtf8(hostname_));
   }
 
-  void Application::applyMachineProfiles() {
+  void ApplicationController::applyMachineProfiles() {
     if (!machine_profiles_.loaded() && (!remote_launch_ || machine_profiles_.error().isEmpty())) {
       return;
     }
@@ -124,7 +124,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::reconcileMachines() {
+  void ApplicationController::reconcileMachines() {
     // A copy: reconciling mutates the application that owns the profiles, which are few and bounded.
     const auto profiles = machine_profiles_.profiles();
     const auto hostname = bytes(hostname_);
@@ -152,7 +152,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::reconcileMachine(const MachineProfile& profile) {
+  void ApplicationController::reconcileMachine(const MachineProfile& profile) {
     auto fields = profileFields(profile);
     auto slot = store_.machines().find(profile.identity());
     if (!slot) {
@@ -198,7 +198,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::admitMachine(Machines::Slot slot) {
+  void ApplicationController::admitMachine(Machines::Slot slot) {
     {
       auto& created = createClient(slot);
 
@@ -214,7 +214,7 @@ namespace telar::gui::qt {
     summarizeMachine(client.key);
   }
 
-  void Application::retireMachine(Machines::Slot slot, MachineRetirement reason) {
+  void ApplicationController::retireMachine(Machines::Slot slot, MachineRetirement reason) {
     if (slot == store_.machines().active()) {
       const auto label = toQString(store_.machines().row(slot).label.view());
 
@@ -236,7 +236,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::discoveredMachine(MachineClient& client, const RemoteDiscovery& discovery) {
+  void ApplicationController::discoveredMachine(MachineClient& client, const RemoteDiscovery& discovery) {
     if (client.named_launch) {
       client.session.setLaunchDirectory(discovery.home());
 

@@ -7,7 +7,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/launch_arguments.hpp"
 #include <QByteArray>
 #include <QString>
@@ -31,7 +31,7 @@ import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
-  void Application::configureRemoteLaunch(const QString& destination, const QStringList& arguments) {
+  void ApplicationController::configureRemoteLaunch(const QString& destination, const QStringList& arguments) {
     if (clientAt(Machines::local_slot).identity_lease) {
       throw std::logic_error{"Configure the initial machine before opening the local connection"};
     }
@@ -48,7 +48,7 @@ namespace telar::gui::qt {
     remote_launch_ = RemoteLaunch{.destination = destination, .arguments = arguments};
   }
 
-  void Application::openRequestedMachine() {
+  void ApplicationController::openRequestedMachine() {
     if (!remote_launch_) {
       return;
     }

@@ -1,6 +1,6 @@
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
@@ -45,11 +45,11 @@ namespace {
     Q_SLOT static void rebindingTheCurrentWindowPreservesConnections() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
 
       client.setWindow(window);
-      const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
 
       client.setWindow(window);
       QCOMPARE(geometry.size(), 0);
@@ -61,13 +61,13 @@ namespace {
     Q_SLOT static void aPreviousWindowCannotPublishScreenChanges() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow previous;
       QQuickWindow current;
 
       client.setWindow(previous);
       client.setWindow(current);
-      const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
 
       previous.screenChanged(previous.screen());
       QCOMPARE(geometry.size(), 0);
@@ -79,14 +79,14 @@ namespace {
     Q_SLOT static void destroyingAPreviousWindowPreservesTheCurrentBinding() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       auto previous = std::make_unique<QQuickWindow>();
       QQuickWindow current;
 
       client.setWindow(*previous);
       client.setWindow(current);
       previous.reset();
-      const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
 
       client.setWindow(current);
       QCOMPARE(geometry.size(), 0);
@@ -100,14 +100,14 @@ namespace {
       constexpr qreal scale_factor = 1.25;
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
       QQuickWindow previous;
       QQuickWindow current;
 
       client.setWindow(previous);
       client.setWindow(current);
-      const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
       auto target = QQuickRenderTarget::fromPaintDevice(&image);
 
       target.setDevicePixelRatio(current.effectiveDevicePixelRatio() * scale_factor);
@@ -130,7 +130,7 @@ namespace {
     Q_SLOT static void aWindowCanBeDestroyedBeforeItsApplication() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
 
       {
         QQuickWindow previous;
@@ -141,7 +141,7 @@ namespace {
       QQuickWindow current;
 
       client.setWindow(current);
-      const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
 
       current.screenChanged(current.screen());
       QCOMPARE(geometry.size(), 1);
@@ -150,7 +150,7 @@ namespace {
     Q_SLOT static void chromeBandsAndRowsFollowTheRenderTargetDensity() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
       constexpr QSize logical_size{801, 503};
       constexpr QSize target_size{64, 64};
@@ -199,7 +199,7 @@ namespace {
       constexpr QSize replacement_size{1100, 800};
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QQuickWindow window;
 
       window.resize(initial_size);
@@ -217,7 +217,7 @@ namespace {
       constexpr std::array scales{1.25, 2.0, 1.0};
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      Application client{memory};
+      ApplicationController client{memory};
       QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
       QQuickWindow window;
       TerminalItem terminal{window.contentItem()};
@@ -240,11 +240,11 @@ namespace {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       QQuickWindow window;
-      auto client = std::make_unique<Application>(memory);
+      auto client = std::make_unique<ApplicationController>(memory);
 
       client->setWindow(window);
-      const QPointer<Application> lifetime{client.get()};
-      const QSignalSpy geometry{client.get(), &Application::windowGeometryChanged};
+      const QPointer<ApplicationController> lifetime{client.get()};
+      const QSignalSpy geometry{client.get(), &ApplicationController::windowGeometryChanged};
 
       client.reset();
       QVERIFY(lifetime.isNull());

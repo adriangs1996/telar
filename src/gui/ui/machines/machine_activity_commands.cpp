@@ -5,26 +5,26 @@ static_assert(true);
 
 #include "machine_activity_target.hpp"
 #include "ui/activity/activity_controller.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QString>
 #include <variant>
 
 namespace telar::gui::qt {
 
-  void Application::peekActivity(const QString& identity) {
+  void ApplicationController::peekActivity(const QString& identity) {
     applyInteraction([&] {
       selectActivity(identity, true);
     });
   }
 
-  void Application::openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
+  void ApplicationController::openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
     if (peek_.open(target, identity, pointer_revision)) {
       showDialog(Dialog::peek);
       peek_.synchronize();
     }
   }
 
-  void Application::selectActivity(const QString& identity, bool peek) {
+  void ApplicationController::selectActivity(const QString& identity, bool peek) {
     pending_activity_.reset();
     const auto* listed = activity_.target(identity);
     if (listed == nullptr || !activity_.available(*listed) || (peek && !std::holds_alternative<MachineActivityTarget::Agent>(listed->owner))) {
@@ -39,7 +39,7 @@ namespace telar::gui::qt {
     settleActivity();
   }
 
-  void Application::settleActivity() {
+  void ApplicationController::settleActivity() {
     if (!pending_activity_) {
       return;
     }

@@ -20,7 +20,7 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_scene.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/terminal_font.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
@@ -160,7 +160,7 @@ namespace telar::gui::qt {
   }
 
   void TerminalItem::setApplication(QObject* application) {
-    auto* next = qobject_cast<Application*>(application);
+    auto* next = qobject_cast<ApplicationController*>(application);
     if (next == application_) {
       return;
     }
@@ -185,26 +185,26 @@ namespace telar::gui::qt {
         emit applicationChanged();
       });
 
-      connect(application_, &Application::terminalChanged, this, [this](qulonglong pane_id) {
+      connect(application_, &ApplicationController::terminalChanged, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refresh();
         }
       });
 
-      connect(application_, &Application::promptChanged, this, [this](qulonglong pane_id) {
+      connect(application_, &ApplicationController::promptChanged, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refreshBlocks();
           update();
         }
       });
 
-      connect(application_, &Application::configurationChanged, this, &TerminalItem::measure);
-      connect(application_, &Application::machineChanged, this, &TerminalItem::invalidateMachine);
-      connect(application_, &Application::refreshed, this, &TerminalItem::refreshLinkHover);
+      connect(application_, &ApplicationController::configurationChanged, this, &TerminalItem::measure);
+      connect(application_, &ApplicationController::machineChanged, this, &TerminalItem::invalidateMachine);
+      connect(application_, &ApplicationController::refreshed, this, &TerminalItem::refreshLinkHover);
       connect(application_->copy(), &CopyController::activeChanged, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &Application::dialogChanged, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &Application::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &Application::inputReleasing, this, [this](qulonglong pane_id) {
+      connect(application_, &ApplicationController::dialogChanged, this, &TerminalItem::refreshLinkHover);
+      connect(application_, &ApplicationController::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
+      connect(application_, &ApplicationController::inputReleasing, this, [this](qulonglong pane_id) {
         if (pane_id != pane_id_) {
           return;
         }

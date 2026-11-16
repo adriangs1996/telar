@@ -53,7 +53,7 @@ Item {
             ratio: root.ratio
             placeholderText: root.searchMode ? "Search scrollback" : "Name"
             onSubmitted: root.submit()
-            onCancelled: root.controller.execute(GuiController.Action.cancel)
+            onCancelled: root.controller.execute(ApplicationController.Action.cancel)
             // A search begun from a command reads its output or the whole scrollback.
             onTabbed: {
                 if (root.searchMode && root.controller.copy.searchScopes) {
@@ -71,7 +71,7 @@ Item {
             submitText: root.searchMode ? "Search" : "Rename"
             submittable: root.submittable
             onSubmitted: root.submit()
-            onCancelled: root.controller.execute(GuiController.Action.cancel)
+            onCancelled: root.controller.execute(ApplicationController.Action.cancel)
         }
     }
 }

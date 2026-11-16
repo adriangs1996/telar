@@ -6,7 +6,7 @@ import QtQuick
 Item {
     id: root
 
-    required property GuiController application
+    required property ApplicationController application
     property real ratio: 1
     property bool keyboardCovered: false
 
@@ -91,7 +91,7 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         onPressed: {
-                            root.application.execute(GuiController.Action.focus_pane, pane.record.key);
+                            root.application.execute(ApplicationController.Action.focus_pane, pane.record.key);
                             terminal.forceActiveFocus(Qt.MouseFocusReason);
                         }
                     }
@@ -134,7 +134,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     onPressed: {
-                        root.application.execute(GuiController.Action.focus_pane, pane.record.key);
+                        root.application.execute(ApplicationController.Action.focus_pane, pane.record.key);
                         terminal.forceActiveFocus(Qt.MouseFocusReason);
                     }
                 }

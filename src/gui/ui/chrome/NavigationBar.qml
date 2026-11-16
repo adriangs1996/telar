@@ -88,7 +88,7 @@ NativeRoundedRectangle {
         workspace: root.workspace.name || "workspace"
         attention: root.rail && (root.machineContext.attention ?? false)
         onMachineRequested: {
-            if (root.controller) root.controller.execute(GuiController.Action.machine_picker);
+            if (root.controller) root.controller.execute(ApplicationController.Action.machine_picker);
         }
         onWorkspaceRequested: root.workspacePickerRequested()
     }
@@ -212,7 +212,7 @@ NativeRoundedRectangle {
             workspace: root.workspace.name || "workspace"
             attention: root.rail && (root.machineContext.attention ?? false)
             onMachineRequested: {
-                if (root.controller) root.controller.execute(GuiController.Action.machine_picker);
+                if (root.controller) root.controller.execute(ApplicationController.Action.machine_picker);
             }
             onWorkspaceRequested: root.workspacePickerRequested()
         }

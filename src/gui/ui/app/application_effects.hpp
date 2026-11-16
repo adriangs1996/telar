@@ -32,10 +32,10 @@ import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
-  class Application;
+  class ApplicationController;
 
   struct ApplicationEffects final : HostEffects {
-    ApplicationEffects(Application& owner, MachineClientKey client) noexcept
+    ApplicationEffects(ApplicationController& owner, MachineClientKey client) noexcept
         : application(owner),
           source(client) {}
 
@@ -43,7 +43,7 @@ namespace telar::gui::qt {
     bool playSound(AgentSound sound) override;
     void notePaneInput(FramePacer::Pane pane) noexcept override;
 
-    Application& application;
+    ApplicationController& application;
     MachineClientKey source;
   };
 

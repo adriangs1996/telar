@@ -18,7 +18,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCommandLineParser>
 #include <QCryptographicHash>
@@ -131,7 +131,7 @@ namespace {
 
     ApplicationMemory application_memory;
     ApplicationAllocator& memory = application_memory.memory();
-    Application client{memory};
+    ApplicationController client{memory};
     // Separators belong to Telar's prompt over an integrated shell.
     const auto configuration = directory.filePath(QStringLiteral("config.lua"));
     QFile file{configuration};

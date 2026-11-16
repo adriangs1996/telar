@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "palette_controller.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QString>
 #include <QVariantMap>
 #include <algorithm>
@@ -16,12 +16,12 @@ import telar.gui.palette.navigation_label;
 
 namespace telar::gui::qt {
 
-  void Application::showPalette(PaletteMode mode) {
+  void ApplicationController::showPalette(PaletteMode mode) {
     palette_.open(mode);
     showDialog(Dialog::palette);
   }
 
-  bool Application::navigatePaletteTarget(const NavigationTarget& target) {
+  bool ApplicationController::navigatePaletteTarget(const NavigationTarget& target) {
     if (const auto* workspace = std::get_if<WorkspaceLocation>(&target)) {
       const auto found = std::ranges::find_if(session().workspaces(), [&](const auto& row) {
         return sameWorkspace(row.location, *workspace);
@@ -53,7 +53,7 @@ namespace telar::gui::qt {
     return session().focusAgent(agent.pane_id, agent.pane_generation);
   }
 
-  void Application::usePaletteResult(const QVariantMap& choice) {
+  void ApplicationController::usePaletteResult(const QVariantMap& choice) {
     const auto chosen = palette_.chosen(choice);
     if (!chosen) {
       return;

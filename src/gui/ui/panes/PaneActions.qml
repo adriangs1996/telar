@@ -7,7 +7,7 @@ Row {
     id: root
     objectName: "paneActions"
 
-    required property GuiController controller
+    required property ApplicationController controller
     required property string paneKey
     required property var colors
     required property var typography
@@ -28,7 +28,7 @@ Row {
     spacing: 2 * ratio
 
     function execute(action) {
-        controller.execute(GuiController.Action.focus_pane, paneKey);
+        controller.execute(ApplicationController.Action.focus_pane, paneKey);
         controller.execute(action);
     }
 
@@ -80,8 +80,8 @@ Row {
 
     Repeater {
         model: [
-            {label: "Split right", divider: "vertical", action: GuiController.Action.split_horizontal},
-            {label: "Split below", divider: "horizontal", action: GuiController.Action.split_vertical}
+            {label: "Split right", divider: "vertical", action: ApplicationController.Action.split_horizontal},
+            {label: "Split below", divider: "horizontal", action: ApplicationController.Action.split_vertical}
         ]
 
         delegate: ActionButton {}
@@ -148,7 +148,7 @@ Row {
                         }
                     }
                     Accessible.name: entry.program
-                    onClicked: root.controller.execute(GuiController.Action.focus_pane, entry.key)
+                    onClicked: root.controller.execute(ApplicationController.Action.focus_pane, entry.key)
 
                     ChromeToolTip {
                         visible: selector.hovered
@@ -174,19 +174,19 @@ Row {
 
             // One button per state: a binding on the required modelData leaves it undefined.
             ActionButton {
-                modelData: ({label: "Restore panes", glyph: "", action: GuiController.Action.fullscreen})
+                modelData: ({label: "Restore panes", glyph: "", action: ApplicationController.Action.fullscreen})
                 engaged: true
                 visible: root.zoomed
             }
 
             ActionButton {
-                modelData: ({label: "Expand pane", glyph: "", action: GuiController.Action.fullscreen})
+                modelData: ({label: "Expand pane", glyph: "", action: ApplicationController.Action.fullscreen})
                 visible: !root.zoomed
             }
         }
     }
 
     ActionButton {
-        modelData: ({label: "Close pane", glyph: "", action: GuiController.Action.close_pane})
+        modelData: ({label: "Close pane", glyph: "", action: ApplicationController.Action.close_pane})
     }
 }

@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/typography_projection.hpp"
@@ -48,11 +48,11 @@ import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
-  DisplayMetrics Application::displayMetrics(qreal density) const {
+  DisplayMetrics ApplicationController::displayMetrics(qreal density) const {
     return DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
   }
 
-  void Application::measureDisplay() {
+  void ApplicationController::measureDisplay() {
     const auto display = displayMetrics(window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio());
 
     palette_.setDisplay(display);
@@ -63,43 +63,43 @@ namespace telar::gui::qt {
     notifications_.setDisplay(display, terminal_grid_);
   }
 
-  bool Application::machineListCollapsed() const noexcept {
+  bool ApplicationController::machineListCollapsed() const noexcept {
     return machine_list_collapsed_;
   }
 
-  int Application::machineCount() const noexcept {
+  int ApplicationController::machineCount() const noexcept {
     return static_cast<int>(store_.machines().count());
   }
 
   // The active machine is named in the top bar; the sidebar lists the others.
-  SidebarMachines Application::sidebarMachines() const noexcept {
+  SidebarMachines ApplicationController::sidebarMachines() const noexcept {
     const auto count = store_.machines().count();
 
     return {.shown = count > 1, .rows = count > 1 && !machine_list_collapsed_ ? count - 1 : 0};
   }
 
-  void Application::toggleMachineList() {
+  void ApplicationController::toggleMachineList() {
     machine_list_collapsed_ = !machine_list_collapsed_;
     sidebar_machines_ = sidebarMachines();
     emit sidebarGeometryChanged();
   }
 
-  QVariantMap Application::machineContext() const {
+  QVariantMap ApplicationController::machineContext() const {
     return {
         {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
         {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
     };
   }
 
-  qreal Application::chromeRatio() const {
+  qreal ApplicationController::chromeRatio() const {
     return 1;
   }
 
-  qreal Application::chromeTextScale() const {
+  qreal ApplicationController::chromeTextScale() const {
     return configuration().chrome_scale;
   }
 
-  QVariantMap Application::windowGeometry() const {
+  QVariantMap ApplicationController::windowGeometry() const {
     const auto& font = configuration().font;
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto display = displayMetrics(density);
@@ -128,7 +128,7 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantMap Application::sidebarGeometry() const {
+  QVariantMap ApplicationController::sidebarGeometry() const {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto display = displayMetrics(density);
     const auto& geometry = display.geometry;
@@ -145,7 +145,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  HistoryModalMetrics Application::historyMetrics() const {
+  HistoryModalMetrics ApplicationController::historyMetrics() const {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto display = displayMetrics(density);
 
@@ -156,7 +156,7 @@ namespace telar::gui::qt {
     };
   }
 
-  void Application::synchronizeWorkbenchGeometry() {
+  void ApplicationController::synchronizeWorkbenchGeometry() {
     const auto display = displayMetrics(terminal_grid_.scale);
     const auto& configuration = this->configuration();
     const auto& geometry = display.geometry;
@@ -183,7 +183,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::fitSidebarWhenReady() {
+  void ApplicationController::fitSidebarWhenReady() {
     if (!configuration().sidebar_width_auto) {
       sidebar_fit_pending_ = false;
       return;
@@ -198,7 +198,7 @@ namespace telar::gui::qt {
     fitSidebar();
   }
 
-  void Application::fitSidebar() {
+  void ApplicationController::fitSidebar() {
     if (window_ != nullptr) {
       setSidebarWidth(sidebarNaturalWidth());
     }
@@ -206,7 +206,7 @@ namespace telar::gui::qt {
 
   // The logical width that shows the longest card and machine row whole, at most a third of
   // the window. The cards are measured from their records, so the ones scrolled out count too.
-  float Application::sidebarNaturalWidth() const {
+  float ApplicationController::sidebarNaturalWidth() const {
     const auto density = window_->effectiveDevicePixelRatio();
     const auto display = displayMetrics(density);
     const auto& chrome = display.chrome;

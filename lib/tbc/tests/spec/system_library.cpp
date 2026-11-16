@@ -17,7 +17,7 @@ namespace third_party {
 
 // CASE: library.view_of_local
 // PAIR: library.view
-// SOURCE: src/gui/ui/app/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application_controller.cpp :: ApplicationController
 // STATUS: implemented
 // CONTRACT: A library type with a trivial destructor views the object it is built from.
 // SCENARIO: A library view of a local library string is returned.
@@ -30,7 +30,7 @@ library::string_view libraryViewOfLocal() {
 
 // CASE: library.view_of_parameter
 // PAIR: library.view
-// SOURCE: src/gui/ui/app/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application_controller.cpp :: ApplicationController
 // STATUS: implemented
 // CONTRACT: A library view of a caller's object may outlive the call.
 // SCENARIO: The viewed string belongs to the caller; accept.
@@ -94,7 +94,7 @@ int* libraryNonContainerPointer() {
 
 // CASE: library.views_in_owner_dead
 // PAIR: library.views_in_owner
-// SOURCE: src/gui/ui/app/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application_controller.cpp :: ApplicationController
 // STATUS: implemented
 // CONTRACT: A library container of views keeps the borrows of the views appended to it.
 // SCENARIO: The appended view's string dies before the container is read.
@@ -111,7 +111,7 @@ void libraryViewsInOwnerDead() {
 
 // CASE: library.views_in_owner_live
 // PAIR: library.views_in_owner
-// SOURCE: src/gui/ui/app/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application_controller.cpp :: ApplicationController
 // STATUS: implemented
 // CONTRACT: Views stored in a library container may be read while their source is alive.
 // SCENARIO: The string outlives the read; accept.

@@ -593,7 +593,7 @@
     "src/gui/ui/scene/alpha_mask_vertex.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/ancestor_geometry.hpp": "Qt moc/QML integration",
     "src/gui/ui/config/appearance.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/application.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/application_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/application_effects.hpp": "Qt moc/QML integration",
     "src/gui/ui/attachments/attachment_image.hpp": "Qt moc/QML integration",
     "src/gui/ui/attachments/attachment_preview.hpp": "Qt moc/QML integration",

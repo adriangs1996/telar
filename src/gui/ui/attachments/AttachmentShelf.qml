@@ -6,7 +6,7 @@ import QtQuick
 Rectangle {
     id: root
 
-    required property GuiController application
+    required property ApplicationController application
     property real ratio: application.chromeRatio
     readonly property var shelf: application.attachments.shelf
     readonly property bool modalOpen: (shelf.modal.id ?? "").length > 0

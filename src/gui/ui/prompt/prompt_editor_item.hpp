@@ -26,7 +26,7 @@ import telar.gui.prompt.layout;
 
 namespace telar::gui::qt {
 
-  class Application;
+  class ApplicationController;
   class NativeCellText;
 
   // telar's command editor as the prompt line draws it: the command in the terminal's font,
@@ -185,7 +185,7 @@ namespace telar::gui::qt {
 
     // Glyphs snap to the scene's pixels, so moving any ancestor repaints them.
     AncestorGeometry ancestors_;
-    QPointer<Application> application_;
+    QPointer<ApplicationController> application_;
     CellTextGrid resolved_;
     std::vector<NativeCellText*> runs_;
     QVariantMap grid_;

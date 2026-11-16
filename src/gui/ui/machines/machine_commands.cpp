@@ -13,7 +13,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/runtime_connection.hpp"
 #include <QByteArrayView>
 #include <QRandomGenerator>
@@ -47,13 +47,13 @@ import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 
-  void Application::initializeMachines() {
+  void ApplicationController::initializeMachines() {
     const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
 
     static_cast<void>(createClient(slot));
   }
 
-  void Application::configureClients() {
+  void ApplicationController::configureClients() {
     for (auto& client : store_.clients()) {
       if (!client) {
         continue;
@@ -66,7 +66,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::setClientsDisplayRefresh(std::uint16_t fps) {
+  void ApplicationController::setClientsDisplayRefresh(std::uint16_t fps) {
     for (auto& client : store_.clients()) {
       if (!client) {
         continue;
@@ -79,7 +79,7 @@ namespace telar::gui::qt {
     }
   }
 
-  MachineClient& Application::createClient(Machines::Slot slot) {
+  MachineClient& ApplicationController::createClient(Machines::Slot slot) {
     const auto key = store_.admission(slot);
     auto owned = makeOwned<MachineClient>(memory_, memory_, *this, key);
     auto* client = owned.get();
@@ -112,31 +112,31 @@ namespace telar::gui::qt {
     return clientAt(slot);
   }
 
-  MachineClient& Application::clientAt(Machines::Slot slot) const noexcept {
+  MachineClient& ApplicationController::clientAt(Machines::Slot slot) const noexcept {
     return store_.client(slot);
   }
 
-  MachineClient* Application::findClient(MachineClientKey key) const noexcept {
+  MachineClient* ApplicationController::findClient(MachineClientKey key) const noexcept {
     return store_.find(key);
   }
 
-  GuiSession& Application::session() noexcept {
+  GuiSession& ApplicationController::session() noexcept {
     return store_.session();
   }
 
-  const GuiSession& Application::session() const noexcept {
+  const GuiSession& ApplicationController::session() const noexcept {
     return store_.session();
   }
 
-  RuntimeConnection& Application::connection() noexcept {
+  RuntimeConnection& ApplicationController::connection() noexcept {
     return store_.connection();
   }
 
-  const RuntimeConnection& Application::connection() const noexcept {
+  const RuntimeConnection& ApplicationController::connection() const noexcept {
     return store_.connection();
   }
 
-  void Application::connectMachine(Machines::Slot slot) {
+  void ApplicationController::connectMachine(Machines::Slot slot) {
     auto& client = clientAt(slot);
     const auto key = client.key;
 
@@ -209,7 +209,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::selectMachine(MachineToken target) {
+  void ApplicationController::selectMachine(MachineToken target) {
     if (!store_.machines().contains(target) || target.slot == store_.machines().active() || !store_.machines().shown(target.slot) || !store_.machines().row(target.slot).live || !store_.clients()[target.slot]) {
       return;
     }
@@ -237,14 +237,14 @@ namespace telar::gui::qt {
     restoreTerminalFocus();
   }
 
-  void Application::releaseMachineInput() {
+  void ApplicationController::releaseMachineInput() {
     interruptBindings();
     for (const auto& pane : session().panes()) {
       emit inputReleasing(pane->id);
     }
   }
 
-  void Application::forgetMachineView() {
+  void ApplicationController::forgetMachineView() {
     history_.forget();
     graphics_resume_timer_.stop();
     panes_.forget();
@@ -259,7 +259,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::summarizeMachine(MachineClientKey key) {
+  void ApplicationController::summarizeMachine(MachineClientKey key) {
     const auto slot = key.machine.slot;
     const auto* const found = findClient(key);
     if (found == nullptr) {

@@ -12,7 +12,7 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/input/key_adapter.hpp"
 #include "ui/input/mouse_buttons.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
@@ -56,7 +56,7 @@ namespace telar::gui::qt {
 
   namespace {
 
-    using Action = Application::Action;
+    using Action = ApplicationController::Action;
 
   }
 
@@ -270,7 +270,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (application_->dialog() != Application::Dialog::none || link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())}) || !link_hover_.surfaceVisible(terminalSurface())) {
+    if (application_->dialog() != ApplicationController::Dialog::none || link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())}) || !link_hover_.surfaceVisible(terminalSurface())) {
       wheel_.reset();
       event->accept();
 
@@ -337,7 +337,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog() == Application::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
+    if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog() == ApplicationController::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
       const auto no_button = static_cast<unsigned>(MouseButton::none);
 
       mousePacket(ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);

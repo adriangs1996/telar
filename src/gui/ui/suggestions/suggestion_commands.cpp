@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/palette/palette_controller.hpp"
 #include <QByteArray>
 #include <QString>
@@ -13,7 +13,7 @@ import telar.gui.palette.navigation_label;
 
 namespace telar::gui::qt {
 
-  void Application::submitSuggestion(const QString& revision) {
+  void ApplicationController::submitSuggestion(const QString& revision) {
     const auto encoded = palette_.query().toUtf8();
     const auto query = PaletteQuery::parse({encoded.constData(), static_cast<std::size_t>(encoded.size())});
     if (store_.dialog().kind != Dialog::palette || query.mode != PaletteMode::suggest || revision != palette_.suggestionRevision()) {
@@ -29,7 +29,7 @@ namespace telar::gui::qt {
     });
   }
 
-  bool Application::restorePaletteParent() {
+  bool ApplicationController::restorePaletteParent() {
     if (store_.dialog().kind != Dialog::palette || !palette_.hasParent()) {
       return false;
     }

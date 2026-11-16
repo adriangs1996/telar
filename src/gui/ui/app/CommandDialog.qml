@@ -90,7 +90,7 @@ Popup {
     closePolicy: customMode ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     onClosed: {
         if (telar.dialog !== Store.Dialog.none && !root.lineHosted)
-            telar.execute(GuiController.Action.cancel);
+            telar.execute(ApplicationController.Action.cancel);
     }
 
     // The inspector opens and closes over the prompt line's search.

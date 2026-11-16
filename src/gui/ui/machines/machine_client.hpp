@@ -72,7 +72,7 @@ namespace telar::gui::qt {
     bool named_launch = false;
     runtime::FixedText<MachineLimits::program_bytes> admitted_program;
 
-    explicit MachineClient(ApplicationAllocator& memory, Application& application, MachineClientKey admission)
+    explicit MachineClient(ApplicationAllocator& memory, ApplicationController& application, MachineClientKey admission)
         : key(admission),
           connection(memory),
           effects(application, admission),

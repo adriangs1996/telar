@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "prompt_editor_item.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/controls/native_cell_text.hpp"
 #include <QEasingCurve>
 #include <QQuickWindow>
@@ -47,7 +47,7 @@ namespace telar::gui::qt {
   }
 
   void PromptEditorItem::setApplication(QObject* application) {
-    auto* next = qobject_cast<Application*>(application);
+    auto* next = qobject_cast<ApplicationController*>(application);
     if (application_ == next) {
       return;
     }
@@ -67,9 +67,9 @@ namespace telar::gui::qt {
         }
       };
 
-      connect(application_, &Application::promptChanged, this, pane);
-      connect(application_, &Application::terminalChanged, this, pane);
-      connect(application_, &Application::configurationChanged, this, &PromptEditorItem::refresh);
+      connect(application_, &ApplicationController::promptChanged, this, pane);
+      connect(application_, &ApplicationController::terminalChanged, this, pane);
+      connect(application_, &ApplicationController::configurationChanged, this, &PromptEditorItem::refresh);
     }
 
     refresh();

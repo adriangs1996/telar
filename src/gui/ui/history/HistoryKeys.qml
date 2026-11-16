@@ -56,7 +56,7 @@ QtObject {
         if (root.state.inspecting) {
             root.controller.history.execute(HistoryController.Action.inspect);
         } else {
-            root.controller.execute(GuiController.Action.cancel);
+            root.controller.execute(ApplicationController.Action.cancel);
         }
     }
 

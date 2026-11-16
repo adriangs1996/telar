@@ -16,7 +16,7 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/attachments/attachment_shelf.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
@@ -60,12 +60,12 @@ import telar.gui.input.configuration;
 
 namespace telar::gui::qt {
 
-  PointerDispatcher::PointerDispatcher(Application& application)
+  PointerDispatcher::PointerDispatcher(ApplicationController& application)
       : QObject(&application),
         application_(application),
         native_events_(application.memory_),
         history_scroll_events_(*this) {
-    connect(&application, &Application::inputReleasing, this, &PointerDispatcher::cancelPane);
+    connect(&application, &ApplicationController::inputReleasing, this, &PointerDispatcher::cancelPane);
   }
 
   void PointerDispatcher::setWindow(QQuickWindow& window) {
@@ -92,7 +92,7 @@ namespace telar::gui::qt {
   // cancellation before Qt merges those phases into its wheel-event stream.
   bool PointerDispatcher::handleNativeScroll(std::string_view event_type, const void* message) {
     // The prompt line scrolls its own rows; the modal takes the wheel only while it shows.
-    if (window_.isNull() || application_.store_.dialog().kind != Application::Dialog::history || application_.history_.hosted()) {
+    if (window_.isNull() || application_.store_.dialog().kind != ApplicationController::Dialog::history || application_.history_.hosted()) {
       return false;
     }
 
@@ -301,7 +301,7 @@ namespace telar::gui::qt {
 
       const auto& surface = application_.history_.presentedActions();
       HistoryActionCapture history;
-      if (application_.store_.dialog().kind == Application::Dialog::history && surface.generation == application_.store_.dialog().generation && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
+      if (application_.store_.dialog().kind == ApplicationController::Dialog::history && surface.generation == application_.store_.dialog().generation && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
         *lease = {.terminal = {}, .history = history, .held = true};
 
         return true;
@@ -382,7 +382,7 @@ namespace telar::gui::qt {
       const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
       const auto choice = surface.choice;
 
-      if (application_.store_.dialog().kind != Application::Dialog::history || surface.generation != application_.store_.dialog().generation) {
+      if (application_.store_.dialog().kind != ApplicationController::Dialog::history || surface.generation != application_.store_.dialog().generation) {
         return true;
       }
 
@@ -423,7 +423,7 @@ namespace telar::gui::qt {
     try {
       switch (event->type()) {
       case QEvent::Wheel:
-        if (application_.store_.dialog().kind == Application::Dialog::history) {
+        if (application_.store_.dialog().kind == ApplicationController::Dialog::history) {
           retireTerminalScroll();
         }
 

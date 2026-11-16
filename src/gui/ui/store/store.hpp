@@ -31,7 +31,7 @@ namespace telar::gui::qt {
     Q_OBJECT
     QML_NAMED_ELEMENT(Store)
     QML_UNCREATABLE("The window owns its store")
-    // QML names every enum value with its enum, as GuiController does.
+    // QML names every enum value with its enum, as ApplicationController does.
     Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
 
   public:

@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include <QQuickWindow>
 #include <QString>
@@ -37,14 +37,14 @@ import telar.gui.presentation.suggestion_geometry;
 
 namespace telar::gui::qt {
 
-  QVariantMap Application::runtimeLinkState() const {
+  QVariantMap ApplicationController::runtimeLinkState() const {
     const auto& link = connection().link();
     const auto detail = link.failure().value_or(std::string_view{});
 
     return {{QStringLiteral("visible"), link.phase != MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().has_value()}, {QStringLiteral("dimAlpha"), LinkStatusGeometry::dim_alpha}};
   }
 
-  QVariantMap Application::runtimeLinkGeometry() const {
+  QVariantMap ApplicationController::runtimeLinkGeometry() const {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto display = displayMetrics(density);
     const auto& workbench = session().workbenchGeometry();

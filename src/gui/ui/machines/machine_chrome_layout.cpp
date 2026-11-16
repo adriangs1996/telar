@@ -12,7 +12,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/activity/agent_projection.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
@@ -87,7 +87,7 @@ namespace telar::gui::qt {
   MachineChromeLayout::MachineChromeLayout(QQuickItem* parent)
       : QQuickItem(parent) {}
 
-  Application* MachineChromeLayout::controller() const noexcept {
+  ApplicationController* MachineChromeLayout::controller() const noexcept {
     return controller_;
   }
 
@@ -111,7 +111,7 @@ namespace telar::gui::qt {
     return style_;
   }
 
-  void MachineChromeLayout::setController(Application* controller) {
+  void MachineChromeLayout::setController(ApplicationController* controller) {
     if (controller_ == controller) {
       return;
     }
@@ -122,9 +122,9 @@ namespace telar::gui::qt {
 
     controller_ = controller;
     if (controller_ != nullptr) {
-      connect(controller_, &Application::machinesChanged, this, &MachineChromeLayout::observeSources);
-      connect(controller_, &Application::configurationChanged, this, &MachineChromeLayout::invalidate);
-      connect(controller_, &Application::windowGeometryChanged, this, &MachineChromeLayout::invalidate);
+      connect(controller_, &ApplicationController::machinesChanged, this, &MachineChromeLayout::observeSources);
+      connect(controller_, &ApplicationController::configurationChanged, this, &MachineChromeLayout::invalidate);
+      connect(controller_, &ApplicationController::windowGeometryChanged, this, &MachineChromeLayout::invalidate);
       connect(controller_, &QObject::destroyed, this, [this] {
         controller_ = nullptr;
         observeSources();
@@ -528,7 +528,7 @@ namespace telar::gui::qt {
     }
 
     if (identity == QLatin1StringView("machine:picker")) {
-      controller_->execute(Application::Action::machine_picker);
+      controller_->execute(ApplicationController::Action::machine_picker);
       return;
     }
 

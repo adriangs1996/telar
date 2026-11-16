@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/app/runtime_connection.hpp"
 #include <QLatin1StringView>
@@ -51,7 +51,7 @@ import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 
-  bool Application::executeMachineAction(Action action) {
+  bool ApplicationController::executeMachineAction(Action action) {
     switch (action) {
     case Action::machine_picker:
       showPalette(PaletteMode::machines);
@@ -72,13 +72,13 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void Application::showMachinePrompt(std::optional<MachineToken> renamed) {
+  void ApplicationController::showMachinePrompt(std::optional<MachineToken> renamed) {
     if (machine_prompt_.open(renamed)) {
       showDialog(Dialog::machine);
     }
   }
 
-  void Application::moveMachine(int delta) {
+  void ApplicationController::moveMachine(int delta) {
     auto slot = static_cast<int>(store_.machines().active());
 
     for (std::size_t step = 0; step < Machines::capacity; ++step) {
@@ -92,13 +92,13 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::refreshMachinePicker() {
+  void ApplicationController::refreshMachinePicker() {
     if (palette_.query().startsWith(QLatin1Char(':'))) {
       palette_.synchronize();
     }
   }
 
-  void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
+  void ApplicationController::chooseMachine(MachinePickerTarget target, bool alternate) {
     const auto intent = MachinePicker::choose(store_.machines(), target.machine, alternate);
     if (intent == MachinePicker::Intent::add) {
       showMachinePrompt();
@@ -136,7 +136,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::editMachineResult(const QVariantMap& choice, MachineEditAction action) {
+  void ApplicationController::editMachineResult(const QVariantMap& choice, MachineEditAction action) {
     const auto target = palette_.chosenMachine(choice);
     if (!target || !target->machine || !store_.machines().contains(*target->machine) || target->machine->slot == Machines::local_slot) {
       return;
@@ -155,7 +155,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::setupMachine(MachineToken target) {
+  void ApplicationController::setupMachine(MachineToken target) {
     if (!store_.machines().contains(target) || target.slot == Machines::local_slot) {
       return;
     }

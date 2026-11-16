@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -57,7 +57,7 @@ namespace telar::gui::qt {
 
   }
 
-  KeyBindings::KeyBindings(Application& application)
+  KeyBindings::KeyBindings(ApplicationController& application)
       : QObject(&application),
         application_(application) {
     clock_.start();
@@ -183,7 +183,7 @@ namespace telar::gui::qt {
     try {
       const auto repeating = router_.repeatAction();
       const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
-      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copy_.active() || application_.dialog() != Application::Dialog::none || application_.components_.pickOpen(), .repeat = policy});
+      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copy_.active() || application_.dialog() != ApplicationController::Dialog::none || application_.components_.pickOpen(), .repeat = policy});
       const auto consumed = apply(decision);
 
       if (input.phase == KeyPhase::release) {
@@ -242,7 +242,7 @@ namespace telar::gui::qt {
 
       if (lease != recipients_.end()) {
         const auto& copy = application_.copy_.state();
-        const auto copying = copy && !copy->pointer && application_.dialog() == Application::Dialog::none;
+        const auto copying = copy && !copy->pointer && application_.dialog() == ApplicationController::Dialog::none;
 
         *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.viewVersion().machine};
       }
@@ -427,7 +427,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (event->type() == QEvent::ShortcutOverride && application_.dialog() == Application::Dialog::none && router_.wantsBinding(capture(*key, *recipient))) {
+    if (event->type() == QEvent::ShortcutOverride && application_.dialog() == ApplicationController::Dialog::none && router_.wantsBinding(capture(*key, *recipient))) {
       // A dead key (Option+N on macOS) would otherwise start a composition and never arrive as a key press.
       if (auto* terminal = qobject_cast<TerminalItem*>(recipient); terminal != nullptr) {
         terminal->bypassInputMethod();
@@ -457,11 +457,11 @@ namespace telar::gui::qt {
     application_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
   }
 
-  int Application::controlModifier() {
+  int ApplicationController::controlModifier() {
     return static_cast<int>(NativeKeyAdapter::control_modifier);
   }
 
-  int Application::superModifier() {
+  int ApplicationController::superModifier() {
     return static_cast<int>(NativeKeyAdapter::super_modifier);
   }
 

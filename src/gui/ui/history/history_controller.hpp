@@ -57,7 +57,7 @@ namespace telar::gui::qt {
     Q_OBJECT
     QML_NAMED_ELEMENT(HistoryController)
     QML_UNCREATABLE("Use the window's history")
-    // QML names every enum value with its enum, as GuiController does.
+    // QML names every enum value with its enum, as ApplicationController does.
     Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
     Q_PROPERTY(QAbstractItemModel* rows READ rows CONSTANT)
     Q_PROPERTY(bool loading READ loading NOTIFY changed)

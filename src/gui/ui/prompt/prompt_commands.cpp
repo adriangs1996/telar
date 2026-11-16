@@ -3,36 +3,36 @@
 static_assert(true);
 #endif
 
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <exception>
 
 namespace telar::gui::qt {
 
-  prompt::Surface Application::promptSurface(std::uint64_t pane_id) const noexcept {
+  prompt::Surface ApplicationController::promptSurface(std::uint64_t pane_id) const noexcept {
     return session().promptSurface(pane_id);
   }
 
-  bool Application::editsPrompt(std::uint64_t pane_id) const noexcept {
+  bool ApplicationController::editsPrompt(std::uint64_t pane_id) const noexcept {
     return session().editsPrompt(pane_id);
   }
 
-  bool Application::hidesTerminalCursor(std::uint64_t pane_id) const noexcept {
+  bool ApplicationController::hidesTerminalCursor(std::uint64_t pane_id) const noexcept {
     return session().hidesTerminalCursor(pane_id);
   }
 
-  const prompt::Line* Application::promptLine(std::uint64_t pane_id) const noexcept {
+  const prompt::Line* ApplicationController::promptLine(std::uint64_t pane_id) const noexcept {
     return session().promptLine(pane_id);
   }
 
-  std::string_view Application::promptSuggestion(std::uint64_t pane_id) const noexcept {
+  std::string_view ApplicationController::promptSuggestion(std::uint64_t pane_id) const noexcept {
     const auto* line = session().promptLine(pane_id);
 
     return line == nullptr ? std::string_view{} : line->suggestion(session().promptHistory());
   }
 
-  CommandPresence Application::commandPresence(std::uint64_t pane_id, std::string_view word) {
+  CommandPresence ApplicationController::commandPresence(std::uint64_t pane_id, std::string_view word) {
     try {
       return session().commandPresence(pane_id, word);
     } catch (const std::exception&) {
@@ -40,11 +40,11 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<std::size_t> Application::selectedBlock(std::uint64_t pane_id) const noexcept {
+  std::optional<std::size_t> ApplicationController::selectedBlock(std::uint64_t pane_id) const noexcept {
     return session().selectedBlock(pane_id);
   }
 
-  void Application::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
+  void ApplicationController::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
     try {
       session().selectBlock(pane_id, index);
     } catch (const std::exception& error) {
@@ -55,7 +55,7 @@ namespace telar::gui::qt {
     emit terminalChanged(pane_id);
   }
 
-  void Application::scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row) {
+  void ApplicationController::scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row) {
     try {
       session().scrollToRow(pane_id, row);
     } catch (const std::exception& error) {
@@ -63,7 +63,7 @@ namespace telar::gui::qt {
     }
   }
 
-  bool Application::promptKey(std::uint64_t pane_id, const prompt::KeyPress& key) {
+  bool ApplicationController::promptKey(std::uint64_t pane_id, const prompt::KeyPress& key) {
     try {
       const auto outcome = session().promptKey(pane_id, key);
       if (outcome == prompt::Outcome::terminal) {
@@ -98,7 +98,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  bool Application::promptText(std::uint64_t pane_id, const QString& text) {
+  bool ApplicationController::promptText(std::uint64_t pane_id, const QString& text) {
     if (!session().editsPrompt(pane_id)) {
       return false;
     }

@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "element_slots.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/config/configuration_source.hpp"
 #include <QString>
 #include <QStringLiteral>
@@ -33,9 +33,9 @@ namespace telar::gui::qt {
 
   }
 
-  void Application::initializeElements() {
+  void ApplicationController::initializeElements() {
     // A theme change shares this signal; only a new Lua generation owns new functions.
-    connect(this, &Application::configurationChanged, this, [this] {
+    connect(this, &ApplicationController::configurationChanged, this, [this] {
       element_slots_.adopt(configuration_source_.configurationGeneration());
     });
 
@@ -54,7 +54,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::refreshElementBars() {
+  void ApplicationController::refreshElementBars() {
     components_.refreshElementBars({
         {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
         {QStringLiteral("machine"), machineContext().value(QStringLiteral("label"))},
@@ -133,7 +133,7 @@ namespace telar::gui::qt {
     };
   }
 
-  void Application::activateElement(const QString& slot, const QString& key, const QString& revision, int element) {
+  void ApplicationController::activateElement(const QString& slot, const QString& key, const QString& revision, int element) {
     const auto* instance = element_slots_.find(slot, key);
     if (instance == nullptr || !instance->rendered || QString::number(instance->revision) != revision || element < 0 || static_cast<std::size_t>(element) >= instance->rendered->elements.size()) {
       return;

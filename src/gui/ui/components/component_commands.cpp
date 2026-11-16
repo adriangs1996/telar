@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "component_projection.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QPointF>
 #include <QString>
 #include <QtCore/qscopeguard.h>
@@ -17,34 +17,34 @@ import telar.gui.links.cell_links;
 
 namespace telar::gui::qt {
 
-  void Application::initializeComponents() {
-    connect(this, &Application::configurationChanged, &components_, &ComponentsController::configure);
-    connect(this, &Application::machineChanged, &components_, &ComponentsController::reset);
-    connect(this, &Application::dialogChanged, this, [this] {
+  void ApplicationController::initializeComponents() {
+    connect(this, &ApplicationController::configurationChanged, &components_, &ComponentsController::configure);
+    connect(this, &ApplicationController::machineChanged, &components_, &ComponentsController::reset);
+    connect(this, &ApplicationController::dialogChanged, this, [this] {
       if (store_.dialog().kind != Dialog::none && components_.panelOpen()) {
         components_.closePanel();
       }
     });
-    connect(&components_, &ComponentsController::failed, this, &Application::reportFailure);
+    connect(&components_, &ComponentsController::failed, this, &ApplicationController::reportFailure);
   }
 
-  void Application::initializePicks() {
-    connect(&configuration_source_, &ConfigurationSource::changed, this, &Application::closeComponentPick);
-    connect(this, &Application::machineChanged, this, &Application::closeComponentPick);
-    connect(this, &Application::dialogChanged, this, [this] {
+  void ApplicationController::initializePicks() {
+    connect(&configuration_source_, &ConfigurationSource::changed, this, &ApplicationController::closeComponentPick);
+    connect(this, &ApplicationController::machineChanged, this, &ApplicationController::closeComponentPick);
+    connect(this, &ApplicationController::dialogChanged, this, [this] {
       if (store_.dialog().kind != Dialog::none) {
         closeComponentPick();
       }
     });
   }
 
-  void Application::activateComponent(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor) {
+  void ApplicationController::activateComponent(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor) {
     if (const auto pressed = components_.activation(source, node, generation, revision)) {
       activateComponentAction(pressed->action, pressed->url, pressed->identity, anchor, *pressed->actions);
     }
   }
 
-  void Application::activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString& identity, const QPointF& anchor, const ConfigurationSource::Actions& resolved) {
+  void ApplicationController::activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString& identity, const QPointF& anchor, const ConfigurationSource::Actions& resolved) {
     try {
       const auto named = action && action->kind == BindingActionKind::extended ? configuration_source_.namedAction(*action, &resolved) : std::nullopt;
       if (identity != componentActionIdentity(action, url, named)) {
@@ -68,7 +68,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::openComponentPick(std::size_t index) {
+  void ApplicationController::openComponentPick(std::size_t index) {
     if (attachments_.modalOpen()) {
       return;
     }
@@ -85,7 +85,7 @@ namespace telar::gui::qt {
     components_.openPick(index);
   }
 
-  void Application::closeComponentPick() {
+  void ApplicationController::closeComponentPick() {
     const bool open = components_.pickOpen();
 
     components_.closePick();
@@ -97,7 +97,7 @@ namespace telar::gui::qt {
   }
 
   // The panel the pick was opened over takes the keyboard back; without one, the terminal does.
-  void Application::restoreComponentPickFocus() {
+  void ApplicationController::restoreComponentPickFocus() {
     const auto target = std::exchange(component_pick_return_focus_, {});
 
     if (components_.panelCurrent()) {
@@ -111,7 +111,7 @@ namespace telar::gui::qt {
     restoreTerminalFocus();
   }
 
-  void Application::chooseComponentPick(int row, const QString& identity) {
+  void ApplicationController::chooseComponentPick(int row, const QString& identity) {
     try {
       components_.choosePick(row, identity);
       if (!components_.pickOpen()) {

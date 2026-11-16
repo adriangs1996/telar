@@ -13,7 +13,7 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "terminal_preparation.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/input/key_adapter.hpp"
 #include "ui/links/link_presentation.hpp"
@@ -55,7 +55,7 @@ import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
 
-  ViewVersion Application::viewVersion() const noexcept {
+  ViewVersion ApplicationController::viewVersion() const noexcept {
     auto version = session().viewVersion();
 
     version.machine = store_.machineView();
@@ -63,31 +63,31 @@ namespace telar::gui::qt {
     return version;
   }
 
-  Qt::KeyboardModifiers Application::pointerModifiers() const noexcept {
+  Qt::KeyboardModifiers ApplicationController::pointerModifiers() const noexcept {
     return pointer_modifiers_;
   }
 
-  void Application::observePointerModifiers(Qt::KeyboardModifiers modifiers) {
+  void ApplicationController::observePointerModifiers(Qt::KeyboardModifiers modifiers) {
     if (pointer_modifiers_ != modifiers) {
       pointer_modifiers_ = modifiers;
       emit pointerModifiersChanged();
     }
   }
 
-  void Application::registerTerminal(TerminalItem& terminal) {
+  void ApplicationController::registerTerminal(TerminalItem& terminal) {
     if (terminal.paneIdentity() != 0) {
       terminals_.insert(terminal.paneIdentity(), &terminal);
     }
   }
 
-  void Application::unregisterTerminal(TerminalItem& terminal) {
+  void ApplicationController::unregisterTerminal(TerminalItem& terminal) {
     const auto found = terminals_.find(terminal.paneIdentity());
     if (found != terminals_.end() && *found == &terminal) {
       terminals_.erase(found);
     }
   }
 
-  std::shared_ptr<const LinkHit> Application::shareLinkHit(const LinkHit& hit) {
+  std::shared_ptr<const LinkHit> ApplicationController::shareLinkHit(const LinkHit& hit) {
     return std::allocate_shared<LinkHit>(AllocatorRef<LinkHit, ApplicationAllocator>{memory_}, hit);
   }
 
@@ -106,7 +106,7 @@ namespace telar::gui::qt {
   bool TerminalItem::linkEligible() const noexcept {
     const auto* current = pane();
 
-    return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog() == Application::Dialog::none && !application_->copy()->active();
+    return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog() == ApplicationController::Dialog::none && !application_->copy()->active();
   }
 
   LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexcept {

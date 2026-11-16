@@ -45,13 +45,13 @@ import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 
-  class Application;
+  class ApplicationController;
   class WindowFontCatalog;
 
   class MachineChromeLayout : public QQuickItem {
     Q_OBJECT
     QML_ELEMENT
-    Q_PROPERTY(telar::gui::qt::Application* controller READ controller WRITE setController NOTIFY controllerChanged)
+    Q_PROPERTY(telar::gui::qt::ApplicationController* controller READ controller WRITE setController NOTIFY controllerChanged)
     Q_PROPERTY(bool segment READ segment WRITE setSegment NOTIFY segmentChanged)
     Q_PROPERTY(bool inlineFacts READ inlineFacts WRITE setInlineFacts NOTIFY inlineFactsChanged)
     Q_PROPERTY(bool shown READ shown NOTIFY shownChanged)
@@ -61,8 +61,8 @@ namespace telar::gui::qt {
 
   public:
     explicit MachineChromeLayout(QQuickItem* parent = nullptr);
-    [[nodiscard]] Application* controller() const noexcept;
-    void setController(Application* controller);
+    [[nodiscard]] ApplicationController* controller() const noexcept;
+    void setController(ApplicationController* controller);
     [[nodiscard]] bool segment() const noexcept;
     void setSegment(bool segment);
     [[nodiscard]] bool inlineFacts() const noexcept;
@@ -139,7 +139,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QColor ink(std::string_view written) const;
     [[nodiscard]] QColor fill(CellColor value) const;
 
-    QPointer<Application> controller_;
+    QPointer<ApplicationController> controller_;
     QPointer<WindowFontCatalog> catalog_;
     QMetaObject::Connection font_connection_;
     std::shared_ptr<ResidentFonts> fonts_;

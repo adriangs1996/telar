@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application.hpp"
+#include "application_controller.hpp"
 #include "application/dependencies.hpp"
 #include "application_effects.hpp"
 #include "core/memory.hpp"
@@ -100,8 +100,8 @@ namespace telar::gui::qt {
       };
     }
 
-    auto paneDirection(Application::Action action) noexcept -> PaneDirection {
-      using Action = Application::Action;
+    auto paneDirection(ApplicationController::Action action) noexcept -> PaneDirection {
+      using Action = ApplicationController::Action;
 
       switch (action) {
       case Action::focus_left:
@@ -118,9 +118,9 @@ namespace telar::gui::qt {
       }
     }
 
-    auto dialogFor(Application::Action action) -> Application::Dialog {
-      using Action = Application::Action;
-      using Dialog = Application::Dialog;
+    auto dialogFor(ApplicationController::Action action) -> ApplicationController::Dialog {
+      using Action = ApplicationController::Action;
+      using Dialog = ApplicationController::Dialog;
 
       switch (action) {
       case Action::palette:
@@ -138,7 +138,7 @@ namespace telar::gui::qt {
 
   }
 
-  Application::Application(ApplicationAllocator& memory, QObject* parent)
+  ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         memory_(memory),
         history_(store_),
@@ -174,9 +174,9 @@ namespace telar::gui::qt {
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
     palette_.setCommands(commands());
 
-    connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
-    connect(&copy_, &CopyController::activeChanged, this, &Application::statusModeChanged);
-    connect(&copy_, &CopyController::paneChanged, this, &Application::terminalChanged);
+    connect(this, &ApplicationController::configurationChanged, this, &ApplicationController::windowGeometryChanged);
+    connect(&copy_, &CopyController::activeChanged, this, &ApplicationController::statusModeChanged);
+    connect(&copy_, &CopyController::paneChanged, this, &ApplicationController::terminalChanged);
     connect(&copy_, &CopyController::inputStarted, this, [this] {
       key_bindings_.cancelSequence();
     });
@@ -189,25 +189,25 @@ namespace telar::gui::qt {
     connect(&copy_, &CopyController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&copy_, &CopyController::failed, this, &Application::reportFailure);
+    connect(&copy_, &CopyController::failed, this, &ApplicationController::reportFailure);
     // The search reads the command the dialog's line was opened on.
-    connect(this, &Application::dialogChanged, &copy_, &CopyController::publishSearch);
+    connect(this, &ApplicationController::dialogChanged, &copy_, &CopyController::publishSearch);
     // The prefix mode lists the keymap's hints.
-    connect(this, &Application::configurationChanged, this, &Application::statusModeChanged);
-    connect(this, &Application::configurationChanged, this, [this] {
+    connect(this, &ApplicationController::configurationChanged, this, &ApplicationController::statusModeChanged);
+    connect(this, &ApplicationController::configurationChanged, this, [this] {
       palette_.setCommands(commands());
     });
-    connect(&store_, &Store::interacted, this, &Application::interacted);
-    connect(&store_, &Store::changed, this, &Application::synchronize);
+    connect(&store_, &Store::interacted, this, &ApplicationController::interacted);
+    connect(&store_, &Store::changed, this, &ApplicationController::synchronize);
     connect(&store_, &Store::interacting, this, [this] {
       pending_activity_.reset();
     });
-    connect(this, &Application::prefixChanged, this, &Application::statusModeChanged);
-    connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
+    connect(this, &ApplicationController::prefixChanged, this, &ApplicationController::statusModeChanged);
+    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::synchronizeWorkbenchGeometry);
     // After the workbench geometry, which the dialogs measured from the display are placed in.
-    connect(this, &Application::windowGeometryChanged, this, &Application::measureDisplay);
-    connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
-    connect(this, &Application::windowGeometryChanged, this, [this] {
+    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::measureDisplay);
+    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::sidebarGeometryChanged);
+    connect(this, &ApplicationController::windowGeometryChanged, this, [this] {
       history_.setMetrics(historyMetrics());
     });
     connect(&history_, &HistoryController::submitted, this, [this] {
@@ -216,25 +216,25 @@ namespace telar::gui::qt {
     connect(&history_, &HistoryController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&history_, &HistoryController::failed, this, &Application::reportFailure);
+    connect(&history_, &HistoryController::failed, this, &ApplicationController::reportFailure);
     connect(&paths_, &PathPickerController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&paths_, &PathPickerController::failed, this, &Application::reportFailure);
+    connect(&paths_, &PathPickerController::failed, this, &ApplicationController::reportFailure);
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&peek_, &PeekController::failed, this, &Application::reportFailure);
-    connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
-    connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
-    connect(this, &Application::machineChanged, this, &Application::hostMetricsChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::rowsInserted, this, &Application::sidebarGeometryChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::rowsRemoved, this, &Application::sidebarGeometryChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::dataChanged, this, &Application::sidebarGeometryChanged);
+    connect(&peek_, &PeekController::failed, this, &ApplicationController::reportFailure);
+    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::runtimeLinkChanged);
+    connect(this, &ApplicationController::machineChanged, this, &ApplicationController::runtimeLinkChanged);
+    connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::rowsInserted, this, &ApplicationController::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::rowsRemoved, this, &ApplicationController::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::rowsMoved, this, &ApplicationController::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::dataChanged, this, &ApplicationController::sidebarGeometryChanged);
 
     const platform::login_shell::Command shell;
     const auto directory = QDir::currentPath().toUtf8();
@@ -282,8 +282,8 @@ namespace telar::gui::qt {
       refresh();
     });
 
-    connect(&refresh_timer_, &QTimer::timeout, this, &Application::refresh);
-    connect(this, &Application::machinesChanged, this, [this] {
+    connect(&refresh_timer_, &QTimer::timeout, this, &ApplicationController::refresh);
+    connect(this, &ApplicationController::machinesChanged, this, [this] {
       const auto machines = sidebarMachines();
       if (machines != sidebar_machines_) {
         sidebar_machines_ = machines;
@@ -299,7 +299,7 @@ namespace telar::gui::qt {
     measureDisplay();
   }
 
-  void Application::runtimeDisconnected(MachineClient& client) {
+  void ApplicationController::runtimeDisconnected(MachineClient& client) {
     if (pending_activity_ && pending_activity_->target.source == client.key) {
       pending_activity_.reset();
     }
@@ -326,11 +326,11 @@ namespace telar::gui::qt {
     refresh_timer_.start();
   }
 
-  void Application::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
+  void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
     configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path});
   }
 
-  void Application::configureLaunch(const QString& directory, const QStringList& arguments, bool restore) {
+  void ApplicationController::configureLaunch(const QString& directory, const QStringList& arguments, bool restore) {
     const auto cwd = QDir{directory.isEmpty() ? QDir::currentPath() : directory}.absolutePath().toUtf8();
     const platform::login_shell::Command shell;
     const LaunchArguments prepared{arguments};
@@ -341,7 +341,7 @@ namespace telar::gui::qt {
     session().setRestoreLayout(restore);
   }
 
-  Application::~Application() {
+  ApplicationController::~ApplicationController() {
     if (window_ != nullptr) {
       window_->removeEventFilter(this);
       window_->disconnect(this);
@@ -357,7 +357,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::open(const QString& endpoint) {
+  void ApplicationController::open(const QString& endpoint) {
     auto& client = clientAt(Machines::local_slot);
     const auto path = endpoint.toUtf8();
 
@@ -381,7 +381,7 @@ namespace telar::gui::qt {
     client.connection.open(endpoint);
   }
 
-  void Application::setWindow(QQuickWindow& window) {
+  void ApplicationController::setWindow(QQuickWindow& window) {
     if (window_ == &window) {
       return;
     }
@@ -409,26 +409,26 @@ namespace telar::gui::qt {
     key_bindings_.setWindow(window);
     pointer_dispatcher_.setWindow(window);
     window.installEventFilter(this);
-    connect(&window, &QWindow::widthChanged, this, &Application::synchronizeWindowSize);
-    connect(&window, &QWindow::heightChanged, this, &Application::synchronizeWindowSize);
-    connect(&window, &QWindow::screenChanged, this, &Application::synchronizeScreen);
-    connect(&window, &QWindow::windowStateChanged, this, &Application::windowGeometryChanged);
+    connect(&window, &QWindow::widthChanged, this, &ApplicationController::synchronizeWindowSize);
+    connect(&window, &QWindow::heightChanged, this, &ApplicationController::synchronizeWindowSize);
+    connect(&window, &QWindow::screenChanged, this, &ApplicationController::synchronizeScreen);
+    connect(&window, &QWindow::windowStateChanged, this, &ApplicationController::windowGeometryChanged);
     observeFrames(window);
     synchronizeScreen();
     configureWindow();
   }
 
-  void Application::synchronizeScreen() {
+  void ApplicationController::synchronizeScreen() {
     QObject::disconnect(screen_refresh_connection_);
     if (window_ != nullptr && window_->screen() != nullptr) {
-      screen_refresh_connection_ = connect(window_->screen(), &QScreen::refreshRateChanged, this, &Application::synchronizeCadence);
+      screen_refresh_connection_ = connect(window_->screen(), &QScreen::refreshRateChanged, this, &ApplicationController::synchronizeCadence);
     }
 
     synchronizeDisplay();
     synchronizeCadence();
   }
 
-  void Application::synchronizeDisplay() {
+  void ApplicationController::synchronizeDisplay() {
     try {
       synchronizeFontMetrics();
       if (window_ != nullptr) {
@@ -442,7 +442,7 @@ namespace telar::gui::qt {
     }
   }
 
-  bool Application::eventFilter(QObject* watched, QEvent* event) {
+  bool ApplicationController::eventFilter(QObject* watched, QEvent* event) {
     if (watched == window_ && frame_pacer_ && event->type() == QEvent::UpdateRequest) {
       std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
       const auto count = collectPacingPanes(panes);
@@ -457,9 +457,9 @@ namespace telar::gui::qt {
     return false;
   }
 
-  void Application::observeFrames(QQuickWindow& window) {
+  void ApplicationController::observeFrames(QQuickWindow& window) {
     WindowImages::forWindow(window);
-    connect(&window, &QQuickWindow::afterAnimating, this, &Application::prepareImagePlacements);
+    connect(&window, &QQuickWindow::afterAnimating, this, &ApplicationController::prepareImagePlacements);
     const auto generation = window_generation_;
     // Preparation runs while the scene graph synchronizes, with the GUI thread blocked, so it
     // never overlaps a present on the GUI thread.
@@ -502,11 +502,11 @@ namespace telar::gui::qt {
     );
   }
 
-  PointerDispatcher& Application::pointerDispatcher() noexcept {
+  PointerDispatcher& ApplicationController::pointerDispatcher() noexcept {
     return pointer_dispatcher_;
   }
 
-  void Application::prepareImagePlacements() {
+  void ApplicationController::prepareImagePlacements() {
     if (window_ == nullptr) {
       return;
     }
@@ -530,7 +530,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::prepareFrame(PresentedFrame& frame) {
+  void ApplicationController::prepareFrame(PresentedFrame& frame) {
     frame = {};
     frame.machine_view = store_.machineView();
     frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
@@ -550,7 +550,7 @@ namespace telar::gui::qt {
     history_.prepare(frame.history);
   }
 
-  void Application::prepareTerminalFrames(PresentedFrame& frame) {
+  void ApplicationController::prepareTerminalFrames(PresentedFrame& frame) {
     if (window_ == nullptr) {
       return;
     }
@@ -574,7 +574,7 @@ namespace telar::gui::qt {
     });
   }
 
-  TerminalItem* Application::visibleTerminal(std::uint64_t pane_id) const {
+  TerminalItem* ApplicationController::visibleTerminal(std::uint64_t pane_id) const {
     const auto terminal = terminals_.constFind(pane_id);
     if (terminal == terminals_.cend() || *terminal == nullptr || (*terminal)->window() != window_ || !(*terminal)->isVisible() || !(*terminal)->flags().testFlag(QQuickItem::ItemHasContents) || (*terminal)->width() <= 0 || (*terminal)->height() <= 0) {
       return nullptr;
@@ -583,7 +583,7 @@ namespace telar::gui::qt {
     return *terminal;
   }
 
-  std::size_t Application::collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
+  std::size_t ApplicationController::collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
     const auto* tab = session().activeTab();
     if (window_ == nullptr || tab == nullptr) {
       return 0;
@@ -604,7 +604,7 @@ namespace telar::gui::qt {
     return count;
   }
 
-  void Application::recordPreparedFrame(const PresentedFrame& frame) {
+  void ApplicationController::recordPreparedFrame(const PresentedFrame& frame) {
     if (!frame_pacer_) {
       return;
     }
@@ -618,7 +618,7 @@ namespace telar::gui::qt {
     frame_pacer_->record(std::span{panes}.first(frame.pane_count), frame.preparation_ns);
   }
 
-  void Application::reconsiderFrame() {
+  void ApplicationController::reconsiderFrame() {
     if (!frame_pacer_ || !frame_pacer_->pending()) {
       return;
     }
@@ -629,7 +629,7 @@ namespace telar::gui::qt {
     frame_pacer_->reconsider(std::span{panes}.first(count));
   }
 
-  void Application::requestTerminalFrame() {
+  void ApplicationController::requestTerminalFrame() {
     if (!platform::supportsImmediateWindowUpdates()) {
       reconsiderFrame();
 
@@ -657,13 +657,13 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::configureFramePacer() {
+  void ApplicationController::configureFramePacer() {
     if (frame_pacer_ && window_ != nullptr) {
       frame_pacer_->configure(WindowAnimationClock::forWindow(*window_).frameInterval(), std::nullopt);
     }
   }
 
-  void Application::synchronizeCadence() {
+  void ApplicationController::synchronizeCadence() {
     if (window_ == nullptr || window_->screen() == nullptr) {
       return;
     }
@@ -678,7 +678,7 @@ namespace telar::gui::qt {
     configureFramePacer();
   }
 
-  void Application::configureWindow() {
+  void ApplicationController::configureWindow() {
     if (window_ == nullptr) {
       return;
     }
@@ -687,7 +687,7 @@ namespace telar::gui::qt {
 
     WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? std::nullopt : std::optional{configuration.max_fps});
     configureFramePacer();
-    const QPointer<Application> lifetime{this};
+    const QPointer<ApplicationController> lifetime{this};
     const auto owner = window_;
 
     WindowFontCatalog::forWindow(*owner).configure(configuration.font);
@@ -699,7 +699,7 @@ namespace telar::gui::qt {
     emit windowGeometryChanged();
   }
 
-  void Application::present(const PresentedFrame& frame) {
+  void ApplicationController::present(const PresentedFrame& frame) {
     if (frame.machine_view != store_.machineView()) {
       return;
     }
@@ -729,15 +729,15 @@ namespace telar::gui::qt {
     }
   }
 
-  Pane<Memory>* Application::pane(std::uint64_t identity) const noexcept {
+  Pane<Memory>* ApplicationController::pane(std::uint64_t identity) const noexcept {
     return session().findPane(identity);
   }
 
-  const Configuration& Application::configuration() const noexcept {
+  const Configuration& ApplicationController::configuration() const noexcept {
     return session().configuration();
   }
 
-  void Application::consume(MachineClient& client, QByteArrayView payload) {
+  void ApplicationController::consume(MachineClient& client, QByteArrayView payload) {
     try {
       const bool active = client.key.machine.slot == store_.machines().active();
       const HostCommands handler{*this, active};
@@ -792,7 +792,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::presentChange(Change change) {
+  void ApplicationController::presentChange(Change change) {
     switch (change) {
     case Change::sidebar:
       emit windowGeometryChanged();
@@ -864,7 +864,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const {
+  void ApplicationController::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const {
     if (!active) {
       UnsupportedClientCommand{}(message, reply);
     } else if (!answerConfiguration(application, message, reply)) {
@@ -872,7 +872,7 @@ namespace telar::gui::qt {
     }
   }
 
-  bool Application::answerConfiguration(tbc::view<Application&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
+  bool ApplicationController::answerConfiguration(tbc::view<ApplicationController&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
     switch (message.action) {
     case ClientAction::config_show: {
       // The query rewrites the source's buffer, so the state views a copy of the title, not the session.
@@ -898,7 +898,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply) {
+  void ApplicationController::executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply) {
     switch (message.action) {
     case ClientAction::plugin_enable:
     case ClientAction::plugin_disable:
@@ -964,7 +964,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::refresh() {
+  void ApplicationController::refresh() {
     synchronize();
     peek_.synchronize();
     refreshElementBars();
@@ -980,13 +980,13 @@ namespace telar::gui::qt {
     reconsiderFrame();
   }
 
-  void Application::refreshPanes() {
+  void ApplicationController::refreshPanes() {
     attachments_.synchronize();
     panes_.setScale(terminal_grid_.scale);
     panes_.synchronize();
   }
 
-  void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
+  void ApplicationController::resizeDivider(int index, qreal x, qreal y, bool commit) {
     try {
       auto* tab = session().activeTab();
       if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
@@ -1026,7 +1026,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::execute(Action action, const QString& target) {
+  void ApplicationController::execute(Action action, const QString& target) {
     key_bindings_.cancelSequence();
     applyInteraction([&] {
       if (action != Action::copy_mode && (action != Action::cancel || store_.dialog().kind == Dialog::none)) {
@@ -1039,7 +1039,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::submitDialog(const QVariantMap& input) {
+  void ApplicationController::submitDialog(const QVariantMap& input) {
     applyInteraction([&] {
       const auto name = input.value(QStringLiteral("text")).toString().toUtf8();
       const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
@@ -1061,7 +1061,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void Application::interacted() {
+  void ApplicationController::interacted() {
     // Exceptions stay on this side of the signal that delivered the interaction.
     try {
       publishPromptWrite();
@@ -1074,7 +1074,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::synchronize() {
+  void ApplicationController::synchronize() {
     synchronizeTabStrip();
     workspaces_.synchronize();
     tabs_.synchronize();
@@ -1090,7 +1090,7 @@ namespace telar::gui::qt {
     palette_.synchronize();
   }
 
-  void Application::interactionFailed(const std::exception& error) {
+  void ApplicationController::interactionFailed(const std::exception& error) {
     if (store_.dialog().kind == Dialog::history) {
       history_.fail(error);
     } else {
@@ -1098,7 +1098,7 @@ namespace telar::gui::qt {
     }
   }
 
-  bool Application::executeNavigation(Action action, const QString& target) {
+  bool ApplicationController::executeNavigation(Action action, const QString& target) {
     const auto identity = target.toULongLong();
 
     if (action == Action::new_tab) {
@@ -1132,7 +1132,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  bool Application::executePane(Action action, std::uint64_t identity) {
+  bool ApplicationController::executePane(Action action, std::uint64_t identity) {
     if (action == Action::focus_left || action == Action::focus_right || action == Action::focus_up || action == Action::focus_down) {
       session().focusDirection(paneDirection(action));
     } else if (action == Action::resize_left || action == Action::resize_right || action == Action::resize_up || action == Action::resize_down) {
@@ -1156,7 +1156,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void Application::executeWindowAction(Action action) {
+  void ApplicationController::executeWindowAction(Action action) {
     if (executeMachineAction(action)) {
       return;
     }
@@ -1198,7 +1198,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::cancelCurrentInteraction() {
+  void ApplicationController::cancelCurrentInteraction() {
     session().invalidateSuggestion();
     if (restorePaletteParent()) {
       return;
@@ -1216,12 +1216,12 @@ namespace telar::gui::qt {
     showDialog(Dialog::none);
   }
 
-  void Application::setSidebarWidth(qreal width) {
+  void ApplicationController::setSidebarWidth(qreal width) {
     session().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
     emit windowGeometryChanged();
   }
 
-  void Application::synchronizeFontMetrics() {
+  void ApplicationController::synchronizeFontMetrics() {
     const auto scale = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto resolved = resolveFont(scale);
     const auto& font = resolved.font;
@@ -1233,7 +1233,7 @@ namespace telar::gui::qt {
     terminal_grid_ = {.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = scale};
   }
 
-  bool Application::updateViewport(qreal width, qreal height) {
+  bool ApplicationController::updateViewport(qreal width, qreal height) {
     constexpr qreal maximum_dimension = std::numeric_limits<std::uint16_t>::max();
 
     if (!std::isfinite(width) || !std::isfinite(height)) {
@@ -1251,14 +1251,14 @@ namespace telar::gui::qt {
     return false;
   }
 
-  void Application::synchronizeWindowSize() {
+  void ApplicationController::synchronizeWindowSize() {
     if (window_ != nullptr && updateViewport(window_->width(), window_->height())) {
       emit windowGeometryChanged();
       refreshPanes();
     }
   }
 
-  bool Application::input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source) {
+  bool ApplicationController::input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source) {
     const auto* const current = session().findPane(pane_id);
     if (current == nullptr || !current->attached || current->exited || bytes.isEmpty()) {
       return false;
@@ -1282,7 +1282,7 @@ namespace telar::gui::qt {
     return delivered;
   }
 
-  void Application::paste(std::uint64_t pane_id, const QString& text) {
+  void ApplicationController::paste(std::uint64_t pane_id, const QString& text) {
     try {
       const auto bytes = text.toUtf8();
 
@@ -1294,7 +1294,7 @@ namespace telar::gui::qt {
     publishPromptWrite();
   }
 
-  void Application::resize(std::uint64_t pane_id, TerminalSize size) {
+  void ApplicationController::resize(std::uint64_t pane_id, TerminalSize size) {
     try {
       session().resize(pane_id, size);
     } catch (const std::exception& error) {
@@ -1302,7 +1302,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::scroll(PaneScrollDelta delta) {
+  void ApplicationController::scroll(PaneScrollDelta delta) {
     try {
       session().scroll(delta);
     } catch (const std::exception& error) {
@@ -1310,7 +1310,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::showDialog(Dialog kind) {
+  void ApplicationController::showDialog(Dialog kind) {
     if (kind != Dialog::peek) {
       peek_.forget();
     }
@@ -1353,16 +1353,16 @@ namespace telar::gui::qt {
     emit dialogChanged();
   }
 
-  void Application::reportFailure(const QString& message) {
+  void ApplicationController::reportFailure(const QString& message) {
     error_ = message;
     publishStatus();
   }
 
-  AttachmentsController* Application::attachments() noexcept {
+  AttachmentsController* ApplicationController::attachments() noexcept {
     return &attachments_;
   }
 
-  void Application::initializeAttachments() {
+  void ApplicationController::initializeAttachments() {
     connect(&attachments_, &AttachmentsController::changed, this, [this] {
       refresh_timer_.start();
     });
@@ -1379,22 +1379,22 @@ namespace telar::gui::qt {
         restoreTerminalFocus();
       }
     });
-    connect(&attachments_, &AttachmentsController::failed, this, &Application::reportFailure);
+    connect(&attachments_, &AttachmentsController::failed, this, &ApplicationController::reportFailure);
   }
 
-  void Application::showPathPicker() {
+  void ApplicationController::showPathPicker() {
     if (paths_.open()) {
       showDialog(Dialog::paths);
       paths_.refresh();
     }
   }
 
-  void Application::fail(const std::exception& error) {
+  void ApplicationController::fail(const std::exception& error) {
     error_ = QString::fromUtf8(error.what());
     publishStatus();
   }
 
-  void Application::publishConfiguration() {
+  void ApplicationController::publishConfiguration() {
     // Qt notifies QML bindings before any connected slot, so the cache is dropped before the
     // signal rather than in a slot of it.
     colors_.reset();
@@ -1403,7 +1403,7 @@ namespace telar::gui::qt {
   }
 
   // Each pane delegate reads the theme a score of times; it is built once per configuration.
-  QVariantMap Application::colors() const {
+  QVariantMap ApplicationController::colors() const {
     if (!colors_) {
       colors_ = themeColors(session().configuration());
     }
@@ -1411,7 +1411,7 @@ namespace telar::gui::qt {
     return *colors_;
   }
 
-  QVariantMap Application::font() const {
+  QVariantMap ApplicationController::font() const {
     if (!font_) {
       font_ = fontSettings(session().configuration().font);
     }
@@ -1419,53 +1419,53 @@ namespace telar::gui::qt {
     return *font_;
   }
 
-  ResolvedFont Application::resolveFont(qreal scale) {
+  ResolvedFont ApplicationController::resolveFont(qreal scale) {
     return configuration_source_.resolveFont(session().configuration().font, scale);
   }
 
-  bool Application::sidebarVisible() const {
+  bool ApplicationController::sidebarVisible() const {
     return session().configuration().sidebar_visible;
   }
 
-  qreal Application::sidebarWidth() const {
+  qreal ApplicationController::sidebarWidth() const {
     return session().configuration().sidebar_width;
   }
 
-  bool Application::workspaceListCollapsed() const {
+  bool ApplicationController::workspaceListCollapsed() const {
     return session().workspaceListCollapsed();
   }
 
-  qreal Application::windowControls() const {
+  qreal ApplicationController::windowControls() const {
     return window_ == nullptr ? 0 : platform::windowControls(*window_);
   }
 
-  Application::Dialog Application::dialog() const noexcept {
+  ApplicationController::Dialog ApplicationController::dialog() const noexcept {
     return store_.dialog().kind;
   }
 
-  Application::Dialog Application::lineSearch() const noexcept {
+  ApplicationController::Dialog ApplicationController::lineSearch() const noexcept {
     return store_.dialog().line_search_pane == 0 ? Dialog::none : store_.dialog().kind;
   }
 
-  QString Application::lineSearchPane() const {
+  QString ApplicationController::lineSearchPane() const {
     return store_.dialog().line_search_pane == 0 ? QString{} : QString::number(store_.dialog().line_search_pane);
   }
 
-  bool Application::connected() const {
+  bool ApplicationController::connected() const {
     return connection().ready();
   }
 
-  QString Application::title() const {
+  QString ApplicationController::title() const {
     const auto title = session().windowTitle({hostname_.constData(), static_cast<std::size_t>(hostname_.size())});
 
     return toQString(title.view());
   }
 
-  bool Application::prefixPending() const noexcept {
+  bool ApplicationController::prefixPending() const noexcept {
     return key_bindings_.prefixPending();
   }
 
-  QVariantMap Application::statusMode() const {
+  QVariantMap ApplicationController::statusMode() const {
     if (prefixPending()) {
       return statusModeRecord(StatusMode::prefix, key_bindings_.modeHints());
     }
@@ -1473,11 +1473,11 @@ namespace telar::gui::qt {
     return statusModeRecord(copy_.active() ? StatusMode::copy : StatusMode::normal);
   }
 
-  QVariantMap Application::hostMetrics() const {
+  QVariantMap ApplicationController::hostMetrics() const {
     return metricsRecord(session().hostMetrics());
   }
 
-  QString Application::tlsBadgeColor() const {
+  QString ApplicationController::tlsBadgeColor() const {
     const auto& proxy = session().proxyStatus();
     if (!proxy.active && !proxy.system_trusted) {
       return {};
@@ -1490,14 +1490,14 @@ namespace telar::gui::qt {
     return proxy.scope == ProxyScope::wildcard ? QStringLiteral("red") : QStringLiteral("peach");
   }
 
-  void Application::dismissDiagnostic() {
+  void ApplicationController::dismissDiagnostic() {
     error_.clear();
     session().dismissDiagnostic();
     connection().dismissError();
     publishStatus();
   }
 
-  void Application::publishStatus() {
+  void ApplicationController::publishStatus() {
     auto& published = published_status_;
     auto title = this->title();
     if (title != published.title) {
@@ -1518,7 +1518,7 @@ namespace telar::gui::qt {
     copy_.publish();
   }
 
-  QString Application::error() const {
+  QString ApplicationController::error() const {
     if (!error_.isEmpty()) {
       return error_;
     }

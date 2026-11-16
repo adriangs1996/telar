@@ -820,7 +820,7 @@ Item {
     // closes; so does one whose field loses the keyboard to a click elsewhere in the window.
     function abandonSearch() {
         if (!root.searching && root.application.lineSearch !== Store.Dialog.none && root.application.lineSearchPane === root.paneId) {
-            root.application.execute(GuiController.Action.cancel);
+            root.application.execute(ApplicationController.Action.cancel);
         }
     }
 
@@ -830,12 +830,12 @@ Item {
         if (!root.searching || !view || view.focused || view.inspecting || !window || !window.active) {
             return;
         }
-        root.application.execute(GuiController.Action.cancel);
+        root.application.execute(ApplicationController.Action.cancel);
     }
 
     Component.onDestruction: {
         if (root.application.lineSearchPane === root.paneId && root.application.lineSearch !== Store.Dialog.none) {
-            root.application.execute(GuiController.Action.cancel);
+            root.application.execute(ApplicationController.Action.cancel);
         }
     }
 
@@ -984,7 +984,7 @@ Item {
                     // Nothing found: the cursor goes back where the search began.
                     typing.stop();
                     root.application.copy.search("");
-                    root.application.execute(GuiController.Action.cancel);
+                    root.application.execute(ApplicationController.Action.cancel);
                 }
             }
 
@@ -1192,7 +1192,7 @@ Item {
                     if (view.history) {
                         historyKeys.cancel();
                     } else {
-                        root.application.execute(GuiController.Action.cancel);
+                        root.application.execute(ApplicationController.Action.cancel);
                     }
                 }
                 Keys.onPressed: event => event.accepted = view.history ? historyKeys.handle(event) : pathKeys.handle(event)

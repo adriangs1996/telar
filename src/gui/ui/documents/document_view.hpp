@@ -15,7 +15,7 @@ static_assert(true);
 
 namespace telar::gui::qt {
 
-  class Application;
+  class ApplicationController;
 
   // The document a pane's program shows natively (`telar render`), as the blocks QML lays out.
   // The session owns the decoded document; this projects it once per version, with all of its
@@ -74,7 +74,7 @@ namespace telar::gui::qt {
     void refresh();
     void project();
 
-    QPointer<Application> application_;
+    QPointer<ApplicationController> application_;
     std::uint64_t pane_id_ = 0;
     std::uint64_t document_id_ = 0;
     QVariantMap colors_;

@@ -7,7 +7,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
 #include <algorithm>
 #include <array>
@@ -24,7 +24,7 @@ static_assert(true);
 #include <variant>
 
 #pragma once
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
 
 import telar.gui.layout.geometry;
@@ -35,20 +35,20 @@ import telar.gui.presentation.frame_pacer;
 namespace telar::gui::test {
 
   struct FramePacing {
-    [[nodiscard]] static bool requestsPending(const qt::Application& application) noexcept {
+    [[nodiscard]] static bool requestsPending(const qt::ApplicationController& application) noexcept {
       return application.session().requestsPending();
     }
 
-    [[nodiscard]] static TabDropSurface tabs(const qt::Application& application) {
+    [[nodiscard]] static TabDropSurface tabs(const qt::ApplicationController& application) {
       return application.tabDropSurface();
     }
 
-    static void presentTabs(qt::Application& application, const TabDropSurface& surface) {
+    static void presentTabs(qt::ApplicationController& application, const TabDropSurface& surface) {
       application.presented_tabs_ = surface;
       application.pointer_dispatcher_.presentTabs(surface);
     }
 
-    static void anchor(qt::Application& application, std::uint64_t now_ns) {
+    static void anchor(qt::ApplicationController& application, std::uint64_t now_ns) {
       if (!application.frame_pacer_) {
         throw std::logic_error{"The application has no window frame pacer"};
       }
@@ -59,11 +59,11 @@ namespace telar::gui::test {
       application.frame_pacer_->record(std::span{panes}.first(count), now_ns);
     }
 
-    [[nodiscard]] static bool pending(const qt::Application& application) noexcept {
+    [[nodiscard]] static bool pending(const qt::ApplicationController& application) noexcept {
       return application.frame_pacer_ && application.frame_pacer_->pending();
     }
 
-    static void release(qt::Application& application) {
+    static void release(qt::ApplicationController& application) {
       anchor(application, platform::AwakeClock::nowNanoseconds() - FramePacer::maximum_interval_ns);
       application.reconsiderFrame();
     }

@@ -12,7 +12,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/machines/machine_client.hpp"
 #include "ui/machines/machine_client_key.hpp"
@@ -41,7 +41,7 @@ import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
 
-  bool Application::openLink(const LinkTarget& target, std::optional<std::uint64_t> source_id) {
+  bool ApplicationController::openLink(const LinkTarget& target, std::optional<std::uint64_t> source_id) {
     try {
       if (target.scheme() == LinkScheme::file || target.scheme() == LinkScheme::path) {
         const platform::ProcessEnvironment environment;
@@ -61,7 +61,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void Application::openCopyLink(std::uint64_t pane_id, CellPosition point) {
+  void ApplicationController::openCopyLink(std::uint64_t pane_id, CellPosition point) {
     const auto* pane = session().findPane(pane_id);
     if (pane == nullptr) {
       return;
@@ -73,7 +73,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure) {
+  void ApplicationController::linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure) {
     auto* client = findClient(source);
     if (client == nullptr || !failure) {
       return;

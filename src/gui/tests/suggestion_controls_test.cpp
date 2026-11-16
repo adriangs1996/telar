@@ -2,7 +2,7 @@
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/controls/native_form_field.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
@@ -98,7 +98,7 @@ namespace {
       QVERIFY(runtime_.waitForStarted());
       QTRY_VERIFY2_WITH_TIMEOUT(QFileInfo::exists(socket_), runtime_.readAllStandardError().constData(), wait_ms);
       bundledFonts();
-      client_ = std::make_unique<Application>(memory_);
+      client_ = std::make_unique<ApplicationController>(memory_);
       client_->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, false);
       client_->loadConfiguration(configuration, {}, {});
       window_->resize(window_width, window_height);
@@ -119,9 +119,9 @@ namespace {
 
       panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_.get())}, {QStringLiteral("ratio"), client_->chromeRatio()}});
       panel_->setParentItem(window_->contentItem());
-      connect(client_.get(), &Application::windowGeometryChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
+      connect(client_.get(), &ApplicationController::windowGeometryChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_->palette(), &PaletteController::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
-      connect(client_.get(), &Application::dialogChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
+      connect(client_.get(), &ApplicationController::dialogChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
       synchronizeSurfaces();
       QVERIFY(test::showComponentWindow(*window_, wait_ms));
       QTRY_VERIFY_WITH_TIMEOUT(client_->pane(pane_id_) != nullptr && client_->pane(pane_id_)->screen.frameId() != 0, wait_ms);
@@ -133,12 +133,12 @@ namespace {
       QTest::keyClick(window_.get(), Qt::Key_B, NativeKeyAdapter::control_modifier);
       QVERIFY2(client_->prefixPending(), qPrintable(client_->error()));
       QTest::keyClick(window_.get(), Qt::Key_Question);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::palette, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette, wait_ms);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
       query()->forceActiveFocus();
       QTRY_VERIFY_WITH_TIMEOUT(query()->hasActiveFocus(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
-      client_->execute(Application::Action::cancel);
+      client_->execute(ApplicationController::Action::cancel);
     }
 
     Q_SLOT void replacementRequestsDiscardTheEarlierCommandAndPasteOnlyOnConfirmation() {
@@ -155,7 +155,7 @@ namespace {
       QVERIFY(!QFileInfo::exists(marker_));
       query()->forceActiveFocus();
       QTest::keyClick(window_.get(), Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
       QVERIFY(!QFileInfo::exists(marker_));
       terminal_->forceActiveFocus();
@@ -180,7 +180,7 @@ namespace {
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine timed out. Try again."));
-      QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
+      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
       client_->palette()->search(QStringLiteral("?fixture:ready"));
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
@@ -193,10 +193,10 @@ namespace {
       QTest::mousePress(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
       client_->palette()->search(QStringLiteral("?edited before release"));
       QTest::mouseRelease(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
-      QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
+      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
       QVERIFY(!QFileInfo::exists(marker_));
-      client_->execute(Application::Action::cancel);
+      client_->execute(ApplicationController::Action::cancel);
     }
 
     Q_SLOT void shortenedPreviewsKeepTheEntirePaste() {
@@ -209,7 +209,7 @@ namespace {
       const auto command = state().value(QStringLiteral("text")).toString();
 
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
       QVERIFY(!QFileInfo::exists(marker_));
       client_->input(pane_id_, "\x15");
@@ -242,8 +242,8 @@ namespace {
 
       panel_->setPosition(palette.topLeft());
       panel_->setSize(palette.size());
-      panel_->setVisible(client_->dialog() == telar::gui::qt::Application::Dialog::palette);
-      if ((client_->dialog() == telar::gui::qt::Application::Dialog::none)) {
+      panel_->setVisible(client_->dialog() == telar::gui::qt::ApplicationController::Dialog::palette);
+      if ((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none)) {
         terminal_->forceActiveFocus();
       }
     }
@@ -257,7 +257,7 @@ namespace {
     }
 
     void open(const QString& task) {
-      client_->execute(Application::Action::suggest_command);
+      client_->execute(ApplicationController::Action::suggest_command);
       client_->palette()->search(task);
       QVERIFY(query() != nullptr);
       query()->forceActiveFocus();
@@ -273,7 +273,7 @@ namespace {
     QProcess runtime_;
     std::unique_ptr<QQuickWindow> window_ = std::make_unique<QQuickWindow>();
     QQmlEngine engine_;
-    std::unique_ptr<Application> client_;
+    std::unique_ptr<ApplicationController> client_;
     std::unique_ptr<TerminalItem> terminal_;
     std::unique_ptr<QQuickItem> panel_;
     QString marker_;

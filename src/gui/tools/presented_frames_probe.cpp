@@ -1,7 +1,7 @@
 // Source-extracted observeFrames oracle with actual frame types and Qt events.
 // Preparation/presentation are simulated; native scene and acknowledgement tests
 // remain required. Queued callbacks must retain their own immutable snapshots.
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQuickWindow>
@@ -17,7 +17,7 @@
 
 namespace telar::gui::test {
   struct FramePacing {
-    using Frame = qt::Application::PresentedFrame;
+    using Frame = qt::ApplicationController::PresentedFrame;
   };
 }
 

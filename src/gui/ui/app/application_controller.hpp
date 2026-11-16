@@ -135,14 +135,20 @@ namespace telar::gui::qt {
   class TerminalItem;
   class MachineChromeLayout;
 
-  class Application final : public QObject {
+  // The window and what runs it: the machines and their runtime connections, the store every
+  // controller reads, the frames the terminals present, the dialog that is open, and the
+  // commands keys, pointers and QML send, which act on the session or the window.
+  //
+  // Each feature's state lives in its own controller, which reads the store and never calls
+  // back here; this controller synchronizes them in order and runs what they ask of the window.
+  class ApplicationController final : public QObject {
     friend struct ApplicationEffects;
     friend class MachineChromeLayout;
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 
     Q_OBJECT
-    QML_NAMED_ELEMENT(GuiController)
+    QML_NAMED_ELEMENT(ApplicationController)
     QML_UNCREATABLE("Use the running GUI controller")
     // QML names every enum value with its enum, so Action::palette and Dialog::palette do not clash.
     Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
@@ -251,12 +257,12 @@ namespace telar::gui::qt {
 
     using Dialog = Store::Dialog;
 
-    explicit Application(ApplicationAllocator& memory, QObject* parent = nullptr);
-    ~Application() override;
-    Application(const Application&) = delete;
-    Application& operator=(const Application&) = delete;
-    Application(Application&&) = delete;
-    Application& operator=(Application&&) = delete;
+    explicit ApplicationController(ApplicationAllocator& memory, QObject* parent = nullptr);
+    ~ApplicationController() override;
+    ApplicationController(const ApplicationController&) = delete;
+    ApplicationController& operator=(const ApplicationController&) = delete;
+    ApplicationController(ApplicationController&&) = delete;
+    ApplicationController& operator=(ApplicationController&&) = delete;
 
     [[nodiscard]] AttachmentsController* attachments() noexcept;
     void open(const QString& endpoint);
@@ -553,18 +559,18 @@ namespace telar::gui::qt {
     // Answers the commands of the active machine's client. A configuration reply views the
     // application's buffers, region `a`, until the client encodes it.
     struct HostCommands final : ClientCommandHandler {
-      HostCommands(tbc::view<Application&, tbc::lt::a> owner, bool is_active) noexcept
+      HostCommands(tbc::view<ApplicationController&, tbc::lt::a> owner, bool is_active) noexcept
           : application(owner),
             active(is_active) {}
 
       void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const override;
 
-      tbc::view<Application&, tbc::lt::a> application;
+      tbc::view<ApplicationController&, tbc::lt::a> application;
       bool active = false;
     };
 
     void consume(MachineClient& client, QByteArrayView payload);
-    [[nodiscard]] static bool answerConfiguration(tbc::view<Application&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply);
+    [[nodiscard]] static bool answerConfiguration(tbc::view<ApplicationController&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply);
     void executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply);
     void synchronizeFontMetrics();
     void synchronizeWorkbenchGeometry();
@@ -681,8 +687,8 @@ namespace telar::gui::qt {
     std::optional<WindowFramePacer<>> frame_pacer_;
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
-    tbc::view<ExternalLinkOpener<ApplicationLinkHost, Application, MachineClientKey>, tbc::lt::self> link_opener_;
-    tbc::view<SoundPlayer<ApplicationSoundHost, Application>, tbc::lt::self> sound_player_;
+    tbc::view<ExternalLinkOpener<ApplicationLinkHost, ApplicationController, MachineClientKey>, tbc::lt::self> link_opener_;
+    tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     WorkspacesController workspaces_;
     TabsController tabs_;

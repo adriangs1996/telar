@@ -43,14 +43,14 @@ Window {
         ratio: root.ratio
         textScale: telar.chromeTextScale
         rail: root.geometry.rail
-        onSidebarToggled: telar.execute(GuiController.Action.toggle_sidebar)
-        onWorkspaceSelected: key => telar.execute(GuiController.Action.select_workspace, key)
-        onWorkspacePickerRequested: telar.execute(GuiController.Action.goto_picker)
-        onTabSelected: key => telar.execute(GuiController.Action.select_tab, key)
-        onTabClosed: key => telar.execute(GuiController.Action.close_tab, key)
-        onTabRenamed: telar.execute(GuiController.Action.rename_tab)
-        onTabCreated: telar.execute(GuiController.Action.new_tab)
-        onPaletteRequested: telar.execute(GuiController.Action.palette)
+        onSidebarToggled: telar.execute(ApplicationController.Action.toggle_sidebar)
+        onWorkspaceSelected: key => telar.execute(ApplicationController.Action.select_workspace, key)
+        onWorkspacePickerRequested: telar.execute(ApplicationController.Action.goto_picker)
+        onTabSelected: key => telar.execute(ApplicationController.Action.select_tab, key)
+        onTabClosed: key => telar.execute(ApplicationController.Action.close_tab, key)
+        onTabRenamed: telar.execute(ApplicationController.Action.rename_tab)
+        onTabCreated: telar.execute(ApplicationController.Action.new_tab)
+        onPaletteRequested: telar.execute(ApplicationController.Action.palette)
     }
 
     Sidebar {
@@ -69,7 +69,7 @@ Window {
         agentModel: telar.activity.rows
         preferredWidth: telar.sidebarWidth
         textScale: telar.chromeTextScale
-        onAgentSelected: key => telar.execute(GuiController.Action.select_agent, key)
+        onAgentSelected: key => telar.execute(ApplicationController.Action.select_agent, key)
         onAgentPeekRequested: key => telar.peekActivity(key)
         onSidebarResized: requestedWidth => telar.setSidebarWidth(requestedWidth)
     }
@@ -142,6 +142,6 @@ Window {
 
     Shortcut {
         sequences: ["Ctrl+Shift+P", "Meta+Shift+P"]
-        onActivated: telar.execute(GuiController.Action.palette)
+        onActivated: telar.execute(ApplicationController.Action.palette)
     }
 }

@@ -1,7 +1,7 @@
 """Check queued frame snapshots using the source's observeFrames implementation.
 
 Only observeFrames is transplanted into a QObject facade. Both builds use the
-current Application::PresentedFrame type, real QQuickWindow signals and Qt queued
+current ApplicationController::PresentedFrame type, real QQuickWindow signals and Qt queued
 callbacks. Preparation and presentation are simulated; this does not replace
 native scene, runtime acknowledgement, weak QObject lifetime or pixel tests.
 This driver currently supports macOS Qt framework builds.
@@ -23,7 +23,7 @@ def digest(path):
 
 
 def observer(source):
-    marker = 'void Application::observeFrames('
+    marker = 'void ApplicationController::observeFrames('
     if source.count(marker) != 1:
         raise ValueError('Expected exactly one observeFrames implementation')
     start = source.index(marker)
@@ -32,13 +32,13 @@ def observer(source):
     while depth:
         depth += (source[end] == '{') - (source[end] == '}')
         end += 1
-    return source[start:end].replace('Application::', 'ProbeApplication::')
+    return source[start:end].replace('ApplicationController::', 'ProbeApplication::')
 
 
 def build_probe(build, source, output, sanitize=False, unsafe=False):
     output.mkdir()
     database = json.loads((build / 'compile_commands.json').read_text())
-    row = next(row for row in database if row['file'].endswith('/ui/app/application.cpp'))
+    row = next(row for row in database if row['file'].endswith('/ui/app/application_controller.cpp'))
     application_header = Path(row['file']).with_suffix('.hpp')
     command = row.get('arguments') or shlex.split(row['command'])
     compiler = command[0]
@@ -50,14 +50,14 @@ def build_probe(build, source, output, sanitize=False, unsafe=False):
         body = body.replace(condition, 'false')
     generated = output / 'observe_frames.inc'
     generated.write_text(body + '\n')
-    (output / 'application.cpp').write_bytes(source.read_bytes())
-    (output / 'application.hpp').write_bytes(application_header.read_bytes())
+    (output / 'application_controller.cpp').write_bytes(source.read_bytes())
+    (output / 'application_controller.hpp').write_bytes(application_header.read_bytes())
     probe = Path(__file__).with_name('presented_frames_probe.cpp')
     obj = output / 'probe.o'
     command[command.index('-o') + 1] = str(obj)
     command[-1] = str(probe)
     command.insert(1, '-I' + str(output))
-    # The snapshot of application.hpp lives beside the generated include. Its
+    # The snapshot of application_controller.hpp lives beside the generated include. Its
     # sibling headers still resolve through the build's original include paths.
     flags = ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'] if sanitize else []
     command[1:1] = flags

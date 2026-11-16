@@ -13,7 +13,7 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/fold_map.hpp"
 #include "terminal_preparation.hpp"
-#include "ui/app/application.hpp"
+#include "ui/app/application_controller.hpp"
 #include "ui/fonts/font_collection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/terminal_font.hpp"
@@ -270,7 +270,7 @@ namespace telar::gui::qt {
     void hoverLeaveEvent(QHoverEvent* event) override;
 
   private:
-    friend class Application;
+    friend class ApplicationController;
     friend class PointerDispatcher;
     friend class test::TerminalCursor;
 
@@ -398,7 +398,7 @@ namespace telar::gui::qt {
       bool operator==(const LinkStamp&) const = default;
     };
 
-    Application* application_ = nullptr;
+    ApplicationController* application_ = nullptr;
     std::uint64_t pane_id_ = 0;
     std::vector<std::uint8_t> hidden_rows_;
     QVariantList separators_;

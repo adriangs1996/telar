@@ -41,12 +41,12 @@ import telar.gui.presentation.tab_drop;
 
 namespace telar::gui::qt {
 
-  class Application;
+  class ApplicationController;
   class TerminalItem;
 
   class PointerDispatcher final : public QObject {
   public:
-    explicit PointerDispatcher(Application& application);
+    explicit PointerDispatcher(ApplicationController& application);
     ~PointerDispatcher() override = default;
     PointerDispatcher(const PointerDispatcher&) = delete;
     PointerDispatcher& operator=(const PointerDispatcher&) = delete;
@@ -106,7 +106,7 @@ namespace telar::gui::qt {
     bool release(QMouseEvent& event);
     static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 
-    Application& application_;
+    ApplicationController& application_;
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;
