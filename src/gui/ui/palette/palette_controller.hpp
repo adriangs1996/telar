@@ -10,6 +10,7 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -148,18 +149,11 @@ namespace telar::gui::qt {
     bool navigate(const NavigationTarget& target);
 
     // Runs a user's mutation of the session and commits it to the store.
-    template <typename Mutation>
+    template <std::invocable Mutation>
     void interact(Mutation mutate) {
-      store_.begin();
-      try {
-        mutate();
-      } catch (const std::exception& error) {
+      store_.interact(mutate, [this](const std::exception& error) {
         emit failed(QString::fromUtf8(error.what()));
-
-        return;
-      }
-
-      store_.commit();
+      });
     }
 
     Store& store_;

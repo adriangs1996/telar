@@ -140,23 +140,21 @@ namespace telar::gui::qt {
 
     const auto link = toQString(item->link.view());
 
-    store_.begin();
-    try {
-      if (store_.session().activateNotification(*id)) {
-        if (!link.isEmpty()) {
-          emit linkRequested(link);
+    store_.interact(
+        [&] {
+          if (store_.session().activateNotification(*id)) {
+            if (!link.isEmpty()) {
+              emit linkRequested(link);
+            }
+
+            refresh();
+            emit focusRestoreRequested();
+          }
+        },
+        [this](const std::exception& error) {
+          emit failed(QString::fromUtf8(error.what()));
         }
-
-        refresh();
-        emit focusRestoreRequested();
-      }
-    } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
-
-      return;
-    }
-
-    store_.commit();
+    );
   }
 
   void NotificationsController::retireFocus(const QString& identity, QQuickItem* retiring_owner) {

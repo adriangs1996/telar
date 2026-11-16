@@ -625,15 +625,9 @@ namespace telar::gui::qt {
     // publishes what the mutation wrote and refreshes the window.
     template <std::invocable Mutation>
     void applyInteraction(Mutation mutate) {
-      store_.begin();
-      try {
-        mutate();
-      } catch (const std::exception& error) {
+      store_.interact(mutate, [this](const std::exception& error) {
         interactionFailed(error);
-        return;
-      }
-
-      store_.commit();
+      });
     }
 
     void interacted();

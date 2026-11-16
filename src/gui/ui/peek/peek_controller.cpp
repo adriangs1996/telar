@@ -113,18 +113,16 @@ namespace telar::gui::qt {
 
     const auto text = editor_.toUtf8();
 
-    store_.begin();
-    try {
-      if (store_.session().submitPeek({text.constData(), static_cast<std::size_t>(text.size())})) {
-        emit closeRequested();
-      }
-    } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
-
-      return;
-    }
-
-    store_.commit();
+    store_.interact(
+        [&] {
+          if (store_.session().submitPeek({text.constData(), static_cast<std::size_t>(text.size())})) {
+            emit closeRequested();
+          }
+        },
+        [this](const std::exception& error) {
+          emit failed(QString::fromUtf8(error.what()));
+        }
+    );
   }
 
   QVariantMap PeekController::state() const {

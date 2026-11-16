@@ -22,6 +22,7 @@ static_assert(true);
 #include <QWheelEvent>
 #include <QtQml/qqmlregistration.h>
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -237,18 +238,11 @@ namespace telar::gui::qt {
 
     // Runs a user's mutation of the session and commits it to the store; a failure shows in the
     // dialog instead.
-    template <typename Mutation>
+    template <std::invocable Mutation>
     void interact(Mutation mutate) {
-      store_.begin();
-      try {
-        mutate();
-      } catch (const std::exception& error) {
+      store_.interact(mutate, [this](const std::exception& error) {
         fail(error);
-
-        return;
-      }
-
-      store_.commit();
+      });
     }
 
     Store& store_;

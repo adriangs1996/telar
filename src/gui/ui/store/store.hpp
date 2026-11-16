@@ -10,7 +10,9 @@ static_assert(true);
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 #include <array>
+#include <concepts>
 #include <cstdint>
+#include <exception>
 #include <optional>
 
 #pragma once
@@ -100,6 +102,22 @@ namespace telar::gui::qt {
     // Ends a user interaction: interacted() runs its effects, and changed() follows at once, so
     // what the user did shows in the same turn. Runtime messages keep waiting for touch()'s flush.
     void commit();
+
+    // Runs a user's mutation of the state as one interaction. A mutation that throws is not
+    // committed: `failed` reports its error instead.
+    template <std::invocable Mutation, std::invocable<const std::exception&> Failure>
+    void interact(Mutation&& mutate, Failure&& failed) {
+      begin();
+      try {
+        mutate();
+      } catch (const std::exception& error) {
+        failed(error);
+
+        return;
+      }
+
+      commit();
+    }
 
   signals:
     void changed();
