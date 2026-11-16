@@ -4,10 +4,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS ver
 project(telar_auth_daemon LANGUAGES CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 option(TELAR_AUTH_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 if(NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")

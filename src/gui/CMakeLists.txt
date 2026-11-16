@@ -3,11 +3,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_gui LANGUAGES C CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 option(TELAR_GUI_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 # clangd, gui-lint and per-file incremental rebuilds need one compile command per source.

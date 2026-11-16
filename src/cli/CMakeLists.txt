@@ -4,11 +4,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS ver
 project(telar_cli LANGUAGES C CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 if(NOT TARGET telar-config)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../lib/config" "${CMAKE_BINARY_DIR}/telar-config")
 endif()

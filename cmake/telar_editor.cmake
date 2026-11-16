@@ -10,8 +10,6 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_SYSROOT AND NOT DEFINED ENV{SDKROOT})
   set(CMAKE_OSX_SYSROOT "${telar_editor_sdk}" CACHE PATH "macOS SDK" FORCE)
 endif()
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 # telar_editor_flags(TARGET [GHOSTTY]): GHOSTTY adds libghostty-vt's headers,
 # which telar-config's headers include but leave to their consumers to link.
 function(telar_editor_flags target)

@@ -4,10 +4,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS ver
 project(telar_runtime LANGUAGES C CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
 include(cmake/dependencies.cmake)
