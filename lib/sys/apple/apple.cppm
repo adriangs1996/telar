@@ -34,7 +34,7 @@ module;
 
 export module telar.sys.apple;
 
-// Darwin only (cmake/module_platforms.cmake). The C headers stay in this global
+// Darwin only (MACOS_SOURCES in lib/sys/CMakeLists.txt). The C headers stay in this global
 // module fragment only; importers reach their declarations through these
 // using-declarations instead of including them.
 export {

@@ -17,7 +17,7 @@ module;
 
 export module telar.sys.linux_api;
 
-// Linux only (cmake/module_platforms.cmake). The C headers stay in this global
+// Linux only (LINUX_SOURCES in lib/sys/CMakeLists.txt). The C headers stay in this global
 // module fragment only; importers reach their declarations through these
 // using-declarations instead of including them.
 export {

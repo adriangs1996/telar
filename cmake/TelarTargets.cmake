@@ -8,12 +8,15 @@ include("${CMAKE_CURRENT_LIST_DIR}/TelarChecks.cmake")
 # builds beside the process it tests. Each helper registers its target for the
 # quality checks of cmake/TelarChecks.cmake, which take their scope from here.
 
-# telar_modules(<target> [EXCLUDE <folder>...]): makes every module interface below
-# the current folder part of the target's public module file set, so scanning,
-# transitive ordering and installed consumers use CMake's native module graph.
-# EXCLUDE names subfolders that build their modules into a target of their own.
+# telar_modules(<target> [EXCLUDE <folder>...] [MACOS_SOURCES <file>...]
+#               [LINUX_SOURCES <file>...]): makes every module interface below the
+# current folder part of the target's public module file set, so scanning, transitive
+# ordering and installed consumers use CMake's native module graph. EXCLUDE names
+# subfolders that build their modules into a target of their own. MACOS_SOURCES and
+# LINUX_SOURCES are the files of one platform, interfaces among them: elsewhere their
+# interfaces leave the module set, and on it their other files are added as sources.
 function(telar_modules target)
-  cmake_parse_arguments(PARSE_ARGV 1 modules "" "" "EXCLUDE")
+  cmake_parse_arguments(PARSE_ARGV 1 modules "" "" "EXCLUDE;MACOS_SOURCES;LINUX_SOURCES")
   file(GLOB_RECURSE interfaces CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cppm")
   list(FILTER interfaces EXCLUDE REGEX "/(tests|tools|vendor|out(-[^/]*)?|CMakeFiles)/")
   foreach(folder IN LISTS modules_EXCLUDE)
@@ -24,32 +27,47 @@ function(telar_modules target)
       endif()
     endforeach()
   endforeach()
-  include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/module_platforms.cmake")
-  get_filename_component(repository "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." ABSOLUTE)
-  if(APPLE)
-    set(excluded ${TELAR_LINUX_MODULES})
-  else()
-    set(excluded ${TELAR_MACOS_MODULES})
-  endif()
-  foreach(source IN LISTS excluded)
-    list(REMOVE_ITEM interfaces "${repository}/${source}")
+  set(sources)
+  foreach(platform IN ITEMS MACOS LINUX)
+    if((platform STREQUAL "MACOS" AND APPLE) OR (platform STREQUAL "LINUX" AND CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+      set(current ON)
+    else()
+      set(current OFF)
+    endif()
+    foreach(source IN LISTS modules_${platform}_SOURCES)
+      cmake_path(ABSOLUTE_PATH source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE)
+      if(NOT source MATCHES "\\.cppm$")
+        if(current)
+          list(APPEND sources "${source}")
+        endif()
+      elseif(NOT source IN_LIST interfaces)
+        message(FATAL_ERROR "${target}: ${source} is not a module interface below ${CMAKE_CURRENT_SOURCE_DIR}")
+      elseif(NOT current)
+        list(REMOVE_ITEM interfaces "${source}")
+      endif()
+    endforeach()
   endforeach()
   if(NOT interfaces)
     message(FATAL_ERROR "No module interfaces for ${target}")
   endif()
   target_sources(${target} PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${interfaces})
+  if(sources)
+    target_sources(${target} PRIVATE ${sources})
+  endif()
   target_compile_features(${target} PUBLIC cxx_std_23)
   target_link_libraries(${target} PUBLIC telar::build_flags)
   set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()
 
-# telar_add_library(<name> [ALIAS <alias>] [SOURCES <file>...] [EXCLUDE <folder>...]
-#                   [INCLUDES <directory>...] [DEPS <target>...] [CHECKS <check>...])
+# telar_add_library(<name> [ALIAS <alias>] [SOURCES <file>...] [MACOS_SOURCES <file>...]
+#                   [LINUX_SOURCES <file>...] [EXCLUDE <folder>...] [INCLUDES <directory>...]
+#                   [DEPS <target>...] [CHECKS <check>...])
 # A static library of the module interfaces below the current folder and SOURCES, its
-# implementation units. ALIAS defaults to telar::<x> for a name telar-<x>. INCLUDES are
-# public include directories and DEPS public dependencies. CHECKS defaults to every check.
+# implementation units; MACOS_SOURCES and LINUX_SOURCES are those of one platform, as in
+# telar_modules. ALIAS defaults to telar::<x> for a name telar-<x>. INCLUDES are public
+# include directories and DEPS public dependencies. CHECKS defaults to every check.
 function(telar_add_library name)
-  cmake_parse_arguments(PARSE_ARGV 1 library "" "ALIAS" "SOURCES;EXCLUDE;INCLUDES;DEPS;CHECKS")
+  cmake_parse_arguments(PARSE_ARGV 1 library "" "ALIAS" "SOURCES;MACOS_SOURCES;LINUX_SOURCES;EXCLUDE;INCLUDES;DEPS;CHECKS")
   if(library_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_library(${name}): unexpected arguments ${library_UNPARSED_ARGUMENTS}")
   endif()
@@ -65,7 +83,8 @@ function(telar_add_library name)
 
   add_library(${name} STATIC ${library_SOURCES})
   add_library(${library_ALIAS} ALIAS ${name})
-  telar_modules(${name} EXCLUDE ${library_EXCLUDE})
+  telar_modules(${name} EXCLUDE ${library_EXCLUDE}
+    MACOS_SOURCES ${library_MACOS_SOURCES} LINUX_SOURCES ${library_LINUX_SOURCES})
   if(library_INCLUDES)
     target_include_directories(${name} PUBLIC ${library_INCLUDES})
   endif()
@@ -75,13 +94,14 @@ function(telar_add_library name)
   telar_register_checks(${name} CHECKS ${library_CHECKS})
 endfunction()
 
-# telar_add_domain(<process> <domain> [SOURCES <file>...] [INCLUDES <directory>...]
+# telar_add_domain(<process> <domain> [SOURCES <file>...] [MACOS_SOURCES <file>...]
+#                  [LINUX_SOURCES <file>...] [INCLUDES <directory>...]
 #                  [DEPS <domain or target>...] [CHECKS <check>...])
 # A domain of a process (docs/build/modules.json, process_layers) as the library
 # <process>-<domain>, aliased telar::<process>::<domain>, from the folder whose
 # CMakeLists.txt declares it. A plain name in DEPS is a domain of the same process.
 function(telar_add_domain process domain)
-  cmake_parse_arguments(PARSE_ARGV 2 domain "" "" "SOURCES;INCLUDES;DEPS;CHECKS")
+  cmake_parse_arguments(PARSE_ARGV 2 domain "" "" "SOURCES;MACOS_SOURCES;LINUX_SOURCES;INCLUDES;DEPS;CHECKS")
   if(domain_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_domain(${process} ${domain}): unexpected arguments ${domain_UNPARSED_ARGUMENTS}")
   endif()
@@ -98,6 +118,8 @@ function(telar_add_domain process domain)
   endif()
   telar_add_library(${process}-${domain} ALIAS telar::${process}::${domain}
     SOURCES ${domain_SOURCES}
+    MACOS_SOURCES ${domain_MACOS_SOURCES}
+    LINUX_SOURCES ${domain_LINUX_SOURCES}
     INCLUDES ${domain_INCLUDES}
     DEPS ${dependencies}
     ${checks})

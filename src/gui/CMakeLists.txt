@@ -46,7 +46,9 @@ target_sources(gui-core PRIVATE
   application/sound_playback/sound_playback.cpp
   application/workspace_replica/workspace_replica.cpp
   platform/shared_image_source/shared_image_source.cpp)
-telar_modules(gui-core)
+telar_modules(gui-core
+  MACOS_SOURCES fonts/glyph_rasterizer/glyph_rasterizer.cppm
+  LINUX_SOURCES platform/background_effect/background_effect.cppm)
 # The implementation units of the terminal, fonts, graphics, presentation, layout and model
 # domain interfaces.
 target_sources(gui-core PRIVATE

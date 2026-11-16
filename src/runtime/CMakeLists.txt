@@ -211,7 +211,9 @@ target_sources(runtime-core PRIVATE
   traffic/capture_analysis/capture_analysis.cpp
   traffic/control_backend/control_backend.cpp
   traffic/control_protocol/control_protocol.cpp)
-telar_modules(runtime-core)
+telar_modules(runtime-core
+  MACOS_SOURCES platform/frameworks/frameworks.cppm redirect/record/record.cppm redirect/record/record.cpp
+  LINUX_SOURCES platform/proc_file/proc_file.cppm platform/proc_file/proc_file.cpp)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # Third-party headers, as the other dependencies': the project neither warns about nor annotates them.
@@ -230,11 +232,8 @@ target_link_libraries(runtime-core PUBLIC deps::zlib deps::brotli_decoder deps::
 target_link_libraries(runtime-core PUBLIC deps::ghostty_vt deps::sqlite3 Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
   target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
-  # The interface of telar.runtime.redirect.record is macOS only (cmake/module_platforms.cmake).
-  target_sources(runtime-core PRIVATE redirect/record/record.cpp)
 else()
   target_compile_definitions(runtime-core PUBLIC _GNU_SOURCE)
-  target_sources(runtime-core PRIVATE platform/proc_file/proc_file.cpp)
   target_link_libraries(runtime-core PUBLIC util)
 endif()
 

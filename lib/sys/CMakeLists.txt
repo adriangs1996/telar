@@ -7,13 +7,10 @@ find_package(Threads REQUIRED)
 
 telar_add_library(telar-sys
   SOURCES posix/posix.cpp process/process.cpp socket/socket.cpp
+  MACOS_SOURCES apple/apple.cppm apple/apple.cpp
+  LINUX_SOURCES linux_api/linux_api.cppm linux_api/linux_api.cpp
   # The libraries that define what the modules declare.
   DEPS Threads::Threads ${CMAKE_DL_LIBS})
-if(APPLE)
-  target_sources(telar-sys PRIVATE apple/apple.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_sources(telar-sys PRIVATE linux_api/linux_api.cpp)
-endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(telar-sys PRIVATE _GNU_SOURCE)
   target_link_libraries(telar-sys PUBLIC util)
