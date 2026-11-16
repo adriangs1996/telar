@@ -11,16 +11,19 @@ Item {
     id: root
     objectName: "workspaceForm"
 
-    required property var controller
+    required property WorkspaceFormController controller
+    required property var colors
+    required property var typography
     property real ratio: 1
-    readonly property var colors: controller.colors
-    readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.workspaceForm.state
+    readonly property var state: controller.state
     readonly property var entries: state.entries ?? []
     readonly property int selection: state.selection ?? 0
     readonly property bool confirmCreate: state.confirmCreate ?? false
     readonly property bool submittable: name.text.trim().length > 0 || directory.text.trim().length > 0
     property alias field: name
+    // Enter with a name or a directory: the window creates the workspace from `input`.
+    signal submitted(var input)
+    signal cancelled()
 
     readonly property real sectionGap: 16 * ratio
     readonly property real labelGap: 6 * ratio
@@ -43,12 +46,12 @@ Item {
 
     function submit() {
         if (root.submittable) {
-            root.controller.submitDialog({text: name.text, path: directory.text});
+            root.submitted({text: name.text, path: directory.text});
         }
     }
 
     function cancel() {
-        root.controller.execute(WindowActions.Action.cancel);
+        root.cancelled();
     }
 
     function useDirectory(path) {
@@ -59,18 +62,14 @@ Item {
         directory.text = path;
         directory.input.cursorPosition = path.length;
         directory.input.forceActiveFocus();
-        root.controller.workspaceForm.edit(path);
+        root.controller.edit(path);
     }
 
-    Connections {
-        target: root.controller
-        function onDialogChanged() {
-            if (root.controller.dialog === Store.Dialog.new_workspace) {
-                name.text = "";
-                directory.text = "";
-                root.controller.workspaceForm.edit("");
-            }
-        }
+    // Empties the form; the window calls it each time it opens the dialog.
+    function clear() {
+        name.text = "";
+        directory.text = "";
+        root.controller.edit("");
     }
 
     component Label: ChromeText {
@@ -163,15 +162,15 @@ Item {
                 typography: root.typography
                 ratio: root.ratio
                 placeholderText: "~/projects/my-app"
-                onEdited: root.controller.workspaceForm.edit(text)
+                onEdited: root.controller.edit(text)
                 onSubmitted: root.submit()
                 onCancelled: root.cancel()
-                onMoved: delta => root.controller.workspaceForm.move(delta)
+                onMoved: delta => root.controller.move(delta)
                 onTabbed: backward => {
                     if (backward) {
                         name.input.forceActiveFocus();
                     } else {
-                        root.useDirectory(root.controller.workspaceForm.accept());
+                        root.useDirectory(root.controller.accept());
                     }
                 }
             }
@@ -266,7 +265,7 @@ Item {
                             id: pointer
                             anchors.fill: parent
                             identity: "workspaceFolder:" + (root.entries[row.entry] ?? "")
-                            onActivated: root.useDirectory(root.controller.workspaceForm.choose(row.entry))
+                            onActivated: root.useDirectory(root.controller.choose(row.entry))
                         }
                     }
                 }

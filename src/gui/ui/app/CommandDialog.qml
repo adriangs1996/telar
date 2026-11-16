@@ -120,6 +120,10 @@ Popup {
     Connections {
         target: telar
         function onDialogChanged() {
+            if (telar.dialog === Store.Dialog.new_workspace) {
+                workspaceForm.clear();
+            }
+
             if (telar.dialog !== Store.Dialog.none) {
                 if (!root.paletteMode && !root.pathMode && !root.machineMode && !root.peekMode) {
                     root.activeSearch.text = "";
@@ -279,8 +283,12 @@ Popup {
             id: workspaceForm
             anchors.fill: parent
             visible: root.workspaceMode
-            controller: telar
+            controller: telar.workspaceForm
+            colors: telar.colors
+            typography: telar.windowGeometry.typography
             ratio: root.ratio
+            onSubmitted: input => telar.submitDialog(input)
+            onCancelled: telar.execute(WindowActions.Action.cancel)
         }
     }
 }
