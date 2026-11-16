@@ -1,4 +1,4 @@
-telar_process(gui OPTIONS -Wall -Wextra -Wpedantic -ffp-contract=off)
+telar_process(gui OPTIONS -Wall -Wextra -Wpedantic -ffp-contract=off QML ui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, lint and per-file incremental rebuilds need one compile command per source.

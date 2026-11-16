@@ -8,15 +8,16 @@ include("${CMAKE_CURRENT_LIST_DIR}/TelarChecks.cmake")
 # builds beside the process it tests. Each helper registers its target for the
 # quality checks of cmake/TelarChecks.cmake, which take their scope from here.
 
-# telar_process(<name> [OPTIONS <option>...]): the folder that calls it is the process
-# <name>. Its source and binary directories become TELAR_PROCESS_SOURCE_DIR and
+# telar_process(<name> [OPTIONS <option>...] [QML <folder>]): the folder that calls it is
+# the process <name>. Its source and binary directories become TELAR_PROCESS_SOURCE_DIR and
 # TELAR_PROCESS_BINARY_DIR for the helpers called here and in the folders below, which
 # build tests and probes beside the process. It creates <name>-settings, the INTERFACE
 # target every domain of the process links: before declaring its domains, the process gives
 # it the include directories, definitions and libraries they compile and link with. OPTIONS
-# are the compile options of every domain and of everything that links one.
+# are the compile options of every domain and of everything that links one. QML is the
+# folder below the process that holds its QML, which its Qt tests scan for QML imports.
 function(telar_process name)
-  cmake_parse_arguments(PARSE_ARGV 1 process "" "" "OPTIONS")
+  cmake_parse_arguments(PARSE_ARGV 1 process "" "QML" "OPTIONS")
   if(process_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_process(${name}): unexpected arguments ${process_UNPARSED_ARGUMENTS}")
   endif()
@@ -24,6 +25,12 @@ function(telar_process name)
   set(TELAR_PROCESS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" PARENT_SCOPE)
   set(TELAR_PROCESS_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" PARENT_SCOPE)
   set(TELAR_PROCESS_OPTIONS "${process_OPTIONS}" PARENT_SCOPE)
+  set(qml_directory)
+  if(process_QML)
+    cmake_path(ABSOLUTE_PATH process_QML BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE
+      OUTPUT_VARIABLE qml_directory)
+  endif()
+  set(TELAR_PROCESS_QML_DIR "${qml_directory}" PARENT_SCOPE)
   add_library(${name}-settings INTERFACE)
 endfunction()
 
@@ -212,8 +219,10 @@ function(telar_add_test name)
         qt_add_executable(${name} ${test_SOURCES})
         # Static Qt links the QML plugins a program imports. Like the process's own programs,
         # a test scans the process's QML and finds its QML modules in its build directory.
+        # The scan walks only the QML folder: a build tree left in the process's folder
+        # would add its copies of the QML to every test's configure.
         set_target_properties(${name} PROPERTIES
-          QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS "${TELAR_PROCESS_SOURCE_DIR}"
+          QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS "${TELAR_PROCESS_QML_DIR}"
           QT_QML_IMPORT_PATH "${TELAR_PROCESS_BINARY_DIR}")
       else()
         add_executable(${name} ${test_SOURCES})
