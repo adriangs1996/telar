@@ -5,6 +5,7 @@ static_assert(true);
 
 #pragma once
 
+#include "documents_controller.hpp"
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -15,15 +16,13 @@ static_assert(true);
 
 namespace telar::gui::qt {
 
-  class ApplicationController;
-
   // The document a pane's program shows natively (`telar render`), as the blocks QML lays out.
   // The session owns the decoded document; this projects it once per version, with all of its
   // text escaped into Qt rich text, so nothing a program wrote is read as markup.
   class DocumentView : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(NativeDocument)
-    Q_PROPERTY(QObject* application READ application WRITE setApplication NOTIFY applicationChanged)
+    Q_PROPERTY(telar::gui::qt::DocumentsController* controller READ controller WRITE setController NOTIFY controllerChanged)
     Q_PROPERTY(QString paneId READ paneId WRITE setPaneId NOTIFY paneIdChanged)
     // 0 for the document that covers the pane; else one drawn in place of rows it stands for.
     Q_PROPERTY(qulonglong documentId READ documentId WRITE setDocumentId NOTIFY documentIdChanged)
@@ -38,8 +37,8 @@ namespace telar::gui::qt {
   public:
     explicit DocumentView(QObject* parent = nullptr);
 
-    [[nodiscard]] QObject* application() const noexcept;
-    void setApplication(QObject* application);
+    [[nodiscard]] DocumentsController* controller() const noexcept;
+    void setController(DocumentsController* controller);
     [[nodiscard]] QString paneId() const;
     void setPaneId(const QString& identity);
 
@@ -60,7 +59,7 @@ namespace telar::gui::qt {
     [[nodiscard]] Q_INVOKABLE bool openLink(const QString& target) const;
 
   signals:
-    void applicationChanged();
+    void controllerChanged();
     void paneIdChanged();
     void documentIdChanged();
     void colorsChanged();
@@ -74,7 +73,7 @@ namespace telar::gui::qt {
     void refresh();
     void project();
 
-    QPointer<ApplicationController> application_;
+    QPointer<DocumentsController> controller_;
     std::uint64_t pane_id_ = 0;
     std::uint64_t document_id_ = 0;
     QVariantMap colors_;

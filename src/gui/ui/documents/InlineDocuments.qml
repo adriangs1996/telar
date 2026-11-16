@@ -39,7 +39,7 @@ Item {
                     return;
                 }
                 if (inlineDocument.shown && zone.cell > 0 && body.implicitHeight > 0) {
-                    root.application.measureInlineDocument(root.paneId, zone.modelData.id, zone.needed);
+                    root.application.documents.measure(root.paneId, zone.modelData.id, zone.needed);
                 }
             }
 
@@ -60,7 +60,7 @@ Item {
 
             NativeDocument {
                 id: inlineDocument
-                application: root.application
+                controller: root.application.documents
                 paneId: root.paneId
                 documentId: zone.modelData.id
                 colors: root.colors

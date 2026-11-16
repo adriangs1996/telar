@@ -1005,7 +1005,7 @@ namespace telar::gui::qt {
     const auto& copy = application_->copy()->state();
     const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
 
-    if (preedit_.isEmpty() && application_->documentKey(pane_id_, *event)) {
+    if (preedit_.isEmpty() && application_->documents()->key(pane_id_, *event)) {
       // The document the pane shows took a scroll key.
     } else if (clipboard_shortcut && event->key() == Qt::Key_C && selected) {
       application_->copy()->copySelection(pane_id_);

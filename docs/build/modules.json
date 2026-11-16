@@ -618,6 +618,7 @@
     "src/gui/ui/scene/curve_scene.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/timing/deadline_timer.hpp": "Qt moc/QML integration",
     "src/gui/ui/documents/document_view.hpp": "Qt moc/QML integration",
+    "src/gui/ui/documents/documents_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/components/element_canvas.hpp": "Qt moc/QML integration",
     "src/gui/ui/components/element_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/components/element_slots.hpp": "Qt moc/QML integration",

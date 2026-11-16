@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "document_view.hpp"
-#include "ui/app/application_controller.hpp"
 #include <QDesktopServices>
 #include <QKeyEvent>
 #include <QUrl>
@@ -116,8 +115,8 @@ namespace telar::gui::qt {
     }
 
     // The document a view shows, whether it shows, and what changes when it does.
-    const Document* findDocument(const ApplicationController* application, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
-      const auto* pane = application == nullptr ? nullptr : application->pane(pane_id);
+    const Document* findDocument(const DocumentsController* controller, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
+      const auto* pane = controller == nullptr ? nullptr : controller->pane(pane_id);
 
       shown = false;
       version = 0;
@@ -219,78 +218,31 @@ namespace telar::gui::qt {
 
   }
 
-  bool ApplicationController::documentKey(std::uint64_t pane_id, const QKeyEvent& event) {
-    const auto* current = pane(pane_id);
-    if (current == nullptr || !current->document_shown) {
-      return false;
-    }
-
-    const auto modifiers = event.modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
-    const auto key = event.key();
-    const char* action = nullptr;
-
-    if (modifiers == Qt::ControlModifier) {
-      action = key == Qt::Key_D ? "half_down" : key == Qt::Key_U ? "half_up"
-                                                                 : nullptr;
-    } else if (modifiers == Qt::NoModifier) {
-      const auto text = event.text();
-      if (key == Qt::Key_Down || text == QLatin1StringView{"j"}) {
-        action = "line_down";
-      } else if (key == Qt::Key_Up || text == QLatin1StringView{"k"}) {
-        action = "line_up";
-      } else if (key == Qt::Key_PageDown || key == Qt::Key_Space || text == QLatin1StringView{"f"}) {
-        action = "page_down";
-      } else if (key == Qt::Key_PageUp || text == QLatin1StringView{"b"}) {
-        action = "page_up";
-      } else if (key == Qt::Key_Home || text == QLatin1StringView{"g"}) {
-        action = "top";
-      } else if (key == Qt::Key_End || text == QLatin1StringView{"G"}) {
-        action = "bottom";
-      }
-    }
-
-    if (action == nullptr) {
-      return false;
-    }
-
-    emit documentScroll(pane_id, QString::fromLatin1(action));
-    return true;
-  }
-
-  void ApplicationController::measureInlineDocument(const QString& pane_id, qulonglong id, int rows) {
-    const auto pane = pane_id.toULongLong();
-    if (rows > 0 && session().measureInline(pane, id, static_cast<std::uint32_t>(rows))) {
-      emit terminalChanged(pane);
-      requestTerminalFrame();
-    }
-  }
-
   DocumentView::DocumentView(QObject* parent)
       : QObject(parent) {}
 
-  QObject* DocumentView::application() const noexcept {
-    return application_;
+  DocumentsController* DocumentView::controller() const noexcept {
+    return controller_;
   }
 
-  void DocumentView::setApplication(QObject* application) {
-    auto* next = qobject_cast<ApplicationController*>(application);
-    if (application_ == next) {
+  void DocumentView::setController(DocumentsController* controller) {
+    if (controller_ == controller) {
       return;
     }
 
-    if (application_ != nullptr) {
-      disconnect(application_, nullptr, this, nullptr);
+    if (controller_ != nullptr) {
+      disconnect(controller_, nullptr, this, nullptr);
     }
 
-    application_ = next;
-    if (application_ != nullptr) {
-      connect(application_, &ApplicationController::documentChanged, this, [this](qulonglong pane_id) {
+    controller_ = controller;
+    if (controller_ != nullptr) {
+      connect(controller_, &DocumentsController::changed, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refresh();
         }
       });
 
-      connect(application_, &ApplicationController::documentScroll, this, [this](qulonglong pane_id, const QString& action) {
+      connect(controller_, &DocumentsController::scrollRequested, this, [this](qulonglong pane_id, const QString& action) {
         if (pane_id == pane_id_ && document_id_ == 0 && shown_) {
           emit scrollRequested(action);
         }
@@ -299,7 +251,7 @@ namespace telar::gui::qt {
 
     stale_ = true;
     refresh();
-    emit applicationChanged();
+    emit controllerChanged();
   }
 
   QString DocumentView::paneId() const {
@@ -373,7 +325,7 @@ namespace telar::gui::qt {
     bool shown = false;
     std::uint64_t version = 0;
 
-    static_cast<void>(findDocument(application_, pane_id_, document_id_, shown, version));
+    static_cast<void>(findDocument(controller_, pane_id_, document_id_, shown, version));
     if (shown == shown_ && version == version_ && !stale_) {
       return;
     }
@@ -393,7 +345,7 @@ namespace telar::gui::qt {
   void DocumentView::project() {
     bool shown = false;
     std::uint64_t version = 0;
-    const auto& document = *findDocument(application_, pane_id_, document_id_, shown, version);
+    const auto& document = *findDocument(controller_, pane_id_, document_id_, shown, version);
     const RichText rich{document, colors_, mono_family_};
 
     blocks_.clear();

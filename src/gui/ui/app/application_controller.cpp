@@ -158,6 +158,7 @@ namespace telar::gui::qt {
         machine_prompt_(store_, machine_profiles_),
         peek_(store_, activity_),
         prompt_(store_),
+        documents_(store_),
         link_status_(store_),
         links_(store_),
         copy_(store_),
@@ -234,6 +235,10 @@ namespace telar::gui::qt {
     connect(this, &ApplicationController::machineChanged, &link_status_, &LinkStatusController::publish);
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
+    connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
+      emit terminalChanged(pane_id);
+      requestTerminalFrame();
+    });
     connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
     connect(workspaces_.rows(), &QAbstractItemModel::rowsInserted, this, &ApplicationController::sidebarGeometryChanged);
     connect(workspaces_.rows(), &QAbstractItemModel::rowsRemoved, this, &ApplicationController::sidebarGeometryChanged);
@@ -828,7 +833,7 @@ namespace telar::gui::qt {
       publishStatus();
       break;
     case Change::document:
-      emit documentChanged(session().changedPane());
+      documents_.publish(session().changedPane());
       // Inline documents take rows of the view, or give them back.
       emit terminalChanged(session().changedPane());
       requestTerminalFrame();

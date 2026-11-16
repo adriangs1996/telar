@@ -25,6 +25,7 @@ static_assert(true);
 #include "ui/components/components_controller.hpp"
 #include "ui/components/element_slots.hpp"
 #include "ui/config/configuration_source.hpp"
+#include "ui/documents/documents_controller.hpp"
 #include "ui/fonts/font_resolver.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/history/history_controller.hpp"
@@ -193,6 +194,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
     Q_PROPERTY(telar::gui::qt::PromptController* prompt READ prompt CONSTANT)
+    Q_PROPERTY(telar::gui::qt::DocumentsController* documents READ documents CONSTANT)
     Q_PROPERTY(telar::gui::qt::LinkStatusController* linkStatus READ linkStatus CONSTANT)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
     Q_PROPERTY(telar::gui::qt::PathPickerController* paths READ paths CONSTANT)
@@ -305,11 +307,6 @@ namespace telar::gui::qt {
     void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
     // The keys and text telar's command editor takes. False hands the key back to the terminal.
     bool promptKey(std::uint64_t pane_id, const prompt::KeyPress& key);
-    // While the pane shows a document, its scroll keys move the document; every other key, as
-    // q or Ctrl-C, reaches the program that shows it.
-    bool documentKey(std::uint64_t pane_id, const QKeyEvent& event);
-    // The view measured an inline document in `rows` rows of its own: the pane makes room for it.
-    Q_INVOKABLE void measureInlineDocument(const QString& pane_id, qulonglong id, int rows);
     bool promptText(std::uint64_t pane_id, const QString& text);
     void resize(std::uint64_t pane_id, TerminalSize size);
     void scroll(PaneScrollDelta delta);
@@ -354,6 +351,10 @@ namespace telar::gui::qt {
 
     PromptController* prompt() noexcept {
       return &prompt_;
+    }
+
+    DocumentsController* documents() noexcept {
+      return &documents_;
     }
 
     LinkStatusController* linkStatus() noexcept {
@@ -428,8 +429,6 @@ namespace telar::gui::qt {
     void terminalChanged(qulonglong pane_id);
     void promptChanged(qulonglong pane_id);
     // The document a pane shows natively appeared, changed or went away.
-    void documentChanged(qulonglong pane_id);
-    void documentScroll(qulonglong pane_id, const QString& action);
     void pointerModifiersChanged();
     void inputReleasing(qulonglong pane_id);
     void notification(const QString& message);
@@ -682,6 +681,7 @@ namespace telar::gui::qt {
     MachinePromptController machine_prompt_;
     PeekController peek_;
     PromptController prompt_;
+    DocumentsController documents_;
     LinkStatusController link_status_;
     LinksController links_;
     CopyController copy_;

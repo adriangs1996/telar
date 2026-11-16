@@ -48,7 +48,7 @@ Item {
 
     NativeDocument {
         id: nativeDocument
-        application: root.application
+        controller: root.application.documents
         paneId: root.paneId
         colors: root.colors
         monoFamily: documentTheme.monoFamily
