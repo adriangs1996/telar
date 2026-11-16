@@ -9,12 +9,17 @@ the graph keeps measuring as the tree nests. Files directly in ui/ belong to no 
   another folder, or that imports a relative path (`import "../components/Fit.js"`,
   `import "../controls"`) that resolves into another folder of ui/. All QML shares one module,
   so the type name is the file name.
+- A QML file that names a C++ type registered for QML in a header of another folder
+  (`QML_ELEMENT` registers the class name, `QML_NAMED_ELEMENT(Name)` its argument) has a QML
+  edge to that header's folder, whatever the use: instantiation, property or parameter type,
+  enum or attached-property scope (`Store.Action.Copy`, `TerminalView.foo`).
 
 The report prints how many files outside app/ include the root header, how often the shared
 headers of app/ are used from outside it, and the edges and cycles of four graphs: C++ as it
 is, C++ with the shared app/ headers counted as `foundation`, the same without the edges to
 app/ that are not shared headers (the root and U4's runtime_connection/application_effects),
-and QML. `-v` lists the edges of the third graph and the files that include the root header.
+and QML. `-v` lists the edges of the third graph, the files that include the root header and the
+QML edges.
 
 `--rules` checks the target rules of the UI and exits with 1 when any edge breaks them:
 anyone may use foundation/, foundation/ may not use design/, and a directory of the app/ tree
@@ -39,6 +44,13 @@ SOURCE_SUFFIXES = CPP_SUFFIXES + ('.qml',)
 INCLUDE_RE = re.compile(r'#include\s+"ui/((?:[a-z_0-9]+/)+)([a-z_0-9]+\.hpp)"')
 # A quoted QML import names a directory or a script file by its path.
 QML_IMPORT_RE = re.compile(r'^\s*import\s+"([^"]+)"', re.M)
+# A registration macro of a C++ type for QML, with the name it gives when it names one.
+QML_REGISTRATION_RE = re.compile(r'\bQML_(?:NAMED_ELEMENT\(\s*(\w+)\s*\)|ELEMENT\b)')
+# The definition of a class, not a forward declaration: `class Name final : Base {`, `struct Name {`.
+CLASS_RE = re.compile(r'\b(?:class|struct)\s+(?:[A-Z_]+\s+)?(\w+)\s*(?:final\s*)?[:{]')
+# Comments and string literals of QML and JavaScript, where a type name is not a use.
+QML_NON_CODE_RE = re.compile(
+    r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'|`(?:\\.|[^`\\])*`', re.S)
 # Headers of app/ that make a file depend on ApplicationController.
 ROOT_HEADERS = {'application.hpp', 'application_controller.hpp'}
 # Headers of app/ that are utilities, not the root (U3). The second graph counts them as
@@ -126,18 +138,50 @@ def imported_folder(path, imported):
     return target[len(UI):]
 
 
+def registered_types(sources):
+    """Return {name: folder} of the C++ types that headers of ui/ register for QML.
+
+    `QML_NAMED_ELEMENT(Name)` registers Name; `QML_ELEMENT` registers the class it sits in, the
+    nearest class definition above it."""
+    owners = {}
+    for path, text in sources.items():
+        if not path.endswith(('.hpp', '.h')):
+            continue
+
+        for registration in QML_REGISTRATION_RE.finditer(text):
+            name = registration.group(1)
+            if name is None:
+                classes = CLASS_RE.findall(text, 0, registration.start())
+                if not classes:
+                    continue
+                name = classes[-1]
+            owners[name] = folder(path)
+
+    return owners
+
+
 def qml_graph(sources):
-    """Return {folder: folders whose QML types it instantiates or whose files it imports}."""
+    """Return {folder: folders whose QML or C++ types it names, or whose files it imports}."""
     qml = {path: text for path, text in sources.items() if path.endswith('.qml')}
     # A type name that appears in two folders resolves to the last one in git order.
     owners = {path.rsplit('/', 1)[1][:-len('.qml')]: folder(path) for path in qml}
     patterns = {name: re.compile(r'\b' + re.escape(name) + r'\s*\{') for name in owners}
+    # A C++ type is named by any use of its identifier in code, not after a dot: a type, an
+    # enum or attached-property scope, or an instantiation.
+    registered = registered_types(sources)
+    names = re.compile(r'(?<![.\w])(' + '|'.join(map(re.escape, sorted(registered, key=len, reverse=True)))
+                       + r')\b') if registered else None
     graph = collections.defaultdict(set)
     for path, text in qml.items():
         node = folder(path)
         for name, owner in owners.items():
             if owner != node and patterns[name].search(text):
                 graph[node].add(owner)
+
+        if names is not None:
+            for name in set(names.findall(QML_NON_CODE_RE.sub(' ', text))):
+                if registered[name] != node:
+                    graph[node].add(registered[name])
 
         for imported in QML_IMPORT_RE.findall(text):
             target = imported_folder(path, imported)
@@ -249,6 +293,8 @@ def report(rev, sources, verbose, rules):
         lines += [f'   {node} -> {sorted(without_root[node])}' for node in sorted(without_root)]
         lines.append('root users:')
         lines += [f'   {path}' for path in sorted(root_users)]
+        lines.append('QML edges:')
+        lines += [f'   {node} -> {sorted(qml[node])}' for node in sorted(qml) if qml[node]]
 
     if not rules:
         return lines, 0

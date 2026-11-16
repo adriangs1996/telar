@@ -17,6 +17,11 @@ def include(header):
     return f'#include "ui/{header}"\n'
 
 
+def registered(name, macro=None):
+    """A header that registers the class `name` for QML, by default under its own name."""
+    return f'class {name} : public QObject {{\n    {macro or f"QML_NAMED_ELEMENT({name})"}\n}};\n'
+
+
 class UiGraph(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='telar-ui-graph-')
@@ -85,6 +90,7 @@ class UiGraph(unittest.TestCase):
             "   panes -> ['chrome', 'foundation']",
             'root users:',
             '   src/gui/ui/chrome/sidebar.hpp',
+            'QML edges:',
         ])
 
     def test_qml_edges_follow_instantiated_types(self):
@@ -121,6 +127,74 @@ class UiGraph(unittest.TestCase):
             'rule violations: 2',
             '   QML app/chrome -> components',
             '   QML foundation/models -> design',
+        ])
+
+    def test_registered_types_take_the_macro_argument_or_the_class_name(self):
+        rev = self.tree({
+            'app/application_controller.hpp': registered('ApplicationController'),
+            'controls/chrome_style.hpp': 'class ChromeStyle final : public QObject {\n    QML_ELEMENT\n    QML_SINGLETON\n};\n',
+            # The forward declaration above the class is not the registered class.
+            'panes/attention.hpp': 'class WindowAnimationClock;\n\nclass NativePaneAttention : public QQuickItem {\n'
+                                   '    Q_OBJECT\n    QML_ELEMENT\n};\n',
+            'terminal/terminal_item.hpp': registered('TerminalItem', 'QML_NAMED_ELEMENT(TerminalView)'),
+            'foundation/input/action.hpp': 'namespace action {\n    Q_NAMESPACE\n    QML_NAMED_ELEMENT(Action)\n}\n',
+            # Only headers register types.
+            'store/store.cpp': 'class Hidden {\n    QML_ELEMENT\n};\n',
+        })
+
+        self.assertEqual(graph.registered_types(graph.load_sources(rev, self.repository)), {
+            'ApplicationController': 'app',
+            'ChromeStyle': 'controls',
+            'NativePaneAttention': 'panes',
+            'TerminalView': 'terminal',
+            'Action': 'foundation/input',
+        })
+
+    def test_qml_edges_follow_every_use_of_a_registered_type(self):
+        rev = self.tree({
+            'app/application_controller.hpp': registered('ApplicationController'),
+            'store/store.hpp': registered('Store'),
+            'terminal/terminal_item.hpp': registered('TerminalItem', 'QML_NAMED_ELEMENT(TerminalView)'),
+            'peek/peek_controller.hpp': registered('PeekController'),
+            'controls/chrome_style.hpp': registered('ChromeStyle', 'QML_ELEMENT'),
+            'scene/clock.hpp': registered('Clock', 'QML_ELEMENT'),
+            # Enum scope, property type, instantiation, attached property, parameter type.
+            'palette/PalettePanel.qml': 'Item {\n    onX: execute(ApplicationController.Action.cancel)\n}\n',
+            'paths/PathPanel.qml': 'Item {\n    required property PeekController peek\n}\n',
+            'panes/PaneArea.qml': 'Item {\n    TerminalView {}\n}\n',
+            'history/HistoryRow.qml': 'Item {\n    ChromeStyle.weight: 2\n}\n',
+            'prompt/PromptPanel.qml': 'Item {\n    function pick(value: Store): bool { return true }\n}\n',
+            # Comments, strings, members after a dot and the type's own folder are not edges.
+            'links/LinkStatus.qml': 'Item {\n    // Clock {}\n    /* PeekController */\n'
+                                    '    property string a: "TerminalView {"\n    property string b: \'Store.x\'\n'
+                                    '    property var c: root.Clock\n}\n',
+            'store/StoreView.qml': 'Item {\n    property int a: Store.Dialog.none\n}\n',
+        })
+
+        qml = graph.qml_graph(graph.load_sources(rev, self.repository))
+
+        self.assertEqual({node: sorted(targets) for node, targets in qml.items() if targets}, {
+            'palette': ['app'],
+            'paths': ['peek'],
+            'panes': ['terminal'],
+            'history': ['controls'],
+            'prompt': ['store'],
+        })
+
+    def test_rules_judge_registered_type_edges(self):
+        lines, code = self.run_report({
+            'app/application_controller.hpp': registered('ApplicationController'),
+            'foundation/input/action.hpp': registered('ActionId', 'QML_NAMED_ELEMENT(Action)'),
+            'app/panes/PaneActions.qml': 'Item {\n    property int a: ApplicationController.Action.copy\n'
+                                         '    property int b: Action.copy\n}\n',
+        }, verbose=True, rules=True)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[lines.index('QML edges:'):], [
+            'QML edges:',
+            "   app/panes -> ['app', 'foundation/input']",
+            'rule violations: 1',
+            '   QML app/panes -> app',
         ])
 
     def test_long_cycles_print_their_size_only(self):
