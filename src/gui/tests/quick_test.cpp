@@ -3187,14 +3187,14 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Escape);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::machine);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
-      const auto maximum = client_->machinePromptState().value(QStringLiteral("maximumBytes")).toInt();
+      const auto maximum = client_->machinePrompt()->state().value(QStringLiteral("maximumBytes")).toInt();
       const QString retained(maximum, QLatin1Char('x'));
       QInputMethodEvent commit;
 
       commit.setCommitString(retained + QStringLiteral("🧵"));
       QCoreApplication::sendEvent(search, &commit);
       QCOMPARE(search->text(), retained);
-      QCOMPARE(client_->machinePromptState().value(QStringLiteral("editorText")).toString(), retained);
+      QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("editorText")).toString(), retained);
       const auto find_notice = [this] {
         return std::ranges::find_if(client_->notifications().items(), [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.machine_label_bytes") != std::string_view::npos;
@@ -3206,7 +3206,7 @@ return {api_version=2, client={keybindings={
 
       client_->dismissNotification(client_->notificationIdentity(notice));
       QTest::keyClick(window_, Qt::Key_Return);
-      QCOMPARE(client_->machinePromptState().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
+      QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
       QCOMPARE(search->text(), QString{});
       QTest::keyClick(window_, Qt::Key_Escape);
       QVERIFY((client_->dialog() == telar::gui::qt::Application::Dialog::none));

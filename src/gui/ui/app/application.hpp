@@ -38,6 +38,7 @@ static_assert(true);
 #include "ui/machines/machine_client.hpp"
 #include "ui/machines/machine_client_key.hpp"
 #include "ui/machines/machine_profiles_source.hpp"
+#include "ui/machines/machine_prompt_controller.hpp"
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
 #include "ui/palette/palette_controller.hpp"
@@ -196,8 +197,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::Store::Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
     Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
-    Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
-    Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
+    Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
     Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
@@ -259,11 +259,6 @@ namespace telar::gui::qt {
     Q_ENUM(MachineEditAction)
 
     Q_INVOKABLE void editMachineResult(const QVariantMap& choice, MachineEditAction action);
-    Q_INVOKABLE void searchMachinePrompt(const QString& text);
-    Q_INVOKABLE void submitMachinePrompt(const QString& revision);
-    Q_INVOKABLE void reportMachinePromptLimit(qulonglong requested_bytes);
-    [[nodiscard]] QVariantMap machinePromptState() const;
-    [[nodiscard]] QVariantMap machinePromptGeometry() const;
     Q_INVOKABLE void peekActivity(const QString& identity);
     Q_INVOKABLE void toggleMachineList();
     Q_INVOKABLE void fitSidebar();
@@ -400,6 +395,10 @@ namespace telar::gui::qt {
       return &paths_;
     }
 
+    MachinePromptController* machinePrompt() noexcept {
+      return &machine_prompt_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -480,7 +479,6 @@ namespace telar::gui::qt {
     void notificationsChanged();
     void machineChanged();
     void machinesChanged();
-    void machinePromptChanged();
     void peekChanged();
     void machineLaunchFailed(const QString& error);
 
@@ -541,19 +539,6 @@ namespace telar::gui::qt {
       removed,
     };
 
-    enum class MachinePromptMode : std::uint8_t {
-      add_label,
-      add_destination,
-      rename,
-    };
-
-    struct MachinePrompt {
-      MachinePromptMode mode = MachinePromptMode::add_label;
-      QString text;
-      QString label;
-      std::optional<MachineToken> renamed;
-    };
-
     struct RemoteLaunch {
       QString destination;
       QStringList arguments;
@@ -565,7 +550,6 @@ namespace telar::gui::qt {
     void showMachinePrompt(std::optional<MachineToken> renamed = {});
     void setupMachine(MachineToken target);
     void refreshMachinePicker();
-    [[nodiscard]] std::size_t machinePromptLimit() const noexcept;
     void initializeMachineProfiles();
     void applyMachineProfiles();
     void openRequestedMachine();
@@ -785,7 +769,6 @@ namespace telar::gui::qt {
     MachineProfilesSource machine_profiles_;
     AttachmentShelf attachments_;
     bool attachment_modal_active_ = false;
-    std::optional<MachinePrompt> machine_prompt_;
     std::optional<RemoteLaunch> remote_launch_;
     QTimer machine_retry_;
     QString machine_control_endpoint_;
@@ -806,6 +789,7 @@ namespace telar::gui::qt {
     ActivityController activity_;
     PaletteController palette_;
     PathPickerController paths_;
+    MachinePromptController machine_prompt_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer notification_timer_;

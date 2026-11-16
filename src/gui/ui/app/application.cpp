@@ -182,6 +182,7 @@ namespace telar::gui::qt {
         activity_(store_, element_slots_, memory),
         palette_(store_),
         paths_(store_),
+        machine_prompt_(store_, machine_profiles_),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -223,6 +224,9 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
     connect(&paths_, &PathPickerController::failed, this, &Application::reportFailure);
+    connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
+      showDialog(Dialog::none);
+    });
     connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
     connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
@@ -1314,7 +1318,7 @@ namespace telar::gui::qt {
     }
 
     if (kind != Dialog::machine) {
-      machine_prompt_.reset();
+      machine_prompt_.forget();
     }
 
     if (kind != Dialog::palette) {

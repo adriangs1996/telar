@@ -11,8 +11,8 @@ Item {
     property real ratio: 1
     readonly property var colors: controller.colors
     readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.machinePromptState
-    readonly property var regions: controller.machinePromptGeometry
+    readonly property var state: controller.machinePrompt.state
+    readonly property var regions: controller.machinePrompt.geometry
     property alias queryField: query
 
     clip: true
@@ -30,8 +30,8 @@ Item {
     }
 
     Connections {
-        target: root.controller
-        function onMachinePromptChanged() {
+        target: root.controller.machinePrompt
+        function onChanged() {
             root.synchronizeEditor();
         }
     }
@@ -65,10 +65,10 @@ Item {
             color: root.colors.surface0
             z: -1
         }
-        onTextEdited: root.controller.searchMachinePrompt(text)
-        onLimitReached: requested => root.controller.reportMachinePromptLimit(requested)
-        Keys.onReturnPressed: root.controller.submitMachinePrompt(root.state.revision)
-        Keys.onEnterPressed: root.controller.submitMachinePrompt(root.state.revision)
+        onTextEdited: root.controller.machinePrompt.search(text)
+        onLimitReached: requested => root.controller.machinePrompt.reportLimit(requested)
+        Keys.onReturnPressed: root.controller.machinePrompt.submit(root.state.revision)
+        Keys.onEnterPressed: root.controller.machinePrompt.submit(root.state.revision)
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
                 root.controller.execute(GuiController.Action.cancel);

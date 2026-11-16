@@ -61,8 +61,6 @@ namespace telar::gui::qt {
 
   void Application::initializeMachineProfiles() {
     connect(this, &Application::machinesChanged, this, &Application::refreshMachinePicker);
-    connect(this, &Application::windowGeometryChanged, this, &Application::machinePromptChanged);
-    connect(this, &Application::configurationChanged, this, &Application::machinePromptChanged);
 
     machine_retry_.setSingleShot(true);
     constexpr int profile_retry_ms = 1000;

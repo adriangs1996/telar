@@ -3,158 +3,145 @@
 static_assert(true);
 #endif
 
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "ui/app/application.hpp"
+#include "machine_prompt_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/app/utf16_encoding.hpp"
 #include <QByteArray>
-#include <QLatin1StringView>
-#include <QQuickWindow>
-#include <QString>
 #include <QStringView>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <variant>
 
-#include "ui/app/utf16_encoding.hpp"
-
+import telar.gui.core.metrics;
 import telar.gui.machines.profile_store;
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 
-  void Application::showMachinePrompt(std::optional<MachineToken> renamed) {
+  MachinePromptController::MachinePromptController(Store& store, MachineProfilesSource& profiles, QObject* parent)
+      : QObject(parent),
+        store_(store),
+        profiles_(profiles) {}
+
+  bool MachinePromptController::isOpen() const noexcept {
+    return store_.dialog().kind == Store::Dialog::machine && prompt_.has_value();
+  }
+
+  void MachinePromptController::setDisplay(const DisplayMetrics& display) {
+    display_ = display;
+    emit changed();
+  }
+
+  void MachinePromptController::forget() noexcept {
+    prompt_.reset();
+  }
+
+  bool MachinePromptController::open(std::optional<MachineToken> renamed) {
     if (renamed && (!store_.machines().contains(*renamed) || renamed->slot == Machines::local_slot)) {
-      return;
+      return false;
     }
 
-    machine_prompt_.emplace();
-    machine_prompt_->renamed = renamed;
+    prompt_.emplace();
+    prompt_->renamed = renamed;
     if (renamed) {
-      machine_prompt_->mode = MachinePromptMode::rename;
-      machine_prompt_->text = toQString(store_.machines().row(renamed->slot).label.view());
+      prompt_->mode = Mode::rename;
+      prompt_->text = toQString(store_.machines().row(renamed->slot).label.view());
     }
 
-    showDialog(Dialog::machine);
-    emit machinePromptChanged();
+    return true;
   }
 
-  std::size_t Application::machinePromptLimit() const noexcept {
-    return machine_prompt_ && machine_prompt_->mode == MachinePromptMode::add_destination ? MachineLimits::destination_bytes : MachineLimits::label_bytes;
+  std::size_t MachinePromptController::limit() const noexcept {
+    return prompt_ && prompt_->mode == Mode::add_destination ? MachineLimits::destination_bytes : MachineLimits::label_bytes;
   }
 
-  void Application::searchMachinePrompt(const QString& text) {
-    if (store_.dialog().kind != Dialog::machine || !machine_prompt_) {
+  void MachinePromptController::search(const QString& text) {
+    if (!isOpen()) {
       return;
     }
 
-    const auto measured = Utf16Prefix::fit(QStringView{text}, machinePromptLimit(), utf16Encoding());
+    const auto measured = Utf16Prefix::fit(QStringView{text}, limit(), utf16Encoding());
 
-    machine_prompt_->text = text.first(static_cast<qsizetype>(measured.units));
-    if (!machine_prompt_->text.isValidUtf16()) {
-      machine_prompt_->text = QString::fromUtf8(machine_prompt_->text.toUtf8());
+    prompt_->text = text.first(static_cast<qsizetype>(measured.units));
+    if (!prompt_->text.isValidUtf16()) {
+      prompt_->text = QString::fromUtf8(prompt_->text.toUtf8());
     }
 
-    emit machinePromptChanged();
+    emit changed();
     if (measured.bytes < measured.requested_bytes) {
-      reportMachinePromptLimit(static_cast<qulonglong>(measured.requested_bytes));
+      reportLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
   }
 
-  void Application::reportMachinePromptLimit(qulonglong requested_bytes) {
-    if (store_.dialog().kind != Dialog::machine || !machine_prompt_ || requested_bytes <= machinePromptLimit()) {
+  void MachinePromptController::reportLimit(qulonglong requested_bytes) {
+    if (!isOpen() || requested_bytes <= limit()) {
       return;
     }
 
-    const auto* const name = machine_prompt_->mode == MachinePromptMode::add_destination ? "prompt.machine_destination_bytes" : "prompt.machine_label_bytes";
+    const auto* const name = prompt_->mode == Mode::add_destination ? "prompt.machine_destination_bytes" : "prompt.machine_label_bytes";
 
-    session().reportLimit({.name = name, .noun = "bytes", .value = machinePromptLimit(), .requested = requested_bytes, .route = {}});
-    refreshNotifications();
+    store_.session().reportLimit({.name = name, .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
+    store_.commit();
   }
 
-  void Application::submitMachinePrompt(const QString& revision) {
-    if (store_.dialog().kind != Dialog::machine || !machine_prompt_ || machine_prompt_->text.isEmpty() || revision != QString::number(store_.dialog().generation)) {
+  void MachinePromptController::submit(const QString& revision) {
+    if (!isOpen() || prompt_->text.isEmpty() || revision != QString::number(store_.dialog().generation)) {
       return;
     }
 
-    if (machine_prompt_->mode == MachinePromptMode::add_label) {
-      machine_prompt_->label = machine_prompt_->text;
-      machine_prompt_->text.clear();
-      machine_prompt_->mode = MachinePromptMode::add_destination;
+    if (prompt_->mode == Mode::add_label) {
+      prompt_->label = prompt_->text;
+      prompt_->text.clear();
+      prompt_->mode = Mode::add_destination;
       store_.advanceDialog();
-      emit machinePromptChanged();
+      emit changed();
 
       return;
     }
 
-    const auto text = machine_prompt_->text.toUtf8();
+    const auto text = prompt_->text.toUtf8();
     const std::string_view value{text.constData(), static_cast<std::size_t>(text.size())};
 
-    if (machine_prompt_->mode == MachinePromptMode::rename) {
-      const auto renamed = machine_prompt_->renamed;
+    if (prompt_->mode == Mode::rename) {
+      const auto renamed = prompt_->renamed;
       if (renamed && store_.machines().contains(*renamed)) {
-        static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::rename, .label = store_.machines().row(renamed->slot).label.view(), .value = value}));
+        static_cast<void>(profiles_.edit({.kind = MachineEditKind::rename, .label = store_.machines().row(renamed->slot).label.view(), .value = value}));
       }
     } else {
-      const auto label = machine_prompt_->label.toUtf8();
+      const auto label = prompt_->label.toUtf8();
 
-      static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::add, .label = {label.constData(), static_cast<std::size_t>(label.size())}, .value = value}));
+      static_cast<void>(profiles_.edit({.kind = MachineEditKind::add, .label = {label.constData(), static_cast<std::size_t>(label.size())}, .value = value}));
     }
 
-    machine_prompt_.reset();
-    showDialog(Dialog::none);
+    prompt_.reset();
+    emit closeRequested();
   }
 
-  QVariantMap Application::machinePromptState() const {
+  QVariantMap MachinePromptController::state() const {
     QString title;
     QString text;
 
-    if (machine_prompt_) {
-      text = machine_prompt_->text;
-      switch (machine_prompt_->mode) {
-      case MachinePromptMode::add_label:
+    if (prompt_) {
+      text = prompt_->text;
+      switch (prompt_->mode) {
+      case Mode::add_label:
         title = QStringLiteral("New machine label");
         break;
-      case MachinePromptMode::add_destination:
+      case Mode::add_destination:
         title = QStringLiteral("Its SSH destination: user@host or an alias");
         break;
-      case MachinePromptMode::rename:
+      case Mode::rename:
         title = QStringLiteral("Rename machine");
         break;
       }
     }
 
-    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("editorText"), text}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(machinePromptLimit())}};
+    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("editorText"), text}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(limit())}};
   }
 
-  QVariantMap Application::machinePromptGeometry() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
-    const auto& workbench = session().workbenchGeometry();
+  QVariantMap MachinePromptController::geometry() const {
+    const auto& display = display_;
+    const auto density = display.density;
+    const auto& workbench = store_.session().workbenchGeometry();
     const auto geometry = NamePromptGeometry::measure(workbench.cellArea());
     auto bounds = workbench.pixels(geometry.bounds);
 

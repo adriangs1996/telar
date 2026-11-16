@@ -76,7 +76,7 @@ Popup {
     readonly property rect historyBounds: telar.history.geometry.bounds
     readonly property rect paletteBounds: paletteMode ? telar.palette.geometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect pathBounds: pathMode && telar.lineSearch === Store.Dialog.none ? telar.paths.geometry.bounds : Qt.rect(0, 0, 0, 0)
-    readonly property rect machineBounds: machineMode ? telar.machinePromptGeometry.bounds : Qt.rect(0, 0, 0, 0)
+    readonly property rect machineBounds: machineMode ? telar.machinePrompt.geometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect peekBounds: peekMode ? telar.peekGeometry.bounds : Qt.rect(0, 0, 0, 0)
     x: peekMode ? peekBounds.x : machineMode ? machineBounds.x : pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
     y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y + historyEntranceOffset * (1 - historyMotion.reveal) : paletteMode ? paletteBounds.y : (parent.height - height) / 2 + promptEntranceOffset * (1 - promptMotion.reveal)

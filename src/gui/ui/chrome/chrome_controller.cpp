@@ -57,6 +57,7 @@ namespace telar::gui::qt {
 
     palette_.setDisplay(display);
     paths_.setDisplay(display);
+    machine_prompt_.setDisplay(display);
   }
 
   bool Application::machineListCollapsed() const noexcept {

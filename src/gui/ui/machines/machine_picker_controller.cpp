@@ -72,6 +72,12 @@ namespace telar::gui::qt {
     return true;
   }
 
+  void Application::showMachinePrompt(std::optional<MachineToken> renamed) {
+    if (machine_prompt_.open(renamed)) {
+      showDialog(Dialog::machine);
+    }
+  }
+
   void Application::moveMachine(int delta) {
     auto slot = static_cast<int>(store_.machines().active());
 

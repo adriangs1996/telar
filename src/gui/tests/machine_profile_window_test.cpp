@@ -416,19 +416,19 @@ namespace {
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 1);
       application.usePaletteResult(machineChoice(application, QStringLiteral("Add machine…")));
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::machine);
-      const auto first_revision = application.machinePromptState().value(QStringLiteral("revision")).toString();
+      const auto first_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
 
-      application.searchMachinePrompt(QStringLiteral("Added"));
-      application.submitMachinePrompt(first_revision);
-      QCOMPARE(application.machinePromptState().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
-      const auto second_revision = application.machinePromptState().value(QStringLiteral("revision")).toString();
+      application.machinePrompt()->search(QStringLiteral("Added"));
+      application.machinePrompt()->submit(first_revision);
+      QCOMPARE(application.machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
+      const auto second_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
 
       QVERIFY(first_revision != second_revision);
-      application.searchMachinePrompt(QStringLiteral("window-added@fixture"));
-      application.submitMachinePrompt(first_revision);
+      application.machinePrompt()->search(QStringLiteral("window-added@fixture"));
+      application.machinePrompt()->submit(first_revision);
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::machine);
-      application.submitMachinePrompt(second_revision);
+      application.machinePrompt()->submit(second_revision);
       QVERIFY((application.dialog() == telar::gui::qt::Application::Dialog::none));
       const auto& machines = MachineProfileWindow::machines(application);
 
@@ -437,9 +437,9 @@ namespace {
 
       application.execute(Application::Action::machine_picker);
       application.editMachineResult(machineChoice(application, QStringLiteral("Added")), Application::MachineEditAction::rename);
-      QCOMPARE(application.machinePromptState().value(QStringLiteral("editorText")).toString(), QStringLiteral("Added"));
-      application.searchMachinePrompt(QStringLiteral("Renamed"));
-      application.submitMachinePrompt(application.machinePromptState().value(QStringLiteral("revision")).toString());
+      QCOMPARE(application.machinePrompt()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("Added"));
+      application.machinePrompt()->search(QStringLiteral("Renamed"));
+      application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       QTRY_COMPARE(machines.row(slot).label.view(), std::string_view{"Renamed"});
       application.execute(Application::Action::machine_picker);
       application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), Application::MachineEditAction::remove);
@@ -464,10 +464,10 @@ namespace {
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
       QVERIFY(MachineProfileWindow::machines(application).row(slot).used);
       application.execute(Application::Action::add_machine);
-      application.searchMachinePrompt(QStringLiteral("invalid label"));
-      application.submitMachinePrompt(application.machinePromptState().value(QStringLiteral("revision")).toString());
-      application.searchMachinePrompt(QStringLiteral("window-invalid@fixture"));
-      application.submitMachinePrompt(application.machinePromptState().value(QStringLiteral("revision")).toString());
+      application.machinePrompt()->search(QStringLiteral("invalid label"));
+      application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
+      application.machinePrompt()->search(QStringLiteral("window-invalid@fixture"));
+      application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       QTRY_VERIFY(!application.notifications().items().empty());
       QCOMPARE(application.notifications().items().front().title.view(), std::string_view{"Machine not saved"});
       QVERIFY(!MachineProfileWindow::machines(application).findDestination("window-invalid@fixture"));
