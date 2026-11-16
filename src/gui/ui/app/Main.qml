@@ -35,9 +35,9 @@ Window {
         visible: height > 0
         colors: telar.colors
         typography: root.geometry.typography
-        workspace: telar.workspaceContext
-        tabModel: telar.tabs
-        workspaceModel: telar.workspaces
+        workspace: telar.workspaces.context
+        tabModel: telar.tabs.rows
+        workspaceModel: telar.workspaces.rows
         prefixPending: telar.prefixPending
         controlsInset: telar.windowControls
         ratio: root.ratio

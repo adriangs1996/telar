@@ -137,6 +137,25 @@ namespace telar::gui::qt {
     };
   }
 
+  QVariantMap ElementSlots::elements(std::span<const components::Slot> family, const QString& key, const QVariantMap& item) {
+    if (!active()) {
+      return {};
+    }
+
+    QVariantMap result;
+
+    for (const auto slot : family) {
+      auto content = attach(slot, key, item);
+      if (!content.isEmpty()) {
+        const auto name = components::slot_names[static_cast<std::size_t>(slot)];
+
+        result.insert(QString::fromLatin1(name.data(), static_cast<qsizetype>(name.size())), std::move(content));
+      }
+    }
+
+    return result;
+  }
+
   void ElementSlots::finish(std::span<const components::Slot> family) {
     for (auto iterator = instances_.begin(); iterator != instances_.end();) {
       if (iterator->seen || std::ranges::find(family, iterator->slot) == family.end()) {

@@ -23,12 +23,6 @@ namespace telar::gui::qt {
 
   namespace {
 
-    QString slotName(components::Slot slot) {
-      const auto name = components::slot_names[static_cast<std::size_t>(slot)];
-
-      return QString::fromLatin1(name.data(), static_cast<qsizetype>(name.size()));
-    }
-
     QString statusName(const QVariant& code) {
       constexpr std::array names{"unknown", "working", "blocked", "ready", "failed", "done"};
       const auto index = code.toInt();
@@ -59,23 +53,6 @@ namespace telar::gui::qt {
     });
   }
 
-  QVariantMap Application::elementsFor(std::initializer_list<components::Slot> pieces, const QString& key, const QVariantMap& item) {
-    if (!element_slots_.active()) {
-      return {};
-    }
-
-    QVariantMap result;
-
-    for (const auto slot : pieces) {
-      auto content = element_slots_.attach(slot, key, item);
-      if (!content.isEmpty()) {
-        result.insert(slotName(slot), std::move(content));
-      }
-    }
-
-    return result;
-  }
-
   void Application::refreshElementBars() {
     element_slots_.begin(ElementSlots::bar_slots);
     if (!element_slots_.active()) {
@@ -85,13 +62,13 @@ namespace telar::gui::qt {
     }
 
     const QVariantMap item{
-        {QStringLiteral("workspace"), workspace_context_.value(QStringLiteral("name"))},
+        {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
         {QStringLiteral("machine"), machineContext().value(QStringLiteral("label"))},
-        {QStringLiteral("tab_count"), tabs_.rowCount()},
+        {QStringLiteral("tab_count"), tabs_.count()},
         {QStringLiteral("sidebar_visible"), sidebarVisible()},
     };
 
-    element_bars_ = elementsFor({components::Slot::top_bar, components::Slot::bottom_bar}, QStringLiteral("window"), item);
+    element_bars_ = element_slots_.elements(ElementSlots::bar_slots, QStringLiteral("window"), item);
     element_slots_.finish(ElementSlots::bar_slots);
   }
 

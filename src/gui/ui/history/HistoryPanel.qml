@@ -240,7 +240,7 @@ Item {
                     state: root.browserState
                     colors: root.controller.colors
                     typography: root.controller.windowGeometry.typography
-                    workspace: root.controller.workspaceContext?.name ?? ""
+                    workspace: root.controller.workspaces.context?.name ?? ""
                     ratio: root.ratio
                     onSearchEverywhere: root.controller.history.setFilters({scope: "global"})
                 }

@@ -239,7 +239,7 @@ namespace telar::gui::qt {
 
       record.insert(QStringLiteral("key"), identity);
       if (element_slots_.active()) {
-        record.insert(QStringLiteral("elements"), elementsFor({components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status}, identity, ElementSlots::agentItem(record)));
+        record.insert(QStringLiteral("elements"), element_slots_.elements(ElementSlots::agent_slots, identity, ElementSlots::agentItem(record)));
       }
 
       records.append(std::move(record));

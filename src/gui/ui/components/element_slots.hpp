@@ -72,6 +72,9 @@ namespace telar::gui::qt {
     void begin(std::span<const components::Slot> family);
     // The content a record carries for `slot`; empty while QML should draw the piece.
     [[nodiscard]] QVariantMap attach(components::Slot slot, const QString& key, const QVariantMap& item);
+    // The content of every slot in `family` a mod draws for one record, by slot name; empty when
+    // no mod draws any.
+    [[nodiscard]] QVariantMap elements(std::span<const components::Slot> family, const QString& key, const QVariantMap& item);
     void finish(std::span<const components::Slot> family);
     // Changes whenever what the instances draw may have changed: a render settled, or the
     // instances were forgotten or invalidated. A pass that saw this revision has nothing new.

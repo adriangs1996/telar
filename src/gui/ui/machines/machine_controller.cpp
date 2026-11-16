@@ -249,8 +249,8 @@ namespace telar::gui::qt {
     graphics_resume_timer_.stop();
     panes_.reconcile({});
     dividers_.reconcile({});
-    tabs_.reconcile({});
-    workspaces_.reconcile({});
+    tabs_.forget();
+    workspaces_.forget();
     agents_.reconcile({});
     activity_selection_.reset();
     error_.clear();

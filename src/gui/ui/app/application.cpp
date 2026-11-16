@@ -190,6 +190,8 @@ namespace telar::gui::qt {
         link_opener_(*this),
         sound_player_(*this),
         system_notifier_(memory),
+        workspaces_(store_),
+        tabs_(store_, element_slots_),
         hostname_(platform::hostName()) {
     // First of configurationChanged's connections: every slot and binding it reaches, directly
     // or through the signals chained to it, reads the new theme rather than a cached one.
@@ -238,10 +240,10 @@ namespace telar::gui::qt {
     connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::hostMetricsChanged);
-    connect(&workspaces_, &QAbstractItemModel::rowsInserted, this, &Application::sidebarGeometryChanged);
-    connect(&workspaces_, &QAbstractItemModel::rowsRemoved, this, &Application::sidebarGeometryChanged);
-    connect(&workspaces_, &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);
-    connect(&workspaces_, &QAbstractItemModel::dataChanged, this, &Application::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::rowsInserted, this, &Application::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::rowsRemoved, this, &Application::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);
+    connect(workspaces_.rows(), &QAbstractItemModel::dataChanged, this, &Application::sidebarGeometryChanged);
 
     const platform::login_shell::Command shell;
     const auto directory = QDir::currentPath().toUtf8();
@@ -965,68 +967,9 @@ namespace telar::gui::qt {
   }
 
   void Application::refresh() {
-    synchronizeTabStrip();
-    QList<QVariantMap> workspaces;
-    const auto* active = session().activeTab();
-    QVariantMap workspace_context;
-    std::optional<std::uint64_t> selected_project;
-
-    if (active != nullptr && active->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
-      selected_project = session().workspaceList().projectOf(active->location.workspace.id);
-      const auto current = std::ranges::find_if(session().workspaces(), [&](const auto& workspace) {
-        return sameWorkspace(workspace.location, active->location.workspace);
-      });
-      if (current != session().workspaces().end()) {
-        workspace_context = workspaceRecord(*current, true);
-      }
-    }
-
-    for (const auto& workspace : session().workspaceList().projects()) {
-      const bool selected = selected_project == workspace.location.id;
-      auto record = projectRecord(workspace, session().workspaceList(), std::span<const Agent<Memory>>{session().agents()}, selected);
-
-      record.insert(QStringLiteral("index"), workspaces.size());
-      if (selected) {
-        workspace_context.insert(QStringLiteral("index"), workspaces.size());
-      }
-
-      workspaces.append(std::move(record));
-    }
-
-    workspace_context_ = std::move(workspace_context);
-    workspaces_.reconcile(std::move(workspaces));
-
-    QList<const Tab<Memory>*> ordered_tabs;
-
-    for (const auto& tab : session().tabs()) {
-      if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace)) {
-        ordered_tabs.append(tab.get());
-      }
-    }
-
-    std::ranges::stable_sort(ordered_tabs, [](const auto* left, const auto* right) {
-      return left->position < right->position;
-    });
-
-    QList<QVariantMap> tabs;
-
-    element_slots_.begin(ElementSlots::tab_slots);
-    for (const auto* tab : ordered_tabs) {
-      const auto* pane = session().findPane(tab->focused_pane);
-      auto record = tabRecord(*tab, pane, session().panes(), std::span<const Agent<Memory>>{session().agents()}, tab == active);
-
-      if (element_slots_.active()) {
-        record.insert(QStringLiteral("elements"), elementsFor({components::Slot::tab, components::Slot::tab_cards, components::Slot::tab_title, components::Slot::tab_path, components::Slot::tab_activity}, record.value(QStringLiteral("key")).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
-      }
-
-      tabs.append(std::move(record));
-    }
-
-    tabs_.reconcile(std::move(tabs));
-    element_slots_.finish(ElementSlots::tab_slots);
+    synchronize();
     refreshAgents();
     refreshPeek();
-    store_.touch();
     refreshPanes();
     refreshPalette();
     refreshElementBars();
@@ -1092,7 +1035,7 @@ namespace telar::gui::qt {
         auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id));
 
         if (element_slots_.active()) {
-          chrome.insert(QStringLiteral("elements"), elementsFor({components::Slot::pane_header, components::Slot::pane_mark, components::Slot::pane_program, components::Slot::pane_context, components::Slot::pane_status, components::Slot::pane_progress, components::Slot::pane_actions}, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
+          chrome.insert(QStringLiteral("elements"), element_slots_.elements(ElementSlots::pane_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
         }
 
         record.insert(QStringLiteral("chrome"), std::move(chrome));
@@ -1204,6 +1147,9 @@ namespace telar::gui::qt {
   }
 
   void Application::synchronize() {
+    synchronizeTabStrip();
+    workspaces_.synchronize();
+    tabs_.synchronize();
     history_.synchronize();
   }
 
@@ -1497,10 +1443,6 @@ namespace telar::gui::qt {
 
   ResolvedFont Application::resolveFont(qreal scale) {
     return configuration_source_.resolveFont(session().configuration().font, scale);
-  }
-
-  QVariantMap Application::workspaceContext() const {
-    return workspace_context_;
   }
 
   bool Application::sidebarVisible() const {

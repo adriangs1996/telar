@@ -21,6 +21,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
 #include "ui/attachments/attachment_shelf.hpp"
+#include "ui/chrome/tabs_controller.hpp"
 #include "ui/components/component_surface_state.hpp"
 #include "ui/components/element_slots.hpp"
 #include "ui/components/pick_controller.hpp"
@@ -41,6 +42,7 @@ static_assert(true);
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
+#include "ui/workspaces/workspaces_controller.hpp"
 #include "window_frame_pacer.hpp"
 #include <QByteArray>
 #include <QColor>
@@ -144,8 +146,8 @@ namespace telar::gui::qt {
     Q_PROPERTY(AttachmentShelf* attachments READ attachments CONSTANT)
     Q_PROPERTY(QVariantMap attachmentGeometry READ attachmentGeometry NOTIFY stateChanged)
     Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY stateChanged)
-    Q_PROPERTY(QAbstractItemModel* workspaces READ workspaces CONSTANT)
-    Q_PROPERTY(QAbstractItemModel* tabs READ tabs CONSTANT)
+    Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
+    Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(QAbstractItemModel* panes READ panes CONSTANT)
     Q_PROPERTY(QAbstractItemModel* dividers READ dividers CONSTANT)
     Q_PROPERTY(QAbstractItemModel* agents READ agents CONSTANT)
@@ -160,7 +162,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap runtimeLinkState READ runtimeLinkState NOTIFY runtimeLinkChanged)
     Q_PROPERTY(QVariantMap runtimeLinkGeometry READ runtimeLinkGeometry NOTIFY runtimeLinkChanged)
     Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
-    Q_PROPERTY(QVariantMap workspaceContext READ workspaceContext NOTIFY stateChanged)
     Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
     Q_PROPERTY(bool machineListCollapsed READ machineListCollapsed NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(int machineCount READ machineCount NOTIFY machinesChanged)
@@ -395,11 +396,11 @@ namespace telar::gui::qt {
     void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
     void pluginWorkerFinished(std::uint64_t execution, const PluginInvocation& invocation, const PluginWorkerResult& result);
 
-    QAbstractItemModel* workspaces() noexcept {
+    WorkspacesController* workspaces() noexcept {
       return &workspaces_;
     }
 
-    QAbstractItemModel* tabs() noexcept {
+    TabsController* tabs() noexcept {
       return &tabs_;
     }
 
@@ -435,7 +436,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap workspaceFormState() const;
     [[nodiscard]] QVariantMap pathPickerGeometry() const;
     [[nodiscard]] QVariantMap sidebarGeometry() const;
-    [[nodiscard]] QVariantMap workspaceContext() const;
     [[nodiscard]] QVariantMap machineContext() const;
     [[nodiscard]] bool machineListCollapsed() const noexcept;
     [[nodiscard]] int machineCount() const noexcept;
@@ -535,7 +535,6 @@ namespace telar::gui::qt {
     [[nodiscard]] bool componentActionsLive(const ConfigurationSource::Actions& actions) const;
     void initializeElements();
     // The mod content a record carries for its slots, keyed by slot name.
-    [[nodiscard]] QVariantMap elementsFor(std::initializer_list<components::Slot> pieces, const QString& key, const QVariantMap& item);
     void refreshElementBars();
     void activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString& identity, const QPointF& anchor, const ConfigurationSource::Actions& resolved);
     void toggleComponentPanel(std::size_t index);
@@ -886,9 +885,8 @@ namespace telar::gui::qt {
     tbc::view<ExternalLinkOpener<ApplicationLinkHost, Application, MachineClientKey>, tbc::lt::self> link_opener_;
     tbc::view<SoundPlayer<ApplicationSoundHost, Application>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
-    ListModel workspaces_;
-    QVariantMap workspace_context_;
-    ListModel tabs_;
+    WorkspacesController workspaces_;
+    TabsController tabs_;
     ListModel panes_;
     ListModel dividers_;
     ListModel agents_;

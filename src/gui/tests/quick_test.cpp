@@ -896,7 +896,7 @@ return {api_version = 2, client = {
       const auto original_id = firstPane()->id;
       const auto original_tab = QString::number(firstPane()->location.tab_id);
       const auto original_size = firstPane()->size;
-      const auto tab_count = client_->tabs()->rowCount();
+      const auto tab_count = client_->tabs()->rows()->rowCount();
       QString temporary_tab;
       const auto restore = qScopeGuard([&] {
         if (!temporary_tab.isEmpty()) {
@@ -950,7 +950,7 @@ return {api_version = 2, client = {
 
     Q_SLOT void promptDialogRenamesTab() {
       const auto tab_label = [&] {
-        return client_->tabs()->data(client_->tabs()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
+        return client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
       };
 
       const auto original_label = tab_label();
@@ -1017,8 +1017,8 @@ return {api_version = 2, client = {
       }
 
       writeTestFile(root.filePath(QStringLiteral("notes.txt")), "file");
-      const auto workspaces = client_->workspaces()->rowCount();
-      const auto original_workspace = client_->workspaceContext().value(QStringLiteral("key")).toString();
+      const auto workspaces = client_->workspaces()->rows()->rowCount();
+      const auto original_workspace = client_->workspaces()->context().value(QStringLiteral("key")).toString();
       const auto original_workspace_id = firstPane()->location.workspace.id;
       const auto cleanup = qScopeGuard([this] {
         client_->execute(Application::Action::cancel);
@@ -1068,8 +1068,8 @@ return {api_version = 2, client = {
       const auto workspace_names = [this] {
         QStringList names;
 
-        for (int row = 0; row < client_->workspaces()->rowCount(); ++row) {
-          names.append(client_->workspaces()->data(client_->workspaces()->index(row, 0), ListModel::record_role).toMap().value(QStringLiteral("name")).toString());
+        for (int row = 0; row < client_->workspaces()->rows()->rowCount(); ++row) {
+          names.append(client_->workspaces()->rows()->data(client_->workspaces()->rows()->index(row, 0), ListModel::record_role).toMap().value(QStringLiteral("name")).toString());
         }
 
         return names;
@@ -1077,12 +1077,12 @@ return {api_version = 2, client = {
 
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::none, runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rowCount(), workspaces + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rows()->rowCount(), workspaces + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(QFileInfo{missing}.isDir(), runtime_wait_ms);
       QVERIFY2(workspace_names().contains(QStringLiteral("gamma")), qPrintable(workspace_names().join(QLatin1Char(','))));
       // Wait for the workspace snapshot before closing its last tab.
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->location.workspace.id != original_workspace_id && terminalReady(), runtime_wait_ms);
-      const auto created_workspace = client_->workspaceContext().value(QStringLiteral("key")).toString();
+      const auto created_workspace = client_->workspaces()->context().value(QStringLiteral("key")).toString();
 
       for (const auto& key : {original_workspace, created_workspace}) {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -1097,19 +1097,19 @@ return {api_version = 2, client = {
 
         QVERIFY(target != nullptr);
         QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, target->mapRectToScene(target->boundingRect()).center().toPoint());
-        QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceContext().value(QStringLiteral("key")).toString(), key, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->context().value(QStringLiteral("key")).toString(), key, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       }
 
       captureArtifact(QStringLiteral("project-switcher"));
       client_->execute(Application::Action::close_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rowCount(), workspaces, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rows()->rowCount(), workspaces, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
     }
 
     Q_SLOT void qmlActionBindings() {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto cleanup = qScopeGuard([this, original_tabs] {
         closeExtraTabs(original_tabs);
       });
@@ -1132,7 +1132,7 @@ return {api_version = 2, client = {
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
 
       const auto tab_label = [&] {
-        return client_->tabs()->data(client_->tabs()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
+        return client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
       };
 
       const auto original_label = tab_label();
@@ -1161,9 +1161,9 @@ return {api_version = 2, client = {
 
       QCoreApplication::sendEvent(search, &activate);
       QTRY_COMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       client_->execute(Application::Action::close_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
     }
 
@@ -1330,14 +1330,14 @@ return {api_version = 2, client = {
     }
 
     Q_SLOT void wheelReportingAndCopyOwnership() {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original_pane = firstPane();
 
       QVERIFY(original_pane != nullptr);
       const auto original_identity = original_pane->id;
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       auto restore = qScopeGuard([this, original_tabs, original_identity] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
       });
@@ -1811,14 +1811,14 @@ return {api_version = 2, client = {
 #endif
 
     Q_SLOT void configuredFileEditor() {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original = firstPane();
 
       QVERIFY(original != nullptr);
       const auto original_id = original->id;
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       auto restore = qScopeGuard([this, original_tabs, original_id] {
         client_->loadConfiguration({}, {}, {});
         closeTemporaryTab({.count = original_tabs, .pane_id = original_id});
@@ -1918,14 +1918,14 @@ return {api_version = 2, client = {
     }
 
     Q_SLOT void kittyKeyboardInput() {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original_pane = firstPane();
 
       QVERIFY(original_pane != nullptr);
       const auto original_identity = original_pane->id;
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       auto restore = qScopeGuard([this, original_tabs, original_identity] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
       });
@@ -2450,10 +2450,10 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
-      const auto first_tab = client_->tabs()->data(client_->tabs()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      const auto first_tab = client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
 
       client_->execute(Application::Action::select_tab, first_tab);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
@@ -2635,10 +2635,10 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original_pane = firstPane()->id;
       const auto original_tab = firstPane()->location.tab_id;
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_pane, runtime_wait_ms);
       const auto destination = firstPane()->id;
       const auto destination_tab = firstPane()->location.tab_id;
@@ -2661,9 +2661,9 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::none, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == destination, runtime_wait_ms);
-      QCOMPARE(client_->tabs()->rowCount(), original_tabs + 1);
+      QCOMPARE(client_->tabs()->rows()->rowCount(), original_tabs + 1);
       client_->execute(Application::Action::close_tab, QString::number(destination_tab));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs, runtime_wait_ms);
       client_->execute(Application::Action::select_tab, QString::number(original_tab));
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
@@ -3064,10 +3064,10 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original_pane = firstPane()->id;
       const auto original_tab = firstPane()->location.tab_id;
-      const auto original_count = client_->tabs()->rowCount();
+      const auto original_count = client_->tabs()->rows()->rowCount();
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_count + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_pane, runtime_wait_ms);
       const auto destination_tab = firstPane()->location.tab_id;
       auto restore = qScopeGuard([this, original_tab, destination_tab] {
@@ -3087,8 +3087,8 @@ return {api_version=2, client={keybindings={
       const auto tab_keys = [this] {
         QList<QString> keys;
 
-        for (int index = 0; index < client_->tabs()->rowCount(); ++index) {
-          keys.append(client_->tabs()->data(client_->tabs()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString());
+        for (int index = 0; index < client_->tabs()->rows()->rowCount(); ++index) {
+          keys.append(client_->tabs()->rows()->data(client_->tabs()->rows()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString());
         }
 
         return keys;
@@ -3111,11 +3111,11 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(tab_keys(), moved_order, runtime_wait_ms);
       run(QStringLiteral("Move tab right"));
       QTRY_COMPARE_WITH_TIMEOUT(tab_keys(), original_order, runtime_wait_ms);
-      QCOMPARE(client_->tabs()->rowCount(), original_count + 1);
+      QCOMPARE(client_->tabs()->rows()->rowCount(), original_count + 1);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
       QCOMPARE(client_->error(), QString{});
       client_->execute(Application::Action::close_tab, QString::number(destination_tab));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_count, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_count, runtime_wait_ms);
       client_->execute(Application::Action::select_tab, QString::number(original_tab));
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
       restore.dismiss();
@@ -3979,14 +3979,14 @@ return {api_version=2, client={keybindings={
     }
 
     void verifyPresentedHistorySubmitMode(bool enter_runs, bool alternate, const QString& tag, bool retain_capture = false) {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original = firstPane();
 
       QVERIFY(original != nullptr);
       const auto original_pane = original->id;
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       const auto restore_tab = qScopeGuard([this, original_tabs, original_pane] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_pane});
       });
@@ -4365,7 +4365,7 @@ return {api_version=2, client={keybindings={
         QFAIL("Empty history controls and the query field must exist");
       }
 
-      QCOMPARE(title->property("text").toString(), QStringLiteral("No matches in workspace ") + client_->workspaceContext().value(QStringLiteral("name")).toString());
+      QCOMPARE(title->property("text").toString(), QStringLiteral("No matches in workspace ") + client_->workspaces()->context().value(QStringLiteral("name")).toString());
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(button->isVisible());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene({button->width() / 2, button->height() / 2}).toPoint());
@@ -4633,20 +4633,20 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyInspectionTracksTabRenamingAndPaneClosure() {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original = firstPane();
 
       QVERIFY(original != nullptr);
       const auto original_identity = original->id;
       const auto restore = qScopeGuard([this, original_tabs, original_identity] {
         client_->execute(Application::Action::cancel);
-        if (client_->tabs()->rowCount() > original_tabs) {
+        if (client_->tabs()->rows()->rowCount() > original_tabs) {
           closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
         }
       });
 
       client_->execute(Application::Action::new_tab);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rowCount() == original_tabs + 1 && terminalReady() && firstPane()->id != original_identity, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == original_tabs + 1 && terminalReady() && firstPane()->id != original_identity, runtime_wait_ms);
       const auto pane_id = firstPane()->id;
 
       client_->input(pane_id, "printf 'GUI_HISTORY_LIVE_METADATA\\n'\n");
@@ -4691,8 +4691,8 @@ return {api_version=2, client={keybindings={
 
       test::HistoryPresentation::renameTab(*client_, "Live history tab");
       const auto tab_renamed = [&] {
-        for (int index = 0; index < client_->tabs()->rowCount(); ++index) {
-          if (client_->tabs()->data(client_->tabs()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString() == QLatin1StringView("Live history tab")) {
+        for (int index = 0; index < client_->tabs()->rows()->rowCount(); ++index) {
+          if (client_->tabs()->rows()->data(client_->tabs()->rows()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString() == QLatin1StringView("Live history tab")) {
             return true;
           }
         }
@@ -4703,7 +4703,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(tab_renamed(), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane_fact(), QString::number(pane_id) + QStringLiteral("  ·  tab Live history tab"), runtime_wait_ms);
       client_->execute(Application::Action::close_tab);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rowCount() == original_tabs && client_->pane(pane_id) == nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == original_tabs && client_->pane(pane_id) == nullptr, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane_fact(), QString::number(pane_id) + QStringLiteral("  ·  closed"), runtime_wait_ms);
       QVERIFY(!inspector->property("browserState").toMap().value(QStringLiteral("paneOpen")).toBool());
       QVERIFY(!client_->history()->state().value(QStringLiteral("paneOpen")).toBool());
@@ -5156,13 +5156,13 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void newTabsRecoverTheFullGridAfterNestedSplits() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      const TabRestorePoint before{.count = client_->tabs()->rowCount(), .pane_id = firstPane()->id};
+      const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const auto restore = qScopeGuard([this, before] {
         closeExtraTabs(before.count);
       });
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
       const auto bounds = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
       const auto resolved = client_->resolveFont(window_->devicePixelRatio());
@@ -5196,7 +5196,7 @@ return {api_version=2, client={keybindings={
       client_->execute(Application::Action::split_vertical);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != source_id, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.columns(), single_columns, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), single_rows, runtime_wait_ms);
@@ -5211,13 +5211,13 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void zoomCapsuleSwitchesHiddenPanesAndRestoresTiling() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      const TabRestorePoint before{.count = client_->tabs()->rowCount(), .pane_id = firstPane()->id};
+      const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const auto restore = qScopeGuard([this, before] {
         closeTemporaryTab(before);
       });
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto source_id = firstPane()->id;
 
@@ -5268,7 +5268,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void attentionRingsFollowUnfocusedAttachedPanes() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      const TabRestorePoint before{.count = client_->tabs()->rowCount(), .pane_id = firstPane()->id};
+      const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const auto original_window_size = window_->size();
       const auto restore = qScopeGuard([this, before, original_window_size] {
         window_->resize(original_window_size);
@@ -5276,7 +5276,7 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
       const auto source_id = firstPane()->id;
       const telar::gui::PaneAttentionKey attachment{.pane_id = source_id, .attachment_generation = firstPane()->attachment_generation};
@@ -5370,7 +5370,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredCommandsOpenAndCloseTheirOwnTabs() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      const TabRestorePoint before{.count = client_->tabs()->rowCount(), .pane_id = firstPane()->id};
+      const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -5396,12 +5396,12 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->error(), QString{});
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), before.count + 1, runtime_wait_ms);
-      QTRY_VERIFY2_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, qPrintable(QStringLiteral("pane=%1 before=%2 tabs=%3 error=%4").arg(firstPane() == nullptr ? 0 : firstPane()->id).arg(before.pane_id).arg(client_->tabs()->rowCount()).arg(client_->error())), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, qPrintable(QStringLiteral("pane=%1 before=%2 tabs=%3 error=%4").arg(firstPane() == nullptr ? 0 : firstPane()->id).arg(before.pane_id).arg(client_->tabs()->rows()->rowCount()).arg(client_->error())), runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(!firstPane()->cwd.empty(), qPrintable(QStringLiteral("pane=%1 frame=%2 attached=%3 error=%4").arg(firstPane()->id).arg(firstPane()->screen.frameId()).arg(firstPane()->attached).arg(client_->error())), runtime_wait_ms);
       const auto source_id = firstPane()->id;
       const auto source_directory = toQString(firstPane()->cwd);
-      const auto count = client_->tabs()->rowCount();
+      const auto count = client_->tabs()->rows()->rowCount();
       const QTemporaryDir fallback;
 
       client_->configureLaunch(fallback.path(), {QStringLiteral("/bin/sh")}, true);
@@ -5436,16 +5436,16 @@ return {api_version=2, client={keybindings={
         QTest::keyPress(window_, command.key, Qt::AltModifier);
         QVERIFY(guarded.isNull() || guarded->inputMethodQuery(Qt::ImEnabled).toBool());
         QTest::keyRelease(window_, command.key, Qt::AltModifier);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), count + 1, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), count + 1, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != source_id, runtime_wait_ms);
         const auto expected = QStringLiteral("GUI_COMMAND_%1:%2:%3").arg(QString::fromUtf8(command.marker), source_directory, QString::fromUtf8(command.argument));
 
         QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen).remove(QLatin1Char('\n')).contains(expected), qPrintable(screenText(firstPane()->screen)), runtime_wait_ms);
-        const auto tab = client_->tabs()->data(client_->tabs()->index(count, 0), ListModel::record_role).toMap();
+        const auto tab = client_->tabs()->rows()->data(client_->tabs()->rows()->index(count, 0), ListModel::record_role).toMap();
 
         QCOMPARE(tab.value(QStringLiteral("label")).toString(), QString::fromUtf8(command.label));
         client_->input(firstPane()->id, "quit\r");
-        QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), count, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), count, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == source_id, runtime_wait_ms);
       }
 
@@ -5583,7 +5583,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY2_WITH_TIMEOUT(!client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
 
-      const auto tabs = client_->tabs()->rowCount();
+      const auto tabs = client_->tabs()->rows()->rowCount();
       const auto denied_request = static_cast<std::uint64_t>(Request::denied);
 
       peer.request(telar::ClientCommand{.request_id = denied_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("denied"), .text = "example"});
@@ -5591,7 +5591,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
       QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
       QVERIFY(!client_->sidebarVisible());
-      QCOMPARE(client_->tabs()->rowCount(), tabs);
+      QCOMPARE(client_->tabs()->rows()->rowCount(), tabs);
 
       QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
       QTRY_VERIFY2_WITH_TIMEOUT(client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
@@ -5644,7 +5644,7 @@ return {api_version=2, client={keybindings={
           runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
       QVERIFY(client_->sidebarVisible());
-      QCOMPARE(client_->tabs()->rowCount(), tabs);
+      QCOMPARE(client_->tabs()->rows()->rowCount(), tabs);
       QFile retained{path};
 
       QVERIFY(retained.open(QIODevice::ReadOnly));
@@ -7378,7 +7378,7 @@ return {api_version=2, client={keybindings={
 
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->error(), QString{});
-      const auto tab_count = client_->tabs()->rowCount();
+      const auto tab_count = client_->tabs()->rows()->rowCount();
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -7401,7 +7401,7 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientAction::config_show, negative_index_request, "binding", -1);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, negative_index_request, runtime_wait_ms);
       QCOMPARE(peer.result().text, QStringLiteral("InvalidIndex"));
-      QCOMPARE(client_->tabs()->rowCount(), tab_count);
+      QCOMPARE(client_->tabs()->rows()->rowCount(), tab_count);
       QCOMPARE(client_->error(), QString{});
       QCOMPARE(peer.error(), QString{});
     }
@@ -7784,7 +7784,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void reopeningRestoresLayout() {
-      const auto previous_tabs = client_->tabs()->rowCount();
+      const auto previous_tabs = client_->tabs()->rows()->rowCount();
       const auto previous_pane = firstPane()->id;
 
       client_->execute(Application::Action::toggle_workspace_list);
@@ -7796,7 +7796,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(runtime_.state(), QProcess::Running);
       openWindow();
       QVERIFY2(window_ != nullptr, qPrintable(errors_));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), previous_tabs, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), previous_tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->id == previous_pane && firstPane()->screen.frameId() > 0, runtime_wait_ms);
       QTRY_VERIFY(client_->workspaceListCollapsed());
       QCOMPARE(client_->error(), QString{});
@@ -7870,8 +7870,8 @@ return {api_version=2, client={keybindings={
     [[nodiscard]] QStringList tabKeys() const {
       QStringList result;
 
-      for (int index = 0; index < client_->tabs()->rowCount(); ++index) {
-        result.append(client_->tabs()->data(client_->tabs()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString());
+      for (int index = 0; index < client_->tabs()->rows()->rowCount(); ++index) {
+        result.append(client_->tabs()->rows()->data(client_->tabs()->rows()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString());
       }
 
       return result;
@@ -7891,11 +7891,11 @@ return {api_version=2, client={keybindings={
       constexpr int added_tabs = 2;
 
       for (int index = 0; index < added_tabs; ++index) {
-        const auto count = client_->tabs()->rowCount();
+        const auto count = client_->tabs()->rows()->rowCount();
 
         client_->execute(Application::Action::new_tab);
         if (!test::waitForGuiCondition([&] {
-              return client_->tabs()->rowCount() == count + 1 && terminalReady();
+              return client_->tabs()->rows()->rowCount() == count + 1 && terminalReady();
             },
                 runtime_wait_ms)) {
           return false;
@@ -8274,14 +8274,14 @@ return {api_version=2, client={keybindings={
 
     template <typename Gesture>
     void verifyChildMouse(std::string_view expected, Gesture&& gesture, ChildMouseEncoding encoding = ChildMouseEncoding::sgr) {
-      const auto original_tabs = client_->tabs()->rowCount();
+      const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original = firstPane();
 
       QVERIFY(original != nullptr);
       const auto original_identity = original->id;
 
       client_->execute(Application::Action::new_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       const auto restore = qScopeGuard([this, original_tabs, original_identity] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
       });
@@ -8355,12 +8355,12 @@ return {api_version=2, client={keybindings={
     }
 
     void closeExtraTabs(int kept_count) {
-      while (client_->tabs()->rowCount() > kept_count) {
-        const auto count = client_->tabs()->rowCount();
+      while (client_->tabs()->rows()->rowCount() > kept_count) {
+        const auto count = client_->tabs()->rows()->rowCount();
 
         client_->execute(Application::Action::close_tab);
         const auto closed = QTest::qWaitFor([this, count] {
-          return client_->tabs()->rowCount() < count;
+          return client_->tabs()->rows()->rowCount() < count;
         },
             runtime_wait_ms);
 
@@ -8376,7 +8376,7 @@ return {api_version=2, client={keybindings={
 
       client_->execute(Application::Action::close_tab);
       const auto closed = QTest::qWaitFor([this, destination] {
-        return client_->tabs()->rowCount() == destination.count;
+        return client_->tabs()->rows()->rowCount() == destination.count;
       },
           runtime_wait_ms);
 
@@ -8384,7 +8384,7 @@ return {api_version=2, client={keybindings={
       // Closing selects an adjacent tab; this fixture may have started elsewhere.
       client_->execute(Application::Action::select_tab, QString::number(source_tab));
       const auto restored = QTest::qWaitFor([this, destination] {
-        return client_->tabs()->rowCount() == destination.count && terminalReady() && firstPane()->id == destination.pane_id;
+        return client_->tabs()->rows()->rowCount() == destination.count && terminalReady() && firstPane()->id == destination.pane_id;
       },
           runtime_wait_ms);
 
@@ -8454,7 +8454,7 @@ return {api_version=2, client={keybindings={
     }
 
     void verifyGroupTabFocusTransitions() {
-      const auto tabs = client_->tabs()->rowCount();
+      const auto tabs = client_->tabs()->rows()->rowCount();
       const auto pane = firstPane()->id;
       const auto cleanup = qScopeGuard([this, tabs] {
         closeExtraTabs(tabs);
@@ -8475,11 +8475,11 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_B, control);
       QVERIFY(client_->prefixPending());
       QTest::keyClick(window_, Qt::Key_C);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), tabs + 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), tabs + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != pane, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
       client_->execute(Application::Action::close_tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), tabs, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == pane, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
     }

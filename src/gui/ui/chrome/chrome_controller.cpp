@@ -127,7 +127,7 @@ namespace telar::gui::qt {
         .height = geometry.sidebar.height,
     };
 
-    auto result = sidebarRegionsRecord(area, display, static_cast<std::size_t>(workspaces_.rowCount()), sidebarMachines());
+    auto result = sidebarRegionsRecord(area, display, static_cast<std::size_t>(workspaces_.count()), sidebarMachines());
 
     result.insert(QStringLiteral("typography"), chromeTypographyRecord(display, configuration().font));
 
