@@ -965,7 +965,6 @@ namespace telar::gui::qt {
 
   void Application::refresh() {
     synchronizeTabStrip();
-    element_slots_.begin();
     QList<QVariantMap> workspaces;
     const auto* active = session().activeTab();
     QVariantMap workspace_context;
@@ -1010,6 +1009,7 @@ namespace telar::gui::qt {
 
     QList<QVariantMap> tabs;
 
+    element_slots_.begin(ElementSlots::tab_slots);
     for (const auto* tab : ordered_tabs) {
       const auto* pane = session().findPane(tab->focused_pane);
       auto record = tabRecord(*tab, pane, session().panes(), std::span<const Agent<Memory>>{session().agents()}, tab == active);
@@ -1022,13 +1022,13 @@ namespace telar::gui::qt {
     }
 
     tabs_.reconcile(std::move(tabs));
+    element_slots_.finish(ElementSlots::tab_slots);
     refreshAgents();
     refreshPeek();
     store_.touch();
     refreshPanes();
     refreshPalette();
     refreshElementBars();
-    element_slots_.finish();
     if (store_.dialog().kind == Dialog::paths) {
       emit pathPickerGeometryChanged();
     }
@@ -1058,6 +1058,7 @@ namespace telar::gui::qt {
 
   void Application::refreshPanes() {
     synchronizeAttachments();
+    element_slots_.begin(ElementSlots::pane_slots);
     auto* tab = session().activeTab();
     QList<QVariantMap> panes;
     QList<QVariantMap> dividers;
@@ -1113,6 +1114,7 @@ namespace telar::gui::qt {
 
     panes_.reconcile(std::move(panes));
     dividers_.reconcile(std::move(dividers));
+    element_slots_.finish(ElementSlots::pane_slots);
   }
 
   void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {

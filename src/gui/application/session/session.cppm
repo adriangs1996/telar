@@ -470,6 +470,10 @@ export {
       [[nodiscard]] const NotificationCenter& notifications() const noexcept;
 
       [[nodiscard]] std::uint64_t notificationRevision() const noexcept;
+      // Changes with what a pane's header and its tab show: title, directory, program, progress,
+      // git, the shell's host and link, and whether a tab's panes are loaded. ViewVersion leaves
+      // these out on purpose: they never move a link under the pointer.
+      [[nodiscard]] std::uint64_t chromeRevision() const noexcept;
 
       [[nodiscard]] bool graphicsPaused(std::uint64_t pane_id) const noexcept;
 
@@ -1102,6 +1106,7 @@ export {
       AgentAcknowledgement agent_acknowledgement_;
       NotificationCenter notifications_;
       std::uint64_t notification_revision_ = 0;
+      std::uint64_t chrome_revision_ = 0;
       tbc::view<HistoryBrowser<Memory>, tbc::lt::a> history_;
       tbc::view<PeekScreen<Memory>, tbc::lt::a> peek_;
       PathPickerPage path_picker_;

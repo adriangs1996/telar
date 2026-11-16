@@ -393,6 +393,10 @@ namespace telar::gui {
     return notification_revision_;
   }
 
+  std::uint64_t Session::chromeRevision() const noexcept {
+    return chrome_revision_;
+  }
+
   std::string_view Session::error() const noexcept {
     return error_;
   }

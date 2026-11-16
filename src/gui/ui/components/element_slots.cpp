@@ -54,7 +54,10 @@ namespace telar::gui::qt {
     // Results of one Lua pass arrive close together; project them once.
     settle_.setSingleShot(true);
     settle_.setInterval(0);
-    connect(&settle_, &QTimer::timeout, this, &ElementSlots::contentChanged);
+    connect(&settle_, &QTimer::timeout, this, [this] {
+      ++revision_;
+      emit contentChanged();
+    });
   }
 
   bool ElementSlots::configured(components::Slot slot) const noexcept {
@@ -76,13 +79,20 @@ namespace telar::gui::qt {
 
     generation_ = generation;
     ++epoch_;
+    ++revision_;
     instances_.clear();
   }
 
-  void ElementSlots::begin() {
+  void ElementSlots::begin(std::span<const components::Slot> family) {
     for (auto& instance : instances_) {
-      instance.seen = false;
+      if (std::ranges::find(family, instance.slot) != family.end()) {
+        instance.seen = false;
+      }
     }
+  }
+
+  std::uint64_t ElementSlots::revision() const noexcept {
+    return revision_;
   }
 
   std::uint64_t ElementSlots::identity(components::Slot slot, const QString& key) noexcept {
@@ -127,23 +137,15 @@ namespace telar::gui::qt {
     };
   }
 
-  void ElementSlots::finish() {
+  void ElementSlots::finish(std::span<const components::Slot> family) {
     for (auto iterator = instances_.begin(); iterator != instances_.end();) {
-      if (iterator->seen) {
+      if (iterator->seen || std::ranges::find(family, iterator->slot) == family.end()) {
         ++iterator;
         continue;
       }
 
       source_.forgetElements(iterator->id);
       iterator = instances_.erase(iterator);
-    }
-  }
-
-  void ElementSlots::retain(std::initializer_list<components::Slot> pieces) {
-    for (auto& instance : instances_) {
-      if (std::ranges::find(pieces, instance.slot) != pieces.end()) {
-        instance.seen = true;
-      }
     }
   }
 
@@ -167,6 +169,7 @@ namespace telar::gui::qt {
   }
 
   void ElementSlots::invalidate() {
+    ++revision_;
     // A render may finish at once and change its instance, so each is found again by its id.
     for (const auto id : instances_.keys()) {
       auto& instance = *instances_.find(id);

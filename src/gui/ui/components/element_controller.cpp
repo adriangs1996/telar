@@ -77,8 +77,10 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshElementBars() {
+    element_slots_.begin(ElementSlots::bar_slots);
     if (!element_slots_.active()) {
       element_bars_.clear();
+      element_slots_.finish(ElementSlots::bar_slots);
       return;
     }
 
@@ -90,6 +92,7 @@ namespace telar::gui::qt {
     };
 
     element_bars_ = elementsFor({components::Slot::top_bar, components::Slot::bottom_bar}, QStringLiteral("window"), item);
+    element_slots_.finish(ElementSlots::bar_slots);
   }
 
   QVariantMap Application::elementBars() const {

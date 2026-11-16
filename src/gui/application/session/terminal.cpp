@@ -253,6 +253,7 @@ namespace telar::gui {
   Change Session::apply(const PaneTitle& message) {
     if (auto* pane = findPane(message.pane_id)) {
       pane->title = message.title;
+      ++chrome_revision_;
     }
 
     return Change::model;
@@ -261,6 +262,7 @@ namespace telar::gui {
   Change Session::apply(const PaneCwd& message) {
     if (auto* pane = findPane(message.pane_id)) {
       pane->cwd = message.cwd;
+      ++chrome_revision_;
     }
 
     return Change::model;
@@ -274,6 +276,8 @@ namespace telar::gui {
     for (const auto& tab : tabs_) {
       tab->observeForeground(message);
     }
+
+    ++chrome_revision_;
 
     return Change::model;
   }
@@ -292,6 +296,7 @@ namespace telar::gui {
 
     pane->progress_state = message.state;
     pane->progress_percent = message.percent;
+    ++chrome_revision_;
 
     return Change::model;
   }
@@ -306,6 +311,7 @@ namespace telar::gui {
     pane->git = message;
     pane->git.branch = pane->git_branch;
     changed_pane_ = pane->id;
+    ++chrome_revision_;
     return Change::model;
   }
 
@@ -324,6 +330,9 @@ namespace telar::gui {
     pane->shell.directory = pane->shell_directory;
     // The pane's header names the host and the link.
     chrome_changed_ |= previous.remote != message.remote || previous_host != pane->shell_host || previous.link_ms != message.link_ms;
+    if (chrome_changed_) {
+      ++chrome_revision_;
+    }
     if (const auto found = lines_.find(pane->id); found != lines_.end()) {
       auto& line = found->second.line;
 

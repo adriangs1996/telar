@@ -984,6 +984,7 @@ namespace telar::gui {
 
     pane.attachment_generation = ++attachment_generation_;
     pane.attached = true;
+    ++chrome_revision_;
   }
 
   Launch Session::defaultLaunch() const noexcept {
@@ -1180,6 +1181,7 @@ namespace telar::gui {
     restoreCanonicalLayout(tab);
     tab.loaded = true;
     tab.loading = false;
+    ++chrome_revision_;
     std::array<std::uint64_t, PaneLayout::maximum_panes> removed{};
     std::size_t removed_count = 0;
 
@@ -1259,6 +1261,7 @@ namespace telar::gui {
       tab.label = descriptor.label;
       tab.position = descriptor.position;
       tab.observePanes(descriptor.panes);
+      ++chrome_revision_;
     }
 
     if (current_workspace && !active_tab_ && (presented_ || leave_pending_) && !message.tabs.empty()) {

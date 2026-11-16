@@ -12,11 +12,13 @@ static_assert(true);
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <span>
 
 #pragma once
 
@@ -54,18 +56,26 @@ namespace telar::gui::qt {
     };
 
     static constexpr unsigned failure_limit = 3;
+    // The slot families, each projected by its own pass.
+    static constexpr std::array tab_slots{components::Slot::tab, components::Slot::tab_cards, components::Slot::tab_title, components::Slot::tab_path, components::Slot::tab_activity};
+    static constexpr std::array pane_slots{components::Slot::pane_header, components::Slot::pane_mark, components::Slot::pane_program, components::Slot::pane_context, components::Slot::pane_status, components::Slot::pane_progress, components::Slot::pane_actions};
+    static constexpr std::array agent_slots{components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status};
+    static constexpr std::array bar_slots{components::Slot::top_bar, components::Slot::bottom_bar};
 
     ElementSlots(ConfigurationSource& source, Context context, QObject* parent = nullptr);
     [[nodiscard]] bool configured(components::Slot slot) const noexcept;
     [[nodiscard]] bool active() const noexcept;
     // Forgets every instance when `generation` is new: it owns new functions.
     void adopt(std::uint64_t generation);
-    void begin();
+    // A pass over one family: begin() before it attaches, finish() after; finish() drops the
+    // family's instances the pass did not attach. Other families keep theirs.
+    void begin(std::span<const components::Slot> family);
     // The content a record carries for `slot`; empty while QML should draw the piece.
     [[nodiscard]] QVariantMap attach(components::Slot slot, const QString& key, const QVariantMap& item);
-    void finish();
-    // Keeps the instances of these slots through a pass that did not rebuild their records.
-    void retain(std::initializer_list<components::Slot> pieces);
+    void finish(std::span<const components::Slot> family);
+    // Changes whenever what the instances draw may have changed: a render settled, or the
+    // instances were forgotten or invalidated. A pass that saw this revision has nothing new.
+    [[nodiscard]] std::uint64_t revision() const noexcept;
     [[nodiscard]] const Instance* find(const QString& slot, const QString& key) const;
     // Reruns every instance, after a click function may have changed what the mod draws.
     void invalidate();
@@ -95,6 +105,7 @@ namespace telar::gui::qt {
     std::uint64_t next_revision_ = 0;
     std::uint64_t epoch_ = 0;
     std::uint64_t generation_ = 0;
+    std::uint64_t revision_ = 0;
   };
 
 }

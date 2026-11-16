@@ -1175,6 +1175,7 @@ namespace {
 
     openFirstPane(client, transport);
     const auto original = client.viewVersion();
+    const auto original_chrome = client.chromeRevision();
 
     client.focusPane(1);
     client.selectTab(client.activeTab()->location);
@@ -1186,6 +1187,7 @@ namespace {
     client.setSidebarVisible(client.configuration().sidebar_visible);
     client.setSidebarWidth(client.configuration().sidebar_width);
     require(client.viewVersion() == original, "frames, pane metadata and unchanged view commands must preserve the gesture context");
+    require(client.chromeRevision() > original_chrome, "pane metadata must move the chrome revision the pane headers and tabs read");
 
     const auto original_size = client.findPane(1)->size;
     auto enlarged = original_size;

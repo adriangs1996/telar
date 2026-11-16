@@ -196,10 +196,10 @@ namespace telar::gui::qt {
     const ActivitySelection selection{.slot = store_.machines().active(), .tabs = view.active_tab, .panes = view.panes};
     if (versions == activity_versions_ && activity_selection_ == selection) {
       // The cards stay as they are, and so do the mod instances drawing them.
-      element_slots_.retain({components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status});
       return;
     }
 
+    element_slots_.begin(ElementSlots::agent_slots);
     Vector<Order::Source, ApplicationAllocator> sources{AllocatorRef<Order::Source, ApplicationAllocator>{memory_}};
 
     sources.reserve(Machines::capacity);
@@ -292,6 +292,7 @@ namespace telar::gui::qt {
 
     activity_targets_ = std::move(targets);
     agents_.reconcile(std::move(records));
+    element_slots_.finish(ElementSlots::agent_slots);
     fitSidebarWhenReady();
     activity_versions_ = std::move(versions);
     activity_selection_ = selection;
