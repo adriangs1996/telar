@@ -41,9 +41,9 @@ static_assert(true);
 
 #include "telar_config/graphics/limits.hpp"
 #include "telar_config/terminal/control/policy.hpp"
-#include "ui/components/pick_controller.hpp"
-#include "ui/components/surface_command.hpp"
-#include "ui/config/lua_host.hpp"
+#include "ui/app/chrome/components/pick_controller.hpp"
+#include "ui/app/chrome/components/surface_command.hpp"
+#include "ui/foundation/config/lua_host.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -69,8 +69,8 @@ static_assert(true);
 #include <sys/stat.h>
 
 #include "core/memory.hpp"
-#include "ui/components/pick_controller.hpp"
-#include "ui/components/surface_command.hpp"
+#include "ui/app/chrome/components/pick_controller.hpp"
+#include "ui/app/chrome/components/surface_command.hpp"
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;

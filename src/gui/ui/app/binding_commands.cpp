@@ -15,8 +15,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/config/configuration_source.hpp"
-#include "ui/controls/native_form_field.hpp"
+#include "ui/design/controls/native_form_field.hpp"
+#include "ui/foundation/config/configuration_source.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>

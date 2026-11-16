@@ -15,11 +15,11 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "ui/attachments/attachment_shelf.hpp"
-#include "ui/chrome/tabs_controller.hpp"
+#include "ui/app/chrome/tabs_controller.hpp"
+#include "ui/app/panes/attachments/attachment_shelf.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/input/mouse_buttons.hpp"
 #include "ui/foundation/input/native_pointer_events.hpp"
-#include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>

@@ -412,7 +412,7 @@ void initializerListRangeDangling() {
 
 // CASE: std.moved_into_caller_owner
 // PAIR: std.moved_owner
-// SOURCE: src/gui/ui/terminal/terminal_scene.cpp :: TerminalScene
+// SOURCE: src/gui/ui/app/panes/terminal/terminal_scene.cpp :: TerminalScene
 // STATUS: implemented
 // CONTRACT: Moving a unique_ptr hands its object to the destination, so a raw pointer follows the new owner.
 // SCENARIO: The replacement moves into the caller's owner before the raw pointer is returned; accept.
@@ -442,7 +442,7 @@ standard::node& movedIntoContainer(std::vector<std::unique_ptr<standard::node>>&
 
 // CASE: std.moved_into_local_owner
 // PAIR: std.moved_owner
-// SOURCE: src/gui/ui/terminal/terminal_scene.cpp :: TerminalScene
+// SOURCE: src/gui/ui/app/panes/terminal/terminal_scene.cpp :: TerminalScene
 // STATUS: implemented
 // CONTRACT: An object moved into a local owner dies with that owner.
 // SCENARIO: The raw pointer is returned after its new local owner goes out of scope.
@@ -576,7 +576,7 @@ const char* rangesFindEscape() {
 
 // CASE: std.release_handoff
 // PAIR: std.release
-// SOURCE: src/gui/ui/scene/scene_nodes.hpp :: adoptSceneNode
+// SOURCE: src/gui/ui/foundation/scene/scene_nodes.hpp :: adoptSceneNode
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: A scene node is adopted by its parent and a reference to it is returned; accept.
@@ -600,7 +600,7 @@ standard::scene_node& stdReleaseHandoff(standard::scene_parent& parent, std::uni
 
 // CASE: std.release_kept
 // PAIR: std.release
-// SOURCE: src/gui/ui/scene/scene_nodes.hpp :: adoptSceneNode
+// SOURCE: src/gui/ui/foundation/scene/scene_nodes.hpp :: adoptSceneNode
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: Without the release, the local owner destroys the node the returned reference designates.

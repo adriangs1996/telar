@@ -6,7 +6,7 @@ static_assert(true);
 #include "external_link_opener.hpp"
 #include "terminal/cell_position.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/store/store.hpp"
+#include "ui/foundation/store/store.hpp"
 #include <QObject>
 #include <QString>
 #include <cstdint>

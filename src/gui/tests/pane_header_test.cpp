@@ -13,14 +13,14 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/controls/native_agent_status.hpp"
-#include "ui/controls/native_tab_activity.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/panes/pane_header_layout.hpp"
+#include "ui/app/panes/pane_projection.hpp"
+#include "ui/design/controls/native_agent_status.hpp"
+#include "ui/design/controls/native_tab_activity.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/progress_value.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/panes/pane_header_layout.hpp"
-#include "ui/panes/pane_projection.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -60,14 +60,14 @@ static_assert(true);
 #include <variant>
 
 #include "core/memory.hpp"
-#include "ui/controls/native_agent_status.hpp"
-#include "ui/controls/native_tab_activity.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/panes/pane_header_layout.hpp"
+#include "ui/app/panes/pane_projection.hpp"
+#include "ui/design/controls/native_agent_status.hpp"
+#include "ui/design/controls/native_tab_activity.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/progress_value.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/panes/pane_header_layout.hpp"
-#include "ui/panes/pane_projection.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

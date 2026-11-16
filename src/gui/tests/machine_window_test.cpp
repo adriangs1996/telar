@@ -15,7 +15,7 @@ static_assert(true);
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/plugins/plugin_worker.hpp"
+#include "ui/foundation/plugins/plugin_worker.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <algorithm>
@@ -36,7 +36,7 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 #if (defined(__APPLE__))
-#include "ui/attachments/attachment_shelf.hpp"
+#include "ui/app/panes/attachments/attachment_shelf.hpp"
 #endif
 #if (defined(__APPLE__))
 #include "ui/foundation/input/key_adapter.hpp"
@@ -75,13 +75,13 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/terminal/terminal_item.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
@@ -125,10 +125,10 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/plugins/plugin_worker.hpp"
+#include "ui/foundation/plugins/plugin_worker.hpp"
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
-#include "ui/attachments/attachment_shelf.hpp"
+#include "ui/app/panes/attachments/attachment_shelf.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include <QBuffer>
 #include <QDebug>
@@ -140,13 +140,13 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/terminal/terminal_item.hpp"
 
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.metrics_fixture;

@@ -1,6 +1,6 @@
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
-#include "ui/controls/modal_reveal_layout.hpp"
+#include "ui/design/controls/modal_reveal_layout.hpp"
 #include <QGuiApplication>
 #include <QPointer>
 #include <QQuickWindow>

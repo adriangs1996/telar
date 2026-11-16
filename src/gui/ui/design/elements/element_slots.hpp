@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "ui/config/lua_host.hpp"
+#include "ui/foundation/config/lua_host.hpp"
 #include <QByteArray>
 #include <QHash>
 #include <QObject>

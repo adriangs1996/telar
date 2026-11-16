@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "application_controller.hpp"
-#include "ui/config/configuration_source.hpp"
 #include "ui/design/elements/element_slots.hpp"
+#include "ui/foundation/config/configuration_source.hpp"
 #include <QString>
 #include <QStringLiteral>
 #include <QVariantMap>

@@ -49,8 +49,8 @@ static_assert(true);
 
 #include "telar_client/serializers/telar_frame.hpp"
 
-#include "ui/config/configuration_source.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/config/configuration_source.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -73,8 +73,8 @@ static_assert(true);
 #include <memory>
 
 #include "application/dependencies.hpp"
-#include "ui/config/configuration_source.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/config/configuration_source.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 
 import telar.gui.tests.json_fixture;
 import telar.gui.presentation.client_view_state;

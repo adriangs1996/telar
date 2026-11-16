@@ -6,9 +6,9 @@ static_assert(true);
 #include "../core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/overlays/notifications/sound_player.hpp"
+#include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/foundation/process/command_process.hpp"
-#include "ui/notifications/sound_player.hpp"
-#include "ui/notifications/system_notifier.hpp"
 #include <QCoreApplication>
 #include <QIODevice>
 #include <QObject>
@@ -38,9 +38,9 @@ static_assert(true);
 #include <vector>
 
 #include "core/memory.hpp"
+#include "ui/app/overlays/notifications/sound_player.hpp"
+#include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/foundation/process/command_process.hpp"
-#include "ui/notifications/sound_player.hpp"
-#include "ui/notifications/system_notifier.hpp"
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.application.host_effects;

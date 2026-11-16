@@ -1,5 +1,5 @@
 #include "application/dependencies.hpp"
-#include "ui/attachments/clipboard_images.hpp"
+#include "ui/app/panes/attachments/clipboard_images.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QClipboard>

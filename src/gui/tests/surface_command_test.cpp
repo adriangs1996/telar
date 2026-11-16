@@ -1,4 +1,4 @@
-#include "ui/components/surface_command.hpp"
+#include "ui/app/chrome/components/surface_command.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>

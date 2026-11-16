@@ -14,10 +14,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/machine_prompt/machine_profiles_source.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -58,10 +58,10 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/machine_prompt/machine_profiles_source.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

@@ -15,9 +15,9 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/scene/scene_nodes.hpp"
-#include "ui/terminal/graphics_scene.hpp"
-#include "ui/terminal/window_images.hpp"
+#include "ui/app/panes/terminal/graphics_scene.hpp"
+#include "ui/app/panes/terminal/window_images.hpp"
+#include "ui/foundation/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QDir>
 #include <QGuiApplication>
@@ -62,9 +62,9 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
 #include "terminal/screen.hpp"
-#include "ui/scene/scene_nodes.hpp"
-#include "ui/terminal/graphics_scene.hpp"
-#include "ui/terminal/window_images.hpp"
+#include "ui/app/panes/terminal/graphics_scene.hpp"
+#include "ui/app/panes/terminal/window_images.hpp"
+#include "ui/foundation/scene/scene_nodes.hpp"
 
 import telar.gui.graphics.texture_cache;
 import telar.wire.graphics;

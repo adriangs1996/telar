@@ -12,15 +12,15 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/panes/terminal/history/history_empty_layout.hpp"
+#include "ui/app/panes/terminal/history/history_filters_layout.hpp"
+#include "ui/app/panes/terminal/history/history_footer_layout.hpp"
+#include "ui/app/panes/terminal/history/history_inspection_layout.hpp"
+#include "ui/app/panes/terminal/history/history_loading_layout.hpp"
+#include "ui/app/panes/terminal/history/history_selection_layout.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/history/history_empty_layout.hpp"
-#include "ui/history/history_filters_layout.hpp"
-#include "ui/history/history_footer_layout.hpp"
-#include "ui/history/history_inspection_layout.hpp"
-#include "ui/history/history_loading_layout.hpp"
-#include "ui/history/history_selection_layout.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -78,15 +78,15 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/panes/terminal/history/history_empty_layout.hpp"
+#include "ui/app/panes/terminal/history/history_filters_layout.hpp"
+#include "ui/app/panes/terminal/history/history_footer_layout.hpp"
+#include "ui/app/panes/terminal/history/history_inspection_layout.hpp"
+#include "ui/app/panes/terminal/history/history_loading_layout.hpp"
+#include "ui/app/panes/terminal/history/history_selection_layout.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/history/history_empty_layout.hpp"
-#include "ui/history/history_filters_layout.hpp"
-#include "ui/history/history_footer_layout.hpp"
-#include "ui/history/history_inspection_layout.hpp"
-#include "ui/history/history_loading_layout.hpp"
-#include "ui/history/history_selection_layout.hpp"
 
 import telar.gui.history.browser;
 import telar.gui.presentation.history_inspection;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/terminal/terminal_item.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
 
 namespace telar::gui::test {
 

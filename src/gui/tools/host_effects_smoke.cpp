@@ -5,9 +5,9 @@ static_assert(true);
 
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/overlays/notifications/sound_player.hpp"
+#include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/foundation/process/command_process.hpp"
-#include "ui/notifications/sound_player.hpp"
-#include "ui/notifications/system_notifier.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -30,9 +30,9 @@ static_assert(true);
 #include <system_error>
 #include <utility>
 
+#include "ui/app/overlays/notifications/sound_player.hpp"
+#include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/foundation/process/command_process.hpp"
-#include "ui/notifications/sound_player.hpp"
-#include "ui/notifications/system_notifier.hpp"
 
 import telar.gui.text.notification_payload;
 

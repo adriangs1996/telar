@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "ui/notifications/sound_player.hpp"
-#include "ui/notifications/system_notifier.hpp"
+#include "ui/app/overlays/notifications/sound_player.hpp"
+#include "ui/app/overlays/notifications/system_notifier.hpp"
 
 #pragma once
 

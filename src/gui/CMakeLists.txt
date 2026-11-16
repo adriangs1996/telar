@@ -68,11 +68,11 @@ if(TELAR_GUI_NATIVE)
   find_package(Qt6GuiPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
-  add_library(gui-surface-command STATIC ui/components/surface_command.cpp)
+  add_library(gui-surface-command STATIC ui/app/chrome/components/surface_command.cpp)
   target_link_libraries(gui-surface-command PUBLIC gui-posix gui-platform Qt6::Core)
   add_dependencies(gui-surface-command telar-gui-command)
 
-  add_library(gui-machine-profiles STATIC ui/machine_prompt/machine_profiles_source.cpp ui/machine_prompt/machine_profiles_source.hpp)
+  add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source.cpp ui/app/overlays/machine_prompt/machine_profiles_source.hpp)
   target_link_libraries(gui-machine-profiles PUBLIC gui-posix gui-platform gui-machines Qt6::Concurrent)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
@@ -139,7 +139,7 @@ if(TELAR_GUI_NATIVE)
     target_link_libraries(gui-platform-native PRIVATE Fontconfig::Fontconfig)
     target_sources(gui-platform-native PRIVATE platform/linux/font.c)
     target_sources(gui-platform-native PRIVATE platform/linux/window.cpp platform/linux/clipboard_image_source.cpp platform/linux/clipboard_image_monitor.cpp platform/linux/xcb_clipboard_image_monitor.cpp platform/linux/wayland_clipboard_image_monitor.cpp)
-    target_sources(gui-platform-native PRIVATE ui/scene/optical_text_fallback.cpp)
+    target_sources(gui-platform-native PRIVATE ui/foundation/scene/optical_text_fallback.cpp)
   else()
     message(FATAL_ERROR "The GUI supports macOS and Linux")
   endif()
@@ -148,19 +148,19 @@ if(TELAR_GUI_NATIVE)
   # It imports no domain; the lowest, gui-core, gives it the GUI's settings.
   target_link_libraries(gui-keyboard PUBLIC gui-core Qt6::Gui)
 
-  add_library(gui-clipboard-images STATIC ui/attachments/attachment_preview.cpp ui/attachments/attachment_preview.hpp ui/attachments/clipboard_images.cpp ui/attachments/clipboard_images.hpp)
+  add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
   target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-attachments gui-machines gui-graphics Qt6::Concurrent)
 
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
-  target_sources(gui-quick PRIVATE ui/terminal/window_images.cpp ui/terminal/image_resource.cpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/window_images.cpp ui/app/panes/terminal/image_resource.cpp)
   target_link_libraries(gui-quick PUBLIC gui-clipboard-images)
-  set_source_files_properties(ui/attachments/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/attachments/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
-  target_sources(gui-quick PRIVATE ui/terminal/terminal_scene.cpp ui/terminal/terminal_scene.hpp)
-  target_sources(gui-quick PRIVATE ui/scene/text_scene.cpp)
-  target_sources(gui-quick PRIVATE ui/fonts/font_source.cpp ui/fonts/font_resolver.cpp)
-  target_sources(gui-quick PRIVATE ui/fonts/bundled_fonts.cpp ui/fonts/terminal_font.cpp platform/runtime_endpoint/runtime_endpoint.cpp platform/login_shell/login_shell.cpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/terminal_scene.cpp ui/app/panes/terminal/terminal_scene.hpp)
+  target_sources(gui-quick PRIVATE ui/foundation/scene/text_scene.cpp)
+  target_sources(gui-quick PRIVATE ui/foundation/fonts/font_source.cpp ui/foundation/fonts/font_resolver.cpp)
+  target_sources(gui-quick PRIVATE ui/foundation/fonts/bundled_fonts.cpp ui/foundation/fonts/terminal_font.cpp platform/runtime_endpoint/runtime_endpoint.cpp platform/login_shell/login_shell.cpp)
   target_link_libraries(gui-quick PUBLIC gui-core gui-history gui-layout gui-suggestions gui-text gui-palette
     gui-peek gui-prompt gui-terminal gui-fonts gui-links gui-input gui-attachments gui-paths gui-model
     gui-platform gui-machines gui-presentation gui-graphics gui-application gui-components gui-config
@@ -192,25 +192,25 @@ if(TELAR_GUI_NATIVE)
     target_compile_definitions(gui-quick PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1)
   endif()
 
-  target_sources(gui-quick PRIVATE ui/attachments/attachments_controller.cpp ui/attachments/attachments_controller.hpp ui/app/plugin_commands.cpp ui/plugins/plugin_runner.cpp ui/plugins/plugin_runner.hpp ui/app/prompt_commands.cpp ui/prompt/prompt_controller.cpp ui/prompt/prompt_controller.hpp ui/documents/documents_controller.cpp ui/documents/documents_controller.hpp)
-  target_sources(gui-quick PRIVATE ui/components/components_controller.cpp ui/components/components_controller.hpp ui/app/component_commands.cpp ui/app/element_commands.cpp ui/design/elements/element_slots.cpp ui/design/elements/element_slots.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/attachments/attachments_controller.cpp ui/app/panes/attachments/attachments_controller.hpp ui/app/plugin_commands.cpp ui/foundation/plugins/plugin_runner.cpp ui/foundation/plugins/plugin_runner.hpp ui/app/prompt_commands.cpp ui/app/panes/terminal/prompt/prompt_controller.cpp ui/app/panes/terminal/prompt/prompt_controller.hpp ui/app/panes/documents/documents_controller.cpp ui/app/panes/documents/documents_controller.hpp)
+  target_sources(gui-quick PRIVATE ui/app/chrome/components/components_controller.cpp ui/app/chrome/components/components_controller.hpp ui/app/component_commands.cpp ui/app/element_commands.cpp ui/design/elements/element_slots.cpp ui/design/elements/element_slots.hpp)
   target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
-  target_sources(gui-quick PRIVATE ui/history/history_controller.cpp ui/history/history_controller.hpp ui/history/history_pointer.cpp ui/app/binding_commands.cpp ui/app/key_bindings.cpp ui/terminal/copy_controller.cpp ui/terminal/copy_controller.hpp ui/terminal/terminal_controller.cpp ui/terminal/terminal_controller.hpp ui/terminal/terminal_host.hpp ui/app/terminal_host.cpp ui/foundation/links/links_controller.cpp ui/foundation/links/links_controller.hpp)
-  target_sources(gui-quick PRIVATE ui/app/palette_commands.cpp ui/paths/path_picker_controller.cpp ui/paths/path_picker_controller.hpp ui/paths/path_picker_projection.cpp ui/workspace_form/workspace_form_controller.cpp ui/workspace_form/workspace_form_controller.hpp)
-  target_sources(gui-quick PRIVATE ui/app/machine_clients.cpp ui/app/machine_profiles.cpp ui/app/machine_actions.cpp ui/machine_prompt/machine_prompt_controller.cpp ui/machine_prompt/machine_prompt_controller.hpp ui/app/machine_launch.cpp ui/app/activity_selection.cpp)
-  target_sources(gui-quick PRIVATE ui/store/store.cpp ui/store/store.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_controller.cpp ui/app/panes/terminal/history/history_controller.hpp ui/app/panes/terminal/history/history_pointer.cpp ui/app/binding_commands.cpp ui/app/key_bindings.cpp ui/app/panes/terminal/copy_controller.cpp ui/app/panes/terminal/copy_controller.hpp ui/app/panes/terminal/terminal_controller.cpp ui/app/panes/terminal/terminal_controller.hpp ui/app/panes/terminal/terminal_host.hpp ui/app/terminal_host.cpp ui/foundation/links/links_controller.cpp ui/foundation/links/links_controller.hpp)
+  target_sources(gui-quick PRIVATE ui/app/palette_commands.cpp ui/app/panes/terminal/paths/path_picker_controller.cpp ui/app/panes/terminal/paths/path_picker_controller.hpp ui/app/panes/terminal/paths/path_picker_projection.cpp ui/app/overlays/workspace_form/workspace_form_controller.cpp ui/app/overlays/workspace_form/workspace_form_controller.hpp)
+  target_sources(gui-quick PRIVATE ui/app/machine_clients.cpp ui/app/machine_profiles.cpp ui/app/machine_actions.cpp ui/app/overlays/machine_prompt/machine_prompt_controller.cpp ui/app/overlays/machine_prompt/machine_prompt_controller.hpp ui/app/machine_launch.cpp ui/app/activity_selection.cpp)
+  target_sources(gui-quick PRIVATE ui/foundation/store/store.cpp ui/foundation/store/store.hpp)
   target_sources(gui-quick PRIVATE ui/foundation/input/window_actions.hpp)
-  target_sources(gui-quick PRIVATE ui/workspaces/workspaces_controller.cpp ui/workspaces/workspaces_controller.hpp ui/chrome/tabs_controller.cpp ui/chrome/tabs_controller.hpp ui/chrome/sidebar_controller.cpp ui/chrome/sidebar_controller.hpp ui/panes/panes_controller.cpp ui/panes/panes_controller.hpp ui/activity/activity_controller.cpp ui/activity/activity_controller.hpp ui/foundation/models/machine_activity_target.cpp ui/foundation/models/machine_activity_target.hpp ui/palette/palette_controller.cpp ui/palette/palette_controller.hpp)
-  target_sources(gui-quick PRIVATE ui/peek/peek_controller.cpp ui/peek/peek_controller.hpp ui/link_status/link_status_controller.cpp ui/link_status/link_status_controller.hpp)
-  set_source_files_properties(ui/palette/palette_controller.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  target_sources(gui-quick PRIVATE ui/history/history_empty_layout.cpp ui/history/history_empty_layout.hpp ui/history/history_loading_layout.cpp ui/history/history_loading_layout.hpp ui/history/history_selection_layout.cpp ui/history/history_selection_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/controls/modal_reveal_layout.cpp ui/controls/modal_reveal_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/panes/pane_motion_layout.cpp ui/panes/pane_motion_layout.hpp)
-  set_source_files_properties(ui/controls/modal_reveal_layout.cpp ui/panes/pane_motion_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/history/history_empty_layout.cpp ui/history/history_loading_layout.cpp ui/history/history_selection_layout.cpp ui/history/history_row_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  target_sources(gui-quick PRIVATE ui/terminal/terminal_pointer.cpp ui/terminal/terminal_scroll.cpp ui/terminal/terminal_links.cpp ui/links/link_preview.cpp ui/app/pointer_dispatcher.cpp ui/foundation/input/native_pointer_events.cpp)
-  target_sources(gui-quick PRIVATE ui/config/configuration_loader.cpp)
-  target_sources(gui-quick PRIVATE ui/app/notification_commands.cpp ui/app/graphics_recovery.cpp ui/notifications/notifications_controller.cpp ui/notifications/notifications_controller.hpp ui/app/window_geometry.cpp ui/app/application_effects.cpp ui/foundation/machines/machine_effects.cpp ui/foundation/machines/machine_effects.hpp)
+  target_sources(gui-quick PRIVATE ui/app/chrome/workspaces/workspaces_controller.cpp ui/app/chrome/workspaces/workspaces_controller.hpp ui/app/chrome/tabs_controller.cpp ui/app/chrome/tabs_controller.hpp ui/app/chrome/sidebar_controller.cpp ui/app/chrome/sidebar_controller.hpp ui/app/panes/panes_controller.cpp ui/app/panes/panes_controller.hpp ui/app/chrome/activity/activity_controller.cpp ui/app/chrome/activity/activity_controller.hpp ui/foundation/models/machine_activity_target.cpp ui/foundation/models/machine_activity_target.hpp ui/app/overlays/palette/palette_controller.cpp ui/app/overlays/palette/palette_controller.hpp)
+  target_sources(gui-quick PRIVATE ui/app/overlays/peek/peek_controller.cpp ui/app/overlays/peek/peek_controller.hpp ui/app/overlays/link_status/link_status_controller.cpp ui/app/overlays/link_status/link_status_controller.hpp)
+  set_source_files_properties(ui/app/overlays/palette/palette_controller.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_empty_layout.cpp ui/app/panes/terminal/history/history_empty_layout.hpp ui/app/panes/terminal/history/history_loading_layout.cpp ui/app/panes/terminal/history/history_loading_layout.hpp ui/app/panes/terminal/history/history_selection_layout.cpp ui/app/panes/terminal/history/history_selection_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/design/controls/modal_reveal_layout.cpp ui/design/controls/modal_reveal_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/pane_motion_layout.cpp ui/app/panes/pane_motion_layout.hpp)
+  set_source_files_properties(ui/design/controls/modal_reveal_layout.cpp ui/app/panes/pane_motion_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/terminal/history/history_empty_layout.cpp ui/app/panes/terminal/history/history_loading_layout.cpp ui/app/panes/terminal/history/history_selection_layout.cpp ui/app/panes/terminal/history/history_row_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/terminal_pointer.cpp ui/app/panes/terminal/terminal_scroll.cpp ui/app/panes/terminal/terminal_links.cpp ui/app/panes/terminal/links/link_preview.cpp ui/app/pointer_dispatcher.cpp ui/foundation/input/native_pointer_events.cpp)
+  target_sources(gui-quick PRIVATE ui/foundation/config/configuration_loader.cpp)
+  target_sources(gui-quick PRIVATE ui/app/notification_commands.cpp ui/app/graphics_recovery.cpp ui/app/overlays/notifications/notifications_controller.cpp ui/app/overlays/notifications/notifications_controller.hpp ui/app/window_geometry.cpp ui/app/application_effects.cpp ui/foundation/machines/machine_effects.cpp ui/foundation/machines/machine_effects.hpp)
   add_custom_target(gui-editor-ui
     COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_editor_database.py" --build-dir "${CMAKE_BINARY_DIR}"
     DEPENDS tools/create_editor_database.py
@@ -222,58 +222,58 @@ if(TELAR_GUI_NATIVE)
     LIBRARIES gui-core gui-history gui-layout gui-text gui-model gui-platform gui-presentation gui-application
       deps::ghostty_vt Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
 
-  target_sources(gui-quick PRIVATE ui/notifications/notification_layout.cpp ui/notifications/notification_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/machine_chrome/machine_chrome_layout.cpp ui/machine_chrome/machine_chrome_layout.hpp ui/machine_chrome/machine_chrome_controller.cpp ui/machine_chrome/machine_chrome_controller.hpp)
-  set_source_files_properties(ui/machine_chrome/machine_chrome_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  target_sources(gui-quick PRIVATE ui/scene/curve_scene.cpp ui/scene/curve_mask_node.cpp ui/scene/alpha_mask_material.cpp ui/fonts/chrome_fonts.cpp ui/scene/chrome_text_scene.cpp ui/scene/ancestor_geometry.cpp)
-  target_sources(gui-quick PRIVATE ui/scene/rounded_rectangle_scene.cpp ui/scene/software_rounded_rectangle.cpp)
-  target_sources(gui-quick PRIVATE ui/controls/provider_artwork.cpp ui/fonts/resident_fonts.cpp ui/scene/chrome_icon_scene.cpp)
-  target_sources(gui-quick PRIVATE ui/fonts/window_font_catalog.cpp ui/fonts/window_font_catalog.hpp)
-  target_sources(gui-quick PRIVATE ui/panes/pane_header_layout.cpp ui/panes/pane_header_layout.hpp ui/controls/chrome_style.hpp)
-  target_sources(gui-quick PRIVATE ui/history/history_row_layout.cpp ui/history/history_row_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/history/history_match_model.hpp)
-  target_sources(gui-quick PRIVATE ui/history/history_meta_layout.cpp ui/history/history_meta_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/history/history_footer_layout.cpp ui/history/history_footer_layout.hpp ui/design/history_hint_projection.hpp)
-  target_sources(gui-quick PRIVATE ui/history/history_filters_layout.cpp ui/history/history_filters_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/history/history_inspection_layout.cpp ui/history/history_inspection_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/controls/native_form_field.cpp ui/controls/native_form_field_input.cpp ui/controls/native_form_field.hpp ui/controls/form_composition_events.cpp)
-  set_source_files_properties(ui/controls/native_form_field.cpp ui/controls/native_form_field_input.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/history/history_filters_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/history/history_footer_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/history/history_meta_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/history/history_row_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  target_sources(gui-quick PRIVATE ui/panes/fullscreen_strip_layout.cpp ui/panes/fullscreen_strip_layout.hpp)
-  set_source_files_properties(ui/panes/fullscreen_strip_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  target_sources(gui-quick PRIVATE ui/scene/window_animation_clock.cpp ui/app/window_animation.cpp ui/controls/native_tab_activity.cpp ui/controls/native_tab_activity.hpp ui/controls/native_progress_ring.cpp ui/controls/native_progress_ring.hpp)
-  target_sources(gui-quick PRIVATE ui/panes/native_pane_attention.cpp ui/panes/native_pane_attention.hpp)
-  set_source_files_properties(ui/panes/native_pane_attention.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/panes/pane_header_layout.cpp ui/app/window_geometry.cpp ui/chrome/sidebar_controller.cpp ui/notifications/notification_layout.cpp ui/scene/window_animation_clock.cpp ui/controls/native_tab_activity.cpp ui/controls/native_progress_ring.cpp ui/controls/native_agent_status.cpp ui/scene/rounded_rectangle_scene.cpp ui/scene/software_rounded_rectangle.cpp ui/controls/native_rounded_rectangle.cpp ui/controls/provider_artwork.cpp ui/scene/chrome_text_scene.cpp ui/scene/chrome_icon_scene.cpp ui/controls/native_chrome_icon.cpp ui/controls/native_cell_text.cpp ui/chrome/native_mode_layout.cpp ui/chrome/tab_strip_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_sources(gui-quick PRIVATE ui/app/overlays/notifications/notification_layout.cpp ui/app/overlays/notifications/notification_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/app/chrome/components/machine_chrome/machine_chrome_layout.cpp ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp ui/app/chrome/components/machine_chrome/machine_chrome_controller.cpp ui/app/chrome/components/machine_chrome/machine_chrome_controller.hpp)
+  set_source_files_properties(ui/app/chrome/components/machine_chrome/machine_chrome_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_sources(gui-quick PRIVATE ui/foundation/scene/curve_scene.cpp ui/foundation/scene/curve_mask_node.cpp ui/foundation/scene/alpha_mask_material.cpp ui/foundation/fonts/chrome_fonts.cpp ui/foundation/scene/chrome_text_scene.cpp ui/foundation/scene/ancestor_geometry.cpp)
+  target_sources(gui-quick PRIVATE ui/foundation/scene/rounded_rectangle_scene.cpp ui/foundation/scene/software_rounded_rectangle.cpp)
+  target_sources(gui-quick PRIVATE ui/design/controls/provider_artwork.cpp ui/foundation/fonts/resident_fonts.cpp ui/foundation/scene/chrome_icon_scene.cpp)
+  target_sources(gui-quick PRIVATE ui/foundation/fonts/window_font_catalog.cpp ui/foundation/fonts/window_font_catalog.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/pane_header_layout.cpp ui/app/panes/pane_header_layout.hpp ui/design/controls/chrome_style.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_row_layout.cpp ui/app/panes/terminal/history/history_row_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_match_model.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_meta_layout.cpp ui/app/panes/terminal/history/history_meta_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_footer_layout.cpp ui/app/panes/terminal/history/history_footer_layout.hpp ui/design/history_hint_projection.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_filters_layout.cpp ui/app/panes/terminal/history/history_filters_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/terminal/history/history_inspection_layout.cpp ui/app/panes/terminal/history/history_inspection_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/design/controls/native_form_field.cpp ui/design/controls/native_form_field_input.cpp ui/design/controls/native_form_field.hpp ui/design/controls/form_composition_events.cpp)
+  set_source_files_properties(ui/design/controls/native_form_field.cpp ui/design/controls/native_form_field_input.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/terminal/history/history_filters_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/terminal/history/history_footer_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/terminal/history/history_meta_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/terminal/history/history_row_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_sources(gui-quick PRIVATE ui/app/panes/fullscreen_strip_layout.cpp ui/app/panes/fullscreen_strip_layout.hpp)
+  set_source_files_properties(ui/app/panes/fullscreen_strip_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_sources(gui-quick PRIVATE ui/foundation/scene/window_animation_clock.cpp ui/app/window_animation.cpp ui/design/controls/native_tab_activity.cpp ui/design/controls/native_tab_activity.hpp ui/design/controls/native_progress_ring.cpp ui/design/controls/native_progress_ring.hpp)
+  target_sources(gui-quick PRIVATE ui/app/panes/native_pane_attention.cpp ui/app/panes/native_pane_attention.hpp)
+  set_source_files_properties(ui/app/panes/native_pane_attention.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/app/panes/pane_header_layout.cpp ui/app/window_geometry.cpp ui/app/chrome/sidebar_controller.cpp ui/app/overlays/notifications/notification_layout.cpp ui/foundation/scene/window_animation_clock.cpp ui/design/controls/native_tab_activity.cpp ui/design/controls/native_progress_ring.cpp ui/design/controls/native_agent_status.cpp ui/foundation/scene/rounded_rectangle_scene.cpp ui/foundation/scene/software_rounded_rectangle.cpp ui/design/controls/native_rounded_rectangle.cpp ui/design/controls/provider_artwork.cpp ui/foundation/scene/chrome_text_scene.cpp ui/foundation/scene/chrome_icon_scene.cpp ui/design/controls/native_chrome_icon.cpp ui/design/controls/native_cell_text.cpp ui/app/chrome/native_mode_layout.cpp ui/app/chrome/tab_strip_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   qt_add_shaders(gui-quick gui-curve-shaders
     PREFIX "/telar/shaders"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/scene/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/foundation/scene/shaders"
     BATCHABLE
-    FILES ui/scene/shaders/alpha_mask.vert ui/scene/shaders/alpha_mask.frag ui/scene/shaders/nearest_alpha_mask.frag ui/scene/shaders/filtered_alpha_mask.frag ui/scene/shaders/tab_caption.frag)
+    FILES ui/foundation/scene/shaders/alpha_mask.vert ui/foundation/scene/shaders/alpha_mask.frag ui/foundation/scene/shaders/nearest_alpha_mask.frag ui/foundation/scene/shaders/filtered_alpha_mask.frag ui/foundation/scene/shaders/tab_caption.frag)
 
   qt_add_shaders(gui-quick gui-shape-shaders
     PREFIX "/telar/shaders"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/scene/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/foundation/scene/shaders"
     BATCHABLE
     PERTARGETCOMPILE
-    FILES ui/scene/shaders/rounded_rectangle.vert ui/scene/shaders/rounded_rectangle.frag)
+    FILES ui/foundation/scene/shaders/rounded_rectangle.vert ui/foundation/scene/shaders/rounded_rectangle.frag)
 
   qt_add_shaders(gui-quick gui-straight-mask-shaders
     PREFIX "/telar/shaders"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/scene/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/foundation/scene/shaders"
     BATCHABLE
     DEFINES TELAR_STRAIGHT_ALPHA=1
     OUTPUTS straight/alpha_mask.frag.qsb straight/nearest_alpha_mask.frag.qsb straight/filtered_alpha_mask.frag.qsb
-    FILES ui/scene/shaders/alpha_mask.frag ui/scene/shaders/nearest_alpha_mask.frag ui/scene/shaders/filtered_alpha_mask.frag)
+    FILES ui/foundation/scene/shaders/alpha_mask.frag ui/foundation/scene/shaders/nearest_alpha_mask.frag ui/foundation/scene/shaders/filtered_alpha_mask.frag)
 
-  set_source_files_properties(ui/components/ComponentFit.js PROPERTIES QT_QML_SKIP_QMLDIR_ENTRY TRUE)
+  set_source_files_properties(ui/app/chrome/components/ComponentFit.js PROPERTIES QT_QML_SKIP_QMLDIR_ENTRY TRUE)
 
   # The generated QML type registrations include each registered header by its bare name.
   # Sources spell ui/ headers from src/gui; only the registrations need these folders.
-  foreach(folder IN ITEMS activity app attachments chrome components controls design/elements documents history link_status machine_chrome machine_prompt notifications palette panes paths peek prompt store terminal workspace_form workspaces)
+  foreach(folder IN ITEMS app/chrome/activity app app/panes/attachments app/chrome app/chrome/components design/controls design/elements app/panes/documents app/panes/terminal/history app/overlays/link_status app/chrome/components/machine_chrome app/overlays/machine_prompt app/overlays/notifications app/overlays/palette app/panes app/panes/terminal/paths app/overlays/peek app/panes/terminal/prompt foundation/store app/panes/terminal app/overlays/workspace_form app/chrome/workspaces)
     target_include_directories(gui-quick PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui/${folder}")
   endforeach()
 
@@ -281,8 +281,8 @@ if(TELAR_GUI_NATIVE)
     URI Telar.Gui
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
-    SOURCES ui/attachments/attachment_image.cpp ui/attachments/attachment_image.hpp ui/attachments/attachment_shelf.cpp ui/attachments/attachment_shelf.hpp ui/controls/native_agent_status.cpp ui/controls/native_agent_status.hpp ui/controls/native_rounded_rectangle.cpp ui/controls/native_rounded_rectangle.hpp ui/app/application_controller.cpp ui/app/application_controller.hpp ui/foundation/machines/runtime_connection.cpp ui/foundation/machines/runtime_connection.hpp ui/terminal/terminal_item.cpp ui/terminal/terminal_item.hpp ui/config/configuration_source.cpp ui/config/configuration_source.hpp ui/config/lua_host.cpp ui/config/lua_host.hpp ui/design/elements/element_layout.cpp ui/design/elements/element_layout.hpp ui/design/elements/element_canvas.cpp ui/design/elements/element_canvas.hpp ui/terminal/graphics_scene.cpp ui/terminal/graphics_scene.hpp ui/chrome/tab_strip_layout.cpp ui/chrome/tab_strip_layout.hpp ui/controls/provider_mark.cpp ui/controls/provider_mark.hpp ui/controls/native_chrome_text.cpp ui/controls/native_chrome_text.hpp ui/controls/native_chrome_icon.cpp ui/controls/native_chrome_icon.hpp ui/controls/native_cell_text.cpp ui/controls/native_cell_text.hpp ui/chrome/native_mode_layout.cpp ui/chrome/native_mode_layout.hpp ui/prompt/prompt_editor_item.cpp ui/prompt/prompt_editor_item.hpp ui/documents/document_view.cpp ui/documents/document_view.hpp
-    QML_FILES ui/components/ComponentFit.js ui/design/elements/Elements.js ui/design/elements/ElementNode.qml ui/design/elements/ElementHost.qml ui/components/ComponentPick.qml ui/components/ComponentBranch.qml ui/components/ComponentNode.qml ui/components/ComponentTree.qml ui/components/ComponentOverflow.qml ui/components/ComponentSlot.qml ui/components/ComponentPanel.qml ui/attachments/AttachmentShelf.qml ui/attachments/AttachmentModal.qml ui/peek/PeekPanel.qml ui/link_status/LinkStatus.qml ui/machine_chrome/MachineChrome.qml ui/machine_prompt/MachinePromptPanel.qml ui/prompt_panel/PromptPanel.qml ui/design/PromptField.qml ui/design/PromptActions.qml ui/workspace_form/WorkspaceFormPanel.qml ui/controls/FormTextField.qml ui/controls/KeyboardAction.qml ui/controls/ActionPointer.qml ui/app/Main.qml ui/controls/DialogSurface.qml ui/chrome/Sidebar.qml ui/chrome/TerminalTabs.qml ui/panes/PaneArea.qml ui/panes/PaneActions.qml ui/panes/PaneHeader.qml ui/panes/FullscreenStrip.qml ui/panes/PaneStatusChip.qml ui/panes/PaneProgress.qml ui/app/CommandDialog.qml ui/paths/PathPickerPanel.qml ui/palette/PalettePanel.qml ui/suggestions/SuggestionPanel.qml ui/palette/PaletteRow.qml ui/design/PaletteKeycap.qml ui/design/PaletteButton.qml ui/history/HistoryPanel.qml ui/history/HistoryKeys.qml ui/paths/PathKeys.qml ui/history/HistoryEmpty.qml ui/history/HistoryInspector.qml ui/controls/FormButton.qml ui/history/HistoryRow.qml ui/history/HistoryMeta.qml ui/design/HistoryHint.qml ui/history/HistoryFooter.qml ui/history/HistoryFilters.qml ui/history/HistoryFilterChip.qml ui/history/HistorySearchBar.qml ui/links/LinkPreview.qml ui/controls/ChromeText.qml ui/controls/ChromeToolTip.qml ui/controls/ChromeIcon.qml ui/controls/ChromeButton.qml ui/controls/ApplicationMark.qml ui/controls/ApplicationTile.qml ui/controls/ElevationShadow.qml ui/workspaces/WorkspaceList.qml ui/workspaces/ProjectRow.qml ui/workspaces/ProjectSwitcher.qml ui/workspaces/WorkspaceIdentity.qml ui/activity/ActivityList.qml ui/activity/ActivityFrame.qml ui/activity/AgentCard.qml ui/activity/AgentStatus.qml ui/activity/TaskCard.qml ui/activity/TaskPlan.qml ui/activity/CommandCard.qml ui/chrome/NavigationBar.qml ui/design/BarBattery.qml ui/design/BarSparkline.qml ui/design/BarMetric.qml ui/design/BarRing.qml ui/design/BarPill.qml ui/design/SystemSummary.qml ui/chrome/MetricsGroup.qml ui/chrome/StatusBar.qml ui/chrome/BarBadge.qml ui/controls/CellText.qml ui/chrome/ModeBar.qml ui/notifications/NotificationOverlay.qml ui/terminal/PromptLine.qml ui/terminal/CommandSeparators.qml ui/terminal/CommandRail.qml ui/terminal/JumpToEnd.qml ui/documents/DocumentView.qml ui/documents/DocumentBlock.qml ui/documents/DocumentTheme.qml ui/documents/InlineDocuments.qml)
+    SOURCES ui/app/panes/attachments/attachment_image.cpp ui/app/panes/attachments/attachment_image.hpp ui/app/panes/attachments/attachment_shelf.cpp ui/app/panes/attachments/attachment_shelf.hpp ui/design/controls/native_agent_status.cpp ui/design/controls/native_agent_status.hpp ui/design/controls/native_rounded_rectangle.cpp ui/design/controls/native_rounded_rectangle.hpp ui/app/application_controller.cpp ui/app/application_controller.hpp ui/foundation/machines/runtime_connection.cpp ui/foundation/machines/runtime_connection.hpp ui/app/panes/terminal/terminal_item.cpp ui/app/panes/terminal/terminal_item.hpp ui/foundation/config/configuration_source.cpp ui/foundation/config/configuration_source.hpp ui/foundation/config/lua_host.cpp ui/foundation/config/lua_host.hpp ui/design/elements/element_layout.cpp ui/design/elements/element_layout.hpp ui/design/elements/element_canvas.cpp ui/design/elements/element_canvas.hpp ui/app/panes/terminal/graphics_scene.cpp ui/app/panes/terminal/graphics_scene.hpp ui/app/chrome/tab_strip_layout.cpp ui/app/chrome/tab_strip_layout.hpp ui/design/controls/provider_mark.cpp ui/design/controls/provider_mark.hpp ui/design/controls/native_chrome_text.cpp ui/design/controls/native_chrome_text.hpp ui/design/controls/native_chrome_icon.cpp ui/design/controls/native_chrome_icon.hpp ui/design/controls/native_cell_text.cpp ui/design/controls/native_cell_text.hpp ui/app/chrome/native_mode_layout.cpp ui/app/chrome/native_mode_layout.hpp ui/app/panes/terminal/prompt/prompt_editor_item.cpp ui/app/panes/terminal/prompt/prompt_editor_item.hpp ui/app/panes/documents/document_view.cpp ui/app/panes/documents/document_view.hpp
+    QML_FILES ui/app/chrome/components/ComponentFit.js ui/design/elements/Elements.js ui/design/elements/ElementNode.qml ui/design/elements/ElementHost.qml ui/app/chrome/components/ComponentPick.qml ui/app/chrome/components/ComponentBranch.qml ui/app/chrome/components/ComponentNode.qml ui/app/chrome/components/ComponentTree.qml ui/app/chrome/components/ComponentOverflow.qml ui/app/chrome/components/ComponentSlot.qml ui/app/chrome/components/ComponentPanel.qml ui/app/panes/attachments/AttachmentShelf.qml ui/app/panes/attachments/AttachmentModal.qml ui/app/overlays/peek/PeekPanel.qml ui/app/overlays/link_status/LinkStatus.qml ui/app/chrome/components/machine_chrome/MachineChrome.qml ui/app/overlays/machine_prompt/MachinePromptPanel.qml ui/app/overlays/prompt_panel/PromptPanel.qml ui/design/PromptField.qml ui/design/PromptActions.qml ui/app/overlays/workspace_form/WorkspaceFormPanel.qml ui/design/controls/FormTextField.qml ui/design/controls/KeyboardAction.qml ui/design/controls/ActionPointer.qml ui/app/Main.qml ui/design/controls/DialogSurface.qml ui/app/chrome/Sidebar.qml ui/app/chrome/TerminalTabs.qml ui/app/panes/PaneArea.qml ui/app/panes/PaneActions.qml ui/app/panes/PaneHeader.qml ui/app/panes/FullscreenStrip.qml ui/app/panes/PaneStatusChip.qml ui/app/panes/PaneProgress.qml ui/app/CommandDialog.qml ui/app/panes/terminal/paths/PathPickerPanel.qml ui/app/overlays/palette/PalettePanel.qml ui/app/overlays/palette/suggestions/SuggestionPanel.qml ui/app/overlays/palette/PaletteRow.qml ui/design/PaletteKeycap.qml ui/design/PaletteButton.qml ui/app/panes/terminal/history/HistoryPanel.qml ui/app/panes/terminal/history/HistoryKeys.qml ui/app/panes/terminal/paths/PathKeys.qml ui/app/panes/terminal/history/HistoryEmpty.qml ui/app/panes/terminal/history/HistoryInspector.qml ui/design/controls/FormButton.qml ui/app/panes/terminal/history/HistoryRow.qml ui/app/panes/terminal/history/HistoryMeta.qml ui/design/HistoryHint.qml ui/app/panes/terminal/history/HistoryFooter.qml ui/app/panes/terminal/history/HistoryFilters.qml ui/app/panes/terminal/history/HistoryFilterChip.qml ui/app/panes/terminal/history/HistorySearchBar.qml ui/app/panes/terminal/links/LinkPreview.qml ui/design/controls/ChromeText.qml ui/design/controls/ChromeToolTip.qml ui/design/controls/ChromeIcon.qml ui/design/controls/ChromeButton.qml ui/design/controls/ApplicationMark.qml ui/design/controls/ApplicationTile.qml ui/design/controls/ElevationShadow.qml ui/app/chrome/workspaces/WorkspaceList.qml ui/app/chrome/workspaces/ProjectRow.qml ui/app/chrome/workspaces/ProjectSwitcher.qml ui/app/chrome/workspaces/WorkspaceIdentity.qml ui/app/chrome/activity/ActivityList.qml ui/app/chrome/activity/ActivityFrame.qml ui/app/chrome/activity/AgentCard.qml ui/app/chrome/activity/AgentStatus.qml ui/app/chrome/activity/TaskCard.qml ui/app/chrome/activity/TaskPlan.qml ui/app/chrome/activity/CommandCard.qml ui/app/chrome/NavigationBar.qml ui/design/BarBattery.qml ui/design/BarSparkline.qml ui/design/BarMetric.qml ui/design/BarRing.qml ui/design/BarPill.qml ui/design/SystemSummary.qml ui/app/chrome/MetricsGroup.qml ui/app/chrome/StatusBar.qml ui/app/chrome/BarBadge.qml ui/design/controls/CellText.qml ui/app/chrome/ModeBar.qml ui/app/overlays/notifications/NotificationOverlay.qml ui/app/panes/terminal/PromptLine.qml ui/app/panes/terminal/CommandSeparators.qml ui/app/panes/terminal/CommandRail.qml ui/app/panes/terminal/JumpToEnd.qml ui/app/panes/documents/DocumentView.qml ui/app/panes/documents/DocumentBlock.qml ui/app/panes/documents/DocumentTheme.qml ui/app/panes/documents/InlineDocuments.qml)
 
   qt_add_executable(telar-gui main.cpp)
   if(APPLE)

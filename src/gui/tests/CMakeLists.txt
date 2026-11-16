@@ -299,7 +299,7 @@ if(TELAR_GUI_NATIVE)
     target_include_directories(gui-clipboard-wayland-probe PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     set_target_properties(gui-clipboard-wayland-provider gui-clipboard-wayland-probe PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
   endif()
-  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/attachments/attachment_preview.cpp LIBRARIES gui-attachments gui-graphics Qt6::Gui
+  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-attachments gui-graphics Qt6::Gui
     TEST gui-attachment-preview LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-attachment-preview-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
 

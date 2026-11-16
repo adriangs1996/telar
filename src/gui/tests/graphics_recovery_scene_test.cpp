@@ -18,7 +18,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
@@ -60,7 +60,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 
 import telar.gui.application.workspace_replica;

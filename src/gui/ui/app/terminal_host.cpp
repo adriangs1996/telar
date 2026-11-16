@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "application_controller.hpp"
-#include "ui/terminal/terminal_item.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
 #include <QKeyEvent>
 #include <cstdint>
 

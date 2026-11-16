@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "machine_activity_target.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/store/store.hpp"
+#include "ui/foundation/store/store.hpp"
 #include <algorithm>
 #include <variant>
 

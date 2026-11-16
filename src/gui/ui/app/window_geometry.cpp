@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/fonts/typography_projection.hpp"
+#include "ui/foundation/fonts/typography_projection.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QQuickWindow>
 #include <QVariantMap>

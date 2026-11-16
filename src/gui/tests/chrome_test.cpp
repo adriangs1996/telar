@@ -16,16 +16,16 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/chrome/metrics_projection.hpp"
-#include "ui/chrome/sidebar_projection.hpp"
-#include "ui/chrome/tab_strip_layout.hpp"
-#include "ui/controls/provider_artwork.hpp"
-#include "ui/controls/provider_mark.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
-#include "ui/fonts/typography_projection.hpp"
+#include "ui/app/chrome/metrics_projection.hpp"
+#include "ui/app/chrome/sidebar_projection.hpp"
+#include "ui/app/chrome/tab_strip_layout.hpp"
+#include "ui/design/controls/provider_artwork.hpp"
+#include "ui/design/controls/provider_mark.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/foundation/fonts/typography_projection.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/scene/window_animation_clock.hpp"
+#include "ui/foundation/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QCoreApplication>
@@ -79,16 +79,16 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/chrome/metrics_projection.hpp"
-#include "ui/chrome/sidebar_projection.hpp"
-#include "ui/chrome/tab_strip_layout.hpp"
-#include "ui/controls/provider_artwork.hpp"
-#include "ui/controls/provider_mark.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
-#include "ui/fonts/typography_projection.hpp"
+#include "ui/app/chrome/metrics_projection.hpp"
+#include "ui/app/chrome/sidebar_projection.hpp"
+#include "ui/app/chrome/tab_strip_layout.hpp"
+#include "ui/design/controls/provider_artwork.hpp"
+#include "ui/design/controls/provider_mark.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/foundation/fonts/typography_projection.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/scene/window_animation_clock.hpp"
+#include "ui/foundation/scene/window_animation_clock.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
@@ -346,8 +346,8 @@ namespace {
         return object;
       };
 
-      const auto shelf = load(QFINDTESTDATA("../ui/attachments/AttachmentShelf.qml"));
-      const auto modal = load(QFINDTESTDATA("../ui/attachments/AttachmentModal.qml"));
+      const auto shelf = load(QFINDTESTDATA("../ui/app/panes/attachments/AttachmentShelf.qml"));
+      const auto modal = load(QFINDTESTDATA("../ui/app/panes/attachments/AttachmentModal.qml"));
       QQmlExpression modal_color{qmlContext(modal.get()), modal.get(), QStringLiteral("modal.color")};
       const auto actual = modal_color.evaluate().value<QColor>();
 

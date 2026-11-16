@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "application_controller.hpp"
-#include "ui/palette/palette_controller.hpp"
+#include "ui/app/overlays/palette/palette_controller.hpp"
 
 import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;

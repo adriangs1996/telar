@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "element_slots.hpp"
 #include "component_projection.hpp"
-#include "ui/config/configuration_source.hpp"
+#include "ui/foundation/config/configuration_source.hpp"
 #include <QColor>
 #include <QJsonDocument>
 #include <QJsonObject>

@@ -6,8 +6,8 @@ static_assert(true);
 #include "../core/memory.hpp"
 #include "../platform/font.h"
 #include "../platform/macos/glyph_rasterizer.h"
-#include "ui/fonts/bundled_fonts.hpp"
-#include "ui/scene/optical_text.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/foundation/scene/optical_text.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFile>
@@ -41,8 +41,8 @@ static_assert(true);
 #include <vector>
 
 #include "core/memory.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
-#include "ui/scene/optical_text.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/foundation/scene/optical_text.hpp"
 
 import telar.gui.fonts.face;
 import telar.gui.fonts.glyph_rasterizer;

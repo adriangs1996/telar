@@ -8,12 +8,12 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/machines/window_identity.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/machine_prompt/machine_profiles_source.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QString>

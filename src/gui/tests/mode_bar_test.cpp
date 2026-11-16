@@ -7,10 +7,10 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/chrome/mode_projection.hpp"
-#include "ui/controls/cell_text_grid.hpp"
-#include "ui/controls/native_cell_text.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/mode_projection.hpp"
+#include "ui/design/controls/cell_text_grid.hpp"
+#include "ui/design/controls/native_cell_text.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QCoreApplication>
 #include <QDebug>
@@ -55,10 +55,10 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "ui/chrome/mode_projection.hpp"
-#include "ui/controls/cell_text_grid.hpp"
-#include "ui/controls/native_cell_text.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/mode_projection.hpp"
+#include "ui/design/controls/cell_text_grid.hpp"
+#include "ui/design/controls/native_cell_text.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
 
 import telar.gui.core.metrics;

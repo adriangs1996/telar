@@ -13,10 +13,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/workspaces/project_projection.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/workspaces/project_projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QGuiApplication>
@@ -53,10 +53,10 @@ static_assert(true);
 #include <variant>
 
 #include "core/memory.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/workspaces/project_projection.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/workspaces/project_projection.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

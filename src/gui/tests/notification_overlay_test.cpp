@@ -13,10 +13,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/overlays/notifications/notification_layout.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/notifications/notification_layout.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QColor>
@@ -55,10 +55,10 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/overlays/notifications/notification_layout.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/notifications/notification_layout.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

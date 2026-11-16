@@ -1,4 +1,4 @@
-#include "ui/scene/optical_text.hpp"
+#include "ui/foundation/scene/optical_text.hpp"
 #include "cf_reference.hpp"
 #include "font_smoothing.h"
 #include "tbc/view.hpp"

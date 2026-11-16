@@ -9,10 +9,10 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/machine_prompt/machine_profiles_source.hpp"
 #include <QLatin1StringView>
 #include <QString>
 #include <QVariantList>

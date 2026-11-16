@@ -1,4 +1,4 @@
-// Draws the block, straight box and Braille glyphs as ui/scene/cell_glyphs.hpp does (draw, then
+// Draws the block, straight box and Braille glyphs as ui/foundation/scene/cell_glyphs.hpp does (draw, then
 // coverage() and rectangles()) and prints the time per frame of them as one JSON row, with a
 // checksum of the ink that must match between builds. `--dump` prints every rectangle exactly
 // instead, over a range of cell sizes, as the oracle of a change to the glyph geometry.

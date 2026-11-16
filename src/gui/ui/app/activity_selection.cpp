@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "application_controller.hpp"
-#include "ui/activity/activity_controller.hpp"
+#include "ui/app/chrome/activity/activity_controller.hpp"
 #include "ui/foundation/models/machine_activity_target.hpp"
 #include <QString>
 #include <variant>

@@ -102,7 +102,7 @@ def prepare(output):
                       trace_pane != nullptr ? trace_pane->screen.frameId() : 0);''')
     add(path, source)
 
-    path = 'src/gui/ui/terminal/terminal_item.cpp'
+    path = 'src/gui/ui/app/panes/terminal/terminal_item.cpp'
     source = read(path)
     source = replace_once(source, '  CellSelection selection;\n', '''  TELAR_PHASE_TRACE("terminal.paint", this, current->id, current->screen.frameId());
   CellSelection selection;

@@ -11,12 +11,12 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/chrome/tab_strip_layout.hpp"
-#include "ui/controls/modal_reveal_layout.hpp"
-#include "ui/controls/native_rounded_rectangle.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/tab_strip_layout.hpp"
+#include "ui/design/controls/modal_reveal_layout.hpp"
+#include "ui/design/controls/native_rounded_rectangle.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/scene/window_animation_clock.hpp"
+#include "ui/foundation/scene/window_animation_clock.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>
@@ -39,12 +39,12 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/chrome/tab_strip_layout.hpp"
-#include "ui/controls/modal_reveal_layout.hpp"
-#include "ui/controls/native_rounded_rectangle.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/tab_strip_layout.hpp"
+#include "ui/design/controls/modal_reveal_layout.hpp"
+#include "ui/design/controls/native_rounded_rectangle.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/scene/window_animation_clock.hpp"
+#include "ui/foundation/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;

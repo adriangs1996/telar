@@ -1,6 +1,6 @@
 #include "element_layout.hpp"
 
-#include "ui/scene/window_animation_clock.hpp"
+#include "ui/foundation/scene/window_animation_clock.hpp"
 
 #include <QQuickWindow>
 #include <QVariantMap>

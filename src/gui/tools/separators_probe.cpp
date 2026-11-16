@@ -19,7 +19,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/terminal/terminal_item.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
 #include <QCommandLineParser>
 #include <QCryptographicHash>
 #include <QFile>

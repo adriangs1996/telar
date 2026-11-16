@@ -69,14 +69,14 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
+#include "ui/app/panes/terminal/prompt/prompt_editor_item.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/prompt/prompt_editor_item.hpp"
-#include "ui/terminal/terminal_item.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
@@ -138,13 +138,13 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
+#include "ui/app/panes/terminal/terminal_item.hpp"
+#include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/terminal/terminal_item.hpp"
 
 import telar.gui.transport.runtime_link;
 import telar.wire.content;

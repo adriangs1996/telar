@@ -1170,7 +1170,7 @@ std::size_t declarationOwnedReceiverAlias() {
 
 // CASE: declaration.shared_reference_result
 // PAIR: declaration.shared_reference_result
-// SOURCE: src/gui/ui/controls/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
+// SOURCE: src/gui/ui/design/controls/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
 // STATUS: implemented
 // CONTRACT: A reference a shared type's method returns is storage the shared object keeps valid, as a pointer it returns is, so a call through it invalidates nothing of its caller.
 // SCENARIO: An item measures through a face its shared fonts hand out while a view of its own text is used later; accept.
@@ -1223,7 +1223,7 @@ std::size_t declarationSharedReferenceResult(declarations::shared_fonts& fonts) 
 
 // CASE: declaration.unshared_reference_result
 // PAIR: declaration.shared_reference_result
-// SOURCE: src/gui/ui/controls/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
+// SOURCE: src/gui/ui/design/controls/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
 // STATUS: implemented
 // CONTRACT: A reference a shared type's method returns is storage the shared object keeps valid, as a pointer it returns is, so a call through it invalidates nothing of its caller.
 // SCENARIO: A face the item owns grows a buffer a view of it was taken from before; reject the later use.
