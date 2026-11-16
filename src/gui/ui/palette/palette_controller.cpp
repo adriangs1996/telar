@@ -3,63 +3,23 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
+#include "palette_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/app/utf16_encoding.hpp"
+#include "ui/controls/form_text_grid.hpp"
 #include <QByteArray>
 #include <QChar>
 #include <QLatin1StringView>
-#include <QQuickWindow>
-#include <QString>
 #include <QStringView>
 #include <QVariant>
-#include <QVariantList>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <limits>
-#include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 #include <utility>
-#include <variant>
 
-#include "application/dependencies.hpp"
-#include "ui/app/utf16_encoding.hpp"
-
-import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
-import telar.gui.machines.picker;
-import telar.gui.model.records;
-import telar.gui.palette.navigation_label;
-import telar.gui.presentation.suggestion_geometry;
-import telar.gui.text.bounded_editor;
+import telar.gui.presentation.form_field_geometry;
+import telar.gui.presentation.suggestion_labels;
+import telar.gui.suggestions.state;
 
 namespace telar::gui::qt {
 
@@ -111,12 +71,12 @@ namespace telar::gui::qt {
         primary.remove_prefix(NavigationLabel::tab_prefix.size());
       }
 
-      QString glyph = QStringLiteral("\uf121");
+      QString glyph = QStringLiteral("");
 
       if (kind == PaletteRowKind::context) {
-        glyph = QStringLiteral("\uf07b");
+        glyph = QStringLiteral("");
       } else if (kind == PaletteRowKind::tab) {
-        glyph = QStringLiteral("\uf2d0");
+        glyph = QStringLiteral("");
       }
 
       const auto hint = kind == PaletteRowKind::context ? QStringLiteral("context") : QStringLiteral("tab");
@@ -135,95 +95,138 @@ namespace telar::gui::qt {
 
   }
 
-  void Application::showPalette(PaletteMode mode) {
-    palette_parent_.reset();
-    palette_editor_restore_ = {};
+  PaletteController::PaletteController(Store& store, QObject* parent)
+      : QObject(parent),
+        store_(store) {}
+
+  bool PaletteController::isOpen() const noexcept {
+    return store_.dialog().kind == Store::Dialog::palette;
+  }
+
+  PaletteMode PaletteController::mode() const {
+    const auto text = query_.toUtf8();
+
+    return PaletteQuery::parse(paletteBytes(text)).mode;
+  }
+
+  const QString& PaletteController::query() const noexcept {
+    return query_;
+  }
+
+  std::uint64_t PaletteController::rebuilds() const noexcept {
+    return rebuilds_;
+  }
+
+  void PaletteController::setDisplay(const DisplayMetrics& display) {
+    display_ = display;
+    emit changed();
+  }
+
+  void PaletteController::setCommands(QVariantList commands) {
+    commands_ = std::move(commands);
+  }
+
+  void PaletteController::open(PaletteMode mode) {
+    parent_.reset();
+    editor_restore_ = {};
     if (mode == PaletteMode::suggest) {
-      session().beginSuggestion();
+      store_.session().beginSuggestion();
     }
 
-    palette_query_ = QChar{static_cast<char>(mode)};
-    palette_selection_ = 0;
-    ++palette_revision_;
-    showDialog(Dialog::palette);
-    static_cast<void>(updatePaletteResults());
-    emit paletteChanged();
+    query_ = QChar{static_cast<char>(mode)};
+    selection_ = 0;
+    ++revision_;
+    static_cast<void>(updateResults());
+    emit changed();
   }
 
-  void Application::reportPaletteQueryLimit(qulonglong requested_bytes) {
-    if (store_.dialog().kind == Dialog::palette && requested_bytes > PaletteQuery::maximum_bytes) {
-      session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
-      refreshNotifications();
-    }
+  void PaletteController::forget() noexcept {
+    parent_.reset();
+    editor_restore_ = {};
   }
 
-  void Application::searchPalette(const QString& text) {
-    if (store_.dialog().kind != Dialog::palette || text == palette_query_) {
+  void PaletteController::publish() {
+    emit changed();
+  }
+
+  void PaletteController::reportQueryLimit(qulonglong requested_bytes) {
+    if (!isOpen() || requested_bytes <= PaletteQuery::maximum_bytes) {
       return;
     }
 
-    const auto before_bytes = palette_query_.toUtf8();
+    store_.session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
+    store_.commit();
+  }
+
+  void PaletteController::search(const QString& text) {
+    if (!isOpen() || text == query_) {
+      return;
+    }
+
+    const auto before_bytes = query_.toUtf8();
     const auto before = PaletteQuery::parse(paletteBytes(before_bytes));
     const auto measured = Utf16Prefix::fit(QStringView{text}, PaletteQuery::maximum_bytes, utf16Encoding());
 
-    palette_query_ = text.first(static_cast<qsizetype>(measured.units));
-    if (!palette_query_.isValidUtf16()) {
-      palette_query_ = QString::fromUtf8(palette_query_.toUtf8());
+    query_ = text.first(static_cast<qsizetype>(measured.units));
+    if (!query_.isValidUtf16()) {
+      query_ = QString::fromUtf8(query_.toUtf8());
     }
 
-    palette_selection_ = 0;
-    const auto current_bytes = palette_query_.toUtf8();
+    selection_ = 0;
+    const auto current_bytes = query_.toUtf8();
     const auto current = PaletteQuery::parse(paletteBytes(current_bytes));
     if (current.mode == PaletteMode::suggest && (before.mode != PaletteMode::suggest || before.text != current.text)) {
-      session().invalidateSuggestion();
+      store_.session().invalidateSuggestion();
     }
 
-    static_cast<void>(updatePaletteResults());
-    emit paletteChanged();
+    static_cast<void>(updateResults());
+    emit changed();
 
     if (measured.bytes < measured.requested_bytes) {
-      reportPaletteQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
+      reportQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
   }
 
-  void Application::movePalette(int delta) {
-    if (store_.dialog().kind != Dialog::palette || palette_rows_.empty()) {
+  void PaletteController::move(int delta) {
+    if (!isOpen() || rows_.empty()) {
       return;
     }
 
-    const auto last = palette_rows_.size() - 1;
-    const auto selected = std::clamp(static_cast<qsizetype>(palette_selection_) + delta, qsizetype{0}, last);
-    if (std::cmp_not_equal(selected, palette_selection_)) {
-      palette_selection_ = static_cast<std::size_t>(selected);
-      emit paletteChanged();
+    const auto last = rows_.size() - 1;
+    const auto selected = std::clamp(static_cast<qsizetype>(selection_) + delta, qsizetype{0}, last);
+    if (std::cmp_not_equal(selected, selection_)) {
+      selection_ = static_cast<std::size_t>(selected);
+      emit changed();
     }
   }
 
-  void Application::setPaletteMode(int mode) {
+  void PaletteController::setMode(int mode) {
     const auto prefix = PaletteQuery::prefix(static_cast<char>(mode));
-    const auto current = palette_query_.toUtf8();
-    if (store_.dialog().kind != Dialog::palette || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
+    const auto current = query_.toUtf8();
+    if (!isOpen() || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
       return;
     }
 
-    auto replacement = palette_query_;
+    auto replacement = query_;
 
     if (!current.isEmpty() && PaletteQuery::prefix(current.front())) {
       replacement.remove(0, 1);
     }
 
     replacement.prepend(QChar{static_cast<char>(*prefix)});
-    searchPalette(replacement);
+    search(replacement);
   }
 
-  void Application::refreshPalette() {
-    if (store_.dialog().kind == Dialog::palette && updatePaletteResults()) {
-      emit paletteChanged();
+  void PaletteController::synchronize() {
+    if (isOpen() && updateResults()) {
+      emit changed();
     }
   }
 
-  void Application::collectPaletteNavigation(PaletteMatches& matches, std::string_view query) const {
-    for (const auto& workspace : session().workspaces()) {
+  void PaletteController::collectNavigation(Matches& matches, std::string_view query) const {
+    const auto& session = store_.session();
+
+    for (const auto& workspace : session.workspaces()) {
       NavigationLabel label;
 
       label.append(workspace.name);
@@ -233,9 +236,9 @@ namespace telar::gui::qt {
 
     std::array<const Tab<Memory>*, GuiSession::maximum_workspace_tabs> tabs{};
     std::size_t count = 0;
-    const auto* active = session().activeTab();
+    const auto* active = session.activeTab();
 
-    for (const auto& tab : session().tabs()) {
+    for (const auto& tab : session.tabs()) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace) && count < tabs.size()) {
         tabs[count++] = tab.get();
       }
@@ -248,11 +251,11 @@ namespace telar::gui::qt {
       NavigationLabel label;
 
       label.append(NavigationLabel::tab_prefix);
-      label.append(tab->label.empty() ? tabApplicationName(*tab, session().findPane(tab->focused_pane)) : std::string_view{tab->label});
+      label.append(tab->label.empty() ? tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label});
       matches.add(NavigationTarget{tab->location}, label.view(), query);
     }
 
-    for (const auto& agent : session().agents()) {
+    for (const auto& agent : session.agents()) {
       NavigationLabel label;
 
       label.append(agent.provider_name);
@@ -262,24 +265,23 @@ namespace telar::gui::qt {
     }
   }
 
-  bool Application::updatePaletteResults() {
-    const auto text = palette_query_.toUtf8();
+  bool PaletteController::updateResults() {
+    const auto text = query_.toUtf8();
     const auto query = PaletteQuery::parse(paletteBytes(text));
     if (query.mode == PaletteMode::machines) {
-      return updateMachinePickerResults(query.text);
+      return updateMachineResults(query.text);
     }
 
-    PaletteMatches matches;
+    Matches matches;
 
     if (query.mode == PaletteMode::navigate) {
-      collectPaletteNavigation(matches, query.text);
+      collectNavigation(matches, query.text);
     } else if (query.mode == PaletteMode::actions) {
-      palette_commands_ = commands();
-      for (const auto& entry : palette_commands_) {
+      for (const auto& entry : commands_) {
         const auto command = entry.toMap();
         const auto label = command.value(QStringLiteral("label")).toString().toUtf8();
 
-        matches.add(command.value(QStringLiteral("action")).value<Action>(), paletteBytes(label), query.text);
+        matches.add(PaletteAction{.value = command.value(QStringLiteral("action")).toInt()}, paletteBytes(label), query.text);
       }
     }
 
@@ -287,34 +289,66 @@ namespace telar::gui::qt {
 
     rows.reserve(static_cast<qsizetype>(matches.rows().size()));
     for (const auto& match : matches.rows()) {
-      rows.append(paletteRecord(match.target, !query.text.empty()));
+      rows.append(record(match.target, !query.text.empty()));
     }
 
-    if (rows == palette_rows_) {
+    if (rows == rows_) {
       return false;
     }
 
     for (std::size_t index = 0; index < matches.rows().size(); ++index) {
-      palette_targets_[index] = matches.rows()[index].target;
-      palette_kinds_[index] = static_cast<PaletteRowKind>(rows[static_cast<qsizetype>(index)].toMap().value(QStringLiteral("kind")).toInt());
+      targets_[index] = matches.rows()[index].target;
+      kinds_[index] = static_cast<PaletteRowKind>(rows[static_cast<qsizetype>(index)].toMap().value(QStringLiteral("kind")).toInt());
     }
 
-    palette_rows_ = std::move(rows);
-    palette_selection_ = palette_rows_.empty() ? 0 : std::min(palette_selection_, static_cast<std::size_t>(palette_rows_.size() - 1));
-    ++palette_revision_;
+    rows_ = std::move(rows);
+    selection_ = rows_.empty() ? 0 : std::min(selection_, static_cast<std::size_t>(rows_.size() - 1));
+    ++revision_;
+    ++rebuilds_;
 
     return true;
   }
 
-  QVariantMap Application::paletteRecord(const PaletteTarget& target, bool queried) const {
-    if (const auto* action = std::get_if<Action>(&target)) {
-      for (const auto& entry : palette_commands_) {
+  bool PaletteController::updateMachineResults(std::string_view query) {
+    const auto matches = MachinePicker::collect(store_.machines(), query);
+    QVariantList rows;
+
+    rows.reserve(static_cast<qsizetype>(matches.rows().size()) + 1);
+    for (const auto& match : matches.rows()) {
+      rows.append(machineRecord({.machine = match.target}));
+    }
+
+    rows.append(machineRecord({.machine = std::nullopt}));
+    if (rows == rows_) {
+      return false;
+    }
+
+    for (std::size_t index = 0; index < matches.rows().size(); ++index) {
+      targets_[index] = MachinePickerTarget{.machine = matches.rows()[index].target};
+      kinds_[index] = PaletteRowKind::machine;
+    }
+
+    const auto last = matches.rows().size();
+
+    targets_[last] = MachinePickerTarget{.machine = std::nullopt};
+    kinds_[last] = PaletteRowKind::machine;
+    rows_ = std::move(rows);
+    selection_ = std::min(selection_, static_cast<std::size_t>(rows_.size() - 1));
+    ++revision_;
+    ++rebuilds_;
+
+    return true;
+  }
+
+  QVariantMap PaletteController::record(const PaletteTarget& target, bool queried) const {
+    if (const auto* action = std::get_if<PaletteAction>(&target)) {
+      for (const auto& entry : commands_) {
         const auto command = entry.toMap();
-        if (command.value(QStringLiteral("action")).value<Action>() == *action) {
+        if (command.value(QStringLiteral("action")).toInt() == action->value) {
           return {
-              {QStringLiteral("key"), QStringLiteral("action:") + QString::number(static_cast<int>(*action))},
+              {QStringLiteral("key"), QStringLiteral("action:") + QString::number(action->value)},
               {QStringLiteral("kind"), static_cast<int>(PaletteRowKind::action)},
-              {QStringLiteral("icon"), QStringLiteral("\uf105")},
+              {QStringLiteral("icon"), QStringLiteral("")},
               {QStringLiteral("primary"), command.value(QStringLiteral("label"))},
               {QStringLiteral("secondary"), QString{}},
               {QStringLiteral("hint"), command.value(QStringLiteral("shortcut"))},
@@ -327,14 +361,15 @@ namespace telar::gui::qt {
       return {};
     }
 
+    const auto& session = store_.session();
     const auto& navigation = std::get<NavigationTarget>(target);
     NavigationLabel label;
 
     if (const auto* workspace = std::get_if<WorkspaceLocation>(&navigation)) {
-      const auto found = std::ranges::find_if(session().workspaces(), [&](const auto& row) {
+      const auto found = std::ranges::find_if(session.workspaces(), [&](const auto& row) {
         return sameWorkspace(row.location, *workspace);
       });
-      if (found != session().workspaces().end()) {
+      if (found != session.workspaces().end()) {
         label.append(found->name);
         label.appendDetail(found->branch);
       }
@@ -343,22 +378,22 @@ namespace telar::gui::qt {
     }
 
     if (const auto* tab = std::get_if<TabLocation>(&navigation)) {
-      const auto found = std::ranges::find_if(session().tabs(), [&](const auto& row) {
+      const auto found = std::ranges::find_if(session.tabs(), [&](const auto& row) {
         return sameTab(row->location, *tab);
       });
-      if (found != session().tabs().end()) {
+      if (found != session.tabs().end()) {
         label.append(NavigationLabel::tab_prefix);
-        label.append((*found)->label.empty() ? tabApplicationName(*(*found), session().findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
+        label.append((*found)->label.empty() ? tabApplicationName(*(*found), session.findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
       }
 
       return navigationRecord(navigation, label, PaletteRowKind::tab, queried);
     }
 
     const auto identity = std::get<AgentNavigationTarget>(navigation);
-    const auto found = std::ranges::find_if(session().agents(), [&](const auto& row) {
+    const auto found = std::ranges::find_if(session.agents(), [&](const auto& row) {
       return row.pane_id == identity.pane_id && row.pane_generation == identity.pane_generation;
     });
-    if (found == session().agents().end()) {
+    if (found == session.agents().end()) {
       return {};
     }
 
@@ -379,33 +414,86 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantMap Application::paletteState() const {
-    const auto text = palette_query_.toUtf8();
+  QVariantMap PaletteController::machineRecord(MachinePickerTarget target) const {
+    QVariantMap result{
+        {QStringLiteral("kind"), static_cast<int>(PaletteRowKind::machine)},
+        {QStringLiteral("detailBelow"), false},
+        {QStringLiteral("shortcut"), false},
+    };
+
+    if (!target.machine) {
+      result.insert(QStringLiteral("key"), QStringLiteral("machine:add"));
+      result.insert(QStringLiteral("icon"), QStringLiteral("+"));
+      result.insert(QStringLiteral("primary"), QStringLiteral("Add machine…"));
+      result.insert(QStringLiteral("secondary"), QStringLiteral("a label and its SSH destination"));
+      result.insert(QStringLiteral("hint"), QString{});
+
+      return result;
+    }
+
+    const auto token = *target.machine;
+    const auto& row = store_.machines().row(token.slot);
+    QString state;
+
+    if (!row.enabled) {
+      state = QStringLiteral("disabled · enter enables");
+    } else if (token.slot == store_.machines().active()) {
+      state = QStringLiteral("shown");
+    } else {
+      switch (row.phase) {
+      case MachinePhase::connected:
+        state = row.cpu_percent ? QString::number(*row.cpu_percent) + QStringLiteral("% cpu") : QStringLiteral("connected");
+        break;
+      case MachinePhase::connecting:
+        state = QStringLiteral("connecting");
+        break;
+      case MachinePhase::lost:
+        state = QStringLiteral("unreachable · enter retries");
+        break;
+      case MachinePhase::failed:
+        state = row.needs_setup ? QStringLiteral("no telar for this build · enter sets it up") : QStringLiteral("failed · enter retries");
+        break;
+      case MachinePhase::stopped:
+        state = QStringLiteral("disabled");
+        break;
+      }
+    }
+
+    result.insert(QStringLiteral("key"), QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation));
+    result.insert(QStringLiteral("icon"), row.attention ? QStringLiteral("●") : QStringLiteral("○"));
+    result.insert(QStringLiteral("primary"), toQString(row.label.view()));
+    result.insert(QStringLiteral("secondary"), row.destination.view().empty() ? QStringLiteral("this machine") : toQString(row.destination.view()));
+    result.insert(QStringLiteral("hint"), state);
+
+    return result;
+  }
+
+  QVariantMap PaletteController::state() const {
+    const auto text = query_.toUtf8();
     const auto query = PaletteQuery::parse(paletteBytes(text));
-    const auto selected = static_cast<qsizetype>(palette_selection_);
+    const auto selected = static_cast<qsizetype>(selection_);
 
     return {
         {QStringLiteral("mode"), static_cast<int>(query.mode)},
-        {QStringLiteral("editorText"), palette_query_},
+        {QStringLiteral("editorText"), query_},
         {QStringLiteral("query"), toQString(query.text)},
         {QStringLiteral("selection"), selected},
-        {QStringLiteral("selectedKey"), selected < palette_rows_.size() ? palette_rows_[selected].toMap().value(QStringLiteral("key")) : QVariant{}},
-        {QStringLiteral("revision"), QString::number(palette_revision_)},
-        {QStringLiteral("count"), palette_rows_.size()},
+        {QStringLiteral("selectedKey"), selected < rows_.size() ? rows_[selected].toMap().value(QStringLiteral("key")) : QVariant{}},
+        {QStringLiteral("revision"), QString::number(revision_)},
+        {QStringLiteral("count"), rows_.size()},
         {QStringLiteral("maximumQueryBytes"), static_cast<qulonglong>(PaletteQuery::maximum_bytes)},
-        {QStringLiteral("editorRestoreRevision"), palette_editor_restore_.revision == 0 ? QString{} : QString::number(palette_editor_restore_.revision)},
-        {QStringLiteral("editorAnchor"), palette_editor_restore_.anchor},
-        {QStringLiteral("editorCursor"), palette_editor_restore_.cursor},
+        {QStringLiteral("editorRestoreRevision"), editor_restore_.revision == 0 ? QString{} : QString::number(editor_restore_.revision)},
+        {QStringLiteral("editorAnchor"), editor_restore_.anchor},
+        {QStringLiteral("editorCursor"), editor_restore_.cursor},
     };
   }
 
-  QVariantMap Application::paletteGeometry() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
-    const Rect viewport{.width = static_cast<float>(display.viewport.width), .height = static_cast<float>(display.viewport.height)};
-    const auto text = palette_query_.toUtf8();
+  QVariantMap PaletteController::geometry() const {
+    const auto density = display_.density;
+    const Rect viewport{.width = static_cast<float>(display_.viewport.width), .height = static_cast<float>(display_.viewport.height)};
+    const auto text = query_.toUtf8();
     const auto query = PaletteQuery::parse(paletteBytes(text));
-    const auto geometry = PaletteGeometry::measure(viewport, display.chrome, {.pick_rows = std::nullopt, .suggest = query.mode == PaletteMode::suggest});
+    const auto geometry = PaletteGeometry::measure(viewport, display_.chrome, {.pick_rows = std::nullopt, .suggest = query.mode == PaletteMode::suggest});
     const auto local = [&](Rect area) {
       area.x -= geometry.bounds.x;
       area.y -= geometry.bounds.y;
@@ -413,19 +501,19 @@ namespace telar::gui::qt {
       return toQRectF(area, density);
     };
 
-    const auto kinds = std::span{palette_kinds_}.first(static_cast<std::size_t>(palette_rows_.size()));
-    const auto visible = PaletteRowWindow::measure(kinds, palette_selection_, geometry, display.chrome, query.text.empty());
+    const auto kinds = std::span{kinds_}.first(static_cast<std::size_t>(rows_.size()));
+    const auto visible = PaletteRowWindow::measure(kinds, selection_, geometry, display_.chrome, query.text.empty());
     QVariantList rows;
 
     rows.reserve(static_cast<qsizetype>(visible.count));
     for (std::size_t index = 0; index < visible.count; ++index) {
       const auto& placement = visible.rows[index];
-      auto record = palette_rows_[static_cast<qsizetype>(placement.index)].toMap();
+      auto record = rows_[static_cast<qsizetype>(placement.index)].toMap();
 
       record.insert(QStringLiteral("bounds"), local(placement.bounds));
       record.insert(QStringLiteral("groupBounds"), local(placement.group));
       record.insert(QStringLiteral("groupLabel"), groupName(kinds[placement.index]));
-      record.insert(QStringLiteral("selected"), placement.index == palette_selection_);
+      record.insert(QStringLiteral("selected"), placement.index == selection_);
       rows.append(QVariant{std::in_place_type<QVariantMap>, std::move(record)});
     }
 
@@ -440,88 +528,144 @@ namespace telar::gui::qt {
     };
   }
 
-  bool Application::navigatePaletteTarget(const NavigationTarget& target) {
-    if (const auto* workspace = std::get_if<WorkspaceLocation>(&target)) {
-      const auto found = std::ranges::find_if(session().workspaces(), [&](const auto& row) {
-        return sameWorkspace(row.location, *workspace);
-      });
-      if (found == session().workspaces().end()) {
-        return false;
-      }
-
-      session().selectWorkspace(*workspace);
-
-      return true;
-    }
-
-    if (const auto* tab = std::get_if<TabLocation>(&target)) {
-      const auto found = std::ranges::find_if(session().tabs(), [&](const auto& row) {
-        return sameTab(row->location, *tab);
-      });
-      if (found == session().tabs().end()) {
-        return false;
-      }
-
-      session().selectTab(*tab);
-
-      return true;
-    }
-
-    const auto agent = std::get<AgentNavigationTarget>(target);
-
-    return session().focusAgent(agent.pane_id, agent.pane_generation);
-  }
-
-  void Application::usePaletteResult(const QVariantMap& choice) {
+  std::optional<PaletteController::Choice> PaletteController::chosen(const QVariantMap& choice) const {
     const auto key = choice.value(QStringLiteral("key")).toString();
     const auto revision = choice.value(QStringLiteral("revision")).toString();
-    if (store_.dialog().kind != Dialog::palette || revision != QString::number(palette_revision_)) {
-      return;
+    if (!isOpen() || revision != QString::number(revision_)) {
+      return std::nullopt;
     }
 
-    const auto found = std::ranges::find_if(palette_rows_, [&](const auto& entry) {
+    const auto found = std::ranges::find_if(rows_, [&](const auto& entry) {
       return entry.toMap().value(QStringLiteral("key")).toString() == key;
     });
-    if (found == palette_rows_.end()) {
+    if (found == rows_.end()) {
+      return std::nullopt;
+    }
+
+    const auto index = static_cast<std::size_t>(found - rows_.begin());
+
+    return Choice{.target = targets_[index], .index = index};
+  }
+
+  std::optional<MachinePickerTarget> PaletteController::chosenMachine(const QVariantMap& choice) const {
+    if (!isOpen() || choice.value(QStringLiteral("revision")).toString() != QString::number(revision_)) {
+      return std::nullopt;
+    }
+
+    const auto key = choice.value(QStringLiteral("key")).toString();
+
+    for (qsizetype index = 0; index < rows_.size(); ++index) {
+      if (rows_[index].toMap().value(QStringLiteral("key")).toString() == key) {
+        if (const auto* target = std::get_if<MachinePickerTarget>(&targets_[static_cast<std::size_t>(index)])) {
+          return *target;
+        }
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  PaletteController::Parent PaletteController::parentFor(const QVariantMap& choice, std::size_t index) const {
+    const auto cursor = choice.value(QStringLiteral("cursor"), query_.size()).toInt();
+    const auto anchor = choice.value(QStringLiteral("anchor"), cursor).toInt();
+
+    return {.query = query_, .selection = index, .editor = {.anchor = std::clamp(anchor, 0, static_cast<int>(query_.size())), .cursor = std::clamp(cursor, 0, static_cast<int>(query_.size()))}};
+  }
+
+  void PaletteController::adoptParent(Parent parent) {
+    parent_ = std::move(parent);
+    emit changed();
+  }
+
+  bool PaletteController::hasParent() const noexcept {
+    return parent_.has_value();
+  }
+
+  void PaletteController::restoreParent() {
+    if (!parent_) {
       return;
     }
 
-    const auto index = static_cast<std::size_t>(found - palette_rows_.begin());
-    const auto target = palette_targets_[index];
+    auto parent = std::move(*parent_);
 
-    applyInteraction([&] {
-      if (const auto* machine = std::get_if<MachinePickerTarget>(&target)) {
-        chooseMachine(*machine, choice.value(QStringLiteral("alternate"), false).toBool());
+    open(PaletteMode::actions);
+    query_ = std::move(parent.query);
+    selection_ = parent.selection;
+    static_cast<void>(updateResults());
+    editor_restore_ = parent.editor;
+    editor_restore_.revision = ++revision_;
+    emit changed();
+  }
 
-        return;
+  QString PaletteController::suggestionRevision() const {
+    return QString::number(store_.dialog().generation) + QLatin1Char(':') + QString::number(store_.session().suggestion().revision());
+  }
+
+  QVariantMap PaletteController::suggestion() const {
+    const auto& suggestion = store_.session().suggestion();
+    const auto phase = suggestion.phase();
+    const auto encoded = query_.toUtf8();
+    const auto query = PaletteQuery::parse(paletteBytes(encoded));
+
+    return {
+        {QStringLiteral("heading"), toQString(SuggestionLabels::heading(phase))},
+        {QStringLiteral("message"), toQString(SuggestionLabels::message(phase, suggestion.status()))},
+        {QStringLiteral("button"), toQString(SuggestionLabels::button(phase))},
+        {QStringLiteral("footer"), toQString(SuggestionLabels::footer(phase))},
+        {QStringLiteral("text"), toQString(suggestion.text())},
+        {QStringLiteral("phase"), static_cast<int>(phase)},
+        {QStringLiteral("ready"), phase == SuggestionPhase::ready},
+        {QStringLiteral("failed"), phase == SuggestionPhase::failed},
+        {QStringLiteral("canSubmit"), SuggestionLabels::canSubmit(phase, query.text)},
+        {QStringLiteral("revision"), suggestionRevision()},
+        {QStringLiteral("hasParent"), parent_.has_value()},
+    };
+  }
+
+  QVariantMap PaletteController::suggestionGeometry() const {
+    const auto density = display_.density;
+    const Rect viewport{.width = static_cast<float>(display_.viewport.width), .height = static_cast<float>(display_.viewport.height)};
+    const auto palette = PaletteGeometry::measure(viewport, display_.chrome, {.pick_rows = std::nullopt, .suggest = true});
+    const auto geometry = SuggestionGeometry::measure(palette, display_.chrome, parent_.has_value());
+    const auto local = [&](Rect area) {
+      area.x -= palette.bounds.x;
+      area.y -= palette.bounds.y;
+
+      return toQRectF(area, density);
+    };
+
+    const auto& session = store_.session();
+    QVariantList lines;
+    QVariantMap grid;
+
+    if (session.suggestion().phase() == SuggestionPhase::ready) {
+      const auto& font = session.configuration().font;
+      const auto resolved = FormTextGrid::resolve(toQString(font.family.view()), toQString(font.style.view()), display_.chrome.body);
+
+      grid = resolved.record(density);
+      SuggestionPreview preview{session.suggestion().text(), geometry.preview, resolved.metrics};
+
+      while (const auto line = preview.next()) {
+        lines.append(QVariantMap{{QStringLiteral("text"), toQString(line->text)}, {QStringLiteral("bounds"), local(line->bounds)}, {QStringLiteral("shortened"), line->shortened}});
       }
+    }
 
-      if (const auto* navigation = std::get_if<NavigationTarget>(&target)) {
-        if (navigatePaletteTarget(*navigation)) {
-          showDialog(Dialog::none);
-        }
-
-        return;
-      }
-
-      const auto action = std::get<Action>(target);
-      if (action == Action::suggest_command) {
-        const auto cursor = choice.value(QStringLiteral("cursor"), palette_query_.size()).toInt();
-        const auto anchor = choice.value(QStringLiteral("anchor"), cursor).toInt();
-        PaletteParent parent{.query = palette_query_, .selection = index, .editor = {.anchor = std::clamp(anchor, 0, static_cast<int>(palette_query_.size())), .cursor = std::clamp(cursor, 0, static_cast<int>(palette_query_.size()))}};
-
-        showPalette(PaletteMode::suggest);
-        palette_parent_ = std::move(parent);
-        emit paletteChanged();
-
-        return;
-      }
-
-      showDialog(Dialog::none);
-      if (!executeNavigation(action, {}) && !executePane(action, 0)) {
-        executeWindowAction(action);
-      }
-    });
+    return {
+        {QStringLiteral("title"), local(geometry.title)},
+        {QStringLiteral("back"), local(geometry.back)},
+        {QStringLiteral("heading"), local(geometry.heading)},
+        {QStringLiteral("body"), local(geometry.body)},
+        {QStringLiteral("message"), local(geometry.message)},
+        {QStringLiteral("preview"), local(geometry.preview)},
+        {QStringLiteral("footer"), local(geometry.footer_caption)},
+        {QStringLiteral("button"), local(geometry.button)},
+        {QStringLiteral("separator"), local(geometry.separator)},
+        {QStringLiteral("previewRadius"), display_.chrome.px(SuggestionGeometry::preview_radius) / density},
+        {QStringLiteral("messageAlpha"), SuggestionGeometry::message_alpha},
+        {QStringLiteral("titleAlpha"), SuggestionGeometry::title_alpha},
+        {QStringLiteral("grid"), std::move(grid)},
+        {QStringLiteral("lines"), std::move(lines)},
+    };
   }
 
 }

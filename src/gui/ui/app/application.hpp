@@ -40,6 +40,7 @@ static_assert(true);
 #include "ui/machines/machine_profiles_source.hpp"
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
+#include "ui/palette/palette_controller.hpp"
 #include "ui/panes/panes_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
@@ -118,7 +119,6 @@ import telar.gui.prompt.routing;
 import telar.gui.prompt.line;
 import telar.gui.prompt.editor;
 import telar.gui.input.copy_mode;
-import telar.gui.model.replicas;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::test {
@@ -199,10 +199,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
     Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
     Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
-    Q_PROPERTY(QVariantMap paletteState READ paletteState NOTIFY paletteChanged)
-    Q_PROPERTY(QVariantMap paletteGeometry READ paletteGeometry NOTIFY paletteChanged)
-    Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
-    Q_PROPERTY(QVariantMap suggestionGeometry READ suggestionGeometry NOTIFY paletteChanged)
+    Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
     Q_PROPERTY(QVariantMap pathPickerState READ pathPickerState NOTIFY pathPickerChanged)
     Q_PROPERTY(QVariantMap workspaceFormState READ workspaceFormState NOTIFY workspaceFormChanged)
     Q_PROPERTY(QVariantMap pathPickerGeometry READ pathPickerGeometry NOTIFY pathPickerGeometryChanged)
@@ -333,7 +330,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void registerTabStrip(QQuickItem* strip);
     Q_INVOKABLE void selectCapturedTab();
     Q_INVOKABLE void setSidebarWidth(qreal width);
-    Q_INVOKABLE void searchPalette(const QString& text);
     Q_INVOKABLE void searchPaths(const QString& text);
     Q_INVOKABLE void reportPathQueryLimit(qulonglong requested_bytes);
     Q_INVOKABLE void movePathSelection(int delta);
@@ -347,9 +343,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void moveWorkspaceDirectory(int delta);
     Q_INVOKABLE QString acceptWorkspaceDirectory();
     Q_INVOKABLE QString chooseWorkspaceDirectory(int index);
-    Q_INVOKABLE void reportPaletteQueryLimit(qulonglong requested_bytes);
-    Q_INVOKABLE void movePalette(int delta);
-    Q_INVOKABLE void setPaletteMode(int mode);
     Q_INVOKABLE void usePaletteResult(const QVariantMap& choice);
     Q_INVOKABLE void submitSuggestion(const QString& revision);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
@@ -408,6 +401,10 @@ namespace telar::gui::qt {
       return &activity_;
     }
 
+    PaletteController* palette() noexcept {
+      return &palette_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -415,10 +412,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap colors() const;
     [[nodiscard]] QVariantMap font() const;
     [[nodiscard]] QVariantList commands() const;
-    [[nodiscard]] QVariantMap paletteState() const;
-    [[nodiscard]] QVariantMap suggestionState() const;
-    [[nodiscard]] QVariantMap suggestionGeometry() const;
-    [[nodiscard]] QVariantMap paletteGeometry() const;
     [[nodiscard]] qreal chromeRatio() const;
     [[nodiscard]] qreal chromeTextScale() const;
     [[nodiscard]] QVariantMap windowGeometry() const;
@@ -462,7 +455,6 @@ namespace telar::gui::qt {
 
   signals:
     void prefixChanged();
-    void paletteChanged();
     void pathPickerChanged();
     void workspaceFormChanged();
     void pathPickerGeometryChanged();
@@ -554,9 +546,6 @@ namespace telar::gui::qt {
     void applyExpression(const InputExpression& expression);
     void scrollBinding(ScrollDirection direction);
     [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
-    using PaletteTarget = std::variant<NavigationTarget, Action, MachinePickerTarget>;
-    static constexpr std::size_t palette_capacity = WorkspaceReplica<Memory>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<Memory>::capacity;
-    using PaletteMatches = RankedMatches<PaletteTarget, palette_capacity>;
 
     enum class MachineRetirement : std::uint8_t {
       disabled,
@@ -587,9 +576,6 @@ namespace telar::gui::qt {
     void showMachinePrompt(std::optional<MachineToken> renamed = {});
     void setupMachine(MachineToken target);
     void refreshMachinePicker();
-    bool updateMachinePickerResults(std::string_view query);
-    [[nodiscard]] QVariantMap machinePickerRecord(MachinePickerTarget target) const;
-    [[nodiscard]] std::optional<MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
     [[nodiscard]] std::size_t machinePromptLimit() const noexcept;
     void initializeMachineProfiles();
     void applyMachineProfiles();
@@ -617,11 +603,9 @@ namespace telar::gui::qt {
     void runtimeDisconnected(MachineClient& client);
     void cancelCurrentInteraction();
     void showPalette(PaletteMode mode);
-    void refreshPalette();
+    // Pushes the display the palette measures its dialog in.
+    void measurePalette();
     bool restorePaletteParent();
-    bool updatePaletteResults();
-    void collectPaletteNavigation(PaletteMatches& matches, std::string_view query) const;
-    [[nodiscard]] QVariantMap paletteRecord(const PaletteTarget& target, bool queried) const;
     bool navigatePaletteTarget(const NavigationTarget& target);
     void showPathPicker();
     void refreshPathPicker();
@@ -733,7 +717,6 @@ namespace telar::gui::qt {
     void publishCopyChange(std::uint64_t previous_pane);
     void leaveKeyboardCopyMode();
     void openCopyLink(std::uint64_t pane_id, CellPosition point);
-    [[nodiscard]] QString suggestionRevision() const;
     void present(const PresentedFrame& frame);
     void prepareFrame(PresentedFrame& frame);
     void prepareTerminalFrames(PresentedFrame& frame);
@@ -854,28 +837,7 @@ namespace telar::gui::qt {
     TabsController tabs_;
     PanesController panes_;
     ActivityController activity_;
-    QString palette_query_;
-
-    struct PaletteEditorPosition {
-      int anchor = 0;
-      int cursor = 0;
-      std::uint64_t revision = 0;
-    };
-
-    struct PaletteParent {
-      QString query;
-      std::size_t selection = 0;
-      PaletteEditorPosition editor;
-    };
-
-    std::optional<PaletteParent> palette_parent_;
-    PaletteEditorPosition palette_editor_restore_;
-    QVariantList palette_rows_;
-    QVariantList palette_commands_;
-    std::array<PaletteTarget, palette_capacity> palette_targets_{};
-    std::array<PaletteRowKind, palette_capacity> palette_kinds_{};
-    std::size_t palette_selection_ = 0;
-    std::uint64_t palette_revision_ = 0;
+    PaletteController palette_;
     QTimer refresh_timer_;
     QTimer notification_timer_;
     // The active session's notification revision the window last presented.

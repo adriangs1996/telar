@@ -120,7 +120,7 @@ namespace {
       panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_.get())}, {QStringLiteral("ratio"), client_->chromeRatio()}});
       panel_->setParentItem(window_->contentItem());
       connect(client_.get(), &Application::windowGeometryChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
-      connect(client_.get(), &Application::paletteChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
+      connect(client_->palette(), &PaletteController::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_.get(), &Application::dialogChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
       synchronizeSurfaces();
       QVERIFY(test::showComponentWindow(*window_, wait_ms));
@@ -134,7 +134,7 @@ namespace {
       QVERIFY2(client_->prefixPending(), qPrintable(client_->error()));
       QTest::keyClick(window_.get(), Qt::Key_Question);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::palette, wait_ms);
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
       query()->forceActiveFocus();
       QTRY_VERIFY_WITH_TIMEOUT(query()->hasActiveFocus(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
@@ -145,7 +145,7 @@ namespace {
       open(QStringLiteral("?fixture:delay"));
       submit();
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Generating a command…"));
-      client_->searchPalette(QStringLiteral("?fixture:alternate"));
+      client_->palette()->search(QStringLiteral("?fixture:alternate"));
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
@@ -176,12 +176,12 @@ namespace {
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine could not answer. Try again."));
-      client_->searchPalette(QStringLiteral("?fixture:timeout"));
+      client_->palette()->search(QStringLiteral("?fixture:timeout"));
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine timed out. Try again."));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
-      client_->searchPalette(QStringLiteral("?fixture:ready"));
+      client_->palette()->search(QStringLiteral("?fixture:ready"));
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
       auto const* button = panel_->findChild<QQuickItem*>(QStringLiteral("suggestionSubmit"));
@@ -191,7 +191,7 @@ namespace {
       const auto point = button->mapToScene({button->width() / 2, button->height() / 2}).toPoint();
 
       QTest::mousePress(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
-      client_->searchPalette(QStringLiteral("?edited before release"));
+      client_->palette()->search(QStringLiteral("?edited before release"));
       QTest::mouseRelease(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
@@ -203,7 +203,7 @@ namespace {
       open(QStringLiteral("?fixture:long"));
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
-      const auto lines = client_->suggestionGeometry().value(QStringLiteral("lines")).toList();
+      const auto lines = client_->palette()->suggestionGeometry().value(QStringLiteral("lines")).toList();
 
       QVERIFY(!lines.empty() && lines.back().toMap().value(QStringLiteral("shortened")).toBool());
       const auto command = state().value(QStringLiteral("text")).toString();
@@ -238,7 +238,7 @@ namespace {
 
       terminal_->setPosition(terminal.topLeft());
       terminal_->setSize(terminal.size());
-      const auto palette = client_->paletteGeometry().value(QStringLiteral("bounds")).toRectF();
+      const auto palette = client_->palette()->geometry().value(QStringLiteral("bounds")).toRectF();
 
       panel_->setPosition(palette.topLeft());
       panel_->setSize(palette.size());
@@ -249,7 +249,7 @@ namespace {
     }
 
     [[nodiscard]] QVariantMap state() const {
-      return client_->suggestionState();
+      return client_->palette()->suggestion();
     }
 
     [[nodiscard]] NativeFormField* query() const {
@@ -258,7 +258,7 @@ namespace {
 
     void open(const QString& task) {
       client_->execute(Application::Action::suggest_command);
-      client_->searchPalette(task);
+      client_->palette()->search(task);
       QVERIFY(query() != nullptr);
       query()->forceActiveFocus();
     }

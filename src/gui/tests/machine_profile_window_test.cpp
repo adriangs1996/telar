@@ -201,13 +201,13 @@ namespace {
     return *slot;
   }
 
-  QVariantMap machineChoice(const Application& application, const QString& label) {
-    const auto rows = application.paletteGeometry().value(QStringLiteral("rows")).toList();
+  QVariantMap machineChoice(Application& application, const QString& label) {
+    const auto rows = application.palette()->geometry().value(QStringLiteral("rows")).toList();
 
     for (const auto& value : rows) {
       const auto row = value.toMap();
       if (row.value(QStringLiteral("primary")).toString() == label) {
-        return {{QStringLiteral("key"), row.value(QStringLiteral("key"))}, {QStringLiteral("revision"), application.paletteState().value(QStringLiteral("revision"))}};
+        return {{QStringLiteral("key"), row.value(QStringLiteral("key"))}, {QStringLiteral("revision"), application.palette()->state().value(QStringLiteral("revision"))}};
       }
     }
 
@@ -381,7 +381,7 @@ namespace {
       application.execute(Application::Action::previous_machine);
       QCOMPARE(machines.active(), slot);
       application.execute(Application::Action::machine_picker);
-      QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 4);
+      QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 4);
       const auto offline = requireValue(machines.find(MachineId::fromRaw(2)), "Expected disabled picker row");
 
       application.usePaletteResult(machineChoice(application, QStringLiteral("Offline")));
@@ -412,8 +412,8 @@ namespace {
       auto& application = fixture.application;
 
       application.execute(Application::Action::machine_picker);
-      application.searchPalette(QStringLiteral(":unmatched"));
-      QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 1);
+      application.palette()->search(QStringLiteral(":unmatched"));
+      QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 1);
       application.usePaletteResult(machineChoice(application, QStringLiteral("Add machine…")));
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::machine);
       const auto first_revision = application.machinePromptState().value(QStringLiteral("revision")).toString();
@@ -445,7 +445,7 @@ namespace {
       application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), Application::MachineEditAction::remove);
       QTRY_VERIFY(!machines.row(slot).used);
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::palette);
-      QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 2);
+      QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 2);
     }
 
     Q_SLOT static void stalePickerAndInvalidEditsKeepTheirTargets() {
@@ -459,7 +459,7 @@ namespace {
       const auto stale = machineChoice(application, QStringLiteral("Build"));
 
       fixture.replace(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Renamed","destination":"window@fixture","enabled":false}]})");
-      QTRY_VERIFY(application.paletteState().value(QStringLiteral("revision")) != stale.value(QStringLiteral("revision")));
+      QTRY_VERIFY(application.palette()->state().value(QStringLiteral("revision")) != stale.value(QStringLiteral("revision")));
       application.editMachineResult(stale, Application::MachineEditAction::remove);
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
       QVERIFY(MachineProfileWindow::machines(application).row(slot).used);

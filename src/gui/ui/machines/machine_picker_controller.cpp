@@ -87,111 +87,9 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshMachinePicker() {
-    if (store_.dialog().kind == Dialog::palette && palette_query_.startsWith(QLatin1Char(':'))) {
-      refreshPalette();
+    if (palette_.query().startsWith(QLatin1Char(':'))) {
+      palette_.synchronize();
     }
-  }
-
-  bool Application::updateMachinePickerResults(std::string_view query) {
-    const auto matches = MachinePicker::collect(store_.machines(), query);
-    QVariantList rows;
-
-    rows.reserve(static_cast<qsizetype>(matches.rows().size()) + 1);
-    for (const auto& match : matches.rows()) {
-      rows.append(machinePickerRecord({.machine = match.target}));
-    }
-
-    rows.append(machinePickerRecord({.machine = std::nullopt}));
-    if (rows == palette_rows_) {
-      return false;
-    }
-
-    for (std::size_t index = 0; index < matches.rows().size(); ++index) {
-      palette_targets_[index] = MachinePickerTarget{.machine = matches.rows()[index].target};
-      palette_kinds_[index] = PaletteRowKind::machine;
-    }
-
-    const auto last = matches.rows().size();
-
-    palette_targets_[last] = MachinePickerTarget{.machine = std::nullopt};
-    palette_kinds_[last] = PaletteRowKind::machine;
-    palette_rows_ = std::move(rows);
-    palette_selection_ = std::min(palette_selection_, static_cast<std::size_t>(palette_rows_.size() - 1));
-    ++palette_revision_;
-
-    return true;
-  }
-
-  QVariantMap Application::machinePickerRecord(MachinePickerTarget target) const {
-    QVariantMap result{
-        {QStringLiteral("kind"), static_cast<int>(PaletteRowKind::machine)},
-        {QStringLiteral("detailBelow"), false},
-        {QStringLiteral("shortcut"), false},
-    };
-
-    if (!target.machine) {
-      result.insert(QStringLiteral("key"), QStringLiteral("machine:add"));
-      result.insert(QStringLiteral("icon"), QStringLiteral("+"));
-      result.insert(QStringLiteral("primary"), QStringLiteral("Add machine…"));
-      result.insert(QStringLiteral("secondary"), QStringLiteral("a label and its SSH destination"));
-      result.insert(QStringLiteral("hint"), QString{});
-
-      return result;
-    }
-
-    const auto token = *target.machine;
-    const auto& row = store_.machines().row(token.slot);
-    QString state;
-
-    if (!row.enabled) {
-      state = QStringLiteral("disabled · enter enables");
-    } else if (token.slot == store_.machines().active()) {
-      state = QStringLiteral("shown");
-    } else {
-      switch (row.phase) {
-      case MachinePhase::connected:
-        state = row.cpu_percent ? QString::number(*row.cpu_percent) + QStringLiteral("% cpu") : QStringLiteral("connected");
-        break;
-      case MachinePhase::connecting:
-        state = QStringLiteral("connecting");
-        break;
-      case MachinePhase::lost:
-        state = QStringLiteral("unreachable · enter retries");
-        break;
-      case MachinePhase::failed:
-        state = row.needs_setup ? QStringLiteral("no telar for this build · enter sets it up") : QStringLiteral("failed · enter retries");
-        break;
-      case MachinePhase::stopped:
-        state = QStringLiteral("disabled");
-        break;
-      }
-    }
-
-    result.insert(QStringLiteral("key"), QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation));
-    result.insert(QStringLiteral("icon"), row.attention ? QStringLiteral("●") : QStringLiteral("○"));
-    result.insert(QStringLiteral("primary"), toQString(row.label.view()));
-    result.insert(QStringLiteral("secondary"), row.destination.view().empty() ? QStringLiteral("this machine") : toQString(row.destination.view()));
-    result.insert(QStringLiteral("hint"), state);
-
-    return result;
-  }
-
-  std::optional<MachinePickerTarget> Application::chosenMachine(const QVariantMap& choice) const {
-    if (store_.dialog().kind != Dialog::palette || choice.value(QStringLiteral("revision")).toString() != QString::number(palette_revision_)) {
-      return std::nullopt;
-    }
-
-    const auto key = choice.value(QStringLiteral("key")).toString();
-
-    for (qsizetype index = 0; index < palette_rows_.size(); ++index) {
-      if (palette_rows_[index].toMap().value(QStringLiteral("key")).toString() == key) {
-        if (const auto* target = std::get_if<MachinePickerTarget>(&palette_targets_[static_cast<std::size_t>(index)])) {
-          return *target;
-        }
-      }
-    }
-
-    return std::nullopt;
   }
 
   void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
@@ -233,7 +131,7 @@ namespace telar::gui::qt {
   }
 
   void Application::editMachineResult(const QVariantMap& choice, MachineEditAction action) {
-    const auto target = chosenMachine(choice);
+    const auto target = palette_.chosenMachine(choice);
     if (!target || !target->machine || !store_.machines().contains(*target->machine) || target->machine->slot == Machines::local_slot) {
       return;
     }

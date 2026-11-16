@@ -180,6 +180,7 @@ namespace telar::gui::qt {
         tabs_(store_, element_slots_),
         panes_(store_, element_slots_),
         activity_(store_, element_slots_, memory),
+        palette_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
     initializeMachineProfiles();
@@ -188,18 +189,21 @@ namespace telar::gui::qt {
     initializeElements();
     initializePicks();
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
+    palette_.setCommands(commands());
 
     connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
     connect(this, &Application::copyModeChanged, this, &Application::statusModeChanged);
     // The prefix mode lists the keymap's hints.
     connect(this, &Application::configurationChanged, this, &Application::statusModeChanged);
-    connect(this, &Application::configurationChanged, this, &Application::paletteChanged);
+    connect(this, &Application::configurationChanged, this, [this] {
+      palette_.setCommands(commands());
+    });
     connect(&store_, &Store::interacted, this, &Application::interacted);
     connect(&store_, &Store::changed, this, &Application::synchronize);
     connect(&store_, &Store::interacting, this, [this] {
       pending_activity_.reset();
     });
-    connect(this, &Application::windowGeometryChanged, this, &Application::paletteChanged);
+    connect(this, &Application::windowGeometryChanged, this, &Application::measurePalette);
     connect(this, &Application::windowGeometryChanged, this, &Application::pathPickerGeometryChanged);
     connect(this, &Application::pathPickerChanged, this, &Application::pathPickerGeometryChanged);
     connect(&workspace_listing_, &QFutureWatcher<DirectoryCompletion>::finished, this, &Application::landWorkspaceDirectory);
@@ -288,6 +292,7 @@ namespace telar::gui::qt {
     });
 
     synchronizeWorkbenchGeometry();
+    measurePalette();
   }
 
   void Application::runtimeDisconnected(MachineClient& client) {
@@ -305,7 +310,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.dialog().kind == Dialog::palette) {
-      emit paletteChanged();
+      palette_.publish();
     }
 
     if (store_.dialog().kind == Dialog::paths || store_.dialog().kind == Dialog::peek) {
@@ -805,7 +810,7 @@ namespace telar::gui::qt {
       refreshPathPicker();
       break;
     case Change::suggestion:
-      emit paletteChanged();
+      palette_.publish();
       break;
     case Change::peek:
       refreshPeek();
@@ -957,7 +962,6 @@ namespace telar::gui::qt {
   void Application::refresh() {
     synchronize();
     refreshPeek();
-    refreshPalette();
     refreshElementBars();
     if (store_.dialog().kind == Dialog::paths) {
       emit pathPickerGeometryChanged();
@@ -1079,6 +1083,7 @@ namespace telar::gui::qt {
 
     refreshPanes();
     history_.synchronize();
+    palette_.synchronize();
   }
 
   void Application::interactionFailed(const std::exception& error) {
@@ -1313,8 +1318,7 @@ namespace telar::gui::qt {
     }
 
     if (kind != Dialog::palette) {
-      palette_parent_.reset();
-      palette_editor_restore_ = {};
+      palette_.forget();
     }
 
     if (store_.dialog().kind == Dialog::paths && kind != Dialog::paths) {

@@ -1149,7 +1149,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), original_label, runtime_wait_ms);
 
       client_->execute(Application::Action::palette);
-      client_->searchPalette(QStringLiteral(">New tab"));
+      client_->palette()->search(QStringLiteral(">New tab"));
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (search == nullptr) {
         QFAIL("Required command search fixture is missing");
@@ -2532,28 +2532,28 @@ return {api_version=2, client={keybindings={
       const auto original_panes = client_->panes()->rows()->rowCount();
 
       client_->execute(Application::Action::palette);
-      client_->searchPalette(QStringLiteral(">Split right"));
-      QCOMPARE(client_->paletteState().value(QStringLiteral("count")).toInt(), 1);
-      const auto state = client_->paletteState();
+      client_->palette()->search(QStringLiteral(">Split right"));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1);
+      const auto state = client_->palette()->state();
       const auto key = state.value(QStringLiteral("selectedKey")).toString();
       const auto revision = state.value(QStringLiteral("revision")).toString();
 
       QVERIFY(!key.isEmpty());
-      client_->searchPalette(QStringLiteral(">no matching command exists here"));
+      client_->palette()->search(QStringLiteral(">no matching command exists here"));
       client_->usePaletteResult({{QStringLiteral("key"), key}, {QStringLiteral("revision"), revision}});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
-      client_->searchPalette(QStringLiteral("@context query"));
-      client_->setPaletteMode('>');
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral(">context query"));
-      client_->setPaletteMode('@');
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("@context query"));
-      client_->searchPalette(QStringLiteral(">Split right"));
-      const auto previous = client_->paletteState();
+      client_->palette()->search(QStringLiteral("@context query"));
+      client_->palette()->setMode('>');
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral(">context query"));
+      client_->palette()->setMode('@');
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("@context query"));
+      client_->palette()->search(QStringLiteral(">Split right"));
+      const auto previous = client_->palette()->state();
 
       client_->execute(Application::Action::cancel);
       client_->execute(Application::Action::palette);
-      client_->searchPalette(QStringLiteral(">Split right"));
+      client_->palette()->search(QStringLiteral(">Split right"));
       client_->usePaletteResult({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
@@ -2568,9 +2568,9 @@ return {api_version=2, client={keybindings={
       });
 
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
-      QVERIFY(!client_->suggestionState().value(QStringLiteral("canSubmit")).toBool());
-      client_->searchPalette(QStringLiteral("?list files"));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
+      QVERIFY(!client_->palette()->suggestion().value(QStringLiteral("canSubmit")).toBool());
+      client_->palette()->search(QStringLiteral("?list files"));
       auto const* search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
@@ -2578,7 +2578,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(search->text(), QStringLiteral("?list files"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
       const auto suggestion = [this] {
-        return client_->suggestionState();
+        return client_->palette()->suggestion();
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(suggestion().value(QStringLiteral("failed")).toBool(), runtime_wait_ms);
@@ -2586,7 +2586,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(suggestion().value(QStringLiteral("message")).toString(), QStringLiteral("Configure runtime.engine to enable suggestions."));
       const auto obsolete = suggestion().value(QStringLiteral("revision")).toString();
 
-      client_->searchPalette(QStringLiteral("?new task"));
+      client_->palette()->search(QStringLiteral("?new task"));
       QCOMPARE(suggestion().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
       client_->submitSuggestion(obsolete);
       QCOMPARE(suggestion().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
@@ -2605,8 +2605,8 @@ return {api_version=2, client={keybindings={
 
       const auto query = QStringLiteral(">Suggest a command");
 
-      client_->searchPalette(query);
-      QCOMPARE(client_->paletteState().value(QStringLiteral("count")).toInt(), 1);
+      client_->palette()->search(query);
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1);
       const QPointer<NativeFormField> search{window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"))};
 
       QVERIFY(search != nullptr);
@@ -2616,18 +2616,18 @@ return {api_version=2, client={keybindings={
 
       search->select(anchor, cursor);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"), runtime_wait_ms);
-      QVERIFY(client_->suggestionState().value(QStringLiteral("hasParent")).toBool());
+      QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"), runtime_wait_ms);
+      QVERIFY(client_->palette()->suggestion().value(QStringLiteral("hasParent")).toBool());
       QVERIFY(search != nullptr);
       QCOMPARE(window_->findChild<NativeFormField*>(QStringLiteral("commandSearch")), search.data());
-      client_->searchPalette(QStringLiteral("?child task"));
+      client_->palette()->search(QStringLiteral("?child task"));
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("editorText")).toString(), query, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("editorText")).toString(), query, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(search->text(), query, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(search->cursorPosition(), cursor, runtime_wait_ms);
       QCOMPARE(search->selectionStart(), cursor);
       QCOMPARE(search->selectionEnd(), anchor);
-      QVERIFY(!client_->suggestionState().value(QStringLiteral("hasParent")).toBool());
+      QVERIFY(!client_->palette()->suggestion().value(QStringLiteral("hasParent")).toBool());
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -2651,8 +2651,8 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
       QTest::keyClick(window_, Qt::Key_G);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::palette, runtime_wait_ms);
-      client_->searchPalette(QStringLiteral("@PLT_DST"));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
+      client_->palette()->search(QStringLiteral("@PLT_DST"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
       const auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
@@ -3078,8 +3078,8 @@ return {api_version=2, client={keybindings={
 
       const auto run = [this](const QString& label) {
         client_->execute(Application::Action::palette);
-        client_->searchPalette(QLatin1Char('>') + label);
-        const auto state = client_->paletteState();
+        client_->palette()->search(QLatin1Char('>') + label);
+        const auto state = client_->palette()->state();
 
         client_->usePaletteResult({{QStringLiteral("key"), state.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), state.value(QStringLiteral("revision"))}});
       };
@@ -3138,8 +3138,8 @@ return {api_version=2, client={keybindings={
 
       client_->openMachines(path);
       client_->execute(Application::Action::machine_picker);
-      client_->searchPalette(QStringLiteral(":Offline"));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
+      client_->palette()->search(QStringLiteral(":Offline"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
       auto* search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
@@ -3160,13 +3160,13 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::Application::Dialog::none), runtime_wait_ms);
       client_->execute(Application::Action::machine_picker);
-      client_->searchPalette(QStringLiteral(":Renamed"));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
+      client_->palette()->search(QStringLiteral(":Renamed"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
       search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
       QVERIFY(search != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_D, Qt::KeyboardModifiers{Application::controlModifier()});
-      QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
     }
 
@@ -3225,7 +3225,7 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Escape);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
-      const auto maximum = client_->paletteState().value(QStringLiteral("maximumQueryBytes")).toInt();
+      const auto maximum = client_->palette()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
       const QString retained(maximum - 1, QLatin1Char('x'));
 
       QVERIFY(QMetaObject::invokeMethod(search, "selectAll"));
@@ -3234,7 +3234,7 @@ return {api_version=2, client={keybindings={
       commit.setCommitString(retained + QStringLiteral("🧵"));
       QCoreApplication::sendEvent(search, &commit);
       QCOMPARE(search->property("text").toString(), retained);
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), retained);
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), retained);
       const auto find_notice = [this] {
         return std::ranges::find_if(client_->notifications().items(), [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.field_bytes") != std::string_view::npos;
@@ -3511,6 +3511,7 @@ return {api_version=2, client={keybindings={
       const auto tabs = client_->tabs()->rebuilds();
       const auto panes = client_->panes()->rebuilds();
       const auto activity = client_->activity()->rebuilds();
+      const auto palette = client_->palette()->rebuilds();
       // The window refreshes, but no property of it moves, so QML reads none of them again.
       const QSignalSpy refreshes{client_.get(), &Application::refreshed};
       const QSignalSpy title{client_.get(), &Application::titleChanged};
@@ -3529,6 +3530,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->tabs()->rebuilds(), tabs);
       QCOMPARE(client_->panes()->rebuilds(), panes);
       QCOMPARE(client_->activity()->rebuilds(), activity);
+      QCOMPARE(client_->palette()->rebuilds(), palette);
       QCOMPARE(refreshes.count(), 3);
       QCOMPARE(title.count(), 0);
       QCOMPARE(diagnostic.count(), 0);
@@ -4983,7 +4985,7 @@ return {api_version=2, client={keybindings={
       const auto stale_query = QStringLiteral("> stale query before routed goto");
 
       client_->execute(Application::Action::palette);
-      client_->searchPalette(stale_query);
+      client_->palette()->search(stale_query);
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -4995,7 +4997,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
       QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), stale_query);
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), stale_query);
       client_->execute(Application::Action::cancel);
 
       peer.request(telar::ClientAction::client_open_goto, 2);
@@ -5003,10 +5005,10 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
       QCOMPARE(peer.result().text, QString{});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
-      QCOMPARE(client_->paletteState().value(QStringLiteral("mode")).toInt(), static_cast<int>(PaletteMode::navigate));
-      QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("@"));
-      QCOMPARE(client_->paletteState().value(QStringLiteral("query")).toString(), QString{});
-      QVERIFY(client_->paletteState().value(QStringLiteral("count")).toInt() > 0);
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("mode")).toInt(), static_cast<int>(PaletteMode::navigate));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("@"));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("query")).toString(), QString{});
+      QVERIFY(client_->palette()->state().value(QStringLiteral("count")).toInt() > 0);
       const auto* search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);

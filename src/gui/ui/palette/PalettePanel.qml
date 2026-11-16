@@ -11,8 +11,8 @@ Item {
     property real ratio: 1
     readonly property var colors: controller.colors
     readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.paletteState
-    readonly property var regions: controller.paletteGeometry
+    readonly property var state: controller.palette.state
+    readonly property var regions: controller.palette.geometry
     readonly property int navigateMode: "@".charCodeAt(0)
     readonly property int actionsMode: ">".charCodeAt(0)
     readonly property int machinesMode: ":".charCodeAt(0)
@@ -34,7 +34,7 @@ Item {
 
     function submit(alternate = false) {
         if (root.suggesting) {
-            root.controller.submitSuggestion(root.controller.suggestionState.revision);
+            root.controller.submitSuggestion(root.controller.palette.suggestion.revision);
         } else {
             choose(root.state.selectedKey ?? "", root.state.revision, alternate);
         }
@@ -66,8 +66,8 @@ Item {
     }
 
     Connections {
-        target: root.controller
-        function onPaletteChanged() {
+        target: root.controller.palette
+        function onChanged() {
             root.synchronizeEditor();
         }
     }
@@ -76,8 +76,8 @@ Item {
         anchors.fill: parent
         active: root.suggesting
         sourceComponent: SuggestionPanel {
-            state: root.controller.suggestionState
-            regions: root.controller.suggestionGeometry
+            state: root.controller.palette.suggestion
+            regions: root.controller.palette.suggestionGeometry
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
@@ -119,10 +119,10 @@ Item {
             maximumBytes: root.state.maximumQueryBytes
             placeholderPrefix: root.state.editorText.length > 0 && ["@", ">", ":", "?"].includes(root.state.editorText[0]) ? root.state.editorText[0] : ""
             placeholderText: root.state.mode === root.navigateMode ? "Search contexts, tabs and agents…" : root.state.mode === root.actionsMode ? "Search actions…" : root.state.mode === root.machinesMode ? "Search machines…" : "What would you like to do?"
-            onTextEdited: root.controller.searchPalette(text)
-            onLimitReached: requested => root.controller.reportPaletteQueryLimit(requested)
-            Keys.onDownPressed: root.controller.movePalette(1)
-            Keys.onUpPressed: root.controller.movePalette(-1)
+            onTextEdited: root.controller.palette.search(text)
+            onLimitReached: requested => root.controller.palette.reportQueryLimit(requested)
+            Keys.onDownPressed: root.controller.palette.move(1)
+            Keys.onUpPressed: root.controller.palette.move(-1)
             Keys.onReturnPressed: event => root.submit((event.modifiers & Qt.ShiftModifier) !== 0)
             Keys.onEnterPressed: event => root.submit((event.modifiers & Qt.ShiftModifier) !== 0)
             Keys.onPressed: event => {
@@ -208,7 +208,7 @@ Item {
                         pixelSize: root.typography.small
                         ratio: root.ratio
                         onActivated: {
-                            root.controller.setPaletteMode(modeTab.modelData.prefix.charCodeAt(0));
+                            root.controller.palette.setMode(modeTab.modelData.prefix.charCodeAt(0));
                             query.forceActiveFocus();
                         }
                     }
