@@ -58,7 +58,7 @@ namespace telar::gui::qt {
   ViewVersion Application::viewVersion() const noexcept {
     auto version = session().viewVersion();
 
-    version.machine = machine_view_revision_;
+    version.machine = store_.machineView();
 
     return version;
   }

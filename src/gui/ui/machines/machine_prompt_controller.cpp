@@ -48,7 +48,7 @@ import telar.gui.text.bounded_editor;
 namespace telar::gui::qt {
 
   void Application::showMachinePrompt(std::optional<MachineToken> renamed) {
-    if (renamed && (!machines_.contains(*renamed) || renamed->slot == Machines::local_slot)) {
+    if (renamed && (!store_.machines().contains(*renamed) || renamed->slot == Machines::local_slot)) {
       return;
     }
 
@@ -56,7 +56,7 @@ namespace telar::gui::qt {
     machine_prompt_->renamed = renamed;
     if (renamed) {
       machine_prompt_->mode = MachinePromptMode::rename;
-      machine_prompt_->text = toQString(machines_.row(renamed->slot).label.view());
+      machine_prompt_->text = toQString(store_.machines().row(renamed->slot).label.view());
     }
 
     showDialog(Dialog::machine);
@@ -116,8 +116,8 @@ namespace telar::gui::qt {
 
     if (machine_prompt_->mode == MachinePromptMode::rename) {
       const auto renamed = machine_prompt_->renamed;
-      if (renamed && machines_.contains(*renamed)) {
-        static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::rename, .label = machines_.row(renamed->slot).label.view(), .value = value}));
+      if (renamed && store_.machines().contains(*renamed)) {
+        static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::rename, .label = store_.machines().row(renamed->slot).label.view(), .value = value}));
       }
     } else {
       const auto label = machine_prompt_->label.toUtf8();

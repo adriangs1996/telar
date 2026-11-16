@@ -53,7 +53,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"PluginExecutionIdExhausted"};
     }
 
-    const auto& client = clientAt(machines_.active());
+    const auto& client = clientAt(store_.machines().active());
     const auto execution = next_plugin_execution_++;
 
     plugin_owner_ = PluginOwner{.source = client.key, .runtime_generation = client.runtime_generation, .execution = execution};
@@ -74,7 +74,7 @@ namespace telar::gui::qt {
 
     plugin_owner_.reset();
     const auto* client = findClient(owner.source);
-    if (client == nullptr || client->key.machine.slot != machines_.active() || client->runtime_generation != owner.runtime_generation || !client->connection.ready() || configuration_source_.configurationGeneration() != invocation.configuration_generation) {
+    if (client == nullptr || client->key.machine.slot != store_.machines().active() || client->runtime_generation != owner.runtime_generation || !client->connection.ready() || configuration_source_.configurationGeneration() != invocation.configuration_generation) {
       return;
     }
 

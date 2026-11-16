@@ -267,7 +267,7 @@ namespace telar::gui::qt {
     });
 
     connect(&configuration_source_, &ConfigurationSource::themeChanged, this, [this] {
-      for (auto& client : clients_) {
+      for (auto& client : store_.clients()) {
         if (client) {
           (*client)->session.setTheme(configuration_source_.configuration().theme);
         }
@@ -315,7 +315,7 @@ namespace telar::gui::qt {
     client.phase = client.connection.link().phase;
     client.needs_setup = client.connection.link().setup_repairs;
     summarizeMachine(client.key);
-    if (client.key.machine.slot != machines_.active()) {
+    if (client.key.machine.slot != store_.machines().active()) {
       return;
     }
 
@@ -355,7 +355,7 @@ namespace telar::gui::qt {
 
     frame_pacer_.reset();
     QObject::disconnect(screen_refresh_connection_);
-    for (auto& client : clients_) {
+    for (auto& client : store_.clients()) {
       if (client) {
         (*client)->connection.disconnect(this);
         (*client)->connection.close();
@@ -539,7 +539,7 @@ namespace telar::gui::qt {
 
   void Application::prepareFrame(PresentedFrame& frame) {
     frame = {};
-    frame.machine_view = machine_view_revision_;
+    frame.machine_view = store_.machineView();
     frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
     frame.tabs = tabDropSurface();
     if (window_ == nullptr) {
@@ -739,7 +739,7 @@ namespace telar::gui::qt {
   }
 
   void Application::present(const PresentedFrame& frame) {
-    if (frame.machine_view != machine_view_revision_) {
+    if (frame.machine_view != store_.machineView()) {
       return;
     }
 
@@ -782,7 +782,7 @@ namespace telar::gui::qt {
 
   void Application::consume(MachineClient& client, QByteArrayView payload) {
     try {
-      const bool active = client.key.machine.slot == machines_.active();
+      const bool active = client.key.machine.slot == store_.machines().active();
       const HostCommands handler{*this, active};
       const auto notification_revision = client.session.notificationRevision();
       const auto graphics_revision = client.session.graphicsRecoveryRevision();
@@ -797,7 +797,7 @@ namespace telar::gui::qt {
       static_cast<void>(client.session.settlePresentation());
       summarizeMachine(client.key);
       if (active && client.key.machine.slot != Machines::local_slot && (change == Change::stopped || change == Change::closed)) {
-        selectMachine(machines_.token(Machines::local_slot));
+        selectMachine(store_.machines().token(Machines::local_slot));
         return;
       }
 
@@ -821,7 +821,7 @@ namespace telar::gui::qt {
 
       presentChange(change);
     } catch (const std::exception& error) {
-      if (client.key.machine.slot == machines_.active()) {
+      if (client.key.machine.slot == store_.machines().active()) {
         fail(error);
         refreshHistory();
       } else {
@@ -1106,7 +1106,7 @@ namespace telar::gui::qt {
       const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
       const auto fullscreen_entries = fullscreenEntries(*tab);
       const auto motion_context = QStringLiteral("%1/%2/%3/%4/%5")
-                                      .arg(machine_view_revision_)
+                                      .arg(store_.machineView())
                                       .arg(static_cast<int>(tab->location.workspace.kind))
                                       .arg(tab->location.workspace.id)
                                       .arg(tab->location.tab_id)

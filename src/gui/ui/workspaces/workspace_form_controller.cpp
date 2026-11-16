@@ -63,7 +63,7 @@ namespace telar::gui::qt {
         {QStringLiteral("entries"), entries},
         {QStringLiteral("selection"), static_cast<int>(workspace_form_.selection)},
         {QStringLiteral("confirmCreate"), workspace_form_.confirm_create},
-        {QStringLiteral("completes"), machines_.active() == Machines::local_slot},
+        {QStringLiteral("completes"), store_.machines().active() == Machines::local_slot},
     };
   }
 
@@ -82,7 +82,7 @@ namespace telar::gui::qt {
     workspace_form_.confirm_create = false;
     workspace_form_.selection = 0;
     workspace_form_.wanted.clear();
-    if (machines_.active() == Machines::local_slot) {
+    if (store_.machines().active() == Machines::local_slot) {
       try {
         const auto typed = text.toUtf8();
         const auto expanded = expandWorkspaceDirectory(text).toUtf8();
@@ -182,7 +182,7 @@ namespace telar::gui::qt {
   bool Application::submitWorkspace(const QVariantMap& input) {
     const auto name = input.value(QStringLiteral("text")).toString();
     const auto typed = input.value(QStringLiteral("path")).toString();
-    const bool local = machines_.active() == Machines::local_slot;
+    const bool local = store_.machines().active() == Machines::local_slot;
     QString directory;
 
     if (!typed.trimmed().isEmpty()) {

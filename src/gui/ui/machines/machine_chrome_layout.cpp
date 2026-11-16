@@ -171,16 +171,16 @@ namespace telar::gui::qt {
 
   void MachineChromeLayout::observeSources() {
     std::array<std::optional<Source>, MachineLimits::window_slots> incoming;
-    const bool shown = controller_ != nullptr && controller_->machines_.count() > 1;
-    const bool attention = controller_ != nullptr && controller_->machines_.attentionElsewhere();
+    const bool shown = controller_ != nullptr && controller_->store_.machines().count() > 1;
+    const bool attention = controller_ != nullptr && controller_->store_.machines().attentionElsewhere();
 
     if (controller_ != nullptr) {
       for (std::size_t index = 0; index < incoming.size(); ++index) {
         const auto slot = static_cast<Machines::Slot>(index);
-        if (controller_->machines_.shown(slot)) {
-          const auto& row = controller_->machines_.row(slot);
+        if (controller_->store_.machines().shown(slot)) {
+          const auto& row = controller_->store_.machines().row(slot);
 
-          incoming[index] = Source{.token = controller_->machines_.token(slot), .label = row.label, .color = row.color, .active = slot == controller_->machines_.active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
+          incoming[index] = Source{.token = controller_->store_.machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store_.machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
           if (mode_ == Mode::list && !incoming[index]->active) {
             collectCards(slot, *incoming[index]);
           }
@@ -361,7 +361,7 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeLayout::collectCards(Machines::Slot slot, Source& source) const {
-    const auto& client = controller_->clients_[slot];
+    const auto& client = controller_->store_.clients()[slot];
     if (!client || (*client)->phase != MachinePhase::connected || !(*client)->session.ready()) {
       return;
     }

@@ -131,21 +131,21 @@ namespace telar::gui::qt {
     const auto profiles = machine_profiles_.profiles();
     const auto hostname = bytes(hostname_);
     const auto local_label = profiles.localLabel().value_or(hostname);
-    if (machines_.row(Machines::local_slot).label.view() != local_label) {
-      machines_.update(Machines::local_slot, {.label = local_label, .destination = {}});
+    if (store_.machines().row(Machines::local_slot).label.view() != local_label) {
+      store_.machines().update(Machines::local_slot, {.label = local_label, .destination = {}});
     }
 
     for (std::size_t index = 1; index < Machines::capacity; ++index) {
       const auto slot = static_cast<Machines::Slot>(index);
-      const auto& row = machines_.row(slot);
+      const auto& row = store_.machines().row(slot);
       const auto profile_exists = std::ranges::any_of(profiles.rows(), [&row](const MachineProfile& profile) {
         return profile.identity() == row.id;
       });
       if (row.used && row.id.value() != 0 && !profile_exists) {
         retireMachine(slot, MachineRetirement::removed);
-        clients_[slot].reset();
-        machines_.setLive(slot, false);
-        machines_.remove(slot);
+        store_.clients()[slot].reset();
+        store_.machines().setLive(slot, false);
+        store_.machines().remove(slot);
       }
     }
 
@@ -156,16 +156,16 @@ namespace telar::gui::qt {
 
   void Application::reconcileMachine(const MachineProfile& profile) {
     auto fields = profileFields(profile);
-    auto slot = machines_.find(profile.identity());
+    auto slot = store_.machines().find(profile.identity());
     if (!slot) {
-      const auto temporary = machines_.findDestination(profile.destination());
-      if (temporary && *temporary != Machines::local_slot && machines_.row(*temporary).id.value() == 0) {
+      const auto temporary = store_.machines().findDestination(profile.destination());
+      if (temporary && *temporary != Machines::local_slot && store_.machines().row(*temporary).id.value() == 0) {
         slot = temporary;
       }
     }
 
     if (!slot) {
-      const auto added = machines_.add(fields);
+      const auto added = store_.machines().add(fields);
 
       if (fields.enabled) {
         admitMachine(added);
@@ -175,16 +175,16 @@ namespace telar::gui::qt {
     }
 
     if (profile.enabled()) {
-      machines_.unpin(*slot);
+      store_.machines().unpin(*slot);
     }
 
-    const auto& previous = machines_.row(*slot);
+    const auto& previous = store_.machines().row(*slot);
 
     fields.enabled = profile.enabled() || previous.pinned;
     const auto was_enabled = previous.enabled;
     const auto moved = previous.destination.view() != fields.destination || previous.program.view() != fields.program.value_or("");
 
-    machines_.update(*slot, fields);
+    store_.machines().update(*slot, fields);
     if (!fields.enabled) {
       if (was_enabled) {
         retireMachine(*slot, MachineRetirement::disabled);
@@ -193,8 +193,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& client = clients_[*slot];
-    const auto admitted = client && (*client)->key.machine == machines_.token(*slot) && (*client)->admitted_program.view() == fields.program.value_or("");
+    const auto& client = store_.clients()[*slot];
+    const auto admitted = client && (*client)->key.machine == store_.machines().token(*slot) && (*client)->admitted_program.view() == fields.program.value_or("");
     if (!was_enabled || moved || !admitted) {
       admitMachine(*slot);
     }
@@ -204,31 +204,31 @@ namespace telar::gui::qt {
     {
       auto& created = createClient(slot);
 
-      created.identity = WindowIdentity::remote(clientAt(Machines::local_slot).identity, machines_.row(slot).destination.view());
+      created.identity = WindowIdentity::remote(clientAt(Machines::local_slot).identity, store_.machines().row(slot).destination.view());
       created.session.setRestoreLayout(restore_layout_);
     }
 
     synchronizeWorkbenchGeometry();
     auto& client = clientAt(slot);
-    const auto& row = machines_.row(slot);
+    const auto& row = store_.machines().row(slot);
 
     client.connection.openRemote({.destination = toQString(row.destination.view()), .program = toQString(row.program.view()), .local_endpoint = machine_control_endpoint_, .prepare_directory = prepare_machine_directory_});
     summarizeMachine(client.key);
   }
 
   void Application::retireMachine(Machines::Slot slot, MachineRetirement reason) {
-    if (slot == machines_.active()) {
-      const auto label = toQString(machines_.row(slot).label.view());
+    if (slot == store_.machines().active()) {
+      const auto label = toQString(store_.machines().row(slot).label.view());
 
-      selectMachine(machines_.token(Machines::local_slot));
+      selectMachine(store_.machines().token(Machines::local_slot));
       const auto state = reason == MachineRetirement::disabled ? QStringLiteral("disabled") : QStringLiteral("removed");
-      const auto local = toQString(machines_.row(Machines::local_slot).label.view());
+      const auto local = toQString(store_.machines().row(Machines::local_slot).label.view());
       const auto detail = (label + QStringLiteral(" was ") + state + QStringLiteral("; the window shows ") + local).toUtf8();
 
       publishNotification({.title = "Machine left the window", .message = bytes(detail), .link = {}});
     }
 
-    if (const auto& client = clients_[slot]) {
+    if (const auto& client = store_.clients()[slot]) {
       (*client)->connection.close();
       (*client)->session.disconnected();
       static_cast<void>((*client)->session.settlePresentation());

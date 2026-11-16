@@ -56,13 +56,13 @@ namespace telar::gui::qt {
     const auto request = *remote_launch_;
     const auto destination = request.destination.toUtf8();
     const std::string_view name{destination.constData(), static_cast<std::size_t>(destination.size())};
-    const auto slot = MachineOpening::admitted(machines_, name).value_or(Machines::local_slot);
-    const auto opened = slot == Machines::local_slot ? machines_.add({.label = name, .destination = name}) : slot;
-    if (!machines_.row(opened).pinned) {
-      machines_.pin(opened);
+    const auto slot = MachineOpening::admitted(store_.machines(), name).value_or(Machines::local_slot);
+    const auto opened = slot == Machines::local_slot ? store_.machines().add({.label = name, .destination = name}) : slot;
+    if (!store_.machines().row(opened).pinned) {
+      store_.machines().pin(opened);
     }
 
-    if (!clients_[opened] || clientAt(opened).phase == MachinePhase::stopped) {
+    if (!store_.clients()[opened] || clientAt(opened).phase == MachinePhase::stopped) {
       admitMachine(opened);
     }
 
@@ -75,7 +75,7 @@ namespace telar::gui::qt {
       client.named_launch = true;
     }
 
-    selectMachine(machines_.token(opened));
+    selectMachine(store_.machines().token(opened));
     remote_launch_.reset();
   }
 

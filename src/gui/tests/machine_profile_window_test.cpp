@@ -72,7 +72,7 @@ namespace telar::gui::test {
 
   struct MachineProfileWindow {
     static const Machines& machines(const qt::Application& application) {
-      return application.machines_;
+      return application.store_.machines();
     }
 
     static qt::MachineProfilesSource& profiles(qt::Application& application) {
@@ -80,19 +80,19 @@ namespace telar::gui::test {
     }
 
     static qt::MachineClient* client(qt::Application& application, Machines::Slot slot) {
-      const auto& client = application.clients_[slot];
+      const auto& client = application.store_.clients()[slot];
 
       return client ? client->get() : nullptr;
     }
 
     static void select(qt::Application& application, Machines::Slot slot) {
-      application.selectMachine(application.machines_.token(slot));
+      application.selectMachine(application.store_.machines().token(slot));
     }
 
     static Machines::Slot temporary(qt::Application& application) {
-      const auto slot = application.machines_.add({.label = "temporary", .destination = "window@fixture"});
+      const auto slot = application.store_.machines().add({.label = "temporary", .destination = "window@fixture"});
 
-      application.machines_.pin(slot);
+      application.store_.machines().pin(slot);
       application.admitMachine(slot);
 
       return slot;

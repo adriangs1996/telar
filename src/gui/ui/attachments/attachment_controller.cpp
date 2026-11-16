@@ -146,7 +146,7 @@ namespace telar::gui::qt {
       const auto bytes = message.toUtf8();
 
       clientAt(Machines::local_slot).session.publishNotification({.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
-      if (machines_.active() == Machines::local_slot) {
+      if (store_.machines().active() == Machines::local_slot) {
         refreshNotifications();
       }
     });
@@ -200,7 +200,7 @@ namespace telar::gui::qt {
       }
     }
 
-    attachments_.setPrompt(prompt, machines_.active() == Machines::local_slot);
+    attachments_.setPrompt(prompt, store_.machines().active() == Machines::local_slot);
     std::optional<PaneBottomReservation> reservation;
 
     if (prompt && attachments_.hasVisibleItems()) {

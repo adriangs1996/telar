@@ -57,12 +57,12 @@ namespace telar::gui::qt {
   }
 
   int Application::machineCount() const noexcept {
-    return static_cast<int>(machines_.count());
+    return static_cast<int>(store_.machines().count());
   }
 
   // The active machine is named in the top bar; the sidebar lists the others.
   SidebarMachines Application::sidebarMachines() const noexcept {
-    const auto count = machines_.count();
+    const auto count = store_.machines().count();
 
     return {.shown = count > 1, .rows = count > 1 && !machine_list_collapsed_ ? count - 1 : 0};
   }
@@ -75,8 +75,8 @@ namespace telar::gui::qt {
 
   QVariantMap Application::machineContext() const {
     return {
-        {QStringLiteral("label"), toQString(machines_.row(machines_.active()).label.view())},
-        {QStringLiteral("attention"), machines_.attentionElsewhere()},
+        {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
+        {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
     };
   }
 
@@ -191,7 +191,7 @@ namespace telar::gui::qt {
 
     const auto columns = std::clamp(std::floor(geometry.terminal.width / static_cast<float>(grid.cell_width_px)), 1.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max()));
 
-    for (auto& client : clients_) {
+    for (auto& client : store_.clients()) {
       if (client) {
         (*client)->session.setWorkbenchGeometry(workbench);
         (*client)->session.setHostColumns(static_cast<std::uint16_t>(columns));
@@ -205,7 +205,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& client = clients_[machines_.active()];
+    const auto& client = store_.clients()[store_.machines().active()];
     if (!sidebar_fit_pending_ || window_ == nullptr || !client || !(*client)->session.ready()) {
       return;
     }
@@ -263,14 +263,14 @@ namespace telar::gui::qt {
 
     float machines_width = 0;
 
-    for (std::size_t index = 0; index < clients_.size() && !machine_list_collapsed_; ++index) {
+    for (std::size_t index = 0; index < store_.clients().size() && !machine_list_collapsed_; ++index) {
       const auto slot = static_cast<Machines::Slot>(index);
-      if (slot == machines_.active() || !machines_.shown(slot)) {
+      if (slot == store_.machines().active() || !store_.machines().shown(slot)) {
         continue;
       }
 
-      const auto& client = clients_[index];
-      const auto& row = machines_.row(slot);
+      const auto& client = store_.clients()[index];
+      const auto& row = store_.machines().row(slot);
       std::size_t active = 0;
 
       if (client) {

@@ -93,7 +93,7 @@ namespace telar::gui::qt {
   }
 
   QString Application::notificationIdentity(NotificationId identity) const {
-    return QString::number(machine_view_revision_) + QLatin1Char(':') + QString::number(identity.value);
+    return QString::number(store_.machineView()) + QLatin1Char(':') + QString::number(identity.value);
   }
 
   std::optional<NotificationId> Application::resolveNotification(const QString& identity) const {
@@ -107,7 +107,7 @@ namespace telar::gui::qt {
     const auto view = identity.first(separator).toULongLong(&valid_view);
     const auto raw_id = identity.sliced(separator + 1).toULongLong(&valid_id);
 
-    return valid_view && valid_id && view == machine_view_revision_ ? std::optional{NotificationId{raw_id}} : std::nullopt;
+    return valid_view && valid_id && view == store_.machineView() ? std::optional{NotificationId{raw_id}} : std::nullopt;
   }
 
   bool Application::notificationTargetVisible(NotificationTarget target) const noexcept {
@@ -194,7 +194,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const NotificationFocus target{.window = window_generation_, .machine = machine_view_revision_, .pane = pane->id, .generation = pane->generation, .attachment = pane->attachment_generation};
+    const NotificationFocus target{.window = window_generation_, .machine = store_.machineView(), .pane = pane->id, .generation = pane->generation, .attachment = pane->attachment_generation};
 
     // A delivered control can disappear before its disabled record is painted.
     // Complete its retirement before restoring the captured pane's keyboard owner.
@@ -208,7 +208,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      const NotificationFocus present{.window = window_generation_, .machine = machine_view_revision_, .pane = current->id, .generation = current->generation, .attachment = current->attachment_generation};
+      const NotificationFocus present{.window = window_generation_, .machine = store_.machineView(), .pane = current->id, .generation = current->generation, .attachment = current->attachment_generation};
       if (present == target) {
         restoreTerminalFocus();
       }

@@ -39,7 +39,7 @@ namespace telar::gui::qt {
     if (auto* strip = qobject_cast<TabStripLayout*>(tab_strip_.data())) {
       const auto* active = session().activeTab();
 
-      strip->setContext(machine_view_revision_, active == nullptr ? std::nullopt : std::optional{active->location.workspace});
+      strip->setContext(store_.machineView(), active == nullptr ? std::nullopt : std::optional{active->location.workspace});
     }
   }
 
@@ -52,7 +52,7 @@ namespace telar::gui::qt {
     const auto id = captured->tab_id;
     const auto* active = session().activeTab();
     const auto& surface = presented_tabs_;
-    if (active == nullptr || dialog_ != Dialog::none || surface.machine_view != machine_view_revision_ || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
+    if (active == nullptr || dialog_ != Dialog::none || surface.machine_view != store_.machineView() || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
       return;
     }
 
@@ -74,7 +74,7 @@ namespace telar::gui::qt {
     }
 
     result.workspace = active->location.workspace;
-    result.machine_view = machine_view_revision_;
+    result.machine_view = store_.machineView();
     result.scale = window_->effectiveDevicePixelRatio();
     result.viewport = {.width = static_cast<float>(window_->width() * result.scale), .height = static_cast<float>(window_->height() * result.scale)};
     result.threshold = TabDrag::logical_threshold * chromeRatio() * result.scale;
@@ -94,7 +94,7 @@ namespace telar::gui::qt {
     }
 
     const auto& surface = application_.presented_tabs_;
-    const auto* target = position && application_.dialog_ == Application::Dialog::none && surface.machine_view == application_.machine_view_revision_ ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
+    const auto* target = position && application_.dialog_ == Application::Dialog::none && surface.machine_view == application_.store_.machineView() ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
 
     strip->setPointerHover(target == nullptr ? std::nullopt : std::optional{target->id});
   }
@@ -184,7 +184,7 @@ namespace telar::gui::qt {
     }
 
     const auto& surface = application_.presented_tabs_;
-    if (surface.machine_view != application_.machine_view_revision_ || surface.scale <= 0 || surface.threshold <= 0 || !std::isfinite(event.position().x()) || !std::isfinite(event.position().y())) {
+    if (surface.machine_view != application_.store_.machineView() || surface.scale <= 0 || surface.threshold <= 0 || !std::isfinite(event.position().x()) || !std::isfinite(event.position().y())) {
       return false;
     }
 
@@ -215,7 +215,7 @@ namespace telar::gui::qt {
     }
 
     presentTabs(application_.presented_tabs_);
-    if (application_.dialog_ != Application::Dialog::none || tab_capture_surface_.machine_view != application_.machine_view_revision_) {
+    if (application_.dialog_ != Application::Dialog::none || tab_capture_surface_.machine_view != application_.store_.machineView()) {
       cancelTabDrag();
     }
 

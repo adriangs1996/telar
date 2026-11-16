@@ -48,13 +48,13 @@ import telar.gui.presentation.activity_order;
 namespace telar::gui::qt {
 
   void Application::initializeMachines() {
-    const auto slot = machines_.add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
+    const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
 
     static_cast<void>(createClient(slot));
   }
 
   void Application::configureClients() {
-    for (auto& client : clients_) {
+    for (auto& client : store_.clients()) {
       if (!client) {
         continue;
       }
@@ -67,7 +67,7 @@ namespace telar::gui::qt {
   }
 
   void Application::setClientsDisplayRefresh(std::uint16_t fps) {
-    for (auto& client : clients_) {
+    for (auto& client : store_.clients()) {
       if (!client) {
         continue;
       }
@@ -80,30 +80,30 @@ namespace telar::gui::qt {
   }
 
   MachineClient& Application::createClient(Machines::Slot slot) {
-    const MachineClientKey key{.machine = machines_.token(slot), .generation = next_client_generation_++};
+    const auto key = store_.admission(slot);
     auto owned = makeOwned<MachineClient>(memory_, memory_, *this, key);
     auto* client = owned.get();
 
-    client->admitted_program.assign(machines_.row(slot).program.view());
+    client->admitted_program.assign(store_.machines().row(slot).program.view());
     client->identity = QRandomGenerator::system()->generate64() | std::uint64_t{1};
     client->session.configure(configuration_source_.configuration());
-    client->session.setPresented(slot == machines_.active());
-    const bool replacing_active = clients_[slot] && slot == machines_.active();
+    client->session.setPresented(slot == store_.machines().active());
+    const bool replacing_active = store_.clients()[slot] && slot == store_.machines().active();
     if (replacing_active) {
       releaseMachineInput();
       showDialog(Dialog::none);
-      ++machine_view_revision_;
+      store_.advanceMachineView();
       forgetMachineView();
     }
 
-    if (auto& previous = clients_[slot]) {
+    if (auto& previous = store_.clients()[slot]) {
       (*previous)->connection.disconnect(this);
       (*previous)->connection.close();
       previous.reset();
     }
 
-    clients_[slot] = std::move(owned);
-    machines_.setLive(slot, true);
+    store_.clients()[slot] = std::move(owned);
+    store_.machines().setLive(slot, true);
     connectMachine(slot);
     if (replacing_active) {
       emit machineChanged();
@@ -113,38 +113,27 @@ namespace telar::gui::qt {
   }
 
   MachineClient& Application::clientAt(Machines::Slot slot) const noexcept {
-    const auto& client = clients_[slot];
-    if (!client) {
-      std::terminate();
-    }
-
-    return **client;
+    return store_.client(slot);
   }
 
   MachineClient* Application::findClient(MachineClientKey key) const noexcept {
-    if (!machines_.contains(key.machine)) {
-      return nullptr;
-    }
-
-    const auto& client = clients_[key.machine.slot];
-
-    return client && (*client)->key == key ? client->get() : nullptr;
+    return store_.find(key);
   }
 
   GuiSession& Application::session() noexcept {
-    return clientAt(machines_.active()).session;
+    return store_.session();
   }
 
   const GuiSession& Application::session() const noexcept {
-    return clientAt(machines_.active()).session;
+    return store_.session();
   }
 
   RuntimeConnection& Application::connection() noexcept {
-    return clientAt(machines_.active()).connection;
+    return store_.connection();
   }
 
   const RuntimeConnection& Application::connection() const noexcept {
-    return clientAt(machines_.active()).connection;
+    return store_.connection();
   }
 
   void Application::connectMachine(Machines::Slot slot) {
@@ -165,7 +154,7 @@ namespace telar::gui::qt {
         source->needs_setup = false;
         source->session.connected(source->identity, RuntimeProtocol::readsRows(source->connection.schema()));
         summarizeMachine(source->key);
-        if (key.machine.slot == machines_.active()) {
+        if (key.machine.slot == store_.machines().active()) {
           emit stateChanged();
           emit hostMetricsChanged();
         }
@@ -189,7 +178,7 @@ namespace telar::gui::qt {
         &RuntimeConnection::paneWillDetach,
         this,
         [this, key](qulonglong pane_id) {
-          if (findClient(key) != nullptr && key.machine.slot == machines_.active()) {
+          if (findClient(key) != nullptr && key.machine.slot == store_.machines().active()) {
             emit inputReleasing(pane_id);
           }
         },
@@ -207,21 +196,21 @@ namespace telar::gui::qt {
         source->phase = source->connection.link().phase;
         source->needs_setup = source->connection.link().setup_repairs;
         summarizeMachine(source->key);
-        if (key.machine.slot == machines_.active()) {
+        if (key.machine.slot == store_.machines().active()) {
           emit runtimeLinkChanged();
         }
       }
     });
 
     connect(&client.connection, &RuntimeConnection::errorChanged, this, [this, key] {
-      if (findClient(key) != nullptr && key.machine.slot == machines_.active()) {
+      if (findClient(key) != nullptr && key.machine.slot == store_.machines().active()) {
         emit stateChanged();
       }
     });
   }
 
   void Application::selectMachine(MachineToken target) {
-    if (!machines_.contains(target) || target.slot == machines_.active() || !machines_.shown(target.slot) || !machines_.row(target.slot).live || !clients_[target.slot]) {
+    if (!store_.machines().contains(target) || target.slot == store_.machines().active() || !store_.machines().shown(target.slot) || !store_.machines().row(target.slot).live || !store_.clients()[target.slot]) {
       return;
     }
 
@@ -231,9 +220,9 @@ namespace telar::gui::qt {
     showDialog(Dialog::none);
     session().invalidateSuggestion();
     session().setPresented(false);
-    ++machine_view_revision_;
+    store_.advanceMachineView();
     forgetMachineView();
-    if (!machines_.select(target.slot)) {
+    if (!store_.machines().select(target.slot)) {
       return;
     }
 
@@ -288,7 +277,7 @@ namespace telar::gui::qt {
     }
 
     const auto& client = *found;
-    const auto& summary = machines_.row(slot);
+    const auto& summary = store_.machines().row(slot);
     const auto& sample = client.session.hostMetrics().sample();
     MachineObservation observation{
         .phase = client.phase,
@@ -312,7 +301,7 @@ namespace telar::gui::qt {
       });
     }
 
-    if (machines_.summarize(slot, observation)) {
+    if (store_.machines().summarize(slot, observation)) {
       emit machinesChanged();
     }
   }

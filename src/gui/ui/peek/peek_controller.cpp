@@ -90,7 +90,7 @@ namespace telar::gui::qt {
     const auto* agent = std::get_if<MachineActivityTarget::Agent>(&peek_origin_->target.owner);
     const auto& target = session().peek().target();
 
-    return agent != nullptr && peek_origin_->target.source.machine.slot == machines_.active() && target && *target == PeekTarget{.agent = agent->key, .session = agent->session};
+    return agent != nullptr && peek_origin_->target.source.machine.slot == store_.machines().active() && target && *target == PeekTarget{.agent = agent->key, .session = agent->session};
   }
 
   void Application::refreshPeek() {

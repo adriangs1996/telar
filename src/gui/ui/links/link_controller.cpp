@@ -50,7 +50,7 @@ namespace telar::gui::qt {
 
         session().openFile(FilePath::parse(target), executable, environment, source_id);
       } else {
-        link_opener_.request(target, clientAt(machines_.active()).key);
+        link_opener_.request(target, clientAt(store_.machines().active()).key);
       }
     } catch (const std::exception& error) {
       emit notification(QStringLiteral("Could not open link: ") + toQString(error.what()));
@@ -97,7 +97,7 @@ namespace telar::gui::qt {
     }
 
     client->session.publishNotification({.title = "Telar", .message = message, .link = {}});
-    if (source.machine.slot == machines_.active()) {
+    if (source.machine.slot == store_.machines().active()) {
       refreshNotifications();
     }
   }

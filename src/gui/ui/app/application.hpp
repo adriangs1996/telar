@@ -38,6 +38,7 @@ static_assert(true);
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
 #include "ui/plugins/plugin_worker.hpp"
+#include "ui/store/store.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
 #include "window_frame_pacer.hpp"
 #include <QByteArray>
@@ -889,11 +890,7 @@ namespace telar::gui::qt {
     }
 
     ApplicationAllocator& memory_;
-    Machines machines_;
-    // Each client reports back to this application.
-    tbc::view<std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity>, tbc::lt::self> clients_;
-    std::uint64_t next_client_generation_ = 1;
-    std::uint64_t machine_view_revision_ = 0;
+    Store store_;
 
     struct ActivitySourceVersion {
       MachineClientKey source;

@@ -73,13 +73,13 @@ namespace telar::gui::qt {
   }
 
   void Application::moveMachine(int delta) {
-    auto slot = static_cast<int>(machines_.active());
+    auto slot = static_cast<int>(store_.machines().active());
 
     for (std::size_t step = 0; step < Machines::capacity; ++step) {
       slot = (slot + delta + static_cast<int>(Machines::capacity)) % static_cast<int>(Machines::capacity);
       const auto candidate = static_cast<Machines::Slot>(slot);
-      if (machines_.shown(candidate) && machines_.row(candidate).live && clients_[candidate]) {
-        selectMachine(machines_.token(candidate));
+      if (store_.machines().shown(candidate) && store_.machines().row(candidate).live && store_.clients()[candidate]) {
+        selectMachine(store_.machines().token(candidate));
 
         return;
       }
@@ -93,7 +93,7 @@ namespace telar::gui::qt {
   }
 
   bool Application::updateMachinePickerResults(std::string_view query) {
-    const auto matches = MachinePicker::collect(machines_, query);
+    const auto matches = MachinePicker::collect(store_.machines(), query);
     QVariantList rows;
 
     rows.reserve(static_cast<qsizetype>(matches.rows().size()) + 1);
@@ -140,12 +140,12 @@ namespace telar::gui::qt {
     }
 
     const auto token = *target.machine;
-    const auto& row = machines_.row(token.slot);
+    const auto& row = store_.machines().row(token.slot);
     QString state;
 
     if (!row.enabled) {
       state = QStringLiteral("disabled · enter enables");
-    } else if (token.slot == machines_.active()) {
+    } else if (token.slot == store_.machines().active()) {
       state = QStringLiteral("shown");
     } else {
       switch (row.phase) {
@@ -195,7 +195,7 @@ namespace telar::gui::qt {
   }
 
   void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
-    const auto intent = MachinePicker::choose(machines_, target.machine, alternate);
+    const auto intent = MachinePicker::choose(store_.machines(), target.machine, alternate);
     if (intent == MachinePicker::Intent::add) {
       showMachinePrompt();
 
@@ -213,13 +213,13 @@ namespace telar::gui::qt {
       setupMachine(token);
     } else if (intent == MachinePicker::Intent::enable || intent == MachinePicker::Intent::disable) {
       if (intent == MachinePicker::Intent::disable) {
-        machines_.unpin(token.slot);
+        store_.machines().unpin(token.slot);
       }
 
-      const auto label = machines_.row(token.slot).label.view();
+      const auto label = store_.machines().row(token.slot).label.view();
 
       static_cast<void>(machine_profiles_.edit({.kind = intent == MachinePicker::Intent::enable ? MachineEditKind::enable : MachineEditKind::disable, .label = label, .value = {}}));
-    } else if (clients_[token.slot]) {
+    } else if (store_.clients()[token.slot]) {
       auto& client = clientAt(token.slot);
       if (!client.connection.ready()) {
         client.phase = MachinePhase::connecting;
@@ -234,7 +234,7 @@ namespace telar::gui::qt {
 
   void Application::editMachineResult(const QVariantMap& choice, MachineEditAction action) {
     const auto target = chosenMachine(choice);
-    if (!target || !target->machine || !machines_.contains(*target->machine) || target->machine->slot == Machines::local_slot) {
+    if (!target || !target->machine || !store_.machines().contains(*target->machine) || target->machine->slot == Machines::local_slot) {
       return;
     }
 
@@ -244,7 +244,7 @@ namespace telar::gui::qt {
       if (action == MachineEditAction::rename) {
         showMachinePrompt(token);
       } else {
-        const auto label = machines_.row(token.slot).label.view();
+        const auto label = store_.machines().row(token.slot).label.view();
 
         static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::remove, .label = label, .value = {}}));
       }
@@ -252,11 +252,11 @@ namespace telar::gui::qt {
   }
 
   void Application::setupMachine(MachineToken target) {
-    if (!machines_.contains(target) || target.slot == Machines::local_slot) {
+    if (!store_.machines().contains(target) || target.slot == Machines::local_slot) {
       return;
     }
 
-    const auto& row = machines_.row(target.slot);
+    const auto& row = store_.machines().row(target.slot);
     const auto program = platform::runtime_endpoint::program();
     constexpr std::string_view title_prefix = "Set up ";
     BoundedText<title_prefix.size() + MachineLimits::label_bytes> title;
@@ -268,7 +268,7 @@ namespace telar::gui::qt {
     runtime::config::CommandTabView command{.count = arguments.size(), .configured_label = title.view()};
 
     std::ranges::copy(arguments, command.arguments.begin());
-    selectMachine(machines_.token(Machines::local_slot));
+    selectMachine(store_.machines().token(Machines::local_slot));
     static_cast<void>(session().createCommandTab(command));
   }
 

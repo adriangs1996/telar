@@ -185,7 +185,7 @@ namespace telar::gui::test {
     }
 
     static qt::MachineClientKey add(qt::Application& application, const QString& endpoint) {
-      const auto slot = application.machines_.add({.label = "Build", .destination = "dev@build"});
+      const auto slot = application.store_.machines().add({.label = "Build", .destination = "dev@build"});
       auto& client = application.createClient(slot);
 
       application.synchronizeWorkbenchGeometry();
@@ -223,24 +223,24 @@ namespace telar::gui::test {
     }
 
     static void rename(qt::Application& application, Machines::Slot slot, std::string_view label) {
-      const auto& row = application.machines_.row(slot);
+      const auto& row = application.store_.machines().row(slot);
 
-      application.machines_.update(slot, {.label = label, .destination = row.destination.view()});
+      application.store_.machines().update(slot, {.label = label, .destination = row.destination.view()});
       emit application.machinesChanged();
     }
 
     static void recolor(qt::Application& application, Machines::Slot slot, std::string_view color) {
-      const auto& row = application.machines_.row(slot);
+      const auto& row = application.store_.machines().row(slot);
 
-      application.machines_.update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
+      application.store_.machines().update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
       emit application.machinesChanged();
     }
 
     static qt::MachineClientKey reuse(qt::Application& application, Machines::Slot slot) {
       application.retireMachine(slot, qt::Application::MachineRetirement::removed);
-      application.clients_[slot].reset();
-      application.machines_.remove(slot);
-      const auto added = application.machines_.add({.label = "Replacement", .destination = "dev@replacement"}, slot);
+      application.store_.clients()[slot].reset();
+      application.store_.machines().remove(slot);
+      const auto added = application.store_.machines().add({.label = "Replacement", .destination = "dev@replacement"}, slot);
       const auto key = application.createClient(added).key;
 
       emit application.machinesChanged();

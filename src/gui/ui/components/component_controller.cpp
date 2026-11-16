@@ -320,7 +320,7 @@ namespace telar::gui::qt {
   bool Application::componentCommandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const {
     const auto* client = findClient(source);
 
-    return generation == configuration_source_.configurationGeneration() && client != nullptr && client->key.machine.slot == machines_.active() && client->runtime_generation == runtime;
+    return generation == configuration_source_.configurationGeneration() && client != nullptr && client->key.machine.slot == store_.machines().active() && client->runtime_generation == runtime;
   }
 
   void Application::renderComponentSource(std::size_t index, bool panel) {
@@ -340,7 +340,7 @@ namespace telar::gui::qt {
       if (source.kind == components::SourceKind::dynamic) {
         applyComponentRender(index, panel, componentContext());
       } else if (source.kind == components::SourceKind::command) {
-        const auto& client = clientAt(machines_.active());
+        const auto& client = clientAt(store_.machines().active());
         const ComponentCommandOwner owner{
             .index = index,
             .panel = panel,

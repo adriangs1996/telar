@@ -46,7 +46,7 @@ namespace telar::gui::qt {
   }
 
   PickOwner Application::pickOwner() const {
-    const auto& client = clientAt(machines_.active());
+    const auto& client = clientAt(store_.machines().active());
 
     return {.source = client.key, .runtime = client.runtime_generation, .generation = configuration_source_.configurationGeneration()};
   }
