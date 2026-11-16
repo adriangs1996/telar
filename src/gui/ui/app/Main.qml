@@ -65,7 +65,7 @@ Window {
         expanded: !root.geometry.rail
         colors: telar.colors
         typography: sidebar.regions.typography
-        regions: telar.sidebarGeometry
+        regions: telar.sidebar.regions
         agentModel: telar.activity.rows
         preferredWidth: telar.sidebarWidth
         textScale: telar.chromeTextScale

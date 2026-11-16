@@ -152,6 +152,7 @@ namespace telar::gui::qt {
         tabs_(store_, element_slots_),
         panes_(store_, element_slots_),
         activity_(store_, element_slots_, memory),
+        sidebar_(store_, workspaces_, activity_),
         palette_(store_, PaletteAction{.value = static_cast<int>(Action::suggest_command)}),
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
@@ -244,10 +245,7 @@ namespace telar::gui::qt {
       requestTerminalFrame();
     });
     connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::rowsInserted, this, &ApplicationController::sidebarGeometryChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::rowsRemoved, this, &ApplicationController::sidebarGeometryChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::rowsMoved, this, &ApplicationController::sidebarGeometryChanged);
-    connect(workspaces_.rows(), &QAbstractItemModel::dataChanged, this, &ApplicationController::sidebarGeometryChanged);
+    connect(&sidebar_, &SidebarController::widthRequested, this, &ApplicationController::setSidebarWidth);
 
     const platform::login_shell::Command shell;
     const auto directory = QDir::currentPath().toUtf8();
@@ -270,11 +268,11 @@ namespace telar::gui::qt {
       key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
       configureClients();
       synchronizeFontMetrics();
-      // A reload sets the sidebar back to its configured width, so an automatic one fits again.
-      sidebar_fit_pending_ = true;
-      fitSidebarWhenReady();
-
       publishConfiguration();
+
+      // A reload sets the sidebar back to its configured width, so an automatic one fits again,
+      // in the display the published configuration measures.
+      sidebar_.refit();
       history_.setMetrics(historyMetrics());
       configureWindow();
       refresh();
@@ -297,13 +295,8 @@ namespace telar::gui::qt {
     });
 
     connect(&refresh_timer_, &QTimer::timeout, this, &ApplicationController::refresh);
+    connect(this, &ApplicationController::machinesChanged, &sidebar_, &SidebarController::publishMachines);
     connect(this, &ApplicationController::machinesChanged, this, [this] {
-      const auto machines = sidebarMachines();
-      if (machines != sidebar_machines_) {
-        sidebar_machines_ = machines;
-        emit sidebarGeometryChanged();
-      }
-
       if (!refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
@@ -421,6 +414,7 @@ namespace telar::gui::qt {
     frame_pacer_.emplace(window);
     history_.setWindow(&window);
     activity_.setWindow(&window);
+    sidebar_.setWindow(window);
     tabs_.setWindow(window);
     pointer_dispatcher_.presentHistoryActions({});
     key_bindings_.setWindow(window);
@@ -1098,7 +1092,7 @@ namespace telar::gui::qt {
     activity_.synchronize();
     if (activity_.rebuilds() != activity_rebuilds) {
       // The sidebar's natural width follows the widest card.
-      fitSidebarWhenReady();
+      sidebar_.fitWhenReady();
     }
 
     refreshPanes();

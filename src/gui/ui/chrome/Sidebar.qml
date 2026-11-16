@@ -35,7 +35,7 @@ NativeRoundedRectangle {
     AbstractButton {
         id: machinesHeader
         objectName: "sidebarMachinesHeader"
-        readonly property bool collapsed: root.controller?.machineListCollapsed ?? false
+        readonly property bool collapsed: root.controller?.sidebar?.machineListCollapsed ?? false
         readonly property bool attention: root.controller?.machineContext?.attention ?? false
         x: root.regions.machinesHeader?.x ?? 0
         y: root.regions.machinesHeader?.y ?? 0
@@ -50,7 +50,7 @@ NativeRoundedRectangle {
         Accessible.role: Accessible.Button
         Accessible.name: "Machines, " + machineCount.text + (collapsed ? ", collapsed" : ", expanded") + (collapsed && attention ? ", one needs attention" : "")
         onClicked: {
-            if (root.controller) root.controller.toggleMachineList();
+            if (root.controller) root.controller.sidebar.toggleMachineList();
         }
 
         HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -105,7 +105,7 @@ NativeRoundedRectangle {
             x: parent.width - width - root.headerInset
             width: implicitWidth
             height: parent.height
-            text: Math.max(0, (root.controller?.machineCount ?? 1) - 1)
+            text: Math.max(0, (root.controller?.sidebar?.machineCount ?? 1) - 1)
             color: root.colors.subtext0
             pixelSize: root.typography.small
             elide: Text.ElideNone
@@ -223,7 +223,7 @@ NativeRoundedRectangle {
             }
         }
         onDoubleClicked: {
-            if (root.controller) root.controller.fitSidebar();
+            if (root.controller) root.controller.sidebar.fit();
         }
     }
 }

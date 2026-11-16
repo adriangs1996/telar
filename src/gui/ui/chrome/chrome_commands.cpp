@@ -5,16 +5,12 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "sidebar_projection.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/typography_projection.hpp"
-#include "ui/fonts/window_font_catalog.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/machines/machine_client.hpp"
 #include <QQuickWindow>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
@@ -22,29 +18,21 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 #include <variant>
 
 import telar.gui.layout.geometry;
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.presentation.activity_order;
-import telar.gui.presentation.suggestion_geometry;
 import telar.gui.core.metrics;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection_geometry;
-import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
@@ -62,27 +50,7 @@ namespace telar::gui::qt {
     link_status_.setDisplay(display);
     attachments_.setDisplay(display);
     notifications_.setDisplay(display, terminal_grid_);
-  }
-
-  bool ApplicationController::machineListCollapsed() const noexcept {
-    return machine_list_collapsed_;
-  }
-
-  int ApplicationController::machineCount() const noexcept {
-    return static_cast<int>(store_.machines().count());
-  }
-
-  // The active machine is named in the top bar; the sidebar lists the others.
-  SidebarMachines ApplicationController::sidebarMachines() const noexcept {
-    const auto count = store_.machines().count();
-
-    return {.shown = count > 1, .rows = count > 1 && !machine_list_collapsed_ ? count - 1 : 0};
-  }
-
-  void ApplicationController::toggleMachineList() {
-    machine_list_collapsed_ = !machine_list_collapsed_;
-    sidebar_machines_ = sidebarMachines();
-    emit sidebarGeometryChanged();
+    sidebar_.setDisplay(display);
   }
 
   QVariantMap ApplicationController::machineContext() const {
@@ -129,23 +97,6 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantMap ApplicationController::sidebarGeometry() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
-    const auto& geometry = display.geometry;
-
-    const Rect area{
-        .width = geometry.sidebar.width,
-        .height = geometry.sidebar.height,
-    };
-
-    auto result = sidebarRegionsRecord(area, display, static_cast<std::size_t>(workspaces_.count()), sidebarMachines());
-
-    result.insert(QStringLiteral("typography"), chromeTypographyRecord(display, configuration().font));
-
-    return result;
-  }
-
   HistoryModalMetrics ApplicationController::historyMetrics() const {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto display = displayMetrics(density);
@@ -182,102 +133,6 @@ namespace telar::gui::qt {
         (*client)->session.setHostColumns(static_cast<std::uint16_t>(columns));
       }
     }
-  }
-
-  void ApplicationController::fitSidebarWhenReady() {
-    if (!configuration().sidebar_width_auto) {
-      sidebar_fit_pending_ = false;
-      return;
-    }
-
-    const auto& client = store_.clients()[store_.machines().active()];
-    if (!sidebar_fit_pending_ || window_ == nullptr || !client || !(*client)->session.ready()) {
-      return;
-    }
-
-    sidebar_fit_pending_ = false;
-    fitSidebar();
-  }
-
-  void ApplicationController::fitSidebar() {
-    if (window_ != nullptr) {
-      setSidebarWidth(sidebarNaturalWidth());
-    }
-  }
-
-  // The logical width that shows the longest card and machine row whole, at most a third of
-  // the window. The cards are measured from their records, so the ones scrolled out count too.
-  float ApplicationController::sidebarNaturalWidth() const {
-    const auto density = window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
-    const auto& chrome = display.chrome;
-    auto& catalog = WindowFontCatalog::forWindow(*window_);
-    const auto fonts = ResidentFonts::shared(catalog.collection());
-    const auto measure = [&](const QString& text, auto pixels, bool emphasized) {
-      if (text.isEmpty()) {
-        return 0.0F;
-      }
-
-      const auto utf8 = text.toUtf8();
-      const std::string_view view{utf8.constData(), static_cast<std::size_t>(utf8.size())};
-      const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
-
-      catalog.request(view, role);
-
-      return static_cast<float>(fonts::TextLayout<ConcurrentMemory>::measure(*fonts, view, {.pixel_height = pixels, .preferred = role}));
-    };
-
-    const auto card = AgentCardGeometry::derive(chrome);
-    const auto padding = 2 * card.px(AgentCardGeometry::horizontal_padding);
-    const auto gap = card.px(AgentCardGeometry::gap);
-    const auto mark = card.px(AgentCardGeometry::mark_column);
-    const auto status_side = std::round(static_cast<float>(chrome.title) * AgentCardGeometry::icon_size_ratio);
-    // A status whose clock is drawn later reserves a short age.
-    const auto age = QStringLiteral("59m");
-    float card_width = 0;
-
-    const auto& cards = activity_.records();
-
-    for (int row = 0; row < cards.rowCount(); ++row) {
-      const auto record = cards.data(cards.index(row), ListModel::record_role).toMap();
-      const auto ports = record.value(QStringLiteral("ports")).toString();
-      const auto status = record.value(QStringLiteral("status")).toString();
-      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + padding);
-      const auto detail = padding + mark + gap + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false) + gap + status_side + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
-
-      card_width = std::max({card_width, title, detail});
-    }
-
-    float machines_width = 0;
-
-    for (std::size_t index = 0; index < store_.clients().size() && !machine_list_collapsed_; ++index) {
-      const auto slot = static_cast<Machines::Slot>(index);
-      if (slot == store_.machines().active() || !store_.machines().shown(slot)) {
-        continue;
-      }
-
-      const auto& client = store_.clients()[index];
-      const auto& row = store_.machines().row(slot);
-      std::size_t active = 0;
-
-      if (client) {
-        active = static_cast<std::size_t>(std::ranges::count_if((*client)->session.agents(), [](const auto& agent) {
-          return AgentOrder::stacked(agent.status);
-        }));
-      }
-
-      std::array<char, MachineChromeGeometry::list_status_capacity> storage{};
-      const auto status = MachineChromeGeometry::listStatus(row.live, active, storage);
-      const auto advance = std::max(measure(toQString(row.label.view()), chrome.body, true), measure(toQString(status), chrome.small, false));
-
-      machines_width = std::max(machines_width, MachineChromeGeometry::listNaturalWidth(chrome, advance, active != 0));
-    }
-
-    const auto scale = display.viewport.scale;
-    const auto content = std::max(card.listWidth(card_width), machines_width) + (2 * std::round(chrome.textPx(SidebarGeometry::margin)));
-    const auto third = static_cast<float>(display.viewport.width) / scale / 3;
-
-    return std::clamp(std::ceil(content / scale), Configuration::minimum_sidebar_width, std::max(Configuration::minimum_sidebar_width, third));
   }
 
 }

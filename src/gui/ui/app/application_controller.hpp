@@ -21,6 +21,7 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "ui/activity/activity_controller.hpp"
 #include "ui/attachments/attachments_controller.hpp"
+#include "ui/chrome/sidebar_controller.hpp"
 #include "ui/chrome/tabs_controller.hpp"
 #include "ui/components/components_controller.hpp"
 #include "ui/components/element_slots.hpp"
@@ -160,6 +161,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
     Q_PROPERTY(telar::gui::qt::ActivityController* activity READ activity CONSTANT)
+    Q_PROPERTY(telar::gui::qt::SidebarController* sidebar READ sidebar CONSTANT)
     Q_PROPERTY(telar::gui::qt::HistoryController* history READ history CONSTANT)
     Q_PROPERTY(int controlModifier READ controlModifier CONSTANT)
     Q_PROPERTY(int superModifier READ superModifier CONSTANT)
@@ -168,10 +170,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal chromeRatio READ chromeRatio NOTIFY configurationChanged)
     Q_PROPERTY(qreal chromeTextScale READ chromeTextScale NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap windowGeometry READ windowGeometry NOTIFY windowGeometryChanged)
-    Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
-    Q_PROPERTY(bool machineListCollapsed READ machineListCollapsed NOTIFY sidebarGeometryChanged)
-    Q_PROPERTY(int machineCount READ machineCount NOTIFY machinesChanged)
     Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY sidebarGeometryChanged)
@@ -256,8 +255,6 @@ namespace telar::gui::qt {
 
     Q_INVOKABLE void editMachineResult(const QVariantMap& choice, MachineEditAction action);
     Q_INVOKABLE void peekActivity(const QString& identity);
-    Q_INVOKABLE void toggleMachineList();
-    Q_INVOKABLE void fitSidebar();
 
     using Dialog = Store::Dialog;
 
@@ -327,6 +324,10 @@ namespace telar::gui::qt {
       return &activity_;
     }
 
+    SidebarController* sidebar() noexcept {
+      return &sidebar_;
+    }
+
     PaletteController* palette() noexcept {
       return &palette_;
     }
@@ -381,11 +382,7 @@ namespace telar::gui::qt {
     [[nodiscard]] qreal chromeRatio() const;
     [[nodiscard]] qreal chromeTextScale() const;
     [[nodiscard]] QVariantMap windowGeometry() const;
-    [[nodiscard]] QVariantMap sidebarGeometry() const;
     [[nodiscard]] QVariantMap machineContext() const;
-    [[nodiscard]] bool machineListCollapsed() const noexcept;
-    [[nodiscard]] int machineCount() const noexcept;
-    [[nodiscard]] SidebarMachines sidebarMachines() const noexcept;
     [[nodiscard]] bool sidebarVisible() const;
     [[nodiscard]] qreal sidebarWidth() const;
     [[nodiscard]] bool workspaceListCollapsed() const;
@@ -571,8 +568,6 @@ namespace telar::gui::qt {
     // Notifies the title, diagnostic and copy mode properties whose value moved since they were
     // last published.
     void publishStatus();
-    void fitSidebarWhenReady();
-    [[nodiscard]] float sidebarNaturalWidth() const;
     void selectActivity(const QString& identity, bool peek = false);
     void settleActivity();
     void openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
@@ -653,9 +648,6 @@ namespace telar::gui::qt {
     QTimer machine_retry_;
     QString machine_control_endpoint_;
     bool prepare_machine_directory_ = false;
-    SidebarMachines sidebar_machines_{};
-    bool machine_list_collapsed_ = false;
-    bool sidebar_fit_pending_ = true;
     bool restore_layout_ = true;
     std::optional<WindowFramePacer<>> frame_pacer_;
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
@@ -665,6 +657,7 @@ namespace telar::gui::qt {
     TabsController tabs_;
     PanesController panes_;
     ActivityController activity_;
+    SidebarController sidebar_;
     PaletteController palette_;
     PathPickerController paths_;
     MachinePromptController machine_prompt_;

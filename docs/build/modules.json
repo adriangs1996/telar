@@ -709,6 +709,7 @@
     "src/gui/ui/notifications/sound_player.hpp": "Qt moc/QML integration",
     "src/gui/ui/workspaces/workspaces_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/chrome/tabs_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/chrome/sidebar_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/panes/panes_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/activity/activity_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/palette/palette_controller.hpp": "Qt moc/QML integration",

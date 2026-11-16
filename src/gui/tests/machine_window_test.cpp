@@ -1270,7 +1270,7 @@ namespace {
 
       window.resize(size);
       application.setWindow(window);
-      const auto geometry = application.sidebarGeometry().value(QStringLiteral("cards")).toMap();
+      const auto geometry = application.sidebar()->regions().value(QStringLiteral("cards")).toMap();
       QVariantMap record{{QStringLiteral("key"), QStringLiteral("owned")}, {QStringLiteral("enabled"), true}, {QStringLiteral("selected"), false}, {QStringLiteral("depth"), 0}, {QStringLiteral("compact"), false}, {QStringLiteral("command"), false}};
       constexpr qreal card_width = 200;
       constexpr qreal card_height = 80;

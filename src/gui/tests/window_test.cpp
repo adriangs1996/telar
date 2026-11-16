@@ -188,7 +188,7 @@ namespace {
         QCOMPARE(geometry.value(QStringLiteral("navigation")).toRectF().height(), sample.navigation / sample.density);
         QCOMPARE(geometry.value(QStringLiteral("status")).toRectF().height(), sample.footer / sample.density);
         QCOMPARE(typography.value(QStringLiteral("smallRow")).toReal(), sample.small_row / sample.density);
-        const auto sidebar = client.sidebarGeometry();
+        const auto sidebar = client.sidebar()->regions();
 
         QCOMPARE(sidebar.value(QStringLiteral("typography")).toMap().value(QStringLiteral("smallRow")).toReal(), sample.small_row / sample.density);
       }
