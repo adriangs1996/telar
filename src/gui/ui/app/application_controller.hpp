@@ -540,6 +540,8 @@ namespace telar::gui::qt {
     void synchronizeWindowSize();
     bool updateViewport(qreal width, qreal height);
     void observeFrames(QQuickWindow& window);
+    // Names the animated item types, in the order every window samples them.
+    static void composeWindowAnimation() noexcept;
     void refresh();
     // Drops the theme and font QML reads and notifies a new configuration.
     void publishConfiguration();

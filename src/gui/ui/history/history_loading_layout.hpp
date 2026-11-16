@@ -20,6 +20,9 @@ namespace telar::gui::qt {
 
   class WindowAnimationClock;
 
+  template <typename Item>
+  class WindowAnimationItems;
+
   class HistoryLoadingLayout : public QQuickItem {
     Q_OBJECT
     QML_ELEMENT
@@ -54,7 +57,7 @@ namespace telar::gui::qt {
     void geometryChange(const QRectF& current, const QRectF& previous) override;
 
   private:
-    friend class WindowAnimationClock;
+    friend class WindowAnimationItems<HistoryLoadingLayout>;
     [[nodiscard]] bool eligible() const noexcept;
     [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);

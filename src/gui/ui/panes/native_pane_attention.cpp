@@ -147,15 +147,34 @@ namespace telar::gui::qt {
     return deadline_ns_;
   }
 
-  void NativePaneAttention::sample(std::uint64_t now_ns) {
+  void NativePaneAttention::sample(std::uint64_t now_ns, AttentionFades& fades) {
     if (!clock_ || !key_ || !eligible()) {
       return;
     }
 
-    const auto frame = clock_->sampleAttention(*key_, now_ns);
+    const auto frame = fades.sample(*key_, now_ns, clock_->frameInterval());
 
     deadline_ns_ = frame.deadline_ns;
     setAlpha(frame.alpha);
+  }
+
+  bool NativePaneAttention::WindowAnimationSet::sample(std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive) {
+    if (!window_exposed) {
+      return true;
+    }
+
+    const auto sample = [this, timestamp](NativePaneAttention& item) {
+      item.sample(timestamp, fades_);
+    };
+
+    fades_.begin();
+    if (!items_.each(alive, sample)) {
+      return false;
+    }
+
+    fades_.end();
+
+    return true;
   }
 
   void NativePaneAttention::synchronize() {

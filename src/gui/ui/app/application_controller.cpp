@@ -171,6 +171,7 @@ namespace telar::gui::qt {
         key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(*this, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
         hostname_(platform::hostName()) {
+    composeWindowAnimation();
     initializeMachines();
     initializeMachineProfiles();
     initializeAttachments();

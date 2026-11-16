@@ -49,6 +49,9 @@ namespace telar::gui::qt {
 
   class WindowAnimationClock;
 
+  template <typename Item>
+  class WindowAnimationItems;
+
   class NativeTabActivity : public QQuickItem {
     Q_OBJECT
     QML_ELEMENT
@@ -94,7 +97,7 @@ namespace telar::gui::qt {
     void geometryChange(const QRectF& current, const QRectF& previous) override;
 
   private:
-    friend class WindowAnimationClock;
+    friend class WindowAnimationItems<NativeTabActivity>;
     void bindClock();
     void synchronize();
     void sample(std::uint64_t now_ns);

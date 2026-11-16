@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 #include "ui/scene/ancestor_geometry.hpp"
+#include "ui/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>
@@ -29,8 +30,6 @@ import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 
-  class WindowAnimationClock;
-
   class NativePaneAttention : public QQuickItem {
     Q_OBJECT
     QML_ELEMENT
@@ -42,6 +41,8 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal alpha READ alpha NOTIFY alphaChanged)
 
   public:
+    class WindowAnimationSet;
+
     explicit NativePaneAttention(QQuickItem* parent = nullptr);
     ~NativePaneAttention() override;
     NativePaneAttention(const NativePaneAttention&) = delete;
@@ -75,11 +76,11 @@ namespace telar::gui::qt {
     void itemChange(ItemChange change, const ItemChangeData& data) override;
 
   private:
-    friend class WindowAnimationClock;
+    friend class WindowAnimationItems<NativePaneAttention>;
     void bindClock();
     void synchronize();
     void setAlpha(float alpha);
-    void sample(std::uint64_t now_ns);
+    void sample(std::uint64_t now_ns, AttentionFades& fades);
     [[nodiscard]] bool eligible() const noexcept;
     [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
 
@@ -93,6 +94,29 @@ namespace telar::gui::qt {
     std::optional<std::uint64_t> deadline_ns_;
     QPointer<WindowAnimationClock> clock_;
     tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+  };
+
+  // The attention rings of one window share their fades and are sampled only while the
+  // window is exposed.
+  class NativePaneAttention::WindowAnimationSet {
+  public:
+    void attach(NativePaneAttention& item) {
+      items_.attach(item);
+    }
+
+    void detach(NativePaneAttention& item) {
+      items_.detach(item);
+    }
+
+    bool sample(std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive);
+
+    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t timestamp) const {
+      return items_.deadline(timestamp);
+    }
+
+  private:
+    WindowAnimationItems<NativePaneAttention> items_;
+    AttentionFades fades_;
   };
 
 }

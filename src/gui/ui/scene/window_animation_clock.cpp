@@ -4,21 +4,9 @@ static_assert(true);
 #endif
 
 #include "window_animation_clock.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "ui/activity/native_agent_status.hpp"
-#include "ui/chrome/native_tab_activity.hpp"
-#include "ui/chrome/tab_strip_layout.hpp"
-#include "ui/components/element_layout.hpp"
-#include "ui/controls/modal_reveal_layout.hpp"
-#include "ui/history/history_loading_layout.hpp"
-#include "ui/history/history_selection_layout.hpp"
-#include "ui/notifications/notification_layout.hpp"
-#include "ui/panes/native_pane_attention.hpp"
-#include "ui/panes/pane_motion_layout.hpp"
 #include <QEvent>
 #include <QObject>
+#include <QPointer>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QString>
@@ -27,7 +15,6 @@ static_assert(true);
 #include <QtCore/qnamespace.h>
 #include <QtCore/qstringliteral.h>
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -36,9 +23,6 @@ static_assert(true);
 #include <memory>
 #include <optional>
 #include <span>
-#include <string_view>
-#include <tuple>
-#include <variant>
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;
@@ -46,10 +30,25 @@ import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
+  namespace {
+
+    std::span<const WindowAnimationLane::Make>& composition() noexcept {
+      static std::span<const WindowAnimationLane::Make> lanes;
+
+      return lanes;
+    }
+
+  }
+
   WindowAnimationClock::WindowAnimationClock(QQuickWindow& window)
       : QObject(&window),
         window_(window),
         timer_(this) {
+    lanes_.reserve(composition().size());
+    for (const auto make : composition()) {
+      lanes_.push_back(make());
+    }
+
     timer_.setObjectName(QStringLiteral("agentStatusAnimation"));
     timer_.setSingleShot(true);
     timer_.setTimerType(Qt::PreciseTimer);
@@ -88,6 +87,10 @@ namespace telar::gui::qt {
     return *std::make_unique<WindowAnimationClock>(window).release();
   }
 
+  void WindowAnimationClock::compose(std::span<const WindowAnimationLane::Make> lanes) noexcept {
+    composition() = lanes;
+  }
+
   std::uint64_t WindowAnimationClock::now() noexcept {
     now_ns_ = std::max(now_ns_, platform::AwakeClock::nowNanoseconds());
 
@@ -113,10 +116,6 @@ namespace telar::gui::qt {
 
     maximum_fps_ = maximum_fps;
     requestSynchronization();
-  }
-
-  AttentionFrame WindowAnimationClock::sampleAttention(PaneAttentionKey key, std::uint64_t now_ns) noexcept {
-    return attention_.sample(key, now_ns, frameInterval());
   }
 
   void WindowAnimationClock::requestSynchronization() {
@@ -147,20 +146,16 @@ namespace telar::gui::qt {
 
   bool WindowAnimationClock::sampleVisible(std::uint64_t timestamp) {
     const bool exposed = window_.isVisible() && window_.isExposed() && window_.visibility() != QWindow::Minimized;
-    if (exposed) {
-      attention_.begin();
-    }
+    const QPointer<WindowAnimationClock> alive{this};
 
-    const auto alive = std::apply([&](const auto&... items) {
-      return (sampleItems(items, timestamp, exposed) && ...);
-    },
-        items_);
-    if (!alive) {
-      return false;
-    }
-
-    if (exposed) {
-      attention_.end();
+    // A lane may start while another samples, which moves the vector: index it again after
+    // each call.
+    // NOLINTNEXTLINE(modernize-loop-convert): a range-for would keep the moved storage.
+    for (std::size_t index = 0; index < lanes_.size(); ++index) {
+      const auto& lane = lanes_[index];
+      if (!lane.sample(lane.items.get(), timestamp, exposed, alive)) {
+        return false;
+      }
     }
 
     return true;
@@ -176,14 +171,12 @@ namespace telar::gui::qt {
     const auto timestamp = now();
     std::optional<std::uint64_t> earliest;
 
-    std::apply([&](const auto&... items) {
-      for (const auto deadline : {nextDeadline(items, timestamp)...}) {
-        if (deadline && (!earliest || *deadline < *earliest)) {
-          earliest = deadline;
-        }
+    for (const auto& lane : lanes_) {
+      const auto deadline = lane.deadline(lane.items.get(), timestamp);
+      if (deadline && (!earliest || *deadline < *earliest)) {
+        earliest = deadline;
       }
-    },
-        items_);
+    }
 
     if (earliest) {
       deadline_ns_ = earliest;
