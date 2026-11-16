@@ -6,8 +6,8 @@ static_assert(true);
 #include "../platform/environment.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
+#include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/links/external_link_opener.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QProcess>
@@ -40,8 +40,8 @@ static_assert(true);
 #include <vector>
 
 #include "platform/environment.hpp"
+#include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/links/external_link_opener.hpp"
 
 import telar.gui.links.cell_links;
 import telar.gui.platform.login_shell;

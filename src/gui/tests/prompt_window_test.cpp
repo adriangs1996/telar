@@ -70,10 +70,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/links/external_link_opener.hpp"
 #include "ui/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/prompt/prompt_editor_item.hpp"
 #include "ui/terminal/terminal_item.hpp"
@@ -139,10 +139,10 @@ static_assert(true);
 #include <QtGui/qtestsupport_gui.h>
 #endif
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/links/external_link_opener.hpp"
 #include "ui/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/terminal/terminal_item.hpp"
 
