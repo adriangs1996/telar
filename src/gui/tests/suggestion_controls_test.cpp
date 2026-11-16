@@ -5,8 +5,8 @@
 #include "ui/app/application_controller.hpp"
 #include "ui/controls/native_form_field.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/input/key_adapter.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
 #include <QDir>

@@ -5,7 +5,7 @@ static_assert(true);
 
 #pragma once
 
-#include "ui/input/key_adapter.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include <QByteArray>
 #include <QKeyEvent>
 #include <optional>

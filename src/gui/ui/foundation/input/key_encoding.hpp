@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "key_adapter.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/terminal/terminal_input.hpp"
+#include "terminal_input.hpp"
 #include <QByteArray>
 #include <QKeyEvent>
 #include <algorithm>

@@ -14,7 +14,7 @@ static_assert(true);
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/input/key_adapter.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <algorithm>
@@ -126,7 +126,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "ui/app/application_controller.hpp"
 #ifdef __APPLE__
-#include "ui/input/key_adapter.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include <QBuffer>
 #include <QDebug>
 #include <QFont>

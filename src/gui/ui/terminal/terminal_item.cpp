@@ -24,8 +24,8 @@ static_assert(true);
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/terminal_font.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
-#include "ui/input/key_adapter.hpp"
-#include "ui/input/key_encoding.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
+#include "ui/foundation/input/key_encoding.hpp"
 #include "ui/prompt/prompt_keys.hpp"
 #include "window_images.hpp"
 #include <QClipboard>

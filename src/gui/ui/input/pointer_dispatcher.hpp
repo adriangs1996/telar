@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "native_pointer_events.hpp"
 #include "tbc/view.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/history/history_scroll_events.hpp"
+#include "ui/foundation/input/history_scroll_events.hpp"
+#include "ui/foundation/input/native_pointer_events.hpp"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QObject>
@@ -97,7 +97,7 @@ namespace telar::gui::qt {
     ApplicationController& application_;
     TabsController& tabs_;
     NativePointerEvents native_events_;
-    tbc::view<ActiveHistoryScrollEvents, tbc::lt::self> history_scroll_events_;
+    tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;
     QPointer<TerminalItem> terminal_scroll_owner_;
     std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;

@@ -11,7 +11,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/input/scroll_event.hpp"
+#include "ui/foundation/input/scroll_event.hpp"
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>

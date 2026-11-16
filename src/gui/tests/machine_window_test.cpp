@@ -39,7 +39,7 @@ static_assert(true);
 #include "ui/attachments/attachment_shelf.hpp"
 #endif
 #if (defined(__APPLE__))
-#include "ui/input/key_adapter.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #endif
 #if (defined(__APPLE__))
 #include "platform/private_clipboard.hpp"
@@ -129,7 +129,7 @@ static_assert(true);
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
 #include "ui/attachments/attachment_shelf.hpp"
-#include "ui/input/key_adapter.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include <QBuffer>
 #include <QDebug>
 #include <QFont>

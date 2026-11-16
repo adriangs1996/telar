@@ -20,8 +20,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/input/scroll_event.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>
@@ -54,7 +54,7 @@ static_assert(true);
 #include "history_meta_layout.hpp"
 #include "history_row_layout.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "ui/input/scroll_event.hpp"
+#include "ui/foundation/input/scroll_event.hpp"
 
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;

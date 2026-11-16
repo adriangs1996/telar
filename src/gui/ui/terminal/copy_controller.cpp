@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "copy_controller.hpp"
-#include "ui/input/key_adapter.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include <QByteArray>
 #include <exception>
 

@@ -245,7 +245,7 @@ if(TELAR_GUI_NATIVE)
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-surface-command-test SOURCES surface_command_test.cpp LIBRARIES gui-surface-command
     TEST gui-surface-command LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-native-pointer-events-test SOURCES native_pointer_events_test.cpp ${PROJECT_SOURCE_DIR}/ui/input/native_pointer_events.cpp LIBRARIES gui-core Qt6::Gui Qt6::GuiPrivate
+  telar_add_test(gui-native-pointer-events-test SOURCES native_pointer_events_test.cpp ${PROJECT_SOURCE_DIR}/ui/foundation/input/native_pointer_events.cpp LIBRARIES gui-core Qt6::Gui Qt6::GuiPrivate
     TEST gui-native-pointer-events LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-background-blur-radius-test SOURCES background_blur_radius_test.cpp LIBRARIES gui-core
     TEST gui-background-blur-radius LABELS gui.platform)

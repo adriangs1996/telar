@@ -13,10 +13,10 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/input/key_adapter.hpp"
-#include "ui/input/mouse_buttons.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
+#include "ui/foundation/input/mouse_buttons.hpp"
+#include "ui/foundation/input/scroll_event.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
-#include "ui/input/scroll_event.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QHoverEvent>

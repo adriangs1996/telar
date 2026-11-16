@@ -26,9 +26,9 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "key_adapter.hpp"
-#include "key_encoding.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
+#include "ui/foundation/input/key_encoding.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
 #include <QScopedValueRollback>

@@ -6,8 +6,6 @@ static_assert(true);
 #include "pointer_dispatcher.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "mouse_buttons.hpp"
-#include "native_pointer_events.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
@@ -19,6 +17,8 @@ static_assert(true);
 #include "ui/app/application_controller.hpp"
 #include "ui/attachments/attachment_shelf.hpp"
 #include "ui/chrome/tabs_controller.hpp"
+#include "ui/foundation/input/mouse_buttons.hpp"
+#include "ui/foundation/input/native_pointer_events.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>
