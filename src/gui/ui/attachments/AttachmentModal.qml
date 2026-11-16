@@ -5,13 +5,15 @@ import QtQuick
 
 FocusScope {
     id: root
-    required property ApplicationController application
-    readonly property var shelf: application.attachments.shelf
+    required property AttachmentsController controller
+    required property var colors
+    required property var typography
+    readonly property var shelf: controller.shelf
     readonly property var state: shelf.modal
-    readonly property var regions: application.attachments.modalGeometry
+    readonly property var regions: controller.modalGeometry
     readonly property var host: regions.host
-    readonly property color background: application.colors.background
-    readonly property var grid: application.windowGeometry.typography.grid
+    readonly property color background: colors.background
+    readonly property var grid: typography.grid
     readonly property real physicalPixel: 1 / Screen.devicePixelRatio
     visible: (state.id ?? "").length > 0
     z: 50
@@ -56,8 +58,8 @@ FocusScope {
         y: root.regions.bounds?.y ?? 0
         width: root.regions.bounds?.width ?? 0
         height: root.regions.bounds?.height ?? 0
-        color: root.application.colors.panel_bg
-        border.color: root.application.colors.accent
+        color: root.colors.panel_bg
+        border.color: root.colors.accent
         border.width: root.physicalPixel
 
         MouseArea {
@@ -74,7 +76,7 @@ FocusScope {
             height: root.regions.title?.height ?? 0
             text: "Image preview"
             grid: root.grid
-            color: root.application.colors.accent
+            color: root.colors.accent
             bold: true
         }
 
@@ -85,7 +87,7 @@ FocusScope {
             height: root.regions.close?.height ?? 0
             text: "×"
             grid: root.grid
-            color: root.application.colors.subtext0
+            color: root.colors.subtext0
 
             MouseArea {
                 anchors.fill: parent
@@ -118,7 +120,7 @@ FocusScope {
             height: root.regions.footer?.height ?? 0
             text: "Esc close"
             grid: root.grid
-            color: root.application.colors.subtext0
+            color: root.colors.subtext0
         }
     }
 }

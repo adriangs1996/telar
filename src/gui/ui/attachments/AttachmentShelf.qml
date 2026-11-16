@@ -6,11 +6,13 @@ import QtQuick
 Rectangle {
     id: root
 
-    required property ApplicationController application
-    property real ratio: application.chromeRatio
-    readonly property var shelf: application.attachments.shelf
+    required property AttachmentsController controller
+    required property var colors
+    required property var typography
+    property real ratio: 1
+    readonly property var shelf: controller.shelf
     readonly property bool modalOpen: (shelf.modal.id ?? "").length > 0
-    readonly property var region: application.attachments.geometry
+    readonly property var region: controller.geometry
     readonly property real padding: 6 * ratio
     readonly property real gap: 6 * ratio
     readonly property real closeSide: 18 * ratio
@@ -20,7 +22,7 @@ Rectangle {
     width: region.width ?? 0
     height: region.height ?? 0
     visible: width > 0 && height > 0 && shelf.items.length > 0
-    color: application.colors.panel_bg
+    color: colors.panel_bg
     clip: true
 
     function hovered(area): bool {
@@ -46,7 +48,7 @@ Rectangle {
             width: root.cardWidth
             height: Math.max(0, root.height - root.padding * 2)
             radius: 8 * root.ratio
-            color: root.hovered(pointer) && !root.hovered(closePointer) ? root.application.colors.surface1 : root.application.colors.surface0
+            color: root.hovered(pointer) && !root.hovered(closePointer) ? root.colors.surface1 : root.colors.surface0
 
             MouseArea {
                 id: pointer
@@ -73,14 +75,14 @@ Rectangle {
                 width: root.closeSide
                 height: root.closeSide
                 radius: root.closeSide / 2
-                color: root.application.colors.surface1
+                color: root.colors.surface1
 
                 ChromeText {
                     anchors.fill: parent
                     text: "×"
-                    color: root.hovered(closePointer) ? root.application.colors.red : root.application.colors.subtext0
+                    color: root.hovered(closePointer) ? root.colors.red : root.colors.subtext0
                     horizontalAlignment: Text.AlignHCenter
-                    pixelSize: root.application.windowGeometry.typography.body
+                    pixelSize: root.typography.body
                     emphasized: true
                 }
 

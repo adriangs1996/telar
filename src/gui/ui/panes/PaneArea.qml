@@ -11,7 +11,9 @@ Item {
     property bool keyboardCovered: false
 
     AttachmentShelf {
-        application: root.application
+        controller: root.application.attachments
+        colors: root.application.colors
+        typography: root.application.windowGeometry.typography
         ratio: root.ratio
     }
 

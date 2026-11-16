@@ -625,8 +625,15 @@ namespace {
       chrome_font.setPixelSize(chrome_pixels);
       QGuiApplication::setFont(chrome_font);
       QQmlEngine engine;
-      const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
-      const auto shelf_view = createChrome(engine, QStringLiteral("AttachmentShelf"), properties);
+      const QVariantMap properties{
+          {QStringLiteral("controller"), QVariant::fromValue(application.attachments())},
+          {QStringLiteral("colors"), application.colors()},
+          {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
+      };
+      auto shelf_properties = properties;
+
+      shelf_properties.insert(QStringLiteral("ratio"), application.chromeRatio());
+      const auto shelf_view = createChrome(engine, QStringLiteral("AttachmentShelf"), shelf_properties);
       const auto modal_view = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
 
       shelf_view->setParentItem(window.contentItem());
@@ -723,8 +730,15 @@ namespace {
       window.resize(size);
       application.setWindow(window);
       QQmlEngine engine;
-      const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
-      const auto shelf = createChrome(engine, QStringLiteral("AttachmentShelf"), properties);
+      const QVariantMap properties{
+          {QStringLiteral("controller"), QVariant::fromValue(application.attachments())},
+          {QStringLiteral("colors"), application.colors()},
+          {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
+      };
+      auto shelf_properties = properties;
+
+      shelf_properties.insert(QStringLiteral("ratio"), application.chromeRatio());
+      const auto shelf = createChrome(engine, QStringLiteral("AttachmentShelf"), shelf_properties);
       const auto modal = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
 
       QVERIFY(shelf != nullptr && modal != nullptr);

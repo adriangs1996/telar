@@ -139,7 +139,9 @@ Window {
 
     AttachmentModal {
         anchors.fill: parent
-        application: telar
+        controller: telar.attachments
+        colors: telar.colors
+        typography: root.geometry.typography
     }
 
     Shortcut {
