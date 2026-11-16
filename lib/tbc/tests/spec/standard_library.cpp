@@ -613,7 +613,7 @@ standard::scene_node& stdReleaseKept(std::unique_ptr<standard::scene_node> child
 
 // CASE: std.optional_owner_transfer
 // PAIR: std.optional_owner
-// SOURCE: src/gui/ui/machines/machine_commands.cpp :: clients_
+// SOURCE: src/gui/ui/app/machine_clients.cpp :: clients_
 // STATUS: implemented
 // CONTRACT: Moving an owner into an optional slot hands its object to the slot.
 // SCENARIO: A client installed in the receiver's slot outlives the call; accept.
@@ -634,7 +634,7 @@ namespace standard {
 
 // CASE: std.optional_owner_kept
 // PAIR: std.optional_owner
-// SOURCE: src/gui/ui/machines/machine_commands.cpp :: clients_
+// SOURCE: src/gui/ui/app/machine_clients.cpp :: clients_
 // STATUS: implemented
 // CONTRACT: Moving an owner into an optional slot hands its object to the slot.
 // SCENARIO: The client stays with the local owner, which destroys it on return.
