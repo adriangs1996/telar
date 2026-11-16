@@ -6,21 +6,52 @@ import QtQuick
 Item {
     id: root
 
-    required property ApplicationController application
+    required property PanesController controller
+    required property TerminalController terminals
+    required property DocumentsController documents
+    required property CopyController copy
+    // The controllers of the overlays a pane hosts: the attachment shelf, and the history, path
+    // and prompt searches of its prompt line.
+    required property var attachments
+    required property var history
+    required property var pathPicker
+    required property var prompt
+    required property var colors
+    required property var typography
+    // The height of a pane's header band.
+    required property real headerHeight
+    // The dialog open over the workbench, a Store.Dialog; the search a prompt line hosts and the
+    // pane whose line it is.
+    required property int dialog
+    required property int lineSearch
+    required property string lineSearchPane
+    required property bool prefixPending
+    // The platform's Control and Command modifiers, as event modifier masks.
+    required property int controlModifier
+    required property int superModifier
     property real ratio: 1
     property bool keyboardCovered: false
+    // What a pane asks of the window: a WindowActions.Action on `target`, a pane's key or empty.
+    signal actionRequested(int action, string target)
+    // A click on an element a mod drew in a pane's header.
+    signal elementActivated(string slot, string key, string revision, int element)
+    // A divider dragged to (x, y); `commit` on release.
+    signal dividerResized(int index, real x, real y, bool commit)
+    // The parent raises it each time the window shows or closes a dialog, once `dialog` holds the
+    // new one: the focused pane's terminal takes the keyboard back when none is open.
+    signal dialogShown()
 
     AttachmentShelf {
-        controller: root.application.attachments
-        colors: root.application.colors
-        typography: root.application.windowGeometry.typography
+        controller: root.attachments
+        colors: root.colors
+        typography: root.typography
         ratio: root.ratio
     }
 
     PaneMotionLayout {
         id: motion
         anchors.fill: parent
-        model: root.application.panes.rows
+        model: root.controller.rows
     }
 
     Repeater {
@@ -69,9 +100,9 @@ Item {
                 width: pane.frameWidth
                 height: pane.frameHeight
                 radius: pane.framed ? pane.record.frameRadius * root.ratio : 0
-                color: root.application.colors.paneBackground
+                color: root.colors.paneBackground
                 replaceBackground: true
-                backdropColor: root.application.colors.workbenchBackground
+                backdropColor: root.colors.workbenchBackground
             }
 
             Repeater {
@@ -93,7 +124,7 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         onPressed: {
-                            root.application.execute(WindowActions.Action.focus_pane, pane.record.key);
+                            root.actionRequested(WindowActions.Action.focus_pane, pane.record.key);
                             terminal.forceActiveFocus(Qt.MouseFocusReason);
                         }
                     }
@@ -106,7 +137,7 @@ Item {
                 y: pane.record.frame.y
                 width: pane.frameWidth
                 height: pane.frameHeight
-                borderColor: pane.record.focused ? root.application.colors.accent : root.application.colors.chromeText
+                borderColor: pane.record.focused ? root.colors.accent : root.colors.chromeText
                 borderAlpha: pane.record.focused ? 0.8 : 0.06
                 borderWidth: pane.record.focused ? root.ratio : pane.record.frameLineWidth
                 radius: pane.record.frameRadius * root.ratio
@@ -122,21 +153,21 @@ Item {
                 x: pane.record.frame.x + bandInset
                 y: pane.record.frame.y
                 width: Math.max(0, pane.frameWidth - bandInset - (paneActions.visible ? paneActions.width + 4 * root.ratio : 0))
-                height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader) : 0
+                height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.headerHeight) : 0
                 visible: pane.framed && !pane.drawnHeader
                 record: pane.record.chrome
-                controller: root.application
-                colors: root.application.colors
-                typography: root.application.windowGeometry.typography
+                onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
+                colors: root.colors
+                typography: root.typography
                 ratio: root.ratio
                 bandHeight: height
                 focused: pane.record.focused
-                prefixPending: root.application.prefixPending
+                prefixPending: root.prefixPending
 
                 MouseArea {
                     anchors.fill: parent
                     onPressed: {
-                        root.application.execute(WindowActions.Action.focus_pane, pane.record.key);
+                        root.actionRequested(WindowActions.Action.focus_pane, pane.record.key);
                         terminal.forceActiveFocus(Qt.MouseFocusReason);
                     }
                 }
@@ -147,13 +178,13 @@ Item {
                 x: pane.record.frame.x + pane.frameWidth - width - 6 * root.ratio
                 y: pane.record.frame.y + (header.height - height) / 2
                 visible: pane.framed && !pane.drawnHeader && !pane.elements.pane_actions && (pane.record.focused || paneHover.hovered) && header.height >= height && pane.frameWidth > width + 80 * root.ratio
-                controller: root.application
+                onActionRequested: (action, target) => root.actionRequested(action, target)
                 paneKey: pane.record.key
-                colors: root.application.colors
-                typography: root.application.windowGeometry.typography
+                colors: root.colors
+                typography: root.typography
                 ratio: root.ratio
                 entries: pane.fullscreenEntries
-                prefixPending: root.application.prefixPending
+                prefixPending: root.prefixPending
                 entryRoom: pane.selectorRoom
             }
 
@@ -163,13 +194,13 @@ Item {
                 x: header.x
                 y: header.y
                 width: Math.max(0, pane.frameWidth - header.bandInset - 4 * root.ratio)
-                height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - pane.record.frame.y, root.application.windowGeometry.paneHeader) : 0
+                height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - pane.record.frame.y, root.headerHeight) : 0
                 visible: pane.drawnHeader && pane.framed
                 content: pane.elements.pane_header ?? null
-                colors: root.application.colors
-                typography: root.application.windowGeometry.typography
+                colors: root.colors
+                typography: root.typography
                 ratio: root.ratio
-                onElementActivated: (slot, key, revision, element) => root.application.activateElement(slot, key, revision, element)
+                onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
                 builtins: Object.assign({pane_actions: actionsPiece}, header.builtins)
             }
 
@@ -181,23 +212,23 @@ Item {
                 height: Math.min(implicitHeight, header.height)
                 visible: !pane.drawnHeader && pane.elements.pane_actions !== undefined && pane.framed
                 content: pane.elements.pane_actions ?? null
-                colors: root.application.colors
-                typography: root.application.windowGeometry.typography
+                colors: root.colors
+                typography: root.typography
                 ratio: root.ratio
-                onElementActivated: (slot, key, revision, element) => root.application.activateElement(slot, key, revision, element)
+                onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
                 builtins: ({pane_actions: actionsPiece})
             }
 
             Component {
                 id: actionsPiece
                 PaneActions {
-                    controller: root.application
+                    onActionRequested: (action, target) => root.actionRequested(action, target)
                     paneKey: pane.record.key
-                    colors: root.application.colors
-                    typography: root.application.windowGeometry.typography
+                    colors: root.colors
+                    typography: root.typography
                     ratio: root.ratio
                     entries: pane.fullscreenEntries
-                    prefixPending: root.application.prefixPending
+                    prefixPending: root.prefixPending
                     entryRoom: pane.selectorRoom
                 }
             }
@@ -220,7 +251,7 @@ Item {
                 NativeRoundedRectangle {
                     objectName: "paneTerminalBackground"
                     anchors.fill: parent
-                    color: root.application.colors.terminalBackground
+                    color: root.colors.terminalBackground
                     replaceBackground: true
                 }
 
@@ -231,14 +262,14 @@ Item {
                     // Commit the terminal grid once; animate only its viewport.
                     width: pane.record.content.width
                     height: pane.record.content.height
-                    controller: root.application.terminals
+                    controller: root.terminals
                     paneId: pane.record.key
                     backgroundProvided: true
                     property bool focusReady: false
                     readonly property bool modelFocused: pane.record.focused
 
                     function focusSelectedPane() {
-                        if (terminal.modelFocused && root.application.dialog === Store.Dialog.none && !root.keyboardCovered) {
+                        if (terminal.modelFocused && root.dialog === Store.Dialog.none && !root.keyboardCovered) {
                             terminal.forceActiveFocus();
                         }
                     }
@@ -282,13 +313,13 @@ Item {
                         width: parent.width
                         height: parent.height + viewport.rise
                         visible: pane.framed && !pane.record.focused
-                        color: Qt.rgba(root.application.colors.background.r, root.application.colors.background.g, root.application.colors.background.b, 1)
+                        color: Qt.rgba(root.colors.background.r, root.colors.background.g, root.colors.background.b, 1)
                         opacity: pane.record.dimAlpha
                     }
 
                     LinkPreview {
                         preview: terminal.linkPreview
-                        colors: root.application.colors
+                        colors: root.colors
 
                         function publishBounds() {
                             terminal.setLinkPreviewBounds(visible ? Qt.rect(x, y, width, height) : Qt.rect(0, 0, 0, 0));
@@ -302,8 +333,8 @@ Item {
                     }
 
                     Connections {
-                        target: root.application
-                        function onDialogChanged() {
+                        target: root
+                        function onDialogShown() {
                             terminal.focusSelectedPane();
                         }
                     }
@@ -334,11 +365,11 @@ Item {
                 InlineDocuments {
                     anchors.fill: parent
                     transform: Translate { y: -viewport.rise }
-                    controller: root.application.documents
+                    controller: root.documents
                     paneId: pane.record.key
                     view: terminal
-                    colors: root.application.colors
-                    grid: root.application.windowGeometry.typography.grid
+                    colors: root.colors
+                    grid: root.typography.grid
                     ratio: root.ratio
                 }
 
@@ -348,8 +379,8 @@ Item {
                     // With the rows, which a view scrolled by pixels draws shifted up.
                     transform: Translate { y: -viewport.rise - terminal.scrollShift }
                     pinnedOffset: viewport.rise + terminal.scrollShift
-                    colors: root.application.colors
-                    grid: root.application.windowGeometry.typography.grid
+                    colors: root.colors
+                    grid: root.typography.grid
                     ratio: root.ratio
                     moving: promptLine.moving
                     interruptKey: promptLine.interruptKey
@@ -363,28 +394,28 @@ Item {
                     revealDelay: separators.revealDelay
                     transform: Translate { y: -viewport.rise }
                     paneId: pane.record.key
-                    colors: root.application.colors
-                    typography: root.application.windowGeometry.typography
-                    grid: root.application.windowGeometry.typography.grid
-                    history: root.application.history
-                    pathPicker: root.application.paths
-                    copy: root.application.copy
-                    prompt: root.application.prompt
-                    lineSearch: root.application.lineSearch
-                    lineSearchPane: root.application.lineSearchPane
-                    controlModifier: root.application.controlModifier
-                    superModifier: root.application.superModifier
+                    colors: root.colors
+                    typography: root.typography
+                    grid: root.typography.grid
+                    history: root.history
+                    pathPicker: root.pathPicker
+                    copy: root.copy
+                    prompt: root.prompt
+                    lineSearch: root.lineSearch
+                    lineSearchPane: root.lineSearchPane
+                    controlModifier: root.controlModifier
+                    superModifier: root.superModifier
                     terminal: terminal
                     ratio: root.ratio
                     focused: pane.record.focused
-                    onCancelled: root.application.execute(WindowActions.Action.cancel)
+                    onCancelled: root.actionRequested(WindowActions.Action.cancel, "")
                 }
 
                 // Back to the live end, above the docked line.
                 JumpToEnd {
                     view: terminal
-                    colors: root.application.colors
-                    grid: root.application.windowGeometry.typography.grid
+                    colors: root.colors
+                    grid: root.typography.grid
                     ratio: root.ratio
                     moving: promptLine.moving
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -395,7 +426,7 @@ Item {
 
                 CommandRail {
                     view: terminal
-                    colors: root.application.colors
+                    colors: root.colors
                     ratio: root.ratio
                     moving: promptLine.moving
                     anchors.right: parent.right
@@ -410,13 +441,13 @@ Item {
                 DocumentView {
                     anchors.fill: parent
                     z: 4
-                    controller: root.application.documents
+                    controller: root.documents
                     paneId: pane.record.key
-                    colors: root.application.colors
-                    grid: root.application.windowGeometry.typography.grid
+                    colors: root.colors
+                    grid: root.typography.grid
                     ratio: root.ratio
                     focusTarget: terminal
-                    onFocusRequested: paneId => root.application.execute(WindowActions.Action.focus_pane, paneId)
+                    onFocusRequested: paneId => root.actionRequested(WindowActions.Action.focus_pane, paneId)
                 }
             }
 
@@ -431,14 +462,14 @@ Item {
                     attachment: pane.record.attentionKey
                     active: true
                     ratio: root.ratio
-                    color: root.application.colors[pane.record.chrome.agent.statusColor ?? "overlay1"]
+                    color: root.colors[pane.record.chrome.agent.statusColor ?? "overlay1"]
                 }
             }
         }
     }
 
     Repeater {
-        model: root.application.panes.dividers
+        model: root.controller.dividers
 
         delegate: MouseArea {
             required property var record
@@ -452,7 +483,7 @@ Item {
 
             function resize(mouse, commit) {
                 const position = mapToItem(root, mouse.x, mouse.y);
-                root.application.resizeDivider(Number(record.key), position.x, position.y, commit);
+                root.dividerResized(Number(record.key), position.x, position.y, commit);
             }
 
             onPositionChanged: mouse => {

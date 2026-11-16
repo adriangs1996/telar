@@ -11,10 +11,11 @@ PaneHeaderLayout {
     required property var typography
     property bool focused: false
     property bool prefixPending: false
-    property var controller: null
     // Mod content for the header's pieces, by slot name.
     readonly property var elements: record.elements ?? ({})
     readonly property var builtins: ({pane_mark: markPiece, pane_program: programPiece, pane_context: contextPiece, pane_status: statusPiece, pane_progress: progressPiece})
+    // A click on an element a mod drew in the header.
+    signal elementActivated(string slot, string key, string revision, int element)
     // The agent's state is a dot on the pane's tile; a mod may still place the worded chip.
     readonly property string statusColor: record.agent?.statusColor ?? ""
     readonly property real tileWidth: elements.pane_mark ? markHost.implicitWidth : 18 * ratio
@@ -114,7 +115,7 @@ PaneHeaderLayout {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+        onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
         builtins: root.builtins
     }
 

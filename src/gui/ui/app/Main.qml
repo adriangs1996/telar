@@ -75,13 +75,41 @@ Window {
     }
 
     PaneArea {
-        application: telar
+        id: paneArea
+        controller: telar.panes
+        terminals: telar.terminals
+        documents: telar.documents
+        copy: telar.copy
+        attachments: telar.attachments
+        history: telar.history
+        pathPicker: telar.paths
+        prompt: telar.prompt
+        colors: telar.colors
+        typography: root.geometry.typography
+        headerHeight: root.geometry.paneHeader
+        dialog: telar.dialog
+        lineSearch: telar.lineSearch
+        lineSearchPane: telar.lineSearchPane
+        prefixPending: telar.prefixPending
+        controlModifier: telar.controlModifier
+        superModifier: telar.superModifier
         keyboardCovered: componentPanelPopup.visible || componentPickPopup.visible
         x: root.geometry.terminal.x
         y: root.geometry.terminal.y
         width: root.geometry.terminal.width
         height: root.geometry.terminal.height
         ratio: root.ratio
+        onActionRequested: (action, target) => telar.execute(action, target)
+        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
+        onDividerResized: (index, x, y, commit) => telar.resizeDivider(index, x, y, commit)
+    }
+
+    // Once the panes read the new dialog, the focused one takes the keyboard back if none is open.
+    Connections {
+        target: telar
+        function onDialogChanged() {
+            paneArea.dialogShown();
+        }
     }
 
     StatusBar {

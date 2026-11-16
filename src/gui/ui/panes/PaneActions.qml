@@ -7,7 +7,6 @@ Row {
     id: root
     objectName: "paneActions"
 
-    required property ApplicationController controller
     required property string paneKey
     required property var colors
     required property var typography
@@ -24,12 +23,14 @@ Row {
     readonly property int capacity: Math.max(1, Math.floor(entryRoom / entryWidth))
     readonly property int first: Math.max(0, Math.min(entries.findIndex(entry => entry.focused) - Math.floor((capacity - 1) / 2), entries.length - capacity))
     readonly property var shown: entries.slice(first, first + capacity)
+    // A button asks the window for a WindowActions.Action on `target`, or on the focused pane.
+    signal actionRequested(int action, string target)
 
     spacing: 2 * ratio
 
     function execute(action) {
-        controller.execute(WindowActions.Action.focus_pane, paneKey);
-        controller.execute(action);
+        root.actionRequested(WindowActions.Action.focus_pane, paneKey);
+        root.actionRequested(action, "");
     }
 
     component ActionButton: ChromeButton {
@@ -148,7 +149,7 @@ Row {
                         }
                     }
                     Accessible.name: entry.program
-                    onClicked: root.controller.execute(WindowActions.Action.focus_pane, entry.key)
+                    onClicked: root.actionRequested(WindowActions.Action.focus_pane, entry.key)
 
                     ChromeToolTip {
                         visible: selector.hovered
