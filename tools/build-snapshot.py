@@ -25,7 +25,10 @@ are normalized lexically, so `lib/wire/../base/include` is `lib/base/include`.
     build-snapshot.py diff runtime.json gui.json out/dev
 
 `diff` takes snapshot files or configured trees, prints the differences grouped
-by kind and exits with 1 if there are any. Include directories that only change
+by kind and exits with 1 if there are any. With --by-source it compares what is
+built rather than which target builds it, for changes that move sources between
+targets: each source's flags, whichever targets compile it, and each linked
+binary's sources with the tree's archives expanded into theirs. Include directories that only change
 order are not a difference when no header could resolve differently: no file
 under one of the swapped directories exists under the other. That check reads
 the directories, so it needs the trees on disk.
@@ -72,6 +75,8 @@ def main():
     diff_parser.add_argument('trees', type=Path, nargs='+', metavar='tree',
                              help='base snapshots or trees, then the new one')
     diff_parser.add_argument('-v', '--verbose', action='store_true', help='list every member of each group')
+    diff_parser.add_argument('--by-source', action='store_true',
+                             help='key compilations by source and expand archives into the binaries that link them')
     args = parser.parse_args()
 
     if args.command == 'record':
@@ -86,6 +91,8 @@ def main():
         parser.error('diff needs a base and a new snapshot or tree')
 
     *bases, new = map(load, args.trees)
+    if args.by_source:
+        bases, new = [by_source(base) for base in bases], by_source(new)
     if len(bases) == 1:
         report = compare(relocate(bases[0], new), new)
         print_report(report, args.verbose)
@@ -427,6 +434,35 @@ def normalize_value(value, paths):
 
 # Comparing.
 
+def by_source(snapshot):
+    """The snapshot keyed by what is built: each compiled source with the flag sets of every
+    target that compiles it, and each linked binary with the sources of the tree's archives
+    it links in place of the archives. Archives themselves leave the comparison."""
+    variants = collections.defaultdict(set)
+    for key, identity in snapshot['compile'].items():
+        variants[key.split(':', 1)[1]].add(identity)
+
+    def source(item):
+        return item.split(':', 2)[2] if item.startswith('object:') else item
+
+    archives = {target: {source(item) for item in entry['objects']}
+                for target, entry in snapshot['link'].items() if entry['kind'] == 'static'}
+    link = {}
+    for target, entry in snapshot['link'].items():
+        if entry['kind'] == 'static':
+            continue
+
+        objects, libraries = {source(item) for item in entry['objects']}, []
+        for item in entry['libraries']:
+            if item.startswith('target:') and item[len('target:'):] in archives:
+                objects |= archives[item[len('target:'):]]
+            else:
+                libraries.append(item)
+        link[target] = {**entry, 'objects': sorted(objects), 'libraries': libraries}
+
+    return {**snapshot, 'compile': {key: sorted(value) for key, value in variants.items()}, 'link': link}
+
+
 def relocate(base, new):
     """The base snapshot with each path under one of its directories moved to the new
     tree's directory for the same source directory."""
@@ -477,9 +513,7 @@ def compare(base, new, subset=False):
         if not subset:
             groups['compile: only in new']['sources'].append(key)
     for key in sorted(base['compile'].keys() & new['compile'].keys()):
-        before = base['flag_sets'][base['compile'][key]]
-        after = new['flag_sets'][new['compile'][key]]
-        for kind, description in compare_flags(before, after, directories):
+        for kind, description in compare_variants(base, new, key, directories):
             groups[kind][description].append(key)
 
     for key in sorted(base['link'].keys() - new['link'].keys()):
@@ -507,6 +541,23 @@ def compare(base, new, subset=False):
                 groups['tests: changed'][description].append(key)
 
     return {'groups': groups, 'failures': [kind for kind in groups if not kind.startswith('equivalent')]}
+
+
+def compare_variants(base, new, key, directories):
+    """The differences of a compiled source: of its one flag set, or by source of the flag sets
+    the targets that compile it use, each new one against the closest old one."""
+    before, after = base['compile'][key], new['compile'][key]
+    if isinstance(before, str):
+        yield from compare_flags(base['flag_sets'][before], new['flag_sets'][after], directories)
+        return
+
+    old = {json.dumps(base['flag_sets'][identity], sort_keys=True): base['flag_sets'][identity] for identity in before}
+    current = {json.dumps(new['flag_sets'][identity], sort_keys=True): new['flag_sets'][identity] for identity in after}
+    for text in sorted(current.keys() - old.keys()):
+        candidates = [list(compare_flags(flags, current[text], directories)) for flags in old.values()]
+        yield from min(candidates, key=len)
+    if old.keys() - current.keys() and not current.keys() - old.keys():
+        yield 'compile: flag sets only in base', f'{len(old)} -> {len(current)} flag sets'
 
 
 def compare_flags(before, after, directories):
