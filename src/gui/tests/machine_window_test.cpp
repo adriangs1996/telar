@@ -1338,8 +1338,8 @@ namespace {
 
       QCOMPARE(read.pane_id, inspected_pane);
       fixture.remote_runtime->send(PaneText{.request_id = read.request_id, .pane_id = inspected_pane, .text = "OWNED_REMOTE_PEEK", .exit_code = {}});
-      QTRY_VERIFY_WITH_TIMEOUT(application.peekState().value(QStringLiteral("lines")).toStringList().contains(QStringLiteral("OWNED_REMOTE_PEEK")), wait_ms);
-      const auto bounds = application.peekGeometry().value(QStringLiteral("bounds")).toRectF();
+      QTRY_VERIFY_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("lines")).toStringList().contains(QStringLiteral("OWNED_REMOTE_PEEK")), wait_ms);
+      const auto bounds = application.peek()->geometry().value(QStringLiteral("bounds")).toRectF();
       auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
 
       panel->setParentItem(window.contentItem());
@@ -1351,7 +1351,7 @@ namespace {
         QTest::keyClick(&window, byte);
       }
 
-      QTRY_COMPARE_WITH_TIMEOUT(application.peekState().value(QStringLiteral("editorText")).toString(), QStringLiteral("Continue the remote task"), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("Continue the remote task"), wait_ms);
       QTest::keyClick(&window, Qt::Key_Return);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::send_pane_text), 1, wait_ms);
       const auto message = fixture.remote_runtime->last<SendPaneText>();
@@ -1366,7 +1366,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.requestsPending(), wait_ms);
       application.peekActivity(key);
       QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
-      const auto stale_revision = application.peekState().value(QStringLiteral("revision")).toString();
+      const auto stale_revision = application.peek()->state().value(QStringLiteral("revision")).toString();
 
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
       const auto retired = fixture.remote_runtime->last<ReadPane>();
@@ -1374,11 +1374,11 @@ namespace {
       ++agents.front().session_id.front();
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::none, wait_ms);
-      application.searchPeek(QStringLiteral("/stop"));
-      application.submitPeek(stale_revision);
+      application.peek()->search(QStringLiteral("/stop"));
+      application.peek()->submit(stale_revision);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::interrupt_agent), 0);
       fixture.remote_runtime->send(PaneText{.request_id = retired.request_id, .pane_id = inspected_pane, .text = "RETIRED_PEEK", .exit_code = {}});
-      QVERIFY(application.peekState().value(QStringLiteral("lines")).toStringList().isEmpty());
+      QVERIFY(application.peek()->state().value(QStringLiteral("lines")).toStringList().isEmpty());
     }
 
     Q_SLOT static void peekSubmissionsRejectRetiredWindowsAndDialogRevisions() {
@@ -1403,25 +1403,25 @@ namespace {
 
       application.peekActivity(key);
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
-      const auto retired = application.peekState().value(QStringLiteral("revision")).toString();
+      const auto retired = application.peek()->state().value(QStringLiteral("revision")).toString();
 
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
       const auto retired_read = fixture.local_runtime->last<ReadPane>();
 
       application.setWindow(replacement);
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::none);
-      application.searchPeek(QStringLiteral("/stop"));
-      application.submitPeek(retired);
+      application.peek()->search(QStringLiteral("/stop"));
+      application.peek()->submit(retired);
       QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
       fixture.local_runtime->send(PaneText{.request_id = retired_read.request_id, .pane_id = pane_id, .text = "Retired window", .exit_code = {}});
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, Machines::local_slot).session.requestsPending(), wait_ms);
       application.setWindow(window);
       application.peekActivity(key);
       QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
-      application.searchPeek(QStringLiteral("/stop"));
-      application.submitPeek(retired);
+      application.peek()->search(QStringLiteral("/stop"));
+      application.peek()->submit(retired);
       QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
-      application.submitPeek(application.peekState().value(QStringLiteral("revision")).toString());
+      application.peek()->submit(application.peek()->state().value(QStringLiteral("revision")).toString());
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::interrupt_agent), 1, wait_ms);
       QCOMPARE(fixture.local_runtime->last<InterruptAgent>().pane_id, pane_id);
     }
@@ -1713,8 +1713,8 @@ namespace {
       fixture.local_runtime->send(PaneText{.request_id = read.request_id, .pane_id = pane_id, .text = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\nRECENT_TAIL", .exit_code = {}});
       constexpr qsizetype line_count = 11;
 
-      QTRY_COMPARE_WITH_TIMEOUT(application.peekState().value(QStringLiteral("lines")).toStringList().size(), line_count, wait_ms);
-      const auto bounds = application.peekGeometry().value(QStringLiteral("bounds")).toRectF();
+      QTRY_COMPARE_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("lines")).toStringList().size(), line_count, wait_ms);
+      const auto bounds = application.peek()->geometry().value(QStringLiteral("bounds")).toRectF();
       auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
 
       panel->setParentItem(window.contentItem());
@@ -1733,7 +1733,7 @@ namespace {
       window.resize(wide);
       QTRY_COMPARE_WITH_TIMEOUT(lines().size(), line_count, wait_ms);
       window.resize(tiny);
-      QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialog())).arg(application.peekGeometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialog())).arg(application.peek()->geometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
       QTest::keyClick(&window, Qt::Key_Escape);
       QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
     }

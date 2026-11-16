@@ -183,6 +183,7 @@ namespace telar::gui::qt {
         palette_(store_),
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
+        peek_(store_, activity_),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -206,9 +207,10 @@ namespace telar::gui::qt {
     connect(&store_, &Store::interacting, this, [this] {
       pending_activity_.reset();
     });
-    connect(this, &Application::windowGeometryChanged, this, &Application::measureDisplay);
     connect(this, &Application::prefixChanged, this, &Application::statusModeChanged);
     connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
+    // After the workbench geometry, which the dialogs measured from the display are placed in.
+    connect(this, &Application::windowGeometryChanged, this, &Application::measureDisplay);
     connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
     connect(this, &Application::windowGeometryChanged, this, [this] {
       history_.setMetrics(historyMetrics());
@@ -227,7 +229,10 @@ namespace telar::gui::qt {
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
+    connect(&peek_, &PeekController::closeRequested, this, [this] {
+      showDialog(Dialog::none);
+    });
+    connect(&peek_, &PeekController::failed, this, &Application::reportFailure);
     connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::hostMetricsChanged);
@@ -400,6 +405,7 @@ namespace telar::gui::qt {
 
     window_ = &window;
     ++window_generation_;
+    peek_.setWindowGeneration(window_generation_);
     frame_pacer_.reset();
     frame_pacer_.emplace(window);
     history_.setWindow(&window);
@@ -817,7 +823,7 @@ namespace telar::gui::qt {
       palette_.publish();
       break;
     case Change::peek:
-      refreshPeek();
+      peek_.synchronize();
       publishStatus();
       break;
     case Change::document:
@@ -965,7 +971,7 @@ namespace telar::gui::qt {
 
   void Application::refresh() {
     synchronize();
-    refreshPeek();
+    peek_.synchronize();
     refreshElementBars();
     if (store_.dialog().kind == Dialog::paths) {
       paths_.publishGeometry();
@@ -1312,9 +1318,7 @@ namespace telar::gui::qt {
 
   void Application::showDialog(Dialog kind) {
     if (kind != Dialog::peek) {
-      session().closePeek();
-      peek_origin_.reset();
-      peek_editor_.clear();
+      peek_.forget();
     }
 
     if (kind != Dialog::machine) {

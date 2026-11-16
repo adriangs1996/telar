@@ -44,6 +44,7 @@ static_assert(true);
 #include "ui/palette/palette_controller.hpp"
 #include "ui/panes/panes_controller.hpp"
 #include "ui/paths/path_picker_controller.hpp"
+#include "ui/peek/peek_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
@@ -198,8 +199,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
-    Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
-    Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
+    Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
     Q_PROPERTY(telar::gui::qt::PathPickerController* paths READ paths CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspaceFormController* workspaceForm READ workspaceForm CONSTANT)
@@ -262,11 +262,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void peekActivity(const QString& identity);
     Q_INVOKABLE void toggleMachineList();
     Q_INVOKABLE void fitSidebar();
-    Q_INVOKABLE void searchPeek(const QString& text);
-    Q_INVOKABLE void submitPeek(const QString& revision);
-    Q_INVOKABLE void reportPeekLimit(qulonglong requested_bytes);
-    [[nodiscard]] QVariantMap peekState() const;
-    [[nodiscard]] QVariantMap peekGeometry() const;
 
     using Dialog = Store::Dialog;
 
@@ -399,6 +394,10 @@ namespace telar::gui::qt {
       return &machine_prompt_;
     }
 
+    PeekController* peek() noexcept {
+      return &peek_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -479,7 +478,6 @@ namespace telar::gui::qt {
     void notificationsChanged();
     void machineChanged();
     void machinesChanged();
-    void peekChanged();
     void machineLaunchFailed(const QString& error);
 
   private:
@@ -650,8 +648,6 @@ namespace telar::gui::qt {
     [[nodiscard]] float sidebarNaturalWidth() const;
     void selectActivity(const QString& identity, bool peek = false);
     void settleActivity();
-    [[nodiscard]] bool peekOriginValid() const;
-    void refreshPeek();
     void openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
     void presentChange(Change change);
     void initializeAttachments();
@@ -730,14 +726,7 @@ namespace telar::gui::qt {
       std::uint64_t pointer_revision = 0;
     };
 
-    struct PeekOrigin {
-      MachineActivityTarget target;
-      std::uint64_t window;
-    };
-
     std::optional<PendingActivity> pending_activity_;
-    std::optional<PeekOrigin> peek_origin_;
-    QString peek_editor_;
     std::optional<MachineClientKey> sound_owner_;
     ConfigurationSource configuration_source_;
     // The theme and font QML reads, built on first read after each configurationChanged.
@@ -790,6 +779,7 @@ namespace telar::gui::qt {
     PaletteController palette_;
     PathPickerController paths_;
     MachinePromptController machine_prompt_;
+    PeekController peek_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer notification_timer_;

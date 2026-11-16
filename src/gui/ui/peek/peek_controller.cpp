@@ -3,172 +3,156 @@
 static_assert(true);
 #endif
 
+#include "peek_controller.hpp"
 #include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/app/utf16_encoding.hpp"
-#include "ui/machines/machine_activity_target.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>
-#include <QQuickWindow>
-#include <QString>
 #include <QStringList>
 #include <QStringView>
-#include <QVariantMap>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
-#include <charconv>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <tuple>
-#include <utility>
 #include <variant>
 
-#include "application/dependencies.hpp"
-#include "ui/app/utf16_encoding.hpp"
-
+import telar.gui.core.metrics;
 import telar.gui.peek.screen;
 import telar.gui.presentation.activity_order;
-import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.notification_stack;
+import telar.gui.presentation.suggestion_labels;
 import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 
-  void Application::peekActivity(const QString& identity) {
-    applyInteraction([&] {
-      selectActivity(identity, true);
-    });
+  PeekController::PeekController(Store& store, ActivityController& activity, QObject* parent)
+      : QObject(parent),
+        store_(store),
+        activity_(activity) {}
+
+  void PeekController::setDisplay(const DisplayMetrics& display) {
+    display_ = display;
+    emit changed();
   }
 
-  void Application::openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
+  void PeekController::setWindowGeneration(std::uint64_t generation) noexcept {
+    window_generation_ = generation;
+  }
+
+  bool PeekController::open(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
     const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner);
-    if (agent == nullptr || !session().openPeek(PeekTarget{.agent = agent->key, .session = agent->session})) {
-      return;
-    }
-
-    peek_origin_ = PeekOrigin{.target = target, .window = window_generation_};
-    peek_editor_.clear();
-    activity_.showHover(identity, pointer_revision);
-
-    showDialog(Dialog::peek);
-    emit peekChanged();
-  }
-
-  bool Application::peekOriginValid() const {
-    if (store_.dialog().kind != Dialog::peek || !peek_origin_ || peek_origin_->window != window_generation_ || !activity_.available(peek_origin_->target)) {
+    if (agent == nullptr || !store_.session().openPeek(PeekTarget{.agent = agent->key, .session = agent->session})) {
       return false;
     }
 
-    const auto* agent = std::get_if<MachineActivityTarget::Agent>(&peek_origin_->target.owner);
-    const auto& target = session().peek().target();
+    origin_ = Origin{.target = target, .window = window_generation_};
+    editor_.clear();
+    activity_.showHover(identity, pointer_revision);
 
-    return agent != nullptr && peek_origin_->target.source.machine.slot == store_.machines().active() && target && *target == PeekTarget{.agent = agent->key, .session = agent->session};
+    return true;
   }
 
-  void Application::refreshPeek() {
-    if (store_.dialog().kind != Dialog::peek) {
+  void PeekController::forget() {
+    store_.session().closePeek();
+    origin_.reset();
+    editor_.clear();
+  }
+
+  bool PeekController::valid() const {
+    if (store_.dialog().kind != Store::Dialog::peek || !origin_ || origin_->window != window_generation_ || !activity_.available(origin_->target)) {
+      return false;
+    }
+
+    const auto* agent = std::get_if<MachineActivityTarget::Agent>(&origin_->target.owner);
+    const auto& target = store_.session().peek().target();
+
+    return agent != nullptr && origin_->target.source.machine.slot == store_.machines().active() && target && *target == PeekTarget{.agent = agent->key, .session = agent->session};
+  }
+
+  void PeekController::synchronize() {
+    if (store_.dialog().kind != Store::Dialog::peek) {
       return;
     }
 
-    if (!peekOriginValid()) {
-      showDialog(Dialog::none);
+    if (!valid()) {
+      emit closeRequested();
       return;
     }
 
-    emit peekChanged();
+    emit changed();
   }
 
-  void Application::searchPeek(const QString& text) {
-    if (!peekOriginValid()) {
+  void PeekController::search(const QString& text) {
+    if (!valid()) {
       return;
     }
 
     const auto measured = Utf16Prefix::fit(QStringView{text}, PeekLimits::message_bytes, utf16Encoding());
 
-    peek_editor_ = text.first(static_cast<qsizetype>(measured.units));
-    if (!peek_editor_.isValidUtf16()) {
-      peek_editor_ = QString::fromUtf8(peek_editor_.toUtf8());
+    editor_ = text.first(static_cast<qsizetype>(measured.units));
+    if (!editor_.isValidUtf16()) {
+      editor_ = QString::fromUtf8(editor_.toUtf8());
     }
 
-    emit peekChanged();
+    emit changed();
     if (measured.bytes < measured.requested_bytes) {
-      reportPeekLimit(static_cast<qulonglong>(measured.requested_bytes));
+      reportLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
   }
 
-  void Application::reportPeekLimit(qulonglong requested_bytes) {
-    if (!peekOriginValid() || requested_bytes <= PeekLimits::message_bytes) {
+  void PeekController::reportLimit(qulonglong requested_bytes) {
+    if (!valid() || requested_bytes <= PeekLimits::message_bytes) {
       return;
     }
 
-    session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PeekLimits::message_bytes, .requested = requested_bytes, .route = {}});
-    refreshNotifications();
+    store_.session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PeekLimits::message_bytes, .requested = requested_bytes, .route = {}});
+    store_.commit();
   }
 
-  void Application::submitPeek(const QString& revision) {
-    if (revision != QString::number(store_.dialog().generation) || !peekOriginValid()) {
+  void PeekController::submit(const QString& revision) {
+    if (revision != QString::number(store_.dialog().generation) || !valid()) {
       return;
     }
 
-    const auto text = peek_editor_.toUtf8();
+    const auto text = editor_.toUtf8();
 
-    applyInteraction([&] {
-      if (session().submitPeek({text.constData(), static_cast<std::size_t>(text.size())})) {
-        showDialog(Dialog::none);
+    store_.begin();
+    try {
+      if (store_.session().submitPeek({text.constData(), static_cast<std::size_t>(text.size())})) {
+        emit closeRequested();
       }
-    });
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+
+      return;
+    }
+
+    store_.commit();
   }
 
-  QVariantMap Application::peekState() const {
+  QVariantMap PeekController::state() const {
     QString title;
     QString facts;
     QStringList lines;
 
-    if (peekOriginValid()) {
-      if (const auto* agent = session().peekAgent()) {
-        const auto* task = AgentOrder::taskRow(session().workspaceList(), *agent);
+    if (valid()) {
+      const auto& session = store_.session();
+      if (const auto* agent = session.peekAgent()) {
+        const auto* task = AgentOrder::taskRow(session.workspaceList(), *agent);
 
         title = toQString(PeekLabels::title(*agent, task));
         facts = toQString(PeekLabels::facts(*agent, task).view());
-        const auto geometry = PeekGeometry::measure(session().workbenchGeometry().cellArea());
-        const auto visible = PeekScreen<Memory>::lastLines(session().peek().text(), geometry.screen.height);
+        const auto geometry = PeekGeometry::measure(session.workbenchGeometry().cellArea());
+        const auto visible = PeekScreen<Memory>::lastLines(session.peek().text(), geometry.screen.height);
 
         lines = toQString(visible).split(QLatin1Char('\n'));
       }
     }
 
-    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("facts"), facts}, {QStringLiteral("lines"), lines}, {QStringLiteral("editorText"), peek_editor_}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(PeekLimits::message_bytes)}};
+    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("facts"), facts}, {QStringLiteral("lines"), lines}, {QStringLiteral("editorText"), editor_}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(PeekLimits::message_bytes)}};
   }
 
-  QVariantMap Application::peekGeometry() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
-    const auto& workbench = session().workbenchGeometry();
+  QVariantMap PeekController::geometry() const {
+    const auto& display = display_;
+    const auto density = display.density;
+    const auto& workbench = store_.session().workbenchGeometry();
     const auto geometry = PeekGeometry::measure(workbench.cellArea());
     auto bounds = workbench.pixels(geometry.bounds);
 

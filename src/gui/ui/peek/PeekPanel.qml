@@ -11,8 +11,8 @@ Item {
     property real ratio: 1
     readonly property var colors: controller.colors
     readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.peekState
-    readonly property var regions: controller.peekGeometry
+    readonly property var state: controller.peek.state
+    readonly property var regions: controller.peek.geometry
     property alias queryField: query
 
     clip: true
@@ -36,8 +36,8 @@ Item {
     Keys.onEscapePressed: root.controller.execute(GuiController.Action.cancel)
 
     Connections {
-        target: root.controller
-        function onPeekChanged() {
+        target: root.controller.peek
+        function onChanged() {
             root.synchronizeEditor();
         }
     }
@@ -116,10 +116,10 @@ Item {
             color: root.colors.surface0
             z: -1
         }
-        onTextEdited: root.controller.searchPeek(text)
-        onLimitReached: requested => root.controller.reportPeekLimit(requested)
-        Keys.onReturnPressed: root.controller.submitPeek(root.state.revision)
-        Keys.onEnterPressed: root.controller.submitPeek(root.state.revision)
+        onTextEdited: root.controller.peek.search(text)
+        onLimitReached: requested => root.controller.peek.reportLimit(requested)
+        Keys.onReturnPressed: root.controller.peek.submit(root.state.revision)
+        Keys.onEnterPressed: root.controller.peek.submit(root.state.revision)
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
                 root.controller.execute(GuiController.Action.cancel);
