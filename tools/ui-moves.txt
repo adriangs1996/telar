@@ -22,6 +22,7 @@ paths           app/panes/terminal/paths
 peek            app/overlays/peek
 plugins         foundation/plugins
 prompt          app/panes/terminal/prompt
+prompt_panel    app/overlays/prompt_panel
 scene           foundation/scene
 store           foundation/store
 suggestions     app/overlays/palette/suggestions
