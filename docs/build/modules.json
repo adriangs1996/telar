@@ -637,7 +637,7 @@
     "src/gui/ui/history/history_empty_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_filters_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_footer_layout.hpp": "Qt moc/QML integration",
-    "src/gui/ui/history/history_hint_projection.hpp": "Qt moc/QML integration",
+    "src/gui/ui/design/history_hint_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_inspection_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_loading_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_match_model.hpp": "Qt moc/QML integration",

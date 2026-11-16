@@ -6,7 +6,7 @@ static_assert(true);
 #include "native_mode_layout.hpp"
 #include "tbc/view.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
-#include "ui/history/history_hint_projection.hpp"
+#include "ui/design/history_hint_projection.hpp"
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>
