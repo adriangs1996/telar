@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "ui/activity/activity_controller.hpp"
-#include "ui/machines/machine_activity_target.hpp"
+#include "ui/activity/machine_activity_target.hpp"
 #include "ui/store/store.hpp"
 #include <QObject>
 #include <QString>

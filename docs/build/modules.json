@@ -658,7 +658,7 @@
     "src/gui/ui/foundation/models/list_model.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/local_runtime_endpoint.hpp": "Qt moc/QML integration",
     "src/gui/ui/config/lua_host.hpp": "Qt moc/QML integration",
-    "src/gui/ui/machines/machine_activity_target.hpp": "Qt moc/QML integration",
+    "src/gui/ui/activity/machine_activity_target.hpp": "Qt moc/QML integration",
     "src/gui/ui/machines/machine_chrome_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/machines/machine_chrome_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/machines/machine_client.hpp": "Qt moc/QML integration",

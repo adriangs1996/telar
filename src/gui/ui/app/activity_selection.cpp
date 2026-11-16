@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "application_controller.hpp"
 #include "ui/activity/activity_controller.hpp"
-#include "ui/machines/machine_activity_target.hpp"
+#include "ui/activity/machine_activity_target.hpp"
 #include <QString>
 #include <variant>
 
