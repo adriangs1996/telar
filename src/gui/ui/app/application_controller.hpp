@@ -292,7 +292,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void registerTabStrip(QQuickItem* strip);
     Q_INVOKABLE void selectCapturedTab();
     Q_INVOKABLE void setSidebarWidth(qreal width);
-    Q_INVOKABLE void usePaletteResult(const QVariantMap& choice);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
 
     bool input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
@@ -515,12 +514,12 @@ namespace telar::gui::qt {
     [[nodiscard]] const RuntimeConnection& connection() const noexcept;
     void runtimeDisconnected(MachineClient& client);
     void cancelCurrentInteraction();
+    void initializePalette();
     void showPalette(PaletteMode mode);
     // Pushes the display the controllers measure what they draw in.
     void measureDisplay();
     // A controller's interaction failed outside a dialog that shows it.
     void reportFailure(const QString& message);
-    bool navigatePaletteTarget(const NavigationTarget& target);
     void showPathPicker();
     static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};
 

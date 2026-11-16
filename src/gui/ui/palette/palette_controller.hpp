@@ -40,10 +40,11 @@ namespace telar::gui::qt {
   // drawn. The command suggestion is one of its modes and shares its query, and the actions
   // palette it was opened from.
   //
-  // It reads the store and the display and commands the window pushes. Using a row acts on the
-  // session or the window, so the window does it with what this controller answers. It asks the
-  // window to show its dialog again when it changes mode in place, and to close it once a
-  // suggestion is submitted.
+  // It reads the store and the display and commands the window pushes. A row that names a
+  // context, a tab or an agent navigates the session, and the suggestion action's row opens the
+  // suggestion over it; any other action and the machines are the window's, which it asks to run
+  // them. It asks the window to show its dialog again when it changes mode in place, and to close
+  // it once a row navigated or a suggestion was submitted.
   class PaletteController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(PaletteController)
@@ -72,7 +73,8 @@ namespace telar::gui::qt {
       std::size_t index = 0;
     };
 
-    explicit PaletteController(Store& store, QObject* parent = nullptr);
+    // `suggestion` is the window's action whose row opens the suggestion from the actions palette.
+    PaletteController(Store& store, PaletteAction suggestion, QObject* parent = nullptr);
     ~PaletteController() override = default;
     PaletteController(const PaletteController&) = delete;
     PaletteController& operator=(const PaletteController&) = delete;
@@ -88,6 +90,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void move(int delta);
     Q_INVOKABLE void setMode(int mode);
     Q_INVOKABLE void reportQueryLimit(qulonglong requested_bytes);
+    // Uses the row a choice from QML names, while it is the one the palette shows.
+    Q_INVOKABLE void activate(const QVariantMap& choice);
     // Submits the suggestion's task while the suggestion the view shows is the current one.
     Q_INVOKABLE void submitSuggestion(const QString& revision);
 
@@ -105,12 +109,7 @@ namespace telar::gui::qt {
 
     [[nodiscard]] PaletteMode mode() const;
     [[nodiscard]] const QString& query() const noexcept;
-    // The row a choice from QML names, while it is the one the palette shows.
-    [[nodiscard]] std::optional<Choice> chosen(const QVariantMap& choice) const;
     [[nodiscard]] std::optional<MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
-    // The actions palette as it is, to return to from the suggestion opened from its row.
-    [[nodiscard]] Parent parentFor(const QVariantMap& choice, std::size_t index) const;
-    void adoptParent(Parent parent);
     // Returns to the actions palette the suggestion was opened from; false when the palette is
     // closed or was not opened from one.
     bool restoreParent();
@@ -126,6 +125,9 @@ namespace telar::gui::qt {
     void showRequested();
     void closeRequested();
     void failed(const QString& message);
+    // A row named a machine or one of the window's actions, which the window runs.
+    void machineRequested(telar::gui::MachinePickerTarget target, bool alternate);
+    void actionRequested(telar::gui::qt::PaletteAction action);
 
   private:
     static constexpr std::size_t capacity = WorkspaceReplica<Memory>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<Memory>::capacity;
@@ -137,6 +139,13 @@ namespace telar::gui::qt {
     void collectNavigation(Matches& matches, std::string_view query) const;
     [[nodiscard]] QVariantMap record(const PaletteTarget& target, bool queried) const;
     [[nodiscard]] QVariantMap machineRecord(MachinePickerTarget target) const;
+    // The row a choice from QML names, while it is the one the palette shows.
+    [[nodiscard]] std::optional<Choice> chosen(const QVariantMap& choice) const;
+    // The actions palette as it is, to return to from the suggestion opened from its row.
+    [[nodiscard]] Parent parentFor(const QVariantMap& choice, std::size_t index) const;
+    void adoptParent(Parent parent);
+    // Selects the context or tab, or focuses the agent; false when the session no longer has it.
+    bool navigate(const NavigationTarget& target);
 
     // Runs a user's mutation of the session and commits it to the store.
     template <typename Mutation>
@@ -154,6 +163,7 @@ namespace telar::gui::qt {
     }
 
     Store& store_;
+    PaletteAction suggestion_;
     QString query_;
     std::optional<Parent> parent_;
     EditorPosition editor_restore_;

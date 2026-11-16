@@ -154,7 +154,7 @@ namespace telar::gui::qt {
         tabs_(store_, element_slots_),
         panes_(store_, element_slots_),
         activity_(store_, element_slots_, memory),
-        palette_(store_),
+        palette_(store_, PaletteAction{.value = static_cast<int>(Action::suggest_command)}),
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
         peek_(store_, activity_),
@@ -170,6 +170,7 @@ namespace telar::gui::qt {
     initializeComponents();
     initializeElements();
     initializePicks();
+    initializePalette();
     initializePlugins();
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
     palette_.setCommands(commands());
@@ -217,13 +218,6 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
     connect(&history_, &HistoryController::failed, this, &ApplicationController::reportFailure);
-    connect(&palette_, &PaletteController::showRequested, this, [this] {
-      showDialog(Dialog::palette);
-    });
-    connect(&palette_, &PaletteController::closeRequested, this, [this] {
-      showDialog(Dialog::none);
-    });
-    connect(&palette_, &PaletteController::failed, this, &ApplicationController::reportFailure);
     connect(&paths_, &PathPickerController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });

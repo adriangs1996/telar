@@ -42,7 +42,7 @@ Item {
 
     function choose(key, revision, alternate = false) {
         const anchor = query.selectionStart === query.cursorPosition ? query.selectionEnd : query.selectionStart;
-        root.controller.usePaletteResult({key: key, revision: revision, anchor: anchor, cursor: query.cursorPosition, alternate: alternate});
+        root.controller.palette.activate({key: key, revision: revision, anchor: anchor, cursor: query.cursorPosition, alternate: alternate});
     }
 
     function synchronizeEditor() {

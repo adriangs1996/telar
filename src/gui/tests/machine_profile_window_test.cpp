@@ -384,7 +384,7 @@ namespace {
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 4);
       const auto offline = requireValue(machines.find(MachineId::fromRaw(2)), "Expected disabled picker row");
 
-      application.usePaletteResult(machineChoice(application, QStringLiteral("Offline")));
+      application.palette()->activate(machineChoice(application, QStringLiteral("Offline")));
       QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
       QTRY_VERIFY(machines.row(offline).enabled);
       QCOMPARE(machines.active(), slot);
@@ -392,14 +392,14 @@ namespace {
       auto toggle = machineChoice(application, QStringLiteral("Offline"));
 
       toggle.insert(QStringLiteral("alternate"), true);
-      application.usePaletteResult(toggle);
+      application.palette()->activate(toggle);
       QTRY_VERIFY(!machines.row(offline).enabled);
       QCOMPARE(machines.active(), slot);
       application.execute(ApplicationController::Action::machine_picker);
       auto local = machineChoice(application, QStringLiteral("Personal"));
 
       local.insert(QStringLiteral("alternate"), true);
-      application.usePaletteResult(local);
+      application.palette()->activate(local);
       QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
       QCOMPARE(machines.active(), slot);
       QVERIFY(machines.row(Machines::local_slot).enabled);
@@ -414,7 +414,7 @@ namespace {
       application.execute(ApplicationController::Action::machine_picker);
       application.palette()->search(QStringLiteral(":unmatched"));
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 1);
-      application.usePaletteResult(machineChoice(application, QStringLiteral("Add machine…")));
+      application.palette()->activate(machineChoice(application, QStringLiteral("Add machine…")));
       QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::machine);
       const auto first_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
 
@@ -483,7 +483,7 @@ namespace {
 
       QTRY_VERIFY(MachineProfileWindow::machines(application).row(slot).needs_setup);
       application.execute(ApplicationController::Action::machine_picker);
-      application.usePaletteResult(machineChoice(application, QStringLiteral("Missing")));
+      application.palette()->activate(machineChoice(application, QStringLiteral("Missing")));
       QTRY_COMPARE(fixture.runtime->count(ClientTag::create_tab), std::size_t{1});
       const auto request = fixture.runtime->last<CreateTab>();
 

@@ -95,9 +95,10 @@ namespace telar::gui::qt {
 
   }
 
-  PaletteController::PaletteController(Store& store, QObject* parent)
+  PaletteController::PaletteController(Store& store, PaletteAction suggestion, QObject* parent)
       : QObject(parent),
-        store_(store) {}
+        store_(store),
+        suggestion_(suggestion) {}
 
   bool PaletteController::isOpen() const noexcept {
     return store_.dialog().kind == Store::Dialog::palette;
@@ -594,6 +595,79 @@ namespace telar::gui::qt {
     emit showRequested();
 
     return true;
+  }
+
+  void PaletteController::activate(const QVariantMap& choice) {
+    const auto found = chosen(choice);
+    if (!found) {
+      return;
+    }
+
+    const auto& target = found->target;
+    if (const auto* machine = std::get_if<MachinePickerTarget>(&target)) {
+      emit machineRequested(*machine, choice.value(QStringLiteral("alternate"), false).toBool());
+
+      return;
+    }
+
+    if (const auto* navigation = std::get_if<NavigationTarget>(&target)) {
+      interact([&] {
+        if (navigate(*navigation)) {
+          emit closeRequested();
+        }
+      });
+
+      return;
+    }
+
+    const auto action = std::get<PaletteAction>(target);
+    if (action.value != suggestion_.value) {
+      emit actionRequested(action);
+
+      return;
+    }
+
+    interact([&] {
+      auto parent = parentFor(choice, found->index);
+
+      open(PaletteMode::suggest);
+      emit showRequested();
+      adoptParent(std::move(parent));
+    });
+  }
+
+  bool PaletteController::navigate(const NavigationTarget& target) {
+    auto& session = store_.session();
+
+    if (const auto* workspace = std::get_if<WorkspaceLocation>(&target)) {
+      const auto found = std::ranges::find_if(session.workspaces(), [&](const auto& row) {
+        return sameWorkspace(row.location, *workspace);
+      });
+      if (found == session.workspaces().end()) {
+        return false;
+      }
+
+      session.selectWorkspace(*workspace);
+
+      return true;
+    }
+
+    if (const auto* tab = std::get_if<TabLocation>(&target)) {
+      const auto found = std::ranges::find_if(session.tabs(), [&](const auto& row) {
+        return sameTab(row->location, *tab);
+      });
+      if (found == session.tabs().end()) {
+        return false;
+      }
+
+      session.selectTab(*tab);
+
+      return true;
+    }
+
+    const auto agent = std::get<AgentNavigationTarget>(target);
+
+    return session.focusAgent(agent.pane_id, agent.pane_generation);
   }
 
   void PaletteController::submitSuggestion(const QString& revision) {

@@ -2540,7 +2540,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(!key.isEmpty());
       client_->palette()->search(QStringLiteral(">no matching command exists here"));
-      client_->usePaletteResult({{QStringLiteral("key"), key}, {QStringLiteral("revision"), revision}});
+      client_->palette()->activate({{QStringLiteral("key"), key}, {QStringLiteral("revision"), revision}});
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->palette()->search(QStringLiteral("@context query"));
@@ -2554,7 +2554,7 @@ return {api_version=2, client={keybindings={
       client_->execute(ApplicationController::Action::cancel);
       client_->execute(ApplicationController::Action::palette);
       client_->palette()->search(QStringLiteral(">Split right"));
-      client_->usePaletteResult({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
+      client_->palette()->activate({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->execute(ApplicationController::Action::cancel);
@@ -3081,7 +3081,7 @@ return {api_version=2, client={keybindings={
         client_->palette()->search(QLatin1Char('>') + label);
         const auto state = client_->palette()->state();
 
-        client_->usePaletteResult({{QStringLiteral("key"), state.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), state.value(QStringLiteral("revision"))}});
+        client_->palette()->activate({{QStringLiteral("key"), state.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), state.value(QStringLiteral("revision"))}});
       };
 
       const auto tab_keys = [this] {
