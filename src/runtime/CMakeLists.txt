@@ -11,11 +11,6 @@ add_subdirectory(../../lib/config "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
 add_subdirectory(../../lib/tls "${CMAKE_CURRENT_BINARY_DIR}/telar-tls")
 add_subdirectory(../../lib/native "${CMAKE_CURRENT_BINARY_DIR}/telar-native")
 
-add_library(ghostty-vt UNKNOWN IMPORTED)
-set_target_properties(ghostty-vt PROPERTIES
-  IMPORTED_LOCATION "${GHOSTTY_VT_LIBRARY}"
-  INTERFACE_INCLUDE_DIRECTORIES "${GHOSTTY_VT_INCLUDE_DIR}")
-
 # Static headless distribution builds must not acquire desktop dependencies.
 if(TELAR_LINUX_DISTRIBUTABLE)
   option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" OFF)
@@ -60,7 +55,7 @@ if(NOT GHOSTTY_VT_HAS_WUFFS_PNG)
 endif()
 
 add_executable(ghostty-manifest tools/ghostty_manifest.cpp)
-target_link_libraries(ghostty-manifest PRIVATE ghostty-vt telar::build_flags)
+target_link_libraries(ghostty-manifest PRIVATE deps::ghostty_vt telar::build_flags)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/config/bootstrap.lua" telar_config_bootstrap_file)
@@ -231,7 +226,7 @@ target_link_libraries(runtime-core PUBLIC telar::git)
 add_subdirectory(../../lib/ebnf "${CMAKE_CURRENT_BINARY_DIR}/ebnf")
 target_link_libraries(runtime-core PUBLIC ebnf::ebnf)
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
-target_link_libraries(runtime-core PUBLIC ghostty-vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(runtime-core PUBLIC deps::ghostty_vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
   target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
   # The interface of telar.runtime.redirect.record is macOS only (cmake/module_platforms.cmake).

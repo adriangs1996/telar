@@ -10,7 +10,8 @@ add_library(telar::ghostty ALIAS telar-ghostty)
 telar_modules(telar-ghostty)
 target_include_directories(telar-ghostty PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-set(GHOSTTY_VT_ROOT "" CACHE PATH "Installed libghostty-vt prefix")
-find_path(GHOSTTY_VT_INCLUDE_DIR ghostty/vt/unicode.h HINTS "${GHOSTTY_VT_ROOT}/include" REQUIRED)
-target_include_directories(telar-ghostty PUBLIC "${GHOSTTY_VT_INCLUDE_DIR}")
+# The headers as ordinary include directories, not system ones: the projects that link the
+# library get them from deps::ghostty_vt as system headers.
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/deps/ghostty.cmake")
+target_include_directories(telar-ghostty PUBLIC "$<TARGET_PROPERTY:deps::ghostty_vt,INTERFACE_INCLUDE_DIRECTORIES>")
 telar_editor_flags(telar-ghostty GHOSTTY)
