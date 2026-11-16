@@ -13,8 +13,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/panes/pane_attention_value.hpp"
-#include "ui/panes/progress_value.hpp"
+#include "ui/foundation/models/pane_attention_value.hpp"
+#include "ui/foundation/models/progress_value.hpp"
 #include <QChar>
 #include <QColor>
 #include <QDir>

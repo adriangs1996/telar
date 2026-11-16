@@ -14,9 +14,9 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QList>

@@ -6,7 +6,7 @@ static_assert(true);
 #include "../core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/command_process.hpp"
+#include "ui/foundation/process/command_process.hpp"
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
 #include <QCoreApplication>
@@ -38,7 +38,7 @@ static_assert(true);
 #include <vector>
 
 #include "core/memory.hpp"
-#include "ui/app/command_process.hpp"
+#include "ui/foundation/process/command_process.hpp"
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
 

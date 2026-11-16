@@ -15,12 +15,12 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "ui/activity/agent_status_value.hpp"
 #include "ui/activity/native_agent_status.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/native_tab_activity.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/progress_value.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/panes/pane_header_layout.hpp"
 #include "ui/panes/pane_projection.hpp"
-#include "ui/panes/progress_value.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -62,12 +62,12 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "ui/activity/agent_status_value.hpp"
 #include "ui/activity/native_agent_status.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/native_tab_activity.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/progress_value.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/panes/pane_header_layout.hpp"
 #include "ui/panes/pane_projection.hpp"
-#include "ui/panes/progress_value.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

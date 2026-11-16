@@ -7,8 +7,8 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/fonts/resident_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QList>

@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "native_pane_attention.hpp"
 #include "core/terminal_size.hpp"
-#include "pane_attention_value.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
+#include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/scene/rounded_paints_scene.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QColor>

@@ -10,8 +10,8 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/panes/native_pane_attention.hpp"
-#include "ui/panes/pane_attention_value.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QCoreApplication>
@@ -60,8 +60,8 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
+#include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/panes/native_pane_attention.hpp"
-#include "ui/panes/pane_attention_value.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;

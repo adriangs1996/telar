@@ -12,7 +12,7 @@ static_assert(true);
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/utf16_encoding.hpp"
+#include "ui/foundation/qt/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QInputMethod>
@@ -44,7 +44,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "ui/app/utf16_encoding.hpp"
+#include "ui/foundation/qt/utf16_encoding.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.text.bounded_editor;

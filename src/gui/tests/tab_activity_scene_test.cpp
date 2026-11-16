@@ -16,13 +16,13 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "ui/activity/native_agent_status.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/native_tab_activity.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
 #include "ui/controls/native_progress_ring.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
-#include "ui/panes/progress_value.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/progress_value.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -77,13 +77,13 @@ static_assert(true);
 #include <vector>
 
 #include "ui/activity/native_agent_status.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/native_tab_activity.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
 #include "ui/controls/native_progress_ring.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
-#include "ui/panes/progress_value.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/progress_value.hpp"
+#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.tab_drop;

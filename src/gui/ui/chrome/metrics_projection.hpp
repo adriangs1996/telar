@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>

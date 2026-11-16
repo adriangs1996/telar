@@ -17,10 +17,10 @@ static_assert(true);
 #include "ui/activity/agent_projection.hpp"
 #include "ui/activity/agent_status_value.hpp"
 #include "ui/activity/native_agent_status.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/sidebar_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -75,10 +75,10 @@ static_assert(true);
 #include "ui/activity/agent_projection.hpp"
 #include "ui/activity/agent_status_value.hpp"
 #include "ui/activity/native_agent_status.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/sidebar_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;

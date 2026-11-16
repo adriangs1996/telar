@@ -11,9 +11,9 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/app/runtime_connection.hpp"
-#include "ui/app/window_identity.hpp"
+#include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/qt/window_identity.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QString>

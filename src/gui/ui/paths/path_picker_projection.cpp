@@ -6,8 +6,8 @@ static_assert(true);
 #include "path_picker_controller.hpp"
 #include "platform/window.hpp"
 #include "terminal/cell_position.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/chrome_fonts.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
 #include <algorithm>

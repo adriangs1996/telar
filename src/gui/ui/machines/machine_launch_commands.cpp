@@ -8,7 +8,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/launch_arguments.hpp"
+#include "ui/foundation/process/launch_arguments.hpp"
 #include <QByteArray>
 #include <QString>
 #include <QStringList>

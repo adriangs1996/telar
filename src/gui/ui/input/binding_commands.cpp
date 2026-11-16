@@ -47,7 +47,7 @@ static_assert(true);
 #include <variant>
 
 #include "platform/window.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QStringLiteral>
 #include <QVariantList>

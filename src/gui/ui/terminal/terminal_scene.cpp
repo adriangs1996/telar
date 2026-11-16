@@ -13,8 +13,8 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_decorations.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/cell_glyphs.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/scene/scene_nodes.hpp"
 #include "ui/scene/text_scene.hpp"
 #include <QMatrix4x4>

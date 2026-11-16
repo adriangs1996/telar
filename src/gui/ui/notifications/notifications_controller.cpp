@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "notifications_controller.hpp"
-#include "ui/app/deadline_timer.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/qt/deadline_timer.hpp"
 #include <QLatin1Char>
 #include <exception>
 #include <limits>

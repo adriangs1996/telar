@@ -16,8 +16,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/sidebar_projection.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
@@ -25,6 +23,8 @@ static_assert(true);
 #include "ui/controls/provider_mark.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/fonts/typography_projection.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
@@ -79,8 +79,6 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/sidebar_projection.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
@@ -88,6 +86,8 @@ static_assert(true);
 #include "ui/controls/provider_mark.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/fonts/typography_projection.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 
 import telar.gui.application.workspace_replica;

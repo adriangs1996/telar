@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QIODevice>
 #include <QProcess>
 #include <QStringList>

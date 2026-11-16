@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "terminal_font.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QFont>
 #include <QGuiApplication>
 #include <QScreen>

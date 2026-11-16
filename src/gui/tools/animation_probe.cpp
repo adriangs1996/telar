@@ -11,11 +11,11 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
 #include "ui/controls/modal_reveal_layout.hpp"
 #include "ui/controls/native_rounded_rectangle.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
@@ -39,11 +39,11 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
 #include "ui/controls/modal_reveal_layout.hpp"
 #include "ui/controls/native_rounded_rectangle.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;

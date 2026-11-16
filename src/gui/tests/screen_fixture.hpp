@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QtCore/qchar.h>
 #include <algorithm>
@@ -22,7 +22,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.links.path_expansion;
 

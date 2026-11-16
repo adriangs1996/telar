@@ -14,7 +14,7 @@ static_assert(true);
 #include "terminal_item.hpp"
 #include "terminal_preparation.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/input/key_adapter.hpp"
 #include "ui/links/link_presentation.hpp"
 #include "ui/links/link_preview.hpp"

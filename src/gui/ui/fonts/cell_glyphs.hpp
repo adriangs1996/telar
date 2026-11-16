@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "box_font.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/scene/curve_scene.hpp"
 #include "ui/scene/scene_nodes.hpp"
 #include <algorithm>

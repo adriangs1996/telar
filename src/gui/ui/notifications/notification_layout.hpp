@@ -12,9 +12,9 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/fonts/font_collection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/notifications/notifications_controller.hpp"
 #include <QAbstractItemModel>
 #include <QMetaObject>

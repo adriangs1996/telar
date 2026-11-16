@@ -6,7 +6,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "ui/app/list_model.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/input/scroll_event.hpp"
 #include "ui/store/store.hpp"
 #include <QAbstractItemModel>

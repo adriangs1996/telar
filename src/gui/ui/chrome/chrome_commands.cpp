@@ -10,10 +10,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/typography_projection.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/machines/machine_client.hpp"
 #include <QQuickWindow>
 #include <QVariantMap>

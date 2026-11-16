@@ -11,8 +11,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/list_model.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qtypes.h>

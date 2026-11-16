@@ -13,8 +13,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/panes/fullscreen_strip_layout.hpp"
 #include "ui/panes/pane_projection.hpp"
 #include <QFont>
@@ -59,8 +59,8 @@ static_assert(true);
 #include <variant>
 
 #include "core/memory.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/panes/fullscreen_strip_layout.hpp"
 #include "ui/panes/pane_projection.hpp"
 

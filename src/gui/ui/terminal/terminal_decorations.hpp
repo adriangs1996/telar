@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "telar_client/serializers/telar_cells.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/scene/rounded_rectangle_scene.hpp"
 #include "ui/scene/scene_nodes.hpp"
 #include <QQuickWindow>

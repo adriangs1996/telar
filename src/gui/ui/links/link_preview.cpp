@@ -7,7 +7,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "terminal/cell_position.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QFontMetricsF>
 #include <QPointF>
 #include <QTextLayout>

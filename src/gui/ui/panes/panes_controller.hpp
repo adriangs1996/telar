@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "ui/app/list_model.hpp"
 #include "ui/components/element_slots.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/store/store.hpp"
 #include <QAbstractItemModel>
 #include <QObject>

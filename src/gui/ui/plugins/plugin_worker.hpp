@@ -13,7 +13,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/open_directory.h"
-#include "ui/app/command_process.hpp"
+#include "ui/foundation/process/command_process.hpp"
 #include <QDebug>
 #include <QFuture>
 #include <QFutureWatcher>

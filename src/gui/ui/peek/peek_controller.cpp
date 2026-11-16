@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "peek_controller.hpp"
 #include "application/dependencies.hpp"
-#include "ui/app/projection.hpp"
-#include "ui/app/utf16_encoding.hpp"
+#include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/qt/utf16_encoding.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>
 #include <QStringList>

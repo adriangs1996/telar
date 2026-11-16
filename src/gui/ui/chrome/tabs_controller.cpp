@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "tabs_controller.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QList>
 #include <algorithm>
 #include <span>

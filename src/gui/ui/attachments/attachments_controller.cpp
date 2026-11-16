@@ -7,7 +7,7 @@ static_assert(true);
 #include "attachments/types.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QByteArray>
 #include <QEvent>
 #include <algorithm>

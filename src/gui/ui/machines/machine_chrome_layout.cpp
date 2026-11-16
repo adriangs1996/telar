@@ -13,9 +13,9 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/activity/agent_projection.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QLatin1StringView>

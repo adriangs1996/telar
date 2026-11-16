@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
-#include "ui/app/command_process.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/process/command_process.hpp"
 #include <QIODevice>
 #include <QProcess>
 #include <QStringList>

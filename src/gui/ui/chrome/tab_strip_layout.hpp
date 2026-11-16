@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/fonts/chrome_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
 #include <QMetaObject>

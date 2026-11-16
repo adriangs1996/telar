@@ -11,10 +11,10 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/font_collection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QByteArray>
 #include <QFont>
 #include <QFontMetricsF>

@@ -43,7 +43,7 @@ static_assert(true);
 
 #include "telar_config/graphics/limits.hpp"
 #include "telar_config/terminal/control/policy.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>

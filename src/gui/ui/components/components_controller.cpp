@@ -17,8 +17,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/config/configuration_source.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/machines/machine_client.hpp"
 #include "ui/machines/machine_client_key.hpp"
 #include <QByteArray>

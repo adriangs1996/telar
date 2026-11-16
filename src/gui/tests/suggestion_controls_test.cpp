@@ -3,9 +3,9 @@
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/controls/native_form_field.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/input/key_adapter.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>

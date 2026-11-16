@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "progress_value.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/protocol/pane_io.hpp"
@@ -14,7 +13,8 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
 #include "ui/activity/agent_status_value.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/progress_value.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>

@@ -75,8 +75,8 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/links/external_link_opener.hpp"
 #include "ui/machines/machine_chrome_layout.hpp"
 #include "ui/machines/machine_client.hpp"
@@ -140,8 +140,8 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/app/list_model.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/links/external_link_opener.hpp"
 #include "ui/machines/machine_chrome_layout.hpp"
 #include "ui/machines/machine_client.hpp"

@@ -13,7 +13,7 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/projection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include "ui/machines/machine_client.hpp"
 #include "ui/machines/machine_client_key.hpp"
 #include <QString>

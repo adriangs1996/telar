@@ -13,9 +13,9 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/fonts/font_collection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>

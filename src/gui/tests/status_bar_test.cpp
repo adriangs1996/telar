@@ -9,11 +9,11 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/mode_projection.hpp"
 #include "ui/components/component_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -48,11 +48,11 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "ui/app/projection.hpp"
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/mode_projection.hpp"
 #include "ui/components/component_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application.host_effects;

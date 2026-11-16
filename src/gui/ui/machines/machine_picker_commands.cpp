@@ -11,8 +11,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/projection.hpp"
 #include "ui/app/runtime_connection.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QLatin1StringView>
 #include <QString>
 #include <QVariantList>
