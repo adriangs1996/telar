@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "components_controller.hpp"
-#include "component_projection.hpp"
 #include "component_surface_state.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
@@ -18,6 +17,7 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
 #include "ui/config/configuration_source.hpp"
+#include "ui/design/elements/component_projection.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/projection.hpp"

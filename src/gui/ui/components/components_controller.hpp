@@ -5,11 +5,11 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "component_surface_state.hpp"
-#include "element_slots.hpp"
 #include "pick_controller.hpp"
 #include "surface_command.hpp"
 #include "tbc/view.hpp"
 #include "ui/config/configuration_source.hpp"
+#include "ui/design/elements/element_slots.hpp"
 #include "ui/store/store.hpp"
 #include <QObject>
 #include <QPointF>

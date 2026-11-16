@@ -11,7 +11,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/mode_projection.hpp"
-#include "ui/components/component_projection.hpp"
+#include "ui/design/elements/component_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QColor>
@@ -50,7 +50,7 @@ static_assert(true);
 
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/mode_projection.hpp"
-#include "ui/components/component_projection.hpp"
+#include "ui/design/elements/component_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
 

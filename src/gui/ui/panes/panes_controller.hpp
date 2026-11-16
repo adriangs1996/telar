@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/components/element_slots.hpp"
+#include "ui/design/elements/element_slots.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/store/store.hpp"
 #include <QAbstractItemModel>
