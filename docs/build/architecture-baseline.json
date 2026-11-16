@@ -1,0 +1,350 @@
+{
+  "commit": "1b59c8d2aba03e6e3b9288a7e1163576ca282fe0",
+  "date": "2026-11-16",
+  "machine": {
+    "system": "Darwin 25.6.0 arm64",
+    "cpus": 8,
+    "memory_mib": 16384
+  },
+  "note": "Another agent shared the machine; builds were serialized with it, but its other work shows in the load averages.",
+  "trees": {
+    "runtime": {
+      "directory": "src/runtime/out",
+      "configure": "tools/cpp configure runtime"
+    },
+    "gui": {
+      "directory": "src/gui/out",
+      "configure": "tools/cpp configure gui -- -DTELAR_GUI_QT_BUILD_DIR=<root>/.qt-cache -DTELAR_GUI_TEST_RUNTIME=<root>/.dev/bin/telar"
+    },
+    "cli": {
+      "directory": "src/cli/out",
+      "configure": "tools/cpp configure cli"
+    },
+    "auth": {
+      "directory": "src/auth-daemon/out",
+      "configure": "just auth-configure out Debug"
+    },
+    "runtime-release": {
+      "directory": "src/runtime/out-release",
+      "configure": "tools/cpp configure runtime -B out-release --config Release -- -DBUILD_TESTING=OFF"
+    },
+    "gui-release": {
+      "directory": "src/gui/out-release",
+      "configure": "tools/cpp configure gui -B out-release --config Release -- -DTELAR_GUI_QT_BUILD_DIR=<root>/.qt-cache -DBUILD_TESTING=OFF"
+    },
+    "runtime-sanitize": {
+      "directory": "src/runtime/out-sanitize",
+      "configure": "tools/cpp configure runtime -B out-sanitize --sanitizers"
+    },
+    "gui-sanitize": {
+      "directory": "src/gui/out-sanitize",
+      "configure": "tools/cpp configure gui -B out-sanitize --sanitizers -- -DTELAR_GUI_QT_BUILD_DIR=<root>/.qt-cache -DTELAR_GUI_TEST_RUNTIME=<root>/.dev/bin/telar"
+    }
+  },
+  "snapshots": {
+    "how": "Check out the commit, configure each tree as listed and run python3 tools/build-snapshot.py record <directory>; diff a later tree against it with tools/build-snapshot.py diff.",
+    "counts": {
+      "runtime": {
+        "compiled_sources": 599,
+        "flag_sets": 36,
+        "linked": {
+          "static": 27,
+          "executable": 77,
+          "shared": 1
+        },
+        "tests": 49
+      },
+      "gui": {
+        "compiled_sources": 1089,
+        "flag_sets": 145,
+        "linked": {
+          "static": 33,
+          "executable": 149
+        },
+        "tests": 140
+      },
+      "cli": {
+        "compiled_sources": 198,
+        "flag_sets": 24,
+        "linked": {
+          "static": 22,
+          "executable": 8
+        },
+        "tests": 12
+      },
+      "auth-daemon": {
+        "compiled_sources": 3,
+        "flag_sets": 2,
+        "linked": {
+          "static": 1,
+          "executable": 1
+        },
+        "tests": 1
+      },
+      "gui-out-release": {
+        "compiled_sources": 765,
+        "flag_sets": 80,
+        "linked": {
+          "static": 30,
+          "executable": 7
+        },
+        "tests": 0
+      },
+      "runtime-out-release": {
+        "compiled_sources": 428,
+        "flag_sets": 31,
+        "linked": {
+          "static": 25,
+          "executable": 4
+        },
+        "tests": 0
+      },
+      "runtime-out-sanitize": {
+        "compiled_sources": 599,
+        "flag_sets": 36,
+        "linked": {
+          "static": 27,
+          "executable": 77,
+          "shared": 1
+        },
+        "tests": 49
+      },
+      "gui-out-sanitize": {
+        "compiled_sources": 1089,
+        "flag_sets": 146,
+        "linked": {
+          "static": 33,
+          "executable": 149
+        },
+        "tests": 140
+      }
+    }
+  },
+  "cold_build": {
+    "how": "Configured and built from an empty directory with tools/cpp, memory sampled as tools/module-metrics.py does. build_production builds the targets of just runtime-build and just gui-build, as module-metrics.py --build; build_all then builds the rest of the default target.",
+    "runtime": {
+      "configure_seconds": 2.7,
+      "configure_peak_memory_mib": 126,
+      "configure_load_average": 2.1,
+      "build_production_seconds": 25.3,
+      "build_production_peak_memory_mib": 1140,
+      "build_production_load_average": 2.7,
+      "build_all_seconds": 18.1,
+      "build_all_peak_memory_mib": 1706,
+      "build_all_load_average": 3.4
+    },
+    "gui": {
+      "configure_seconds": 15.3,
+      "configure_peak_memory_mib": 106,
+      "configure_load_average": 4.1,
+      "build_production_seconds": 86.8,
+      "build_production_peak_memory_mib": 2346,
+      "build_production_load_average": 4.7,
+      "build_all_seconds": 107.8,
+      "build_all_peak_memory_mib": 2457,
+      "build_all_load_average": 9.9
+    },
+    "cli": {
+      "configure_seconds": 2.2,
+      "configure_peak_memory_mib": 87,
+      "configure_load_average": 13.3
+    },
+    "auth": {
+      "configure_seconds": 0.7,
+      "configure_peak_memory_mib": 23,
+      "configure_load_average": 12.8
+    },
+    "production_seconds": 112.1,
+    "all_seconds": 238.0,
+    "peak_memory_mib": 2457
+  },
+  "incremental": {
+    "how": "Default target fully built, one no-op build, then touch the source and time tools/cpp build <tree>. Hub and non-hub by transitive dependent domains in process_layers.",
+    "domain_dependents": {
+      "runtime": {
+        "transport": 24,
+        "editors": 2,
+        "domains": 31
+      },
+      "gui": {
+        "core": 21,
+        "peek": 1,
+        "domains": 23
+      }
+    },
+    "runtime hub": {
+      "domain": "transport",
+      "source": "src/runtime/transport/connection/connection.cpp",
+      "noop_seconds": 0.4,
+      "noop_steps": 1,
+      "seconds": 5.0,
+      "compiled": 1,
+      "scanned": 1,
+      "archived": 1,
+      "linked": 32,
+      "steps": 37
+    },
+    "runtime non-hub": {
+      "domain": "editors",
+      "source": "src/runtime/editors/remote_editor/remote_editor.cpp",
+      "noop_seconds": 0.3,
+      "noop_steps": 1,
+      "seconds": 4.4,
+      "compiled": 1,
+      "scanned": 1,
+      "archived": 1,
+      "linked": 32,
+      "steps": 37
+    },
+    "gui hub": {
+      "domain": "core",
+      "source": "src/gui/core/metrics/metrics.cpp",
+      "noop_seconds": 0.9,
+      "noop_steps": 1,
+      "seconds": 13.7,
+      "compiled": 1,
+      "scanned": 1,
+      "archived": 1,
+      "linked": 136,
+      "steps": 141
+    },
+    "gui non-hub": {
+      "domain": "peek",
+      "source": "src/gui/peek/screen/screen.cpp",
+      "noop_seconds": 0.8,
+      "noop_steps": 1,
+      "seconds": 13.3,
+      "compiled": 1,
+      "scanned": 1,
+      "archived": 1,
+      "linked": 136,
+      "steps": 141
+    }
+  },
+  "gui_release_batch_units": 9,
+  "problems": {
+    "B1": {
+      "if_not_target_lines": 37
+    },
+    "B2": {
+      "compile_units_in_both_trees": 139,
+      "module_interfaces": 59,
+      "duplicated_artifacts": {
+        "objects": 139,
+        "bmis": 59
+      },
+      "plan_said": 204
+    },
+    "B5": {
+      "global": "cmake/cpp_modules.cmake:51-56 add_compile_definitions, add_compile_options, add_link_options",
+      "public": "cmake/cpp_modules.cmake:108-113 in telar_modules"
+    },
+    "B6": {
+      "declared_after_alias": [
+        "src/runtime/CMakeLists.txt:248 TELAR_RUNTIME_DIAGNOSTICS",
+        "src/runtime/CMakeLists.txt:265 TELAR_RUNTIME_SANITIZERS",
+        "src/gui/CMakeLists.txt:12 TELAR_GUI_SANITIZERS"
+      ],
+      "still_read": [
+        ".github/workflows/runtime-cpp.yml:74,164 -DTELAR_RUNTIME_SANITIZERS",
+        "src/gui/cmake/fonts.cmake:69,94 TELAR_GUI_SANITIZERS",
+        "src/runtime/cmake/tests.cmake:63,75 TELAR_RUNTIME_SANITIZERS",
+        "src/runtime/README.md:387,451",
+        "src/gui/README.md:225"
+      ]
+    },
+    "B7": {
+      "lookups": [
+        "lib/ghostty/CMakeLists.txt:14",
+        "cmake/telar_editor.cmake:30",
+        "src/runtime/cmake/dependencies.cmake:10-11",
+        "src/cli/cmake/window.cmake:6-7",
+        "src/gui/CMakeLists.txt:191-192"
+      ],
+      "imported_targets": [
+        "ghostty-vt (src/runtime/CMakeLists.txt:18, src/cli/cmake/window.cmake:8)",
+        "gui-unicode (src/gui/CMakeLists.txt:193)"
+      ],
+      "plan_said_lookups": 4
+    },
+    "B8": {
+      "zlib_macos_lookups": [
+        "lib/git/CMakeLists.txt:16",
+        "src/runtime/cmake/dependencies.cmake:75"
+      ],
+      "linked_by_path": [
+        "lib/git/CMakeLists.txt:30 ZLIB_LIBRARY",
+        "src/runtime/CMakeLists.txt:231-238 NGHTTP2, PCAP, ZLIB, BROTLI x3, ZSTD, SQLITE3",
+        "src/cli/CMakeLists.txt:72 SQLITE3 (Linux)"
+      ]
+    },
+    "B9": {
+      "tbc_include_by_path": [
+        "src/runtime/CMakeLists.txt:224",
+        "src/gui/CMakeLists.txt:134",
+        "lib/clipboard/cmake/library.cmake:16"
+      ],
+      "client_include_from_wire": "lib/wire/CMakeLists.txt:32"
+    },
+    "B10": {
+      "per_process_scripts": 8,
+      "shared_engines": [
+        "cmake/lint_prepare.cmake",
+        "cmake/lifetime_check.cmake"
+      ],
+      "tbc_tooling_users": [
+        "lib/tbc",
+        "lib/ebnf",
+        "lib/clipboard",
+        "src/auth-daemon"
+      ],
+      "runtime_lifetime_scope_excludes": [
+        "lib/ebnf",
+        "lib/clipboard",
+        "lib/native",
+        "lib/ghostty"
+      ]
+    },
+    "B12": {
+      "runtime": {
+        "binaries": 78,
+        "linking": 68,
+        "relinked_by_default_target": 32
+      },
+      "gui": {
+        "binaries": 149,
+        "linking": 146,
+        "relinked_by_default_target": 136
+      }
+    },
+    "B13": {
+      "platform_module_lists": "cmake/module_platforms.cmake",
+      "macos_only": 4,
+      "linux_only": 3
+    },
+    "B14": {
+      "tools_cpp": [
+        "justfile runtime/gui",
+        ".github/workflows/runtime-cpp.yml (libraries)",
+        ".github/workflows/*.yml tbc"
+      ],
+      "cmake_direct": [
+        "justfile auth-configure, editor",
+        ".github/workflows/runtime-cpp.yml:69,162",
+        ".github/workflows/gui-cpp.yml:87",
+        "packaging/release/{macos,linux,linux-headless}.sh",
+        "tools/vm/omarchy-build.sh"
+      ],
+      "presets": [
+        "lib/tbc",
+        "lib/ebnf",
+        "lib/clipboard",
+        "src/auth-daemon"
+      ]
+    },
+    "B15": {
+      "gui-glyphs": "no link consumer; add_dependencies of gui-lint, gui-lifetime, gui-interface-bodies, gui-blank-lines",
+      "gui-clock": "linked by gui-awake-clock-test and gui-wall-clock-test"
+    }
+  }
+}
