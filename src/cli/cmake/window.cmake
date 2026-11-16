@@ -7,7 +7,7 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/../config/bootstrap.inc.in" "${CMAKE_C
 target_sources(telar PRIVATE window/window.cpp)
 add_executable(telar-config-check config_check_main.cpp tab/config_check.cpp)
 target_include_directories(telar-config-check PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(telar-config-check PRIVATE cli-core telar::config deps::ghostty_vt)
+target_link_libraries(telar-config-check PRIVATE cli-window cli-tab telar::config deps::ghostty_vt)
 set_target_properties(telar-config-check PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:telar>")
 add_dependencies(telar telar-config-check)
 install(TARGETS telar-config-check RUNTIME DESTINATION bin)

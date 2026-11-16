@@ -3,16 +3,16 @@
 # where the runtime builds beside the CLI.
 telar_add_test(cli-test-check STATIC SOURCES check/check.cppm LIBRARIES telar::build_flags)
 
-telar_add_test(hook-tests SOURCES hooks_test.cpp LIBRARIES cli-core cli-test-check
+telar_add_test(hook-tests SOURCES hooks_test.cpp LIBRARIES cli-hooks cli-hook cli-test-check
   LABELS cli.hooks)
-telar_add_test(integration-tests SOURCES integration_test.cpp LIBRARIES cli-core cli-test-check
+telar_add_test(integration-tests SOURCES integration_test.cpp LIBRARIES cli-integration cli-tab cli-test-check
   LABELS cli.integration)
-telar_add_test(json-text-tests SOURCES json_text_test.cpp LIBRARIES cli-core cli-test-check
+telar_add_test(json-text-tests SOURCES json_text_test.cpp LIBRARIES cli-output cli-test-check
   LABELS cli.output)
-telar_add_test(arguments-tests SOURCES arguments_test.cpp LIBRARIES cli-core cli-test-check
+telar_add_test(arguments-tests SOURCES arguments_test.cpp LIBRARIES cli-command_limit cli-test-check
   LABELS cli.command_limit)
-telar_add_test(hook-mapping-probe NO_TEST SOURCES hook_mapping_probe.cpp LIBRARIES cli-core)
-telar_add_test(repository-prepare-probe NO_TEST SOURCES repository_prepare_probe.cpp LIBRARIES cli-core)
+telar_add_test(hook-mapping-probe NO_TEST SOURCES hook_mapping_probe.cpp LIBRARIES cli-hooks cli-hook)
+telar_add_test(repository-prepare-probe NO_TEST SOURCES repository_prepare_probe.cpp LIBRARIES cli-command_limit cli-worktree_git cli-worktree)
 
 telar_add_test(cli-help-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/help_test.py"
   --telar "$<TARGET_FILE:telar>" --help-directory "${TELAR_PROCESS_SOURCE_DIR}/help" --version "${TELAR_VERSION}"

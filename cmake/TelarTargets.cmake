@@ -8,15 +8,25 @@ include("${CMAKE_CURRENT_LIST_DIR}/TelarChecks.cmake")
 # builds beside the process it tests. Each helper registers its target for the
 # quality checks of cmake/TelarChecks.cmake, which take their scope from here.
 
-# telar_process(<name>): the folder that calls it is the process <name>. Its source and
-# binary directories become TELAR_PROCESS_SOURCE_DIR and TELAR_PROCESS_BINARY_DIR for the
-# helpers called here and in the folders below, which build tests and probes beside the
-# process.
-macro(telar_process name)
-  set(TELAR_PROCESS "${name}")
-  set(TELAR_PROCESS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-  set(TELAR_PROCESS_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-endmacro()
+# telar_process(<name> [OPTIONS <option>...]): the folder that calls it is the process
+# <name>. Its source and binary directories become TELAR_PROCESS_SOURCE_DIR and
+# TELAR_PROCESS_BINARY_DIR for the helpers called here and in the folders below, which
+# build tests and probes beside the process. It creates <name>-settings, the INTERFACE
+# target every domain of the process links: the process gives it the include directories,
+# definitions and libraries its domains compile and link with. OPTIONS are the compile
+# options of every domain and of everything that links one, or links <name>-settings.
+function(telar_process name)
+  cmake_parse_arguments(PARSE_ARGV 1 process "" "" "OPTIONS")
+  if(process_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "telar_process(${name}): unexpected arguments ${process_UNPARSED_ARGUMENTS}")
+  endif()
+  set(TELAR_PROCESS "${name}" PARENT_SCOPE)
+  set(TELAR_PROCESS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" PARENT_SCOPE)
+  set(TELAR_PROCESS_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" PARENT_SCOPE)
+  set(TELAR_PROCESS_OPTIONS "${process_OPTIONS}" PARENT_SCOPE)
+  add_library(${name}-settings INTERFACE)
+  target_compile_options(${name}-settings INTERFACE ${process_OPTIONS})
+endfunction()
 
 # telar_modules(<target> [EXCLUDE <folder>...] [MACOS_SOURCES <file>...]
 #               [LINUX_SOURCES <file>...]): makes every module interface below the
@@ -109,13 +119,18 @@ endfunction()
 #                  [DEPS <domain or target>...] [CHECKS <check>...])
 # A domain of a process (docs/build/modules.json, process_layers) as the library
 # <process>-<domain>, aliased telar::<process>::<domain>, from the folder whose
-# CMakeLists.txt declares it. A plain name in DEPS is a domain of the same process.
+# CMakeLists.txt declares it, below the folder of telar_process(<process>). It links
+# <process>-settings. A plain name in DEPS is a domain of the same process, and
+# tools/check-cpp-modules.py checks those against the domain's imports.
 function(telar_add_domain process domain)
   cmake_parse_arguments(PARSE_ARGV 2 domain "" "" "SOURCES;MACOS_SOURCES;LINUX_SOURCES;INCLUDES;DEPS;CHECKS")
   if(domain_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_domain(${process} ${domain}): unexpected arguments ${domain_UNPARSED_ARGUMENTS}")
   endif()
-  set(dependencies)
+  if(NOT process STREQUAL TELAR_PROCESS)
+    message(FATAL_ERROR "telar_add_domain(${process} ${domain}): declare it below the folder of telar_process(${process})")
+  endif()
+  set(dependencies ${process}-settings)
   foreach(dependency IN LISTS domain_DEPS)
     if(dependency MATCHES "^[a-z0-9_]+$")
       set(dependency "telar::${process}::${dependency}")
@@ -133,6 +148,9 @@ function(telar_add_domain process domain)
     INCLUDES ${domain_INCLUDES}
     DEPS ${dependencies}
     ${checks})
+  # The process's options are the domain's own, so they come before those of the targets
+  # it links (telar::build_flags), in its sources and in those of its importers.
+  target_compile_options(${process}-${domain} PUBLIC ${TELAR_PROCESS_OPTIONS})
 endfunction()
 
 # telar_add_test(<name> [QT | STATIC | SHARED] SOURCES <file>... [LIBRARIES <target>...]
