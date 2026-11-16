@@ -1,6 +1,6 @@
 # ThinLTO en los builds optimizados
 
-Release y RelWithDebInfo enlazan con ThinLTO. Lo activa `cmake/cpp_modules.cmake`,
+Release y RelWithDebInfo enlazan con ThinLTO. Lo activa `cmake/TelarBuild.cmake`,
 que incluyen todos los proyectos, así que cubre release (`packaging/release/*`,
 `just install-gui`) y dev-release (`just app-release`) sin tocar sus comandos.
 

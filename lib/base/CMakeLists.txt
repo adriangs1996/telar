@@ -22,7 +22,7 @@ endif()
 target_link_libraries(telar-base PUBLIC telar::sys)
 # A ThinLTO archive holds bitcode, which a linker reads only through the compiler's LTO: ld64
 # does, GNU ld does not, so an ELF consumer of the installed package links with the
-# toolchain's lld, as this tree does (cmake/cpp_modules.cmake).
+# toolchain's lld, as this tree does (cmake/TelarBuild.cmake).
 if(TELAR_THIN_LTO AND NOT APPLE)
   target_link_options(telar-base INTERFACE "$<INSTALL_INTERFACE:$<$<CONFIG:Release,RelWithDebInfo>:-fuse-ld=lld>>")
 endif()

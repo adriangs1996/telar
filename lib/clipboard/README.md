@@ -23,7 +23,7 @@ C++ importers reach the API through the `telar.clipboard` module, which owns
 are C++ modules too (`telar.clipboard.wayland` and `telar.clipboard.x11`, each the
 only owner of its library's headers, on top of `telar.clipboard.transfer`), and the
 reader imports `std` and `telar.sys`. Every build therefore needs the toolchain
-that `cmake/cpp_modules.cmake` requires: Ninja and the pinned Clang, configured
+that `cmake/TelarBuild.cmake` requires: Ninja and the pinned Clang, configured
 with `-DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake` from `tools/bootstrap-cpp.py`.
 On Linux, also install pkg-config, the Wayland client and XCB development packages,
 and `wayland-scanner`. On Arch/Omarchy:

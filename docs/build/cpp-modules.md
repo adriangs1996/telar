@@ -159,7 +159,7 @@ módulo con nombre esa propiedad ya no es implícita. No se han cambiado algorit
 formatos, límites ni el reparto runtime/cliente. GUI conserva `-ffp-contract=off`
 para no alterar sus cálculos de representación al cambiar de unidad.
 
-`cmake/cpp_modules.cmake` selecciona C++23, Ninja y el escaneo nativo de CMake,
+`cmake/TelarBuild.cmake` selecciona C++23, Ninja y el escaneo nativo de CMake,
 registra `FILE_SET CXX_MODULES` públicos y aplica una variante coherente a todos
 los proveedores e importadores. Debug activa `TELAR_DEBUG` y `TELAR_DIAGNOSTICS`;
 Release puede activar `TELAR_DIAGNOSTICS`. `TELAR_SANITIZERS` instrumenta todo el
