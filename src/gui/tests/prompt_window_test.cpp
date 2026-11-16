@@ -627,7 +627,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       const std::array paths{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "scripts/setup.sh", .kind = PathKind::file}};
 
       runtime.send(PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = paths});
-      QTRY_COMPARE_WITH_TIMEOUT(application.pathPickerState().value(QStringLiteral("count")).toInt(), 3, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.paths()->state().value(QStringLiteral("count")).toInt(), 3, wait_ms);
       field = line->findChild<QQuickItem*>(QStringLiteral("promptSearch"));
       QVERIFY(field != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), wait_ms);

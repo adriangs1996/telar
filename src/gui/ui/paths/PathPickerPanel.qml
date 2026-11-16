@@ -12,8 +12,8 @@ Item {
     readonly property var colors: controller.colors
     readonly property var typography: controller.windowGeometry.typography
     readonly property var grid: typography.grid
-    readonly property var state: controller.pathPickerState
-    readonly property var regions: controller.pathPickerGeometry
+    readonly property var state: controller.paths.state
+    readonly property var regions: controller.paths.geometry
     property alias queryField: query
 
     clip: true
@@ -36,8 +36,8 @@ Item {
     }
 
     Connections {
-        target: root.controller
-        function onPathPickerChanged() {
+        target: root.controller.paths
+        function onChanged() {
             root.synchronizeEditor();
         }
     }
@@ -66,14 +66,14 @@ Item {
         formControl: false
         maximumBytes: root.state.maximumQueryBytes
         Accessible.name: "Search paths"
-        onTextEdited: root.controller.searchPaths(text)
-        onLimitReached: requested => root.controller.reportPathQueryLimit(requested)
-        Keys.onDownPressed: root.controller.movePathSelection(1)
-        Keys.onUpPressed: root.controller.movePathSelection(-1)
+        onTextEdited: root.controller.paths.search(text)
+        onLimitReached: requested => root.controller.paths.reportQueryLimit(requested)
+        Keys.onDownPressed: root.controller.paths.move(1)
+        Keys.onUpPressed: root.controller.paths.move(-1)
         Keys.onReturnPressed: event => keys.submit(event)
         Keys.onEnterPressed: event => keys.submit(event)
-        Keys.onTabPressed: root.controller.descendPath()
-        Keys.onBacktabPressed: root.controller.ascendPath()
+        Keys.onTabPressed: root.controller.paths.descend()
+        Keys.onBacktabPressed: root.controller.paths.ascend()
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
                 root.controller.execute(GuiController.Action.cancel);
@@ -142,7 +142,7 @@ Item {
                 width: row.modelData.bounds.width
                 height: row.modelData.bounds.height
                 identity: root.state.revision + ":" + row.modelData.path
-                onActivated: root.controller.activatePath({path: row.modelData.path, revision: root.state.revision, absolute: false})
+                onActivated: root.controller.paths.activate({path: row.modelData.path, revision: root.state.revision, absolute: false})
             }
         }
     }

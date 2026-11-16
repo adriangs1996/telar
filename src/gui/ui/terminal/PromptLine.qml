@@ -124,7 +124,7 @@ Item {
         interval: 400
         onTriggered: root.menuOpening = false
     }
-    readonly property int searchCount: root.search === Store.Dialog.history ? (root.application.history.state.count ?? 0) : root.search === Store.Dialog.paths ? (root.application.pathPickerState.count ?? 0) : 0
+    readonly property int searchCount: root.search === Store.Dialog.history ? (root.application.history.state.count ?? 0) : root.search === Store.Dialog.paths ? (root.application.paths.state.count ?? 0) : 0
     readonly property int listRows: Math.max(1, Math.min(root.searchRows, root.searchCount, root.screenRows - 2))
     readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.holding ? 1 + editor.visibleRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
     // The rows the line needs past the screen's last: the terminal rises by them, so the
@@ -1026,7 +1026,7 @@ Item {
         Item {
             id: view
             readonly property bool history: root.search === Store.Dialog.history
-            readonly property var current: view.history ? root.application.history.state : root.application.pathPickerState
+            readonly property var current: view.history ? root.application.history.state : root.application.paths.state
             readonly property int count: view.current.count ?? 0
             readonly property int rows: root.listRows
             readonly property real listHeight: view.rows * root.line
@@ -1096,8 +1096,8 @@ Item {
             }
 
             Connections {
-                target: root.application
-                function onPathPickerChanged() {
+                target: root.application.paths
+                function onChanged() {
                     if (!view.history) {
                         view.synchronize();
                         view.follow();
@@ -1171,20 +1171,20 @@ Item {
                 maximumBytes: view.current.maximumQueryBytes ?? 0
                 placeholderText: view.history ? "Search commands" : "Search paths"
                 Accessible.name: view.history ? "Search commands" : "Search paths"
-                onTextEdited: view.history ? root.application.history.search(text) : root.application.searchPaths(text)
-                onLimitReached: requested => view.history ? root.application.history.reportQueryLimit(requested) : root.application.reportPathQueryLimit(requested)
+                onTextEdited: view.history ? root.application.history.search(text) : root.application.paths.search(text)
+                onLimitReached: requested => view.history ? root.application.history.reportQueryLimit(requested) : root.application.paths.reportQueryLimit(requested)
                 onActiveFocusChanged: {
                     if (!field.activeFocus) {
                         Qt.callLater(root.keepSearch);
                     }
                 }
                 // The rows run down from the query: down goes to an older command, a worse path.
-                Keys.onUpPressed: view.history ? historyKeys.moveSelection(-1) : root.application.movePathSelection(-1)
-                Keys.onDownPressed: view.history ? historyKeys.moveSelection(1) : root.application.movePathSelection(1)
+                Keys.onUpPressed: view.history ? historyKeys.moveSelection(-1) : root.application.paths.move(-1)
+                Keys.onDownPressed: view.history ? historyKeys.moveSelection(1) : root.application.paths.move(1)
                 Keys.onReturnPressed: event => view.history ? historyKeys.submit(event) : pathKeys.submit(event)
                 Keys.onEnterPressed: event => view.history ? historyKeys.submit(event) : pathKeys.submit(event)
-                Keys.onTabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.application.descendPath()
-                Keys.onBacktabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.application.ascendPath()
+                Keys.onTabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.application.paths.descend()
+                Keys.onBacktabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.application.paths.ascend()
                 Keys.onEscapePressed: {
                     if (field.cancelComposition()) {
                         return;
@@ -1337,7 +1337,7 @@ Item {
 
                 // Takes the state so a new page or selection lays the rows out again.
                 function layout(state) {
-                    return state ? root.application.pathPickerRows(paths.columns, paths.first, view.rows) : [];
+                    return state ? root.application.paths.rows(paths.columns, paths.first, view.rows) : [];
                 }
 
                 Repeater {
@@ -1390,7 +1390,7 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.application.activatePath({path: pathRow.modelData.path, revision: view.current.revision, absolute: false})
+                            onClicked: root.application.paths.activate({path: pathRow.modelData.path, revision: view.current.revision, absolute: false})
                         }
                     }
                 }

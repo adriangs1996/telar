@@ -181,6 +181,7 @@ namespace telar::gui::qt {
         panes_(store_, element_slots_),
         activity_(store_, element_slots_, memory),
         palette_(store_),
+        paths_(store_),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -204,9 +205,7 @@ namespace telar::gui::qt {
     connect(&store_, &Store::interacting, this, [this] {
       pending_activity_.reset();
     });
-    connect(this, &Application::windowGeometryChanged, this, &Application::measurePalette);
-    connect(this, &Application::windowGeometryChanged, this, &Application::pathPickerGeometryChanged);
-    connect(this, &Application::pathPickerChanged, this, &Application::pathPickerGeometryChanged);
+    connect(this, &Application::windowGeometryChanged, this, &Application::measureDisplay);
     connect(this, &Application::prefixChanged, this, &Application::statusModeChanged);
     connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
     connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
@@ -219,10 +218,11 @@ namespace telar::gui::qt {
     connect(&history_, &HistoryController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&history_, &HistoryController::failed, this, [this](const QString& message) {
-      error_ = message;
-      publishStatus();
+    connect(&history_, &HistoryController::failed, this, &Application::reportFailure);
+    connect(&paths_, &PathPickerController::closeRequested, this, [this] {
+      showDialog(Dialog::none);
     });
+    connect(&paths_, &PathPickerController::failed, this, &Application::reportFailure);
     connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
     connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
@@ -292,7 +292,7 @@ namespace telar::gui::qt {
     });
 
     synchronizeWorkbenchGeometry();
-    measurePalette();
+    measureDisplay();
   }
 
   void Application::runtimeDisconnected(MachineClient& client) {
@@ -801,13 +801,13 @@ namespace telar::gui::qt {
       }
 
       if (store_.dialog().kind == Dialog::paths) {
-        emit pathPickerGeometryChanged();
+        paths_.publishGeometry();
       }
 
       requestTerminalFrame();
       break;
     case Change::paths:
-      refreshPathPicker();
+      paths_.refresh();
       break;
     case Change::suggestion:
       palette_.publish();
@@ -964,7 +964,7 @@ namespace telar::gui::qt {
     refreshPeek();
     refreshElementBars();
     if (store_.dialog().kind == Dialog::paths) {
-      emit pathPickerGeometryChanged();
+      paths_.publishGeometry();
     }
 
     scheduleGraphicsRecovery();
@@ -1349,6 +1349,18 @@ namespace telar::gui::qt {
 
     store_.setDialog(kind, line_search_pane);
     emit dialogChanged();
+  }
+
+  void Application::reportFailure(const QString& message) {
+    error_ = message;
+    publishStatus();
+  }
+
+  void Application::showPathPicker() {
+    if (paths_.open()) {
+      showDialog(Dialog::paths);
+      paths_.refresh();
+    }
   }
 
   void Application::fail(const std::exception& error) {

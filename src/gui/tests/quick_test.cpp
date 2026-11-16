@@ -2698,8 +2698,8 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
       QTest::keyClick(window_, Qt::Key_F);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::paths, runtime_wait_ms);
-      client_->searchPaths(QStringLiteral("folder/"));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->pathPickerState().value(QStringLiteral("count")).toInt() >= 1, runtime_wait_ms);
+      client_->paths()->search(QStringLiteral("folder/"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("count")).toInt() >= 1, runtime_wait_ms);
       auto const* panel = window_->findChild<QQuickItem*>(QStringLiteral("pathPickerPanel"));
 
       QVERIFY(panel != nullptr);
@@ -2710,17 +2710,17 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("folder/"), runtime_wait_ms);
       QVERIFY(!search->property("formControl").toBool());
       QTest::keyClick(window_, Qt::Key_Tab);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->pathPickerState().value(QStringLiteral("root")).toString(), root + QStringLiteral("/folder"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("root")).toString(), root + QStringLiteral("/folder"), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QString{}, runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->pathPickerState().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
-      const auto stale = client_->pathPickerState().value(QStringLiteral("revision"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
+      const auto stale = client_->paths()->state().value(QStringLiteral("revision"));
 
       QTest::keyClick(window_, Qt::Key_Backtab, Qt::ShiftModifier);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->pathPickerState().value(QStringLiteral("root")).toString(), root, runtime_wait_ms);
-      client_->activatePath({{QStringLiteral("revision"), stale}, {QStringLiteral("path"), QStringLiteral("a b'c.txt")}});
+      QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("root")).toString(), root, runtime_wait_ms);
+      client_->paths()->activate({{QStringLiteral("revision"), stale}, {QStringLiteral("path"), QStringLiteral("a b'c.txt")}});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::paths);
-      client_->searchPaths(QStringLiteral("a b"));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->pathPickerState().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
+      client_->paths()->search(QStringLiteral("a b"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::none, runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen, ScreenTextLayout::logical).contains(QStringLiteral("'folder/a b'\\''c.txt'")), qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
@@ -2741,7 +2741,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::paths);
       constexpr int path_query_bytes = 64;
 
-      QCOMPARE(client_->pathPickerState().value(QStringLiteral("maximumQueryBytes")).toInt(), path_query_bytes);
+      QCOMPARE(client_->paths()->state().value(QStringLiteral("maximumQueryBytes")).toInt(), path_query_bytes);
       auto const* panel = window_->findChild<QQuickItem*>(QStringLiteral("pathPickerPanel"));
 
       QVERIFY(panel != nullptr);
@@ -2754,7 +2754,7 @@ return {api_version=2, client={keybindings={
       commit.setCommitString(retained + QStringLiteral("🧵"));
       QCoreApplication::sendEvent(search, &commit);
       QCOMPARE(search->property("text").toString(), retained);
-      QCOMPARE(client_->pathPickerState().value(QStringLiteral("editorText")).toString(), retained);
+      QCOMPARE(client_->paths()->state().value(QStringLiteral("editorText")).toString(), retained);
       const auto notices = [this] {
         return std::ranges::find_if(client_->notifications().items(), [](const auto& item) {
           return item.title.view() == "Limit reached" && item.message.view().contains("prompt.path_query_bytes");

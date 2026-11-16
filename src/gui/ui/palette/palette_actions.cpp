@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "palette_controller.hpp"
 #include "ui/app/application.hpp"
-#include <QQuickWindow>
 #include <QString>
 #include <QVariantMap>
 #include <algorithm>
@@ -20,10 +19,6 @@ namespace telar::gui::qt {
   void Application::showPalette(PaletteMode mode) {
     palette_.open(mode);
     showDialog(Dialog::palette);
-  }
-
-  void Application::measurePalette() {
-    palette_.setDisplay(displayMetrics(window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio()));
   }
 
   bool Application::navigatePaletteTarget(const NavigationTarget& target) {

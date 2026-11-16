@@ -42,6 +42,7 @@ static_assert(true);
 #include "ui/notifications/system_notifier.hpp"
 #include "ui/palette/palette_controller.hpp"
 #include "ui/panes/panes_controller.hpp"
+#include "ui/paths/path_picker_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
@@ -114,7 +115,6 @@ import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
-import telar.gui.presentation.form_field_geometry;
 import telar.gui.presentation.notification_center;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.line;
@@ -201,9 +201,8 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
     Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
-    Q_PROPERTY(QVariantMap pathPickerState READ pathPickerState NOTIFY pathPickerChanged)
+    Q_PROPERTY(telar::gui::qt::PathPickerController* paths READ paths CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspaceFormController* workspaceForm READ workspaceForm CONSTANT)
-    Q_PROPERTY(QVariantMap pathPickerGeometry READ pathPickerGeometry NOTIFY pathPickerGeometryChanged)
 
   public:
     enum class Action : quint8 {
@@ -331,15 +330,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void registerTabStrip(QQuickItem* strip);
     Q_INVOKABLE void selectCapturedTab();
     Q_INVOKABLE void setSidebarWidth(qreal width);
-    Q_INVOKABLE void searchPaths(const QString& text);
-    Q_INVOKABLE void reportPathQueryLimit(qulonglong requested_bytes);
-    Q_INVOKABLE void movePathSelection(int delta);
-    // The paths from `first` on, at most `count`, cut to `columns` cells, for the prompt line's rows.
-    Q_INVOKABLE QVariantList pathPickerRows(int columns, int first, int count) const;
-    Q_INVOKABLE void descendPath();
-    Q_INVOKABLE void ascendPath();
-    Q_INVOKABLE void insertPath(bool absolute);
-    Q_INVOKABLE void activatePath(const QVariantMap& choice);
     Q_INVOKABLE void usePaletteResult(const QVariantMap& choice);
     Q_INVOKABLE void submitSuggestion(const QString& revision);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
@@ -406,6 +396,10 @@ namespace telar::gui::qt {
       return &workspace_form_;
     }
 
+    PathPickerController* paths() noexcept {
+      return &paths_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -418,8 +412,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap windowGeometry() const;
     [[nodiscard]] QVariantMap runtimeLinkState() const;
     [[nodiscard]] QVariantMap runtimeLinkGeometry() const;
-    [[nodiscard]] QVariantMap pathPickerState() const;
-    [[nodiscard]] QVariantMap pathPickerGeometry() const;
     [[nodiscard]] QVariantMap sidebarGeometry() const;
     [[nodiscard]] QVariantMap machineContext() const;
     [[nodiscard]] bool machineListCollapsed() const noexcept;
@@ -455,8 +447,6 @@ namespace telar::gui::qt {
 
   signals:
     void prefixChanged();
-    void pathPickerChanged();
-    void pathPickerGeometryChanged();
     void titleChanged();
     // The error, the TLS proxy badge or whether the runtime is connected moved.
     void diagnosticChanged();
@@ -602,15 +592,13 @@ namespace telar::gui::qt {
     void runtimeDisconnected(MachineClient& client);
     void cancelCurrentInteraction();
     void showPalette(PaletteMode mode);
-    // Pushes the display the palette measures its dialog in.
-    void measurePalette();
+    // Pushes the display the controllers measure what they draw in.
+    void measureDisplay();
+    // A controller's interaction failed outside a dialog that shows it.
+    void reportFailure(const QString& message);
     bool restorePaletteParent();
     bool navigatePaletteTarget(const NavigationTarget& target);
     void showPathPicker();
-    void refreshPathPicker();
-    [[nodiscard]] PathPickerPlacement pathPlacement() const;
-    QString path_query_;
-    std::size_t path_selection_ = 0;
     static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};
 
     struct PresentedPane {
@@ -817,6 +805,7 @@ namespace telar::gui::qt {
     PanesController panes_;
     ActivityController activity_;
     PaletteController palette_;
+    PathPickerController paths_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer notification_timer_;

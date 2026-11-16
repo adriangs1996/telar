@@ -9,7 +9,7 @@ QtObject {
 
     // Enter inserts the path relative to the pane's directory; Alt or Shift, absolute.
     function submit(event) {
-        root.controller.insertPath((event.modifiers & (Qt.AltModifier | Qt.ShiftModifier)) !== 0);
+        root.controller.paths.insert((event.modifiers & (Qt.AltModifier | Qt.ShiftModifier)) !== 0);
     }
 
     // Whether `event` was one of the search's Control commands, which it then ran.
@@ -21,13 +21,13 @@ QtObject {
         switch (event.key) {
         case Qt.Key_J:
         case Qt.Key_K:
-            root.controller.movePathSelection(event.key === Qt.Key_J ? 1 : -1);
+            root.controller.paths.move(event.key === Qt.Key_J ? 1 : -1);
             return true;
         case Qt.Key_H:
             root.controller.execute(GuiController.Action.cancel);
             return true;
         case Qt.Key_L:
-            root.controller.insertPath(false);
+            root.controller.paths.insert(false);
             return true;
         default:
             return false;

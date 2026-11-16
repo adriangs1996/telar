@@ -3,151 +3,143 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "ui/app/application.hpp"
+#include "path_picker_controller.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/app/utf16_encoding.hpp"
 #include <QByteArray>
-#include <QLatin1StringView>
-#include <QString>
 #include <QStringView>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 
-#include "ui/app/utf16_encoding.hpp"
-
-import telar.gui.paths.label;
 import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 
-  void Application::showPathPicker() {
-    if (!session().beginPathPicker()) {
-      return;
+  PathPickerController::PathPickerController(Store& store, QObject* parent)
+      : QObject(parent),
+        store_(store) {
+    // The rows and the selection are drawn where the geometry places them.
+    connect(this, &PathPickerController::changed, this, &PathPickerController::geometryChanged);
+  }
+
+  bool PathPickerController::isOpen() const noexcept {
+    return store_.dialog().kind == Store::Dialog::paths;
+  }
+
+  void PathPickerController::setDisplay(const DisplayMetrics& display) {
+    display_ = display;
+    emit geometryChanged();
+  }
+
+  void PathPickerController::publishGeometry() {
+    emit geometryChanged();
+  }
+
+  bool PathPickerController::open() {
+    auto& session = store_.session();
+    if (!session.beginPathPicker()) {
+      return false;
     }
 
-    path_query_ = toQString(session().pathSeed());
-    path_selection_ = 0;
-    showDialog(Dialog::paths);
-    refreshPathPicker();
+    query_ = toQString(session.pathSeed());
+    selection_ = 0;
+
+    return true;
   }
 
-  void Application::refreshPathPicker() {
-    const auto count = session().pathPicker().matches().size();
+  void PathPickerController::refresh() {
+    const auto count = store_.session().pathPicker().matches().size();
 
-    path_selection_ = count == 0 ? 0 : std::min(path_selection_, count - 1);
-    emit pathPickerChanged();
+    selection_ = count == 0 ? 0 : std::min(selection_, count - 1);
+    emit changed();
   }
 
-  void Application::searchPaths(const QString& text) {
-    if (store_.dialog().kind != Dialog::paths) {
+  void PathPickerController::search(const QString& text) {
+    if (!isOpen()) {
       return;
     }
 
     const auto measured = Utf16Prefix::fit(QStringView{text}, PathPickerLimits::query_bytes, utf16Encoding());
 
-    path_query_ = text.first(static_cast<qsizetype>(measured.units));
-    if (!path_query_.isValidUtf16()) {
-      path_query_ = QString::fromUtf8(path_query_.toUtf8());
+    query_ = text.first(static_cast<qsizetype>(measured.units));
+    if (!query_.isValidUtf16()) {
+      query_ = QString::fromUtf8(query_.toUtf8());
     }
 
-    path_selection_ = 0;
-    const auto query = path_query_.toUtf8();
+    selection_ = 0;
+    const auto query = query_.toUtf8();
 
-    applyInteraction([&] {
-      session().requestPaths({query.constData(), static_cast<std::size_t>(query.size())});
-      refreshPathPicker();
+    interact([&] {
+      store_.session().requestPaths({query.constData(), static_cast<std::size_t>(query.size())});
+      refresh();
     });
 
     if (measured.bytes < measured.requested_bytes) {
-      reportPathQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
+      reportQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
   }
 
-  void Application::reportPathQueryLimit(qulonglong requested_bytes) {
-    if (store_.dialog().kind == Dialog::paths && requested_bytes > PathPickerLimits::query_bytes) {
-      session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
-      refreshNotifications();
+  void PathPickerController::reportQueryLimit(qulonglong requested_bytes) {
+    if (isOpen() && requested_bytes > PathPickerLimits::query_bytes) {
+      store_.session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
+      store_.commit();
     }
   }
 
-  void Application::movePathSelection(int delta) {
-    const auto count = session().pathPicker().matches().size();
+  void PathPickerController::move(int delta) {
+    const auto count = store_.session().pathPicker().matches().size();
 
-    if (store_.dialog().kind != Dialog::paths) {
+    if (!isOpen()) {
       return;
     }
 
     // The prompt line lists the paths downward from its search; a flipped dialog, upward.
-    const auto flipped = store_.dialog().line_search_pane == 0 && pathPlacement().flipped;
+    const auto flipped = store_.dialog().line_search_pane == 0 && placement().flipped;
     const auto direction = flipped ? -static_cast<std::int64_t>(delta) : static_cast<std::int64_t>(delta);
     const auto maximum = count == 0 ? 0 : static_cast<std::int64_t>(count - 1);
 
-    path_selection_ = static_cast<std::size_t>(std::clamp(static_cast<std::int64_t>(path_selection_) + direction, std::int64_t{0}, maximum));
-    emit pathPickerChanged();
+    selection_ = static_cast<std::size_t>(std::clamp(static_cast<std::int64_t>(selection_) + direction, std::int64_t{0}, maximum));
+    emit changed();
   }
 
-  void Application::descendPath() {
-    applyInteraction([&] {
-      if (store_.dialog().kind == Dialog::paths && session().descendPath(path_selection_)) {
-        path_query_.clear();
-        path_selection_ = 0;
-        refreshPathPicker();
+  void PathPickerController::descend() {
+    interact([&] {
+      if (isOpen() && store_.session().descendPath(selection_)) {
+        query_.clear();
+        selection_ = 0;
+        refresh();
       }
     });
   }
 
-  void Application::ascendPath() {
-    applyInteraction([&] {
-      if (store_.dialog().kind == Dialog::paths && session().ascendPath()) {
-        path_query_.clear();
-        path_selection_ = 0;
-        refreshPathPicker();
+  void PathPickerController::ascend() {
+    interact([&] {
+      if (isOpen() && store_.session().ascendPath()) {
+        query_.clear();
+        selection_ = 0;
+        refresh();
       }
     });
   }
 
-  void Application::insertPath(bool absolute) {
-    applyInteraction([&] {
-      if (store_.dialog().kind != Dialog::paths) {
+  void PathPickerController::insert(bool absolute) {
+    interact([&] {
+      if (!isOpen()) {
         return;
       }
 
-      if (session().insertPath(path_selection_, absolute)) {
-        showDialog(Dialog::none);
+      if (store_.session().insertPath(selection_, absolute)) {
+        emit closeRequested();
       }
 
-      refreshPathPicker();
+      refresh();
     });
   }
 
-  void Application::activatePath(const QVariantMap& choice) {
-    const auto& page = session().pathPicker();
-    if (store_.dialog().kind != Dialog::paths || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
+  void PathPickerController::activate(const QVariantMap& choice) {
+    const auto& page = store_.session().pathPicker();
+    if (!isOpen() || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
       return;
     }
 
@@ -160,15 +152,15 @@ namespace telar::gui::qt {
       return;
     }
 
-    path_selection_ = static_cast<std::size_t>(found - page.matches().begin());
-    insertPath(choice.value(QStringLiteral("absolute")).toBool());
+    selection_ = static_cast<std::size_t>(found - page.matches().begin());
+    insert(choice.value(QStringLiteral("absolute")).toBool());
   }
 
-  QVariantMap Application::pathPickerState() const {
-    const auto& page = session().pathPicker();
+  QVariantMap PathPickerController::state() const {
+    const auto& page = store_.session().pathPicker();
 
     return {
-        {QStringLiteral("editorText"), path_query_},
+        {QStringLiteral("editorText"), query_},
         {QStringLiteral("root"), toQString(page.root())},
         {QStringLiteral("rootLabel"), toQString(PathPickerLabels::root(page.root()))},
         {QStringLiteral("countText"), toQString(PathPickerLabels::count(page).view())},
@@ -176,7 +168,7 @@ namespace telar::gui::qt {
         {QStringLiteral("emptyText"), toQString(PathPickerLabels::empty(page))},
         {QStringLiteral("failed"), page.phase() == PathPickerPhase::failed},
         {QStringLiteral("count"), static_cast<qulonglong>(page.matches().size())},
-        {QStringLiteral("selection"), static_cast<qulonglong>(path_selection_)},
+        {QStringLiteral("selection"), static_cast<qulonglong>(selection_)},
         {QStringLiteral("revision"), QString::number(page.revision())},
         {QStringLiteral("maximumQueryBytes"), static_cast<qulonglong>(PathPickerLimits::query_bytes)},
     };

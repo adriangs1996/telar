@@ -3,55 +3,21 @@
 static_assert(true);
 #endif
 
-#include "core/terminal_size.hpp"
-#include "platform/font.h"
+#include "path_picker_controller.hpp"
 #include "platform/window.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
-#include "ui/app/application.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/fonts/chrome_fonts.hpp"
-#include <QQuickWindow>
-#include <QStringLiteral>
 #include <QVariantList>
 #include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <freetype/freetype.h>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
 #include <limits>
-#include <memory>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <type_traits>
 #include <utility>
-#include <variant>
-
-#include "platform/window.hpp"
-#include "terminal/cell_position.hpp"
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
@@ -130,8 +96,8 @@ namespace telar::gui::qt {
 
   }
 
-  QVariantList Application::pathPickerRows(int columns, int first, int count) const {
-    const auto& page = session().pathPicker();
+  QVariantList PathPickerController::rows(int columns, int first, int count) const {
+    const auto& page = store_.session().pathPicker();
     const auto& matches = page.matches();
     const auto begin = std::min(static_cast<std::size_t>(std::max(0, first)), matches.size());
     const auto end = std::min(matches.size(), begin + static_cast<std::size_t>(std::max(0, count)));
@@ -155,7 +121,7 @@ namespace telar::gui::qt {
           {QStringLiteral("index"), static_cast<qulonglong>(index)},
           {QStringLiteral("path"), toQString(page.path(match))},
           {QStringLiteral("directory"), match.kind == PathKind::directory},
-          {QStringLiteral("selected"), index == path_selection_},
+          {QStringLiteral("selected"), index == selection_},
           {QStringLiteral("runs"), std::move(runs)},
       });
     }
@@ -163,17 +129,19 @@ namespace telar::gui::qt {
     return rows;
   }
 
-  PathPickerPlacement Application::pathPlacement() const {
-    const auto& workbench = session().workbenchGeometry();
+  PathPickerPlacement PathPickerController::placement() const {
+    // Arranging the layout caches its placements, so the session is read through its mutable side.
+    auto& session = store_.session();
+    const auto& workbench = session.workbenchGeometry();
     const auto host = workbench.cellArea();
-    auto* tab = session().activeTab();
+    auto* tab = session.activeTab();
     std::optional<CellPosition> cursor;
 
     if (tab != nullptr) {
       const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
 
       for (const auto& placement : tab->layout.arrange(host, workbench.layout_metrics, fullscreen)) {
-        const auto* pane = session().findPane(placement.pane_id);
+        const auto* pane = session.findPane(placement.pane_id);
         if (pane == nullptr || pane->id != tab->focused_pane || !pane->attached) {
           continue;
         }
@@ -187,20 +155,20 @@ namespace telar::gui::qt {
       }
     }
 
-    return PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(session().pathPicker().matches().size()));
+    return PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(session.pathPicker().matches().size()));
   }
 
-  QVariantMap Application::pathPickerGeometry() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
-    const auto& workbench = session().workbenchGeometry();
-    const auto& page = session().pathPicker();
-    const auto placement = pathPlacement();
+  QVariantMap PathPickerController::geometry() const {
+    const auto& display = display_;
+    const auto density = display.density;
+    const auto& workbench = store_.session().workbenchGeometry();
+    const auto& page = store_.session().pathPicker();
+    const auto placement = this->placement();
     const auto count_text = PathPickerLabels::count(page);
-    const auto geometry = PathPickerGeometry::measure(placement, page.matches().size(), path_selection_, {
-                                                                                                             .root = static_cast<std::uint16_t>(cellTextColumns(PathPickerLabels::root(page.root()))),
-                                                                                                             .count = static_cast<std::uint16_t>(cellTextColumns(count_text.view())),
-                                                                                                         });
+    const auto geometry = PathPickerGeometry::measure(placement, page.matches().size(), selection_, {
+                                                                                                        .root = static_cast<std::uint16_t>(cellTextColumns(PathPickerLabels::root(page.root()))),
+                                                                                                        .count = static_cast<std::uint16_t>(cellTextColumns(count_text.view())),
+                                                                                                    });
 
     auto bounds = workbench.pixels(placement.area);
 
@@ -239,7 +207,7 @@ namespace telar::gui::qt {
         {QStringLiteral("footer"), local(geometry.footer)},
         {QStringLiteral("empty"), local(geometry.empty)},
         {QStringLiteral("flipped"), placement.flipped},
-        {QStringLiteral("rows"), pathRows(page, geometry, path_selection_, local)},
+        {QStringLiteral("rows"), pathRows(page, geometry, selection_, local)},
         {QStringLiteral("hints"), std::move(hints)},
     };
   }

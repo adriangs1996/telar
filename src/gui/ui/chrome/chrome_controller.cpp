@@ -52,6 +52,13 @@ namespace telar::gui::qt {
     return DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
   }
 
+  void Application::measureDisplay() {
+    const auto display = displayMetrics(window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio());
+
+    palette_.setDisplay(display);
+    paths_.setDisplay(display);
+  }
+
   bool Application::machineListCollapsed() const noexcept {
     return machine_list_collapsed_;
   }
