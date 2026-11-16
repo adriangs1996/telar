@@ -9,14 +9,23 @@ Item {
     id: root
     objectName: "promptPanel"
 
-    required property var controller
+    required property var colors
+    required property var typography
+    // The dialog open: Store.Dialog.rename_tab, rename_workspace or copy_search.
+    required property int dialog
+    // The command whose output a scrollback search reads, empty for the whole scrollback, and
+    // whether Tab may switch between the two.
+    property string searchScope: ""
+    property bool searchScopes: false
     property real ratio: 1
-    readonly property var colors: controller.colors
-    readonly property var typography: controller.windowGeometry.typography
-    readonly property int dialog: controller.dialog
     readonly property bool searchMode: dialog === Store.Dialog.copy_search
     readonly property bool submittable: name.text.trim().length > 0
     property alias field: name
+    // Enter with a name: the window renames or searches with `input`.
+    signal submitted(var input)
+    signal cancelled()
+    // Tab during a scrollback search: the window switches what it reads.
+    signal searchScopeToggled()
 
     readonly property real sectionGap: 18 * ratio
     readonly property real titleLeading: 1.35
@@ -25,7 +34,7 @@ Item {
 
     function submit() {
         if (root.submittable) {
-            root.controller.submitDialog({text: name.text, path: ""});
+            root.submitted({text: name.text, path: ""});
         }
     }
 
@@ -37,7 +46,7 @@ Item {
         ChromeText {
             width: parent.width
             height: Math.ceil((root.typography.title ?? 0) * root.titleLeading)
-            text: root.searchMode ? (root.controller.copy.searchScope.length > 0 ? "Search output of " + root.controller.copy.searchScope : "Search scrollback") : root.dialog === Store.Dialog.rename_tab ? "Rename tab" : "Rename workspace"
+            text: root.searchMode ? (root.searchScope.length > 0 ? "Search output of " + root.searchScope : "Search scrollback") : root.dialog === Store.Dialog.rename_tab ? "Rename tab" : "Rename workspace"
             color: root.colors.text
             pixelSize: root.typography.title ?? 1
             emphasized: true
@@ -53,11 +62,11 @@ Item {
             ratio: root.ratio
             placeholderText: root.searchMode ? "Search scrollback" : "Name"
             onSubmitted: root.submit()
-            onCancelled: root.controller.execute(WindowActions.Action.cancel)
+            onCancelled: root.cancelled()
             // A search begun from a command reads its output or the whole scrollback.
             onTabbed: {
-                if (root.searchMode && root.controller.copy.searchScopes) {
-                    root.controller.copy.toggleSearchScope();
+                if (root.searchMode && root.searchScopes) {
+                    root.searchScopeToggled();
                 }
             }
         }
@@ -67,11 +76,11 @@ Item {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            hint: root.searchMode && root.controller.copy.searchScopes ? (root.controller.copy.searchScope.length > 0 ? "Tab whole scrollback" : "Tab this command") + "  ·  Enter to confirm  ·  Esc to cancel" : "Enter to confirm  ·  Esc to cancel"
+            hint: root.searchMode && root.searchScopes ? (root.searchScope.length > 0 ? "Tab whole scrollback" : "Tab this command") + "  ·  Enter to confirm  ·  Esc to cancel" : "Enter to confirm  ·  Esc to cancel"
             submitText: root.searchMode ? "Search" : "Rename"
             submittable: root.submittable
             onSubmitted: root.submit()
-            onCancelled: root.controller.execute(WindowActions.Action.cancel)
+            onCancelled: root.cancelled()
         }
     }
 }

@@ -264,8 +264,15 @@ Popup {
             id: prompt
             anchors.fill: parent
             visible: !root.customMode && !root.workspaceMode
-            controller: telar
+            colors: telar.colors
+            typography: telar.windowGeometry.typography
+            dialog: telar.dialog
+            searchScope: telar.copy.searchScope
+            searchScopes: telar.copy.searchScopes
             ratio: root.ratio
+            onSubmitted: input => telar.submitDialog(input)
+            onCancelled: telar.execute(WindowActions.Action.cancel)
+            onSearchScopeToggled: telar.copy.toggleSearchScope()
         }
 
         WorkspaceFormPanel {
