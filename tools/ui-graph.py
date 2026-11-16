@@ -29,14 +29,6 @@ QML edges.
   parent, up to app/ itself. Never from a sibling, a cousin or a descendant.
 - Neither the C++ graph nor the QML graph has a cycle.
 
-`--moves FILE` judges the revision as if each folder were already where FILE moves it. Each
-line of FILE is `folder target`, both below ui/, and `#` starts a comment; a folder takes the
-target of its longest listed prefix, and a folder that is not listed stays where it is. Edges
-between folders that land in the same directory disappear. `ui-moves.txt` beside this tool
-holds the moves to the target tree, so that
-  ui-graph.py HEAD --rules --moves tools/ui-moves.txt
-prints the edges that moving the folders will not fix.
-
 The revision is read with git, so no checkout is needed. Run it from anywhere in the repository:
   ui-graph.py HEAD
   ui-graph.py 1b59c8d2a -v --rules
@@ -84,13 +76,10 @@ def main():
                         help='list the edges without root edges and the files that include the root header')
     parser.add_argument('--rules', action='store_true',
                         help='check the target rules of the UI and exit with 1 on violations')
-    parser.add_argument('--moves', metavar='FILE', type=Path,
-                        help='judge the folders as if they were already where FILE moves them')
     arguments = parser.parse_args()
 
     sources = load_sources(arguments.rev, ROOT)
-    moves = load_moves(arguments.moves.read_text()) if arguments.moves else None
-    lines, code = report(arguments.rev, sources, arguments.verbose, arguments.rules, moves)
+    lines, code = report(arguments.rev, sources, arguments.verbose, arguments.rules)
     print('\n'.join(lines))
     sys.exit(code)
 
@@ -117,51 +106,6 @@ def load_sources(rev, repository):
         offset = start + size + 1
 
     return sources
-
-
-def load_moves(text):
-    """Return {folder: target} from lines of `folder target`; `#` starts a comment."""
-    moves = {}
-    for number, line in enumerate(text.splitlines(), 1):
-        fields = line.split('#', 1)[0].split()
-        if not fields:
-            continue
-        if len(fields) != 2:
-            raise ValueError(f'line {number}: expected `folder target`, got {line!r}')
-
-        source, target = (field.strip('/') for field in fields)
-        if source in moves:
-            raise ValueError(f'line {number}: {source} is moved twice')
-        moves[source] = target
-
-    return moves
-
-
-def moved(node, moves):
-    """The directory of `node` once each folder of `moves` is at its target."""
-    parts = node.split('/')
-    for end in range(len(parts), 0, -1):
-        target = moves.get('/'.join(parts[:end]))
-        if target is not None:
-            return '/'.join([target, *parts[end:]])
-
-    return node
-
-
-def move_edges(edges, qml, moves):
-    """Return the C++ edges and the QML graph with their folders at the targets of `moves`."""
-    include = []
-    for path, node, included, header in edges:
-        node, included = moved(node, moves), moved(included, moves)
-        if node != included:
-            include.append((path, node, included, header))
-
-    graph = collections.defaultdict(set)
-    for node, targets in qml.items():
-        node = moved(node, moves)
-        graph[node] |= {moved(target, moves) for target in targets} - {node}
-
-    return include, graph
 
 
 def folder(path):
@@ -328,12 +272,10 @@ def summary(label, graph):
     return f'{label} edges {edges} cycles: {cycles}'
 
 
-def report(rev, sources, verbose, rules, moves=None):
-    """Return the report lines and the exit code, with the folders at the targets of `moves`."""
+def report(rev, sources, verbose, rules):
+    """Return the report lines and the exit code."""
     edges = include_edges(sources)
     qml = qml_graph(sources)
-    if moves:
-        edges, qml = move_edges(edges, qml, moves)
 
     root_users = set()
     root_folders = set()
@@ -370,8 +312,6 @@ def report(rev, sources, verbose, rules, moves=None):
         return lines, 0
 
     folders = {folder(path) for path in sources}
-    if moves:
-        folders = {moved(node, moves) for node in folders}
     violations = sorted(f'{node} is outside {", ".join(TREES)}' for node in folders
                         if node.split('/')[0] not in TREES)
     violations += sorted({f'C++ {node} -> {target}' for _, node, target, _ in edges if not allowed(node, target)}
