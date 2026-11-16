@@ -1048,7 +1048,9 @@ Item {
 
             PathKeys {
                 id: pathKeys
-                controller: root.application
+                controller: root.application.paths
+                controlModifier: root.application.controlModifier
+                onCancelled: root.application.execute(WindowActions.Action.cancel)
             }
 
             function synchronize() {

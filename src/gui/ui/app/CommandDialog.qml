@@ -189,8 +189,12 @@ Popup {
             anchors.fill: parent
             active: root.pathMode && telar.lineSearch === Store.Dialog.none
             sourceComponent: PathPickerPanel {
-                controller: telar
+                controller: telar.paths
+                colors: telar.colors
+                typography: telar.windowGeometry.typography
+                controlModifier: telar.controlModifier
                 ratio: root.ratio
+                onCancelled: telar.execute(WindowActions.Action.cancel)
             }
         }
 

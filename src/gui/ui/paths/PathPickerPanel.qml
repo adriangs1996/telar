@@ -7,13 +7,17 @@ Item {
     id: root
     objectName: "pathPickerPanel"
 
-    required property var controller
+    required property PathPickerController controller
+    required property var colors
+    required property var typography
+    // The platform's Control modifier, as an event modifier mask.
+    required property int controlModifier
     property real ratio: 1
-    readonly property var colors: controller.colors
-    readonly property var typography: controller.windowGeometry.typography
     readonly property var grid: typography.grid
-    readonly property var state: controller.paths.state
-    readonly property var regions: controller.paths.geometry
+    readonly property var state: controller.state
+    readonly property var regions: controller.geometry
+    // Escape on an empty composition, or Control+H: the window closes the search.
+    signal cancelled()
     property alias queryField: query
 
     clip: true
@@ -28,6 +32,8 @@ Item {
     PathKeys {
         id: keys
         controller: root.controller
+        controlModifier: root.controlModifier
+        onCancelled: root.cancelled()
     }
 
     Component.onCompleted: {
@@ -36,7 +42,7 @@ Item {
     }
 
     Connections {
-        target: root.controller.paths
+        target: root.controller
         function onChanged() {
             root.synchronizeEditor();
         }
@@ -66,17 +72,17 @@ Item {
         formControl: false
         maximumBytes: root.state.maximumQueryBytes
         Accessible.name: "Search paths"
-        onTextEdited: root.controller.paths.search(text)
-        onLimitReached: requested => root.controller.paths.reportQueryLimit(requested)
-        Keys.onDownPressed: root.controller.paths.move(1)
-        Keys.onUpPressed: root.controller.paths.move(-1)
+        onTextEdited: root.controller.search(text)
+        onLimitReached: requested => root.controller.reportQueryLimit(requested)
+        Keys.onDownPressed: root.controller.move(1)
+        Keys.onUpPressed: root.controller.move(-1)
         Keys.onReturnPressed: event => keys.submit(event)
         Keys.onEnterPressed: event => keys.submit(event)
-        Keys.onTabPressed: root.controller.paths.descend()
-        Keys.onBacktabPressed: root.controller.paths.ascend()
+        Keys.onTabPressed: root.controller.descend()
+        Keys.onBacktabPressed: root.controller.ascend()
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
-                root.controller.execute(WindowActions.Action.cancel);
+                root.cancelled();
             }
         }
         Keys.onPressed: event => event.accepted = keys.handle(event)
@@ -142,7 +148,7 @@ Item {
                 width: row.modelData.bounds.width
                 height: row.modelData.bounds.height
                 identity: root.state.revision + ":" + row.modelData.path
-                onActivated: root.controller.paths.activate({path: row.modelData.path, revision: root.state.revision, absolute: false})
+                onActivated: root.controller.activate({path: row.modelData.path, revision: root.state.revision, absolute: false})
             }
         }
     }
