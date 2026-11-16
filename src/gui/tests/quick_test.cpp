@@ -213,7 +213,7 @@ namespace telar::gui::test {
     }
 
     [[nodiscard]] static bool pluginIdle(const qt::Application& application) {
-      return !application.plugin_worker_.active() && !application.plugin_owner_;
+      return application.plugins_.idle();
     }
   };
 

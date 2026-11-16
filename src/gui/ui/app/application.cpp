@@ -143,7 +143,6 @@ namespace telar::gui::qt {
         memory_(memory),
         history_(store_),
         configuration_source_(memory),
-        plugin_worker_(memory, *this),
         machine_profiles_(memory),
         attachments_(store_, memory),
         key_bindings_(*this),
@@ -162,6 +161,7 @@ namespace telar::gui::qt {
         copy_(store_),
         notifications_(store_),
         components_(store_, configuration_source_, element_slots_, memory),
+        plugins_(store_, configuration_source_, memory),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -170,6 +170,7 @@ namespace telar::gui::qt {
     initializeComponents();
     initializeElements();
     initializePicks();
+    initializePlugins();
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
     palette_.setCommands(commands());
 
@@ -905,7 +906,7 @@ namespace telar::gui::qt {
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::plugin_run:
-      startPlugin(configuration_source_.pluginInvocation(message, bindingContext()));
+      plugins_.start(configuration_source_.pluginInvocation(message, bindingContext()));
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::config_reload:

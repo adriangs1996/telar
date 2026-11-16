@@ -44,7 +44,7 @@ static_assert(true);
 #include "ui/panes/panes_controller.hpp"
 #include "ui/paths/path_picker_controller.hpp"
 #include "ui/peek/peek_controller.hpp"
-#include "ui/plugins/plugin_worker.hpp"
+#include "ui/plugins/plugin_runner.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/copy_controller.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
@@ -320,7 +320,6 @@ namespace telar::gui::qt {
     void interruptBindings();
     bool openLink(const LinkTarget& target, std::optional<std::uint64_t> source_id = {});
     void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
-    void pluginWorkerFinished(std::uint64_t execution, const PluginInvocation& invocation, const PluginWorkerResult& result);
 
     WorkspacesController* workspaces() noexcept {
       return &workspaces_;
@@ -464,7 +463,7 @@ namespace telar::gui::qt {
     void initializePicks();
     void openComponentPick(std::size_t index);
     void restoreComponentPickFocus();
-    void startPlugin(const PluginInvocation& invocation);
+    void initializePlugins();
     void applyPluginEffects(const PluginEffects& effects);
     void applyExpression(const InputExpression& expression);
     void scrollBinding(ScrollDirection direction);
@@ -669,16 +668,6 @@ namespace telar::gui::qt {
         this};
     // Where the pressed component action that is running was pressed, for a panel it opens.
     std::optional<QPointF> component_action_anchor_;
-    tbc::view<PluginWorker<Application>, tbc::lt::self> plugin_worker_;
-
-    struct PluginOwner {
-      MachineClientKey source;
-      std::uint64_t runtime_generation = 0;
-      std::uint64_t execution = 0;
-    };
-
-    std::optional<PluginOwner> plugin_owner_;
-    std::uint64_t next_plugin_execution_ = 1;
     MachineProfilesSource machine_profiles_;
     AttachmentsController attachments_;
     std::optional<RemoteLaunch> remote_launch_;
@@ -706,6 +695,7 @@ namespace telar::gui::qt {
     CopyController copy_;
     NotificationsController notifications_;
     ComponentsController components_;
+    PluginRunner plugins_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;

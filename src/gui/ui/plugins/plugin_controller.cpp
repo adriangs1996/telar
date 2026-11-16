@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "core/memory.hpp"
-#include "plugin_worker.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -13,7 +12,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "ui/app/application.hpp"
-#include "ui/machines/machine_client.hpp"
 #include <QString>
 #include <QtCore/qtmetamacros.h>
 #include <algorithm>
@@ -39,62 +37,21 @@ static_assert(true);
 
 import telar.gui.config.plugin_effects;
 import telar.gui.input.copy_pointer;
-import telar.gui.platform.runtime_endpoint;
 import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {
 
-  void Application::startPlugin(const PluginInvocation& invocation) {
-    if (plugin_worker_.active() || plugin_owner_) {
-      throw std::runtime_error{"PluginWorkerBusy"};
-    }
-
-    if (next_plugin_execution_ == 0) {
-      throw std::runtime_error{"PluginExecutionIdExhausted"};
-    }
-
-    const auto& client = clientAt(store_.machines().active());
-    const auto execution = next_plugin_execution_++;
-
-    plugin_owner_ = PluginOwner{.source = client.key, .runtime_generation = client.runtime_generation, .execution = execution};
-    try {
-      plugin_worker_.start(invocation, execution, QString::fromStdString(platform::runtime_endpoint::program()));
-    } catch (...) {
-      plugin_owner_.reset();
-      throw;
-    }
-  }
-
-  void Application::pluginWorkerFinished(std::uint64_t execution, const PluginInvocation& invocation, const PluginWorkerResult& result) {
-    if (!plugin_owner_ || plugin_owner_->execution != execution) {
-      return;
-    }
-
-    const auto owner = *plugin_owner_;
-
-    plugin_owner_.reset();
-    const auto* client = findClient(owner.source);
-    if (client == nullptr || client->key.machine.slot != store_.machines().active() || client->runtime_generation != owner.runtime_generation || !client->connection.ready() || configuration_source_.configurationGeneration() != invocation.configuration_generation) {
-      return;
-    }
-
-    try {
-      if (!result.error.isEmpty()) {
-        throw std::runtime_error{result.error.toStdString()};
+  void Application::initializePlugins() {
+    connect(&plugins_, &PluginRunner::finished, this, [this](const PluginEffects& effects) {
+      try {
+        error_.clear();
+        applyPluginEffects(effects);
+        refresh();
+      } catch (const std::exception& error) {
+        fail(error);
       }
-
-      if (!result.effects) {
-        throw std::runtime_error{"PluginWorkerFailed"};
-      }
-
-      configuration_source_.authorizePlugin(invocation, *result.effects);
-      error_.clear();
-      applyPluginEffects(*result.effects);
-
-      refresh();
-    } catch (const std::exception& error) {
-      fail(error);
-    }
+    });
+    connect(&plugins_, &PluginRunner::failed, this, &Application::reportFailure);
   }
 
   void Application::applyPluginEffects(const PluginEffects& effects) {

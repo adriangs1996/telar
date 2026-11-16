@@ -167,11 +167,11 @@ namespace telar::gui::test {
 
   struct MachineWindow {
     static void armPlugin(qt::Application& application, qt::MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
-      application.plugin_owner_ = qt::Application::PluginOwner{.source = source, .runtime_generation = runtime_generation, .execution = execution};
+      application.plugins_.owner_ = qt::PluginRunner::Owner{.source = source, .runtime_generation = runtime_generation, .execution = execution};
     }
 
     static bool pendingPlugin(const qt::Application& application) {
-      return application.plugin_owner_.has_value();
+      return application.plugins_.owner_.has_value();
     }
 
     static void completePluginFailure(qt::Application& application, std::uint64_t execution) {
@@ -181,7 +181,7 @@ namespace telar::gui::test {
       qt::PluginWorkerResult result;
 
       result.error = QStringLiteral("OwnedPluginFailure");
-      application.pluginWorkerFinished(execution, invocation, result);
+      application.plugins_.pluginWorkerFinished(execution, invocation, result);
     }
 
     static qt::MachineClientKey add(qt::Application& application, const QString& endpoint) {

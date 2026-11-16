@@ -375,7 +375,7 @@ namespace telar::gui::qt {
         openComponentPick(definition->index);
       }
     } else {
-      startPlugin(configuration_source_.pluginInvocation(std::get<PluginActionDescription>(named), bindingContext()));
+      plugins_.start(configuration_source_.pluginInvocation(std::get<PluginActionDescription>(named), bindingContext()));
     }
   }
 

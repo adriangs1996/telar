@@ -867,7 +867,7 @@ if(TELAR_GUI_NATIVE)
     target_compile_definitions(gui-quick PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1)
   endif()
 
-  target_sources(gui-quick PRIVATE ui/attachments/attachments_controller.cpp ui/attachments/attachments_controller.hpp ui/plugins/plugin_controller.cpp ui/prompt/prompt_controller.cpp)
+  target_sources(gui-quick PRIVATE ui/attachments/attachments_controller.cpp ui/attachments/attachments_controller.hpp ui/plugins/plugin_controller.cpp ui/plugins/plugin_runner.cpp ui/plugins/plugin_runner.hpp ui/prompt/prompt_controller.cpp)
   target_sources(gui-quick PRIVATE ui/components/components_controller.cpp ui/components/components_controller.hpp ui/components/component_commands.cpp ui/components/element_controller.cpp ui/components/element_slots.cpp ui/components/element_slots.hpp)
   target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
   target_sources(gui-quick PRIVATE ui/history/history_controller.cpp ui/history/history_controller.hpp ui/history/history_pointer.cpp ui/chrome/tab_drag_controller.cpp ui/input/binding_controller.cpp ui/input/key_bindings.cpp ui/terminal/copy_controller.cpp ui/terminal/copy_controller.hpp ui/links/link_controller.cpp)
