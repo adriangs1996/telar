@@ -209,8 +209,14 @@ Popup {
             queryField: historyQuery
             anchors.fill: parent
             visible: root.historyMode
-            controller: telar
+            controller: telar.history
+            colors: telar.colors
+            typography: telar.windowGeometry.typography
+            workspaceName: telar.workspaces.context?.name ?? ""
+            controlModifier: telar.controlModifier
+            superModifier: telar.superModifier
             ratio: root.ratio
+            onCancelled: telar.execute(WindowActions.Action.cancel)
         }
 
         FormTextField {

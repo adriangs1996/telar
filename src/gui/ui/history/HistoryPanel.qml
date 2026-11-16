@@ -9,12 +9,21 @@ Item {
     objectName: "historyPanel"
 
     property real ratio: 1
-    readonly property var browserState: root.controller.history.state
-    readonly property bool actionable: !root.controller.history.loading && root.browserState.phase === "ready" && root.browserState.count > 0
+    readonly property var browserState: root.controller.state
+    readonly property bool actionable: !root.controller.loading && root.browserState.phase === "ready" && root.browserState.count > 0
     readonly property real resultBottomInset: 6 * ratio
-    required property var controller
+    required property HistoryController controller
+    required property var colors
+    required property var typography
+    // The workspace the "search everywhere" hint names.
+    property string workspaceName: ""
+    // The platform's Control and Command modifiers, as event modifier masks.
+    required property int controlModifier
+    required property int superModifier
     property var queryField: null
-    readonly property var regions: controller.history.geometry
+    readonly property var regions: controller.geometry
+    // Escape or Control+H outside the inspector: the window closes the search.
+    signal cancelled()
     property alias searchHost: historySearch.fieldHost
     property alias rowsView: results
     property bool retiringRows: false
@@ -50,7 +59,10 @@ Item {
     HistoryKeys {
         id: keys
         controller: root.controller
+        controlModifier: root.controlModifier
+        superModifier: root.superModifier
         queryField: root.queryField
+        onCancelled: root.cancelled()
         pageInspector: older => (inspector.item as HistoryInspector)?.page(older)
     }
 
@@ -78,7 +90,7 @@ Item {
     Keys.onDownPressed: root.moveSelection(-1)
 
     HistoryFilters {
-        actionController: root.controller
+        controller: root.controller
         x: root.regions.header.x
         y: root.regions.header.y
         width: root.regions.header.width
@@ -88,12 +100,12 @@ Item {
         ratio: root.ratio
         density: root.regions.density
         state: root.browserState
-        colors: root.controller.colors
-        grid: root.controller.windowGeometry.typography.grid
-        pixelSize: root.controller.windowGeometry.typography.small
-        onScopeSelected: scope => root.controller.history.setFilters({scope: scope})
-        onAuthorSelected: author => root.controller.history.setFilters({author: author})
-        onFailedToggled: root.controller.history.setFilters({failedOnly: !root.browserState.failedOnly})
+        colors: root.colors
+        grid: root.typography.grid
+        pixelSize: root.typography.small
+        onScopeSelected: scope => root.controller.setFilters({scope: scope})
+        onAuthorSelected: author => root.controller.setFilters({author: author})
+        onFailedToggled: root.controller.setFilters({failedOnly: !root.browserState.failedOnly})
     }
 
     Item {
@@ -113,7 +125,7 @@ Item {
             visible: width > 0
             clip: true
             spacing: 0
-            model: root.retiringRows ? null : root.controller.history.rows
+            model: root.retiringRows ? null : root.controller.rows
             opacity: historySearch.rowsOpacity
             verticalLayoutDirection: ListView.BottomToTop
             currentIndex: root.browserState.selection
@@ -140,8 +152,8 @@ Item {
                     height: result.headingHeight
                     visible: height > 0
                     text: result.record.dayLabel.toUpperCase()
-                    color: root.controller.colors.subtext0
-                    pixelSize: root.controller.windowGeometry.typography.small
+                    color: root.colors.subtext0
+                    pixelSize: root.typography.small
                     emphasized: true
                     elide: Text.ElideNone
                 }
@@ -152,15 +164,15 @@ Item {
                     width: result.width
                     height: result.height - y
                     record: result.record
-                    commandText: result.selected ? root.controller.history.command : result.record.command
+                    commandText: result.selected ? root.controller.command : result.record.command
                     query: root.browserState.query
                     commandLoaded: !result.selected || root.browserState.commandLoaded
                     inspectionKey: root.browserState.inspectionKey
                     macStyle: root.browserState.macStyle
                     paneOpen: result.selected && root.browserState.paneOpen
                     viewportHeight: root.regions.results.height
-                    colors: root.controller.colors
-                    typography: root.controller.windowGeometry.typography
+                    colors: root.colors
+                    typography: root.typography
                     rowHeight: root.regions.rowHeight
                     ratio: root.ratio
                     selected: result.selected
@@ -169,13 +181,13 @@ Item {
                     grouped: root.browserState.grouped
                     showCwd: root.browserState.effectiveScope === "global" || root.browserState.effectiveScope === "workspace"
                     interactive: root.actionable
-                    actionController: root.controller
+                    controller: root.controller
                     historyIndex: result.index
                     revision: root.browserState.revision
-                    onActivated: revision => root.controller.history.selectPresented(result.index, revision)
+                    onActivated: revision => root.controller.selectPresented(result.index, revision)
                     onActionTriggered: action => {
                         const actions = {copy: HistoryController.Action.copy, erase: HistoryController.Action.erase, visit: HistoryController.Action.visit};
-                        root.controller.history.execute(actions[action], result.record.key);
+                        root.controller.execute(actions[action], result.record.key);
                     }
                     onImplicitHeightChanged: {
                         if (result.selected) {
@@ -195,13 +207,13 @@ Item {
             active: root.browserState.inspecting && root.browserState.count > 0
             sourceComponent: HistoryInspector {
                 reveal: inspectorMotion.reveal
-                actionController: root.controller
-                details: root.controller.history.inspection
+                controller: root.controller
+                details: root.controller.inspection
                 browserState: root.browserState
-                colors: root.controller.colors
-                typography: root.controller.windowGeometry.typography
-                command: root.controller.history.command
-                output: root.controller.history.output
+                colors: root.colors
+                typography: root.typography
+                command: root.controller.command
+                output: root.controller.output
                 ratio: root.ratio
                 density: root.regions.density
                 split: root.regions.results.width > 0
@@ -209,14 +221,14 @@ Item {
                 onActionTriggered: (action, revision) => {
                     switch (action) {
                     case "submit":
-                        root.controller.history.usePresented(revision);
+                        root.controller.usePresented(revision);
                         break;
                     case "alternate":
-                        root.controller.history.usePresented(revision, true);
+                        root.controller.usePresented(revision, true);
                         break;
                     default:
                         const actions = {copy: HistoryController.Action.copy, erase: HistoryController.Action.erase, visit: HistoryController.Action.visit};
-                        root.controller.history.execute(actions[action], root.controller.history.inspection.identity);
+                        root.controller.execute(actions[action], root.controller.inspection.identity);
                         break;
                     }
                 }
@@ -238,40 +250,40 @@ Item {
                     width: area.width
                     height: area.height
                     state: root.browserState
-                    colors: root.controller.colors
-                    typography: root.controller.windowGeometry.typography
-                    workspace: root.controller.workspaces.context?.name ?? ""
+                    colors: root.colors
+                    typography: root.typography
+                    workspace: root.workspaceName
                     ratio: root.ratio
-                    onSearchEverywhere: root.controller.history.setFilters({scope: "global"})
+                    onSearchEverywhere: root.controller.setFilters({scope: "global"})
                 }
             }
         }
     }
 
     HistoryFooter {
-        actionController: root.controller
+        controller: root.controller
         x: root.regions.footer.x
         y: root.regions.footer.y
         width: root.regions.footer.width
         height: root.regions.footer.height
         state: root.browserState
-        colors: root.controller.colors
-        pixelSize: root.controller.windowGeometry.typography.small
+        colors: root.colors
+        pixelSize: root.typography.small
         ratio: root.ratio
         interactive: root.actionable
         onActionTriggered: (action, revision) => {
             switch (action) {
             case "submit":
-                root.controller.history.usePresented(revision);
+                root.controller.usePresented(revision);
                 break;
             case "alternate":
-                root.controller.history.usePresented(revision, true);
+                root.controller.usePresented(revision, true);
                 break;
             case "inspect":
-                root.controller.history.execute(HistoryController.Action.inspect);
+                root.controller.execute(HistoryController.Action.inspect);
                 break;
             case "visit":
-                root.controller.history.execute(HistoryController.Action.visit);
+                root.controller.execute(HistoryController.Action.visit);
                 break;
             }
         }
@@ -279,8 +291,8 @@ Item {
 
     HistorySearchBar {
         id: historySearch
-        colors: root.controller.colors
-        typography: root.controller.windowGeometry.typography
+        colors: root.colors
+        typography: root.typography
         ratio: root.ratio
         density: root.regions.density
         inspecting: root.browserState.inspecting
@@ -293,7 +305,7 @@ Item {
     }
 
     Connections {
-        target: root.controller.history.rows
+        target: root.controller.rows
         function onRowsAboutToBeRemoved() {
             root.retiringRows = true;
         }
@@ -303,7 +315,7 @@ Item {
     }
 
     Connections {
-        target: root.controller.history
+        target: root.controller
         function onInspectionScrolled(lines) {
             const view = inspector.item as HistoryInspector;
             if (view) {
@@ -316,5 +328,5 @@ Item {
         }
     }
 
-    Component.onCompleted: root.controller.history.registerPanel(root)
+    Component.onCompleted: root.controller.registerPanel(root)
 }

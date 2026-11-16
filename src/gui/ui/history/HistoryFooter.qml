@@ -11,7 +11,7 @@ HistoryFooterLayout {
     required property var colors
     required property real pixelSize
     property real ratio: 1
-    property var actionController: null
+    property HistoryController controller: null
     property bool interactive: state.phase === "ready" && state.count > 0
     readonly property var regions: layout
     signal actionTriggered(string action, string revision)
@@ -48,8 +48,8 @@ HistoryFooterLayout {
             required property int index
             label: root.hints[index] ?? {key: "", word: "", action: "none"}
             geometry: root.regions.hints[index]
-            usePresentedHover: root.actionController !== null
-            presentedHover: root.actionController ? root.actionController.history.hoveredFooterAction === label.action && ((label.action !== "submit" && label.action !== "alternate") || (root.actionController.history.hoveredFooterIndex === root.state.selection && root.actionController.history.hoveredFooterRevision === root.state.revision)) : false
+            usePresentedHover: root.controller !== null
+            presentedHover: root.controller ? root.controller.hoveredFooterAction === label.action && ((label.action !== "submit" && label.action !== "alternate") || (root.controller.hoveredFooterIndex === root.state.selection && root.controller.hoveredFooterRevision === root.state.revision)) : false
             style: root.regions
             x: geometry.bounds.x
             y: geometry.bounds.y
@@ -99,8 +99,8 @@ HistoryFooterLayout {
 
     Component.onCompleted: {
         root.scheduleMeasurement();
-        if (root.actionController) {
-            root.actionController.history.registerFooter(root);
+        if (root.controller) {
+            root.controller.registerFooter(root);
         }
     }
 }

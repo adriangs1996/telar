@@ -1038,7 +1038,10 @@ Item {
 
             HistoryKeys {
                 id: historyKeys
-                controller: root.application
+                controller: root.application.history
+                controlModifier: root.application.controlModifier
+                superModifier: root.application.superModifier
+                onCancelled: root.application.execute(WindowActions.Action.cancel)
                 queryField: field
                 downward: true
             }

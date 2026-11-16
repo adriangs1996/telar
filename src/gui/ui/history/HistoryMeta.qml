@@ -14,7 +14,7 @@ HistoryMetaLayout {
     property bool selected: true
     property bool paneOpen: false
     property bool interactive: true
-    property var actionController: null
+    property HistoryController controller: null
     property int historyIndex: -1
     property string revision: ""
     enabled: root.interactive
@@ -98,8 +98,8 @@ HistoryMetaLayout {
             required property int index
             geometry: root.regions.actions[index]
             label: root.actions[index]
-            usePresentedHover: root.actionController !== null
-            presentedHover: root.actionController ? root.actionController.history.hoveredCardAction === label.action : false
+            usePresentedHover: root.controller !== null
+            presentedHover: root.controller ? root.controller.hoveredCardAction === label.action : false
             style: root.regions
             x: geometry.bounds.x
             y: geometry.bounds.y
@@ -118,8 +118,8 @@ HistoryMetaLayout {
 
     Component.onCompleted: {
         root.scheduleMeasurement();
-        if (root.actionController) {
-            root.actionController.history.registerActions(root);
+        if (root.controller) {
+            root.controller.registerActions(root);
         }
     }
 }
