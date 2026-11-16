@@ -228,7 +228,6 @@ namespace telar::gui::qt {
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
     Q_INVOKABLE void setSidebarWidth(qreal width);
-    Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
 
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
     void interruptBindings();

@@ -47,9 +47,15 @@ namespace telar::gui::qt {
     void setScale(double scale) noexcept;
     [[nodiscard]] QAbstractItemModel* rows() noexcept;
     [[nodiscard]] QAbstractItemModel* dividers() noexcept;
+    // Drags the divider whose key is `index` to (x, y), in the logical pixels the records are laid
+    // out in; `commit` on release keeps the layout.
+    Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
     // How many synchronize() calls rebuilt the records, for tests and probes that check what a
     // change costs.
     [[nodiscard]] std::uint64_t rebuilds() const noexcept;
+
+  signals:
+    void failed(const QString& message);
 
   private:
     struct Inputs {

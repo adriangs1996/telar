@@ -245,6 +245,7 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
     connect(&peek_, &PeekController::failed, this, &ApplicationController::reportFailure);
+    connect(&panes_, &PanesController::failed, this, &ApplicationController::reportFailure);
     connect(this, &ApplicationController::machineChanged, &link_status_, &LinkStatusController::publish);
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
@@ -971,46 +972,6 @@ namespace telar::gui::qt {
     attachments_.synchronize();
     panes_.setScale(terminal_grid_.scale);
     panes_.synchronize();
-  }
-
-  void ApplicationController::resizeDivider(int index, qreal x, qreal y, bool commit) {
-    try {
-      auto* tab = session().activeTab();
-      if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
-        return;
-      }
-
-      const auto dividers = tab->layout.dividers();
-      const auto divider = std::ranges::find_if(dividers, [&](const auto& entry) {
-        return entry.node_index == static_cast<std::size_t>(index);
-      });
-      if (divider == dividers.end()) {
-        return;
-      }
-
-      const auto& geometry = session().workbenchGeometry();
-      const auto parent_bounds = geometry.pixels(divider->parent_bounds);
-      const auto divider_bounds = geometry.pixels(divider->bounds);
-      const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
-      const auto extent = horizontal ? parent_bounds.width - divider_bounds.width : parent_bounds.height - divider_bounds.height;
-      const auto offset = horizontal ? (x * terminal_grid_.scale) - parent_bounds.x - (divider_bounds.width / 2) : (y * terminal_grid_.scale) - parent_bounds.y - (divider_bounds.height / 2);
-
-      if (extent <= 0) {
-        return;
-      }
-
-      const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / extent, 0.0, 1.0) * PaneLayout::ratio_maximum);
-      if (tab->layout.setSplitRatio({.node_index = static_cast<std::size_t>(index), .ratio = ratio})) {
-        session().invalidateView();
-        refreshPanes();
-      }
-
-      if (commit) {
-        session().retainLayout();
-      }
-    } catch (const std::exception& error) {
-      fail(error);
-    }
   }
 
   void ApplicationController::execute(window_actions::Action action, const QString& target) {

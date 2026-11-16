@@ -5,13 +5,21 @@ static_assert(true);
 
 #include "panes_controller.hpp"
 #include "pane_projection.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/models/tab_leaves.hpp"
 #include <QList>
 #include <QString>
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <optional>
 #include <span>
 #include <utility>
+
+import telar.gui.layout.geometry;
 
 namespace telar::gui::qt {
 
@@ -26,6 +34,47 @@ namespace telar::gui::qt {
 
   QAbstractItemModel* PanesController::dividers() noexcept {
     return &dividers_;
+  }
+
+  void PanesController::resizeDivider(int index, qreal x, qreal y, bool commit) {
+    try {
+      auto& session = store_.session();
+      auto* tab = session.activeTab();
+      if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
+        return;
+      }
+
+      const auto dividers = tab->layout.dividers();
+      const auto divider = std::ranges::find_if(dividers, [&](const auto& entry) {
+        return entry.node_index == static_cast<std::size_t>(index);
+      });
+      if (divider == dividers.end()) {
+        return;
+      }
+
+      const auto& geometry = session.workbenchGeometry();
+      const auto parent_bounds = geometry.pixels(divider->parent_bounds);
+      const auto divider_bounds = geometry.pixels(divider->bounds);
+      const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
+      const auto extent = horizontal ? parent_bounds.width - divider_bounds.width : parent_bounds.height - divider_bounds.height;
+      const auto offset = horizontal ? (x * scale_) - parent_bounds.x - (divider_bounds.width / 2) : (y * scale_) - parent_bounds.y - (divider_bounds.height / 2);
+
+      if (extent <= 0) {
+        return;
+      }
+
+      const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / extent, 0.0, 1.0) * PaneLayout::ratio_maximum);
+      if (tab->layout.setSplitRatio({.node_index = static_cast<std::size_t>(index), .ratio = ratio})) {
+        session.invalidateView();
+        synchronize();
+      }
+
+      if (commit) {
+        session.retainLayout();
+      }
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
   }
 
   void PanesController::setScale(double scale) noexcept {

@@ -35,8 +35,6 @@ Item {
     signal actionRequested(int action, string target)
     // A click on an element a mod drew in a pane's header.
     signal elementActivated(string slot, string key, string revision, int element)
-    // A divider dragged to (x, y); `commit` on release.
-    signal dividerResized(int index, real x, real y, bool commit)
     // The parent raises it each time the window shows or closes a dialog, once `dialog` holds the
     // new one: the focused pane's terminal takes the keyboard back when none is open.
     signal dialogShown()
@@ -483,7 +481,7 @@ Item {
 
             function resize(mouse, commit) {
                 const position = mapToItem(root, mouse.x, mouse.y);
-                root.dividerResized(Number(record.key), position.x, position.y, commit);
+                root.controller.resizeDivider(Number(record.key), position.x, position.y, commit);
             }
 
             onPositionChanged: mouse => {

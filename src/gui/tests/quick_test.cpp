@@ -2399,7 +2399,7 @@ return {api_version = 2, client = {
       const auto divider = client_->panes()->dividers()->data(client_->panes()->dividers()->index(0, 0), ListModel::record_role).toMap();
       const auto first_width = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("width")).toReal();
 
-      client_->resizeDivider(divider.value(QStringLiteral("key")).toString().toInt(), divider.value(QStringLiteral("x")).toReal() + divider_drag_pixels, divider.value(QStringLiteral("y")).toReal(), true);
+      client_->panes()->resizeDivider(divider.value(QStringLiteral("key")).toString().toInt(), divider.value(QStringLiteral("x")).toReal() + divider_drag_pixels, divider.value(QStringLiteral("y")).toReal(), true);
       const auto resized_width = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("width")).toReal();
 
       QVERIFY(resized_width > first_width);

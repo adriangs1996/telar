@@ -109,7 +109,6 @@ Window {
         ratio: root.ratio
         onActionRequested: (action, target) => telar.execute(action, target)
         onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
-        onDividerResized: (index, x, y, commit) => telar.resizeDivider(index, x, y, commit)
     }
 
     // Once the panes read the new dialog, the focused one takes the keyboard back if none is open.
