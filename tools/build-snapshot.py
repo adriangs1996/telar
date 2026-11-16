@@ -12,6 +12,8 @@ without building anything. It reads three things a configure writes:
 - build.ninja: per linked binary or archive, its objects (as `<target>:<source>`),
   its libraries (an archive of the tree as `target:<name>`) and its link flags.
 - `ctest --show-only=json-v1`: every test with its command and properties.
+  CTest only knows the command of a test whose executable is built, so a
+  command is compared only when both sides have one.
 
 Paths are written relative to placeholders, so trees in different checkouts or
 build directories compare: $BUILD (the tree), $ROOT (the repository), $TOOLCHAIN,
@@ -414,6 +416,10 @@ def compare(base, new):
         groups['tests: only in new']['tests'].append(key)
     for key in sorted(base['tests'].keys() & new['tests'].keys()):
         for field in ('command', 'properties'):
+            # CTest names a command only once its executable exists, so a tree that
+            # has not been built yet has none to compare.
+            if field == 'command' and not (base['tests'][key][field] and new['tests'][key][field]):
+                continue
             if base['tests'][key][field] != new['tests'][key][field]:
                 description = f'{field}: {json.dumps(base["tests"][key][field])} -> {json.dumps(new["tests"][key][field])}'
                 groups['tests: changed'][description].append(key)
