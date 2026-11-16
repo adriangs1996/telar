@@ -15,7 +15,7 @@ Popup {
     readonly property bool paletteMode: telar.dialog === Store.Dialog.palette
     // The focused pane's prompt line hosts the history and path searches; the history's
     // inspector still opens here, over it.
-    readonly property bool lineHosted: telar.lineSearch !== Store.Dialog.none && !(historyMode && telar.historyState.inspecting)
+    readonly property bool lineHosted: telar.lineSearch !== Store.Dialog.none && !(historyMode && telar.history.state.inspecting)
     readonly property bool listing: historyMode || paletteMode
     readonly property bool promptMode: telar.dialog !== Store.Dialog.none && !customMode
     readonly property bool workspaceMode: telar.dialog === Store.Dialog.new_workspace
@@ -31,7 +31,7 @@ Popup {
         id: historyMotion
         objectName: "historyModalMotion"
         active: root.historyMode
-        generation: telar.historyState.generation ?? ""
+        generation: telar.history.state.generation ?? ""
     }
 
     // Each prompt rises into place as it opens, on the history modal's curve.
@@ -44,8 +44,8 @@ Popup {
 
     function activateResult(alternate) {
         if (historyMode) {
-            if (!telar.historyLoading) {
-                telar.useHistoryRow(telar.historyState.selection, alternate);
+            if (!telar.history.loading) {
+                telar.history.use(telar.history.state.selection, alternate);
             }
         } else if (paletteMode) {
             paletteBrowser.item?.submit(alternate);
@@ -59,7 +59,7 @@ Popup {
         }
 
         if (historyMode && (event.modifiers & Qt.AltModifier) !== 0) {
-            telar.executeHistory(GuiController.HistoryAction.visit);
+            telar.history.execute(HistoryController.Action.visit);
         } else {
             activateResult((event.modifiers & Qt.ShiftModifier) !== 0);
         }
@@ -73,7 +73,7 @@ Popup {
         }
     }
 
-    readonly property rect historyBounds: telar.historyGeometry.bounds
+    readonly property rect historyBounds: telar.history.geometry.bounds
     readonly property rect paletteBounds: paletteMode ? telar.paletteGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect pathBounds: pathMode && telar.lineSearch === Store.Dialog.none ? telar.pathPickerGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect machineBounds: machineMode ? telar.machinePromptGeometry.bounds : Qt.rect(0, 0, 0, 0)
@@ -139,16 +139,20 @@ Popup {
                 root.close();
             }
         }
-        function onHistoryChanged() {
+    }
+
+    Connections {
+        target: telar.history
+        function onChanged() {
             if (!root.historyMode) {
                 return;
             }
 
-            const state = telar.historyState;
+            const state = telar.history.state;
             if (historyQuery.text !== state.editorText) {
                 historyQuery.text = state.editorText;
             }
-            if (!state.inspecting && !telar.historyLoading && !root.lineHosted) {
+            if (!state.inspecting && !telar.history.loading && !root.lineHosted) {
                 historyQuery.forceActiveFocus();
             }
         }
@@ -215,10 +219,10 @@ Popup {
             colors: telar.colors
             typography: telar.windowGeometry.typography
             ratio: root.ratio
-            maximumBytes: telar.historyState.maximumQueryBytes
+            maximumBytes: telar.history.state.maximumQueryBytes
             placeholderText: "Search commands"
-            onTextEdited: telar.searchHistory(text)
-            onLimitReached: requestedBytes => telar.reportHistoryQueryLimit(requestedBytes)
+            onTextEdited: telar.history.search(text)
+            onLimitReached: requestedBytes => telar.history.reportQueryLimit(requestedBytes)
             Keys.onDownPressed: root.moveSelection(1)
             Keys.onUpPressed: root.moveSelection(-1)
             Keys.onReturnPressed: event => root.acceptKey(event)

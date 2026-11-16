@@ -110,7 +110,6 @@ import telar.gui.paths.label;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
-import telar.gui.text.bounded_editor;
 import telar.base.text.utf8;
 import telar.gui.model.records;
 import telar.wire.vocabulary;
@@ -179,6 +178,7 @@ namespace telar::gui::qt {
   Application::Application(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         memory_(memory),
+        history_(store_),
         activity_targets_(AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory}),
         configuration_source_(memory),
         pick_controller_(*this, memory, configuration_source_),
@@ -210,6 +210,9 @@ namespace telar::gui::qt {
     connect(this, &Application::stateChanged, this, &Application::statusModeChanged);
     connect(this, &Application::configurationChanged, this, &Application::paletteChanged);
     connect(&store_, &Store::interacted, this, &Application::interacted);
+    connect(&store_, &Store::interacting, this, [this] {
+      pending_activity_.reset();
+    });
     connect(this, &Application::windowGeometryChanged, this, &Application::paletteChanged);
     connect(this, &Application::windowGeometryChanged, this, &Application::pathPickerGeometryChanged);
     connect(this, &Application::pathPickerChanged, this, &Application::pathPickerGeometryChanged);
@@ -217,7 +220,19 @@ namespace telar::gui::qt {
     connect(this, &Application::prefixChanged, this, &Application::statusModeChanged);
     connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
     connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
-    connect(this, &Application::windowGeometryChanged, this, &Application::historyChanged);
+    connect(this, &Application::windowGeometryChanged, this, [this] {
+      history_.setMetrics(historyMetrics());
+    });
+    connect(&history_, &HistoryController::submitted, this, [this] {
+      error_.clear();
+    });
+    connect(&history_, &HistoryController::closeRequested, this, [this] {
+      showDialog(Dialog::none);
+    });
+    connect(&history_, &HistoryController::failed, this, [this](const QString& message) {
+      error_ = message;
+      emit stateChanged();
+    });
     connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
     connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
     connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
@@ -239,13 +254,8 @@ namespace telar::gui::qt {
     });
 
     refresh_timer_.setSingleShot(true);
-    history_timer_.setSingleShot(true);
     initializeNotifications();
     initializeGraphicsRecovery();
-
-    constexpr int history_debounce_ms = 60;
-
-    history_timer_.setInterval(history_debounce_ms);
 
     connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
       error_.clear();
@@ -257,7 +267,7 @@ namespace telar::gui::qt {
       fitSidebarWhenReady();
 
       emit configurationChanged();
-      emit historyChanged();
+      history_.setMetrics(historyMetrics());
       configureWindow();
       refresh();
     });
@@ -289,18 +299,6 @@ namespace telar::gui::qt {
       if (!refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
-    });
-
-    connect(&history_timer_, &QTimer::timeout, this, [this] {
-      try {
-        const auto query = history_query_.toUtf8();
-
-        session().queryHistory(std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, history_filters_);
-      } catch (const std::exception& error) {
-        fail(error);
-      }
-
-      refreshHistory();
     });
 
     synchronizeWorkbenchGeometry();
@@ -409,10 +407,7 @@ namespace telar::gui::qt {
     ++window_generation_;
     frame_pacer_.reset();
     frame_pacer_.emplace(window);
-    presented_history_.reset();
-    presented_history_surface_ = {};
-    presented_history_actions_ = {};
-    presented_history_hover_.reset();
+    history_.setWindow(&window);
     pointer_dispatcher_.presentHistoryActions({});
     key_bindings_.setWindow(window);
     pointer_dispatcher_.setWindow(window);
@@ -555,39 +550,7 @@ namespace telar::gui::qt {
       }
     }
 
-    const auto& history = session().historyBrowser();
-
-    if (store_.dialog().kind == Dialog::history) {
-      frame.history_actions = historyActionSurface();
-      auto& hover = frame.history_hover.emplace();
-      const auto* filters = qobject_cast<const HistoryFiltersLayout*>(history_filter_layout_.data());
-      if (filters != nullptr && filters->window() == window_) {
-        hover.count += filters->hoverTargets(store_.dialog().generation, std::span{hover.targets}.subspan(hover.count));
-      }
-
-      const auto surface = historyScrollSurface(historyMetrics(), hover);
-
-      for (const auto& target : frame.history_actions.targets) {
-        hover.append({.identity = {.action = target.action, .generation = frame.history_actions.generation}, .bounds = target.bounds});
-      }
-
-      const auto* inspector = qobject_cast<const HistoryInspectionLayout*>(history_inspector_.data());
-      if (inspector != nullptr && inspector->window() == window_) {
-        hover.count += inspector->hoverTargets(store_.dialog().generation, std::span{hover.targets}.subspan(hover.count));
-      }
-
-      const auto* footer = qobject_cast<const HistoryFooterLayout*>(history_footer_.data());
-      if (footer != nullptr && footer->window() == window_) {
-        hover.count += footer->hoverTargets(store_.dialog().generation, std::span{hover.targets}.subspan(hover.count));
-      }
-
-      if (!historyLoading() && history_view_version_ == history.viewVersion()) {
-        frame.history_surface = surface;
-        if (const auto choice = history.choice()) {
-          frame.history = {.choice = *choice, .dialog_generation = store_.dialog().generation, .enter_runs = session().configuration().history.enter_runs};
-        }
-      }
-    }
+    history_.prepare(frame.history);
   }
 
   void Application::prepareTerminalFrames(PresentedFrame& frame) {
@@ -746,12 +709,8 @@ namespace telar::gui::qt {
 
     presented_tabs_ = frame.tabs;
     pointer_dispatcher_.presentTabs(presented_tabs_);
-    presented_history_ = frame.history;
-    presented_history_surface_ = frame.history_surface;
-    presented_history_actions_ = frame.history_actions;
-    pointer_dispatcher_.presentHistoryActions(presented_history_actions_);
-    presented_history_hover_ = frame.history_hover;
-    pointer_dispatcher_.presentHistoryHover(presented_history_hover_ ? presented_history_hover_->view() : std::span<const HistoryHoverTarget>{});
+    history_.present(frame.history);
+    pointer_dispatcher_.presentHistoryActions(history_.presentedActions());
 
     try {
       for (const auto& pane : std::span{frame.panes}.first(frame.pane_count)) {
@@ -825,7 +784,7 @@ namespace telar::gui::qt {
     } catch (const std::exception& error) {
       if (client.key.machine.slot == store_.machines().active()) {
         fail(error);
-        refreshHistory();
+        store_.touch();
       } else {
         client.connection.recover(error.what());
       }
@@ -879,7 +838,7 @@ namespace telar::gui::qt {
       QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
       break;
     case Change::history:
-      refreshHistory();
+      // The store was touched when the payload arrived; the dialog synchronizes on its flush.
       break;
     case Change::notification:
       break;
@@ -1065,7 +1024,7 @@ namespace telar::gui::qt {
     tabs_.reconcile(std::move(tabs));
     refreshAgents();
     refreshPeek();
-    refreshHistory();
+    store_.touch();
     refreshPanes();
     refreshPalette();
     refreshElementBars();
@@ -1243,70 +1202,10 @@ namespace telar::gui::qt {
 
   void Application::interactionFailed(const std::exception& error) {
     if (store_.dialog().kind == Dialog::history) {
-      session().reportHistoryError(error.what());
-      refreshHistory();
+      history_.fail(error);
     } else {
       fail(error);
     }
-  }
-
-  void Application::submitHistory(std::uint64_t entry_id, bool alternate) {
-    if (store_.dialog().kind != Dialog::history) {
-      return;
-    }
-
-    applyInteraction([&] {
-      if (historyLoading()) {
-        throw EncodingError{"History search is still loading"};
-      }
-
-      session().pasteHistory(entry_id, alternate);
-      error_.clear();
-      showDialog(Dialog::none);
-    });
-  }
-
-  void Application::useHistoryRow(int row, bool alternate) {
-    const auto& entries = session().history();
-    if (row < 0 || static_cast<std::size_t>(row) >= entries.size()) {
-      return;
-    }
-
-    submitHistory(entries[static_cast<std::size_t>(row)].id, alternate);
-  }
-
-  void Application::usePresentedHistory(const QString& revision, bool alternate) {
-    const auto* presented = presentedHistory(revision);
-    if (presented == nullptr || presented->enter_runs != session().configuration().history.enter_runs) {
-      return;
-    }
-
-    const auto& browser = session().historyBrowser();
-    if (!browser.accepts(presented->choice)) {
-      return;
-    }
-
-    submitHistory(browser.rows()[presented->choice.index].id, alternate);
-  }
-
-  const Application::PresentedHistory* Application::presentedHistory(const QString& revision) const {
-    if (store_.dialog().kind != Dialog::history || historyLoading() || !presented_history_) {
-      return nullptr;
-    }
-
-    const auto& presented = *presented_history_;
-    if (presented.dialog_generation != store_.dialog().generation) {
-      return nullptr;
-    }
-
-    bool valid_revision = false;
-    const auto requested_revision = revision.toULongLong(&valid_revision);
-
-    return valid_revision && presented.choice.revision == requested_revision ? &presented : nullptr;
-  }
-
-  bool Application::historyLoading() const {
-    return history_timer_.isActive() || session().historyLoading();
   }
 
   bool Application::executeNavigation(Action action, const QString& target) {
@@ -1383,18 +1282,8 @@ namespace telar::gui::qt {
       session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
       emit configurationChanged();
     } else if (action == Action::history) {
-      history_filters_ = {.author = session().configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
-      session().inspectHistory(false);
       showDialog(Dialog::history);
-      // At the prompt line, the search starts from the command being written.
-      QString seed;
-
-      if (const auto* line = store_.dialog().line_search_pane == 0 ? nullptr : session().promptLine(store_.dialog().line_search_pane)) {
-        seed = toQString(line->editor().text().view());
-        seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
-      }
-
-      searchHistory(seed);
+      history_.open();
     } else if (action == Action::palette || action == Action::goto_picker) {
       showPalette(action == Action::palette ? PaletteMode::actions : PaletteMode::navigate);
     } else if (action == Action::path_picker) {
@@ -1479,22 +1368,6 @@ namespace telar::gui::qt {
     }
   }
 
-  void Application::searchHistory(const QString& query) {
-    const auto measured = Utf16Prefix::fit(QStringView{query}, HistorySearch::maximum_query_bytes, utf16Encoding());
-
-    history_query_ = query.first(static_cast<qsizetype>(measured.units));
-    if (!history_query_.isValidUtf16()) {
-      history_query_ = QString::fromUtf8(history_query_.toUtf8());
-    }
-
-    history_timer_.start();
-    emit historyChanged();
-
-    if (measured.bytes < measured.requested_bytes) {
-      reportHistoryQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
-    }
-  }
-
   bool Application::input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source) {
     const auto* const current = session().findPane(pane_id);
     if (current == nullptr || !current->attached || current->exited || bytes.isEmpty()) {
@@ -1569,12 +1442,8 @@ namespace telar::gui::qt {
 
     key_bindings_.cancelSequence();
     store_.advanceDialog();
-    presented_history_.reset();
-    presented_history_surface_ = {};
-    presented_history_actions_ = {};
-    presented_history_hover_.reset();
+    history_.retire();
     pointer_dispatcher_.presentHistoryActions({});
-    pointer_dispatcher_.retireHistoryHover();
 
     if (kind == Dialog::new_workspace || store_.dialog().kind == Dialog::new_workspace) {
       resetWorkspaceForm();

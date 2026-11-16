@@ -632,6 +632,7 @@
     "src/gui/ui/controls/form_text_grid.hpp": "Qt moc/QML integration",
     "src/gui/ui/panes/fullscreen_strip_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/terminal/graphics_scene.hpp": "Qt moc/QML integration",
+    "src/gui/ui/history/history_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_empty_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_filters_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/history/history_footer_layout.hpp": "Qt moc/QML integration",

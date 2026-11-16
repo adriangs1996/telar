@@ -457,4 +457,12 @@ namespace telar::gui::qt {
     application_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
   }
 
+  int Application::controlModifier() {
+    return static_cast<int>(NativeKeyAdapter::control_modifier);
+  }
+
+  int Application::superModifier() {
+    return static_cast<int>(NativeKeyAdapter::super_modifier);
+  }
+
 }

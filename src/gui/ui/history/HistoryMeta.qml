@@ -99,7 +99,7 @@ HistoryMetaLayout {
             geometry: root.regions.actions[index]
             label: root.actions[index]
             usePresentedHover: root.actionController !== null
-            presentedHover: root.actionController ? root.actionController.historyHoveredCardAction === label.action : false
+            presentedHover: root.actionController ? root.actionController.history.hoveredCardAction === label.action : false
             style: root.regions
             x: geometry.bounds.x
             y: geometry.bounds.y
@@ -119,7 +119,7 @@ HistoryMetaLayout {
     Component.onCompleted: {
         root.scheduleMeasurement();
         if (root.actionController) {
-            root.actionController.registerHistoryActions(root);
+            root.actionController.history.registerActions(root);
         }
     }
 }

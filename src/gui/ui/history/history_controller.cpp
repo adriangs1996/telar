@@ -3,57 +3,18 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
+#include "history_controller.hpp"
 #include "platform/window.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "terminal/screen.hpp"
-#include "ui/app/application.hpp"
-#include "ui/app/list_model.hpp"
 #include "ui/app/projection.hpp"
-#include "ui/input/key_adapter.hpp"
+#include "ui/app/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
-#include <QtCore/qbytearrayview.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qlist.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <concepts>
+#include <QStringView>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <exception>
-#include <ghostty/vt/unicode.h>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 #include <utility>
-#include <variant>
-
-#include "application/dependencies.hpp"
-#include "platform/window.hpp"
 
 import telar.base.text.utf8;
 import telar.gui.application.workspace_replica;
@@ -62,7 +23,7 @@ import telar.gui.history.browser;
 import telar.gui.platform.wall_clock;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 
@@ -139,52 +100,140 @@ namespace telar::gui::qt {
 
   }
 
-  void Application::refreshHistory() {
-    const auto& browser = session().historyBrowser();
-    const auto scope_value = store_.dialog().kind == Dialog::history ? historyScopeValue() : QString{};
-    const auto selection = browser.state().selection;
-    const auto* pane = store_.dialog().kind == Dialog::history && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
-    BoundedText<TabCaption::capacity> tab_name;
+  HistoryController::HistoryController(Store& store, QObject* parent)
+      : QObject(parent),
+        store_(store) {
+    constexpr int debounce_ms = 60;
 
-    tab_name.append(historyTabName(pane));
-    const auto pane_open = pane != nullptr;
-    if (history_view_version_ == browser.viewVersion() && history_scope_value_ == scope_value && history_pane_open_ == pane_open && history_tab_name_.view() == tab_name.view()) {
+    search_timer_.setSingleShot(true);
+    search_timer_.setInterval(debounce_ms);
+    connect(&search_timer_, &QTimer::timeout, this, &HistoryController::query);
+    connect(&store_, &Store::changed, this, &HistoryController::synchronize);
+  }
+
+  void HistoryController::open() {
+    auto& session = store_.session();
+
+    filters_ = {.author = session.configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
+    session.inspectHistory(false);
+    // At the prompt line, the search starts from the command being written.
+    QString seed;
+
+    const auto line_pane = store_.dialog().line_search_pane;
+    if (const auto* line = line_pane == 0 ? nullptr : session.promptLine(line_pane)) {
+      seed = toQString(line->editor().text().view());
+      seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    }
+
+    search(seed);
+  }
+
+  void HistoryController::forget() {
+    search_timer_.stop();
+    rows_.reconcile({});
+    synchronized_.reset();
+    rows_version_ = 0;
+    directory_source_.clear();
+    directory_value_.clear();
+  }
+
+  void HistoryController::setMetrics(const HistoryModalMetrics& metrics) {
+    metrics_ = metrics;
+    emit changed();
+  }
+
+  void HistoryController::fail(const std::exception& error) {
+    if (!isOpen()) {
+      emit failed(QString::fromUtf8(error.what()));
+
       return;
     }
 
-    if (history_rows_version_ != browser.rowsVersion()) {
-      const auto sampled = platform::WallClock::sample();
-
-      history_calendar_ = sampled;
-      QList<QVariantMap> rows;
-
-      rows.reserve(static_cast<qsizetype>(browser.rows().size()));
-      for (std::size_t index = 0; index < browser.rows().size(); ++index) {
-        const auto& entry = browser.rows()[index];
-        auto record = historyRecord(entry, sampled);
-        const auto day = HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
-        const auto group_ends = index + 1 == browser.rows().size() || day != HistoryLabels::localDay(browser.rows()[index + 1].started_at_ms, sampled.utc_offset_min);
-
-        record.insert(QStringLiteral("groupEnds"), group_ends);
-        rows.append(std::move(record));
-      }
-
-      history_.replaceRows(std::move(rows));
-      history_rows_version_ = browser.rowsVersion();
-    }
-
-    history_view_version_ = browser.viewVersion();
-    history_scope_value_ = scope_value;
-    history_pane_open_ = pane_open;
-    history_tab_name_ = tab_name;
-    emit historyChanged();
+    store_.session().reportHistoryError(error.what());
+    synchronize();
   }
 
-  std::string_view Application::historyTabName(const Pane<Memory>* pane) const {
+  QAbstractItemModel* HistoryController::rows() noexcept {
+    return &rows_;
+  }
+
+  bool HistoryController::loading() const {
+    return search_timer_.isActive() || store_.session().historyLoading();
+  }
+
+  bool HistoryController::isOpen() const noexcept {
+    return store_.dialog().kind == Store::Dialog::history;
+  }
+
+  void HistoryController::synchronize() {
+    auto next = inputs();
+    if (synchronized_ == next) {
+      return;
+    }
+
+    const auto& browser = store_.session().historyBrowser();
+    if (rows_version_ != browser.rowsVersion()) {
+      buildRows();
+      rows_version_ = browser.rowsVersion();
+    }
+
+    synchronized_ = std::move(next);
+    state_ = buildState();
+    inspection_ = buildInspection();
+    command_ = toQString(browser.selectedCommand());
+    output_ = toQString(browser.output());
+    emit changed();
+  }
+
+  HistoryController::Inputs HistoryController::inputs() {
+    const auto& session = store_.session();
+    const auto& browser = session.historyBrowser();
+    const auto open = isOpen();
+    const auto selection = browser.state().selection;
+    const auto* pane = open && selection < browser.rows().size() ? session.findPane(browser.rows()[selection].pane_id) : nullptr;
+    Inputs inputs{
+        .open = open,
+        .generation = store_.dialog().generation,
+        .view_version = browser.viewVersion(),
+        .search_version = search_version_,
+        .configuration = session.viewVersion().configuration,
+        .loading = loading(),
+        .pane_open = pane != nullptr,
+        .scope_value = open ? scopeValue() : QString{},
+    };
+
+    inputs.tab_name.append(tabName(pane));
+
+    return inputs;
+  }
+
+  void HistoryController::buildRows() {
+    const auto& rows = store_.session().historyBrowser().rows();
+    const auto sampled = platform::WallClock::sample();
+
+    calendar_ = sampled;
+    QList<QVariantMap> records;
+
+    records.reserve(static_cast<qsizetype>(rows.size()));
+    for (std::size_t index = 0; index < rows.size(); ++index) {
+      const auto& entry = rows[index];
+      auto record = historyRecord(entry, sampled);
+      const auto day = HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
+      const auto group_ends = index + 1 == rows.size() || day != HistoryLabels::localDay(rows[index + 1].started_at_ms, sampled.utc_offset_min);
+
+      record.insert(QStringLiteral("groupEnds"), group_ends);
+      records.append(std::move(record));
+    }
+
+    rows_.replaceRows(std::move(records));
+  }
+
+  std::string_view HistoryController::tabName(const Pane<Memory>* pane) const {
+    const auto& session = store_.session();
     if (pane != nullptr) {
-      for (const auto& tab : session().tabs()) {
+      for (const auto& tab : session.tabs()) {
         if (sameTab(tab->location, pane->location)) {
-          return tab->label.empty() ? tabApplicationName(*tab, session().findPane(tab->focused_pane)) : std::string_view{tab->label};
+          return tab->label.empty() ? tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label};
         }
       }
     }
@@ -192,39 +241,68 @@ namespace telar::gui::qt {
     return {};
   }
 
-  QString Application::historyScopeValue() {
-    if (session().historyBrowser().scope() == HistoryScope::workspace) {
-      return workspace_context_.value(QStringLiteral("name")).toString();
+  QString HistoryController::scopeValue() {
+    const auto& session = store_.session();
+    if (session.historyBrowser().scope() == HistoryScope::workspace) {
+      const auto* active = session.activeTab();
+      if (active == nullptr || active->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
+        return {};
+      }
+
+      const auto current = std::ranges::find_if(session.workspaces(), [&](const auto& workspace) {
+        return sameWorkspace(workspace.location, active->location.workspace);
+      });
+
+      return current == session.workspaces().end() ? QString{} : toQString(current->name);
     }
 
-    if (session().historyBrowser().scope() != HistoryScope::cwd) {
+    if (session.historyBrowser().scope() != HistoryScope::cwd) {
       return {};
     }
 
-    const auto* pane = session().focusedPane();
+    const auto* pane = session.focusedPane();
     if (pane == nullptr) {
       return {};
     }
 
     const QByteArrayView source{pane->cwd.data(), static_cast<qsizetype>(pane->cwd.size())};
-    if (QByteArrayView{history_directory_source_} != source) {
+    if (QByteArrayView{directory_source_} != source) {
       const auto compact = HistoryPath::compact(std::string_view{pane->cwd.data(), pane->cwd.size()});
       auto value = toQString(compact.view());
 
-      history_directory_source_.assign(source);
-      history_directory_value_ = std::move(value);
+      directory_source_.assign(source);
+      directory_value_ = std::move(value);
     }
 
-    return history_directory_value_;
+    return directory_value_;
   }
 
-  QVariantMap Application::historyState() const {
-    const auto& browser = session().historyBrowser();
+  // Before the first synchronization, and after the session it showed went away, QML still reads
+  // the live state.
+  QVariantMap HistoryController::state() const {
+    return synchronized_ ? state_ : buildState();
+  }
+
+  QString HistoryController::output() const {
+    return synchronized_ ? output_ : toQString(store_.session().historyBrowser().output());
+  }
+
+  QString HistoryController::command() const {
+    return synchronized_ ? command_ : toQString(store_.session().historyBrowser().selectedCommand());
+  }
+
+  QVariantMap HistoryController::inspection() const {
+    return synchronized_ ? inspection_ : buildInspection();
+  }
+
+  QVariantMap HistoryController::buildState() const {
+    const auto& session = store_.session();
+    const auto& browser = session.historyBrowser();
     const auto& state = browser.state();
     const auto& rows = browser.rows();
     const bool selected_detail = state.selection < rows.size() && rows[state.selection].id == state.command_id;
-    const auto query = history_query_.toUtf8();
-    const auto parsed = HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, history_filters_.failed_only);
+    const auto query = query_.toUtf8();
+    const auto parsed = HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, filters_.failed_only);
 
     return {
         {QStringLiteral("generation"), QString::number(store_.dialog().generation)},
@@ -232,20 +310,20 @@ namespace telar::gui::qt {
         {QStringLiteral("phase"), phaseName(state.phase)},
         {QStringLiteral("hasPage"), state.has_page},
         {QStringLiteral("revision"), QString::number(browser.revision())},
-        {QStringLiteral("scope"), scopeName(history_filters_.scope)},
+        {QStringLiteral("scope"), scopeName(filters_.scope)},
         {QStringLiteral("effectiveScope"), scopeName(browser.scope())},
-        {QStringLiteral("scopeValue"), history_scope_value_},
-        {QStringLiteral("author"), authorName(history_filters_.author)},
+        {QStringLiteral("scopeValue"), synchronized_ ? synchronized_->scope_value : QString{}},
+        {QStringLiteral("author"), authorName(filters_.author)},
         {QStringLiteral("scopeLabel"), filterLabel(HistoryFilterLabels::scopes, scopeName(browser.scope()))},
-        {QStringLiteral("authorLabel"), filterLabel(HistoryFilterLabels::authors, authorName(history_filters_.author))},
+        {QStringLiteral("authorLabel"), filterLabel(HistoryFilterLabels::authors, authorName(filters_.author))},
         {QStringLiteral("failedOnly"), parsed.failed_only},
         {QStringLiteral("grouped"), parsed.query.empty()},
         {QStringLiteral("query"), toQString(parsed.query)},
-        {QStringLiteral("editorText"), history_query_},
+        {QStringLiteral("editorText"), query_},
         {QStringLiteral("maximumQueryBytes"), static_cast<int>(HistorySearch::maximum_query_bytes)},
         {QStringLiteral("inspectionKey"), platform::usesCommandKey() ? QStringLiteral("⌃O") : QStringLiteral("Ctrl+O")},
         {QStringLiteral("macStyle"), platform::usesCommandKey()},
-        {QStringLiteral("paneOpen"), state.selection < rows.size() && session().findPane(rows[state.selection].pane_id) != nullptr},
+        {QStringLiteral("paneOpen"), state.selection < rows.size() && session.findPane(rows[state.selection].pane_id) != nullptr},
         {QStringLiteral("commandLoaded"), state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == HistoryPhase::ready))},
         {QStringLiteral("canOlder"), browser.canPage(HistoryPage::older)},
         {QStringLiteral("hasMore"), state.has_more},
@@ -256,7 +334,7 @@ namespace telar::gui::qt {
         {QStringLiteral("count"), static_cast<int>(browser.rows().size())},
         {QStringLiteral("canSubmit"), browser.canSubmit()},
         {QStringLiteral("commandPhase"), phaseName(selected_detail ? state.command_phase : HistoryPhase::idle)},
-        {QStringLiteral("enterRuns"), session().configuration().history.enter_runs},
+        {QStringLiteral("enterRuns"), session.configuration().history.enter_runs},
         {QStringLiteral("inspecting"), state.inspecting},
         {QStringLiteral("outputPhase"), phaseName(state.output_phase)},
         {QStringLiteral("outputTruncated"), state.output_truncated},
@@ -265,26 +343,19 @@ namespace telar::gui::qt {
     };
   }
 
-  QString Application::historyOutput() const {
-    return toQString(session().historyBrowser().output());
-  }
-
-  QString Application::historyCommand() const {
-    return toQString(session().historyBrowser().selectedCommand());
-  }
-
-  QVariantMap Application::historyInspection() const {
-    const auto& browser = session().historyBrowser();
+  QVariantMap HistoryController::buildInspection() const {
+    const auto& session = store_.session();
+    const auto& browser = session.historyBrowser();
     const auto& state = browser.state();
     if (state.selection >= browser.rows().size()) {
       return {};
     }
 
     const auto& entry = browser.rows()[state.selection];
-    const auto* pane = session().findPane(entry.pane_id);
-    const auto tab_name = historyTabName(pane);
+    const auto* pane = session.findPane(entry.pane_id);
+    const auto tab_name = tabName(pane);
 
-    const auto details = HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, history_calendar_);
+    const auto details = HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, calendar_);
     QVariantList facts;
 
     for (const auto& fact : details.lines()) {
@@ -303,26 +374,47 @@ namespace telar::gui::qt {
     };
   }
 
-  int Application::controlModifier() {
-    return static_cast<int>(NativeKeyAdapter::control_modifier);
+  void HistoryController::search(const QString& query) {
+    const auto measured = Utf16Prefix::fit(QStringView{query}, HistorySearch::maximum_query_bytes, utf16Encoding());
+
+    query_ = query.first(static_cast<qsizetype>(measured.units));
+    if (!query_.isValidUtf16()) {
+      query_ = QString::fromUtf8(query_.toUtf8());
+    }
+
+    search_timer_.start();
+    ++search_version_;
+    synchronize();
+
+    if (measured.bytes < measured.requested_bytes) {
+      reportQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
+    }
   }
 
-  int Application::superModifier() {
-    return static_cast<int>(NativeKeyAdapter::super_modifier);
+  void HistoryController::query() {
+    try {
+      const auto query = query_.toUtf8();
+
+      store_.session().queryHistory(std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    synchronize();
   }
 
-  void Application::reportHistoryQueryLimit(qulonglong requested_bytes) {
-    if (store_.dialog().kind != Dialog::history || requested_bytes <= HistorySearch::maximum_query_bytes) {
+  void HistoryController::reportQueryLimit(qulonglong requested_bytes) {
+    if (!isOpen() || requested_bytes <= HistorySearch::maximum_query_bytes) {
       return;
     }
 
-    session().reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
-    refreshNotifications();
+    store_.session().reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
+    store_.commit();
   }
 
-  void Application::setHistoryFilters(const QVariantMap& filters) {
-    applyInteraction([&] {
-      auto next = history_filters_;
+  void HistoryController::setFilters(const QVariantMap& filters) {
+    interact([&] {
+      auto next = filters_;
 
       if (filters.contains(QStringLiteral("scope"))) {
         next.scope = parseScope(filters.value(QStringLiteral("scope")).toString());
@@ -336,65 +428,122 @@ namespace telar::gui::qt {
         next.failed_only = filters.value(QStringLiteral("failedOnly")).toBool();
       }
 
-      history_filters_ = next;
-      const auto query = history_query_;
+      filters_ = next;
+      const auto query = query_;
 
-      searchHistory(query);
+      search(query);
     });
   }
 
-  void Application::selectHistoryRow(int row) {
-    if (row < 0 || historyLoading()) {
+  void HistoryController::select(int row) {
+    if (row < 0 || loading()) {
       return;
     }
 
-    applyInteraction([&] {
-      session().selectHistoryRow(static_cast<std::size_t>(row));
+    interact([&] {
+      store_.session().selectHistoryRow(static_cast<std::size_t>(row));
     });
   }
 
-  void Application::selectPresentedHistoryRow(int row, const QString& revision) {
-    const auto* presented = presentedHistory(revision);
-    if (row < 0 || presented == nullptr) {
+  void HistoryController::selectPresented(int row, const QString& revision) {
+    const auto* shown = presented(revision);
+    if (row < 0 || shown == nullptr) {
       return;
     }
 
-    const HistoryChoice choice{.index = static_cast<std::size_t>(row), .revision = presented->choice.revision};
-    if (!session().historyBrowser().acceptsRow(choice)) {
+    const HistoryChoice choice{.index = static_cast<std::size_t>(row), .revision = shown->choice.revision};
+    if (!store_.session().historyBrowser().acceptsRow(choice)) {
       return;
     }
 
-    applyInteraction([&] {
-      session().selectHistoryRow(choice.index);
+    interact([&] {
+      store_.session().selectHistoryRow(choice.index);
     });
   }
 
-  void Application::executeHistory(HistoryAction action, const QString& entry_id) {
-    if (store_.dialog().kind != Dialog::history || (historyLoading() && action != HistoryAction::inspect)) {
+  void HistoryController::execute(Action action, const QString& entry_id) {
+    if (!isOpen() || (loading() && action != Action::inspect)) {
       return;
     }
 
-    applyInteraction([&] {
-      if (action == HistoryAction::older || action == HistoryAction::newer) {
-        session().pageHistory(action == HistoryAction::older ? HistoryPage::older : HistoryPage::newer);
-      } else if (action == HistoryAction::inspect) {
-        session().inspectHistory(!session().historyBrowser().state().inspecting);
+    interact([&] {
+      auto& session = store_.session();
+
+      if (action == Action::older || action == Action::newer) {
+        session.pageHistory(action == Action::older ? HistoryPage::older : HistoryPage::newer);
+      } else if (action == Action::inspect) {
+        session.inspectHistory(!session.historyBrowser().state().inspecting);
       } else {
-        const auto& browser = session().historyBrowser();
+        const auto& browser = session.historyBrowser();
         const auto& rows = browser.rows();
         const auto identity = entry_id.isEmpty() && !rows.empty() ? rows[browser.state().selection].id : entry_id.toULongLong();
 
-        if (action == HistoryAction::copy) {
-          session().copyHistory(identity);
-          QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
-        } else if (action == HistoryAction::erase) {
-          session().deleteHistory(identity);
-        } else if (action == HistoryAction::visit) {
-          session().visitHistory(identity);
-          showDialog(Dialog::none);
+        if (action == Action::copy) {
+          session.copyHistory(identity);
+          QGuiApplication::clipboard()->setText(toQString(session.clipboard()));
+        } else if (action == Action::erase) {
+          session.deleteHistory(identity);
+        } else if (action == Action::visit) {
+          session.visitHistory(identity);
+          emit closeRequested();
         }
       }
     });
+  }
+
+  void HistoryController::submit(std::uint64_t entry_id, bool alternate) {
+    if (!isOpen()) {
+      return;
+    }
+
+    interact([&] {
+      if (loading()) {
+        throw EncodingError{"History search is still loading"};
+      }
+
+      store_.session().pasteHistory(entry_id, alternate);
+      emit submitted();
+      emit closeRequested();
+    });
+  }
+
+  void HistoryController::use(int row, bool alternate) {
+    const auto& entries = store_.session().history();
+    if (row < 0 || static_cast<std::size_t>(row) >= entries.size()) {
+      return;
+    }
+
+    submit(entries[static_cast<std::size_t>(row)].id, alternate);
+  }
+
+  void HistoryController::usePresented(const QString& revision, bool alternate) {
+    const auto* shown = presented(revision);
+    if (shown == nullptr || shown->enter_runs != store_.session().configuration().history.enter_runs) {
+      return;
+    }
+
+    const auto& browser = store_.session().historyBrowser();
+    if (!browser.accepts(shown->choice)) {
+      return;
+    }
+
+    submit(browser.rows()[shown->choice.index].id, alternate);
+  }
+
+  const HistoryController::Presented* HistoryController::presented(const QString& revision) const {
+    if (!isOpen() || loading() || !presented_) {
+      return nullptr;
+    }
+
+    const auto& shown = *presented_;
+    if (shown.dialog_generation != store_.dialog().generation) {
+      return nullptr;
+    }
+
+    bool valid_revision = false;
+    const auto requested_revision = revision.toULongLong(&valid_revision);
+
+    return valid_revision && shown.choice.revision == requested_revision ? &shown : nullptr;
   }
 
 }

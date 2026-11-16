@@ -9,12 +9,12 @@ Item {
     objectName: "historyPanel"
 
     property real ratio: 1
-    readonly property var browserState: root.controller.historyState
-    readonly property bool actionable: !root.controller.historyLoading && root.browserState.phase === "ready" && root.browserState.count > 0
+    readonly property var browserState: root.controller.history.state
+    readonly property bool actionable: !root.controller.history.loading && root.browserState.phase === "ready" && root.browserState.count > 0
     readonly property real resultBottomInset: 6 * ratio
     required property var controller
     property var queryField: null
-    readonly property var regions: controller.historyGeometry
+    readonly property var regions: controller.history.geometry
     property alias searchHost: historySearch.fieldHost
     property alias rowsView: results
     property bool retiringRows: false
@@ -91,9 +91,9 @@ Item {
         colors: root.controller.colors
         grid: root.controller.windowGeometry.typography.grid
         pixelSize: root.controller.windowGeometry.typography.small
-        onScopeSelected: scope => root.controller.setHistoryFilters({scope: scope})
-        onAuthorSelected: author => root.controller.setHistoryFilters({author: author})
-        onFailedToggled: root.controller.setHistoryFilters({failedOnly: !root.browserState.failedOnly})
+        onScopeSelected: scope => root.controller.history.setFilters({scope: scope})
+        onAuthorSelected: author => root.controller.history.setFilters({author: author})
+        onFailedToggled: root.controller.history.setFilters({failedOnly: !root.browserState.failedOnly})
     }
 
     Item {
@@ -113,7 +113,7 @@ Item {
             visible: width > 0
             clip: true
             spacing: 0
-            model: root.retiringRows ? null : root.controller.history
+            model: root.retiringRows ? null : root.controller.history.rows
             opacity: historySearch.rowsOpacity
             verticalLayoutDirection: ListView.BottomToTop
             currentIndex: root.browserState.selection
@@ -152,7 +152,7 @@ Item {
                     width: result.width
                     height: result.height - y
                     record: result.record
-                    commandText: result.selected ? root.controller.historyCommand : result.record.command
+                    commandText: result.selected ? root.controller.history.command : result.record.command
                     query: root.browserState.query
                     commandLoaded: !result.selected || root.browserState.commandLoaded
                     inspectionKey: root.browserState.inspectionKey
@@ -172,10 +172,10 @@ Item {
                     actionController: root.controller
                     historyIndex: result.index
                     revision: root.browserState.revision
-                    onActivated: revision => root.controller.selectPresentedHistoryRow(result.index, revision)
+                    onActivated: revision => root.controller.history.selectPresented(result.index, revision)
                     onActionTriggered: action => {
-                        const actions = {copy: GuiController.HistoryAction.copy, erase: GuiController.HistoryAction.erase, visit: GuiController.HistoryAction.visit};
-                        root.controller.executeHistory(actions[action], result.record.key);
+                        const actions = {copy: HistoryController.Action.copy, erase: HistoryController.Action.erase, visit: HistoryController.Action.visit};
+                        root.controller.history.execute(actions[action], result.record.key);
                     }
                     onImplicitHeightChanged: {
                         if (result.selected) {
@@ -196,12 +196,12 @@ Item {
             sourceComponent: HistoryInspector {
                 reveal: inspectorMotion.reveal
                 actionController: root.controller
-                details: root.controller.historyInspection
+                details: root.controller.history.inspection
                 browserState: root.browserState
                 colors: root.controller.colors
                 typography: root.controller.windowGeometry.typography
-                command: root.controller.historyCommand
-                output: root.controller.historyOutput
+                command: root.controller.history.command
+                output: root.controller.history.output
                 ratio: root.ratio
                 density: root.regions.density
                 split: root.regions.results.width > 0
@@ -209,14 +209,14 @@ Item {
                 onActionTriggered: (action, revision) => {
                     switch (action) {
                     case "submit":
-                        root.controller.usePresentedHistory(revision);
+                        root.controller.history.usePresented(revision);
                         break;
                     case "alternate":
-                        root.controller.usePresentedHistory(revision, true);
+                        root.controller.history.usePresented(revision, true);
                         break;
                     default:
-                        const actions = {copy: GuiController.HistoryAction.copy, erase: GuiController.HistoryAction.erase, visit: GuiController.HistoryAction.visit};
-                        root.controller.executeHistory(actions[action], root.controller.historyInspection.identity);
+                        const actions = {copy: HistoryController.Action.copy, erase: HistoryController.Action.erase, visit: HistoryController.Action.visit};
+                        root.controller.history.execute(actions[action], root.controller.history.inspection.identity);
                         break;
                     }
                 }
@@ -242,7 +242,7 @@ Item {
                     typography: root.controller.windowGeometry.typography
                     workspace: root.controller.workspaceContext?.name ?? ""
                     ratio: root.ratio
-                    onSearchEverywhere: root.controller.setHistoryFilters({scope: "global"})
+                    onSearchEverywhere: root.controller.history.setFilters({scope: "global"})
                 }
             }
         }
@@ -262,16 +262,16 @@ Item {
         onActionTriggered: (action, revision) => {
             switch (action) {
             case "submit":
-                root.controller.usePresentedHistory(revision);
+                root.controller.history.usePresented(revision);
                 break;
             case "alternate":
-                root.controller.usePresentedHistory(revision, true);
+                root.controller.history.usePresented(revision, true);
                 break;
             case "inspect":
-                root.controller.executeHistory(GuiController.HistoryAction.inspect);
+                root.controller.history.execute(HistoryController.Action.inspect);
                 break;
             case "visit":
-                root.controller.executeHistory(GuiController.HistoryAction.visit);
+                root.controller.history.execute(HistoryController.Action.visit);
                 break;
             }
         }
@@ -293,7 +293,7 @@ Item {
     }
 
     Connections {
-        target: root.controller.history
+        target: root.controller.history.rows
         function onRowsAboutToBeRemoved() {
             root.retiringRows = true;
         }
@@ -303,18 +303,18 @@ Item {
     }
 
     Connections {
-        target: root.controller
-        function onHistoryInspectionScrolled(lines) {
+        target: root.controller.history
+        function onInspectionScrolled(lines) {
             const view = inspector.item as HistoryInspector;
             if (view) {
                 view.scroll += lines;
             }
         }
 
-        function onHistoryChanged() {
+        function onChanged() {
             Qt.callLater(root.revealSelection);
         }
     }
 
-    Component.onCompleted: root.controller.registerHistoryPanel(root)
+    Component.onCompleted: root.controller.history.registerPanel(root)
 }

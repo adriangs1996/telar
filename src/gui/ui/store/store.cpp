@@ -103,6 +103,10 @@ namespace telar::gui::qt {
     emit changed();
   }
 
+  void Store::begin() {
+    emit interacting();
+  }
+
   void Store::commit() {
     emit interacted();
     touch();

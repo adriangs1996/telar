@@ -27,6 +27,7 @@ static_assert(true);
 #include "ui/components/surface_command.hpp"
 #include "ui/config/configuration_source.hpp"
 #include "ui/fonts/font_resolver.hpp"
+#include "ui/history/history_controller.hpp"
 #include "ui/input/key_bindings.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
 #include "ui/input/scroll_event.hpp"
@@ -95,7 +96,6 @@ static_assert(true);
 import telar.gui.components.builtin_content;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
-import telar.gui.history.browser;
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.tab_drop;
@@ -109,8 +109,6 @@ import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.presentation.history_inspection;
-import telar.gui.text.json_unsigned_integer;
 import telar.gui.presentation.notification_center;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.line;
@@ -151,23 +149,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QAbstractItemModel* panes READ panes CONSTANT)
     Q_PROPERTY(QAbstractItemModel* dividers READ dividers CONSTANT)
     Q_PROPERTY(QAbstractItemModel* agents READ agents CONSTANT)
-    Q_PROPERTY(QAbstractItemModel* history READ history CONSTANT)
-    Q_PROPERTY(bool historyLoading READ historyLoading NOTIFY historyChanged)
-    Q_PROPERTY(int historyHoveredRow READ historyHoveredRow NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredRowRevision READ historyHoveredRowRevision NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredCardAction READ historyHoveredCardAction NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredFilterAction READ historyHoveredFilterAction NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredInspectionAction READ historyHoveredInspectionAction NOTIFY historyHoverChanged)
-    Q_PROPERTY(int historyHoveredInspectionIndex READ historyHoveredInspectionIndex NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredInspectionRevision READ historyHoveredInspectionRevision NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredFooterAction READ historyHoveredFooterAction NOTIFY historyHoverChanged)
-    Q_PROPERTY(int historyHoveredFooterIndex READ historyHoveredFooterIndex NOTIFY historyHoverChanged)
-    Q_PROPERTY(QString historyHoveredFooterRevision READ historyHoveredFooterRevision NOTIFY historyHoverChanged)
-    Q_PROPERTY(QVariantMap historyState READ historyState NOTIFY historyChanged)
-    Q_PROPERTY(QVariantMap historyGeometry READ historyGeometry NOTIFY historyChanged)
-    Q_PROPERTY(QString historyCommand READ historyCommand NOTIFY historyChanged)
-    Q_PROPERTY(QString historyOutput READ historyOutput NOTIFY historyChanged)
-    Q_PROPERTY(QVariantMap historyInspection READ historyInspection NOTIFY historyChanged)
+    Q_PROPERTY(telar::gui::qt::HistoryController* history READ history CONSTANT)
     Q_PROPERTY(int controlModifier READ controlModifier CONSTANT)
     Q_PROPERTY(int superModifier READ superModifier CONSTANT)
     Q_PROPERTY(QVariantMap colors READ colors NOTIFY configurationChanged)
@@ -299,16 +281,6 @@ namespace telar::gui::qt {
 
     using Dialog = Store::Dialog;
 
-    enum class HistoryAction : quint8 {
-      copy,
-      erase,
-      visit,
-      inspect,
-      older,
-      newer,
-    };
-    Q_ENUM(HistoryAction)
-
     explicit Application(ApplicationAllocator& memory, QObject* parent = nullptr);
     ~Application() override;
     Application(const Application&) = delete;
@@ -359,39 +331,11 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap copySearchState() const;
     [[nodiscard]] QString copySearchScope() const;
     [[nodiscard]] bool copySearchScopes() const;
-    Q_INVOKABLE void useHistoryRow(int row, bool alternate = false);
-    Q_INVOKABLE void usePresentedHistory(const QString& revision, bool alternate = false);
-    [[nodiscard]] bool historyLoading() const;
-    [[nodiscard]] int historyHoveredRow() const;
-    [[nodiscard]] QString historyHoveredRowRevision() const;
-    [[nodiscard]] QString historyHoveredCardAction() const;
-    [[nodiscard]] QString historyHoveredFilterAction() const;
-    [[nodiscard]] QString historyHoveredInspectionAction() const;
-    [[nodiscard]] int historyHoveredInspectionIndex() const;
-    [[nodiscard]] QString historyHoveredInspectionRevision() const;
-    [[nodiscard]] QString historyHoveredFooterAction() const;
-    [[nodiscard]] int historyHoveredFooterIndex() const;
-    [[nodiscard]] QString historyHoveredFooterRevision() const;
-    [[nodiscard]] QString historyCommand() const;
-    [[nodiscard]] QVariantMap historyState() const;
-    [[nodiscard]] QString historyOutput() const;
-    [[nodiscard]] QVariantMap historyInspection() const;
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
-    Q_INVOKABLE void executeHistory(HistoryAction action, const QString& entry_id = {});
-    Q_INVOKABLE void selectHistoryRow(int row);
-    Q_INVOKABLE void selectPresentedHistoryRow(int row, const QString& revision);
-    Q_INVOKABLE void registerHistoryPanel(QQuickItem* panel);
     Q_INVOKABLE void registerTabStrip(QQuickItem* strip);
     Q_INVOKABLE void selectCapturedTab();
-    Q_INVOKABLE void registerHistoryInspector(QQuickItem* inspector);
-    Q_INVOKABLE void registerHistoryFilters(QQuickItem* filters);
-    Q_INVOKABLE void registerHistoryFooter(QQuickItem* footer);
-    Q_INVOKABLE void registerHistoryActions(QQuickItem* actions);
-    Q_INVOKABLE void setHistoryFilters(const QVariantMap& filters);
     Q_INVOKABLE void setSidebarWidth(qreal width);
-    Q_INVOKABLE void searchHistory(const QString& query);
-    Q_INVOKABLE void reportHistoryQueryLimit(qulonglong requested_bytes);
     Q_INVOKABLE void searchPalette(const QString& text);
     Q_INVOKABLE void searchPaths(const QString& text);
     Q_INVOKABLE void reportPathQueryLimit(qulonglong requested_bytes);
@@ -471,7 +415,7 @@ namespace telar::gui::qt {
       return &dividers_;
     }
 
-    QAbstractItemModel* history() noexcept {
+    HistoryController* history() noexcept {
       return &history_;
     }
 
@@ -490,7 +434,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap pathPickerState() const;
     [[nodiscard]] QVariantMap workspaceFormState() const;
     [[nodiscard]] QVariantMap pathPickerGeometry() const;
-    [[nodiscard]] QVariantMap historyGeometry() const;
     [[nodiscard]] QVariantMap sidebarGeometry() const;
     [[nodiscard]] QVariantMap workspaceContext() const;
     [[nodiscard]] QVariantMap machineContext() const;
@@ -526,10 +469,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QString lineSearchPane() const;
 
   signals:
-    void historyInspectionScrolled(int lines);
     void prefixChanged();
-    void historyChanged();
-    void historyHoverChanged();
     void paletteChanged();
     void pathPickerChanged();
     void workspaceFormChanged();
@@ -715,39 +655,13 @@ namespace telar::gui::qt {
       QPointer<TerminalItem> terminal;
     };
 
-    struct PresentedHistory {
-      HistoryChoice choice;
-      std::uint64_t dialog_generation = 0;
-      bool enter_runs = false;
-    };
-
-    struct HistoryHoverFrame {
-      std::array<HistoryHoverTarget, HistoryBrowser<Memory>::page_entries + HistoryActions::count + HistoryFooter::capacity + history_filter_target_count + history_inspection_action_count> targets;
-      std::size_t count = 0;
-      std::uint64_t generation = 0;
-      double scale = 1;
-
-      void append(HistoryHoverTarget target) {
-        if (count < targets.size() && !target.bounds.empty()) {
-          targets[count++] = target;
-        }
-      }
-
-      [[nodiscard]] std::span<const HistoryHoverTarget> view() const noexcept {
-        return std::span{targets}.first(count);
-      }
-    };
-
     struct PresentedFrame {
       std::uint64_t machine_view = 0;
       std::array<PresentedPane, PaneLayout::maximum_panes> panes;
       std::size_t pane_count = 0;
       std::uint64_t preparation_ns = 0;
-      std::optional<PresentedHistory> history;
-      HistoryScrollSurface history_surface;
       TabDropSurface tabs;
-      HistoryActionSurface history_actions;
-      std::optional<HistoryHoverFrame> history_hover;
+      HistoryController::Frame history;
     };
 
     // The render thread prepares each frame into the slot after the last one while the GUI
@@ -789,11 +703,6 @@ namespace telar::gui::qt {
     void synchronizeWindowSize();
     bool updateViewport(qreal width, qreal height);
     void observeFrames(QQuickWindow& window);
-    void submitHistory(std::uint64_t entry_id, bool alternate);
-    [[nodiscard]] const PresentedHistory* presentedHistory(const QString& revision) const;
-    void refreshHistory();
-    [[nodiscard]] QString historyScopeValue();
-    [[nodiscard]] std::string_view historyTabName(const Pane<Memory>* pane) const;
     void refresh();
     void refreshAgents();
     void fitSidebarWhenReady();
@@ -814,14 +723,8 @@ namespace telar::gui::qt {
     void synchronizeAttachments();
     void refreshPanes();
     [[nodiscard]] HistoryModalMetrics historyMetrics() const;
-    [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics& metrics, HistoryHoverFrame& hover) const;
-    [[nodiscard]] bool handleHistoryWheel(QWheelEvent& event);
-    void scrollHistory(HistoryScrollPosition pointer, ScrollSample sample);
-    void moveHistoryRows(std::int32_t steps);
-    [[nodiscard]] HistoryActionSurface historyActionSurface() const;
     [[nodiscard]] TabDropSurface tabDropSurface() const;
     void synchronizeTabStrip();
-    void activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice);
     [[nodiscard]] QVariantList fullscreenEntries(const Tab<Memory>& tab);
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
@@ -863,8 +766,8 @@ namespace telar::gui::qt {
     // publishes what the mutation wrote and refreshes the window.
     template <std::invocable Mutation>
     void applyInteraction(Mutation mutate) {
+      store_.begin();
       try {
-        pending_activity_.reset();
         mutate();
       } catch (const std::exception& error) {
         interactionFailed(error);
@@ -879,6 +782,7 @@ namespace telar::gui::qt {
 
     ApplicationAllocator& memory_;
     Store store_;
+    HistoryController history_;
 
     struct ActivitySourceVersion {
       MachineClientKey source;
@@ -985,7 +889,6 @@ namespace telar::gui::qt {
     ListModel panes_;
     ListModel dividers_;
     ListModel agents_;
-    ListModel history_;
     QString palette_query_;
 
     struct PaletteEditorPosition {
@@ -1009,25 +912,8 @@ namespace telar::gui::qt {
     std::size_t palette_selection_ = 0;
     std::uint64_t palette_revision_ = 0;
     QTimer refresh_timer_;
-    QTimer history_timer_;
     QTimer notification_timer_;
     QTimer graphics_resume_timer_;
-    QString history_query_;
-    CalendarSample history_calendar_;
-    HistoryFilters history_filters_;
-    std::uint64_t history_view_version_ = 0;
-    std::uint64_t history_rows_version_ = 0;
-    QByteArray history_directory_source_;
-    QString history_directory_value_;
-    QString history_scope_value_;
-    BoundedText<TabCaption::capacity> history_tab_name_;
-    bool history_pane_open_ = false;
-    HistoryScroll history_scroll_;
-    ScrollEventSequence history_wheel_sequence_;
-    QPointer<QQuickItem> history_panel_;
-    QPointer<QQuickItem> history_viewport_;
-    QPointer<QQuickItem> history_content_;
-    QPointer<QQuickItem> history_search_host_;
     QString error_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
@@ -1035,16 +921,8 @@ namespace telar::gui::qt {
     Viewport viewport_ = default_viewport;
     CellMetrics cell_metrics_;
     TerminalGrid terminal_grid_;
-    std::optional<PresentedHistory> presented_history_;
-    HistoryScrollSurface presented_history_surface_;
     TabDropSurface presented_tabs_;
     QPointer<QQuickItem> tab_strip_;
-    HistoryActionSurface presented_history_actions_;
-    std::optional<HistoryHoverFrame> presented_history_hover_;
-    QPointer<QQuickItem> history_actions_;
-    QPointer<QQuickItem> history_footer_;
-    QPointer<QQuickItem> history_filter_layout_;
-    QPointer<QQuickItem> history_inspector_;
     QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
     QByteArray hostname_;
     Qt::KeyboardModifiers pointer_modifiers_;

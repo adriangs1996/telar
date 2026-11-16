@@ -171,7 +171,7 @@ HistoryInspectionLayout {
             labelColor: action?.action === "erase" ? root.colors.red : root.colors.text
             interactive: root.interactive && action !== null
             usePresentedHover: root.actionController !== null
-            presentedHover: root.actionController ? root.actionController.historyHoveredInspectionAction === (action?.action ?? "") && ((action?.action !== "submit" && action?.action !== "alternate") || (root.actionController.historyHoveredInspectionIndex === root.browserState.selection && root.actionController.historyHoveredInspectionRevision === root.browserState.revision)) : false
+            presentedHover: root.actionController ? root.actionController.history.hoveredInspectionAction === (action?.action ?? "") && ((action?.action !== "submit" && action?.action !== "alternate") || (root.actionController.history.hoveredInspectionIndex === root.browserState.selection && root.actionController.history.hoveredInspectionRevision === root.browserState.revision)) : false
             identity: action?.action === "submit" || action?.action === "alternate" ? root.browserState.revision + ":" + root.browserState.selection + ":" + action.action : (action?.action ?? "")
             onTextAdvanceChanged: root.scheduleMeasurement()
             onActivated: {
@@ -187,7 +187,7 @@ HistoryInspectionLayout {
     Component.onCompleted: {
         root.scheduleMeasurement();
         if (root.actionController) {
-            root.actionController.registerHistoryInspector(root);
+            root.actionController.history.registerInspector(root);
         }
     }
 }

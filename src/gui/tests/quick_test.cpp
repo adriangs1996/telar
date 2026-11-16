@@ -3258,7 +3258,7 @@ return {api_version=2, client={keybindings={
       client_->execute(Application::Action::cancel);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
       client_->execute(Application::Action::history);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rowCount() > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       client_->execute(Application::Action::cancel);
       QCOMPARE(client_->error(), QString{});
     }
@@ -3273,8 +3273,8 @@ return {api_version=2, client={keybindings={
         QFAIL("Required history search fixture is missing");
       }
 
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       search->forceActiveFocus();
       QKeyEvent paste{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
 
@@ -3284,8 +3284,8 @@ return {api_version=2, client={keybindings={
       client_->input(pane->id, "\x15");
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       search->forceActiveFocus();
       QKeyEvent run{QEvent::KeyPress, Qt::Key_Return, Qt::ShiftModifier};
 
@@ -3318,8 +3318,8 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_POINTER"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_POINTER"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       if (!window_->isActive()) {
         test::activateWindow(*window_);
       }
@@ -3346,12 +3346,12 @@ return {api_version=2, client={keybindings={
       const auto position = older->mapToScene(QPointF{older->width() / 2, older->height() / 2}).toPoint();
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, position);
-      QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
-      QVERIFY(client_->historyState().value(QStringLiteral("canSubmit")).toBool());
+      QTRY_COMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
+      QVERIFY(client_->history()->state().value(QStringLiteral("canSubmit")).toBool());
       QTest::mouseDClick(window_, Qt::LeftButton, Qt::NoModifier, position);
       QTest::qWait(frame_settle_ms);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QQuickItem* copy = nullptr;
       const auto locate_copy = [&] {
         for (auto* hint : test::visualItems(*older, QStringLiteral("historyHint"))) {
@@ -3388,10 +3388,10 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       const auto selected_copy = [this] {
-        return historyCardHint(*window_, client_->historyState().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy"));
+        return historyCardHint(*window_, client_->history()->state().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy"));
       };
 
       test::activateWindow(*window_);
@@ -3421,8 +3421,8 @@ return {api_version=2, client={keybindings={
       const test::HistoryCardWaitTrace trace{*window_};
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, release_position);
-      client_->selectHistoryRow(1);
-      QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+      client_->history()->select(1);
+      QTRY_COMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -3445,8 +3445,8 @@ return {api_version=2, client={keybindings={
       QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
       client_->execute(Application::Action::cancel);
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -3463,10 +3463,10 @@ return {api_version=2, client={keybindings={
         held_button = button;
         held = true;
         QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
-        const auto next = 1 - client_->historyState().value(QStringLiteral("selection")).toInt();
+        const auto next = 1 - client_->history()->state().value(QStringLiteral("selection")).toInt();
 
-        client_->selectHistoryRow(next);
-        QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), next);
+        client_->history()->select(next);
+        QTRY_COMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), next);
         QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -3512,8 +3512,8 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_REUSE_PRESS_A_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_REUSE_PRESS_A_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       const auto selected_copy = [this] {
         return historyCardHint(*window_, 0, QStringLiteral("copy"));
       };
@@ -3544,8 +3544,8 @@ return {api_version=2, client={keybindings={
       });
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, position);
-      client_->searchHistory(QStringLiteral("GUI_REUSE_PRESS_B_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_REUSE_PRESS_B_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(!retained.isNull());
@@ -3560,8 +3560,8 @@ return {api_version=2, client={keybindings={
 
       clipboard->setText(sentinel);
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, position);
-      client_->selectHistoryRow(1);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+      client_->history()->select(1);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       // Release before another frame can present the changed selection.
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, position);
       QCOMPARE(clipboard->text(), sentinel);
@@ -3576,13 +3576,13 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QVERIFY(test::waitForGuiCondition([this] {
-        return !client_->historyLoading() && client_->history()->rowCount() == 2;
+        return !client_->history()->loading() && client_->history()->rows()->rowCount() == 2;
       },
           runtime_wait_ms));
       const auto selected_copy = [this] {
-        return historyCardHint(*window_, client_->historyState().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy"));
+        return historyCardHint(*window_, client_->history()->state().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy"));
       };
 
       test::activateWindow(*window_);
@@ -3615,10 +3615,10 @@ return {api_version=2, client={keybindings={
         });
 
         QTest::mousePress(window_, button, Qt::NoModifier, position);
-        const auto next = 1 - client_->historyState().value(QStringLiteral("selection")).toInt();
+        const auto next = 1 - client_->history()->state().value(QStringLiteral("selection")).toInt();
         const auto started = platform::AwakeClock::nowNanoseconds();
 
-        client_->selectHistoryRow(next);
+        client_->history()->select(next);
         const auto ready = [&] {
           return previous.isNull() && selected_copy() != nullptr;
         };
@@ -3630,7 +3630,7 @@ return {api_version=2, client={keybindings={
         }
 
         qInfo() << "History selection progress: native loop" << native_loop << "button" << button << "elapsed ns" << platform::AwakeClock::nowNanoseconds() - started;
-        QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), next);
+        QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), next);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         const auto* current = selected_copy();
 
@@ -3646,7 +3646,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyFooterHintsUseCurrentActions() {
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       const auto restore = qScopeGuard([this] {
         client_->execute(Application::Action::cancel);
         if (const auto* pane = firstPane()) {
@@ -3654,7 +3654,7 @@ return {api_version=2, client={keybindings={
         }
       });
 
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* footer = window_->findChild<QQuickItem*>(QStringLiteral("historyFooter"));
 
       QVERIFY(footer != nullptr);
@@ -3680,15 +3680,15 @@ return {api_version=2, client={keybindings={
       }
 
       QVERIFY(click(QStringLiteral("inspect")));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("inspecting")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("inspecting")).toBool(), runtime_wait_ms);
       constexpr int inspect_hints = 4;
 
       QCOMPARE(footer->property("hints").toList().size(), inspect_hints);
       QVERIFY(click(QStringLiteral("inspect")));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyState().value(QStringLiteral("inspecting")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->state().value(QStringLiteral("inspecting")).toBool(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
-      QVERIFY(!client_->historyState().value(QStringLiteral("enterRuns")).toBool());
+      QVERIFY(!client_->history()->state().value(QStringLiteral("enterRuns")).toBool());
       QVERIFY(click(QStringLiteral("submit")));
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::none, runtime_wait_ms);
       const auto* pane = firstPane();
@@ -3714,8 +3714,8 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_DELIVERY"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
       QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
@@ -3726,13 +3726,13 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(footer != nullptr);
       const auto activate = [&](const QString& action) {
-        const auto revision = client_->historyState().value(QStringLiteral("revision")).toString();
+        const auto revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
         return QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision));
       };
 
-      client_->selectHistoryRow(1);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+      client_->history()->select(1);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       for (const auto& action : {QStringLiteral("submit"), QStringLiteral("alternate")}) {
         QVERIFY(activate(action));
         QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
@@ -3745,18 +3745,18 @@ return {api_version=2, client={keybindings={
       QVERIFY(activate(QStringLiteral("submit")));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
       QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
+      client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
       QVERIFY(activate(QStringLiteral("alternate")));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(activate(QStringLiteral("submit")));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
       client_->execute(Application::Action::cancel);
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(activate(QStringLiteral("submit")));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
       window_->beforeSynchronizing();
@@ -3776,7 +3776,7 @@ return {api_version=2, client={keybindings={
         QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
       }
 
-      QCOMPARE(client_->historyState().value(QStringLiteral("error")).toString(), QString{});
+      QCOMPARE(client_->history()->state().value(QStringLiteral("error")).toString(), QString{});
       QVERIFY(activate(QStringLiteral("submit")));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
       QVERIFY(test::showWindow(*window_, runtime_wait_ms));
@@ -3803,8 +3803,8 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_ROW_PRESENTATION_A_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_ROW_PRESENTATION_A_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       auto* results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
 
       QVERIFY(results != nullptr);
@@ -3831,50 +3831,50 @@ return {api_version=2, client={keybindings={
         return false;
       };
 
-      const auto original_revision = client_->historyState().value(QStringLiteral("revision")).toString();
+      const auto original_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
       QVERIFY(activate(1, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       window_->beforeSynchronizing();
       QVERIFY(activate(1, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       window_->frameSwapped();
       QVERIFY(activate(1, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
-      client_->selectPresentedHistoryRow(-1, original_revision);
-      client_->selectPresentedHistoryRow(client_->history()->rowCount(), original_revision);
+      client_->history()->selectPresented(-1, original_revision);
+      client_->history()->selectPresented(client_->history()->rows()->rowCount(), original_revision);
       QVERIFY(activate(1, QStringLiteral("not-a-revision")));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(activate(1, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QVERIFY(activate(0, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
-      client_->searchHistory(QStringLiteral("GUI_ROW_PRESENTATION_B_"));
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
+      client_->history()->search(QStringLiteral("GUI_ROW_PRESENTATION_B_"));
       QVERIFY(activate(1, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
-      QCOMPARE(client_->history()->rowCount(), 2);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QCOMPARE(client_->history()->rows()->rowCount(), 2);
       // Row retirement restores the QML model through a queued call.
       QTRY_COMPARE(results->property("count").toInt(), 2);
       QVERIFY(QMetaObject::invokeMethod(results, "forceLayout"));
       QTRY_COMPARE(test::visualItems(*window_->contentItem(), QStringLiteral("historyResult")).size(), 2);
-      const auto current_revision = client_->historyState().value(QStringLiteral("revision")).toString();
+      const auto current_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
       QVERIFY(current_revision != original_revision);
       QVERIFY(activate(1, original_revision));
       QVERIFY(activate(1, current_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       window_->beforeSynchronizing();
       window_->frameSwapped();
       QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
       QVERIFY(activate(1, original_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(activate(1, current_revision));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
-      QCOMPARE(client_->historyCommand(), QStringLiteral("echo GUI_ROW_PRESENTATION_B_FIRST"));
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
+      QCOMPARE(client_->history()->command(), QStringLiteral("echo GUI_ROW_PRESENTATION_B_FIRST"));
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
-      QCOMPARE(client_->historyState().value(QStringLiteral("error")).toString(), QString{});
+      QCOMPARE(client_->history()->state().value(QStringLiteral("error")).toString(), QString{});
     }
 
     Q_SLOT void historyReplacementNeedsDeliveryAfterWindowShown() {
@@ -3906,10 +3906,10 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_RESTORE_FIRST"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RESTORE_FIRST"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(waitForHistoryPresentation());
-      const auto original_revision = client_->historyState().value(QStringLiteral("revision")).toString();
+      const auto original_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
       if (minimize) {
         window_->showMinimized();
@@ -3923,10 +3923,10 @@ return {api_version=2, client={keybindings={
       }
 
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_RESTORE_SECOND"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
-      QCOMPARE(client_->historyCommand(), QStringLiteral("echo GUI_HISTORY_RESTORE_SECOND"));
-      const auto replacement_revision = client_->historyState().value(QStringLiteral("revision")).toString();
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RESTORE_SECOND"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      QCOMPARE(client_->history()->command(), QStringLiteral("echo GUI_HISTORY_RESTORE_SECOND"));
+      const auto replacement_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
       QVERIFY(replacement_revision != original_revision);
       QVERIFY(!test::HistoryPresentation::current(*client_));
@@ -4021,8 +4021,8 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, source.constData());
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       const auto action = alternate ? QStringLiteral("alternate") : QStringLiteral("submit");
       QPointer<QQuickItem> pressed;
       bool held = false;
@@ -4049,15 +4049,15 @@ return {api_version=2, client={keybindings={
         QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
       }
 
-      const auto previous_revision = client_->historyState().value(QStringLiteral("revision")).toString();
+      const auto previous_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
       client_->loadConfiguration(final_path, {}, {});
       QTRY_COMPARE_WITH_TIMEOUT(client_->configuration().history.enter_runs, enter_runs, runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("enterRuns")).toBool(), enter_runs);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("enterRuns")).toBool(), enter_runs);
       auto* footer = window_->findChild<QQuickItem*>(QStringLiteral("historyFooter"));
 
       QVERIFY(footer != nullptr);
-      const auto revision = client_->historyState().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->history()->state().value(QStringLiteral("revision")).toString();
 
       QCOMPARE(revision, previous_revision);
       if (retain_capture) {
@@ -4098,11 +4098,11 @@ return {api_version=2, client={keybindings={
     Q_SLOT void historyPagesAndActions() {
       seedHistoryPages();
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_BROWSER_PAGE"));
+      client_->history()->search(QStringLiteral("GUI_BROWSER_PAGE"));
       constexpr auto page_entries = static_cast<int>(HistoryBrowser<telar::Memory>::page_entries);
 
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == page_entries, runtime_wait_ms);
-      QVERIFY(client_->historyState().value(QStringLiteral("canOlder")).toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == page_entries, runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("canOlder")).toBool());
       captureHistoryArtifact(QStringLiteral("history-page"));
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (search == nullptr) {
@@ -4112,29 +4112,29 @@ return {api_version=2, client={keybindings={
       QKeyEvent select_older{QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &select_older);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QKeyEvent select_newer{QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &select_newer);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
 
       QKeyEvent older{QEvent::KeyPress, Qt::Key_PageUp, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &older);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("offset")).toULongLong(), static_cast<qulonglong>(page_entries));
-      const auto selected = client_->history()->data(client_->history()->index(0, 0), ListModel::record_role).toMap();
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("offset")).toULongLong(), static_cast<qulonglong>(page_entries));
+      const auto selected = client_->history()->rows()->data(client_->history()->rows()->index(0, 0), ListModel::record_role).toMap();
 
       QKeyEvent inspect{QEvent::KeyPress, Qt::Key_O, NativeKeyAdapter::control_modifier};
 
       QCoreApplication::sendEvent(search, &inspect);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("outputPhase")).toString(), QStringLiteral("ready"), runtime_wait_ms);
-      QCOMPARE(client_->historyOutput(), QString{});
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("outputPhase")).toString(), QStringLiteral("ready"), runtime_wait_ms);
+      QCOMPARE(client_->history()->output(), QString{});
       captureHistoryArtifact(QStringLiteral("history-inspection"));
       QKeyEvent close_output{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &close_output);
-      QVERIFY(!client_->historyState().value(QStringLiteral("inspecting")).toBool());
+      QVERIFY(!client_->history()->state().value(QStringLiteral("inspecting")).toBool());
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
 
       auto* clipboard = QGuiApplication::clipboard();
@@ -4157,17 +4157,17 @@ return {api_version=2, client={keybindings={
       QKeyEvent erase{QEvent::KeyPress, Qt::Key_Backspace, NativeKeyAdapter::super_modifier};
 
       QCoreApplication::sendEvent(search, &erase);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == page_entries, runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("offset")).toULongLong(), qulonglong{0});
-      QVERIFY(!client_->historyState().value(QStringLiteral("canOlder")).toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == page_entries, runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("offset")).toULongLong(), qulonglong{0});
+      QVERIFY(!client_->history()->state().value(QStringLiteral("canOlder")).toBool());
 
-      client_->setHistoryFilters({{QStringLiteral("author"), QStringLiteral("agent")}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 0, runtime_wait_ms);
-      client_->setHistoryFilters({{QStringLiteral("author"), QStringLiteral("human")}, {QStringLiteral("failedOnly"), true}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 0, runtime_wait_ms);
-      client_->setHistoryFilters({{QStringLiteral("scope"), QStringLiteral("pane")}, {QStringLiteral("failedOnly"), false}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("pane"));
+      client_->history()->setFilters({{QStringLiteral("author"), QStringLiteral("agent")}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
+      client_->history()->setFilters({{QStringLiteral("author"), QStringLiteral("human")}, {QStringLiteral("failedOnly"), true}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("pane")}, {QStringLiteral("failedOnly"), false}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("pane"));
       client_->execute(Application::Action::cancel);
       QCOMPARE(client_->error(), QString{});
     }
@@ -4191,11 +4191,11 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->setHistoryFilters({{QStringLiteral("scope"), QStringLiteral("cwd")}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("cwd"));
-      QCOMPARE(client_->historyState().value(QStringLiteral("scopeValue")).toString(), toQString(HistoryPath::compact(std::string_view{firstPane()->cwd}).view()));
-      const auto revision = client_->historyState().value(QStringLiteral("revision"));
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("cwd")}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("cwd"));
+      QCOMPARE(client_->history()->state().value(QStringLiteral("scopeValue")).toString(), toQString(HistoryPath::compact(std::string_view{firstPane()->cwd}).view()));
+      const auto revision = client_->history()->state().value(QStringLiteral("revision"));
       const QTemporaryDir changed_directory;
 
       QVERIFY(changed_directory.isValid());
@@ -4204,11 +4204,11 @@ return {api_version=2, client={keybindings={
       QVERIFY(!changed_path.isEmpty());
       change_directory(changed_path);
       QTRY_VERIFY2_WITH_TIMEOUT(toQString(firstPane()->cwd) == changed_path, qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("scopeValue")).toString(), toQString(HistoryPath::compact(std::string_view{firstPane()->cwd}).view()), runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("revision")), revision);
-      client_->setHistoryFilters({{QStringLiteral("scope"), QStringLiteral("global")}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
-      QVERIFY(client_->historyState().value(QStringLiteral("scopeValue")).toString().isEmpty());
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("scopeValue")).toString(), toQString(HistoryPath::compact(std::string_view{firstPane()->cwd}).view()), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("revision")), revision);
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("global")}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("scopeValue")).toString().isEmpty());
       change_directory(original_directory);
       QTRY_COMPARE_WITH_TIMEOUT(toQString(firstPane()->cwd), original_directory, runtime_wait_ms);
     }
@@ -4221,8 +4221,8 @@ return {api_version=2, client={keybindings={
 
       const auto query = QStringLiteral("!  GUI_HISTORY_FIXTURE");
 
-      client_->searchHistory(query);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
+      client_->history()->search(query);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
@@ -4231,8 +4231,8 @@ return {api_version=2, client={keybindings={
       QInputMethodEvent preedit{QStringLiteral("中"), {{QInputMethodEvent::Cursor, 1, 1, {}}}};
 
       QCoreApplication::sendEvent(search, &preedit);
-      client_->setHistoryFilters({{QStringLiteral("author"), QStringLiteral("agent")}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
+      client_->history()->setFilters({{QStringLiteral("author"), QStringLiteral("agent")}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QCOMPARE(search->property("text").toString(), query);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(search->property("layout").toMap().value(QStringLiteral("composing")).toBool());
@@ -4240,7 +4240,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->property("selectionEnd").toInt(), 1);
       const auto replacement = QStringLiteral("GUI_HISTORY_NEW_QUERY");
 
-      client_->searchHistory(replacement);
+      client_->history()->search(replacement);
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), replacement, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
     }
@@ -4254,7 +4254,7 @@ return {api_version=2, client={keybindings={
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
-      const auto maximum = client_->historyState().value(QStringLiteral("maximumQueryBytes")).toInt();
+      const auto maximum = client_->history()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
       const QString typed(maximum + 1, QLatin1Char('x'));
       QInputMethodEvent commit;
 
@@ -4280,9 +4280,9 @@ return {api_version=2, client={keybindings={
 
       const QString retained(maximum - 1, QLatin1Char('x'));
 
-      client_->searchHistory(retained + QStringLiteral("🧵"));
+      client_->history()->search(retained + QStringLiteral("🧵"));
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), retained, runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("editorText")).toString(), retained);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("editorText")).toString(), retained);
     }
 
     Q_SLOT void historyMalformedUtf16UsesTheEncodedByteLimit() {
@@ -4301,7 +4301,7 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::cancel);
       });
 
-      const auto maximum = client_->historyState().value(QStringLiteral("maximumQueryBytes")).toInt();
+      const auto maximum = client_->history()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
       constexpr int reserved_bytes = 8;
       constexpr int invalid_units = 12;
       constexpr int tail_units = 20;
@@ -4314,8 +4314,8 @@ return {api_version=2, client={keybindings={
       const auto encoded = query.toUtf8();
       const auto expected = telar::runtime::utf8Prefix({encoded.constData(), static_cast<std::size_t>(encoded.size())}, static_cast<std::size_t>(maximum));
 
-      client_->searchHistory(query);
-      const auto retained = client_->historyState().value(QStringLiteral("editorText")).toString();
+      client_->history()->search(query);
+      const auto retained = client_->history()->state().value(QStringLiteral("editorText")).toString();
 
       QCOMPARE(retained.toUtf8(), QByteArray(expected.data(), static_cast<qsizetype>(expected.size())));
       QVERIFY(retained.isValidUtf16());
@@ -4328,7 +4328,7 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::cancel);
       });
 
-      client_->setHistoryFilters({{QStringLiteral("scope"), QStringLiteral("global")}, {QStringLiteral("author"), QStringLiteral("human")}});
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("global")}, {QStringLiteral("author"), QStringLiteral("human")}});
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (search == nullptr) {
         QFAIL("History query field must exist");
@@ -4336,11 +4336,11 @@ return {api_version=2, client={keybindings={
 
       search->forceActiveFocus();
       QTest::keyClick(window_, Qt::Key_Tab, Qt::ShiftModifier);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("author")).toString(), QStringLiteral("agent"), runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("scope")).toString(), QStringLiteral("global"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("author")).toString(), QStringLiteral("agent"), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("scope")).toString(), QStringLiteral("global"));
       QTest::keyClick(window_, Qt::Key_Backtab, Qt::ShiftModifier);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("author")).toString(), QStringLiteral("all"), runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("scope")).toString(), QStringLiteral("global"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("author")).toString(), QStringLiteral("all"), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("scope")).toString(), QStringLiteral("global"));
       QVERIFY(search->hasActiveFocus());
     }
 
@@ -4353,10 +4353,10 @@ return {api_version=2, client={keybindings={
 
       const auto query = QStringLiteral("GUI_SCROLL_HISTORY_NO_MATCH");
 
-      client_->setHistoryFilters({{QStringLiteral("scope"), QStringLiteral("workspace")}, {QStringLiteral("author"), QStringLiteral("all")}});
-      client_->searchHistory(query);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 0, runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("workspace"), runtime_wait_ms);
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("workspace")}, {QStringLiteral("author"), QStringLiteral("all")}});
+      client_->history()->search(query);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("workspace"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(window_->findChild<QQuickItem*>(QStringLiteral("historyEmptyTitle")) != nullptr, runtime_wait_ms);
       const auto* title = window_->findChild<QQuickItem*>(QStringLiteral("historyEmptyTitle"));
       const auto* button = window_->findChild<QQuickItem*>(QStringLiteral("historySearchEverywhere"));
@@ -4369,15 +4369,15 @@ return {api_version=2, client={keybindings={
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(button->isVisible());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene({button->width() / 2, button->height() / 2}).toPoint());
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->historyState().value(QStringLiteral("effectiveScope")).toString() == QStringLiteral("global"), runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("editorText")).toString(), query);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->state().value(QStringLiteral("effectiveScope")).toString() == QStringLiteral("global"), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("editorText")).toString(), query);
       QVERIFY(search->hasActiveFocus());
       QTRY_COMPARE_WITH_TIMEOUT(title->property("text").toString(), QStringLiteral("No matching commands"), runtime_wait_ms);
       QVERIFY(!button->isVisible());
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
       constexpr int count = 4;
 
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == count, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(window_->findChild<QQuickItem*>(QStringLiteral("historyEmptyTitle")) == nullptr, runtime_wait_ms);
     }
 
@@ -4388,10 +4388,10 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::cancel);
       });
 
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
       constexpr int count = 4;
 
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == count, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       const auto* panel = window_->findChild<QQuickItem*>(QStringLiteral("historyPanel"));
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (panel == nullptr || search == nullptr) {
@@ -4402,20 +4402,20 @@ return {api_version=2, client={keybindings={
       constexpr int half_notch = 60;
 
       for (const auto* region : {"header", "results", "search", "footer"}) {
-        client_->selectHistoryRow(0);
+        client_->history()->select(0);
         QVERIFY(waitForHistoryPresentation());
-        const auto area = client_->historyGeometry().value(QString::fromLatin1(region)).toRectF();
+        const auto area = client_->history()->geometry().value(QString::fromLatin1(region)).toRectF();
         const auto position = panel->mapToScene(area.center());
 
         QVERIFY(sendHistoryWheel(position, {}, {0, half_notch}, Qt::ScrollBegin));
-        QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+        QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
         QVERIFY(sendHistoryWheel(position, {}, {0, half_notch}, Qt::ScrollUpdate));
-        QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
         QVERIFY(search->hasActiveFocus());
         QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
       }
 
-      client_->selectHistoryRow(0);
+      client_->history()->select(0);
       QVERIFY(waitForHistoryPresentation());
       auto row_height = std::numeric_limits<qreal>::max();
 
@@ -4434,17 +4434,17 @@ return {api_version=2, client={keybindings={
       const auto row_pixels = static_cast<int>(std::ceil(row_height));
 
       QVERIFY(cell_pixels > 0 && cell_pixels < row_pixels);
-      const auto position = panel->mapToScene(client_->historyGeometry().value(QStringLiteral("header")).toRectF().center());
+      const auto position = panel->mapToScene(client_->history()->geometry().value(QStringLiteral("header")).toRectF().center());
 
       QVERIFY(sendHistoryWheel(position, {0, cell_pixels}, {0, cell_pixels * 2}, Qt::ScrollBegin));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(sendHistoryWheel(position, {0, row_pixels - cell_pixels}, {0, (row_pixels - cell_pixels) * 2}, Qt::ScrollUpdate));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
 
-      const auto selected = client_->historyState().value(QStringLiteral("selection")).toInt();
+      const auto selected = client_->history()->state().value(QStringLiteral("selection")).toInt();
 
       QVERIFY(sendHistoryWheel(panel->mapToScene({panel->width() + 1, panel->height() / 2}), {}, {0, half_notch * 2}, Qt::ScrollBegin));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), selected);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), selected);
     }
 
     Q_SLOT void historyWheelKeepsFractionThroughAnEmptyPresentedPage() {
@@ -4454,26 +4454,26 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::cancel);
       });
 
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_NO_MATCH"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_NO_MATCH"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
       QVERIFY(waitForHistoryPresentation());
       const auto* panel = window_->findChild<QQuickItem*>(QStringLiteral("historyPanel"));
       if (panel == nullptr) {
         QFAIL("History panel must exist");
       }
 
-      const auto position = panel->mapToScene(client_->historyGeometry().value(QStringLiteral("header")).toRectF().center());
+      const auto position = panel->mapToScene(client_->history()->geometry().value(QStringLiteral("header")).toRectF().center());
       constexpr int half_notch = 60;
 
       QVERIFY(sendHistoryWheel(position, {}, {0, half_notch}, Qt::ScrollBegin));
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
       constexpr int count = 4;
 
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == count, runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(sendHistoryWheel(position, {}, {0, half_notch}, Qt::ScrollUpdate));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
     }
 
     Q_SLOT void historyWheelScrollsInspectionFromEveryBand() {
@@ -4492,11 +4492,11 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::cancel);
       });
 
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_INSPECTION_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
-      client_->executeHistory(Application::HistoryAction::inspect);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("commandLoaded")).toBool(), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("outputPhase")).toString(), QStringLiteral("ready"), runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_SCROLL_INSPECTION_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->execute(HistoryController::Action::inspect);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("commandLoaded")).toBool(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("outputPhase")).toString(), QStringLiteral("ready"), runtime_wait_ms);
       const auto* panel = window_->findChild<QQuickItem*>(QStringLiteral("historyPanel"));
       if (panel == nullptr) {
         QFAIL("History panel must exist");
@@ -4514,12 +4514,12 @@ return {api_version=2, client={keybindings={
       int expected_scroll = 0;
 
       for (const auto* region : {"header", "results", "search", "footer"}) {
-        const auto area = client_->historyGeometry().value(QString::fromLatin1(region)).toRectF();
+        const auto area = client_->history()->geometry().value(QString::fromLatin1(region)).toRectF();
 
         QVERIFY(sendHistoryWheel(panel->mapToScene(area.center()), {}, {0, -notch}, Qt::ScrollBegin));
         ++expected_scroll;
         QTRY_COMPARE_WITH_TIMEOUT(inspector->property("scroll").toInt(), expected_scroll, runtime_wait_ms);
-        QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+        QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       }
 
       const auto grid = client_->windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap();
@@ -4527,7 +4527,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(whole_cell > 1);
       const auto half_cell = whole_cell / 2;
-      const auto position = panel->mapToScene(client_->historyGeometry().value(QStringLiteral("header")).toRectF().center());
+      const auto position = panel->mapToScene(client_->history()->geometry().value(QStringLiteral("header")).toRectF().center());
 
       QVERIFY(sendHistoryWheel(position, {0, -half_cell}, {0, -half_cell * 2}, Qt::ScrollBegin));
       QCOMPARE(inspector->property("scroll").toInt(), expected_scroll);
@@ -4543,46 +4543,46 @@ return {api_version=2, client={keybindings={
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       });
 
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
       constexpr int count = 4;
 
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == count, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       QVERIFY(waitForHistoryPresentation());
       const auto* panel = window_->findChild<QQuickItem*>(QStringLiteral("historyPanel"));
       if (panel == nullptr) {
         QFAIL("History panel must exist");
       }
 
-      const auto position = panel->mapToScene(client_->historyGeometry().value(QStringLiteral("header")).toRectF().center());
+      const auto position = panel->mapToScene(client_->history()->geometry().value(QStringLiteral("header")).toRectF().center());
 
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
       QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_B_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == count, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_B_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       constexpr int notch = 120;
 
       QVERIFY(sendHistoryWheel(position, {}, {0, notch}, Qt::ScrollBegin));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       window_->beforeSynchronizing();
       QVERIFY(sendHistoryWheel(position, {}, {0, notch}, Qt::ScrollUpdate));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(sendHistoryWheel(position, {}, {0, notch}, Qt::ScrollBegin));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
       client_->execute(Application::Action::cancel);
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_HISTORY_B_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == count, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_B_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       QVERIFY(sendHistoryWheel(position, {}, {0, notch}, Qt::ScrollBegin));
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(sendHistoryWheel(position, {}, {0, notch}, Qt::ScrollBegin));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
     }
 
     Q_SLOT void historyWheelStopsAtPageAdmission() {
@@ -4602,26 +4602,26 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::cancel);
       });
 
-      client_->searchHistory(QStringLiteral("GUI_SCROLL_PAGE_"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == page_count, runtime_wait_ms);
-      client_->selectHistoryRow(page_count - 2);
+      client_->history()->search(QStringLiteral("GUI_SCROLL_PAGE_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == page_count, runtime_wait_ms);
+      client_->history()->select(page_count - 2);
       QVERIFY(waitForHistoryPresentation());
       const auto* panel = window_->findChild<QQuickItem*>(QStringLiteral("historyPanel"));
       if (panel == nullptr) {
         QFAIL("History panel must exist");
       }
 
-      const auto position = panel->mapToScene(client_->historyGeometry().value(QStringLiteral("header")).toRectF().center());
+      const auto position = panel->mapToScene(client_->history()->geometry().value(QStringLiteral("header")).toRectF().center());
       constexpr int notch = 120;
 
       QVERIFY(sendHistoryWheel(position, {}, {0, notch * 2}, Qt::ScrollBegin));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->historyState().value(QStringLiteral("offset")).toInt() == page_count, runtime_wait_ms);
-      QCOMPARE(client_->history()->rowCount(), 2);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->state().value(QStringLiteral("offset")).toInt() == page_count, runtime_wait_ms);
+      QCOMPARE(client_->history()->rows()->rowCount(), 2);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(sendHistoryWheel(position, {}, {0, -notch}, Qt::ScrollBegin));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->historyState().value(QStringLiteral("offset")).toInt() == 0, runtime_wait_ms);
-      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), page_count - 1);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->state().value(QStringLiteral("offset")).toInt() == 0, runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), page_count - 1);
     }
 
     Q_SLOT void historyCompositionConsumesTheFirstEscape() {
@@ -4661,12 +4661,12 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(printed(), runtime_wait_ms);
       client_->input(pane_id, "\x15");
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_LIVE_METADATA"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
-      QVERIFY(client_->historyState().value(QStringLiteral("paneOpen")).toBool());
-      client_->executeHistory(Application::HistoryAction::inspect);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_LIVE_METADATA"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("paneOpen")).toBool());
+      client_->history()->execute(HistoryController::Action::inspect);
       QTRY_VERIFY_WITH_TIMEOUT(window_->findChild<QQuickItem*>(QStringLiteral("historyInspector")) != nullptr, runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("outputPhase")).toString() != QLatin1StringView("loading") && client_->historyState().value(QStringLiteral("commandPhase")).toString() != QLatin1StringView("loading"), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("outputPhase")).toString() != QLatin1StringView("loading") && client_->history()->state().value(QStringLiteral("commandPhase")).toString() != QLatin1StringView("loading"), runtime_wait_ms);
       QVERIFY(waitForHistoryPresentation());
       const QPointer<QQuickItem> inspector = window_->findChild<QQuickItem*>(QStringLiteral("historyInspector"));
       const auto pane_fact = [&] {
@@ -4684,10 +4684,10 @@ return {api_version=2, client={keybindings={
         return QString{};
       };
 
-      const auto revision = client_->historyState().value(QStringLiteral("revision")).toString();
-      const auto query = client_->historyState().value(QStringLiteral("editorText")).toString();
-      const auto command = client_->historyCommand();
-      const QSignalSpy rows_changed{client_->history(), &QAbstractItemModel::dataChanged};
+      const auto revision = client_->history()->state().value(QStringLiteral("revision")).toString();
+      const auto query = client_->history()->state().value(QStringLiteral("editorText")).toString();
+      const auto command = client_->history()->command();
+      const QSignalSpy rows_changed{client_->history()->rows(), &QAbstractItemModel::dataChanged};
 
       test::HistoryPresentation::renameTab(*client_, "Live history tab");
       const auto tab_renamed = [&] {
@@ -4706,11 +4706,11 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rowCount() == original_tabs && client_->pane(pane_id) == nullptr, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane_fact(), QString::number(pane_id) + QStringLiteral("  ·  closed"), runtime_wait_ms);
       QVERIFY(!inspector->property("browserState").toMap().value(QStringLiteral("paneOpen")).toBool());
-      QVERIFY(!client_->historyState().value(QStringLiteral("paneOpen")).toBool());
-      QCOMPARE(client_->historyState().value(QStringLiteral("revision")).toString(), revision);
-      QCOMPARE(client_->historyState().value(QStringLiteral("editorText")).toString(), query);
-      QCOMPARE(client_->historyCommand(), command);
-      QCOMPARE(client_->history()->rowCount(), 1);
+      QVERIFY(!client_->history()->state().value(QStringLiteral("paneOpen")).toBool());
+      QCOMPARE(client_->history()->state().value(QStringLiteral("revision")).toString(), revision);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("editorText")).toString(), query);
+      QCOMPARE(client_->history()->command(), command);
+      QCOMPARE(client_->history()->rows()->rowCount(), 1);
       QCOMPARE(rows_changed.size(), 0);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
       QCOMPARE(client_->error(), QString{});
@@ -4746,8 +4746,8 @@ return {api_version=2, client={keybindings={
       });
 
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       const auto* panel = window_->findChild<QQuickItem*>(QStringLiteral("historyPanel"));
       const auto* results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
@@ -4758,7 +4758,7 @@ return {api_version=2, client={keybindings={
       };
 
       const auto expected_search = [&] {
-        const auto geometry = client_->historyGeometry();
+        const auto geometry = client_->history()->geometry();
 
         return geometry.value(QStringLiteral("search")).toRectF().translated(geometry.value(QStringLiteral("bounds")).toRectF().topLeft());
       };
@@ -4771,7 +4771,7 @@ return {api_version=2, client={keybindings={
       const auto original_search = search_bounds();
       const auto original_panel_size = panel->size();
 
-      client_->executeHistory(Application::HistoryAction::inspect);
+      client_->history()->execute(HistoryController::Action::inspect);
       QTRY_COMPARE(search_bounds(), original_search);
       QCOMPARE(panel->size(), original_panel_size);
       QVERIFY(search->hasActiveFocus());
@@ -4796,22 +4796,22 @@ return {api_version=2, client={keybindings={
         return result;
       };
 
-      client_->executeHistory(Application::HistoryAction::inspect);
+      client_->history()->execute(HistoryController::Action::inspect);
       QTRY_VERIFY_WITH_TIMEOUT(results->isVisible(), runtime_wait_ms);
       QVERIFY2(search_bounds() == narrow_search, qPrintable(search_observation()));
       QVERIFY(search->hasActiveFocus());
       captureHistoryArtifact(QStringLiteral("history-geometry-narrow"));
 
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_GEOMETRY_NO_MATCH"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_GEOMETRY_NO_MATCH"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
       QVERIFY2(search_bounds() == narrow_search, qPrintable(search_observation()));
       QVERIFY(search->hasActiveFocus());
     }
 
     Q_SLOT void historyValidationFeedback() {
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (search == nullptr) {
         QFAIL("Required history search fixture is missing");
@@ -4820,27 +4820,27 @@ return {api_version=2, client={keybindings={
       QKeyEvent scope{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &scope);
-      QCOMPARE(client_->historyState().value(QStringLiteral("scope")).toString(), QStringLiteral("workspace"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("scope")).toString(), QStringLiteral("workspace"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QKeyEvent author{QEvent::KeyPress, Qt::Key_Backtab, Qt::ShiftModifier};
 
       QCoreApplication::sendEvent(search, &author);
-      QCOMPARE(client_->historyState().value(QStringLiteral("author")).toString(), QStringLiteral("agent"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 0, runtime_wait_ms);
-      client_->setHistoryFilters({{QStringLiteral("scope"), QStringLiteral("global")}, {QStringLiteral("author"), QStringLiteral("human")}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("author")).toString(), QStringLiteral("agent"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("global")}, {QStringLiteral("author"), QStringLiteral("human")}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
       QKeyEvent inspect{QEvent::KeyPress, Qt::Key_O, control};
 
       QCoreApplication::sendEvent(search, &inspect);
-      QVERIFY(client_->historyState().value(QStringLiteral("inspecting")).toBool());
+      QVERIFY(client_->history()->state().value(QStringLiteral("inspecting")).toBool());
       QKeyEvent close_output{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
       QCoreApplication::sendEvent(window_, &close_output);
-      QVERIFY(!client_->historyState().value(QStringLiteral("inspecting")).toBool());
+      QVERIFY(!client_->history()->state().value(QStringLiteral("inspecting")).toBool());
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
 
-      client_->useHistoryRow(0);
+      client_->history()->use(0);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
       const auto* pane = firstPane();
       if (pane == nullptr) {
@@ -4866,14 +4866,14 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, "gui-long-command");
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_LONG_COMMAND"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == static_cast<int>(entry_count), runtime_wait_ms);
-      const auto last = client_->history()->data(client_->history()->index(static_cast<int>(cached_entries), 0), ListModel::record_role).toMap();
+      client_->history()->search(QStringLiteral("GUI_LONG_COMMAND"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == static_cast<int>(entry_count), runtime_wait_ms);
+      const auto last = client_->history()->rows()->data(client_->history()->rows()->index(static_cast<int>(cached_entries), 0), ListModel::record_role).toMap();
 
       QVERIFY(last.value(QStringLiteral("command")).toString().toUtf8().size() <= static_cast<qsizetype>(Storage::command_preview_bytes));
-      client_->selectHistoryRow(static_cast<int>(cached_entries));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->historyState().value(QStringLiteral("commandPhase")).toString(), QStringLiteral("ready"), runtime_wait_ms);
-      QVERIFY(client_->historyState().value(QStringLiteral("canSubmit")).toBool());
+      client_->history()->select(static_cast<int>(cached_entries));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("commandPhase")).toString(), QStringLiteral("ready"), runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("canSubmit")).toBool());
 
       auto* clipboard = QGuiApplication::clipboard();
       auto saved_clipboard = test::copyClipboard();
@@ -4882,14 +4882,14 @@ return {api_version=2, client={keybindings={
         clipboard->setMimeData(saved.release());
       });
 
-      client_->executeHistory(Application::HistoryAction::copy);
+      client_->history()->execute(HistoryController::Action::copy);
       const auto* const expected = std::ranges::find_if(commands, [&](const auto& command) {
         return toQString(command).startsWith(last.value(QStringLiteral("command")).toString());
       });
 
       QVERIFY(expected != commands.end());
       QCOMPARE(clipboard->text(), toQString(*expected));
-      QCOMPARE(client_->historyCommand(), toQString(*expected));
+      QCOMPARE(client_->history()->command(), toQString(*expected));
       const auto selected_card = [&] {
         const auto cards = test::visualItems(*window_->contentItem(), QStringLiteral("historyRow"));
         const auto found = std::ranges::find_if(cards, [](const auto* card) {
@@ -4922,7 +4922,7 @@ return {api_version=2, client={keybindings={
 
       QTRY_VERIFY_WITH_TIMEOUT(card_is_visible(), runtime_wait_ms);
       captureHistoryArtifact(QStringLiteral("history-selected-command"));
-      client_->executeHistory(Application::HistoryAction::inspect);
+      client_->history()->execute(HistoryController::Action::inspect);
       const auto* command_area = window_->findChild<QQuickItem*>(QStringLiteral("historyCommand"));
 
       QVERIFY(command_area != nullptr);
@@ -4993,7 +4993,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
       QCOMPARE(peer.result().text, QString{});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rowCount() > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       client_->execute(Application::Action::cancel);
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->error(), QString{});
@@ -7983,8 +7983,8 @@ return {api_version=2, client={keybindings={
 
       engine_->setIncubationController(&deferred);
       client_->execute(Application::Action::history);
-      client_->searchHistory(QStringLiteral("GUI_BROWSER_PAGE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_BROWSER_PAGE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* const results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
       if (results == nullptr) {
         QFAIL("Required history result view is missing");
@@ -8002,16 +8002,16 @@ return {api_version=2, client={keybindings={
       // Cache delegates incubate asynchronously, independently of flick distance.
       QVERIFY(results->setProperty("cacheBuffer", results->property("contentHeight")));
       QTRY_VERIFY_WITH_TIMEOUT(deferred.incubatingObjectCount() > 0, runtime_wait_ms);
-      const auto retained_snapshot = expected_rows == client_->history()->rowCount();
+      const auto retained_snapshot = expected_rows == client_->history()->rows()->rowCount();
       const auto existing = test::visualItems(*results, QStringLiteral("historyResult"));
 
       QVERIFY(!existing.isEmpty());
       const QPointer<QQuickItem> retained{existing.front()};
-      const QSignalSpy removed{client_->history(), &QAbstractItemModel::rowsRemoved};
+      const QSignalSpy removed{client_->history()->rows(), &QAbstractItemModel::rowsRemoved};
 
       QTest::failOnWarning(QRegularExpression{QStringLiteral("DelegateModel::cancel:.*")});
-      client_->searchHistory(query);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == expected_rows, runtime_wait_ms);
+      client_->history()->search(query);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == expected_rows, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QCOMPARE(results->property("count").toInt(), expected_rows);
       if (retained_snapshot) {
@@ -8031,7 +8031,7 @@ return {api_version=2, client={keybindings={
           const auto index = item->property("index").toInt();
 
           QVERIFY(index >= 0 && index < expected_rows);
-          const auto record = client_->history()->data(client_->history()->index(index, 0), ListModel::record_role).toMap();
+          const auto record = client_->history()->rows()->data(client_->history()->rows()->index(index, 0), ListModel::record_role).toMap();
 
           QVERIFY(record.value(QStringLiteral("command")).toString().contains(query));
           QCOMPARE(item->property("record").toMap(), record);
@@ -8051,10 +8051,10 @@ return {api_version=2, client={keybindings={
 
       const auto query = QStringLiteral("GUI_HISTORY_FIXTURE");
 
-      client_->searchHistory(query);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+      client_->history()->search(query);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       if (inspecting) {
-        client_->executeHistory(Application::HistoryAction::inspect);
+        client_->history()->execute(HistoryController::Action::inspect);
       }
 
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
@@ -8068,14 +8068,14 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
-      QCOMPARE(client_->historyState().value(QStringLiteral("inspecting")).toBool(), inspecting);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("inspecting")).toBool(), inspecting);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QCOMPARE(search->property("text").toString(), query);
       QCOMPARE(search->property("selectedText").toString(), query.first(3));
       QTest::keyClick(window_, Qt::Key_Escape);
       if (inspecting) {
         QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::history);
-        QVERIFY(!client_->historyState().value(QStringLiteral("inspecting")).toBool());
+        QVERIFY(!client_->history()->state().value(QStringLiteral("inspecting")).toBool());
         QTest::keyClick(window_, Qt::Key_Escape);
       }
 

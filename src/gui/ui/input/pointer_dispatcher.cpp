@@ -55,7 +55,6 @@ static_assert(true);
 
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
-import telar.gui.history.browser;
 import telar.gui.application.workspace_replica;
 import telar.gui.input.configuration;
 
@@ -93,8 +92,7 @@ namespace telar::gui::qt {
   // cancellation before Qt merges those phases into its wheel-event stream.
   bool PointerDispatcher::handleNativeScroll(std::string_view event_type, const void* message) {
     // The prompt line scrolls its own rows; the modal takes the wheel only while it shows.
-    const bool hosted = application_.store_.dialog().line_search_pane != 0 && !application_.session().historyBrowser().state().inspecting;
-    if (window_.isNull() || application_.store_.dialog().kind != Application::Dialog::history || hosted) {
+    if (window_.isNull() || application_.store_.dialog().kind != Application::Dialog::history || application_.history_.hosted()) {
       return false;
     }
 
@@ -104,7 +102,8 @@ namespace telar::gui::qt {
     }
 
     if (input->valid) {
-      application_.scrollHistory({.x = input->x, .y = input->y}, input->sample);
+      retireTerminalScroll();
+      application_.history_.scroll({.x = input->x, .y = input->y}, input->sample);
     }
 
     return true;
@@ -133,51 +132,6 @@ namespace telar::gui::qt {
 
   bool PointerDispatcher::occupied() const noexcept {
     return std::ranges::any_of(captures_, &Capture::held);
-  }
-
-  void PointerDispatcher::notifyHistoryHover() {
-    const auto& identity = history_hover_.hovered();
-    const auto* row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
-
-    if (const auto* footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr; footer != nullptr && footer->submission()) {
-      row = &footer->choice;
-    }
-
-    if (const auto* inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr; inspection != nullptr && inspection->submission()) {
-      row = &inspection->choice;
-    }
-
-    if (row != nullptr && history_hover_revision_value_ != row->revision) {
-      history_hover_revision_value_ = row->revision;
-      history_hover_revision_ = QString::number(row->revision);
-    }
-
-    emit application_.historyHoverChanged();
-  }
-
-  void PointerDispatcher::retireHistoryHover() {
-    if (history_hover_.cancel()) {
-      notifyHistoryHover();
-    }
-  }
-
-  void PointerDispatcher::presentHistoryHover(std::span<const HistoryHoverTarget> targets) {
-    if (history_hover_.present(targets)) {
-      notifyHistoryHover();
-    }
-  }
-
-  void PointerDispatcher::observeHistoryHover(QPointF position, HistoryHover::Observation observation) {
-    const auto& frame = application_.presented_history_hover_;
-    if (application_.store_.dialog().kind != Application::Dialog::history || !frame || frame->generation != application_.store_.dialog().generation) {
-      retireHistoryHover();
-
-      return;
-    }
-
-    if (history_hover_.observe(frame->view(), {.x = position.x() * frame->scale, .y = position.y() * frame->scale}, observation)) {
-      notifyHistoryHover();
-    }
   }
 
   void PointerDispatcher::acquire(TerminalItem& terminal, Qt::MouseButton button) {
@@ -266,7 +220,7 @@ namespace telar::gui::qt {
   void PointerDispatcher::cancel() {
     observeTabHover(std::nullopt);
     cancelTabDrag();
-    retireHistoryHover();
+    application_.history_.retireHover();
     const auto previous_recipients = recipients();
 
     for (std::size_t index = 0; index < captures_.size(); ++index) {
@@ -339,13 +293,13 @@ namespace telar::gui::qt {
       return false;
     }
 
-    observeHistoryHover(event.position(), HistoryHover::Observation::point);
+    application_.history_.observeHover(event.position(), HistoryHover::Observation::point);
     if (auto* lease = capture(event.button())) {
       if (lease->history.held()) {
         *lease = {};
       }
 
-      const auto& surface = application_.presented_history_actions_;
+      const auto& surface = application_.history_.presentedActions();
       HistoryActionCapture history;
       if (application_.store_.dialog().kind == Application::Dialog::history && surface.generation == application_.store_.dialog().generation && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
         *lease = {.terminal = {}, .history = history, .held = true};
@@ -371,7 +325,7 @@ namespace telar::gui::qt {
   bool PointerDispatcher::move(QMouseEvent& event) {
     if (native_events_.moving()) {
       application_.attachments_.observePointer(event.position());
-      observeHistoryHover(event.position(), event.buttons() == Qt::NoButton ? HistoryHover::Observation::point : HistoryHover::Observation::retained);
+      application_.history_.observeHover(event.position(), event.buttons() == Qt::NoButton ? HistoryHover::Observation::point : HistoryHover::Observation::retained);
     }
 
     application_.observeActivityPointer(true, event.position());
@@ -424,7 +378,7 @@ namespace telar::gui::qt {
 
     auto previous = std::exchange(*lease, Capture{});
     if (previous.history.held()) {
-      const auto& surface = application_.presented_history_actions_;
+      const auto& surface = application_.history_.presentedActions();
       const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
       const auto choice = surface.choice;
 
@@ -433,7 +387,7 @@ namespace telar::gui::qt {
       }
 
       if (action && choice) {
-        application_.activateHistoryCardAction(*action, *choice);
+        application_.history_.activate(*action, *choice);
       }
 
       return true;
@@ -469,7 +423,11 @@ namespace telar::gui::qt {
     try {
       switch (event->type()) {
       case QEvent::Wheel:
-        return application_.handleHistoryWheel(dynamic_cast<QWheelEvent&>(*event));
+        if (application_.store_.dialog().kind == Application::Dialog::history) {
+          retireTerminalScroll();
+        }
+
+        return application_.history_.handleWheel(dynamic_cast<QWheelEvent&>(*event));
       case QEvent::MouseButtonPress:
       case QEvent::MouseButtonDblClick: {
         auto& mouse = dynamic_cast<QMouseEvent&>(*event);
@@ -499,7 +457,7 @@ namespace telar::gui::qt {
           updateTabDragVisual();
         }
 
-        retireHistoryHover();
+        application_.history_.retireHover();
         application_.attachments_.observePointer(std::nullopt);
         application_.observeActivityPointer(false);
         return false;

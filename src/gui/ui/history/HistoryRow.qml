@@ -66,7 +66,7 @@ HistoryRowLayout {
         width: root.geometryRegions.frame.width
         height: root.geometryRegions.frame.height
         radius: root.geometryRegions.radius
-        color: Qt.alpha(root.colors.surface0, root.highlight > 0 ? root.highlight : ((root.actionController ? (root.actionController.historyHoveredRow === root.historyIndex && root.actionController.historyHoveredRowRevision === root.revision) : pointer.containsMouse) ? root.geometryRegions.hoverAlpha : 0))
+        color: Qt.alpha(root.colors.surface0, root.highlight > 0 ? root.highlight : ((root.actionController ? (root.actionController.history.hoveredRow === root.historyIndex && root.actionController.history.hoveredRowRevision === root.revision) : pointer.containsMouse) ? root.geometryRegions.hoverAlpha : 0))
     }
 
     NativeRoundedRectangle {

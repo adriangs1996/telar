@@ -590,7 +590,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       };
 
       runtime.send(HistoryResults{.request_id = query.request_id, .snapshot_id = 3, .entries = entries});
-      QTRY_COMPARE_WITH_TIMEOUT(application.historyState().value(QStringLiteral("count")).toInt(), 3, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.history()->state().value(QStringLiteral("count")).toInt(), 3, wait_ms);
       auto* field = line->findChild<QQuickItem*>(QStringLiteral("promptSearch"));
 
       QVERIFY(field != nullptr);
@@ -603,7 +603,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QKeyEvent down{QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier};
 
       QCoreApplication::sendEvent(field, &down);
-      QTRY_COMPARE_WITH_TIMEOUT(application.historyState().value(QStringLiteral("selection")).toInt(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.history()->state().value(QStringLiteral("selection")).toInt(), 1, wait_ms);
       QTest::qWait(900);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       if (const auto picture = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_HISTORY_SCREENSHOT"); !picture.isEmpty()) {

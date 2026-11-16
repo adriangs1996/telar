@@ -14,8 +14,8 @@ QtObject {
     property var pageInspector: null
     // The rows run newest first from the top, so down goes to older ones.
     property bool downward: false
-    readonly property var state: root.controller.historyState
-    readonly property bool actionable: !root.controller.historyLoading && root.state.phase === "ready" && root.state.count > 0
+    readonly property var state: root.controller.history.state
+    readonly property bool actionable: !root.controller.history.loading && root.state.phase === "ready" && root.state.count > 0
 
     function moveSelection(delta) {
         if (!root.actionable) {
@@ -24,24 +24,24 @@ QtObject {
 
         const selected = root.state.selection + delta;
         if (selected >= root.state.count && root.state.canOlder) {
-            root.controller.executeHistory(GuiController.HistoryAction.older);
+            root.controller.history.execute(HistoryController.Action.older);
         } else if (selected < 0 && root.state.canNewer) {
-            root.controller.executeHistory(GuiController.HistoryAction.newer);
+            root.controller.history.execute(HistoryController.Action.newer);
         } else {
-            root.controller.selectHistoryRow(Math.max(0, Math.min(root.state.count - 1, selected)));
+            root.controller.history.select(Math.max(0, Math.min(root.state.count - 1, selected)));
         }
     }
 
     function cycleScope() {
         const scopes = ["global", "workspace", "cwd", "pane"];
         const next = (scopes.indexOf(root.state.scope) + 1) % scopes.length;
-        root.controller.setHistoryFilters({scope: scopes[next]});
+        root.controller.history.setFilters({scope: scopes[next]});
     }
 
     function cycleAuthor() {
         const authors = ["human", "agent", "all"];
         const next = (authors.indexOf(root.state.author) + 1) % authors.length;
-        root.controller.setHistoryFilters({author: authors[next]});
+        root.controller.history.setFilters({author: authors[next]});
     }
 
     function cycleFilter(event) {
@@ -54,7 +54,7 @@ QtObject {
 
     function cancel() {
         if (root.state.inspecting) {
-            root.controller.executeHistory(GuiController.HistoryAction.inspect);
+            root.controller.history.execute(HistoryController.Action.inspect);
         } else {
             root.controller.execute(GuiController.Action.cancel);
         }
@@ -64,9 +64,9 @@ QtObject {
     // running or editing it.
     function submit(event) {
         if ((event.modifiers & Qt.AltModifier) !== 0) {
-            root.controller.executeHistory(GuiController.HistoryAction.visit);
-        } else if (!root.controller.historyLoading) {
-            root.controller.useHistoryRow(root.state.selection, (event.modifiers & Qt.ShiftModifier) !== 0);
+            root.controller.history.execute(HistoryController.Action.visit);
+        } else if (!root.controller.history.loading) {
+            root.controller.history.use(root.state.selection, (event.modifiers & Qt.ShiftModifier) !== 0);
         }
     }
 
@@ -74,7 +74,7 @@ QtObject {
         if (root.state.inspecting && root.pageInspector) {
             root.pageInspector(older);
         } else {
-            root.controller.executeHistory(older ? GuiController.HistoryAction.older : GuiController.HistoryAction.newer);
+            root.controller.history.execute(older ? HistoryController.Action.older : HistoryController.Action.newer);
         }
     }
 
@@ -90,7 +90,7 @@ QtObject {
         const control = (event.modifiers & root.controller.controlModifier) !== 0;
         const command = (event.modifiers & root.controller.superModifier) !== 0;
         if (command && event.key === Qt.Key_Backspace) {
-            root.controller.executeHistory(GuiController.HistoryAction.erase);
+            root.controller.history.execute(HistoryController.Action.erase);
             return true;
         }
 
@@ -98,7 +98,7 @@ QtObject {
             if (root.queryField && root.queryField.selectionStart !== root.queryField.selectionEnd) {
                 root.queryField.copy();
             } else {
-                root.controller.executeHistory(GuiController.HistoryAction.copy);
+                root.controller.history.execute(HistoryController.Action.copy);
             }
 
             return true;
@@ -110,10 +110,10 @@ QtObject {
 
         switch (event.key) {
         case Qt.Key_D:
-            root.controller.executeHistory(GuiController.HistoryAction.erase);
+            root.controller.history.execute(HistoryController.Action.erase);
             return true;
         case Qt.Key_O:
-            root.controller.executeHistory(GuiController.HistoryAction.inspect);
+            root.controller.history.execute(HistoryController.Action.inspect);
             return true;
         case Qt.Key_H:
             if (command || (event.modifiers & Qt.ShiftModifier) !== 0) {
@@ -127,7 +127,7 @@ QtObject {
                 return false;
             }
 
-            root.controller.useHistoryRow(root.state.selection);
+            root.controller.history.use(root.state.selection);
             return true;
         case Qt.Key_J:
             root.moveSelection(root.downward ? 1 : -1);

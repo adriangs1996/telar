@@ -94,11 +94,15 @@ namespace telar::gui::qt {
     void touch();
     // Emits changed() now if the state was touched since the last time.
     void flush();
+    // Starts a user interaction: interacting() lets the window cancel what the interaction
+    // supersedes, before the mutation runs.
+    void begin();
     // Ends a user interaction: interacted() runs its effects now, and changed() follows.
     void commit();
 
   signals:
     void changed();
+    void interacting();
     void interacted();
 
   private:

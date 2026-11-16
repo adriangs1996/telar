@@ -145,33 +145,6 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantMap Application::historyGeometry() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto metrics = historyMetrics();
-    const auto geometry = HistoryModalGeometry::measure(metrics, session().historyBrowser().state().inspecting);
-    const auto local = [&](Rect area) {
-      area.x -= geometry.bounds.x;
-      area.y -= geometry.bounds.y;
-
-      return toQRectF(area, density);
-    };
-
-    return {
-        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
-        {QStringLiteral("header"), local(geometry.header)},
-        {QStringLiteral("results"), local(geometry.results)},
-        {QStringLiteral("inspection"), local(geometry.inspection)},
-        {QStringLiteral("search"), local(geometry.search)},
-        {QStringLiteral("footer"), local(geometry.footer)},
-        {QStringLiteral("inspectionContent"), local(geometry.inspectionContent(metrics.chrome))},
-        {QStringLiteral("inspectionActions"), local(geometry.inspectionActions(metrics.chrome))},
-        {QStringLiteral("rowHeight"), geometry.row_height / density},
-        {QStringLiteral("groupHeight"), geometry.group_height / density},
-        {QStringLiteral("compact"), geometry.compact},
-        {QStringLiteral("density"), density},
-    };
-  }
-
   void Application::synchronizeWorkbenchGeometry() {
     const auto display = displayMetrics(terminal_grid_.scale);
     const auto& configuration = this->configuration();

@@ -245,7 +245,7 @@ namespace telar::gui::qt {
   }
 
   void Application::forgetMachineView() {
-    history_timer_.stop();
+    history_.forget();
     graphics_resume_timer_.stop();
     panes_.reconcile({});
     dividers_.reconcile({});
@@ -253,14 +253,6 @@ namespace telar::gui::qt {
     workspaces_.reconcile({});
     agents_.reconcile({});
     activity_selection_.reset();
-    history_.reconcile({});
-    history_view_version_ = 0;
-    history_rows_version_ = 0;
-    history_directory_source_.clear();
-    history_directory_value_.clear();
-    history_scope_value_.clear();
-    history_tab_name_ = {};
-    history_pane_open_ = false;
     error_.clear();
     frame_pacer_.reset();
     if (window_) {

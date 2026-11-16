@@ -124,7 +124,7 @@ Item {
         interval: 400
         onTriggered: root.menuOpening = false
     }
-    readonly property int searchCount: root.search === Store.Dialog.history ? (root.application.historyState.count ?? 0) : root.search === Store.Dialog.paths ? (root.application.pathPickerState.count ?? 0) : 0
+    readonly property int searchCount: root.search === Store.Dialog.history ? (root.application.history.state.count ?? 0) : root.search === Store.Dialog.paths ? (root.application.pathPickerState.count ?? 0) : 0
     readonly property int listRows: Math.max(1, Math.min(root.searchRows, root.searchCount, root.screenRows - 2))
     readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.holding ? 1 + editor.visibleRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
     // The rows the line needs past the screen's last: the terminal rises by them, so the
@@ -1026,7 +1026,7 @@ Item {
         Item {
             id: view
             readonly property bool history: root.search === Store.Dialog.history
-            readonly property var current: view.history ? root.application.historyState : root.application.pathPickerState
+            readonly property var current: view.history ? root.application.history.state : root.application.pathPickerState
             readonly property int count: view.current.count ?? 0
             readonly property int rows: root.listRows
             readonly property real listHeight: view.rows * root.line
@@ -1086,13 +1086,17 @@ Item {
             }
 
             Connections {
-                target: root.application
-                function onHistoryChanged() {
+                target: root.application.history
+                function onChanged() {
                     if (view.history) {
                         view.synchronize();
                         Qt.callLater(view.focusField);
                     }
                 }
+            }
+
+            Connections {
+                target: root.application
                 function onPathPickerChanged() {
                     if (!view.history) {
                         view.synchronize();
@@ -1102,7 +1106,7 @@ Item {
             }
 
             Connections {
-                target: view.history ? root.application.history : null
+                target: view.history ? root.application.history.rows : null
                 function onRowsAboutToBeRemoved() {
                     view.retiring = true;
                 }
@@ -1127,7 +1131,7 @@ Item {
                 readonly property bool failed: view.history ? (view.current.error ?? "").length > 0 : view.current.failed
                 x: parent.width - implicitWidth - root.cell * 2
                 height: root.line
-                text: view.history ? (found.failed ? view.current.error : root.application.historyLoading ? "searching…" : view.count + (view.current.hasMore ? "+" : "") + (view.count === 1 ? " command" : " commands")) : found.failed ? view.current.status : view.current.countText
+                text: view.history ? (found.failed ? view.current.error : root.application.history.loading ? "searching…" : view.count + (view.current.hasMore ? "+" : "") + (view.count === 1 ? " command" : " commands")) : found.failed ? view.current.status : view.current.countText
                 grid: root.grid
                 color: found.failed ? root.colors.red : root.colors.overlay1
             }
@@ -1167,8 +1171,8 @@ Item {
                 maximumBytes: view.current.maximumQueryBytes ?? 0
                 placeholderText: view.history ? "Search commands" : "Search paths"
                 Accessible.name: view.history ? "Search commands" : "Search paths"
-                onTextEdited: view.history ? root.application.searchHistory(text) : root.application.searchPaths(text)
-                onLimitReached: requested => view.history ? root.application.reportHistoryQueryLimit(requested) : root.application.reportPathQueryLimit(requested)
+                onTextEdited: view.history ? root.application.history.search(text) : root.application.searchPaths(text)
+                onLimitReached: requested => view.history ? root.application.history.reportQueryLimit(requested) : root.application.reportPathQueryLimit(requested)
                 onActiveFocusChanged: {
                     if (!field.activeFocus) {
                         Qt.callLater(root.keepSearch);
@@ -1231,7 +1235,7 @@ Item {
                 x: root.textX
                 y: root.line * 2
                 height: root.line
-                text: view.history ? (root.application.historyLoading ? "Searching…" : (view.current.query ?? "").length > 0 ? "No command matches" : "No commands yet") : view.current.emptyText
+                text: view.history ? (root.application.history.loading ? "Searching…" : (view.current.query ?? "").length > 0 ? "No command matches" : "No commands yet") : view.current.emptyText
                 grid: root.grid
                 color: root.colors.overlay1
             }
@@ -1244,7 +1248,7 @@ Item {
                 width: parent.width
                 height: view.listHeight
                 clip: true
-                model: view.history && !view.retiring ? root.application.history : null
+                model: view.history && !view.retiring ? root.application.history.rows : null
                 boundsBehavior: Flickable.StopAtBounds
                 currentIndex: view.history ? view.current.selection : -1
                 highlightFollowsCurrentItem: true
@@ -1313,8 +1317,8 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.application.selectHistoryRow(historyEntry.index)
-                        onDoubleClicked: root.application.useHistoryRow(historyEntry.index, false)
+                        onClicked: root.application.history.select(historyEntry.index)
+                        onDoubleClicked: root.application.history.use(historyEntry.index, false)
                     }
                 }
             }

@@ -63,18 +63,6 @@ namespace telar::gui::qt {
       return tab_drag_.source();
     }
 
-    void retireHistoryHover();
-
-    [[nodiscard]] const HistoryHover& historyHover() const noexcept {
-      return history_hover_;
-    }
-
-    void presentHistoryHover(std::span<const HistoryHoverTarget> targets);
-
-    [[nodiscard]] const QString& historyHoverRevision() const noexcept {
-      return history_hover_revision_;
-    }
-
     void abandon(TerminalItem& terminal);
     void ungrab(TerminalItem& terminal);
     void observeTerminalScroll(TerminalItem& terminal);
@@ -104,8 +92,6 @@ namespace telar::gui::qt {
     [[nodiscard]] ChildMouseView view(const Capture& lease) const;
     [[nodiscard]] static ChildMouseSample sample(const QMouseEvent& event, MousePhase phase, MouseButton button);
     [[nodiscard]] bool occupied() const noexcept;
-    void observeHistoryHover(QPointF position, HistoryHover::Observation observation);
-    void notifyHistoryHover();
     void report(std::uint64_t pane_id, const std::optional<ChildMouseReport>& report);
     void cancelPane(std::uint64_t pane_id);
     void cancel();
@@ -126,9 +112,6 @@ namespace telar::gui::qt {
     QPointer<QQuickWindow> window_;
     QPointer<TerminalItem> terminal_scroll_owner_;
     std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
-    HistoryHover history_hover_;
-    std::optional<std::uint64_t> history_hover_revision_value_;
-    QString history_hover_revision_;
     TabDrag tab_drag_;
     TabDropSlots tab_drop_slots_;
     std::optional<TabDragMove> pending_tab_move_;

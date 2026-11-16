@@ -6,6 +6,10 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
+#include "history_controller.hpp"
+#include "history_filters_layout.hpp"
+#include "history_footer_layout.hpp"
+#include "history_inspection_layout.hpp"
 #include "history_meta_layout.hpp"
 #include "history_row_layout.hpp"
 #include "input/wheel_accumulator.hpp"
@@ -16,7 +20,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/input/scroll_event.hpp"
 #include <QQuickItem>
@@ -63,31 +66,31 @@ import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 
-  void Application::registerHistoryPanel(QQuickItem* panel) {
-    history_panel_ = panel;
-    history_search_host_ = panel == nullptr ? nullptr : panel->property("searchHost").value<QQuickItem*>();
-    history_viewport_ = panel == nullptr ? nullptr : panel->property("rowsView").value<QQuickItem*>();
-    history_content_ = history_viewport_ == nullptr ? nullptr : history_viewport_->property("contentItem").value<QQuickItem*>();
+  void HistoryController::registerPanel(QQuickItem* panel) {
+    panel_ = panel;
+    search_host_ = panel == nullptr ? nullptr : panel->property("searchHost").value<QQuickItem*>();
+    viewport_ = panel == nullptr ? nullptr : panel->property("rowsView").value<QQuickItem*>();
+    content_ = viewport_ == nullptr ? nullptr : viewport_->property("contentItem").value<QQuickItem*>();
   }
 
-  int Application::historyHoveredRow() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  int HistoryController::hoveredRow() const {
+    const auto& identity = hover_.hovered();
     const auto* row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
 
     return row == nullptr ? static_cast<int>(HistoryRowLayout::Index::missing) : static_cast<int>(row->index);
   }
 
-  QString Application::historyHoveredRowRevision() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredRowRevision() const {
+    const auto& identity = hover_.hovered();
     if (!identity || !std::holds_alternative<HistoryChoice>(identity->action)) {
       return {};
     }
 
-    return pointer_dispatcher_.historyHoverRevision();
+    return hover_revision_;
   }
 
-  QString Application::historyHoveredCardAction() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredCardAction() const {
+    const auto& identity = hover_.hovered();
     const auto* action = identity ? std::get_if<HistoryCardAction>(&identity->action) : nullptr;
     if (action == nullptr) {
       return {};
@@ -105,12 +108,12 @@ namespace telar::gui::qt {
     return {};
   }
 
-  void Application::registerHistoryInspector(QQuickItem* inspector) {
-    history_inspector_ = inspector;
+  void HistoryController::registerInspector(QQuickItem* inspector) {
+    inspector_ = inspector;
   }
 
-  QString Application::historyHoveredInspectionAction() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredInspectionAction() const {
+    const auto& identity = hover_.hovered();
     const auto* inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr;
     if (inspection == nullptr) {
       return {};
@@ -132,26 +135,26 @@ namespace telar::gui::qt {
     return {};
   }
 
-  int Application::historyHoveredInspectionIndex() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  int HistoryController::hoveredInspectionIndex() const {
+    const auto& identity = hover_.hovered();
     const auto* inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr;
 
     return inspection != nullptr && inspection->submission() ? static_cast<int>(inspection->choice.index) : static_cast<int>(HistoryRowLayout::Index::missing);
   }
 
-  QString Application::historyHoveredInspectionRevision() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredInspectionRevision() const {
+    const auto& identity = hover_.hovered();
     const auto* inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr;
 
-    return inspection != nullptr && inspection->submission() ? pointer_dispatcher_.historyHoverRevision() : QString{};
+    return inspection != nullptr && inspection->submission() ? hover_revision_ : QString{};
   }
 
-  void Application::registerHistoryFilters(QQuickItem* filters) {
-    history_filter_layout_ = filters;
+  void HistoryController::registerFilters(QQuickItem* filters) {
+    filter_layout_ = filters;
   }
 
-  QString Application::historyHoveredFilterAction() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredFilterAction() const {
+    const auto& identity = hover_.hovered();
     const auto* action = identity ? std::get_if<HistoryFilterAction>(&identity->action) : nullptr;
     if (action == nullptr) {
       return {};
@@ -179,12 +182,12 @@ namespace telar::gui::qt {
     return {};
   }
 
-  void Application::registerHistoryFooter(QQuickItem* footer) {
-    history_footer_ = footer;
+  void HistoryController::registerFooter(QQuickItem* footer) {
+    footer_ = footer;
   }
 
-  QString Application::historyHoveredFooterAction() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredFooterAction() const {
+    const auto& identity = hover_.hovered();
     const auto* footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr;
     if (footer == nullptr) {
       return {};
@@ -206,81 +209,82 @@ namespace telar::gui::qt {
     return {};
   }
 
-  int Application::historyHoveredFooterIndex() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  int HistoryController::hoveredFooterIndex() const {
+    const auto& identity = hover_.hovered();
     const auto* footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr;
 
     return footer != nullptr && footer->submission() ? static_cast<int>(footer->choice.index) : static_cast<int>(HistoryRowLayout::Index::missing);
   }
 
-  QString Application::historyHoveredFooterRevision() const {
-    const auto& identity = pointer_dispatcher_.historyHover().hovered();
+  QString HistoryController::hoveredFooterRevision() const {
+    const auto& identity = hover_.hovered();
     const auto* footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr;
 
-    return footer != nullptr && footer->submission() ? pointer_dispatcher_.historyHoverRevision() : QString{};
+    return footer != nullptr && footer->submission() ? hover_revision_ : QString{};
   }
 
-  void Application::registerHistoryActions(QQuickItem* actions) {
-    history_actions_ = actions;
+  void HistoryController::registerActions(QQuickItem* actions) {
+    actions_ = actions;
   }
 
-  HistoryActionSurface Application::historyActionSurface() const {
-    const auto* actions = qobject_cast<const HistoryMetaLayout*>(history_actions_.data());
-    if (store_.dialog().kind != Dialog::history || actions == nullptr || actions->window() != window_) {
+  HistoryActionSurface HistoryController::actionSurface() const {
+    const auto* actions = qobject_cast<const HistoryMetaLayout*>(actions_.data());
+    if (!isOpen() || actions == nullptr || actions->window() != window_) {
       return {};
     }
 
     return actions->actionSurface(store_.dialog().generation);
   }
 
-  void Application::activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice) {
-    if (!session().historyBrowser().accepts(choice)) {
+  void HistoryController::activate(HistoryCardAction action, HistoryChoice choice) {
+    if (!store_.session().historyBrowser().accepts(choice)) {
       return;
     }
 
     switch (action) {
     case HistoryCardAction::copy:
-      executeHistory(HistoryAction::copy);
+      execute(Action::copy);
       break;
     case HistoryCardAction::erase:
-      executeHistory(HistoryAction::erase);
+      execute(Action::erase);
       break;
     case HistoryCardAction::visit:
-      executeHistory(HistoryAction::visit);
+      execute(Action::visit);
       break;
     }
   }
 
-  HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics& metrics, HistoryHoverFrame& hover) const {
+  HistoryScrollSurface HistoryController::scrollSurface(HoverFrame& hover) const {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto& browser = session().historyBrowser();
+    const auto& browser = store_.session().historyBrowser();
+    const auto generation = store_.dialog().generation;
 
-    hover.generation = store_.dialog().generation;
+    hover.generation = generation;
     hover.scale = density;
     HistoryScrollSurface surface{
-        .generation = store_.dialog().generation,
+        .generation = generation,
         .revision = browser.revision(),
-        .row_height = metrics.cell_height,
-        .cell_height = metrics.cell_height,
+        .row_height = metrics_.cell_height,
+        .cell_height = metrics_.cell_height,
         .scale = density,
     };
 
-    if (history_panel_ == nullptr || history_panel_->window() != window_ || !history_panel_->isVisible()) {
+    if (panel_ == nullptr || panel_->window() != window_ || !panel_->isVisible()) {
       return surface;
     }
 
-    const auto bounds = history_panel_->mapRectToScene(history_panel_->boundingRect());
+    const auto bounds = panel_->mapRectToScene(panel_->boundingRect());
 
     surface.bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)};
-    surface.delivered = bounds.width() > 0 && bounds.height() > 0 && history_search_host_ != nullptr && history_search_host_->isVisible() && history_search_host_->width() > 0 && history_search_host_->height() > 0;
-    if (history_viewport_ == nullptr || history_content_ == nullptr) {
+    surface.delivered = bounds.width() > 0 && bounds.height() > 0 && search_host_ != nullptr && search_host_->isVisible() && search_host_->width() > 0 && search_host_->height() > 0;
+    if (viewport_ == nullptr || content_ == nullptr) {
       return surface;
     }
 
-    const auto viewport = history_viewport_->mapRectToScene(history_viewport_->boundingRect());
+    const auto viewport = viewport_->mapRectToScene(viewport_->boundingRect());
     std::optional<float> row_height;
 
-    for (const auto* delegate : history_content_->childItems()) {
+    for (const auto* delegate : content_->childItems()) {
       for (const auto* item : delegate->childItems()) {
         const auto* row = qobject_cast<const HistoryRowLayout*>(item);
         if (row == nullptr || !row->isVisible()) {
@@ -297,39 +301,114 @@ namespace telar::gui::qt {
         if (index >= 0 && std::cmp_less(index, HistoryBrowser<Memory>::page_entries)) {
           const auto bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
 
-          hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = store_.dialog().generation}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
+          hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
         }
       }
     }
 
-    surface.row_height = row_height.value_or(metrics.cell_height);
+    surface.row_height = row_height.value_or(metrics_.cell_height);
     surface.has_rows = row_height.has_value();
 
     return surface;
   }
 
-  bool Application::handleHistoryWheel(QWheelEvent& event) {
-    if (store_.dialog().kind != Dialog::history) {
+  void HistoryController::prepare(Frame& frame) const {
+    if (!isOpen()) {
+      return;
+    }
+
+    const auto& session = store_.session();
+    const auto& browser = session.historyBrowser();
+    const auto generation = store_.dialog().generation;
+
+    frame.actions = actionSurface();
+    auto& hover = frame.hover.emplace();
+    const auto* filters = qobject_cast<const HistoryFiltersLayout*>(filter_layout_.data());
+    if (filters != nullptr && filters->window() == window_) {
+      hover.count += filters->hoverTargets(generation, std::span{hover.targets}.subspan(hover.count));
+    }
+
+    const auto surface = scrollSurface(hover);
+
+    for (const auto& target : frame.actions.targets) {
+      hover.append({.identity = {.action = target.action, .generation = frame.actions.generation}, .bounds = target.bounds});
+    }
+
+    const auto* inspector = qobject_cast<const HistoryInspectionLayout*>(inspector_.data());
+    if (inspector != nullptr && inspector->window() == window_) {
+      hover.count += inspector->hoverTargets(generation, std::span{hover.targets}.subspan(hover.count));
+    }
+
+    const auto* footer = qobject_cast<const HistoryFooterLayout*>(footer_.data());
+    if (footer != nullptr && footer->window() == window_) {
+      hover.count += footer->hoverTargets(generation, std::span{hover.targets}.subspan(hover.count));
+    }
+
+    // Only state QML already received is presented: the frame shows what changed() announced.
+    if (!loading() && synchronized_ && synchronized_->view_version == browser.viewVersion()) {
+      frame.surface = surface;
+      if (const auto choice = browser.choice()) {
+        frame.history = Presented{.choice = *choice, .dialog_generation = generation, .enter_runs = session.configuration().history.enter_runs};
+      }
+    }
+  }
+
+  void HistoryController::present(const Frame& frame) {
+    presented_ = frame.history;
+    presented_surface_ = frame.surface;
+    presented_actions_ = frame.actions;
+    presented_hover_ = frame.hover;
+    if (hover_.present(presented_hover_ ? presented_hover_->view() : std::span<const HistoryHoverTarget>{})) {
+      notifyHover();
+    }
+  }
+
+  void HistoryController::retire() {
+    presented_.reset();
+    presented_surface_ = {};
+    presented_actions_ = {};
+    presented_hover_.reset();
+    retireHover();
+  }
+
+  void HistoryController::setWindow(QQuickWindow* window) {
+    window_ = window;
+    presented_.reset();
+    presented_surface_ = {};
+    presented_actions_ = {};
+    presented_hover_.reset();
+  }
+
+  const HistoryActionSurface& HistoryController::presentedActions() const noexcept {
+    return presented_actions_;
+  }
+
+  bool HistoryController::hosted() const {
+    return store_.dialog().line_search_pane != 0 && !store_.session().historyBrowser().state().inspecting;
+  }
+
+  bool HistoryController::handleWheel(QWheelEvent& event) {
+    if (!isOpen()) {
       return false;
     }
 
-    if (history_wheel_sequence_.compatibilityEvent(event)) {
+    if (wheel_sequence_.compatibilityEvent(event)) {
       event.accept();
 
       return true;
     }
 
-    scrollHistory({.x = event.position().x(), .y = event.position().y()}, scrollSample(event, 1));
+    scroll({.x = event.position().x(), .y = event.position().y()}, scrollSample(event, 1));
     event.accept();
 
     return true;
   }
 
-  void Application::scrollHistory(HistoryScrollPosition pointer, ScrollSample sample) {
-    const auto& browser = session().historyBrowser();
+  void HistoryController::scroll(HistoryScrollPosition pointer, ScrollSample sample) {
+    const auto& browser = store_.session().historyBrowser();
     const auto& view = browser.state();
-    const HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !historyLoading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
-    const auto& surface = presented_history_surface_;
+    const HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !loading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
+    const auto& surface = presented_surface_;
 
     if (sample.precise) {
       sample.delta *= surface.scale;
@@ -340,24 +419,24 @@ namespace telar::gui::qt {
       return;
     }
 
-    pointerDispatcher().retireTerminalScroll();
-    const auto steps = history_scroll_.consume(state, surface, physical, sample);
+    const auto steps = scroll_.consume(state, surface, physical, sample);
     if (steps != 0) {
       if (view.inspecting) {
-        emit historyInspectionScrolled(steps);
+        emit inspectionScrolled(steps);
       } else {
-        applyInteraction([&] {
-          moveHistoryRows(steps);
+        interact([&] {
+          moveRows(steps);
         });
       }
     }
   }
 
-  void Application::moveHistoryRows(std::int32_t steps) {
-    const auto& browser = session().historyBrowser();
+  void HistoryController::moveRows(std::int32_t steps) {
+    auto& session = store_.session();
+    const auto& browser = session.historyBrowser();
 
     for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
-      if (historyLoading() || browser.rows().empty()) {
+      if (loading() || browser.rows().empty()) {
         break;
       }
 
@@ -365,16 +444,81 @@ namespace telar::gui::qt {
 
       if (steps < 0) {
         if (selected + 1 < browser.rows().size()) {
-          session().selectHistoryRow(selected + 1);
+          session.selectHistoryRow(selected + 1);
         } else {
-          session().pageHistory(HistoryPage::older);
+          session.pageHistory(HistoryPage::older);
         }
       } else if (selected > 0) {
-        session().selectHistoryRow(selected - 1);
+        session.selectHistoryRow(selected - 1);
       } else {
-        session().pageHistory(HistoryPage::newer);
+        session.pageHistory(HistoryPage::newer);
       }
     }
+  }
+
+  void HistoryController::notifyHover() {
+    const auto& identity = hover_.hovered();
+    const auto* row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
+
+    if (const auto* footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr; footer != nullptr && footer->submission()) {
+      row = &footer->choice;
+    }
+
+    if (const auto* inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr; inspection != nullptr && inspection->submission()) {
+      row = &inspection->choice;
+    }
+
+    if (row != nullptr && hover_revision_value_ != row->revision) {
+      hover_revision_value_ = row->revision;
+      hover_revision_ = QString::number(row->revision);
+    }
+
+    emit hoverChanged();
+  }
+
+  void HistoryController::retireHover() {
+    if (hover_.cancel()) {
+      notifyHover();
+    }
+  }
+
+  void HistoryController::observeHover(QPointF position, HistoryHover::Observation observation) {
+    const auto& frame = presented_hover_;
+    if (!isOpen() || !frame || frame->generation != store_.dialog().generation) {
+      retireHover();
+
+      return;
+    }
+
+    if (hover_.observe(frame->view(), {.x = position.x() * frame->scale, .y = position.y() * frame->scale}, observation)) {
+      notifyHover();
+    }
+  }
+
+  QVariantMap HistoryController::geometry() const {
+    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
+    const auto geometry = HistoryModalGeometry::measure(metrics_, store_.session().historyBrowser().state().inspecting);
+    const auto local = [&](Rect area) {
+      area.x -= geometry.bounds.x;
+      area.y -= geometry.bounds.y;
+
+      return toQRectF(area, density);
+    };
+
+    return {
+        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
+        {QStringLiteral("header"), local(geometry.header)},
+        {QStringLiteral("results"), local(geometry.results)},
+        {QStringLiteral("inspection"), local(geometry.inspection)},
+        {QStringLiteral("search"), local(geometry.search)},
+        {QStringLiteral("footer"), local(geometry.footer)},
+        {QStringLiteral("inspectionContent"), local(geometry.inspectionContent(metrics_.chrome))},
+        {QStringLiteral("inspectionActions"), local(geometry.inspectionActions(metrics_.chrome))},
+        {QStringLiteral("rowHeight"), geometry.row_height / density},
+        {QStringLiteral("groupHeight"), geometry.group_height / density},
+        {QStringLiteral("compact"), geometry.compact},
+        {QStringLiteral("density"), density},
+    };
   }
 
 }
