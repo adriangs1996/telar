@@ -168,6 +168,11 @@ function(telar_add_test name)
     else()
       if(test_QT)
         qt_add_executable(${name} ${test_SOURCES})
+        # Static Qt links the QML plugins a program imports. Like the process's own programs,
+        # a test scans the process's QML and finds its QML modules in its build directory.
+        set_target_properties(${name} PROPERTIES
+          QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS "${PROJECT_SOURCE_DIR}"
+          QT_QML_IMPORT_PATH "${PROJECT_BINARY_DIR}")
       else()
         add_executable(${name} ${test_SOURCES})
       endif()
