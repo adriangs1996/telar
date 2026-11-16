@@ -4,15 +4,16 @@ static_assert(true);
 #endif
 
 #include "key_bindings.hpp"
+#include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application_controller.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -57,9 +58,14 @@ namespace telar::gui::qt {
 
   }
 
-  KeyBindings::KeyBindings(ApplicationController& application)
+  KeyBindings::KeyBindings(ApplicationController& application, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals)
       : QObject(&application),
-        application_(application) {
+        application_(application),
+        store_(store),
+        copy_(copy),
+        components_(components),
+        attachments_(attachments),
+        terminals_(terminals) {
     clock_.start();
     timeout_.setSingleShot(true);
     connect(&timeout_, &QTimer::timeout, this, &KeyBindings::expire);
@@ -160,7 +166,7 @@ namespace telar::gui::qt {
       }
     }
 
-    application_.terminals_.observePointerModifiers(modifiers);
+    terminals_.observePointerModifiers(modifiers);
     if (delivering_ || modifierOnly(event.key())) {
       return false;
     }
@@ -182,8 +188,8 @@ namespace telar::gui::qt {
 
     try {
       const auto repeating = router_.repeatAction();
-      const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
-      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copy_.active() || application_.dialog() != ApplicationController::Dialog::none || application_.components_.pickOpen(), .repeat = policy});
+      const auto policy = repeating ? repeat(*repeating) : std::nullopt;
+      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || copy_.active() || store_.dialog().kind != Store::Dialog::none || components_.pickOpen(), .repeat = policy});
       const auto consumed = apply(decision);
 
       if (input.phase == KeyPhase::release) {
@@ -199,7 +205,7 @@ namespace telar::gui::qt {
     } catch (const std::exception& error) {
       router_.eventFailed(input);
       schedule();
-      application_.fail(error);
+      emit failed(QString::fromUtf8(error.what()));
 
       return true;
     }
@@ -221,7 +227,7 @@ namespace telar::gui::qt {
       return true;
     case Outcome::action:
       if (application_.runBinding(decision.action)) {
-        router_.actionCompleted(decision, application_.bindingRepeat(decision.action));
+        router_.actionCompleted(decision, repeat(decision.action));
       } else {
         router_.eventFailed(decision.event);
       }
@@ -241,17 +247,17 @@ namespace telar::gui::qt {
       }
 
       if (lease != recipients_.end()) {
-        const auto& copy = application_.copy_.state();
-        const auto copying = copy && !copy->pointer && application_.dialog() == ApplicationController::Dialog::none;
+        const auto& copy = copy_.state();
+        const auto copying = copy && !copy->pointer && store_.dialog().kind == Store::Dialog::none;
 
-        *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.store_.machineView()};
+        *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = store_.machineView()};
       }
 
     } else if (lease == recipients_.end()) {
       return true;
     }
 
-    if (lease != recipients_.end() && lease->machine_view != application_.store_.machineView()) {
+    if (lease != recipients_.end() && lease->machine_view != store_.machineView()) {
       *lease = {};
 
       return true;
@@ -261,7 +267,7 @@ namespace telar::gui::qt {
       if (event.phase != KeyPhase::release) {
         const QKeyEvent key{QEvent::KeyPress, event.key, event.modifiers, event.scan, event.native_key, event.native_modifiers, event.text, event.phase == KeyPhase::repeat};
 
-        static_cast<void>(application_.copy_.handleKey(lease->owner, key));
+        static_cast<void>(copy_.handleKey(lease->owner, key));
       }
 
       return true;
@@ -343,7 +349,7 @@ namespace telar::gui::qt {
       static_cast<void>(apply(router_.expire(nowNanoseconds())));
       schedule();
     } catch (const std::exception& error) {
-      application_.fail(error);
+      emit failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -415,7 +421,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (auto* key = dynamic_cast<QKeyEvent*>(event); key != nullptr && application_.attachments_.interceptKey(*key)) {
+    if (auto* key = dynamic_cast<QKeyEvent*>(event); key != nullptr && attachments_.interceptKey(*key)) {
       event->accept();
 
       return true;
@@ -427,7 +433,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (event->type() == QEvent::ShortcutOverride && application_.dialog() == ApplicationController::Dialog::none && router_.wantsBinding(capture(*key, *recipient))) {
+    if (event->type() == QEvent::ShortcutOverride && store_.dialog().kind == Store::Dialog::none && router_.wantsBinding(capture(*key, *recipient))) {
       // A dead key (Option+N on macOS) would otherwise start a composition and never arrive as a key press.
       if (auto* terminal = qobject_cast<TerminalItem*>(recipient); terminal != nullptr) {
         terminal->bypassInputMethod();
@@ -445,6 +451,21 @@ namespace telar::gui::qt {
     return false;
   }
 
+  std::optional<BindingRepeat> KeyBindings::repeat(BindingAction action) const {
+    if (store_.dialog().kind != Store::Dialog::none || components_.pickOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
+      return {};
+    }
+
+    const auto* pane = store_.session().focusedPane();
+    if (pane == nullptr || !pane->attached || pane->exited) {
+      return {};
+    }
+
+    constexpr std::chrono::milliseconds interval{100};
+
+    return BindingRepeat{.interval_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(interval).count()), .owner = pane->id};
+  }
+
   std::optional<KeyChord> KeyBindings::prefixedKeyForAction(const BindingAction& action) const noexcept {
     return router_.prefixedKeyForAction(action);
   }
@@ -452,9 +473,9 @@ namespace telar::gui::qt {
   void KeyBindings::synthetic(KeyChord chord, std::uint64_t pane_id, const InputModes& modes) {
     auto key = NativeKeyAdapter::fromChord(chord);
 
-    application_.terminals_.input(pane_id, encodeKey(key, modes));
+    terminals_.input(pane_id, encodeKey(key, modes));
     key.phase = KeyPhase::release;
-    application_.terminals_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
+    terminals_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
   }
 
   int ApplicationController::controlModifier() {

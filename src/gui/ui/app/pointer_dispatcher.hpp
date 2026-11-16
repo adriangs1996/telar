@@ -40,13 +40,23 @@ import telar.gui.presentation.history_pointer;
 
 namespace telar::gui::qt {
 
+  class ActivityController;
   class ApplicationController;
+  class AttachmentsController;
+  class HistoryController;
+  class Store;
   class TabsController;
+  class TerminalController;
   class TerminalItem;
 
+  // Routes the window's pointer before the items under it: the tab strip, the history modal, the
+  // attachment shelf, the activity list, and the terminals that hold a button. It holds every
+  // recipient a pointer event can have.
   class PointerDispatcher final : public QObject {
+    Q_OBJECT
+
   public:
-    PointerDispatcher(ApplicationController& application, TabsController& tabs);
+    PointerDispatcher(ApplicationController& application, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals);
     ~PointerDispatcher() override = default;
     PointerDispatcher(const PointerDispatcher&) = delete;
     PointerDispatcher& operator=(const PointerDispatcher&) = delete;
@@ -58,6 +68,9 @@ namespace telar::gui::qt {
     bool eventFilter(QObject* watched, QEvent* event) override;
     bool handleNativeScroll(std::string_view event_type, const void* message);
 
+  signals:
+    void failed(const QString& message);
+
   private:
     // The history actions a press holds, by button; the terminals hold theirs in their controller.
     [[nodiscard]] HistoryActionCapture* capture(Qt::MouseButton button) noexcept;
@@ -68,7 +81,12 @@ namespace telar::gui::qt {
     bool release(QMouseEvent& event);
 
     ApplicationController& application_;
+    Store& store_;
     TabsController& tabs_;
+    HistoryController& history_;
+    ActivityController& activity_;
+    AttachmentsController& attachments_;
+    TerminalController& terminals_;
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;

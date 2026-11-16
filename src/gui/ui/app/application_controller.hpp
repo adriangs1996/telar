@@ -8,6 +8,8 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
+#include "key_bindings.hpp"
+#include "pointer_dispatcher.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
@@ -35,8 +37,6 @@ static_assert(true);
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include "ui/history/history_controller.hpp"
-#include "ui/input/key_bindings.hpp"
-#include "ui/input/pointer_dispatcher.hpp"
 #include "ui/links/link_status_controller.hpp"
 #include "ui/links/links_controller.hpp"
 #include "ui/machines/machine_chrome_controller.hpp"
@@ -288,6 +288,9 @@ namespace telar::gui::qt {
 
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
     void interruptBindings();
+    // Runs a binding's action. `resolved` describes actions a Lua render or callback returned;
+    // configured bindings need none.
+    bool runBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
 
     WorkspacesController* workspaces() noexcept {
       return &workspaces_;
@@ -414,13 +417,8 @@ namespace telar::gui::qt {
     friend struct test::HistoryPresentation;
     friend struct test::FramePacing;
     friend struct test::ComponentActions;
-    friend class KeyBindings;
-    friend class PointerDispatcher;
 
     [[nodiscard]] BindingContext bindingContext() const;
-    [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
-    // `resolved` describes actions a Lua render or callback returned; configured bindings need none.
-    bool runBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
     void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
     void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply);
     void applyEffects(const ResolvedEffects<ApplicationAllocator>& effects);
@@ -628,7 +626,6 @@ namespace telar::gui::qt {
     bool prepare_machine_directory_ = false;
     bool restore_layout_ = true;
     std::optional<WindowFramePacer<>> frame_pacer_;
-    tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     // What every client's MachineEffects reaches on the desktop.
@@ -654,7 +651,8 @@ namespace telar::gui::qt {
     ComponentsController components_;
     PluginRunner plugins_;
     WorkspaceFormController workspace_form_;
-    // After the tabs, whose strip it routes the pointer to.
+    // The routers come after every recipient they hold, so they never outlive one.
+    tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;

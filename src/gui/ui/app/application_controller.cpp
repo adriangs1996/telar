@@ -145,7 +145,6 @@ namespace telar::gui::qt {
         configuration_source_(memory),
         machine_profiles_(memory),
         attachments_(store_, memory),
-        key_bindings_(*this),
         sound_player_(*this),
         system_notifier_(memory),
         effects_(system_notifier_, sound_player_),
@@ -169,7 +168,8 @@ namespace telar::gui::qt {
         components_(store_, configuration_source_, element_slots_, memory),
         plugins_(store_, configuration_source_, memory),
         workspace_form_(store_),
-        pointer_dispatcher_(*this, tabs_),
+        key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
+        pointer_dispatcher_(*this, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
         hostname_(platform::hostName()) {
     initializeMachines();
     initializeMachineProfiles();
@@ -198,6 +198,8 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
     connect(&copy_, &CopyController::failed, this, &ApplicationController::reportFailure);
+    connect(&key_bindings_, &KeyBindings::failed, this, &ApplicationController::reportFailure);
+    connect(&pointer_dispatcher_, &PointerDispatcher::failed, this, &ApplicationController::reportFailure);
     // The search reads the command the dialog's line was opened on.
     connect(this, &ApplicationController::dialogChanged, &copy_, &CopyController::publishSearch);
     // The prefix mode lists the keymap's hints.

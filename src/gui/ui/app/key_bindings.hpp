@@ -37,10 +37,19 @@ import telar.gui.presentation.history_inspection;
 namespace telar::gui::qt {
 
   class ApplicationController;
+  class AttachmentsController;
+  class ComponentsController;
+  class CopyController;
+  class Store;
+  class TerminalController;
 
+  // Routes the window's keys: a binding runs the window's action, the rest reach the item that has
+  // the focus, or the pane copy mode reads. It holds every recipient a key can have.
   class KeyBindings final : public QObject {
+    Q_OBJECT
+
   public:
-    explicit KeyBindings(ApplicationController& application);
+    KeyBindings(ApplicationController& application, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals);
     void setWindow(QQuickWindow& window);
     void configure(const InputConfiguration& configuration, const BindingMap<BindingAction>& map);
     bool route(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
@@ -58,6 +67,9 @@ namespace telar::gui::qt {
     void release(Hold hold);
 
     bool eventFilter(QObject* watched, QEvent* event) override;
+
+  signals:
+    void failed(const QString& message);
 
   private:
     struct RoutedKey {
@@ -89,6 +101,8 @@ namespace telar::gui::qt {
     static KeyChord chord(const QKeyEvent& event);
     static std::uint64_t physicalIdentity(const QKeyEvent& event) noexcept;
     static RoutedKey capture(const QKeyEvent& event, QQuickItem& recipient);
+    // Scrolling a pane repeats while its key is held, when no dialog takes the keys.
+    [[nodiscard]] std::optional<BindingRepeat> repeat(BindingAction action) const;
     bool apply(const Decision& decision);
     bool forward(const RoutedKey& event);
     void replay(const RoutedKey& event);
@@ -98,6 +112,11 @@ namespace telar::gui::qt {
     void drain();
 
     ApplicationController& application_;
+    Store& store_;
+    CopyController& copy_;
+    ComponentsController& components_;
+    AttachmentsController& attachments_;
+    TerminalController& terminals_;
     Router router_;
     QPointer<QQuickWindow> window_;
     QElapsedTimer clock_;

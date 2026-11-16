@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "key_bindings.hpp"
@@ -14,7 +15,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/config/configuration_source.hpp"
 #include "ui/controls/native_form_field.hpp"
 #include <algorithm>
@@ -186,21 +186,6 @@ namespace telar::gui::qt {
 
   BindingContext ApplicationController::bindingContext() const {
     return sessionBindingContext(session());
-  }
-
-  std::optional<BindingRepeat> ApplicationController::bindingRepeat(BindingAction action) const {
-    if (store_.dialog().kind != Dialog::none || components_.pickOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
-      return {};
-    }
-
-    const auto* pane = session().focusedPane();
-    if (pane == nullptr || !pane->attached || pane->exited) {
-      return {};
-    }
-
-    constexpr std::chrono::milliseconds interval{100};
-
-    return BindingRepeat{.interval_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(interval).count()), .owner = pane->id};
   }
 
   bool ApplicationController::handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures) {
