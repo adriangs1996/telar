@@ -6,7 +6,7 @@ option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" 
 set(clipboard_source_dir "${CMAKE_CURRENT_LIST_DIR}/..")
 # telar.clipboard exports the API to C++ importers; the Linux backends are modules that own
 # their libraries' headers, and the reader imports both.
-include("${clipboard_source_dir}/../../cmake/cpp_modules.cmake")
+include("${clipboard_source_dir}/../../cmake/TelarTargets.cmake")
 if(NOT TARGET telar-sys)
   add_subdirectory("${clipboard_source_dir}/../sys" "${CMAKE_BINARY_DIR}/telar-sys")
 endif()

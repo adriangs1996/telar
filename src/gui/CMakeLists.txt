@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_gui LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, gui-lint and per-file incremental rebuilds need one compile command per source.

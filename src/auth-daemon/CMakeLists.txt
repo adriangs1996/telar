@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
 project(telar_auth_daemon LANGUAGES CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 option(TELAR_AUTH_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 

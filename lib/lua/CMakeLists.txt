@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_lua LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 if(NOT TARGET telar-base)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../base" "${CMAKE_BINARY_DIR}/telar-base")
@@ -24,10 +24,9 @@ target_include_directories(telar-lua-vm SYSTEM PUBLIC "${TELAR_LUA_SOURCE_DIR}")
 target_compile_definitions(telar-lua-vm PRIVATE LUA_USE_POSIX)
 target_link_libraries(telar-lua-vm PRIVATE telar::build_flags)
 
-add_library(telar-lua STATIC lua.cpp)
-add_library(telar::lua ALIAS telar-lua)
-telar_modules(telar-lua)
-target_include_directories(telar-lua PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(telar-lua PUBLIC telar-lua-vm telar::base)
+telar_add_library(telar-lua
+  SOURCES lua.cpp
+  INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  DEPS telar-lua-vm telar::base)
 
 telar_editor_flags(telar-lua)

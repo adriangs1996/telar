@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
 project(telar_cli LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 if(NOT TARGET telar-config)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../lib/config" "${CMAKE_BINARY_DIR}/telar-config")

@@ -16,7 +16,7 @@ project(ebnf VERSION 0.1.0 LANGUAGES CXX)
 if(EBNF_SANITIZERS)
   set(TELAR_SANITIZERS ON CACHE BOOL "Instrument all owned C++ targets with ASan/UBSan" FORCE)
 endif()
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 option(EBNF_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(EBNF_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
@@ -25,11 +25,9 @@ if(NOT TARGET tbc::tbc)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
 endif()
 
-add_library(ebnf-core STATIC)
-add_library(ebnf::ebnf ALIAS ebnf-core)
-telar_modules(ebnf-core)
-target_link_libraries(ebnf-core PUBLIC telar::tbc)
-target_include_directories(ebnf-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+telar_add_library(ebnf-core ALIAS ebnf::ebnf
+  INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}"
+  DEPS telar::tbc)
 
 add_library(ebnf_options INTERFACE)
 target_include_directories(ebnf_options INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")

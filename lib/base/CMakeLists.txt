@@ -1,25 +1,21 @@
 cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_base LANGUAGES CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
-add_library(telar-base STATIC diagnostics/diagnostics.cpp editors/editors.cpp history/history.cpp text/text.cpp text/json/json.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp)
-add_library(telar::base ALIAS telar-base)
-telar_modules(telar-base)
-target_compile_features(telar-base PUBLIC cxx_std_23)
-target_include_directories(telar-base PUBLIC
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-  "$<INSTALL_INTERFACE:include>")
 # The lifetime annotations its interfaces declare, and their telar.tbc module; a parent project may provide them.
 if(NOT TARGET tbc::tbc)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
 endif()
-target_link_libraries(telar-base PUBLIC telar::tbc)
 # The socket addresses text.cpp parses.
 if(NOT TARGET telar-sys)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../sys" "${CMAKE_BINARY_DIR}/telar-sys")
 endif()
-target_link_libraries(telar-base PUBLIC telar::sys)
+
+telar_add_library(telar-base
+  SOURCES diagnostics/diagnostics.cpp editors/editors.cpp history/history.cpp text/text.cpp text/json/json.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp
+  INCLUDES "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>"
+  DEPS telar::tbc telar::sys)
 # A ThinLTO archive holds bitcode, which a linker reads only through the compiler's LTO: ld64
 # does, GNU ld does not, so an ELF consumer of the installed package links with the
 # toolchain's lld, as this tree does (cmake/TelarBuild.cmake).

@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_shell LANGUAGES CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
-add_library(telar-shell STATIC syntax/syntax.cpp)
-add_library(telar::shell ALIAS telar-shell)
-telar_modules(telar-shell)
+telar_add_library(telar-shell SOURCES syntax/syntax.cpp)
 
 telar_editor_flags(telar-shell)
 

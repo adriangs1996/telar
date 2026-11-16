@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_render LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 if(NOT TARGET telar-base)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../base" "${CMAKE_BINARY_DIR}/telar-base")
@@ -14,10 +14,9 @@ target_include_directories(telar-render-md4c SYSTEM PUBLIC "${TELAR_MD4C_SOURCE_
 set_target_properties(telar-render-md4c PROPERTIES C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(telar-render-md4c PRIVATE telar::build_flags)
 
-add_library(telar-render STATIC document/document.cpp markdown/markdown.cpp terminal/terminal.cpp)
-add_library(telar::render ALIAS telar-render)
-telar_modules(telar-render)
-target_link_libraries(telar-render PUBLIC telar::base telar-render-md4c)
+telar_add_library(telar-render
+  SOURCES document/document.cpp markdown/markdown.cpp terminal/terminal.cpp
+  DEPS telar::base telar-render-md4c)
 target_compile_options(telar-render PRIVATE -Wall -Wextra -Wpedantic)
 
 telar_editor_flags(telar-render)

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_git LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
 
 if(NOT TARGET telar-platform)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../platform" "${CMAKE_BINARY_DIR}/telar-platform")
@@ -17,10 +17,10 @@ if(NOT TARGET telar-git-checkout)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/checkout" "${CMAKE_BINARY_DIR}/telar-git-checkout")
 endif()
 
-add_library(telar-git STATIC git.cpp git-config.cpp git-format.cpp git-history.cpp git-objects.cpp git-worktree.cpp)
-add_library(telar::git ALIAS telar-git)
-telar_modules(telar-git EXCLUDE checkout)
-target_link_libraries(telar-git PUBLIC telar::platform telar::git-checkout telar::native OpenSSL::Crypto deps::zlib)
+telar_add_library(telar-git
+  SOURCES git.cpp git-config.cpp git-format.cpp git-history.cpp git-objects.cpp git-worktree.cpp
+  EXCLUDE checkout
+  DEPS telar::platform telar::git-checkout telar::native OpenSSL::Crypto deps::zlib)
 target_compile_options(telar-git PRIVATE -Wall -Wextra -Wpedantic)
 
 telar_editor_flags(telar-git)
