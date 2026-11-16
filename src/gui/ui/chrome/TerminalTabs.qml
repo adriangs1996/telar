@@ -7,7 +7,7 @@ Item {
     id: root
     clip: true
 
-    property var controller: null
+    property TabsController controller: null
     required property var model
     required property var colors
     required property var typography
@@ -21,6 +21,8 @@ Item {
     signal selected(string key)
     signal closed(string key)
     signal renamed()
+    // A click on an element a mod drew in a tab.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     TabStripLayout {
         id: layout
@@ -44,11 +46,11 @@ Item {
     }
 
     Component.onCompleted: {
-        if (root.controller && root.visible) root.controller.tabs.registerStrip(layout);
+        if (root.controller && root.visible) root.controller.registerStrip(layout);
     }
     // A mod may place its own strip; the visible one owns dragging.
     onVisibleChanged: {
-        if (root.controller && root.visible) root.controller.tabs.registerStrip(layout);
+        if (root.controller && root.visible) root.controller.registerStrip(layout);
     }
 
     NativeRoundedRectangle {
@@ -214,7 +216,7 @@ Item {
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                 onPressed: event => {
                     if (event.button === Qt.LeftButton) {
-                        if (root.controller) root.controller.tabs.selectCaptured();
+                        if (root.controller) root.controller.selectCaptured();
                         else root.selected(tab.source.key);
                     }
                 }
@@ -235,7 +237,7 @@ Item {
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+                onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
                 builtins: tab.builtins
             }
 
@@ -257,7 +259,7 @@ Item {
                     colors: root.colors
                     typography: root.typography
                     ratio: root.ratio
-                    onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+                    onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
                     builtins: tab.builtins
                 }
             }
@@ -391,7 +393,7 @@ Item {
             }
         }
         onPressed: {
-            if (root.controller) root.controller.tabs.selectCaptured();
+            if (root.controller) root.controller.selectCaptured();
             else root.selected(layout.counter.key);
         }
     }

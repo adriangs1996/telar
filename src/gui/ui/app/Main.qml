@@ -27,7 +27,9 @@ Window {
     }
 
     NavigationBar {
-        controller: telar
+        tabs: telar.tabs
+        machineContext: telar.machineContext
+        drawn: telar.components.elementBars.top_bar ?? null
         x: root.geometry.navigation.x
         y: root.geometry.navigation.y
         width: root.geometry.navigation.width
@@ -51,11 +53,16 @@ Window {
         onTabRenamed: telar.execute(WindowActions.Action.rename_tab)
         onTabCreated: telar.execute(WindowActions.Action.new_tab)
         onPaletteRequested: telar.execute(WindowActions.Action.palette)
+        onMachinePickerRequested: telar.execute(WindowActions.Action.machine_picker)
+        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
     }
 
     Sidebar {
         id: sidebar
-        controller: telar
+        controller: telar.sidebar
+        activity: telar.activity
+        machineChrome: telar.machineChrome
+        machineContext: telar.machineContext
 
         x: root.geometry.sidebar.x
         y: root.geometry.sidebar.y
@@ -72,6 +79,7 @@ Window {
         onAgentSelected: key => telar.execute(WindowActions.Action.select_agent, key)
         onAgentPeekRequested: key => telar.peekActivity(key)
         onSidebarResized: requestedWidth => telar.setSidebarWidth(requestedWidth)
+        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
     }
 
     PaneArea {
@@ -113,7 +121,9 @@ Window {
     }
 
     StatusBar {
-        controller: telar
+        components: telar.components
+        machineChrome: telar.machineChrome
+        drawn: telar.components.elementBars.bottom_bar ?? null
         x: root.geometry.status.x
         y: root.geometry.status.y
         width: root.geometry.status.width
@@ -127,6 +137,7 @@ Window {
         mode: telar.statusMode
         ratio: root.ratio
         onDiagnosticDismissed: telar.dismissDiagnostic()
+        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
     }
 
     LinkStatus {

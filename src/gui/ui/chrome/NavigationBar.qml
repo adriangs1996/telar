@@ -10,7 +10,12 @@ NativeRoundedRectangle {
     required property var tabModel
     property var workspaceModel: null
     required property real controlsInset
-    property var controller: null
+    // The tab strip's controller, which takes the strip that drags tabs.
+    property TabsController tabs: null
+    // The active machine: its label, and whether one needs attention.
+    property var machineContext: ({})
+    // A mod's top bar, which replaces every control; the window buttons keep their inset.
+    property var drawn: null
     property real ratio: 1
     property real textScale: 1
     property bool rail: false
@@ -23,6 +28,9 @@ NativeRoundedRectangle {
     signal tabRenamed()
     signal tabCreated()
     signal paletteRequested()
+    signal machinePickerRequested()
+    // A click on an element a mod drew in the bar or a tab.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     readonly property real padding: 8 * ratio
     // Controls and the telar mark follow the bar's height, which follows the font size:
@@ -38,14 +46,11 @@ NativeRoundedRectangle {
     readonly property real tabsMaximum: projects.x - (projects.width > 0 ? 2 * controlGap : controlGap)
     readonly property real tabsWidth: Math.max(0, Math.min(width * tabsShare, tabsMaximum - tabsMinimum))
     readonly property real tabsLeft: Math.max(tabsMinimum, Math.min((width - tabsWidth) / 2, tabsMaximum - tabsWidth))
-    readonly property var machineContext: controller?.machineContext ?? {}
     // The tabs keep this much before the identity and the project switcher get any room,
     // so a narrow window drops those two first.
     readonly property real tabsFloor: 220 * ratio
     readonly property real sideRoom: Math.max(0, paletteButton.x - identity.x - 3 * controlGap - tabsFloor)
     readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28, sideRoom))
-    // A mod's top bar replaces every control; the window buttons keep their inset.
-    readonly property var drawn: controller?.components?.elementBars?.top_bar ?? null
 
     color: colors.topbarBackground
     replaceBackground: true
@@ -88,7 +93,7 @@ NativeRoundedRectangle {
         workspace: root.workspace.name || "workspace"
         attention: root.rail && (root.machineContext.attention ?? false)
         onMachineRequested: {
-            if (root.controller) root.controller.execute(WindowActions.Action.machine_picker);
+            root.machinePickerRequested();
         }
         onWorkspaceRequested: root.workspacePickerRequested()
     }
@@ -147,7 +152,7 @@ NativeRoundedRectangle {
     }
 
     TerminalTabs {
-        controller: root.controller
+        controller: root.tabs
         visible: root.drawn === null
         model: root.tabModel
         x: root.tabsLeft
@@ -162,6 +167,7 @@ NativeRoundedRectangle {
         onSelected: key => root.tabSelected(key)
         onClosed: key => root.tabClosed(key)
         onRenamed: root.tabRenamed()
+        onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
     }
 
     ElementHost {
@@ -174,7 +180,7 @@ NativeRoundedRectangle {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+        onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
         builtins: ({sidebar_toggle: togglePiece, workspace_identity: identityPiece, project_switcher: projectsPiece, tabs: tabsPiece, palette_button: palettePiece, new_tab: newTabPiece})
     }
 
@@ -212,7 +218,7 @@ NativeRoundedRectangle {
             workspace: root.workspace.name || "workspace"
             attention: root.rail && (root.machineContext.attention ?? false)
             onMachineRequested: {
-                if (root.controller) root.controller.execute(WindowActions.Action.machine_picker);
+                root.machinePickerRequested();
             }
             onWorkspaceRequested: root.workspacePickerRequested()
         }
@@ -236,7 +242,7 @@ NativeRoundedRectangle {
     Component {
         id: tabsPiece
         TerminalTabs {
-            controller: root.controller
+            controller: root.tabs
             model: root.tabModel
             implicitHeight: root.height
             createBounds: Qt.rect(0, 0, 0, 0)
@@ -248,6 +254,7 @@ NativeRoundedRectangle {
             onSelected: key => root.tabSelected(key)
             onClosed: key => root.tabClosed(key)
             onRenamed: root.tabRenamed()
+            onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
         }
     }
 

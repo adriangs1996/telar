@@ -445,7 +445,8 @@ namespace {
       tabs.reconcile(tabRecords({.count = 3, .active = 0}));
       auto properties = navigationProperties(tabs, 1000);
 
-      properties.insert(QStringLiteral("controller"), QVariant::fromValue(&application));
+      properties.insert(QStringLiteral("tabs"), QVariant::fromValue(application.tabs()));
+      properties.insert(QStringLiteral("machineContext"), application.machineContext());
       properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("telar")}});
       properties.insert(QStringLiteral("controlsInset"), 80);
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);

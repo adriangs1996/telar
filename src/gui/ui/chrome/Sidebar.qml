@@ -10,13 +10,20 @@ NativeRoundedRectangle {
     required property var regions
     required property var agentModel
     required property real preferredWidth
-    property var controller: null
+    property SidebarController controller: null
+    property ActivityController activity: null
+    // The machine list's controller, and the active machine: its label, and whether one needs
+    // attention.
+    property var machineChrome: null
+    property var machineContext: ({})
     property real ratio: 1
     property real textScale: 1
     property bool expanded: true
     signal agentSelected(string key)
     signal agentPeekRequested(string key)
     signal sidebarResized(real requestedWidth)
+    // A click on an element a mod drew in an agent card.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     // One design pixel beside the chrome text, which the cards and rows are sized in.
     readonly property real unit: regions.cards?.ratio ?? ratio
@@ -35,8 +42,8 @@ NativeRoundedRectangle {
     AbstractButton {
         id: machinesHeader
         objectName: "sidebarMachinesHeader"
-        readonly property bool collapsed: root.controller?.sidebar?.machineListCollapsed ?? false
-        readonly property bool attention: root.controller?.machineContext?.attention ?? false
+        readonly property bool collapsed: root.controller?.machineListCollapsed ?? false
+        readonly property bool attention: root.machineContext.attention ?? false
         x: root.regions.machinesHeader?.x ?? 0
         y: root.regions.machinesHeader?.y ?? 0
         width: root.regions.machinesHeader?.width ?? 0
@@ -50,7 +57,7 @@ NativeRoundedRectangle {
         Accessible.role: Accessible.Button
         Accessible.name: "Machines, " + machineCount.text + (collapsed ? ", collapsed" : ", expanded") + (collapsed && attention ? ", one needs attention" : "")
         onClicked: {
-            if (root.controller) root.controller.sidebar.toggleMachineList();
+            if (root.controller) root.controller.toggleMachineList();
         }
 
         HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -105,7 +112,7 @@ NativeRoundedRectangle {
             x: parent.width - width - root.headerInset
             width: implicitWidth
             height: parent.height
-            text: Math.max(0, (root.controller?.sidebar?.machineCount ?? 1) - 1)
+            text: Math.max(0, (root.controller?.machineCount ?? 1) - 1)
             color: root.colors.subtext0
             pixelSize: root.typography.small
             elide: Text.ElideNone
@@ -114,7 +121,7 @@ NativeRoundedRectangle {
 
     MachineChrome {
         objectName: "sidebarMachineList"
-        controller: root.controller?.machineChrome ?? null
+        controller: root.machineChrome
         segment: false
         x: root.regions.machines?.x ?? 0
         y: root.regions.machines?.y ?? 0
@@ -169,7 +176,7 @@ NativeRoundedRectangle {
             x: parent.width - width - root.headerInset
             width: implicitWidth
             height: parent.height
-            text: root.controller?.activity?.agentCount ?? activityList.count
+            text: root.activity?.agentCount ?? activityList.count
             color: root.colors.subtext0
             pixelSize: root.typography.small
             elide: Text.ElideNone
@@ -185,8 +192,8 @@ NativeRoundedRectangle {
         width: root.regions.activity.width
         height: root.regions.activity.height
         model: root.expanded ? root.agentModel : null
-        hoverIdentity: root.controller?.activity?.hovered ?? ""
-        semanticHover: typeof root.controller?.activity?.hover === "function"
+        hoverIdentity: root.activity?.hovered ?? ""
+        semanticHover: typeof root.activity?.hover === "function"
         colors: root.colors
         typography: root.typography
         geometry: root.regions.cards
@@ -197,10 +204,10 @@ NativeRoundedRectangle {
         visible: root.expanded
         onSelected: key => root.agentSelected(key)
         onPeekRequested: key => root.agentPeekRequested(key)
-        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+        onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
         onHovered: (key, card) => {
             if (activityList.semanticHover) {
-                root.controller.activity.hover(key, card);
+                root.activity.hover(key, card);
             }
         }
     }
@@ -223,7 +230,7 @@ NativeRoundedRectangle {
             }
         }
         onDoubleClicked: {
-            if (root.controller) root.controller.sidebar.fit();
+            if (root.controller) root.controller.fit();
         }
     }
 }

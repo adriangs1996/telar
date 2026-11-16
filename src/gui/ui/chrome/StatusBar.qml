@@ -10,12 +10,19 @@ NativeRoundedRectangle {
     required property var metrics
     required property var colors
     required property var typography
-    property var controller: null
+    // The components the bar shows in its slots, with the machine chrome they may place; without
+    // them, it shows the host metrics.
+    property ComponentsController components: null
+    property var machineChrome: null
+    // A mod's bottom bar, which replaces the components; mode, TLS and diagnostics stay native.
+    property var drawn: null
     property string diagnostic
     property var mode: ({kind: 0, hints: []})
     property string tlsColor
     property real ratio: 1
     signal diagnosticDismissed()
+    // A click on an element a mod drew in the bar.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     readonly property real capsuleInset: 8 * ratio
     readonly property real margin: capsuleInset
@@ -26,8 +33,6 @@ NativeRoundedRectangle {
     readonly property real contentWidth: Math.max(0, width - margin - trailingMargin)
     readonly property real metricsWidth: Math.max(0, contentWidth - (tlsChip.visible ? tlsChip.width + badgeGap : 0))
     readonly property real density: Screen.devicePixelRatio
-    // A mod's bottom bar replaces the components; mode, TLS and diagnostics stay native.
-    readonly property var drawn: controller?.components?.elementBars?.bottom_bar ?? null
 
     color: colors.bottombarBackground
     replaceBackground: true
@@ -46,14 +51,14 @@ NativeRoundedRectangle {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            visible: root.mode.kind === 0 && root.controller === null
+            visible: root.mode.kind === 0 && root.components === null
         }
 
         Item {
-            id: components
+            id: componentRow
             anchors.fill: parent
-            visible: root.mode.kind === 0 && root.controller !== null && root.drawn === null
-            readonly property var slots: root.controller?.components?.bars ?? ({})
+            visible: root.mode.kind === 0 && root.components !== null && root.drawn === null
+            readonly property var slots: root.components?.bars ?? ({})
             readonly property real gap: 24 * root.ratio
             readonly property var fitted: ComponentFit.allocate([
                 {nodes: leftSlot.fitNodes, gap: leftSlot.gap, width: leftSlot.implicitWidth, minimumWidth: leftSlot.errorWidth, tabs: false, overflowWidth: leftSlot.overflowWidth},
@@ -83,79 +88,79 @@ NativeRoundedRectangle {
 
             ComponentSlot {
                 id: leftSlot
-                controller: root.controller?.components ?? null
+                controller: root.components
                 hostMetrics: root.metrics
-                machineChrome: root.controller?.machineChrome ?? null
-                surface: components.slots.left ?? ({kind: "empty"})
+                machineChrome: root.machineChrome
+                surface: componentRow.slots.left ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                width: components.fitted.widths[0]
+                width: componentRow.fitted.widths[0]
                 sharedOverflow: true
-                fittedLevels: components.fitted.levels[0]
+                fittedLevels: componentRow.fitted.levels[0]
                 height: parent.height
             }
 
             ComponentSlot {
                 id: centerSlot
-                x: Math.max(components.leftEnd, Math.min((components.width - width) / 2, components.rightStart - width))
-                controller: root.controller?.components ?? null
+                x: Math.max(componentRow.leftEnd, Math.min((componentRow.width - width) / 2, componentRow.rightStart - width))
+                controller: root.components
                 hostMetrics: root.metrics
-                machineChrome: root.controller?.machineChrome ?? null
-                surface: components.slots.center ?? ({kind: "empty"})
+                machineChrome: root.machineChrome
+                surface: componentRow.slots.center ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                width: components.fitted.widths[1]
+                width: componentRow.fitted.widths[1]
                 sharedOverflow: true
-                fittedLevels: components.fitted.levels[1]
+                fittedLevels: componentRow.fitted.levels[1]
                 height: parent.height
             }
 
             ComponentSlot {
                 id: rightSlot
-                x: legacySlot.x - (legacySlot.width > 0 ? components.gap : 0) - width
-                controller: root.controller?.components ?? null
+                x: legacySlot.x - (legacySlot.width > 0 ? componentRow.gap : 0) - width
+                controller: root.components
                 hostMetrics: root.metrics
-                machineChrome: root.controller?.machineChrome ?? null
-                surface: components.slots.right ?? ({kind: "empty"})
+                machineChrome: root.machineChrome
+                surface: componentRow.slots.right ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                width: components.fitted.widths[2]
+                width: componentRow.fitted.widths[2]
                 sharedOverflow: true
-                fittedLevels: components.fitted.levels[2]
+                fittedLevels: componentRow.fitted.levels[2]
                 height: parent.height
             }
 
             ComponentSlot {
                 id: legacySlot
-                x: components.contentEnd - width
-                controller: root.controller?.components ?? null
+                x: componentRow.contentEnd - width
+                controller: root.components
                 hostMetrics: root.metrics
-                machineChrome: root.controller?.machineChrome ?? null
-                surface: components.slots.top ?? ({kind: "empty"})
+                machineChrome: root.machineChrome
+                surface: componentRow.slots.top ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                width: components.fitted.widths[3]
+                width: componentRow.fitted.widths[3]
                 sharedOverflow: true
-                fittedLevels: components.fitted.levels[3]
+                fittedLevels: componentRow.fitted.levels[3]
                 height: parent.height
             }
 
             ComponentOverflow {
                 id: overflow
-                controller: root.controller?.components ?? null
+                controller: root.components
                 hostMetrics: root.metrics
-                machineChrome: root.controller?.machineChrome ?? null
+                machineChrome: root.machineChrome
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                entries: components.hiddenEntries
-                maximumCount: components.maximumOverflowCount
-                x: components.width - width
-                width: components.fitted.overflowWidth
+                entries: componentRow.hiddenEntries
+                maximumCount: componentRow.maximumOverflowCount
+                x: componentRow.width - width
+                width: componentRow.fitted.overflowWidth
                 height: parent.height
             }
         }
@@ -168,15 +173,15 @@ NativeRoundedRectangle {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+            onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
             builtins: ({metrics: metricsPiece, bar_left: leftPiece, bar_center: centerPiece, bar_right: rightPiece})
         }
 
         component BarPiece: ComponentSlot {
             implicitHeight: root.capsuleHeight
-            controller: root.controller?.components ?? null
+            controller: root.components
             hostMetrics: root.metrics
-            machineChrome: root.controller?.machineChrome ?? null
+            machineChrome: root.machineChrome
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
@@ -196,21 +201,21 @@ NativeRoundedRectangle {
         Component {
             id: leftPiece
             BarPiece {
-                surface: components.slots.left ?? ({kind: "empty"})
+                surface: componentRow.slots.left ?? ({kind: "empty"})
             }
         }
 
         Component {
             id: centerPiece
             BarPiece {
-                surface: components.slots.center ?? ({kind: "empty"})
+                surface: componentRow.slots.center ?? ({kind: "empty"})
             }
         }
 
         Component {
             id: rightPiece
             BarPiece {
-                surface: components.slots.right ?? ({kind: "empty"})
+                surface: componentRow.slots.right ?? ({kind: "empty"})
             }
         }
 
