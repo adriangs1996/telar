@@ -8,6 +8,7 @@ static_assert(true);
 #include "ui/machines/machine_client.hpp"
 #include "ui/machines/machine_client_key.hpp"
 #include <QObject>
+#include <QtQml/qqmlregistration.h>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -19,12 +20,44 @@ import telar.gui.machines.picker;
 namespace telar::gui::qt {
 
   // The state the window shows, below every controller: the machines, the client connected to
-  // each one, and which of them is active. Controllers read it; only the composition root that
-  // owns it decides when a client is admitted, replaced or released.
+  // each one, which of them is active, and the dialog open over the workbench. Controllers read
+  // it; only the composition root that owns it decides when a client is admitted, replaced or
+  // released.
+  //
+  // It is reactive by versions: whoever mutates the state touches the store, and once per turn of
+  // the event loop the store emits changed(). Each subscriber compares the versions it read last
+  // time with the current ones and recomputes only when something it uses moved.
   class Store final : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(Store)
+    QML_UNCREATABLE("The window owns its store")
+    // QML names every enum value with its enum, as GuiController does.
+    Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
 
   public:
+    // The dialog or line search open over the workbench, if any.
+    enum class Dialog : quint8 {
+      none,
+      palette,
+      paths,
+      history,
+      peek,
+      machine,
+      copy_search,
+      new_workspace,
+      rename_tab,
+      rename_workspace,
+    };
+    Q_ENUM(Dialog)
+
+    struct DialogState {
+      Dialog kind = Dialog::none;
+      // Changes with every dialog shown, and with each step of a multi-step prompt.
+      std::uint64_t generation = 0;
+      // The pane whose prompt line hosts the open history or path search, or 0 for the dialog.
+      std::uint64_t line_search_pane = 0;
+    };
+
     using Clients = std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity>;
 
     Store() = default;
@@ -51,6 +84,22 @@ namespace telar::gui::qt {
     // Changes whenever the active session stops being the one the window showed.
     [[nodiscard]] std::uint64_t machineView() const noexcept;
     void advanceMachineView() noexcept;
+    [[nodiscard]] const DialogState& dialog() const noexcept;
+    // A new generation for the dialog about to show; what is presented for the previous one
+    // stops matching.
+    void advanceDialog() noexcept;
+    void setDialog(Dialog kind, std::uint64_t line_search_pane) noexcept;
+    // Marks the state as changed; the store emits changed() once, on the next turn of the event
+    // loop, however many mutations touched it before.
+    void touch();
+    // Emits changed() now if the state was touched since the last time.
+    void flush();
+    // Ends a user interaction: interacted() runs its effects now, and changed() follows.
+    void commit();
+
+  signals:
+    void changed();
+    void interacted();
 
   private:
     Machines machines_;
@@ -58,6 +107,8 @@ namespace telar::gui::qt {
     tbc::view<Clients, tbc::lt::self> clients_;
     std::uint64_t next_client_generation_ = 1;
     std::uint64_t machine_view_ = 0;
+    DialogState dialog_;
+    bool touched_ = false;
   };
 
 }

@@ -68,7 +68,7 @@ namespace telar::gui::qt {
   }
 
   void Application::searchMachinePrompt(const QString& text) {
-    if (dialog_ != Dialog::machine || !machine_prompt_) {
+    if (store_.dialog().kind != Dialog::machine || !machine_prompt_) {
       return;
     }
 
@@ -86,7 +86,7 @@ namespace telar::gui::qt {
   }
 
   void Application::reportMachinePromptLimit(qulonglong requested_bytes) {
-    if (dialog_ != Dialog::machine || !machine_prompt_ || requested_bytes <= machinePromptLimit()) {
+    if (store_.dialog().kind != Dialog::machine || !machine_prompt_ || requested_bytes <= machinePromptLimit()) {
       return;
     }
 
@@ -97,7 +97,7 @@ namespace telar::gui::qt {
   }
 
   void Application::submitMachinePrompt(const QString& revision) {
-    if (dialog_ != Dialog::machine || !machine_prompt_ || machine_prompt_->text.isEmpty() || revision != QString::number(dialog_generation_)) {
+    if (store_.dialog().kind != Dialog::machine || !machine_prompt_ || machine_prompt_->text.isEmpty() || revision != QString::number(store_.dialog().generation)) {
       return;
     }
 
@@ -105,7 +105,7 @@ namespace telar::gui::qt {
       machine_prompt_->label = machine_prompt_->text;
       machine_prompt_->text.clear();
       machine_prompt_->mode = MachinePromptMode::add_destination;
-      ++dialog_generation_;
+      store_.advanceDialog();
       emit machinePromptChanged();
 
       return;
@@ -148,7 +148,7 @@ namespace telar::gui::qt {
       }
     }
 
-    return {{QStringLiteral("revision"), QString::number(dialog_generation_)}, {QStringLiteral("title"), title}, {QStringLiteral("editorText"), text}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(machinePromptLimit())}};
+    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("editorText"), text}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(machinePromptLimit())}};
   }
 
   QVariantMap Application::machinePromptGeometry() const {

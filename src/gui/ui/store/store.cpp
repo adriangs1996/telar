@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "store.hpp"
+#include <QMetaObject>
 #include <exception>
 
 namespace telar::gui::qt {
@@ -69,6 +70,42 @@ namespace telar::gui::qt {
 
   void Store::advanceMachineView() noexcept {
     ++machine_view_;
+  }
+
+  const Store::DialogState& Store::dialog() const noexcept {
+    return dialog_;
+  }
+
+  void Store::advanceDialog() noexcept {
+    ++dialog_.generation;
+  }
+
+  void Store::setDialog(Dialog kind, std::uint64_t line_search_pane) noexcept {
+    dialog_.kind = kind;
+    dialog_.line_search_pane = line_search_pane;
+  }
+
+  void Store::touch() {
+    if (touched_) {
+      return;
+    }
+
+    touched_ = true;
+    QMetaObject::invokeMethod(this, &Store::flush, Qt::QueuedConnection);
+  }
+
+  void Store::flush() {
+    if (!touched_) {
+      return;
+    }
+
+    touched_ = false;
+    emit changed();
+  }
+
+  void Store::commit() {
+    emit interacted();
+    touch();
   }
 
 }

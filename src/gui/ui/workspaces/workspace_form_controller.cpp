@@ -75,7 +75,7 @@ namespace telar::gui::qt {
   // Folders are listed only on this computer: a remote machine's directories
   // are not here to list or to check.
   void Application::editWorkspaceDirectory(const QString& text) {
-    if (dialog_ != Dialog::new_workspace) {
+    if (store_.dialog().kind != Dialog::new_workspace) {
       return;
     }
 
@@ -103,7 +103,7 @@ namespace telar::gui::qt {
 
   void Application::moveWorkspaceDirectory(int delta) {
     const auto count = workspaceListingCurrent() ? workspace_form_.completion.entries.size() : 0;
-    if (dialog_ != Dialog::new_workspace || count == 0) {
+    if (store_.dialog().kind != Dialog::new_workspace || count == 0) {
       return;
     }
 
@@ -114,7 +114,7 @@ namespace telar::gui::qt {
   }
 
   QString Application::acceptWorkspaceDirectory() {
-    if (dialog_ != Dialog::new_workspace || !workspaceListingCurrent() || workspace_form_.completion.entries.empty()) {
+    if (store_.dialog().kind != Dialog::new_workspace || !workspaceListingCurrent() || workspace_form_.completion.entries.empty()) {
       return {};
     }
 
@@ -123,7 +123,7 @@ namespace telar::gui::qt {
 
   QString Application::chooseWorkspaceDirectory(int index) {
     const auto& entries = workspace_form_.completion.entries;
-    if (dialog_ != Dialog::new_workspace || !workspaceListingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
+    if (store_.dialog().kind != Dialog::new_workspace || !workspaceListingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
       return {};
     }
 
@@ -158,7 +158,7 @@ namespace telar::gui::qt {
   void Application::landWorkspaceDirectory() {
     auto result = workspace_listing_.result();
 
-    if (dialog_ != Dialog::new_workspace) {
+    if (store_.dialog().kind != Dialog::new_workspace) {
       return;
     }
 

@@ -68,13 +68,13 @@ namespace telar::gui::qt {
   }
 
   QString Application::suggestionRevision() const {
-    return QString::number(dialog_generation_) + QLatin1Char(':') + QString::number(session().suggestion().revision());
+    return QString::number(store_.dialog().generation) + QLatin1Char(':') + QString::number(session().suggestion().revision());
   }
 
   void Application::submitSuggestion(const QString& revision) {
     const auto encoded = palette_query_.toUtf8();
     const auto query = PaletteQuery::parse({encoded.constData(), static_cast<std::size_t>(encoded.size())});
-    if (dialog_ != Dialog::palette || query.mode != PaletteMode::suggest || revision != suggestionRevision()) {
+    if (store_.dialog().kind != Dialog::palette || query.mode != PaletteMode::suggest || revision != suggestionRevision()) {
       return;
     }
 
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
   }
 
   bool Application::restorePaletteParent() {
-    if (dialog_ != Dialog::palette || !palette_parent_) {
+    if (store_.dialog().kind != Dialog::palette || !palette_parent_) {
       return false;
     }
 

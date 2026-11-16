@@ -209,6 +209,7 @@ namespace telar::gui::qt {
     connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
     connect(this, &Application::stateChanged, this, &Application::statusModeChanged);
     connect(this, &Application::configurationChanged, this, &Application::paletteChanged);
+    connect(&store_, &Store::interacted, this, &Application::interacted);
     connect(this, &Application::windowGeometryChanged, this, &Application::paletteChanged);
     connect(this, &Application::windowGeometryChanged, this, &Application::pathPickerGeometryChanged);
     connect(this, &Application::pathPickerChanged, this, &Application::pathPickerGeometryChanged);
@@ -319,11 +320,11 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (dialog_ == Dialog::palette) {
+    if (store_.dialog().kind == Dialog::palette) {
       emit paletteChanged();
     }
 
-    if (dialog_ == Dialog::paths || dialog_ == Dialog::peek) {
+    if (store_.dialog().kind == Dialog::paths || store_.dialog().kind == Dialog::peek) {
       showDialog(Dialog::none);
     }
 
@@ -392,7 +393,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (dialog_ == Dialog::peek) {
+    if (store_.dialog().kind == Dialog::peek) {
       showDialog(Dialog::none);
     }
 
@@ -556,12 +557,12 @@ namespace telar::gui::qt {
 
     const auto& history = session().historyBrowser();
 
-    if (dialog_ == Dialog::history) {
+    if (store_.dialog().kind == Dialog::history) {
       frame.history_actions = historyActionSurface();
       auto& hover = frame.history_hover.emplace();
       const auto* filters = qobject_cast<const HistoryFiltersLayout*>(history_filter_layout_.data());
       if (filters != nullptr && filters->window() == window_) {
-        hover.count += filters->hoverTargets(dialog_generation_, std::span{hover.targets}.subspan(hover.count));
+        hover.count += filters->hoverTargets(store_.dialog().generation, std::span{hover.targets}.subspan(hover.count));
       }
 
       const auto surface = historyScrollSurface(historyMetrics(), hover);
@@ -572,18 +573,18 @@ namespace telar::gui::qt {
 
       const auto* inspector = qobject_cast<const HistoryInspectionLayout*>(history_inspector_.data());
       if (inspector != nullptr && inspector->window() == window_) {
-        hover.count += inspector->hoverTargets(dialog_generation_, std::span{hover.targets}.subspan(hover.count));
+        hover.count += inspector->hoverTargets(store_.dialog().generation, std::span{hover.targets}.subspan(hover.count));
       }
 
       const auto* footer = qobject_cast<const HistoryFooterLayout*>(history_footer_.data());
       if (footer != nullptr && footer->window() == window_) {
-        hover.count += footer->hoverTargets(dialog_generation_, std::span{hover.targets}.subspan(hover.count));
+        hover.count += footer->hoverTargets(store_.dialog().generation, std::span{hover.targets}.subspan(hover.count));
       }
 
       if (!historyLoading() && history_view_version_ == history.viewVersion()) {
         frame.history_surface = surface;
         if (const auto choice = history.choice()) {
-          frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session().configuration().history.enter_runs};
+          frame.history = {.choice = *choice, .dialog_generation = store_.dialog().generation, .enter_runs = session().configuration().history.enter_runs};
         }
       }
     }
@@ -787,6 +788,7 @@ namespace telar::gui::qt {
       const auto notification_revision = client.session.notificationRevision();
       const auto graphics_revision = client.session.graphicsRecoveryRevision();
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
+      store_.touch();
       if (change == Change::stopped || change == Change::closed) {
         client.connection.finishSession();
         if (change == Change::closed) {
@@ -843,7 +845,7 @@ namespace telar::gui::qt {
         refresh_timer_.start();
       }
 
-      if (dialog_ == Dialog::paths) {
+      if (store_.dialog().kind == Dialog::paths) {
         emit pathPickerGeometryChanged();
       }
 
@@ -954,14 +956,14 @@ namespace telar::gui::qt {
     // Name prompts: none opens over copy mode or another prompt, and
     // copy mode does not start over a prompt.
     case ClientAction::client_open_goto:
-      if (copyModeActive() || dialog_ != Dialog::none) {
+      if (copyModeActive() || store_.dialog().kind != Dialog::none) {
         throw EncodingError{"ClientPromptUnavailable"};
       }
 
       executeWindowAction(Action::goto_picker);
       break;
     case ClientAction::client_open_history:
-      if (copyModeActive() || dialog_ != Dialog::none) {
+      if (copyModeActive() || store_.dialog().kind != Dialog::none) {
         throw EncodingError{"ClientPromptUnavailable"};
       }
 
@@ -970,7 +972,7 @@ namespace telar::gui::qt {
       break;
     case ClientAction::client_copy_mode:
       if (!copyModeActive()) {
-        if (dialog_ != Dialog::none) {
+        if (store_.dialog().kind != Dialog::none) {
           throw EncodingError{"CopyModeUnavailable"};
         }
 
@@ -1068,7 +1070,7 @@ namespace telar::gui::qt {
     refreshPalette();
     refreshElementBars();
     element_slots_.finish();
-    if (dialog_ == Dialog::paths) {
+    if (store_.dialog().kind == Dialog::paths) {
       emit pathPickerGeometryChanged();
     }
 
@@ -1197,7 +1199,7 @@ namespace telar::gui::qt {
   void Application::execute(Action action, const QString& target) {
     key_bindings_.cancelSequence();
     applyInteraction([&] {
-      if (action != Action::copy_mode && (action != Action::cancel || dialog_ == Dialog::none)) {
+      if (action != Action::copy_mode && (action != Action::cancel || store_.dialog().kind == Dialog::none)) {
         leaveKeyboardCopyMode();
       }
 
@@ -1213,15 +1215,15 @@ namespace telar::gui::qt {
       const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
       const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
 
-      if (dialog_ == Dialog::new_workspace) {
+      if (store_.dialog().kind == Dialog::new_workspace) {
         if (!submitWorkspace(input)) {
           return;
         }
-      } else if (dialog_ == Dialog::rename_tab) {
+      } else if (store_.dialog().kind == Dialog::rename_tab) {
         session().renameTab(text);
-      } else if (dialog_ == Dialog::rename_workspace) {
+      } else if (store_.dialog().kind == Dialog::rename_workspace) {
         session().renameWorkspace(text);
-      } else if (dialog_ == Dialog::copy_search) {
+      } else if (store_.dialog().kind == Dialog::copy_search) {
         session().searchCopy(text);
       }
 
@@ -1229,8 +1231,27 @@ namespace telar::gui::qt {
     });
   }
 
+  void Application::interacted() {
+    // Exceptions stay on this side of the signal that delivered the interaction.
+    try {
+      publishPromptWrite();
+      refresh();
+    } catch (const std::exception& error) {
+      interactionFailed(error);
+    }
+  }
+
+  void Application::interactionFailed(const std::exception& error) {
+    if (store_.dialog().kind == Dialog::history) {
+      session().reportHistoryError(error.what());
+      refreshHistory();
+    } else {
+      fail(error);
+    }
+  }
+
   void Application::submitHistory(std::uint64_t entry_id, bool alternate) {
-    if (dialog_ != Dialog::history) {
+    if (store_.dialog().kind != Dialog::history) {
       return;
     }
 
@@ -1269,12 +1290,12 @@ namespace telar::gui::qt {
   }
 
   const Application::PresentedHistory* Application::presentedHistory(const QString& revision) const {
-    if (dialog_ != Dialog::history || historyLoading() || !presented_history_) {
+    if (store_.dialog().kind != Dialog::history || historyLoading() || !presented_history_) {
       return nullptr;
     }
 
     const auto& presented = *presented_history_;
-    if (presented.dialog_generation != dialog_generation_) {
+    if (presented.dialog_generation != store_.dialog().generation) {
       return nullptr;
     }
 
@@ -1368,7 +1389,7 @@ namespace telar::gui::qt {
       // At the prompt line, the search starts from the command being written.
       QString seed;
 
-      if (const auto* line = line_search_pane_ == 0 ? nullptr : session().promptLine(line_search_pane_)) {
+      if (const auto* line = store_.dialog().line_search_pane == 0 ? nullptr : session().promptLine(store_.dialog().line_search_pane)) {
         seed = toQString(line->editor().text().view());
         seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
       }
@@ -1383,10 +1404,10 @@ namespace telar::gui::qt {
     } else if (action == Action::new_workspace || action == Action::rename_tab || action == Action::rename_workspace) {
       showDialog(dialogFor(action));
     } else if (action == Action::copy_mode) {
-      if (dialog_ == Dialog::none && session().enterBlocks()) {
+      if (store_.dialog().kind == Dialog::none && session().enterBlocks()) {
         emit promptChanged(session().changedPane());
         emit terminalChanged(session().changedPane());
-      } else if (dialog_ == Dialog::none) {
+      } else if (store_.dialog().kind == Dialog::none) {
         static_cast<void>(session().enterCopyMode());
         emit stateChanged();
         if (const auto& copy = session().copyMode().state()) {
@@ -1405,7 +1426,7 @@ namespace telar::gui::qt {
     }
 
     const auto& copy = session().copyMode().state();
-    if (dialog_ == Dialog::none && copy && !copy->pointer) {
+    if (store_.dialog().kind == Dialog::none && copy && !copy->pointer) {
       const auto pane_id = copy->pane_id;
 
       session().leaveCopyMode();
@@ -1542,12 +1563,12 @@ namespace telar::gui::qt {
       palette_editor_restore_ = {};
     }
 
-    if (dialog_ == Dialog::paths && kind != Dialog::paths) {
+    if (store_.dialog().kind == Dialog::paths && kind != Dialog::paths) {
       session().closePathPicker();
     }
 
     key_bindings_.cancelSequence();
-    ++dialog_generation_;
+    store_.advanceDialog();
     presented_history_.reset();
     presented_history_surface_ = {};
     presented_history_actions_ = {};
@@ -1555,7 +1576,7 @@ namespace telar::gui::qt {
     pointer_dispatcher_.presentHistoryActions({});
     pointer_dispatcher_.retireHistoryHover();
 
-    if (kind == Dialog::new_workspace || dialog_ == Dialog::new_workspace) {
+    if (kind == Dialog::new_workspace || store_.dialog().kind == Dialog::new_workspace) {
       resetWorkspaceForm();
     }
 
@@ -1565,13 +1586,14 @@ namespace telar::gui::qt {
     const auto* focused = session().focusedPane();
     const bool searching = kind == Dialog::history || kind == Dialog::paths;
     const auto& copy = session().copyMode().state();
+    std::uint64_t line_search_pane = 0;
     if (kind == Dialog::copy_search && copy) {
-      line_search_pane_ = copy->pane_id;
+      line_search_pane = copy->pane_id;
     } else {
-      line_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
+      line_search_pane = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
     }
 
-    dialog_ = kind;
+    store_.setDialog(kind, line_search_pane);
     emit dialogChanged();
   }
 
@@ -1622,15 +1644,15 @@ namespace telar::gui::qt {
   }
 
   Application::Dialog Application::dialog() const noexcept {
-    return dialog_;
+    return store_.dialog().kind;
   }
 
   Application::Dialog Application::lineSearch() const noexcept {
-    return line_search_pane_ == 0 ? Dialog::none : dialog_;
+    return store_.dialog().line_search_pane == 0 ? Dialog::none : store_.dialog().kind;
   }
 
   QString Application::lineSearchPane() const {
-    return line_search_pane_ == 0 ? QString{} : QString::number(line_search_pane_);
+    return store_.dialog().line_search_pane == 0 ? QString{} : QString::number(store_.dialog().line_search_pane);
   }
 
   bool Application::connected() const {

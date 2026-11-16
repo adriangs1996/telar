@@ -236,7 +236,7 @@ Item {
                     readonly property bool modelFocused: pane.record.focused
 
                     function focusSelectedPane() {
-                        if (terminal.modelFocused && root.application.dialog === GuiController.Dialog.none && !root.keyboardCovered) {
+                        if (terminal.modelFocused && root.application.dialog === Store.Dialog.none && !root.keyboardCovered) {
                             terminal.forceActiveFocus();
                         }
                     }

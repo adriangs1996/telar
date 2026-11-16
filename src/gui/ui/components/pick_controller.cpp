@@ -39,7 +39,7 @@ namespace telar::gui::qt {
     connect(&configuration_source_, &ConfigurationSource::changed, this, &Application::closeComponentPick);
     connect(this, &Application::machineChanged, this, &Application::closeComponentPick);
     connect(this, &Application::dialogChanged, this, [this] {
-      if (dialog_ != Dialog::none) {
+      if (store_.dialog().kind != Dialog::none) {
         closeComponentPick();
       }
     });
@@ -83,7 +83,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (dialog_ != Dialog::none) {
+    if (store_.dialog().kind != Dialog::none) {
       execute(Action::cancel);
     }
 

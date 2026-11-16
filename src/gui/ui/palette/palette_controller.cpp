@@ -151,14 +151,14 @@ namespace telar::gui::qt {
   }
 
   void Application::reportPaletteQueryLimit(qulonglong requested_bytes) {
-    if (dialog_ == Dialog::palette && requested_bytes > PaletteQuery::maximum_bytes) {
+    if (store_.dialog().kind == Dialog::palette && requested_bytes > PaletteQuery::maximum_bytes) {
       session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
       refreshNotifications();
     }
   }
 
   void Application::searchPalette(const QString& text) {
-    if (dialog_ != Dialog::palette || text == palette_query_) {
+    if (store_.dialog().kind != Dialog::palette || text == palette_query_) {
       return;
     }
 
@@ -187,7 +187,7 @@ namespace telar::gui::qt {
   }
 
   void Application::movePalette(int delta) {
-    if (dialog_ != Dialog::palette || palette_rows_.empty()) {
+    if (store_.dialog().kind != Dialog::palette || palette_rows_.empty()) {
       return;
     }
 
@@ -202,7 +202,7 @@ namespace telar::gui::qt {
   void Application::setPaletteMode(int mode) {
     const auto prefix = PaletteQuery::prefix(static_cast<char>(mode));
     const auto current = palette_query_.toUtf8();
-    if (dialog_ != Dialog::palette || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
+    if (store_.dialog().kind != Dialog::palette || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
       return;
     }
 
@@ -217,7 +217,7 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshPalette() {
-    if (dialog_ == Dialog::palette && updatePaletteResults()) {
+    if (store_.dialog().kind == Dialog::palette && updatePaletteResults()) {
       emit paletteChanged();
     }
   }
@@ -475,7 +475,7 @@ namespace telar::gui::qt {
   void Application::usePaletteResult(const QVariantMap& choice) {
     const auto key = choice.value(QStringLiteral("key")).toString();
     const auto revision = choice.value(QStringLiteral("revision")).toString();
-    if (dialog_ != Dialog::palette || revision != QString::number(palette_revision_)) {
+    if (store_.dialog().kind != Dialog::palette || revision != QString::number(palette_revision_)) {
       return;
     }
 

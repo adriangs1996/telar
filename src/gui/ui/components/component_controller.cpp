@@ -168,7 +168,7 @@ namespace telar::gui::qt {
 
     connect(this, &Application::machineChanged, this, &Application::resetComponents);
     connect(this, &Application::dialogChanged, this, [this] {
-      if (dialog_ != Dialog::none && component_surfaces_.open_panel) {
+      if (store_.dialog().kind != Dialog::none && component_surfaces_.open_panel) {
         closeComponentPanel();
       }
     });

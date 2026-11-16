@@ -199,7 +199,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
     Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY stateChanged)
     Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
-    Q_PROPERTY(Dialog dialog READ dialog NOTIFY dialogChanged)
+    Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
     // The command whose output the scrollback search reads, empty while it reads the whole
     // scrollback; and whether Tab can switch between the two.
     Q_PROPERTY(QString copySearchScope READ copySearchScope NOTIFY dialogChanged)
@@ -208,7 +208,7 @@ namespace telar::gui::qt {
     // matches and which one the cursor is on, and what it reads.
     Q_PROPERTY(QVariantMap copySearchState READ copySearchState NOTIFY copySearchChanged)
     // The history or path search the focused pane's prompt line hosts in place of the dialog.
-    Q_PROPERTY(Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
+    Q_PROPERTY(telar::gui::qt::Store::Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
     Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
@@ -297,20 +297,7 @@ namespace telar::gui::qt {
     [[nodiscard]] int activityAgentCount() const noexcept;
     Q_INVOKABLE void hoverActivity(const QString& identity, QQuickItem* card = nullptr);
 
-    // The dialog or line search open over the workbench, if any.
-    enum class Dialog : quint8 {
-      none,
-      palette,
-      paths,
-      history,
-      peek,
-      machine,
-      copy_search,
-      new_workspace,
-      rename_tab,
-      rename_workspace,
-    };
-    Q_ENUM(Dialog)
+    using Dialog = Store::Dialog;
 
     enum class HistoryAction : quint8 {
       copy,
@@ -872,22 +859,23 @@ namespace telar::gui::qt {
       }
     }
 
+    // Runs a user's mutation of the session, then commits it to the store, whose interacted()
+    // publishes what the mutation wrote and refreshes the window.
     template <std::invocable Mutation>
     void applyInteraction(Mutation mutate) {
       try {
         pending_activity_.reset();
         mutate();
-        publishPromptWrite();
-        refresh();
       } catch (const std::exception& error) {
-        if (dialog_ == Dialog::history) {
-          session().reportHistoryError(error.what());
-          refreshHistory();
-        } else {
-          fail(error);
-        }
+        interactionFailed(error);
+        return;
       }
+
+      store_.commit();
     }
+
+    void interacted();
+    void interactionFailed(const std::exception& error);
 
     ApplicationAllocator& memory_;
     Store store_;
@@ -1041,10 +1029,6 @@ namespace telar::gui::qt {
     QPointer<QQuickItem> history_content_;
     QPointer<QQuickItem> history_search_host_;
     QString error_;
-    Dialog dialog_ = Dialog::none;
-    std::uint64_t dialog_generation_ = 0;
-    // The pane whose prompt line hosts the open history or path search, or 0 for the dialog.
-    std::uint64_t line_search_pane_ = 0;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     QMetaObject::Connection screen_refresh_connection_;

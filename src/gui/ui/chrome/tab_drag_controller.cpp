@@ -52,7 +52,7 @@ namespace telar::gui::qt {
     const auto id = captured->tab_id;
     const auto* active = session().activeTab();
     const auto& surface = presented_tabs_;
-    if (active == nullptr || dialog_ != Dialog::none || surface.machine_view != store_.machineView() || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
+    if (active == nullptr || store_.dialog().kind != Dialog::none || surface.machine_view != store_.machineView() || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
       return;
     }
 
@@ -69,7 +69,7 @@ namespace telar::gui::qt {
     TabDropSurface result;
     const auto* strip = qobject_cast<const TabStripLayout*>(tab_strip_.data());
     const auto* active = session().activeTab();
-    if (dialog_ != Dialog::none || strip == nullptr || active == nullptr || strip->window() != window_ || window_ == nullptr) {
+    if (store_.dialog().kind != Dialog::none || strip == nullptr || active == nullptr || strip->window() != window_ || window_ == nullptr) {
       return result;
     }
 
@@ -94,7 +94,7 @@ namespace telar::gui::qt {
     }
 
     const auto& surface = application_.presented_tabs_;
-    const auto* target = position && application_.dialog_ == Application::Dialog::none && surface.machine_view == application_.store_.machineView() ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
+    const auto* target = position && application_.store_.dialog().kind == Application::Dialog::none && surface.machine_view == application_.store_.machineView() ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
 
     strip->setPointerHover(target == nullptr ? std::nullopt : std::optional{target->id});
   }
@@ -172,14 +172,14 @@ namespace telar::gui::qt {
       }
     }
 
-    tab_drag_.validate(surface.workspace, std::span{tabs}.first(count), application_.dialog_ != Application::Dialog::none);
+    tab_drag_.validate(surface.workspace, std::span{tabs}.first(count), application_.store_.dialog().kind != Application::Dialog::none);
     if (!tab_drag_.source()) {
       updateTabDragVisual();
     }
   }
 
   bool PointerDispatcher::pressTab(QMouseEvent& event) {
-    if (event.button() != Qt::LeftButton || application_.dialog_ != Application::Dialog::none) {
+    if (event.button() != Qt::LeftButton || application_.store_.dialog().kind != Application::Dialog::none) {
       return false;
     }
 
@@ -215,7 +215,7 @@ namespace telar::gui::qt {
     }
 
     presentTabs(application_.presented_tabs_);
-    if (application_.dialog_ != Application::Dialog::none || tab_capture_surface_.machine_view != application_.store_.machineView()) {
+    if (application_.store_.dialog().kind != Application::Dialog::none || tab_capture_surface_.machine_view != application_.store_.machineView()) {
       cancelTabDrag();
     }
 

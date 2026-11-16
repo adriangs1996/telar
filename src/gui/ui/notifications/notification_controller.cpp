@@ -199,7 +199,7 @@ namespace telar::gui::qt {
     // A delivered control can disappear before its disabled record is painted.
     // Complete its retirement before restoring the captured pane's keyboard owner.
     QMetaObject::invokeMethod(this, [this, target] {
-      if (window_ == nullptr || dialog_ != Dialog::none) {
+      if (window_ == nullptr || store_.dialog().kind != Dialog::none) {
         return;
       }
 
@@ -219,7 +219,7 @@ namespace telar::gui::qt {
   void Application::restoreTerminalFocus() {
     const auto* pane = session().focusedPane();
     const auto terminal = pane != nullptr ? terminals_.value(pane->id) : nullptr;
-    if (terminal && terminal->isVisible() && dialog_ == Dialog::none) {
+    if (terminal && terminal->isVisible() && store_.dialog().kind == Dialog::none) {
       terminal->forceActiveFocus(Qt::OtherFocusReason);
     }
   }

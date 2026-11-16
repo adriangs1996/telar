@@ -93,8 +93,8 @@ namespace telar::gui::qt {
   // cancellation before Qt merges those phases into its wheel-event stream.
   bool PointerDispatcher::handleNativeScroll(std::string_view event_type, const void* message) {
     // The prompt line scrolls its own rows; the modal takes the wheel only while it shows.
-    const bool hosted = application_.line_search_pane_ != 0 && !application_.session().historyBrowser().state().inspecting;
-    if (window_.isNull() || application_.dialog_ != Application::Dialog::history || hosted) {
+    const bool hosted = application_.store_.dialog().line_search_pane != 0 && !application_.session().historyBrowser().state().inspecting;
+    if (window_.isNull() || application_.store_.dialog().kind != Application::Dialog::history || hosted) {
       return false;
     }
 
@@ -169,7 +169,7 @@ namespace telar::gui::qt {
 
   void PointerDispatcher::observeHistoryHover(QPointF position, HistoryHover::Observation observation) {
     const auto& frame = application_.presented_history_hover_;
-    if (application_.dialog_ != Application::Dialog::history || !frame || frame->generation != application_.dialog_generation_) {
+    if (application_.store_.dialog().kind != Application::Dialog::history || !frame || frame->generation != application_.store_.dialog().generation) {
       retireHistoryHover();
 
       return;
@@ -347,7 +347,7 @@ namespace telar::gui::qt {
 
       const auto& surface = application_.presented_history_actions_;
       HistoryActionCapture history;
-      if (application_.dialog_ == Application::Dialog::history && surface.generation == application_.dialog_generation_ && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
+      if (application_.store_.dialog().kind == Application::Dialog::history && surface.generation == application_.store_.dialog().generation && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
         *lease = {.terminal = {}, .history = history, .held = true};
 
         return true;
@@ -428,7 +428,7 @@ namespace telar::gui::qt {
       const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
       const auto choice = surface.choice;
 
-      if (application_.dialog_ != Application::Dialog::history || surface.generation != application_.dialog_generation_) {
+      if (application_.store_.dialog().kind != Application::Dialog::history || surface.generation != application_.store_.dialog().generation) {
         return true;
       }
 

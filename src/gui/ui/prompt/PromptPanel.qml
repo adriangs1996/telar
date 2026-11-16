@@ -14,7 +14,7 @@ Item {
     readonly property var colors: controller.colors
     readonly property var typography: controller.windowGeometry.typography
     readonly property int dialog: controller.dialog
-    readonly property bool searchMode: dialog === GuiController.Dialog.copy_search
+    readonly property bool searchMode: dialog === Store.Dialog.copy_search
     readonly property bool submittable: name.text.trim().length > 0
     property alias field: name
 
@@ -37,7 +37,7 @@ Item {
         ChromeText {
             width: parent.width
             height: Math.ceil((root.typography.title ?? 0) * root.titleLeading)
-            text: root.searchMode ? (root.controller.copySearchScope.length > 0 ? "Search output of " + root.controller.copySearchScope : "Search scrollback") : root.dialog === GuiController.Dialog.rename_tab ? "Rename tab" : "Rename workspace"
+            text: root.searchMode ? (root.controller.copySearchScope.length > 0 ? "Search output of " + root.controller.copySearchScope : "Search scrollback") : root.dialog === Store.Dialog.rename_tab ? "Rename tab" : "Rename workspace"
             color: root.colors.text
             pixelSize: root.typography.title ?? 1
             emphasized: true

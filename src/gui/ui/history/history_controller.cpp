@@ -141,9 +141,9 @@ namespace telar::gui::qt {
 
   void Application::refreshHistory() {
     const auto& browser = session().historyBrowser();
-    const auto scope_value = dialog_ == Dialog::history ? historyScopeValue() : QString{};
+    const auto scope_value = store_.dialog().kind == Dialog::history ? historyScopeValue() : QString{};
     const auto selection = browser.state().selection;
-    const auto* pane = dialog_ == Dialog::history && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
+    const auto* pane = store_.dialog().kind == Dialog::history && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
     BoundedText<TabCaption::capacity> tab_name;
 
     tab_name.append(historyTabName(pane));
@@ -227,7 +227,7 @@ namespace telar::gui::qt {
     const auto parsed = HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, history_filters_.failed_only);
 
     return {
-        {QStringLiteral("generation"), QString::number(dialog_generation_)},
+        {QStringLiteral("generation"), QString::number(store_.dialog().generation)},
         {QStringLiteral("selectedId"), state.selection < rows.size() ? QString::number(rows[state.selection].id) : QString{}},
         {QStringLiteral("phase"), phaseName(state.phase)},
         {QStringLiteral("hasPage"), state.has_page},
@@ -312,7 +312,7 @@ namespace telar::gui::qt {
   }
 
   void Application::reportHistoryQueryLimit(qulonglong requested_bytes) {
-    if (dialog_ != Dialog::history || requested_bytes <= HistorySearch::maximum_query_bytes) {
+    if (store_.dialog().kind != Dialog::history || requested_bytes <= HistorySearch::maximum_query_bytes) {
       return;
     }
 
@@ -370,7 +370,7 @@ namespace telar::gui::qt {
   }
 
   void Application::executeHistory(HistoryAction action, const QString& entry_id) {
-    if (dialog_ != Dialog::history || (historyLoading() && action != HistoryAction::inspect)) {
+    if (store_.dialog().kind != Dialog::history || (historyLoading() && action != HistoryAction::inspect)) {
       return;
     }
 

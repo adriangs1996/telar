@@ -226,11 +226,11 @@ namespace telar::gui::qt {
 
   HistoryActionSurface Application::historyActionSurface() const {
     const auto* actions = qobject_cast<const HistoryMetaLayout*>(history_actions_.data());
-    if (dialog_ != Dialog::history || actions == nullptr || actions->window() != window_) {
+    if (store_.dialog().kind != Dialog::history || actions == nullptr || actions->window() != window_) {
       return {};
     }
 
-    return actions->actionSurface(dialog_generation_);
+    return actions->actionSurface(store_.dialog().generation);
   }
 
   void Application::activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice) {
@@ -255,10 +255,10 @@ namespace telar::gui::qt {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto& browser = session().historyBrowser();
 
-    hover.generation = dialog_generation_;
+    hover.generation = store_.dialog().generation;
     hover.scale = density;
     HistoryScrollSurface surface{
-        .generation = dialog_generation_,
+        .generation = store_.dialog().generation,
         .revision = browser.revision(),
         .row_height = metrics.cell_height,
         .cell_height = metrics.cell_height,
@@ -297,7 +297,7 @@ namespace telar::gui::qt {
         if (index >= 0 && std::cmp_less(index, HistoryBrowser<Memory>::page_entries)) {
           const auto bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
 
-          hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = dialog_generation_}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
+          hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = store_.dialog().generation}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
         }
       }
     }
@@ -309,7 +309,7 @@ namespace telar::gui::qt {
   }
 
   bool Application::handleHistoryWheel(QWheelEvent& event) {
-    if (dialog_ != Dialog::history) {
+    if (store_.dialog().kind != Dialog::history) {
       return false;
     }
 
@@ -328,7 +328,7 @@ namespace telar::gui::qt {
   void Application::scrollHistory(HistoryScrollPosition pointer, ScrollSample sample) {
     const auto& browser = session().historyBrowser();
     const auto& view = browser.state();
-    const HistoryScrollState state{.generation = dialog_generation_, .revision = browser.revision(), .ready = !historyLoading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
+    const HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !historyLoading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
     const auto& surface = presented_history_surface_;
 
     if (sample.precise) {

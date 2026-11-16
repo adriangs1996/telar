@@ -83,7 +83,7 @@ namespace telar::gui::qt {
   }
 
   bool Application::peekOriginValid() const {
-    if (dialog_ != Dialog::peek || !peek_origin_ || peek_origin_->window != window_generation_ || !activityAvailable(peek_origin_->target)) {
+    if (store_.dialog().kind != Dialog::peek || !peek_origin_ || peek_origin_->window != window_generation_ || !activityAvailable(peek_origin_->target)) {
       return false;
     }
 
@@ -94,7 +94,7 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshPeek() {
-    if (dialog_ != Dialog::peek) {
+    if (store_.dialog().kind != Dialog::peek) {
       return;
     }
 
@@ -134,7 +134,7 @@ namespace telar::gui::qt {
   }
 
   void Application::submitPeek(const QString& revision) {
-    if (revision != QString::number(dialog_generation_) || !peekOriginValid()) {
+    if (revision != QString::number(store_.dialog().generation) || !peekOriginValid()) {
       return;
     }
 
@@ -165,7 +165,7 @@ namespace telar::gui::qt {
       }
     }
 
-    return {{QStringLiteral("revision"), QString::number(dialog_generation_)}, {QStringLiteral("title"), title}, {QStringLiteral("facts"), facts}, {QStringLiteral("lines"), lines}, {QStringLiteral("editorText"), peek_editor_}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(PeekLimits::message_bytes)}};
+    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("facts"), facts}, {QStringLiteral("lines"), lines}, {QStringLiteral("editorText"), peek_editor_}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(PeekLimits::message_bytes)}};
   }
 
   QVariantMap Application::peekGeometry() const {

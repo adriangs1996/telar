@@ -944,7 +944,7 @@ if(TELAR_GUI_NATIVE)
 
   # The generated QML type registrations include each registered header by its bare name.
   # Sources spell ui/ headers from src/gui; only the registrations need these folders.
-  foreach(folder IN ITEMS activity app attachments chrome components controls documents history machines notifications panes prompt terminal)
+  foreach(folder IN ITEMS activity app attachments chrome components controls documents history machines notifications panes prompt store terminal)
     target_include_directories(gui-quick PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui/${folder}")
   endforeach()
 

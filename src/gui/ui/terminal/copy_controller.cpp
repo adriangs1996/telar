@@ -41,7 +41,7 @@ namespace telar::gui::qt {
 
   bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent& event) {
     const auto& copy = copyState();
-    if (!copy || copy->pointer || dialog_ != Dialog::none || copy->pane_id != pane_id) {
+    if (!copy || copy->pointer || store_.dialog().kind != Dialog::none || copy->pane_id != pane_id) {
       return false;
     }
 
@@ -94,7 +94,7 @@ namespace telar::gui::qt {
   }
 
   bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
-    if (dialog_ != Dialog::none) {
+    if (store_.dialog().kind != Dialog::none) {
       return false;
     }
 
@@ -111,7 +111,7 @@ namespace telar::gui::qt {
 
   bool Application::handleCopyPointer(const CopyPointerInput& input) {
     const auto owner = session().copyMode().pointerOwner();
-    if (dialog_ != Dialog::none && (!owner || !owner->dragging)) {
+    if (store_.dialog().kind != Dialog::none && (!owner || !owner->dragging)) {
       return true;
     }
 

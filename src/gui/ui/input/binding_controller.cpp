@@ -205,7 +205,7 @@ namespace telar::gui::qt {
   }
 
   std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) const {
-    if (dialog_ != Dialog::none || pick_controller_.isOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
+    if (store_.dialog().kind != Dialog::none || pick_controller_.isOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
       return {};
     }
 

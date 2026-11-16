@@ -64,7 +64,7 @@ namespace telar::gui::qt {
   }
 
   void Application::searchPaths(const QString& text) {
-    if (dialog_ != Dialog::paths) {
+    if (store_.dialog().kind != Dialog::paths) {
       return;
     }
 
@@ -89,7 +89,7 @@ namespace telar::gui::qt {
   }
 
   void Application::reportPathQueryLimit(qulonglong requested_bytes) {
-    if (dialog_ == Dialog::paths && requested_bytes > PathPickerLimits::query_bytes) {
+    if (store_.dialog().kind == Dialog::paths && requested_bytes > PathPickerLimits::query_bytes) {
       session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
       refreshNotifications();
     }
@@ -98,12 +98,12 @@ namespace telar::gui::qt {
   void Application::movePathSelection(int delta) {
     const auto count = session().pathPicker().matches().size();
 
-    if (dialog_ != Dialog::paths) {
+    if (store_.dialog().kind != Dialog::paths) {
       return;
     }
 
     // The prompt line lists the paths downward from its search; a flipped dialog, upward.
-    const auto flipped = line_search_pane_ == 0 && pathPlacement().flipped;
+    const auto flipped = store_.dialog().line_search_pane == 0 && pathPlacement().flipped;
     const auto direction = flipped ? -static_cast<std::int64_t>(delta) : static_cast<std::int64_t>(delta);
     const auto maximum = count == 0 ? 0 : static_cast<std::int64_t>(count - 1);
 
@@ -113,7 +113,7 @@ namespace telar::gui::qt {
 
   void Application::descendPath() {
     applyInteraction([&] {
-      if (dialog_ == Dialog::paths && session().descendPath(path_selection_)) {
+      if (store_.dialog().kind == Dialog::paths && session().descendPath(path_selection_)) {
         path_query_.clear();
         path_selection_ = 0;
         refreshPathPicker();
@@ -123,7 +123,7 @@ namespace telar::gui::qt {
 
   void Application::ascendPath() {
     applyInteraction([&] {
-      if (dialog_ == Dialog::paths && session().ascendPath()) {
+      if (store_.dialog().kind == Dialog::paths && session().ascendPath()) {
         path_query_.clear();
         path_selection_ = 0;
         refreshPathPicker();
@@ -133,7 +133,7 @@ namespace telar::gui::qt {
 
   void Application::insertPath(bool absolute) {
     applyInteraction([&] {
-      if (dialog_ != Dialog::paths) {
+      if (store_.dialog().kind != Dialog::paths) {
         return;
       }
 
@@ -147,7 +147,7 @@ namespace telar::gui::qt {
 
   void Application::activatePath(const QVariantMap& choice) {
     const auto& page = session().pathPicker();
-    if (dialog_ != Dialog::paths || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
+    if (store_.dialog().kind != Dialog::paths || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
       return;
     }
 

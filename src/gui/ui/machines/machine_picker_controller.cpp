@@ -87,7 +87,7 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshMachinePicker() {
-    if (dialog_ == Dialog::palette && palette_query_.startsWith(QLatin1Char(':'))) {
+    if (store_.dialog().kind == Dialog::palette && palette_query_.startsWith(QLatin1Char(':'))) {
       refreshPalette();
     }
   }
@@ -177,7 +177,7 @@ namespace telar::gui::qt {
   }
 
   std::optional<MachinePickerTarget> Application::chosenMachine(const QVariantMap& choice) const {
-    if (dialog_ != Dialog::palette || choice.value(QStringLiteral("revision")).toString() != QString::number(palette_revision_)) {
+    if (store_.dialog().kind != Dialog::palette || choice.value(QStringLiteral("revision")).toString() != QString::number(palette_revision_)) {
       return std::nullopt;
     }
 
