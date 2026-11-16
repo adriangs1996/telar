@@ -2017,14 +2017,14 @@ namespace {
       application.notifications()->retireFocus(local_key);
       application.setWindow(current);
       current.contentItem()->forceActiveFocus();
-      QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+      QCoreApplication::sendPostedEvents(application.notifications(), QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), current.contentItem());
       application.notifications()->retireFocus(local_key, &old_terminal);
-      QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+      QCoreApplication::sendPostedEvents(application.notifications(), QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), current.contentItem());
 
       application.notifications()->retireFocus(local_key);
-      QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+      QCoreApplication::sendPostedEvents(application.notifications(), QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), &terminal);
       terminal.setFocus(false);
       current.contentItem()->forceActiveFocus();
@@ -2033,7 +2033,7 @@ namespace {
       QQuickItem editor{current.contentItem()};
 
       editor.forceActiveFocus();
-      QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+      QCoreApplication::sendPostedEvents(application.notifications(), QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), &editor);
 
       MachineWindow::select(application, fixture.remote.machine);
@@ -2046,10 +2046,10 @@ namespace {
       current.contentItem()->forceActiveFocus();
       QCOMPARE(current.activeFocusItem(), current.contentItem());
       application.notifications()->retireFocus(local_key);
-      QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+      QCoreApplication::sendPostedEvents(application.notifications(), QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), current.contentItem());
       application.notifications()->retireFocus(remote_key);
-      QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+      QCoreApplication::sendPostedEvents(application.notifications(), QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), &terminal);
     }
 

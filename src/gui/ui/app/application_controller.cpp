@@ -404,6 +404,7 @@ namespace telar::gui::qt {
     window_ = &window;
     ++window_generation_;
     peek_.setWindowGeneration(window_generation_);
+    notifications_.setWindow(window, window_generation_);
     frame_pacer_.reset();
     frame_pacer_.emplace(window);
     history_.setWindow(&window);
@@ -1354,6 +1355,14 @@ namespace telar::gui::qt {
 
     store_.setDialog(kind, line_search_pane);
     emit dialogChanged();
+  }
+
+  void ApplicationController::restoreTerminalFocus() {
+    const auto* pane = session().focusedPane();
+    const auto terminal = pane != nullptr ? terminals_.value(pane->id) : nullptr;
+    if (terminal && terminal->isVisible() && store_.dialog().kind == Dialog::none) {
+      terminal->forceActiveFocus(Qt::OtherFocusReason);
+    }
   }
 
   void ApplicationController::reportFailure(const QString& message) {

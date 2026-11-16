@@ -607,9 +607,6 @@ namespace telar::gui::qt {
     void configureWindow();
     void synchronizeCadence();
     void initializeNotifications();
-    // The card that held the keyboard went away: the focused terminal takes it back once nothing
-    // else did meanwhile.
-    void retireNotificationFocus(QQuickItem* retiring_owner);
     void initializeGraphicsRecovery();
     void scheduleGraphicsRecovery();
     void restoreTerminalFocus();

@@ -7,12 +7,33 @@ static_assert(true);
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/timing/deadline_timer.hpp"
 #include <QLatin1Char>
+#include <QMetaObject>
 #include <exception>
 #include <limits>
 
 import telar.gui.platform.awake_clock;
 
 namespace telar::gui::qt {
+
+  namespace {
+
+    struct NotificationFocus {
+      std::uint64_t window;
+      std::uint64_t machine;
+      std::uint64_t pane;
+      std::uint64_t generation;
+      std::uint64_t attachment;
+
+      bool operator==(const NotificationFocus&) const = default;
+    };
+
+    bool keyboardFocusVacant(const QQuickWindow& window) {
+      const auto* item = window.activeFocusItem();
+
+      return item == nullptr || item == window.contentItem() || !item->isEnabled();
+    }
+
+  }
 
   NotificationsController::NotificationsController(Store& store, QObject* parent)
       : QObject(parent),
@@ -139,9 +160,40 @@ namespace telar::gui::qt {
   }
 
   void NotificationsController::retireFocus(const QString& identity, QQuickItem* retiring_owner) {
-    if (resolve(identity)) {
-      emit focusRetireRequested(retiring_owner);
+    if (!resolve(identity)) {
+      return;
     }
+
+    const auto* pane = store_.session().focusedPane();
+    if (pane == nullptr || !pane->attached || window_ == nullptr || (retiring_owner != nullptr && retiring_owner->window() != window_) || (!keyboardFocusVacant(*window_) && window_->activeFocusItem() != retiring_owner)) {
+      return;
+    }
+
+    const NotificationFocus target{.window = window_generation_, .machine = store_.machineView(), .pane = pane->id, .generation = pane->generation, .attachment = pane->attachment_generation};
+
+    // A delivered control can disappear before its disabled record is painted.
+    // Complete its retirement before restoring the captured pane's keyboard owner.
+    QMetaObject::invokeMethod(this, [this, target] {
+      if (window_ == nullptr || store_.dialog().kind != Store::Dialog::none) {
+        return;
+      }
+
+      const auto* current = store_.session().focusedPane();
+      if (!keyboardFocusVacant(*window_) || current == nullptr || !current->attached) {
+        return;
+      }
+
+      const NotificationFocus present{.window = window_generation_, .machine = store_.machineView(), .pane = current->id, .generation = current->generation, .attachment = current->attachment_generation};
+      if (present == target) {
+        emit focusRestoreRequested();
+      }
+    },
+        Qt::QueuedConnection);
+  }
+
+  void NotificationsController::setWindow(QQuickWindow& window, std::uint64_t generation) {
+    window_ = &window;
+    window_generation_ = generation;
   }
 
 }

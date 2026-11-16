@@ -6,7 +6,9 @@ static_assert(true);
 #include "core/terminal_size.hpp"
 #include "ui/store/store.hpp"
 #include <QObject>
+#include <QPointer>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QString>
 #include <QTimer>
 #include <QtQml/qqmlregistration.h>
@@ -24,8 +26,9 @@ namespace telar::gui::qt {
   // The notifications the active session holds: the cards the overlay stacks over the
   // terminals, when each one fades, and dismissing or acting on one.
   //
-  // It reads the store and the display the window pushes. Acting on a card opens its link and
-  // gives the keyboard back to the terminal, which the window does when the controller asks.
+  // It reads the store and the display and window the window pushes. Acting on a card opens its
+  // link and gives the keyboard back to the terminal, which the window does when the controller
+  // asks.
   class NotificationsController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(NotificationsController)
@@ -50,7 +53,8 @@ namespace telar::gui::qt {
 
     Q_INVOKABLE void dismiss(const QString& identity);
     Q_INVOKABLE void activate(const QString& identity);
-    // The card that held the keyboard is going away: the terminal may take it back.
+    // The card that held the keyboard is going away: the focused terminal takes it back once
+    // nothing else did meanwhile.
     Q_INVOKABLE void retireFocus(const QString& identity, QQuickItem* retiring_owner = nullptr);
 
     void publish(NotificationInput input);
@@ -61,6 +65,8 @@ namespace telar::gui::qt {
     // What the window shows moved: a card's target may have come into view or left it.
     void publishView();
     void setDisplay(const DisplayMetrics& display, TerminalGrid grid);
+    // The window the cards show in, and its generation, which changes with each window.
+    void setWindow(QQuickWindow& window, std::uint64_t generation);
 
   signals:
     void changed();
@@ -68,7 +74,6 @@ namespace telar::gui::qt {
     void displayChanged();
     void linkRequested(const QString& uri);
     void focusRestoreRequested();
-    void focusRetireRequested(QQuickItem* retiring_owner);
     void failed(const QString& message);
 
   private:
@@ -80,6 +85,8 @@ namespace telar::gui::qt {
     std::uint64_t presented_ = 0;
     DisplayMetrics display_{};
     TerminalGrid grid_{};
+    QPointer<QQuickWindow> window_;
+    std::uint64_t window_generation_ = 0;
   };
 
 }
