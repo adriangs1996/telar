@@ -878,6 +878,8 @@ namespace telar::gui::qt {
     std::uint64_t palette_revision_ = 0;
     QTimer refresh_timer_;
     QTimer notification_timer_;
+    // The active session's notification revision the window last presented.
+    std::uint64_t presented_notifications_ = 0;
     QTimer graphics_resume_timer_;
     QString error_;
 

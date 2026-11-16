@@ -1055,6 +1055,11 @@ namespace telar::gui::qt {
     // Exceptions stay on this side of the signal that delivered the interaction.
     try {
       publishPromptWrite();
+      // A controller's interaction may have published a notification, such as a reached limit.
+      if (session().notificationRevision() != presented_notifications_) {
+        refreshNotifications();
+      }
+
       refresh();
     } catch (const std::exception& error) {
       interactionFailed(error);

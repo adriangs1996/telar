@@ -130,6 +130,7 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshNotifications() {
+    presented_notifications_ = session().notificationRevision();
     scheduleNotifications();
     emit notificationsChanged();
   }

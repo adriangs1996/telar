@@ -4295,11 +4295,14 @@ return {api_version=2, client={keybindings={
       QVERIFY(search != nullptr);
       const auto maximum = client_->history()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
       const QString typed(maximum + 1, QLatin1Char('x'));
+      // The notice reaches the window, not only the session.
+      const QSignalSpy presented{client_.get(), &Application::notificationsChanged};
       QInputMethodEvent commit;
 
       commit.setCommitString(typed);
       QCoreApplication::sendEvent(search, &commit);
       QCOMPARE(search->property("text").toString(), typed.first(maximum));
+      QVERIFY(presented.count() > 0);
       const auto reached = [this] {
         return std::ranges::any_of(client_->notifications().items(), [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.history_query_bytes") != std::string_view::npos;
