@@ -293,7 +293,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void selectCapturedTab();
     Q_INVOKABLE void setSidebarWidth(qreal width);
     Q_INVOKABLE void usePaletteResult(const QVariantMap& choice);
-    Q_INVOKABLE void submitSuggestion(const QString& revision);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
 
     bool input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
@@ -521,7 +520,6 @@ namespace telar::gui::qt {
     void measureDisplay();
     // A controller's interaction failed outside a dialog that shows it.
     void reportFailure(const QString& message);
-    bool restorePaletteParent();
     bool navigatePaletteTarget(const NavigationTarget& target);
     void showPathPicker();
     static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};

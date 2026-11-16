@@ -2588,7 +2588,7 @@ return {api_version=2, client={keybindings={
 
       client_->palette()->search(QStringLiteral("?new task"));
       QCOMPARE(suggestion().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
-      client_->submitSuggestion(obsolete);
+      client_->palette()->submitSuggestion(obsolete);
       QCOMPARE(suggestion().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
       QTRY_COMPARE_WITH_TIMEOUT(search->text(), QStringLiteral("?new task"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);

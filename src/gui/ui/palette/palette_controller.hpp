@@ -12,6 +12,7 @@ static_assert(true);
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <optional>
 #include <string_view>
 #include <variant>
@@ -40,7 +41,9 @@ namespace telar::gui::qt {
   // palette it was opened from.
   //
   // It reads the store and the display and commands the window pushes. Using a row acts on the
-  // session or the window, so the window does it with what this controller answers.
+  // session or the window, so the window does it with what this controller answers. It asks the
+  // window to show its dialog again when it changes mode in place, and to close it once a
+  // suggestion is submitted.
   class PaletteController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(PaletteController)
@@ -85,6 +88,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void move(int delta);
     Q_INVOKABLE void setMode(int mode);
     Q_INVOKABLE void reportQueryLimit(qulonglong requested_bytes);
+    // Submits the suggestion's task while the suggestion the view shows is the current one.
+    Q_INVOKABLE void submitSuggestion(const QString& revision);
 
     // Starts the palette in a mode, with an empty query; the window shows its dialog.
     void open(PaletteMode mode);
@@ -106,9 +111,9 @@ namespace telar::gui::qt {
     // The actions palette as it is, to return to from the suggestion opened from its row.
     [[nodiscard]] Parent parentFor(const QVariantMap& choice, std::size_t index) const;
     void adoptParent(Parent parent);
-    [[nodiscard]] bool hasParent() const noexcept;
-    // Returns to the actions palette the suggestion was opened from.
-    void restoreParent();
+    // Returns to the actions palette the suggestion was opened from; false when the palette is
+    // closed or was not opened from one.
+    bool restoreParent();
     // The suggestion's revision, which a submission names.
     [[nodiscard]] QString suggestionRevision() const;
     // How many times the rows were matched again and moved, for tests and probes that check what
@@ -117,6 +122,10 @@ namespace telar::gui::qt {
 
   signals:
     void changed();
+    // The palette changed mode in place: the window shows its dialog again.
+    void showRequested();
+    void closeRequested();
+    void failed(const QString& message);
 
   private:
     static constexpr std::size_t capacity = WorkspaceReplica<Memory>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<Memory>::capacity;
@@ -128,6 +137,21 @@ namespace telar::gui::qt {
     void collectNavigation(Matches& matches, std::string_view query) const;
     [[nodiscard]] QVariantMap record(const PaletteTarget& target, bool queried) const;
     [[nodiscard]] QVariantMap machineRecord(MachinePickerTarget target) const;
+
+    // Runs a user's mutation of the session and commits it to the store.
+    template <typename Mutation>
+    void interact(Mutation mutate) {
+      store_.begin();
+      try {
+        mutate();
+      } catch (const std::exception& error) {
+        emit failed(QString::fromUtf8(error.what()));
+
+        return;
+      }
+
+      store_.commit();
+    }
 
     Store& store_;
     QString query_;

@@ -264,7 +264,7 @@ namespace {
     }
 
     void submit() {
-      client_->submitSuggestion(state().value(QStringLiteral("revision")).toString());
+      client_->palette()->submitSuggestion(state().value(QStringLiteral("revision")).toString());
     }
 
     ApplicationMemory application_memory_;

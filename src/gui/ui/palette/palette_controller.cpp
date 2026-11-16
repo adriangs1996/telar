@@ -577,13 +577,9 @@ namespace telar::gui::qt {
     emit changed();
   }
 
-  bool PaletteController::hasParent() const noexcept {
-    return parent_.has_value();
-  }
-
-  void PaletteController::restoreParent() {
-    if (!parent_) {
-      return;
+  bool PaletteController::restoreParent() {
+    if (!isOpen() || !parent_) {
+      return false;
     }
 
     auto parent = std::move(*parent_);
@@ -595,6 +591,25 @@ namespace telar::gui::qt {
     editor_restore_ = parent.editor;
     editor_restore_.revision = ++revision_;
     emit changed();
+    emit showRequested();
+
+    return true;
+  }
+
+  void PaletteController::submitSuggestion(const QString& revision) {
+    const auto encoded = query_.toUtf8();
+    const auto query = PaletteQuery::parse(paletteBytes(encoded));
+    if (!isOpen() || query.mode != PaletteMode::suggest || revision != suggestionRevision()) {
+      return;
+    }
+
+    interact([&] {
+      if (store_.session().submitSuggestion(query.text)) {
+        emit closeRequested();
+      }
+
+      publish();
+    });
   }
 
   QString PaletteController::suggestionRevision() const {

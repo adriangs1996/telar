@@ -34,7 +34,7 @@ Item {
 
     function submit(alternate = false) {
         if (root.suggesting) {
-            root.controller.submitSuggestion(root.controller.palette.suggestion.revision);
+            root.controller.palette.submitSuggestion(root.controller.palette.suggestion.revision);
         } else {
             choose(root.state.selectedKey ?? "", root.state.revision, alternate);
         }
@@ -81,7 +81,7 @@ Item {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            onSubmitted: revision => root.controller.submitSuggestion(revision)
+            onSubmitted: revision => root.controller.palette.submitSuggestion(revision)
             onBackRequested: root.controller.execute(ApplicationController.Action.cancel)
         }
     }

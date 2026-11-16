@@ -217,6 +217,13 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
     connect(&history_, &HistoryController::failed, this, &ApplicationController::reportFailure);
+    connect(&palette_, &PaletteController::showRequested, this, [this] {
+      showDialog(Dialog::palette);
+    });
+    connect(&palette_, &PaletteController::closeRequested, this, [this] {
+      showDialog(Dialog::none);
+    });
+    connect(&palette_, &PaletteController::failed, this, &ApplicationController::reportFailure);
     connect(&paths_, &PathPickerController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
@@ -1200,7 +1207,7 @@ namespace telar::gui::qt {
 
   void ApplicationController::cancelCurrentInteraction() {
     session().invalidateSuggestion();
-    if (restorePaletteParent()) {
+    if (palette_.restoreParent()) {
       return;
     }
 
