@@ -76,7 +76,7 @@ KeyboardAction {
     }
 
     function activate() {
-        controller.activateComponent(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
+        controller.components.activate(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
     }
 
     // A bar yields its tooltips to an open panel or pick; a panel's own nodes yield only to a pick.

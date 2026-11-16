@@ -395,11 +395,8 @@ namespace telar::gui::qt {
     [[nodiscard]] QString title() const;
     [[nodiscard]] QVariantMap statusMode() const;
     [[nodiscard]] QVariantMap hostMetrics() const;
-    Q_INVOKABLE void activateComponent(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor);
     // A click on a mod element: runs its action, URL or Lua function.
     Q_INVOKABLE void activateElement(const QString& slot, const QString& key, const QString& revision, int element);
-    Q_INVOKABLE void closeComponentPick();
-    Q_INVOKABLE void chooseComponentPick(int row, const QString& identity);
     [[nodiscard]] bool prefixPending() const noexcept;
     [[nodiscard]] QString error() const;
     [[nodiscard]] QString tlsBadgeColor() const;
@@ -458,10 +455,8 @@ namespace telar::gui::qt {
     void initializeElements();
     // The mod content a record carries for its slots, keyed by slot name.
     void refreshElementBars();
-    void activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString& identity, const QPointF& anchor, const ConfigurationSource::Actions& resolved);
     void initializePicks();
     void openComponentPick(std::size_t index);
-    void restoreComponentPickFocus();
     void initializePlugins();
     void initializePrompt();
     void applyPluginEffects(const PluginEffects& effects);
@@ -650,7 +645,6 @@ namespace telar::gui::qt {
     // The theme and font QML reads, built on first read after each configurationChanged.
     mutable std::optional<QVariantMap> colors_;
     mutable std::optional<QVariantMap> font_;
-    QPointer<QQuickItem> component_pick_return_focus_;
     tbc::view<ElementSlots, tbc::lt::self> element_slots_{configuration_source_, [this] {
                                                             return components_.context();
                                                           },

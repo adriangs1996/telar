@@ -5832,9 +5832,9 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       const auto left = slot("left");
 
-      client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+      client_->components()->activate(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+      client_->components()->activate(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
@@ -5856,7 +5856,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredTooltipsYieldToOpenSurfaces() {
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPick();
+        client_->components()->closePick();
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
@@ -6792,9 +6792,9 @@ return {api_version=2, client={keybindings={
       const auto generation = surface.value(QStringLiteral("generation")).toString();
       const auto revision = surface.value(QStringLiteral("revision")).toString();
 
-      client_->activateComponent(source, 0, generation + QStringLiteral("stale"), revision, bounds.center());
+      client_->components()->activate(source, 0, generation + QStringLiteral("stale"), revision, bounds.center());
       QVERIFY(!client_->components()->panel().value(QStringLiteral("open")).toBool());
-      client_->activateComponent(source, 0, generation, revision + QStringLiteral("stale"), bounds.center());
+      client_->components()->activate(source, 0, generation, revision + QStringLiteral("stale"), bounds.center());
       QVERIFY(!client_->components()->panel().value(QStringLiteral("open")).toBool());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
@@ -7167,7 +7167,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void configuredPicks() {
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
-        client_->closeComponentPick();
+        client_->components()->closePick();
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
@@ -8756,7 +8756,7 @@ return {api_version=2, client={keybindings={
 
     void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPick();
+        client_->components()->closePick();
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });

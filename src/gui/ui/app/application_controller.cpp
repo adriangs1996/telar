@@ -412,6 +412,7 @@ namespace telar::gui::qt {
     ++window_generation_;
     peek_.setWindowGeneration(window_generation_);
     notifications_.setWindow(window, window_generation_);
+    components_.setWindow(window);
     frame_pacer_.reset();
     frame_pacer_.emplace(window);
     history_.setWindow(&window);
@@ -1407,7 +1408,7 @@ namespace telar::gui::qt {
     // The modal takes the keyboard and the pointer from the panes while it is open.
     connect(&attachments_, &AttachmentsController::modalChanged, this, [this](bool open) {
       if (open) {
-        closeComponentPick();
+        components_.closePick();
         components_.closePanel();
         interruptBindings();
         for (const auto& pane : session().panes()) {

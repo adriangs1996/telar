@@ -13,6 +13,9 @@ static_assert(true);
 #include "ui/store/store.hpp"
 #include <QObject>
 #include <QPointF>
+#include <QPointer>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QString>
 #include <QTimer>
 #include <QVariantMap>
@@ -25,6 +28,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.components.configuration;
+import telar.gui.links.cell_links;
 
 namespace telar::gui::test {
   struct ComponentActions;
@@ -39,8 +43,9 @@ namespace telar::gui::qt {
   // pick a binding opens over them, and the element bars.
   //
   // Each surface is fixed, built in, rendered by Lua or by a command, on its own clock. It reads
-  // the store and the configuration. Running a surface's action acts on the session or the
-  // window, so the window does it with the action this controller answers.
+  // the store and the configuration. A pressed node's binding acts on the session or the window,
+  // and its link opens with the window's, so it asks the window to run them. The pick gives the
+  // keyboard back to the panel it was opened over, or asks the window for the terminal.
   class ComponentsController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(ComponentsController)
@@ -52,14 +57,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap elementBars READ elementBars NOTIFY elementBarsChanged)
 
   public:
-    // What a surface's node runs when it is pressed.
-    struct Activation {
-      std::optional<BindingAction> action;
-      std::string_view url;
-      QString identity;
-      const ConfigurationSource::Actions* actions = nullptr;
-    };
-
     ComponentsController(Store& store, ConfigurationSource& configuration, ElementSlots& elements, ApplicationAllocator& memory, QObject* parent = nullptr);
     ~ComponentsController() override = default;
     ComponentsController(const ComponentsController&) = delete;
@@ -89,13 +86,17 @@ namespace telar::gui::qt {
     [[nodiscard]] bool panelCurrent() const noexcept;
     // Whether the content that offered these actions is still on screen.
     [[nodiscard]] bool actionsLive(const ConfigurationSource::Actions& actions) const;
-    // The node a press in QML names, while its surface still shows it.
-    [[nodiscard]] std::optional<Activation> activation(int source, int node, const QString& generation, const QString& revision) const;
+    // Runs the node a press in QML names, while its surface still shows it and its action is
+    // still the one shown; `anchor` is where it was pressed.
+    Q_INVOKABLE void activate(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor);
 
+    void setWindow(QQuickWindow& window);
+    // Remembers what has the keyboard, to give it back when the pick closes, unless the pick is
+    // open already.
+    void rememberPickFocus();
     void openPick(std::size_t index);
-    void closePick();
-    // Chooses a row; it throws what the pick rejects.
-    void choosePick(int row, const QString& identity);
+    Q_INVOKABLE void closePick();
+    Q_INVOKABLE void choosePick(int row, const QString& identity);
     [[nodiscard]] bool pickOpen() const;
 
     // The element bars render `item`, what a mod reads of the window.
@@ -106,12 +107,29 @@ namespace telar::gui::qt {
     void pickChanged();
     void elementBarsChanged();
     void failed(const QString& message);
+    // A pressed node runs a binding, where it was pressed, or opens a link; the window does both.
+    void bindingRequested(const telar::gui::BindingAction& action, const telar::gui::qt::ConfigurationSource::Actions& actions, QPointF anchor);
+    void linkRequested(const telar::gui::LinkTarget& target);
+    // The pick closed with no panel to give the keyboard back to.
+    void focusRestoreRequested();
 
   private:
+    // What a surface's node runs when it is pressed.
+    struct Activation {
+      std::optional<BindingAction> action;
+      std::string_view url;
+      QString identity;
+      const ConfigurationSource::Actions* actions = nullptr;
+    };
+
     friend struct test::ComponentActions;
     template <typename Host, Allocator Memory, typename Source>
     friend class PickController;
 
+    // The node a press in QML names, while its surface still shows it.
+    [[nodiscard]] std::optional<Activation> activation(int source, int node, const QString& generation, const QString& revision) const;
+    // The panel the pick was opened over takes the keyboard back; without one, the terminal does.
+    void restorePickFocus();
     void tick();
     void arm();
     void project();
@@ -139,6 +157,8 @@ namespace telar::gui::qt {
     std::optional<ComponentCommandOwner> command_owner_;
     std::uint64_t next_revision_ = 0;
     tbc::view<PickController<ComponentsController, ApplicationAllocator, ConfigurationSource>, tbc::lt::self> pick_;
+    QPointer<QQuickWindow> window_;
+    QPointer<QQuickItem> pick_return_focus_;
     QVariantMap element_bars_;
   };
 

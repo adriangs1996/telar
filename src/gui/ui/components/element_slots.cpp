@@ -45,6 +45,12 @@ namespace telar::gui::qt {
       return result;
     }
 
+    QString statusName(const QVariant& code) {
+      constexpr std::array names{"unknown", "working", "blocked", "ready", "failed", "done"};
+      const auto index = code.toInt();
+
+      return QString::fromLatin1(index >= 0 && static_cast<std::size_t>(index) < names.size() ? names[static_cast<std::size_t>(index)] : names.front());
+    }
   }
 
   ElementSlots::ElementSlots(ConfigurationSource& source, Context context, QObject* parent)
@@ -361,6 +367,76 @@ namespace telar::gui::qt {
     }
 
     return result;
+  }
+
+  QVariantMap ElementSlots::tabItem(const QVariantMap& record, int position) {
+    QVariantList panes;
+
+    for (const auto& entry : record.value(QStringLiteral("cards")).toList()) {
+      const auto card = entry.toMap();
+
+      panes.append(QVariantMap{
+          {QStringLiteral("key"), card.value(QStringLiteral("key"))},
+          {QStringLiteral("program"), card.value(QStringLiteral("program"))},
+          {QStringLiteral("focused"), card.value(QStringLiteral("focused"))},
+          {QStringLiteral("attention"), !card.value(QStringLiteral("attentionColor")).toString().isEmpty()},
+      });
+    }
+
+    return {
+        {QStringLiteral("index"), position + 1},
+        {QStringLiteral("key"), record.value(QStringLiteral("key"))},
+        {QStringLiteral("title"), record.value(QStringLiteral("title"))},
+        {QStringLiteral("label"), record.value(QStringLiteral("label"))},
+        {QStringLiteral("path"), record.value(QStringLiteral("path"))},
+        {QStringLiteral("application"), record.value(QStringLiteral("application"))},
+        {QStringLiteral("selected"), record.value(QStringLiteral("selected"))},
+        {QStringLiteral("attention"), !record.value(QStringLiteral("attentionColor")).toString().isEmpty()},
+        {QStringLiteral("panes"), panes},
+    };
+  }
+
+  QVariantMap ElementSlots::paneItem(const QVariantMap& pane, const QVariantMap& chrome) {
+    QVariantMap item{
+        {QStringLiteral("id"), pane.value(QStringLiteral("key"))},
+        {QStringLiteral("index"), chrome.value(QStringLiteral("index")).toInt()},
+        {QStringLiteral("program"), chrome.value(QStringLiteral("program"))},
+        {QStringLiteral("context"), chrome.value(QStringLiteral("context"))},
+        {QStringLiteral("focused"), pane.value(QStringLiteral("focused"))},
+        {QStringLiteral("fullscreen"), pane.value(QStringLiteral("fullscreen"))},
+        {QStringLiteral("images_paused"), chrome.value(QStringLiteral("imagesPaused"))},
+        {QStringLiteral("needs_attention"), chrome.value(QStringLiteral("needsAttention"))},
+        {QStringLiteral("progress"), chrome.value(QStringLiteral("progressText"))},
+    };
+
+    const auto agent = chrome.value(QStringLiteral("agent")).toMap();
+    if (!agent.isEmpty()) {
+      item.insert(QStringLiteral("agent"), QVariantMap{
+                                               {QStringLiteral("status"), statusName(agent.value(QStringLiteral("statusCode")))},
+                                               {QStringLiteral("blocked_reason"), agent.value(QStringLiteral("blockedReason"))},
+                                           });
+    }
+
+    return item;
+  }
+
+  QVariantMap ElementSlots::agentItem(const QVariantMap& record) {
+    return {
+        {QStringLiteral("key"), record.value(QStringLiteral("key"))},
+        {QStringLiteral("title"), record.value(QStringLiteral("title"))},
+        {QStringLiteral("project"), record.value(QStringLiteral("project"))},
+        {QStringLiteral("detail"), record.value(QStringLiteral("detail"))},
+        {QStringLiteral("provider"), record.value(QStringLiteral("provider"))},
+        {QStringLiteral("status"), statusName(record.value(QStringLiteral("statusCode")))},
+        {QStringLiteral("selected"), record.value(QStringLiteral("selected"))},
+        {QStringLiteral("compact"), record.value(QStringLiteral("compact"))},
+        {QStringLiteral("depth"), record.value(QStringLiteral("depth"))},
+        {QStringLiteral("plan"), QVariantMap{
+                                     {QStringLiteral("done"), record.value(QStringLiteral("planDone"))},
+                                     {QStringLiteral("total"), record.value(QStringLiteral("planTotal"))},
+                                     {QStringLiteral("step"), record.value(QStringLiteral("planStep"))},
+                                 }},
+    };
   }
 
 }

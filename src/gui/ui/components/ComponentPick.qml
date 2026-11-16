@@ -29,7 +29,7 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     background: DialogSurface { colors: root.colors; ratio: root.ratio }
     Overlay.modal: Rectangle { color: "black"; opacity: 0.25 }
-    onClosed: if (state.open) controller.closeComponentPick()
+    onClosed: if (state.open) controller.components.closePick()
     onRowsChanged: selection = state.preferredRow ?? 0
     onVisibleChanged: {
         if (visible) {
@@ -45,7 +45,7 @@ Popup {
     }
 
     function choose() {
-        controller.chooseComponentPick(selection, state.identity);
+        controller.components.choosePick(selection, state.identity);
     }
 
     contentItem: Item {
@@ -65,7 +65,7 @@ Popup {
             text: "×"
             pixelSize: root.typography.body
             Accessible.name: "Close pick"
-            onClicked: root.controller.closeComponentPick()
+            onClicked: root.controller.components.closePick()
         }
         FormTextField {
             id: query
@@ -85,7 +85,7 @@ Popup {
             Keys.onUpPressed: root.move(-1)
             Keys.onDownPressed: root.move(1)
             Keys.onEscapePressed: {
-                if (!query.cancelComposition()) root.controller.closeComponentPick();
+                if (!query.cancelComposition()) root.controller.components.closePick();
             }
         }
         ListView {

@@ -277,12 +277,74 @@ namespace telar::gui::qt {
     return pick_.state();
   }
 
+  void ComponentsController::activate(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor) {
+    const auto pressed = activation(source, node, generation, revision);
+    if (!pressed) {
+      return;
+    }
+
+    const auto& action = pressed->action;
+    std::optional<LinkTarget> link;
+
+    try {
+      const auto named = action && action->kind == BindingActionKind::extended ? configuration_.namedAction(*action, pressed->actions) : std::nullopt;
+      if (pressed->identity != componentActionIdentity(action, pressed->url, named)) {
+        return;
+      }
+
+      if (!action && !pressed->url.empty()) {
+        link = LinkTarget::fromUri(pressed->url);
+      }
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+
+      return;
+    }
+
+    if (action) {
+      emit bindingRequested(*action, *pressed->actions, anchor);
+    } else if (link) {
+      emit linkRequested(*link);
+    }
+  }
+
+  void ComponentsController::setWindow(QQuickWindow& window) {
+    window_ = &window;
+  }
+
+  void ComponentsController::rememberPickFocus() {
+    if (!pick_.isOpen()) {
+      pick_return_focus_ = window_ != nullptr ? window_->activeFocusItem() : nullptr;
+    }
+  }
+
   void ComponentsController::openPick(std::size_t index) {
     pick_.open(index);
   }
 
   void ComponentsController::closePick() {
+    const bool open = pick_.isOpen();
+
     pick_.close();
+    if (open) {
+      restorePickFocus();
+    } else {
+      pick_return_focus_.clear();
+    }
+  }
+
+  void ComponentsController::restorePickFocus() {
+    const auto target = std::exchange(pick_return_focus_, {});
+
+    if (panelCurrent()) {
+      if (target != nullptr && target->window() == window_ && target->isVisible() && target->isEnabled()) {
+        target->forceActiveFocus(Qt::OtherFocusReason);
+      }
+
+      return;
+    }
+
+    emit focusRestoreRequested();
   }
 
   void ComponentsController::filterPick(const QString& query) {
@@ -290,7 +352,14 @@ namespace telar::gui::qt {
   }
 
   void ComponentsController::choosePick(int row, const QString& identity) {
-    pick_.choose(row, identity);
+    try {
+      pick_.choose(row, identity);
+      if (!pick_.isOpen()) {
+        restorePickFocus();
+      }
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
   }
 
   bool ComponentsController::pickOpen() const {

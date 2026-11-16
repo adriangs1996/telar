@@ -217,7 +217,7 @@ namespace telar::gui::qt {
           return true;
         }
 
-        closeComponentPick();
+        components_.closePick();
 
         return true;
       }
