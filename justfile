@@ -105,6 +105,10 @@ interface-bodies: lifetime-checker (configure "dev")
 blank-lines fix="OFF": lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=blank_lines "-DBUILD_DIRECTORY={{ build_dir }}/dev" "-DFIX={{ fix }}" -P cmake/scripts/check.cmake
 
+# Check the layers of src/gui/ui at a revision: no cycle, and no folder using one the UI rules forbid.
+ui-rules rev="HEAD":
+    python3 tools/ui-graph.py "{{ rev }}" --rules
+
 # Format every C++, Objective-C++ and module file in the repository with the root .clang-format.
 format:
     "{{ cpp }}" exec -- cmake -P cmake/scripts/format.cmake

@@ -26,6 +26,19 @@ jobs:
           sudo apt-get install -y -qq shellcheck
           shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh
 
+  # The layers of src/gui/ui (tools/ui-graph.py): no cycle, and no folder using one it may not.
+  ui-layers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the UI rules
+        run: |
+          python3 -m unittest discover -s tools/tests -p test_ui_graph.py -v
+          python3 tools/ui-graph.py HEAD --rules
+
   cpp-format:
     runs-on: ubuntu-24.04
     steps:
