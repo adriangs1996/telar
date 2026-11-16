@@ -95,6 +95,7 @@ static_assert(true);
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -191,6 +192,42 @@ namespace {
     return true;
   }
 
+  // A prompt line bound as PaneArea binds it, with the application in the pane area's place:
+  // the controllers the line hosts, the line search it follows and the cancel it asks for.
+  std::unique_ptr<QQuickItem> createPromptLine(QQmlEngine& engine, ApplicationController& application, TerminalItem& terminal, std::uint64_t pane) {
+    QQmlComponent component{&engine};
+
+    component.setData(R"(
+      import Telar.Gui
+      PromptLine {
+        required property ApplicationController application
+        colors: application.colors
+        typography: application.windowGeometry.typography
+        grid: application.windowGeometry.typography.grid
+        history: application.history
+        pathPicker: application.paths
+        copy: application.copy
+        prompt: application.prompt
+        lineSearch: application.lineSearch
+        lineSearchPane: application.lineSearchPane
+        controlModifier: application.controlModifier
+        superModifier: application.superModifier
+        onCancelled: application.execute(WindowActions.Action.cancel)
+      }
+    )",
+        QUrl{});
+    auto object = std::unique_ptr<QObject>{component.createWithInitialProperties({
+        {QStringLiteral("application"), QVariant::fromValue(&application)},
+        {QStringLiteral("paneId"), QString::number(pane)},
+        {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject*>(&terminal))},
+    })};
+    if (qobject_cast<QQuickItem*>(object.get()) == nullptr) {
+      throw std::runtime_error{component.errorString().toStdString()};
+    }
+
+    return std::unique_ptr<QQuickItem>{qobject_cast<QQuickItem*>(object.release())};
+  }
+
   // A screen with some output and the shell's prompt on the last row, flagged as the runtime
   // flags a row its integrated shell marked.
   void sendPromptScreen(WireRuntime& runtime, std::uint64_t frame_id) {
@@ -275,15 +312,7 @@ namespace {
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{720, 300});
       QQmlEngine engine;
-      const QVariantMap properties{
-          {QStringLiteral("application"), QVariant::fromValue(&application)},
-          {QStringLiteral("paneId"), QString::number(pane_id)},
-          {QStringLiteral("colors"), application.colors()},
-          {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
-          {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject*>(&terminal))},
-      };
-
-      const auto line = createChrome(engine, QStringLiteral("PromptLine"), properties);
+      const auto line = createPromptLine(engine, application, terminal, pane_id);
 
       QVERIFY(line);
       line->setParentItem(&terminal);
@@ -554,15 +583,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{820, 420});
       QQmlEngine engine;
-      const QVariantMap properties{
-          {QStringLiteral("application"), QVariant::fromValue(&application)},
-          {QStringLiteral("paneId"), QString::number(pane_id)},
-          {QStringLiteral("colors"), application.colors()},
-          {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
-          {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject*>(&terminal))},
-      };
-
-      const auto line = createChrome(engine, QStringLiteral("PromptLine"), properties);
+      const auto line = createPromptLine(engine, application, terminal, pane_id);
 
       QVERIFY(line);
       line->setParentItem(&terminal);
@@ -756,15 +777,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{820, 300});
       QQmlEngine engine;
-      const QVariantMap properties{
-          {QStringLiteral("application"), QVariant::fromValue(&application)},
-          {QStringLiteral("paneId"), QString::number(pane_id)},
-          {QStringLiteral("colors"), application.colors()},
-          {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
-          {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject*>(&terminal))},
-      };
-
-      const auto line = createChrome(engine, QStringLiteral("PromptLine"), properties);
+      const auto line = createPromptLine(engine, application, terminal, pane_id);
 
       QVERIFY(line);
       line->setParentItem(&terminal);
@@ -879,7 +892,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       rail->setParentItem(&terminal);
       rail->setPosition({700, 12});
       rail->setHeight(180);
-      const auto line = createChrome(engine, QStringLiteral("PromptLine"), {{QStringLiteral("application"), QVariant::fromValue(&application)}, {QStringLiteral("paneId"), QString::number(pane)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}, {QStringLiteral("terminal"), QVariant::fromValue(static_cast<QObject*>(&terminal))}});
+      const auto line = createPromptLine(engine, application, terminal, pane);
 
       line->setParentItem(&terminal);
       window.show();

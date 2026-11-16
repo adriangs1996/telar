@@ -362,13 +362,22 @@ Item {
                     id: promptLine
                     revealDelay: separators.revealDelay
                     transform: Translate { y: -viewport.rise }
-                    application: root.application
                     paneId: pane.record.key
                     colors: root.application.colors
+                    typography: root.application.windowGeometry.typography
                     grid: root.application.windowGeometry.typography.grid
+                    history: root.application.history
+                    pathPicker: root.application.paths
+                    copy: root.application.copy
+                    prompt: root.application.prompt
+                    lineSearch: root.application.lineSearch
+                    lineSearchPane: root.application.lineSearchPane
+                    controlModifier: root.application.controlModifier
+                    superModifier: root.application.superModifier
                     terminal: terminal
                     ratio: root.ratio
                     focused: pane.record.focused
+                    onCancelled: root.application.execute(WindowActions.Action.cancel)
                 }
 
                 // Back to the live end, above the docked line.

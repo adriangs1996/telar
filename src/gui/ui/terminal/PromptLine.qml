@@ -14,15 +14,29 @@ import Telar.Gui
 Item {
     id: root
 
-    required property var application
     required property string paneId
     required property var colors
+    required property var typography
     required property var grid
+    // What the line hosts: the history and path searches, the scrollback search of copy mode,
+    // and the editor.
+    required property var history
+    required property var pathPicker
+    required property CopyController copy
+    required property var prompt
+    // The search the window hosts in a prompt line, a Store.Dialog, and the pane whose line it is.
+    required property int lineSearch
+    required property string lineSearchPane
+    // The platform's Control and Command modifiers, as event modifier masks.
+    required property int controlModifier
+    required property int superModifier
     property var terminal: null
     property real ratio: 1
     // Only the focused pane edits, queues, reads secrets and searches; another pane's line
     // waits dimmed, and the shell's own prompt stays hidden either way.
     property bool focused: true
+    // The line closes the search it hosts: Escape, Control+H, a lost focus or the line going.
+    signal cancelled()
 
     readonly property string surface: editor.surface
     readonly property bool editing: root.surface === "editor"
@@ -32,8 +46,8 @@ Item {
     readonly property bool queueing: root.running && root.focused && (!editor.empty || editor.queued)
     // The history or the paths, searched from the editor's row, the rows they find under it.
     // The scrollback search lives in the line of the pane copy mode reads, whatever runs there.
-    readonly property bool scrollbackSearch: root.application.lineSearchPane === root.paneId && root.application.lineSearch === Store.Dialog.copy_search
-    readonly property int search: (root.editing && root.focused || root.scrollbackSearch) && root.application.lineSearchPane === root.paneId ? root.application.lineSearch : Store.Dialog.none
+    readonly property bool scrollbackSearch: root.lineSearchPane === root.paneId && root.lineSearch === Store.Dialog.copy_search
+    readonly property int search: (root.editing && root.focused || root.scrollbackSearch) && root.lineSearchPane === root.paneId ? root.lineSearch : Store.Dialog.none
     readonly property bool searching: root.search !== Store.Dialog.none
     // The rows a search shows at most, newest or best nearest the query.
     readonly property int searchRows: 8
@@ -124,7 +138,7 @@ Item {
         interval: 400
         onTriggered: root.menuOpening = false
     }
-    readonly property int searchCount: root.search === Store.Dialog.history ? (root.application.history.state.count ?? 0) : root.search === Store.Dialog.paths ? (root.application.paths.state.count ?? 0) : 0
+    readonly property int searchCount: root.search === Store.Dialog.history ? (root.history.state.count ?? 0) : root.search === Store.Dialog.paths ? (root.pathPicker.state.count ?? 0) : 0
     readonly property int listRows: Math.max(1, Math.min(root.searchRows, root.searchCount, root.screenRows - 2))
     readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.holding ? 1 + editor.visibleRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
     // The rows the line needs past the screen's last: the terminal rises by them, so the
@@ -819,8 +833,8 @@ Item {
     // A search the line stops hosting while it is open, as when its pane loses the focus,
     // closes; so does one whose field loses the keyboard to a click elsewhere in the window.
     function abandonSearch() {
-        if (!root.searching && root.application.lineSearch !== Store.Dialog.none && root.application.lineSearchPane === root.paneId) {
-            root.application.execute(WindowActions.Action.cancel);
+        if (!root.searching && root.lineSearch !== Store.Dialog.none && root.lineSearchPane === root.paneId) {
+            root.cancelled();
         }
     }
 
@@ -830,12 +844,12 @@ Item {
         if (!root.searching || !view || view.focused || view.inspecting || !window || !window.active) {
             return;
         }
-        root.application.execute(WindowActions.Action.cancel);
+        root.cancelled();
     }
 
     Component.onDestruction: {
-        if (root.application.lineSearchPane === root.paneId && root.application.lineSearch !== Store.Dialog.none) {
-            root.application.execute(WindowActions.Action.cancel);
+        if (root.lineSearchPane === root.paneId && root.lineSearch !== Store.Dialog.none) {
+            root.cancelled();
         }
     }
 
@@ -885,7 +899,7 @@ Item {
 
         Item {
             id: scrollback
-            readonly property var current: root.application.copy.searchState
+            readonly property var current: root.copy.searchState
             readonly property bool focused: query.activeFocus
             readonly property bool inspecting: false
             height: 2 * root.line
@@ -896,7 +910,7 @@ Item {
             Timer {
                 id: typing
                 interval: 90
-                onTriggered: root.application.copy.search(query.text)
+                onTriggered: root.copy.search(query.text)
             }
 
             CellText {
@@ -946,7 +960,7 @@ Item {
                 width: Math.max(0, (keys.visible ? keys.x : parent.width) - x - root.cell)
                 height: root.line
                 colors: root.colors
-                typography: root.application.windowGeometry.typography
+                typography: root.typography
                 ratio: root.ratio
                 formControl: false
                 drawsCaret: false
@@ -959,22 +973,22 @@ Item {
                         Qt.callLater(root.keepSearch);
                     }
                 }
-                Keys.onUpPressed: root.application.copy.step(false)
-                Keys.onDownPressed: root.application.copy.step(true)
+                Keys.onUpPressed: root.copy.step(false)
+                Keys.onDownPressed: root.copy.step(true)
                 Keys.onReturnPressed: {
                     typing.stop();
-                    root.application.copy.search(query.text);
-                    root.application.copy.finishSearch();
+                    root.copy.search(query.text);
+                    root.copy.finishSearch();
                 }
                 Keys.onEnterPressed: {
                     typing.stop();
-                    root.application.copy.search(query.text);
-                    root.application.copy.finishSearch();
+                    root.copy.search(query.text);
+                    root.copy.finishSearch();
                 }
                 Keys.onTabPressed: {
                     if (scrollback.current.scopes) {
                         typing.stop();
-                        root.application.copy.toggleSearchScope();
+                        root.copy.toggleSearchScope();
                     }
                 }
                 Keys.onEscapePressed: {
@@ -983,8 +997,8 @@ Item {
                     }
                     // Nothing found: the cursor goes back where the search began.
                     typing.stop();
-                    root.application.copy.search("");
-                    root.application.execute(WindowActions.Action.cancel);
+                    root.copy.search("");
+                    root.cancelled();
                 }
             }
 
@@ -1026,7 +1040,7 @@ Item {
         Item {
             id: view
             readonly property bool history: root.search === Store.Dialog.history
-            readonly property var current: view.history ? root.application.history.state : root.application.paths.state
+            readonly property var current: view.history ? root.history.state : root.pathPicker.state
             readonly property int count: view.current.count ?? 0
             readonly property int rows: root.listRows
             readonly property real listHeight: view.rows * root.line
@@ -1038,19 +1052,19 @@ Item {
 
             HistoryKeys {
                 id: historyKeys
-                controller: root.application.history
-                controlModifier: root.application.controlModifier
-                superModifier: root.application.superModifier
-                onCancelled: root.application.execute(WindowActions.Action.cancel)
+                controller: root.history
+                controlModifier: root.controlModifier
+                superModifier: root.superModifier
+                onCancelled: root.cancelled()
                 queryField: field
                 downward: true
             }
 
             PathKeys {
                 id: pathKeys
-                controller: root.application.paths
-                controlModifier: root.application.controlModifier
-                onCancelled: root.application.execute(WindowActions.Action.cancel)
+                controller: root.pathPicker
+                controlModifier: root.controlModifier
+                onCancelled: root.cancelled()
             }
 
             function synchronize() {
@@ -1091,7 +1105,7 @@ Item {
             }
 
             Connections {
-                target: root.application.history
+                target: root.history
                 function onChanged() {
                     if (view.history) {
                         view.synchronize();
@@ -1101,7 +1115,7 @@ Item {
             }
 
             Connections {
-                target: root.application.paths
+                target: root.pathPicker
                 function onChanged() {
                     if (!view.history) {
                         view.synchronize();
@@ -1111,7 +1125,7 @@ Item {
             }
 
             Connections {
-                target: view.history ? root.application.history.rows : null
+                target: view.history ? root.history.rows : null
                 function onRowsAboutToBeRemoved() {
                     view.retiring = true;
                 }
@@ -1136,7 +1150,7 @@ Item {
                 readonly property bool failed: view.history ? (view.current.error ?? "").length > 0 : view.current.failed
                 x: parent.width - implicitWidth - root.cell * 2
                 height: root.line
-                text: view.history ? (found.failed ? view.current.error : root.application.history.loading ? "searching…" : view.count + (view.current.hasMore ? "+" : "") + (view.count === 1 ? " command" : " commands")) : found.failed ? view.current.status : view.current.countText
+                text: view.history ? (found.failed ? view.current.error : root.history.loading ? "searching…" : view.count + (view.current.hasMore ? "+" : "") + (view.count === 1 ? " command" : " commands")) : found.failed ? view.current.status : view.current.countText
                 grid: root.grid
                 color: found.failed ? root.colors.red : root.colors.overlay1
             }
@@ -1169,27 +1183,27 @@ Item {
                 width: Math.max(0, (hints.visible ? hints.x : parent.width) - x - root.cell)
                 height: root.line
                 colors: root.colors
-                typography: root.application.windowGeometry.typography
+                typography: root.typography
                 ratio: root.ratio
                 formControl: false
                 drawsCaret: false
                 maximumBytes: view.current.maximumQueryBytes ?? 0
                 placeholderText: view.history ? "Search commands" : "Search paths"
                 Accessible.name: view.history ? "Search commands" : "Search paths"
-                onTextEdited: view.history ? root.application.history.search(text) : root.application.paths.search(text)
-                onLimitReached: requested => view.history ? root.application.history.reportQueryLimit(requested) : root.application.paths.reportQueryLimit(requested)
+                onTextEdited: view.history ? root.history.search(text) : root.pathPicker.search(text)
+                onLimitReached: requested => view.history ? root.history.reportQueryLimit(requested) : root.pathPicker.reportQueryLimit(requested)
                 onActiveFocusChanged: {
                     if (!field.activeFocus) {
                         Qt.callLater(root.keepSearch);
                     }
                 }
                 // The rows run down from the query: down goes to an older command, a worse path.
-                Keys.onUpPressed: view.history ? historyKeys.moveSelection(-1) : root.application.paths.move(-1)
-                Keys.onDownPressed: view.history ? historyKeys.moveSelection(1) : root.application.paths.move(1)
+                Keys.onUpPressed: view.history ? historyKeys.moveSelection(-1) : root.pathPicker.move(-1)
+                Keys.onDownPressed: view.history ? historyKeys.moveSelection(1) : root.pathPicker.move(1)
                 Keys.onReturnPressed: event => view.history ? historyKeys.submit(event) : pathKeys.submit(event)
                 Keys.onEnterPressed: event => view.history ? historyKeys.submit(event) : pathKeys.submit(event)
-                Keys.onTabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.application.paths.descend()
-                Keys.onBacktabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.application.paths.ascend()
+                Keys.onTabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.pathPicker.descend()
+                Keys.onBacktabPressed: event => view.history ? historyKeys.cycleFilter(event) : root.pathPicker.ascend()
                 Keys.onEscapePressed: {
                     if (field.cancelComposition()) {
                         return;
@@ -1197,7 +1211,7 @@ Item {
                     if (view.history) {
                         historyKeys.cancel();
                     } else {
-                        root.application.execute(WindowActions.Action.cancel);
+                        root.cancelled();
                     }
                 }
                 Keys.onPressed: event => event.accepted = view.history ? historyKeys.handle(event) : pathKeys.handle(event)
@@ -1240,7 +1254,7 @@ Item {
                 x: root.textX
                 y: root.line * 2
                 height: root.line
-                text: view.history ? (root.application.history.loading ? "Searching…" : (view.current.query ?? "").length > 0 ? "No command matches" : "No commands yet") : view.current.emptyText
+                text: view.history ? (root.history.loading ? "Searching…" : (view.current.query ?? "").length > 0 ? "No command matches" : "No commands yet") : view.current.emptyText
                 grid: root.grid
                 color: root.colors.overlay1
             }
@@ -1253,7 +1267,7 @@ Item {
                 width: parent.width
                 height: view.listHeight
                 clip: true
-                model: view.history && !view.retiring ? root.application.history.rows : null
+                model: view.history && !view.retiring ? root.history.rows : null
                 boundsBehavior: Flickable.StopAtBounds
                 currentIndex: view.history ? view.current.selection : -1
                 highlightFollowsCurrentItem: true
@@ -1322,8 +1336,8 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.application.history.select(historyEntry.index)
-                        onDoubleClicked: root.application.history.use(historyEntry.index, false)
+                        onClicked: root.history.select(historyEntry.index)
+                        onDoubleClicked: root.history.use(historyEntry.index, false)
                     }
                 }
             }
@@ -1342,7 +1356,7 @@ Item {
 
                 // Takes the state so a new page or selection lays the rows out again.
                 function layout(state) {
-                    return state ? root.application.paths.rows(paths.columns, paths.first, view.rows) : [];
+                    return state ? root.pathPicker.rows(paths.columns, paths.first, view.rows) : [];
                 }
 
                 Repeater {
@@ -1395,7 +1409,7 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.application.paths.activate({path: pathRow.modelData.path, revision: view.current.revision, absolute: false})
+                            onClicked: root.pathPicker.activate({path: pathRow.modelData.path, revision: view.current.revision, absolute: false})
                         }
                     }
                 }
@@ -1405,7 +1419,7 @@ Item {
 
     NativePromptEditor {
         id: editor
-        controller: root.application.prompt
+        controller: root.prompt
         paneId: root.paneId
         grid: root.grid
         colors: root.colors
