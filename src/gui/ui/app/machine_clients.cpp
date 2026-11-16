@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -10,7 +11,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
@@ -44,8 +44,28 @@ static_assert(true);
 import telar.gui.machines.picker;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.activity_order;
+import telar.platform.process;
 
 namespace telar::gui::qt {
+
+  namespace {
+
+    // A remote's discovery names the shell and home a new pane starts in, unless the window was
+    // launched with a command of its own, which only takes the home.
+    void discovered(MachineClient& client, const RemoteDiscovery& discovery) {
+      if (client.named_launch) {
+        client.session.setLaunchDirectory(discovery.home());
+
+        return;
+      }
+
+      const auto path = discovery.shell();
+      const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
+
+      client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(!runtime::loginShellScript(path).empty() ? arguments.size() : 1)});
+    }
+
+  }
 
   void ApplicationController::initializeMachines() {
     const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
@@ -150,7 +170,7 @@ namespace telar::gui::qt {
 
     connect(&client.connection, &RuntimeConnection::discovered, this, [this, key](const RemoteDiscovery& discovery) {
       if (auto* source = findClient(key)) {
-        discoveredMachine(*source, discovery);
+        discovered(*source, discovery);
       }
     },
         Qt::DirectConnection);

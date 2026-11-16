@@ -3,17 +3,17 @@
 static_assert(true);
 #endif
 
-#include "machine_profiles_source.hpp"
+#include "application_controller.hpp"
 #include "platform/environment.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/machines/window_identity.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "ui/machines/machine_profiles_source.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QString>
@@ -39,7 +39,6 @@ static_assert(true);
 
 #include "platform/environment.hpp"
 
-import telar.platform.process;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
@@ -234,19 +233,6 @@ namespace telar::gui::qt {
       (*client)->needs_setup = false;
       summarizeMachine((*client)->key);
     }
-  }
-
-  void ApplicationController::discoveredMachine(MachineClient& client, const RemoteDiscovery& discovery) {
-    if (client.named_launch) {
-      client.session.setLaunchDirectory(discovery.home());
-
-      return;
-    }
-
-    const auto path = discovery.shell();
-    const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
-
-    client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(!runtime::loginShellScript(path).empty() ? arguments.size() : 1)});
   }
 
 }

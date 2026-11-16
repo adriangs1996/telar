@@ -3,10 +3,10 @@
 static_assert(true);
 #endif
 
+#include "application_controller.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/process/launch_arguments.hpp"
 #include <QByteArray>

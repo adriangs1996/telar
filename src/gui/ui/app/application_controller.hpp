@@ -484,7 +484,6 @@ namespace telar::gui::qt {
     void reconcileMachine(const MachineProfile& profile);
     void admitMachine(Machines::Slot slot);
     void retireMachine(Machines::Slot slot, MachineRetirement reason);
-    static void discoveredMachine(MachineClient& client, const RemoteDiscovery& discovery);
     void initializeMachines();
     void configureClients();
     void setClientsDisplayRefresh(std::uint16_t fps);
