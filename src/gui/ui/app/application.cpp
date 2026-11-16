@@ -161,6 +161,7 @@ namespace telar::gui::qt {
         machine_prompt_(store_, machine_profiles_),
         peek_(store_, activity_),
         copy_(store_),
+        notifications_(store_),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -524,7 +525,7 @@ namespace telar::gui::qt {
 
     if (const auto reach = WindowImages::forWindow(*window_).preparePlacements(std::span{sources}.first(count))) {
       session().reportLimit(*reach);
-      refreshNotifications();
+      notifications_.refresh();
     }
   }
 
@@ -771,7 +772,7 @@ namespace telar::gui::qt {
       }
 
       if (notification_revision != session().notificationRevision()) {
-        refreshNotifications();
+        notifications_.refresh();
       }
 
       if (graphics_revision != session().graphicsRecoveryRevision()) {
@@ -973,6 +974,7 @@ namespace telar::gui::qt {
     scheduleGraphicsRecovery();
     publishStatus();
     attachments_.publishGeometry();
+    notifications_.publishView();
     emit refreshed();
     reconsiderFrame();
   }
@@ -1063,9 +1065,7 @@ namespace telar::gui::qt {
     try {
       publishPromptWrite();
       // A controller's interaction may have published a notification, such as a reached limit.
-      if (session().notificationRevision() != presented_notifications_) {
-        refreshNotifications();
-      }
+      notifications_.present();
 
       refresh();
     } catch (const std::exception& error) {

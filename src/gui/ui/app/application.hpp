@@ -39,6 +39,7 @@ static_assert(true);
 #include "ui/machines/machine_client_key.hpp"
 #include "ui/machines/machine_profiles_source.hpp"
 #include "ui/machines/machine_prompt_controller.hpp"
+#include "ui/notifications/notifications_controller.hpp"
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
 #include "ui/palette/palette_controller.hpp"
@@ -118,7 +119,6 @@ import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
-import telar.gui.presentation.notification_center;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.line;
 import telar.gui.prompt.editor;
@@ -183,6 +183,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY diagnosticChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY diagnosticChanged)
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
+    Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
     Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
     Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
     // The history or path search the focused pane's prompt line hosts in place of the dialog.
@@ -279,16 +280,8 @@ namespace telar::gui::qt {
     void observePointerModifiers(Qt::KeyboardModifiers modifiers);
     void registerTerminal(TerminalItem& terminal);
     void unregisterTerminal(TerminalItem& terminal);
-    [[nodiscard]] const NotificationCenter& notifications() const noexcept;
-    [[nodiscard]] QString notificationIdentity(NotificationId identity) const;
-    [[nodiscard]] bool notificationTargetVisible(NotificationTarget target) const noexcept;
     [[nodiscard]] DisplayMetrics displayMetrics(qreal density) const;
-    [[nodiscard]] Rect notificationHost(const DisplayMetrics& display) const;
-    void publishNotification(NotificationInput input);
     void soundPlaybackFinished(std::optional<CommandFailure> failure);
-    Q_INVOKABLE void dismissNotification(const QString& identity);
-    Q_INVOKABLE void activateNotification(const QString& identity);
-    Q_INVOKABLE void retireNotificationFocus(const QString& identity, QQuickItem* retiring_owner = nullptr);
     [[nodiscard]] PointerDispatcher& pointerDispatcher() noexcept;
     [[nodiscard]] std::shared_ptr<const LinkHit> shareLinkHit(const LinkHit& hit);
 
@@ -375,6 +368,10 @@ namespace telar::gui::qt {
       return &copy_;
     }
 
+    NotificationsController* notifications() noexcept {
+      return &notifications_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -449,7 +446,6 @@ namespace telar::gui::qt {
     void pointerModifiersChanged();
     void inputReleasing(qulonglong pane_id);
     void notification(const QString& message);
-    void notificationsChanged();
     void machineChanged();
     void machinesChanged();
     void machineLaunchFailed(const QString& error);
@@ -642,13 +638,13 @@ namespace telar::gui::qt {
     void prepareImagePlacements();
     void configureWindow();
     void synchronizeCadence();
-    void refreshNotifications();
-    void scheduleNotifications();
     void initializeNotifications();
+    // The card that held the keyboard went away: the focused terminal takes it back once nothing
+    // else did meanwhile.
+    void retireNotificationFocus(QQuickItem* retiring_owner);
     void initializeGraphicsRecovery();
     void scheduleGraphicsRecovery();
     void restoreTerminalFocus();
-    [[nodiscard]] std::optional<NotificationId> resolveNotification(const QString& identity) const;
     bool executeNavigation(Action action, const QString& target);
     bool executePane(Action action, std::uint64_t identity);
     void executeWindowAction(Action action);
@@ -746,11 +742,9 @@ namespace telar::gui::qt {
     MachinePromptController machine_prompt_;
     PeekController peek_;
     CopyController copy_;
+    NotificationsController notifications_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
-    QTimer notification_timer_;
-    // The active session's notification revision the window last presented.
-    std::uint64_t presented_notifications_ = 0;
     QTimer graphics_resume_timer_;
     QString error_;
 

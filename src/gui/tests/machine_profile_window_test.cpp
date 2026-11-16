@@ -468,8 +468,8 @@ namespace {
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       application.machinePrompt()->search(QStringLiteral("window-invalid@fixture"));
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
-      QTRY_VERIFY(!application.notifications().items().empty());
-      QCOMPARE(application.notifications().items().front().title.view(), std::string_view{"Machine not saved"});
+      QTRY_VERIFY(!application.notifications()->center().items().empty());
+      QCOMPARE(application.notifications()->center().items().front().title.view(), std::string_view{"Machine not saved"});
       QVERIFY(!MachineProfileWindow::machines(application).findDestination("window-invalid@fixture"));
     }
 

@@ -1900,16 +1900,16 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(positioned_arguments(), QByteArray{"+call cursor(12, 3)\n"} + file_path.toUtf8() + '\n', runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
       client_->execute(Application::Action::focus_pane, QString::number(source_id));
-      const QSignalSpy feedback{client_.get(), &Application::notificationsChanged};
+      const QSignalSpy feedback{client_->notifications(), &NotificationsController::changed};
       const auto missing_uri = uri + ".missing";
 
       peer.request(telar::ClientAction::client_open_link, 3, {missing_uri.constData(), static_cast<std::size_t>(missing_uri.size())});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
       QVERIFY2(peer.result().status == telar::ClientCommandStatus::admitted, qPrintable(peer.result().text));
       QTRY_VERIFY2_WITH_TIMEOUT(!feedback.empty(), qPrintable(client_->error()), runtime_wait_ms);
-      QVERIFY(!client_->notifications().items().empty());
-      QCOMPARE(client_->notifications().items().front().title.view(), std::string_view{"Could not open link"});
-      QCOMPARE(client_->notifications().items().front().message.view(), std::string_view{"FileNotFound"});
+      QVERIFY(!client_->notifications()->center().items().empty());
+      QCOMPARE(client_->notifications()->center().items().front().title.view(), std::string_view{"Could not open link"});
+      QCOMPARE(client_->notifications()->center().items().front().message.view(), std::string_view{"FileNotFound"});
       dismissNotification();
       QCOMPARE(client_->error(), QString{});
       client_->loadConfiguration({}, {}, {});
@@ -1968,10 +1968,10 @@ return {api_version = 2, client = {
       peer.open(socket_);
       QTRY_VERIFY_WITH_TIMEOUT(peer.ready(), runtime_wait_ms);
       peer.showNotification({.request_id = 2, .notification = {.level = telar::NotificationLevel::success, .duration_ms = telar::max_notification_duration_ms, .title = "Runtime notice", .message = "Delivered over the real protocol", .link = "https://example.com/notice"}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications().items().empty() && client_->notifications().items().front().title.view() == "Runtime notice", runtime_wait_ms);
-      const auto id = client_->notifications().items().front().id;
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications()->center().items().empty() && client_->notifications()->center().items().front().title.view() == "Runtime notice", runtime_wait_ms);
+      const auto id = client_->notifications()->center().items().front().id;
 
-      QCOMPARE(client_->notifications().items().front().link.view(), std::string_view{"https://example.com/notice"});
+      QCOMPARE(client_->notifications()->center().items().front().link.view(), std::string_view{"https://example.com/notice"});
       QTRY_VERIFY_WITH_TIMEOUT(!telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("notificationCard")).empty(), runtime_wait_ms);
       const auto* body = telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("notificationBody")).front();
       const auto body_point = body->mapToScene({body->width() / 2, body->height() / 2}).toPoint();
@@ -1984,7 +1984,7 @@ return {api_version = 2, client = {
       peer.request(telar::ClientCommand{.request_id = 3, .action = telar::ClientAction::notification_dismiss, .target_id = id.value});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(id) == nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(id) == nullptr, runtime_wait_ms);
       peer.request(telar::ClientCommand{.request_id = 4, .action = telar::ClientAction::notification_dismiss, .target_id = id.value});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{4}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
@@ -1993,9 +1993,9 @@ return {api_version = 2, client = {
       constexpr std::uint64_t focus_notice_request = 5;
 
       peer.showNotification({.request_id = focus_notice_request, .notification = {.level = telar::NotificationLevel::info, .duration_ms = telar::max_notification_duration_ms, .title = "Dismiss and type", .message = "Keep the terminal ready"}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications().items().empty() && client_->notifications().items().front().title.view() == "Dismiss and type", runtime_wait_ms);
-      const auto focus_id = client_->notifications().items().front().id;
-      const auto focus_key = client_->notificationIdentity(focus_id);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications()->center().items().empty() && client_->notifications()->center().items().front().title.view() == "Dismiss and type", runtime_wait_ms);
+      const auto focus_id = client_->notifications()->center().items().front().id;
+      const auto focus_key = client_->notifications()->identity(focus_id);
       const auto closes = [&] {
         auto items = telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
 
@@ -2029,13 +2029,13 @@ return {api_version = 2, client = {
         QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);
       });
 
-      QVERIFY(client_->notifications().find(focus_id) != nullptr);
-      QCOMPARE(client_->notifications().find(focus_id)->phase, telar::gui::NotificationItem::Phase::exiting);
+      QVERIFY(client_->notifications()->center().find(focus_id) != nullptr);
+      QCOMPARE(client_->notifications()->center().find(focus_id)->phase, telar::gui::NotificationItem::Phase::exiting);
       observation();
       QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);
       release_click.dismiss();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().items().empty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().items().empty(), runtime_wait_ms);
     }
 
     Q_SLOT void routedDismissalOfFocusedNotificationReturnsToTerminal() {
@@ -2045,9 +2045,9 @@ return {api_version = 2, client = {
       peer.open(socket_);
       QTRY_VERIFY_WITH_TIMEOUT(peer.ready(), runtime_wait_ms);
       peer.showNotification({.request_id = 1, .notification = {.level = telar::NotificationLevel::info, .duration_ms = telar::max_notification_duration_ms, .title = "Focused notice", .message = "Remove the focused widget"}});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications().items().empty() && client_->notifications().items().front().title.view() == "Focused notice", runtime_wait_ms);
-      const auto identity = client_->notifications().items().front().id;
-      const auto key = client_->notificationIdentity(identity);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications()->center().items().empty() && client_->notifications()->center().items().front().title.view() == "Focused notice", runtime_wait_ms);
+      const auto identity = client_->notifications()->center().items().front().id;
+      const auto key = client_->notifications()->identity(identity);
       const auto closes = [&] {
         auto items = test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
 
@@ -2060,7 +2060,7 @@ return {api_version = 2, client = {
 
       QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
       const auto cleanup = qScopeGuard([this, key] {
-        client_->dismissNotification(key);
+        client_->notifications()->dismiss(key);
       });
 
       const QPointer<QQuickItem> close{closes().front()};
@@ -2072,7 +2072,7 @@ return {api_version = 2, client = {
       peer.request(telar::ClientCommand{.request_id = 2, .action = telar::ClientAction::notification_dismiss, .target_id = identity.value});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().items().empty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().items().empty(), runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
       sendTextKeys(QLatin1StringView{"printf 'NOTICE_FOCUS_RESTORED\\n'"});
       QTest::keyClick(window_, Qt::Key_Return);
@@ -2089,15 +2089,15 @@ return {api_version = 2, client = {
 
     Q_SLOT void removingFocusedNotificationWithoutDisabledFrameReturnsToTerminal() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      client_->publishNotification({.level = telar::NotificationLevel::info, .title = "Removed delivered control", .message = "No intermediate disabled record", .link = {}, .duration_ns = telar::max_notification_duration_ms * NotificationInput::nanoseconds_per_millisecond});
+      client_->notifications()->publish({.level = telar::NotificationLevel::info, .title = "Removed delivered control", .message = "No intermediate disabled record", .link = {}, .duration_ns = telar::max_notification_duration_ms * NotificationInput::nanoseconds_per_millisecond});
       const auto closes = [&] {
         return test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
-      const auto identity = client_->notificationIdentity(client_->notifications().items().front().id);
+      const auto identity = client_->notifications()->identity(client_->notifications()->center().items().front().id);
       const auto cleanup = qScopeGuard([this, identity] {
-        client_->dismissNotification(identity);
+        client_->notifications()->dismiss(identity);
       });
 
       auto* close = closes().front();
@@ -2756,16 +2756,16 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->property("text").toString(), retained);
       QCOMPARE(client_->paths()->state().value(QStringLiteral("editorText")).toString(), retained);
       const auto notices = [this] {
-        return std::ranges::find_if(client_->notifications().items(), [](const auto& item) {
+        return std::ranges::find_if(client_->notifications()->center().items(), [](const auto& item) {
           return item.title.view() == "Limit reached" && item.message.view().contains("prompt.path_query_bytes");
         });
       };
 
-      QTRY_VERIFY_WITH_TIMEOUT(notices() != client_->notifications().items().end(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(notices() != client_->notifications()->center().items().end(), runtime_wait_ms);
       const auto identity = notices()->id;
 
-      client_->dismissNotification(client_->notificationIdentity(identity));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
+      client_->notifications()->dismiss(client_->notifications()->identity(identity));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(identity) == nullptr, runtime_wait_ms);
     }
 
     Q_SLOT void staleTabHitsDoNotCaptureConfiguredWidgets() {
@@ -3196,15 +3196,15 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->text(), retained);
       QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("editorText")).toString(), retained);
       const auto find_notice = [this] {
-        return std::ranges::find_if(client_->notifications().items(), [](const auto& notice) {
+        return std::ranges::find_if(client_->notifications()->center().items(), [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.machine_label_bytes") != std::string_view::npos;
         });
       };
 
-      QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications().items().end(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications()->center().items().end(), runtime_wait_ms);
       const auto notice = find_notice()->id;
 
-      client_->dismissNotification(client_->notificationIdentity(notice));
+      client_->notifications()->dismiss(client_->notifications()->identity(notice));
       QTest::keyClick(window_, Qt::Key_Return);
       QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
       QCOMPARE(search->text(), QString{});
@@ -3236,16 +3236,16 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->property("text").toString(), retained);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), retained);
       const auto find_notice = [this] {
-        return std::ranges::find_if(client_->notifications().items(), [](const auto& notice) {
+        return std::ranges::find_if(client_->notifications()->center().items(), [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.field_bytes") != std::string_view::npos;
         });
       };
 
-      QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications().items().end(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications()->center().items().end(), runtime_wait_ms);
       const auto identity = find_notice()->id;
 
-      client_->dismissNotification(client_->notificationIdentity(identity));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
+      client_->notifications()->dismiss(client_->notifications()->identity(identity));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(identity) == nullptr, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
       QCOMPARE(client_->error(), QString{});
@@ -4298,7 +4298,7 @@ return {api_version=2, client={keybindings={
       const auto maximum = client_->history()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
       const QString typed(maximum + 1, QLatin1Char('x'));
       // The notice reaches the window, not only the session.
-      const QSignalSpy presented{client_.get(), &Application::notificationsChanged};
+      const QSignalSpy presented{client_->notifications(), &NotificationsController::changed};
       QInputMethodEvent commit;
 
       commit.setCommitString(typed);
@@ -4306,21 +4306,21 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->property("text").toString(), typed.first(maximum));
       QVERIFY(presented.count() > 0);
       const auto reached = [this] {
-        return std::ranges::any_of(client_->notifications().items(), [](const auto& notice) {
+        return std::ranges::any_of(client_->notifications()->center().items(), [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.history_query_bytes") != std::string_view::npos;
         });
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(reached(), runtime_wait_ms);
-      const auto notice = std::ranges::find_if(client_->notifications().items(), [](const auto& item) {
+      const auto notice = std::ranges::find_if(client_->notifications()->center().items(), [](const auto& item) {
         return item.title.view() == "Limit reached" && item.message.view().find("prompt.history_query_bytes") != std::string_view::npos;
       });
 
       const auto identity = notice->id;
 
       captureHistoryArtifact(QStringLiteral("history-query-limit"));
-      client_->dismissNotification(client_->notificationIdentity(identity));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
+      client_->notifications()->dismiss(client_->notifications()->identity(identity));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(identity) == nullptr, runtime_wait_ms);
 
       const QString retained(maximum - 1, QLatin1Char('x'));
 
@@ -4332,14 +4332,14 @@ return {api_version=2, client={keybindings={
     Q_SLOT void historyMalformedUtf16UsesTheEncodedByteLimit() {
       client_->execute(Application::Action::history);
       const auto restore = qScopeGuard([this] {
-        const auto notices = client_->notifications().items();
+        const auto notices = client_->notifications()->center().items();
         const auto found = std::ranges::find_if(notices, [](const auto& notice) {
           return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.history_query_bytes") != std::string_view::npos;
         });
         if (found != notices.end()) {
           const auto identity = found->id;
 
-          client_->dismissNotification(client_->notificationIdentity(identity));
+          client_->notifications()->dismiss(client_->notifications()->identity(identity));
         }
 
         client_->execute(Application::Action::cancel);

@@ -81,7 +81,7 @@ namespace {
     return {
         {QStringLiteral("width"), window_width},
         {QStringLiteral("height"), window_height},
-        {QStringLiteral("controller"), QVariant::fromValue(&client)},
+        {QStringLiteral("controller"), QVariant::fromValue(client.notifications())},
         {QStringLiteral("colors"), themeColors(Configuration{})},
     };
   }
@@ -108,12 +108,12 @@ namespace {
       overlay->setParentItem(window.contentItem());
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      client.publishNotification({.level = NotificationLevel::warning, .title = "Agent needs input", .message = "Agent in pane 1 is waiting for input", .link = {}});
+      client.notifications()->publish({.level = NotificationLevel::warning, .title = "Agent needs input", .message = "Agent in pane 1 is waiting for input", .link = {}});
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*overlay, QStringLiteral("notificationCard")).size(), 1, wait_ms);
       auto* layout = qobject_cast<NotificationLayout*>(overlay.get());
 
       QVERIFY(layout != nullptr);
-      QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().front().phase, NotificationItem::Phase::visible, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().front().phase, NotificationItem::Phase::visible, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(layout->cards()->data(layout->cards()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("opacity")).toFloat(), 1.0F, wait_ms);
       const auto* card = visualItems(*overlay, QStringLiteral("notificationCard")).front();
       const auto bounds = [&] {
@@ -131,14 +131,14 @@ namespace {
       QVERIFY(!window.grabWindow().isNull());
 
       QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, {0, 0});
-      QCOMPARE(client.notifications().items().size(), std::size_t{1});
-      QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::visible);
+      QCOMPARE(client.notifications()->center().items().size(), std::size_t{1});
+      QCOMPARE(client.notifications()->center().items().front().phase, NotificationItem::Phase::visible);
       const auto close = visualItems(*overlay, QStringLiteral("notificationClose"));
 
       QCOMPARE(close.size(), 1);
       QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, close.front()->mapToScene({close.front()->width() / 2, close.front()->height() / 2}).toPoint());
-      QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::exiting);
-      QTRY_VERIFY_WITH_TIMEOUT(client.notifications().items().empty(), wait_ms);
+      QCOMPARE(client.notifications()->center().items().front().phase, NotificationItem::Phase::exiting);
+      QTRY_VERIFY_WITH_TIMEOUT(client.notifications()->center().items().empty(), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(visualItems(*overlay, QStringLiteral("notificationCard")).empty(), wait_ms);
     }
 
@@ -156,9 +156,9 @@ namespace {
       overlay->setParentItem(window.contentItem());
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      client.publishNotification({.title = "Oldest", .message = "first", .link = {}});
-      client.publishNotification({.title = "Middle", .message = "second", .link = {}});
-      client.publishNotification({.title = "Newest", .message = "first\nsecond\nthird\nfourth", .link = "https://example.com/path"});
+      client.notifications()->publish({.title = "Oldest", .message = "first", .link = {}});
+      client.notifications()->publish({.title = "Middle", .message = "second", .link = {}});
+      client.notifications()->publish({.title = "Newest", .message = "first\nsecond\nthird\nfourth", .link = "https://example.com/path"});
       auto* layout = qobject_cast<NotificationLayout*>(overlay.get());
 
       QVERIFY(layout != nullptr);
@@ -214,8 +214,8 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       activateWindow(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isActive(), wait_ms);
-      client.publishNotification({.title = "Review build", .message = "Open the build result", .link = "https://example.com/build", .duration_ns = fixture_notification_duration_ns});
-      QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().front().phase, NotificationItem::Phase::visible, wait_ms);
+      client.notifications()->publish({.title = "Review build", .message = "Open the build result", .link = "https://example.com/build", .duration_ns = fixture_notification_duration_ns});
+      QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().front().phase, NotificationItem::Phase::visible, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*overlay, QStringLiteral("notificationClose")).size(), 1, wait_ms);
       auto* body = visualItems(*overlay, QStringLiteral("notificationBody")).front();
       const auto* close = visualItems(*overlay, QStringLiteral("notificationClose")).front();
@@ -245,10 +245,10 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(close_focus->isVisible(), wait_ms);
       QVERIFY(!body_focus->isVisible());
       QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, close_point);
-      QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::exiting);
+      QCOMPARE(client.notifications()->center().items().front().phase, NotificationItem::Phase::exiting);
       QTest::mouseMove(&window, {0, 0});
       QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, {0, 0});
-      QTRY_VERIFY_WITH_TIMEOUT(client.notifications().items().empty(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client.notifications()->center().items().empty(), wait_ms);
     }
 
     Q_SLOT static void keyboardActionsActivateOnPress() {
@@ -273,16 +273,16 @@ namespace {
 
       for (const auto& control : controls) {
         for (const auto key : keys) {
-          client.publishNotification({.title = "Keyboard notice", .message = "Ready", .link = {}, .duration_ns = fixture_notification_duration_ns});
-          QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().front().phase, NotificationItem::Phase::visible, wait_ms);
+          client.notifications()->publish({.title = "Keyboard notice", .message = "Ready", .link = {}, .duration_ns = fixture_notification_duration_ns});
+          QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().front().phase, NotificationItem::Phase::visible, wait_ms);
           QTRY_COMPARE_WITH_TIMEOUT(visualItems(*overlay, control).size(), 1, wait_ms);
           auto* button = visualItems(*overlay, control).front();
 
           button->forceActiveFocus(Qt::TabFocusReason);
           QTest::keyPress(&window, key);
-          QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::exiting);
+          QCOMPARE(client.notifications()->center().items().front().phase, NotificationItem::Phase::exiting);
           QTest::keyRelease(&window, key);
-          QTRY_VERIFY_WITH_TIMEOUT(client.notifications().items().empty(), wait_ms);
+          QTRY_VERIFY_WITH_TIMEOUT(client.notifications()->center().items().empty(), wait_ms);
         }
       }
     }
@@ -325,13 +325,13 @@ namespace {
       overlay->forceActiveFocus();
       QCOMPARE(window.activeFocusItem(), overlay.get());
       QTest::keyClick(&window, Qt::Key_N, Qt::AltModifier);
-      QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().size(), std::size_t{1}, wait_ms);
-      QCOMPARE(client.notifications().items().front().title.view(), std::string_view{"Configured notice"});
-      QCOMPARE(client.notifications().items().front().level, NotificationLevel::warning);
+      QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().size(), std::size_t{1}, wait_ms);
+      QCOMPARE(client.notifications()->center().items().front().title.view(), std::string_view{"Configured notice"});
+      QCOMPARE(client.notifications()->center().items().front().level, NotificationLevel::warning);
       QTest::keyClick(&window, Qt::Key_B, Qt::AltModifier);
-      QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().size(), std::size_t{2}, wait_ms);
-      QCOMPARE(client.notifications().items().front().title.view(), std::string_view{"Callback notice"});
-      QCOMPARE(client.notifications().items().front().level, NotificationLevel::success);
+      QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().size(), std::size_t{2}, wait_ms);
+      QCOMPARE(client.notifications()->center().items().front().title.view(), std::string_view{"Callback notice"});
+      QCOMPARE(client.notifications()->center().items().front().level, NotificationLevel::success);
       QCOMPARE(client.error(), QString{});
       QCOMPARE(window.activeFocusItem(), overlay.get());
     }

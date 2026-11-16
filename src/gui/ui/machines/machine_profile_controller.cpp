@@ -72,7 +72,7 @@ namespace telar::gui::qt {
       const auto detail = machine_profiles_.error().toUtf8();
       const auto* const title = machine_profiles_.editError() ? "Machine not saved" : "machines.json not applied";
 
-      publishNotification({.level = NotificationLevel::failure, .title = title, .message = bytes(detail), .link = {}});
+      notifications_.publish({.level = NotificationLevel::failure, .title = title, .message = bytes(detail), .link = {}});
       if (remote_launch_) {
         applyMachineProfiles();
       }
@@ -119,7 +119,7 @@ namespace telar::gui::qt {
       machine_retry_.stop();
       emit machinesChanged();
     } catch (const std::exception& error) {
-      publishNotification({.level = NotificationLevel::failure, .title = "machines.json not applied", .message = error.what(), .link = {}});
+      notifications_.publish({.level = NotificationLevel::failure, .title = "machines.json not applied", .message = error.what(), .link = {}});
       machine_retry_.start();
     }
   }
@@ -223,7 +223,7 @@ namespace telar::gui::qt {
       const auto local = toQString(store_.machines().row(Machines::local_slot).label.view());
       const auto detail = (label + QStringLiteral(" was ") + state + QStringLiteral("; the window shows ") + local).toUtf8();
 
-      publishNotification({.title = "Machine left the window", .message = bytes(detail), .link = {}});
+      notifications_.publish({.title = "Machine left the window", .message = bytes(detail), .link = {}});
     }
 
     if (const auto& client = store_.clients()[slot]) {

@@ -232,7 +232,7 @@ namespace telar::gui::qt {
     synchronizeWorkbenchGeometry();
     session().setPresented(true);
     configureWindow();
-    refreshNotifications();
+    notifications_.refresh();
     refresh();
     restoreTerminalFocus();
   }

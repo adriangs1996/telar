@@ -2006,26 +2006,26 @@ namespace {
 
       terminal.setApplication(&application);
       terminal.setPaneId(QString::number(pane_id));
-      application.publishNotification({.title = "Local", .message = "local focus", .link = {}});
-      const auto local_key = application.notificationIdentity(application.notifications().items().front().id);
+      application.notifications()->publish({.title = "Local", .message = "local focus", .link = {}});
+      const auto local_key = application.notifications()->identity(application.notifications()->center().items().front().id);
 
       previous.contentItem()->forceActiveFocus();
-      application.retireNotificationFocus(local_key);
+      application.notifications()->retireFocus(local_key);
       application.setWindow(current);
       current.contentItem()->forceActiveFocus();
       QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), current.contentItem());
-      application.retireNotificationFocus(local_key, &old_terminal);
+      application.notifications()->retireFocus(local_key, &old_terminal);
       QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), current.contentItem());
 
-      application.retireNotificationFocus(local_key);
+      application.notifications()->retireFocus(local_key);
       QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), &terminal);
       terminal.setFocus(false);
       current.contentItem()->forceActiveFocus();
       QCOMPARE(current.activeFocusItem(), current.contentItem());
-      application.retireNotificationFocus(local_key);
+      application.notifications()->retireFocus(local_key);
       QQuickItem editor{current.contentItem()};
 
       editor.forceActiveFocus();
@@ -2035,16 +2035,16 @@ namespace {
       MachineWindow::select(application, fixture.remote.machine);
       QVERIFY(finishOpening(*fixture.remote_runtime));
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
-      application.publishNotification({.title = "Remote", .message = "remote focus", .link = {}});
-      const auto remote_key = application.notificationIdentity(application.notifications().items().front().id);
+      application.notifications()->publish({.title = "Remote", .message = "remote focus", .link = {}});
+      const auto remote_key = application.notifications()->identity(application.notifications()->center().items().front().id);
 
       editor.setFocus(false);
       current.contentItem()->forceActiveFocus();
       QCOMPARE(current.activeFocusItem(), current.contentItem());
-      application.retireNotificationFocus(local_key);
+      application.notifications()->retireFocus(local_key);
       QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), current.contentItem());
-      application.retireNotificationFocus(remote_key);
+      application.notifications()->retireFocus(remote_key);
       QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
       QCOMPARE(current.activeFocusItem(), &terminal);
     }
@@ -2125,21 +2125,21 @@ namespace {
       QVERIFY(fixture.start());
       auto& application = fixture.application;
 
-      application.publishNotification({.title = "Local", .message = "local notice", .link = {}});
-      const auto old_id = application.notifications().items().front().id;
-      const auto old_key = application.notificationIdentity(old_id);
+      application.notifications()->publish({.title = "Local", .message = "local notice", .link = {}});
+      const auto old_id = application.notifications()->center().items().front().id;
+      const auto old_key = application.notifications()->identity(old_id);
 
       MachineWindow::select(application, fixture.remote.machine);
-      application.publishNotification({.title = "Remote", .message = "remote notice", .link = {}});
-      const auto current_id = application.notifications().items().front().id;
+      application.notifications()->publish({.title = "Remote", .message = "remote notice", .link = {}});
+      const auto current_id = application.notifications()->center().items().front().id;
 
       QCOMPARE(old_id.value, current_id.value);
-      application.dismissNotification(old_key);
-      QCOMPARE(application.notifications().items().front().phase, NotificationItem::Phase::entering);
-      application.activateNotification(old_key);
-      QCOMPARE(application.notifications().items().front().phase, NotificationItem::Phase::entering);
-      application.dismissNotification(application.notificationIdentity(current_id));
-      QCOMPARE(application.notifications().items().front().phase, NotificationItem::Phase::exiting);
+      application.notifications()->dismiss(old_key);
+      QCOMPARE(application.notifications()->center().items().front().phase, NotificationItem::Phase::entering);
+      application.notifications()->activate(old_key);
+      QCOMPARE(application.notifications()->center().items().front().phase, NotificationItem::Phase::entering);
+      application.notifications()->dismiss(application.notifications()->identity(current_id));
+      QCOMPARE(application.notifications()->center().items().front().phase, NotificationItem::Phase::exiting);
     }
 
     Q_SLOT static void rebuildingAClientRejectsItsPreviousAdmission() {
@@ -2165,13 +2165,13 @@ namespace {
 
       MachineWindow::select(application, fixture.remote.machine);
       application.linkOpeningFinished(original, LinkOpeningFailure::launch);
-      QVERIFY(application.notifications().items().empty());
+      QVERIFY(application.notifications()->center().items().empty());
       QCOMPARE(local.session.notifications().items().size(), 1);
       const auto retired = fixture.remote;
 
       static_cast<void>(MachineWindow::replace(application, retired.machine.slot));
       application.linkOpeningFinished(retired, LinkOpeningFailure::process);
-      QVERIFY(application.notifications().items().empty());
+      QVERIFY(application.notifications()->center().items().empty());
     }
   };
 

@@ -12,10 +12,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
 #include "ui/app/list_model.hpp"
 #include "ui/fonts/font_collection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
+#include "ui/notifications/notifications_controller.hpp"
 #include <QAbstractItemModel>
 #include <QMetaObject>
 #include <QPointer>
@@ -59,7 +59,7 @@ namespace telar::gui::qt {
   class NotificationLayout : public QQuickItem {
     Q_OBJECT
     QML_ELEMENT
-    Q_PROPERTY(telar::gui::qt::Application* controller READ controller WRITE setController NOTIFY controllerChanged)
+    Q_PROPERTY(telar::gui::qt::NotificationsController* controller READ controller WRITE setController NOTIFY controllerChanged)
     Q_PROPERTY(QAbstractItemModel* cards READ cards CONSTANT)
     Q_PROPERTY(QRectF host READ host NOTIFY layoutChanged)
     Q_PROPERTY(QVariantMap style READ style NOTIFY layoutChanged)
@@ -71,8 +71,8 @@ namespace telar::gui::qt {
     NotificationLayout& operator=(const NotificationLayout&) = delete;
     NotificationLayout(NotificationLayout&&) = delete;
     NotificationLayout& operator=(NotificationLayout&&) = delete;
-    [[nodiscard]] Application* controller() const noexcept;
-    void setController(Application* controller);
+    [[nodiscard]] NotificationsController* controller() const noexcept;
+    void setController(NotificationsController* controller);
     [[nodiscard]] QAbstractItemModel* cards() noexcept;
     [[nodiscard]] QRectF host() const noexcept;
     [[nodiscard]] QVariantMap style() const;
@@ -138,7 +138,7 @@ namespace telar::gui::qt {
     // Measures through the window's catalog and the resident fonts, apart from the layout's state.
     [[nodiscard]] static float measure(WindowFontCatalog& catalog, ResidentFonts& fonts, std::string_view text, std::uint16_t pixels, bool emphasized);
 
-    QPointer<Application> controller_;
+    QPointer<NotificationsController> controller_;
     QPointer<WindowAnimationClock> clock_;
     QPointer<WindowFontCatalog> catalog_;
     QMetaObject::Connection font_connection_;

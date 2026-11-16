@@ -401,7 +401,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
     }
 
-    publishNotification({.level = notification->level, .target = notification->target, .title = notification->title.view(), .message = notification->message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification->duration_ms) * NotificationInput::nanoseconds_per_millisecond});
+    notifications_.publish({.level = notification->level, .target = notification->target, .title = notification->title.view(), .message = notification->message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification->duration_ms) * NotificationInput::nanoseconds_per_millisecond});
   }
 
   void Application::executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved) {

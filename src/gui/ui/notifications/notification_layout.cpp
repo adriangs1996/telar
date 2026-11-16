@@ -14,7 +14,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/app/application.hpp"
 #include "ui/app/projection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
@@ -120,11 +119,11 @@ namespace telar::gui::qt {
     }
   }
 
-  Application* NotificationLayout::controller() const noexcept {
+  NotificationsController* NotificationLayout::controller() const noexcept {
     return controller_;
   }
 
-  void NotificationLayout::setController(Application* controller) {
+  void NotificationLayout::setController(NotificationsController* controller) {
     if (controller_ == controller) {
       return;
     }
@@ -135,10 +134,9 @@ namespace telar::gui::qt {
 
     controller_ = controller;
     if (controller_) {
-      connect(controller, &Application::notificationsChanged, this, &NotificationLayout::scheduleLayout);
-      connect(controller, &Application::refreshed, this, &NotificationLayout::scheduleLayout);
-      connect(controller, &Application::windowGeometryChanged, this, &NotificationLayout::invalidate);
-      connect(controller, &Application::configurationChanged, this, &NotificationLayout::invalidate);
+      connect(controller, &NotificationsController::changed, this, &NotificationLayout::scheduleLayout);
+      connect(controller, &NotificationsController::viewChanged, this, &NotificationLayout::scheduleLayout);
+      connect(controller, &NotificationsController::displayChanged, this, &NotificationLayout::invalidate);
       connect(controller, &QObject::destroyed, this, &NotificationLayout::invalidate);
     }
 
@@ -159,16 +157,16 @@ namespace telar::gui::qt {
   }
 
   bool NotificationLayout::eligible() const noexcept {
-    return controller_ && !controller_->notifications().items().empty() && isVisible() && width() > 0 && height() > 0;
+    return controller_ && !controller_->center().items().empty() && isVisible() && width() > 0 && height() > 0;
   }
 
   std::optional<std::uint64_t> NotificationLayout::deadline(std::uint64_t now_ns) const {
-    if (!controller_ || controller_->notifications().items().empty()) {
+    if (!controller_ || controller_->center().items().empty()) {
       return std::nullopt;
     }
 
     const auto interval = clock_ ? clock_->frameInterval() : 1;
-    const auto lifecycle = controller_->notifications().nextDeadline(now_ns, interval);
+    const auto lifecycle = controller_->center().nextDeadline(now_ns, interval);
     const auto movement = stack_.nextDeadline(now_ns, interval);
 
     return movement && lifecycle ? std::min(*movement, *lifecycle) : lifecycle;
@@ -197,7 +195,7 @@ namespace telar::gui::qt {
     for (int index = first; index <= last; ++index) {
       const auto record = cards_.data(cards_.index(index), ListModel::record_role).toMap();
       if (record.value(QStringLiteral("key")).toString() == identity) {
-        controller_->retireNotificationFocus(identity, focused);
+        controller_->retireFocus(identity, focused);
         return;
       }
     }
@@ -254,7 +252,7 @@ namespace telar::gui::qt {
   NotificationLayout::Content& NotificationLayout::content(const NotificationItem& item, float width) {
     auto* found = std::ranges::find(contents_, item.id, &Content::id);
     if (found == contents_.end()) {
-      const auto retained = controller_->notifications().items();
+      const auto retained = controller_->center().items();
 
       found = std::ranges::find_if(contents_, [&](const auto& candidate) {
         return candidate.id.value == 0 || std::ranges::none_of(retained, [&](const auto& existing) {
@@ -320,7 +318,7 @@ namespace telar::gui::qt {
     const auto accessible = item.link.view().empty() ? toQString(item.title.view()) + QStringLiteral(": ") + toQString(item.message.view()) : toQString(item.title.view()) + QStringLiteral(", opens ") + toQString(item.linkHost()) + QStringLiteral(": ") + toQString(item.message.view());
 
     return {.record = {
-                {QStringLiteral("key"), controller_->notificationIdentity(item.id)},
+                {QStringLiteral("key"), controller_->identity(item.id)},
                 {QStringLiteral("title"), toQString(item.title.view())},
                 {QStringLiteral("titleBounds"), logicalBounds(geometry.title(), density_)},
                 {QStringLiteral("body"), body},
@@ -339,7 +337,7 @@ namespace telar::gui::qt {
   }
 
   void NotificationLayout::rebuild() {
-    const auto machine_view = controller_ ? controller_->viewVersion().machine : 0;
+    const auto machine_view = controller_ ? controller_->machineView() : 0;
     if (machine_view != machine_view_) {
       machine_view_ = machine_view;
       for (auto& content : contents_) {
@@ -357,11 +355,11 @@ namespace telar::gui::qt {
 
     density_ = window()->effectiveDevicePixelRatio();
     refreshFonts();
-    const auto display = controller_->displayMetrics(density_);
+    const auto& display = controller_->display();
 
     chrome_ = display.chrome;
     metrics_ = {.ratio = chrome_.ratio, .title_row = ChromeMetrics::lineHeight(chrome_.title), .body_row = ChromeMetrics::lineHeight(chrome_.body), .small_row = ChromeMetrics::lineHeight(chrome_.small)};
-    const auto physical_host = controller_->notificationHost(display);
+    const auto physical_host = controller_->host();
     const auto host = logicalBounds(physical_host, density_);
     const QVariantMap style{
         {QStringLiteral("radius"), metrics_.px(NotificationMetrics::radius) / density_},
@@ -383,8 +381,8 @@ namespace telar::gui::qt {
     }
 
     now_ns_ = std::max(now_ns_, clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds());
-    const auto placements = stack_.prepare({.items = controller_->notifications().items(), .host = physical_host, .ratio = metrics_.ratio, .now_ns = now_ns_}, [&](const NotificationItem& item) {
-      return controller_->notificationTargetVisible(item.target);
+    const auto placements = stack_.prepare({.items = controller_->center().items(), .host = physical_host, .ratio = metrics_.ratio, .now_ns = now_ns_}, [&](const NotificationItem& item) {
+      return controller_->targetVisible(item.target);
     },
         [&](const NotificationItem& item, float width) {
           return content(item, width).height;
@@ -393,7 +391,7 @@ namespace telar::gui::qt {
     QList<QVariantMap> records;
 
     for (const auto& placement : placements.items()) {
-      const auto& item = controller_->notifications().items()[placement.index];
+      const auto& item = controller_->center().items()[placement.index];
       const auto& cached = content(item, placement.bounds.width);
       const NotificationCardGeometry geometry{.bounds = placement.bounds, .metrics = metrics_};
       auto underline = geometry.actionUnderline(cached.action_line_height, cached.action_advance);

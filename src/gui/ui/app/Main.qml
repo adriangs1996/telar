@@ -131,7 +131,7 @@ Window {
 
     NotificationOverlay {
         anchors.fill: parent
-        controller: telar
+        controller: telar.notifications
         colors: telar.colors
     }
 

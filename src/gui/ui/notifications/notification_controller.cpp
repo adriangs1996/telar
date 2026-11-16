@@ -40,8 +40,6 @@ static_assert(true);
 import telar.gui.core.metrics;
 import telar.gui.links.cell_links;
 import telar.gui.platform.awake_clock;
-import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {
 
@@ -66,18 +64,10 @@ namespace telar::gui::qt {
   }
 
   void Application::initializeNotifications() {
-    notification_timer_.setSingleShot(true);
-    notification_timer_.setTimerType(Qt::PreciseTimer);
-
-    connect(&notification_timer_, &QTimer::timeout, this, [this] {
-      session().advanceNotifications(platform::AwakeClock::nowNanoseconds());
-      refreshNotifications();
-    });
-
     connect(this, &Application::notification, this, [this](const QString& message) {
       const auto bytes = message.toUtf8();
 
-      publishNotification({
+      notifications_.publish({
           .title = "Telar",
           .message = {
               bytes.constData(),
@@ -86,59 +76,16 @@ namespace telar::gui::qt {
           .link = {},
       });
     });
-  }
+    connect(&notifications_, &NotificationsController::focusRestoreRequested, this, &Application::restoreTerminalFocus);
+    connect(&notifications_, &NotificationsController::focusRetireRequested, this, &Application::retireNotificationFocus);
+    connect(&notifications_, &NotificationsController::failed, this, &Application::reportFailure);
+    connect(&notifications_, &NotificationsController::linkRequested, this, [this](const QString& uri) {
+      const auto bytes = uri.toUtf8();
 
-  const NotificationCenter& Application::notifications() const noexcept {
-    return session().notifications();
-  }
-
-  QString Application::notificationIdentity(NotificationId identity) const {
-    return QString::number(store_.machineView()) + QLatin1Char(':') + QString::number(identity.value);
-  }
-
-  std::optional<NotificationId> Application::resolveNotification(const QString& identity) const {
-    const auto separator = identity.indexOf(QLatin1Char(':'));
-    if (separator < 0) {
-      return std::nullopt;
-    }
-
-    bool valid_view = false;
-    bool valid_id = false;
-    const auto view = identity.first(separator).toULongLong(&valid_view);
-    const auto raw_id = identity.sliced(separator + 1).toULongLong(&valid_id);
-
-    return valid_view && valid_id && view == store_.machineView() ? std::optional{NotificationId{raw_id}} : std::nullopt;
-  }
-
-  bool Application::notificationTargetVisible(NotificationTarget target) const noexcept {
-    return session().notificationTargetVisible(target);
-  }
-
-  Rect Application::notificationHost(const DisplayMetrics& display) const {
-    const auto& geometry = display.geometry;
-    auto grid = terminal_grid_;
-
-    grid.scale = 1;
-    const auto size = grid.fit(geometry.terminal.width, geometry.terminal.height);
-
-    return size ? Rect{.x = geometry.terminal.x, .y = geometry.terminal.y, .width = static_cast<float>(size->cols * grid.cell_width_px), .height = static_cast<float>(size->rows * grid.cell_height_px)} : Rect{};
-  }
-
-  void Application::publishNotification(NotificationInput input) {
-    session().publishNotification(input);
-    refreshNotifications();
-  }
-
-  void Application::refreshNotifications() {
-    presented_notifications_ = session().notificationRevision();
-    scheduleNotifications();
-    emit notificationsChanged();
-  }
-
-  void Application::scheduleNotifications() {
-    const auto now_ns = platform::AwakeClock::nowNanoseconds();
-
-    scheduleDeadline(notification_timer_, notifications().nextDeadline(now_ns, std::numeric_limits<std::uint64_t>::max()), now_ns);
+      if (const auto link = LinkTarget::fromUri({bytes.constData(), static_cast<std::size_t>(bytes.size())})) {
+        static_cast<void>(openLink(*link));
+      }
+    });
   }
 
   void Application::initializeGraphicsRecovery() {
@@ -160,38 +107,9 @@ namespace telar::gui::qt {
     scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, platform::AwakeClock::nowNanoseconds());
   }
 
-  void Application::dismissNotification(const QString& identity) {
-    const auto id = resolveNotification(identity);
-    if (id && session().dismissNotification(*id)) {
-      refreshNotifications();
-      restoreTerminalFocus();
-    }
-  }
-
-  void Application::activateNotification(const QString& identity) {
-    const auto id = resolveNotification(identity);
-    const auto* item = id ? notifications().find(*id) : nullptr;
-    if (item == nullptr) {
-      return;
-    }
-
-    const auto link = LinkTarget::fromUri(item->link.view());
-
-    applyInteraction([&] {
-      if (session().activateNotification(*id)) {
-        if (link) {
-          static_cast<void>(openLink(*link));
-        }
-
-        refreshNotifications();
-        restoreTerminalFocus();
-      }
-    });
-  }
-
-  void Application::retireNotificationFocus(const QString& identity, QQuickItem* retiring_owner) {
+  void Application::retireNotificationFocus(QQuickItem* retiring_owner) {
     const auto* pane = session().focusedPane();
-    if (!resolveNotification(identity) || pane == nullptr || !pane->attached || window_ == nullptr || (retiring_owner != nullptr && retiring_owner->window() != window_) || (!keyboardFocusVacant(*window_) && window_->activeFocusItem() != retiring_owner)) {
+    if (pane == nullptr || !pane->attached || window_ == nullptr || (retiring_owner != nullptr && retiring_owner->window() != window_) || (!keyboardFocusVacant(*window_) && window_->activeFocusItem() != retiring_owner)) {
       return;
     }
 

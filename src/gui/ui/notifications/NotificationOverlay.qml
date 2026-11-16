@@ -19,7 +19,7 @@ NotificationLayout {
         onPressed: activated()
         onEnabledChanged: {
             if (!enabled) {
-                root.controller.retireNotificationFocus(identity);
+                root.controller.retireFocus(identity);
             }
         }
         Keys.onReturnPressed: activated()
@@ -90,9 +90,9 @@ NotificationLayout {
                     Accessible.name: card.record.accessible
                     onActivated: {
                         if (card.record.clickable) {
-                            root.controller.activateNotification(card.record.key);
+                            root.controller.activate(card.record.key);
                         } else {
-                            root.controller.dismissNotification(card.record.key);
+                            root.controller.dismiss(card.record.key);
                         }
                     }
                 }
@@ -195,7 +195,7 @@ NotificationLayout {
                     enabled: card.record.enabled
                     Accessible.name: "Dismiss notification"
                     KeyNavigation.backtab: bodyControl
-                    onActivated: root.controller.dismissNotification(card.record.key)
+                    onActivated: root.controller.dismiss(card.record.key)
 
                     background: Item {
                         NativeRoundedRectangle {

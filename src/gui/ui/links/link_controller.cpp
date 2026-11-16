@@ -98,7 +98,7 @@ namespace telar::gui::qt {
 
     client->session.publishNotification({.title = "Telar", .message = message, .link = {}});
     if (source.machine.slot == store_.machines().active()) {
-      refreshNotifications();
+      notifications_.refresh();
     }
   }
 

@@ -884,7 +884,7 @@ if(TELAR_GUI_NATIVE)
   set_source_files_properties(ui/history/history_empty_layout.cpp ui/history/history_loading_layout.cpp ui/history/history_selection_layout.cpp ui/history/history_row_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   target_sources(gui-quick PRIVATE ui/terminal/terminal_pointer.cpp ui/terminal/terminal_scroll.cpp ui/terminal/terminal_links.cpp ui/links/link_preview.cpp ui/input/pointer_dispatcher.cpp ui/input/native_pointer_events.cpp ui/history/history_scroll_events.cpp)
   target_sources(gui-quick PRIVATE ui/config/configuration_loader.cpp)
-  target_sources(gui-quick PRIVATE ui/notifications/notification_controller.cpp ui/chrome/chrome_controller.cpp ui/app/application_effects.cpp)
+  target_sources(gui-quick PRIVATE ui/notifications/notification_controller.cpp ui/notifications/notifications_controller.cpp ui/notifications/notifications_controller.hpp ui/chrome/chrome_controller.cpp ui/app/application_effects.cpp)
   add_custom_target(gui-editor-ui
     COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_editor_database.py" --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS tools/create_editor_database.py

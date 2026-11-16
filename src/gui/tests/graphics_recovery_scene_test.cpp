@@ -165,8 +165,8 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::request_graphics_snapshot), 3, wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(label->isVisible(), wait_ms);
       QCOMPARE(label->property("text").toString(), QStringLiteral("images paused"));
-      QCOMPARE(application.notifications().items().size(), 1);
-      QCOMPARE(application.notifications().items().front().title.view(), std::string_view{"Images paused in pane 1: nvim"});
+      QCOMPARE(application.notifications()->center().items().size(), 1);
+      QCOMPARE(application.notifications()->center().items().front().title.view(), std::string_view{"Images paused in pane 1: nvim"});
       QCOMPARE(runtime.count(ClientTag::report_limit), 1);
 
       constexpr auto window_ns = GraphicsPauses::healthy_window_ns;

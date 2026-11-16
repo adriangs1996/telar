@@ -60,6 +60,7 @@ namespace telar::gui::qt {
     machine_prompt_.setDisplay(display);
     peek_.setDisplay(display);
     attachments_.setDisplay(display);
+    notifications_.setDisplay(display, terminal_grid_);
   }
 
   bool Application::machineListCollapsed() const noexcept {
