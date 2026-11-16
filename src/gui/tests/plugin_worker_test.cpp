@@ -11,7 +11,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "ui/plugins/plugin_packages.hpp"
+#include "ui/config/plugin_packages.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include <QCoreApplication>
 #include <QFile>
@@ -57,7 +57,7 @@ static_assert(true);
 #include <vector>
 
 #include "application/dependencies.hpp"
-#include "ui/plugins/plugin_packages.hpp"
+#include "ui/config/plugin_packages.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 
 import telar.gui.config.plugin_query;

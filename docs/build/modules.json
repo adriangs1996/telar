@@ -689,7 +689,7 @@
     "src/gui/ui/panes/pane_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/physical_pixel_matrix.hpp": "Qt moc/QML integration",
     "src/gui/ui/components/pick_controller.hpp": "Qt moc/QML integration",
-    "src/gui/ui/plugins/plugin_packages.hpp": "Qt moc/QML integration",
+    "src/gui/ui/config/plugin_packages.hpp": "Qt moc/QML integration",
     "src/gui/ui/plugins/plugin_worker.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/pointer_dispatcher.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/models/progress_value.hpp": "Qt moc/QML integration",

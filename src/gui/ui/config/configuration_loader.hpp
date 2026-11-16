@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
+#include "plugin_packages.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -12,7 +13,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "ui/plugins/plugin_packages.hpp"
 #include <QByteArray>
 #include <QList>
 #include <QMap>
