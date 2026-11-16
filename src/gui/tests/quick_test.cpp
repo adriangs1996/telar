@@ -3498,6 +3498,30 @@ return {api_version=2, client={keybindings={
       QCOMPARE(clipboard->text(), sentinel);
     }
 
+    Q_SLOT void historySelectionLeavesTheWorkbenchProjectionsAlone() {
+      importRetainedHistory();
+      const auto restore = qScopeGuard([this] {
+        client_->execute(Application::Action::cancel);
+      });
+
+      client_->execute(Application::Action::history);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
+      const auto workspaces = client_->workspaces()->rebuilds();
+      const auto tabs = client_->tabs()->rebuilds();
+      const auto panes = client_->panes()->rebuilds();
+
+      // Each selection commits and flushes before it returns; no runtime message runs in between.
+      for (const auto row : {1, 0, 1}) {
+        client_->history()->select(row);
+        QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), row);
+      }
+
+      QCOMPARE(client_->workspaces()->rebuilds(), workspaces);
+      QCOMPARE(client_->tabs()->rebuilds(), tabs);
+      QCOMPARE(client_->panes()->rebuilds(), panes);
+    }
+
     Q_SLOT void historyCardPressCannotFollowAReplacedRecord() {
       const std::array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_REUSE_PRESS_A_FIRST"},

@@ -156,7 +156,12 @@ namespace telar::gui::qt {
     return &rows_;
   }
 
+  // QML reads loading in the same snapshot as state, rows and the rest; actions check busy().
   bool HistoryController::loading() const {
+    return synchronized_ ? synchronized_->loading : busy();
+  }
+
+  bool HistoryController::busy() const {
     return search_timer_.isActive() || store_.session().historyLoading();
   }
 
@@ -196,7 +201,7 @@ namespace telar::gui::qt {
         .view_version = browser.viewVersion(),
         .search_version = search_version_,
         .configuration = session.viewVersion().configuration,
-        .loading = loading(),
+        .loading = busy(),
         .pane_open = pane != nullptr,
         .scope_value = open ? scopeValue() : QString{},
     };
@@ -435,7 +440,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::select(int row) {
-    if (row < 0 || loading()) {
+    if (row < 0 || busy()) {
       return;
     }
 
@@ -461,7 +466,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::execute(Action action, const QString& entry_id) {
-    if (!isOpen() || (loading() && action != Action::inspect)) {
+    if (!isOpen() || (busy() && action != Action::inspect)) {
       return;
     }
 
@@ -496,7 +501,7 @@ namespace telar::gui::qt {
     }
 
     interact([&] {
-      if (loading()) {
+      if (busy()) {
         throw EncodingError{"History search is still loading"};
       }
 
@@ -530,7 +535,7 @@ namespace telar::gui::qt {
   }
 
   const HistoryController::Presented* HistoryController::presented(const QString& revision) const {
-    if (!isOpen() || loading() || !presented_) {
+    if (!isOpen() || busy() || !presented_) {
       return nullptr;
     }
 

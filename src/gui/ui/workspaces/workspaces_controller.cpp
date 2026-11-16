@@ -10,7 +10,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-
 namespace telar::gui::qt {
 
   WorkspacesController::WorkspacesController(Store& store, QObject* parent)
@@ -49,11 +48,17 @@ namespace telar::gui::qt {
     };
   }
 
+  std::uint64_t WorkspacesController::rebuilds() const noexcept {
+    return rebuilds_;
+  }
+
   void WorkspacesController::synchronize() {
     const auto next = inputs();
     if (synchronized_ == next) {
       return;
     }
+
+    ++rebuilds_;
 
     const auto& session = store_.session();
     const auto* active = session.activeTab();

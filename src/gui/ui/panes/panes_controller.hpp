@@ -47,6 +47,9 @@ namespace telar::gui::qt {
     void setScale(double scale) noexcept;
     [[nodiscard]] QAbstractItemModel* rows() noexcept;
     [[nodiscard]] QAbstractItemModel* dividers() noexcept;
+    // How many synchronize() calls rebuilt the records, for tests and probes that check what a
+    // change costs.
+    [[nodiscard]] std::uint64_t rebuilds() const noexcept;
 
   private:
     struct Inputs {
@@ -75,6 +78,7 @@ namespace telar::gui::qt {
     ListModel dividers_;
     double scale_ = 1;
     std::optional<Inputs> synchronized_;
+    std::uint64_t rebuilds_ = 0;
   };
 
 }

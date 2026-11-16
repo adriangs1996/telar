@@ -77,11 +77,17 @@ namespace telar::gui::qt {
     return entries;
   }
 
+  std::uint64_t PanesController::rebuilds() const noexcept {
+    return rebuilds_;
+  }
+
   void PanesController::synchronize() {
     const auto next = inputs();
     if (synchronized_ == next) {
       return;
     }
+
+    ++rebuilds_;
 
     auto& session = store_.session();
     auto* tab = session.activeTab();

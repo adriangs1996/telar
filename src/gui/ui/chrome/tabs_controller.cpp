@@ -10,7 +10,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-
 namespace telar::gui::qt {
 
   TabsController::TabsController(Store& store, ElementSlots& elements, QObject* parent)
@@ -49,11 +48,17 @@ namespace telar::gui::qt {
     };
   }
 
+  std::uint64_t TabsController::rebuilds() const noexcept {
+    return rebuilds_;
+  }
+
   void TabsController::synchronize() {
     const auto next = inputs();
     if (synchronized_ == next) {
       return;
     }
+
+    ++rebuilds_;
 
     const auto& session = store_.session();
     const auto* active = session.activeTab();

@@ -39,6 +39,9 @@ namespace telar::gui::qt {
     void forget();
     [[nodiscard]] QAbstractItemModel* rows() noexcept;
     [[nodiscard]] int count() const noexcept;
+    // How many synchronize() calls rebuilt the records, for tests and probes that check what a
+    // change costs.
+    [[nodiscard]] std::uint64_t rebuilds() const noexcept;
 
   private:
     struct Inputs {
@@ -61,6 +64,7 @@ namespace telar::gui::qt {
     ElementSlots& elements_;
     ListModel rows_;
     std::optional<Inputs> synchronized_;
+    std::uint64_t rebuilds_ = 0;
   };
 
 }

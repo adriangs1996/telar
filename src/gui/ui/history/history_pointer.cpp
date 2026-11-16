@@ -345,7 +345,7 @@ namespace telar::gui::qt {
     }
 
     // Only state QML already received is presented: the frame shows what changed() announced.
-    if (!loading() && synchronized_ && synchronized_->view_version == browser.viewVersion()) {
+    if (!busy() && synchronized_ && synchronized_->view_version == browser.viewVersion()) {
       frame.surface = surface;
       if (const auto choice = browser.choice()) {
         frame.history = Presented{.choice = *choice, .dialog_generation = generation, .enter_runs = session.configuration().history.enter_runs};
@@ -407,7 +407,7 @@ namespace telar::gui::qt {
   void HistoryController::scroll(HistoryScrollPosition pointer, ScrollSample sample) {
     const auto& browser = store_.session().historyBrowser();
     const auto& view = browser.state();
-    const HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !loading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
+    const HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !busy() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
     const auto& surface = presented_surface_;
 
     if (sample.precise) {
@@ -436,7 +436,7 @@ namespace telar::gui::qt {
     const auto& browser = session.historyBrowser();
 
     for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
-      if (loading() || browser.rows().empty()) {
+      if (busy() || browser.rows().empty()) {
         break;
       }
 

@@ -41,6 +41,9 @@ namespace telar::gui::qt {
     [[nodiscard]] QAbstractItemModel* rows() noexcept;
     [[nodiscard]] int count() const noexcept;
     [[nodiscard]] const QVariantMap& context() const noexcept;
+    // How many synchronize() calls rebuilt the records, for tests and probes that check what a
+    // change costs.
+    [[nodiscard]] std::uint64_t rebuilds() const noexcept;
 
   signals:
     void contextChanged();
@@ -63,6 +66,7 @@ namespace telar::gui::qt {
     ListModel rows_;
     QVariantMap context_;
     std::optional<Inputs> synchronized_;
+    std::uint64_t rebuilds_ = 0;
   };
 
 }

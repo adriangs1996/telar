@@ -225,6 +225,8 @@ namespace telar::gui::qt {
     [[nodiscard]] QString scopeValue();
     [[nodiscard]] std::string_view tabName(const Pane<Memory>* pane) const;
     [[nodiscard]] bool isOpen() const noexcept;
+    // Whether a search is pending or loading now; actions refuse to run while it is.
+    [[nodiscard]] bool busy() const;
     [[nodiscard]] const Presented* presented(const QString& revision) const;
     [[nodiscard]] HistoryActionSurface actionSurface() const;
     [[nodiscard]] HistoryScrollSurface scrollSurface(HoverFrame& hover) const;
