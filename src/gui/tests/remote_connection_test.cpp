@@ -13,8 +13,8 @@ static_assert(true);
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
-#include "ui/app/runtime_connection.hpp"
-#include "ui/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/runtime_connection.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCoreApplication>
@@ -52,8 +52,8 @@ static_assert(true);
 #include <vector>
 
 #include "application/dependencies.hpp"
-#include "ui/app/runtime_connection.hpp"
-#include "ui/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/runtime_connection.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

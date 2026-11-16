@@ -3,48 +3,34 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "ui/machines/machine_client_key.hpp"
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <chrono>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <variant>
+#include "application/dependencies.hpp"
+#include "ui/notifications/sound_player.hpp"
+#include "ui/notifications/system_notifier.hpp"
 
 #pragma once
 
 import telar.gui.text.notification_payload;
 import telar.gui.application.host_effects;
-import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
   class ApplicationController;
 
+  // The desktop the window's clients reach through their MachineEffects: its notifications and
+  // its one sound at a time.
   struct ApplicationEffects final : HostEffects {
-    ApplicationEffects(ApplicationController& owner, MachineClientKey client) noexcept
-        : application(owner),
-          source(client) {}
+    using Notifier = SystemNotifier<ApplicationNotificationHost, ApplicationAllocator>;
+    using Player = SoundPlayer<ApplicationSoundHost, ApplicationController>;
+
+    ApplicationEffects(Notifier& notifications, Player& sounds) noexcept
+        : notifier(notifications),
+          player(sounds) {}
 
     bool postNotification(const NotificationPayload& payload) override;
     bool playSound(AgentSound sound) override;
-    void notePaneInput(FramePacer::Pane pane) noexcept override;
 
-    ApplicationController& application;
-    MachineClientKey source;
+    Notifier& notifier;
+    Player& player;
   };
 
 }

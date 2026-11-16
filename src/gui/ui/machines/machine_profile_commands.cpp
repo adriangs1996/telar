@@ -3,15 +3,15 @@
 static_assert(true);
 #endif
 
-#include "machine_client.hpp"
 #include "machine_profiles_source.hpp"
 #include "platform/environment.hpp"
-#include "remote_bridge.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/runtime_connection.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/machines/window_identity.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QByteArray>

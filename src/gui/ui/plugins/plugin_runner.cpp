@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "plugin_runner.hpp"
-#include "ui/machines/machine_client.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
 #include <exception>
 #include <stdexcept>
 #include <string>

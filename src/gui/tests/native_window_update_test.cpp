@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/window_frame_pacer.hpp"
+#include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <QEvent>
 #include <QGuiApplication>
 #include <QWindow>
@@ -29,7 +29,7 @@ static_assert(true);
 #include <variant>
 
 #include "platform/window.hpp"
-#include "ui/app/window_frame_pacer.hpp"
+#include "ui/foundation/timing/window_frame_pacer.hpp"
 
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;

@@ -8,30 +8,21 @@ static_assert(true);
 
 import std;
 import telar.gui.text.notification_payload;
-import telar.gui.platform.awake_clock;
-import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
   bool ApplicationEffects::postNotification(const NotificationPayload& payload) {
-    return application.findClient(source) != nullptr && source.machine.slot == application.store_.machines().active() && application.system_notifier_.post(payload);
+    return notifier.post(payload);
   }
 
   bool ApplicationEffects::playSound(AgentSound sound) {
-    if (application.findClient(source) == nullptr || source.machine.slot != application.store_.machines().active() || application.sound_player_.active()) {
+    if (player.active()) {
       return false;
     }
 
-    application.sound_player_.start(sound);
-    application.sound_owner_ = source;
+    player.start(sound);
 
     return true;
-  }
-
-  void ApplicationEffects::notePaneInput(FramePacer::Pane pane) noexcept {
-    if (application.findClient(source) != nullptr && source.machine.slot == application.store_.machines().active() && application.frame_pacer_) {
-      application.frame_pacer_->noteInput(pane, platform::AwakeClock::nowNanoseconds());
-    }
   }
 
   void ApplicationController::soundPlaybackFinished([[maybe_unused]] std::optional<CommandFailure> failure) {

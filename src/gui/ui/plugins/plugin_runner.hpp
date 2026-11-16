@@ -7,7 +7,7 @@ static_assert(true);
 #include "plugin_worker.hpp"
 #include "tbc/view.hpp"
 #include "ui/config/configuration_source.hpp"
-#include "ui/machines/machine_client_key.hpp"
+#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/store/store.hpp"
 #include <QObject>
 #include <QString>

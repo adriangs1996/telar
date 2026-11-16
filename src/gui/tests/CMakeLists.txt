@@ -326,11 +326,11 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
     TEST gui-plugin-packages LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-ssh-runtime-fixture NO_TEST SOURCES ssh_runtime_fixture.cpp LIBRARIES gui-core)
-  telar_add_test(gui-remote-connection-test QT SOURCES remote_connection_test.cpp ${PROJECT_SOURCE_DIR}/ui/app/runtime_connection.cpp ${PROJECT_SOURCE_DIR}/ui/app/runtime_connection.hpp LIBRARIES gui-posix Qt6::Concurrent Qt6::Network Qt6::Test
+  telar_add_test(gui-remote-connection-test QT SOURCES remote_connection_test.cpp ${PROJECT_SOURCE_DIR}/ui/foundation/machines/runtime_connection.cpp ${PROJECT_SOURCE_DIR}/ui/foundation/machines/runtime_connection.hpp LIBRARIES gui-posix Qt6::Concurrent Qt6::Network Qt6::Test
     TEST gui-remote-connection LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-remote-connection-test PRIVATE "${PROJECT_SOURCE_DIR}")
   add_dependencies(gui-remote-connection-test gui-ssh-runtime-fixture)
-  telar_add_test(gui-runtime-compatibility-probe QT PROBE SOURCES ${PROJECT_SOURCE_DIR}/tools/runtime_compatibility_probe.cpp ${PROJECT_SOURCE_DIR}/ui/app/runtime_connection.cpp ${PROJECT_SOURCE_DIR}/ui/app/runtime_connection.hpp LIBRARIES gui-posix Qt6::Concurrent Qt6::Network
+  telar_add_test(gui-runtime-compatibility-probe QT PROBE SOURCES ${PROJECT_SOURCE_DIR}/tools/runtime_compatibility_probe.cpp ${PROJECT_SOURCE_DIR}/ui/foundation/machines/runtime_connection.cpp ${PROJECT_SOURCE_DIR}/ui/foundation/machines/runtime_connection.hpp LIBRARIES gui-posix Qt6::Concurrent Qt6::Network
     CHECKS lint lifetime blank_lines)
   target_include_directories(gui-runtime-compatibility-probe PRIVATE "${PROJECT_SOURCE_DIR}")
   telar_add_test(gui-local-runtime-endpoint-test QT SOURCES local_runtime_endpoint_test.cpp LIBRARIES gui-posix Qt6::Network Qt6::Test

@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "links_controller.hpp"
 #include "platform/environment.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/machines/machine_client.hpp"
 #include <exception>
 #include <string_view>
 

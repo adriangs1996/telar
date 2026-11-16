@@ -8,6 +8,8 @@ static_assert(true);
 #include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "machine_client_key.hpp"
+#include "machine_effects.hpp"
+#include "runtime_connection.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -20,8 +22,6 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/application_effects.hpp"
-#include "ui/app/runtime_connection.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -62,7 +62,7 @@ namespace telar::gui::qt {
   struct MachineClient {
     MachineClientKey key;
     RuntimeConnection connection;
-    ApplicationEffects effects;
+    MachineEffects effects;
     GuiSession session;
     std::optional<platform::WindowLease> identity_lease;
     std::uint64_t identity = 0;
@@ -72,11 +72,22 @@ namespace telar::gui::qt {
     bool named_launch = false;
     runtime::FixedText<MachineLimits::program_bytes> admitted_program;
 
-    explicit MachineClient(ApplicationAllocator& memory, ApplicationController& application, MachineClientKey admission)
+    explicit MachineClient(ApplicationAllocator& memory, const MachineEffects::Sinks& sinks, MachineClientKey admission)
         : key(admission),
           connection(memory),
-          effects(application, admission),
+          effects(sinks, admission),
           session(memory, connection, effects) {}
   };
+
+  // The client the key names, or null once its slot holds another client or none.
+  [[nodiscard]] inline MachineClient* findMachineClient(const Machines& machines, const MachineClients& clients, MachineClientKey key) noexcept {
+    if (!machines.contains(key.machine)) {
+      return nullptr;
+    }
+
+    const auto& client = clients[key.machine.slot];
+
+    return client && (*client)->key == key ? client->get() : nullptr;
+  }
 
 }

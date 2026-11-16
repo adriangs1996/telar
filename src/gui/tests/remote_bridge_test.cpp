@@ -8,8 +8,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "ui/machines/remote_bridge.hpp"
-#include "ui/machines/ssh_options.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/ssh_options.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -37,8 +37,8 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-#include "ui/machines/remote_bridge.hpp"
-#include "ui/machines/ssh_options.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/ssh_options.hpp"
 
 import telar.gui.machines.discovery;
 import telar.client;

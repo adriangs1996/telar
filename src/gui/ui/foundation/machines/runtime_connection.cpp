@@ -14,7 +14,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "ui/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
 #include <QStringLiteral>

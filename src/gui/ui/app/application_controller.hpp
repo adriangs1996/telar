@@ -8,7 +8,6 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "runtime_connection.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
@@ -28,7 +27,11 @@ static_assert(true);
 #include "ui/config/configuration_source.hpp"
 #include "ui/documents/documents_controller.hpp"
 #include "ui/fonts/font_resolver.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
+#include "ui/foundation/machines/machine_client_key.hpp"
+#include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/models/list_model.hpp"
+#include "ui/foundation/timing/window_frame_pacer.hpp"
 #include "ui/history/history_controller.hpp"
 #include "ui/input/key_bindings.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
@@ -36,8 +39,6 @@ static_assert(true);
 #include "ui/links/link_status_controller.hpp"
 #include "ui/links/links_controller.hpp"
 #include "ui/machines/machine_activity_target.hpp"
-#include "ui/machines/machine_client.hpp"
-#include "ui/machines/machine_client_key.hpp"
 #include "ui/machines/machine_profiles_source.hpp"
 #include "ui/machines/machine_prompt_controller.hpp"
 #include "ui/notifications/notifications_controller.hpp"
@@ -54,7 +55,6 @@ static_assert(true);
 #include "ui/terminal/terminal_preparation.hpp"
 #include "ui/workspaces/workspace_form_controller.hpp"
 #include "ui/workspaces/workspaces_controller.hpp"
-#include "window_frame_pacer.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFutureWatcher>
@@ -146,7 +146,6 @@ namespace telar::gui::qt {
   // Each feature's state lives in its own controller, which reads the store and never calls
   // back here; this controller synchronizes them in order and runs what they ask of the window.
   class ApplicationController final : public QObject {
-    friend struct ApplicationEffects;
     friend class MachineChromeLayout;
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
@@ -653,6 +652,8 @@ namespace telar::gui::qt {
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
+    // What every client's MachineEffects reaches on the desktop.
+    tbc::view<ApplicationEffects, tbc::lt::self> effects_;
     WorkspacesController workspaces_;
     TabsController tabs_;
     PanesController panes_;

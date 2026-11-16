@@ -35,13 +35,7 @@ namespace telar::gui::qt {
   }
 
   MachineClient* Store::find(MachineClientKey key) const noexcept {
-    if (!machines_.contains(key.machine)) {
-      return nullptr;
-    }
-
-    const auto& client = clients_[key.machine.slot];
-
-    return client && (*client)->key == key ? client->get() : nullptr;
+    return findMachineClient(machines_, clients_, key);
   }
 
   GuiSession& Store::session() noexcept {

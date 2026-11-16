@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/machines/machine_client_key.hpp"
+#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QPointF>
 #include <QString>
 #include <QVariantList>

@@ -21,9 +21,9 @@ static_assert(true);
 #include "ui/chrome/mode_projection.hpp"
 #include "ui/fonts/terminal_font.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/process/launch_arguments.hpp"
-#include "ui/machines/machine_client.hpp"
 #include "ui/panes/pane_projection.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include "ui/terminal/terminal_item.hpp"
@@ -148,6 +148,7 @@ namespace telar::gui::qt {
         key_bindings_(*this),
         sound_player_(*this),
         system_notifier_(memory),
+        effects_(system_notifier_, sound_player_),
         workspaces_(store_),
         tabs_(store_, element_slots_),
         panes_(store_, element_slots_),

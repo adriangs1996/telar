@@ -5,16 +5,16 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "machine_client.hpp"
-#include "machine_client_key.hpp"
-#include "remote_bridge.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/app/runtime_connection.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
+#include "ui/foundation/machines/machine_client_key.hpp"
+#include "ui/foundation/machines/remote_bridge.hpp"
+#include "ui/foundation/machines/runtime_connection.hpp"
 #include <QByteArrayView>
 #include <QRandomGenerator>
 #include <QtCore/qnamespace.h>
@@ -81,7 +81,15 @@ namespace telar::gui::qt {
 
   MachineClient& ApplicationController::createClient(Machines::Slot slot) {
     const auto key = store_.admission(slot);
-    auto owned = makeOwned<MachineClient>(memory_, memory_, *this, key);
+    const MachineEffects::Sinks sinks{
+        .machines = store_.machines(),
+        .clients = store_.clients(),
+        .desktop = effects_,
+        .sound_owner = sound_owner_,
+        .frame_pacer = frame_pacer_,
+    };
+
+    auto owned = makeOwned<MachineClient>(memory_, memory_, sinks, key);
     auto* client = owned.get();
 
     client->admitted_program.assign(store_.machines().row(slot).program.view());

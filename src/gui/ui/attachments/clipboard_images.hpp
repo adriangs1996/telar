@@ -7,7 +7,7 @@
 #include "platform/clipboard_image_monitor.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "tbc/view.hpp"
-#include "ui/machines/machine_client_key.hpp"
+#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>

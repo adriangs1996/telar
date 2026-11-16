@@ -6,7 +6,6 @@ static_assert(true);
 #include "machine_chrome_layout.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "machine_client.hpp"
 #include "platform/font.h"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -15,6 +14,7 @@ static_assert(true);
 #include "ui/app/application_controller.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>

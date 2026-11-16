@@ -112,7 +112,7 @@ def prepare(output):
 ''')
     add(path, source)
 
-    path = 'src/gui/ui/app/runtime_connection.cpp'
+    path = 'src/gui/ui/foundation/machines/runtime_connection.cpp'
     source = read(path)
     source = replace_once(source, 'void RuntimeConnection::read() {\n', '''void RuntimeConnection::read() {
   TELAR_PHASE_TRACE("socket.read", this, 0, 0);

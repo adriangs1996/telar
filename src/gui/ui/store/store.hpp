@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "ui/machines/machine_client.hpp"
-#include "ui/machines/machine_client_key.hpp"
+#include "ui/foundation/machines/machine_client.hpp"
+#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 #include <array>
@@ -60,7 +60,7 @@ namespace telar::gui::qt {
       std::uint64_t line_search_pane = 0;
     };
 
-    using Clients = std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity>;
+    using Clients = MachineClients;
 
     Store() = default;
     ~Store() override = default;
