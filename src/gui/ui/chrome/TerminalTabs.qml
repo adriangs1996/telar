@@ -44,11 +44,11 @@ Item {
     }
 
     Component.onCompleted: {
-        if (root.controller && root.visible) root.controller.registerTabStrip(layout);
+        if (root.controller && root.visible) root.controller.tabs.registerStrip(layout);
     }
     // A mod may place its own strip; the visible one owns dragging.
     onVisibleChanged: {
-        if (root.controller && root.visible) root.controller.registerTabStrip(layout);
+        if (root.controller && root.visible) root.controller.tabs.registerStrip(layout);
     }
 
     NativeRoundedRectangle {
@@ -214,7 +214,7 @@ Item {
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                 onPressed: event => {
                     if (event.button === Qt.LeftButton) {
-                        if (root.controller) root.controller.selectCapturedTab();
+                        if (root.controller) root.controller.tabs.selectCaptured();
                         else root.selected(tab.source.key);
                     }
                 }
@@ -391,7 +391,7 @@ Item {
             }
         }
         onPressed: {
-            if (root.controller) root.controller.selectCapturedTab();
+            if (root.controller) root.controller.tabs.selectCaptured();
             else root.selected(layout.counter.key);
         }
     }

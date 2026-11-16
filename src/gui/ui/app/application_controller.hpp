@@ -293,8 +293,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void submitDialog(const QVariantMap& input);
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
-    Q_INVOKABLE void registerTabStrip(QQuickItem* strip);
-    Q_INVOKABLE void selectCapturedTab();
     Q_INVOKABLE void setSidebarWidth(qreal width);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
 
@@ -582,8 +580,6 @@ namespace telar::gui::qt {
     void initializeAttachments();
     void refreshPanes();
     [[nodiscard]] HistoryModalMetrics historyMetrics() const;
-    [[nodiscard]] TabDropSurface tabDropSurface() const;
-    void synchronizeTabStrip();
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
     void present(const PresentedFrame& frame);
@@ -663,7 +659,6 @@ namespace telar::gui::qt {
     bool restore_layout_ = true;
     std::optional<WindowFramePacer<>> frame_pacer_;
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
-    tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     WorkspacesController workspaces_;
@@ -683,6 +678,8 @@ namespace telar::gui::qt {
     ComponentsController components_;
     PluginRunner plugins_;
     WorkspaceFormController workspace_form_;
+    // After the tabs, whose strip it routes the pointer to.
+    tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
     QString error_;
@@ -702,8 +699,6 @@ namespace telar::gui::qt {
     Viewport viewport_ = default_viewport;
     CellMetrics cell_metrics_;
     TerminalGrid terminal_grid_;
-    TabDropSurface presented_tabs_;
-    QPointer<QQuickItem> tab_strip_;
     QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
     QByteArray hostname_;
     Qt::KeyboardModifiers pointer_modifiers_;

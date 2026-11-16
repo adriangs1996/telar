@@ -8,7 +8,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/input/pointer_dispatcher.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -25,10 +24,8 @@ static_assert(true);
 
 #pragma once
 #include "ui/app/application_controller.hpp"
-#include "ui/input/pointer_dispatcher.hpp"
 
 import telar.gui.layout.geometry;
-import telar.gui.presentation.tab_drop;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
@@ -37,15 +34,6 @@ namespace telar::gui::test {
   struct FramePacing {
     [[nodiscard]] static bool requestsPending(const qt::ApplicationController& application) noexcept {
       return application.session().requestsPending();
-    }
-
-    [[nodiscard]] static TabDropSurface tabs(const qt::ApplicationController& application) {
-      return application.tabDropSurface();
-    }
-
-    static void presentTabs(qt::ApplicationController& application, const TabDropSurface& surface) {
-      application.presented_tabs_ = surface;
-      application.pointer_dispatcher_.presentTabs(surface);
     }
 
     static void anchor(qt::ApplicationController& application, std::uint64_t now_ns) {

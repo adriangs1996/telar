@@ -146,7 +146,6 @@ namespace telar::gui::qt {
         machine_profiles_(memory),
         attachments_(store_, memory),
         key_bindings_(*this),
-        pointer_dispatcher_(*this),
         sound_player_(*this),
         system_notifier_(memory),
         workspaces_(store_),
@@ -166,6 +165,7 @@ namespace telar::gui::qt {
         components_(store_, configuration_source_, element_slots_, memory),
         plugins_(store_, configuration_source_, memory),
         workspace_form_(store_),
+        pointer_dispatcher_(*this, tabs_),
         hostname_(platform::hostName()) {
     initializeMachines();
     initializeMachineProfiles();
@@ -235,6 +235,10 @@ namespace telar::gui::qt {
     connect(this, &ApplicationController::machineChanged, &link_status_, &LinkStatusController::publish);
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
+    connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
+      execute(Action::select_tab, QString::number(tab_id));
+      restoreTerminalFocus();
+    });
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
       emit terminalChanged(pane_id);
       requestTerminalFrame();
@@ -417,6 +421,7 @@ namespace telar::gui::qt {
     frame_pacer_.emplace(window);
     history_.setWindow(&window);
     activity_.setWindow(&window);
+    tabs_.setWindow(window);
     pointer_dispatcher_.presentHistoryActions({});
     key_bindings_.setWindow(window);
     pointer_dispatcher_.setWindow(window);
@@ -546,7 +551,7 @@ namespace telar::gui::qt {
     frame = {};
     frame.machine_view = store_.machineView();
     frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
-    frame.tabs = tabDropSurface();
+    frame.tabs = tabs_.dropSurface(chromeRatio());
     if (window_ == nullptr) {
       return;
     }
@@ -716,8 +721,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    presented_tabs_ = frame.tabs;
-    pointer_dispatcher_.presentTabs(presented_tabs_);
+    tabs_.present(frame.tabs);
     history_.present(frame.history);
     pointer_dispatcher_.presentHistoryActions(history_.presentedActions());
 
@@ -1087,7 +1091,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::synchronize() {
-    synchronizeTabStrip();
+    tabs_.synchronizeStrip();
     workspaces_.synchronize();
     tabs_.synchronize();
     const auto activity_rebuilds = activity_.rebuilds();

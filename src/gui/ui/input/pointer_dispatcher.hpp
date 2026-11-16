@@ -37,16 +37,16 @@ static_assert(true);
 
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.tab_drop;
 
 namespace telar::gui::qt {
 
   class ApplicationController;
+  class TabsController;
   class TerminalItem;
 
   class PointerDispatcher final : public QObject {
   public:
-    explicit PointerDispatcher(ApplicationController& application);
+    PointerDispatcher(ApplicationController& application, TabsController& tabs);
     ~PointerDispatcher() override = default;
     PointerDispatcher(const PointerDispatcher&) = delete;
     PointerDispatcher& operator=(const PointerDispatcher&) = delete;
@@ -57,12 +57,6 @@ namespace telar::gui::qt {
     void beginChild(const ChildMouseView& view, ChildMouseSample sample);
     void release(Qt::MouseButton button);
     void presentHistoryActions(const HistoryActionSurface& surface);
-    void presentTabs(const TabDropSurface& surface);
-
-    [[nodiscard]] std::optional<TabLocation> capturedTab() const noexcept {
-      return tab_drag_.source();
-    }
-
     void abandon(TerminalItem& terminal);
     void ungrab(TerminalItem& terminal);
     void observeTerminalScroll(TerminalItem& terminal);
@@ -95,30 +89,18 @@ namespace telar::gui::qt {
     void report(std::uint64_t pane_id, const std::optional<ChildMouseReport>& report);
     void cancelPane(std::uint64_t pane_id);
     void cancel();
-    void cancelTabDrag();
-    void observeTabHover(std::optional<QPointF> position);
-    [[nodiscard]] bool tabKey(QKeyEvent& event);
-    void updateTabDragVisual();
-    [[nodiscard]] bool pressTab(QMouseEvent& event);
-    [[nodiscard]] bool updateTabDrag(QMouseEvent& event, bool released);
     bool press(QMouseEvent& event);
     bool move(QMouseEvent& event);
     bool release(QMouseEvent& event);
     static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 
     ApplicationController& application_;
+    TabsController& tabs_;
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;
     QPointer<TerminalItem> terminal_scroll_owner_;
     std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
-    TabDrag tab_drag_;
-    TabDropSlots tab_drop_slots_;
-    std::optional<TabDragMove> pending_tab_move_;
-    TabDropSurface tab_capture_surface_;
-    QPointF tab_pointer_;
-    qreal tab_grab_offset_ = 0;
-    bool tab_escape_held_ = false;
     bool delivering_ = false;
     bool handing_off_ = false;
   };

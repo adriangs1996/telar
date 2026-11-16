@@ -2795,14 +2795,14 @@ return {api_version=2, client={keybindings={
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
-      QTRY_VERIFY_WITH_TIMEOUT(test::FramePacing::tabs(*client_).count > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->dropSurface(client_->chromeRatio()).count > 0, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* label = componentItem(QStringLiteral("label"), QStringLiteral("Configured action"));
 
       QVERIFY(label != nullptr);
       const auto bounds = label->mapRectToScene(label->boundingRect());
       const auto point = bounds.center().toPoint();
-      const auto live = test::FramePacing::tabs(*client_);
+      const auto live = client_->tabs()->dropSurface(client_->chromeRatio());
 
       QVERIFY(live.at({point.x() * live.scale, point.y() * live.scale}) == nullptr);
       auto stale = live;
@@ -2810,10 +2810,10 @@ return {api_version=2, client={keybindings={
       stale.count = 1;
       stale.create = {};
       stale.targets.front().bounds = {.x = static_cast<float>(bounds.x() * live.scale), .y = static_cast<float>(bounds.y() * live.scale), .width = static_cast<float>(bounds.width() * live.scale), .height = static_cast<float>(bounds.height() * live.scale)};
-      test::FramePacing::presentTabs(*client_, stale);
+      client_->tabs()->present(stale);
       held = point;
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, point);
-      QVERIFY2(!client_->pointerDispatcher().capturedTab().has_value(), "A stale tab hit must not capture a different configured widget");
+      QVERIFY2(!client_->tabs()->capturedTab().has_value(), "A stale tab hit must not capture a different configured widget");
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, point);
       held.reset();
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
@@ -2910,7 +2910,7 @@ return {api_version=2, client={keybindings={
       const auto restarted_ending = destination->mapToScene({destination->width() * trailing_half, destination->height() / 2}).toPoint();
 
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, restarted);
-      const auto captured = client_->pointerDispatcher().capturedTab();
+      const auto captured = client_->tabs()->capturedTab();
       if (captured) {
         QCOMPARE(captured->tab_id, created.front().toULongLong());
       } else {
@@ -2945,7 +2945,7 @@ return {api_version=2, client={keybindings={
 
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
       sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
-      QVERIFY(client_->pointerDispatcher().capturedTab().has_value());
+      QVERIFY(client_->tabs()->capturedTab().has_value());
       client_->execute(ApplicationController::Action::close_tab, created.front());
       expected.removeOne(created.front());
       QVERIFY(test::waitForGuiCondition([&] {
@@ -2953,7 +2953,7 @@ return {api_version=2, client={keybindings={
       },
           runtime_wait_ms));
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QVERIFY(!client_->pointerDispatcher().capturedTab().has_value());
+      QVERIFY(!client_->tabs()->capturedTab().has_value());
       const auto* layout = window_->findChild<QQuickItem*>(QStringLiteral("tabStripLayout"));
 
       QVERIFY(layout != nullptr);
@@ -3026,7 +3026,7 @@ return {api_version=2, client={keybindings={
 
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
       held = true;
-      const auto captured = client_->pointerDispatcher().capturedTab();
+      const auto captured = client_->tabs()->capturedTab();
       if (captured) {
         QCOMPARE(captured->tab_id, key.toULongLong());
       } else {
@@ -7927,7 +7927,7 @@ return {api_version=2, client={keybindings={
 
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
       sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
-      QVERIFY(client_->pointerDispatcher().capturedTab().has_value());
+      QVERIFY(client_->tabs()->capturedTab().has_value());
       switch (interruption) {
       case TabDragInterruption::viewport:
         window_->resize(size.width() + 1, size.height());
@@ -7945,7 +7945,7 @@ return {api_version=2, client={keybindings={
       }
 
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QVERIFY(!client_->pointerDispatcher().capturedTab().has_value());
+      QVERIFY(!client_->tabs()->capturedTab().has_value());
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
       QCOMPARE(tabKeys(), before);
       QCOMPARE(client_->error(), QString{});

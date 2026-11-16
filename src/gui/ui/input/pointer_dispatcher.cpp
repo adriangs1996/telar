@@ -18,6 +18,7 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/attachments/attachment_shelf.hpp"
+#include "ui/chrome/tabs_controller.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>
@@ -60,9 +61,10 @@ import telar.gui.input.configuration;
 
 namespace telar::gui::qt {
 
-  PointerDispatcher::PointerDispatcher(ApplicationController& application)
+  PointerDispatcher::PointerDispatcher(ApplicationController& application, TabsController& tabs)
       : QObject(&application),
         application_(application),
+        tabs_(tabs),
         native_events_(application.memory_),
         history_scroll_events_(*this) {
     connect(&application, &ApplicationController::inputReleasing, this, &PointerDispatcher::cancelPane);
@@ -218,8 +220,8 @@ namespace telar::gui::qt {
   }
 
   void PointerDispatcher::cancel() {
-    observeTabHover(std::nullopt);
-    cancelTabDrag();
+    tabs_.observeHover(std::nullopt);
+    tabs_.cancelDrag();
     application_.history_.retireHover();
     const auto previous_recipients = recipients();
 
@@ -289,7 +291,7 @@ namespace telar::gui::qt {
   }
 
   bool PointerDispatcher::press(QMouseEvent& event) {
-    if (pressTab(event)) {
+    if (tabs_.press(event, application_.chromeRatio())) {
       return false;
     }
 
@@ -329,7 +331,7 @@ namespace telar::gui::qt {
     }
 
     application_.activity_.observePointer(true, event.position());
-    const auto tab_consumed = updateTabDrag(event, false);
+    const auto tab_consumed = tabs_.drag(event, false);
 
     if (!occupied()) {
       return tab_consumed;
@@ -367,7 +369,7 @@ namespace telar::gui::qt {
   }
 
   bool PointerDispatcher::release(QMouseEvent& event) {
-    if (event.button() == Qt::LeftButton && updateTabDrag(event, true)) {
+    if (event.button() == Qt::LeftButton && tabs_.drag(event, true)) {
       return true;
     }
 
@@ -433,30 +435,23 @@ namespace telar::gui::qt {
         auto& mouse = dynamic_cast<QMouseEvent&>(*event);
 
         application_.activity_.observePointer(true, mouse.position());
-        observeTabHover(mouse.position());
+        tabs_.observeHover(mouse.position());
 
         return press(mouse);
       }
       case QEvent::MouseMove: {
         auto& mouse = dynamic_cast<QMouseEvent&>(*event);
 
-        observeTabHover(mouse.position());
+        tabs_.observeHover(mouse.position());
         return move(mouse);
       }
       case QEvent::ShortcutOverride:
       case QEvent::KeyPress:
       case QEvent::KeyRelease: {
-        return tabKey(dynamic_cast<QKeyEvent&>(*event));
+        return tabs_.key(dynamic_cast<QKeyEvent&>(*event));
       }
       case QEvent::Leave:
-        observeTabHover(std::nullopt);
-        if (tab_drag_.captured()) {
-          const auto scale = tab_capture_surface_.scale / tab_capture_surface_.threshold;
-
-          tab_drag_.update({tab_pointer_.x() * scale, tab_pointer_.y() * scale}, std::nullopt);
-          updateTabDragVisual();
-        }
-
+        tabs_.leave();
         application_.history_.retireHover();
         application_.attachments_.shelf()->observePointer(std::nullopt);
         application_.activity_.observePointer(false);
@@ -464,7 +459,7 @@ namespace telar::gui::qt {
       case QEvent::MouseButtonRelease: {
         auto& mouse = dynamic_cast<QMouseEvent&>(*event);
 
-        observeTabHover(mouse.position());
+        tabs_.observeHover(mouse.position());
         return release(mouse);
       }
       default:
