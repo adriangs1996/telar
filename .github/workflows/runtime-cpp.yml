@@ -71,7 +71,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" \
             -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT" \
             -DTELAR_RUNTIME_DISTRIBUTABLE=${{ matrix.distributable }} \
-            -DTELAR_RUNTIME_SANITIZERS=${{ matrix.sanitizers }}
+            -DTELAR_SANITIZERS=${{ matrix.sanitizers }}
 
       - name: Build and test
         run: |
@@ -161,7 +161,7 @@ jobs:
         run: |
           cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
             -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" -DTELAR_CLIPBOARD_NATIVE=OFF \
-            -DTELAR_RUNTIME_SANITIZERS=${{ matrix.configuration == 'Debug' && 'ON' || 'OFF' }} \
+            -DTELAR_SANITIZERS=${{ matrix.configuration == 'Debug' && 'ON' || 'OFF' }} \
             -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT"
 
       - name: Build and test

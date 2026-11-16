@@ -60,10 +60,6 @@ add_executable(control-queue-tests tests/control_queue_test.cpp tests/pty_respon
 target_include_directories(control-queue-tests PRIVATE .)
 target_link_libraries(control-queue-tests PRIVATE runtime-core runtime-test-fixtures)
 target_compile_options(control-queue-tests PRIVATE -Wall -Wextra -Wpedantic)
-if(TELAR_RUNTIME_SANITIZERS)
-  target_compile_options(control-queue-tests PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(control-queue-tests PRIVATE -fsanitize=address,undefined)
-endif()
 add_test(NAME control-queue-tests COMMAND control-queue-tests)
 # The parser and the ordinary scans run from runtime-core's control module. Each scan test calls
 # both of its instruction sets: the target's vectors and the byte loop of a target without them.
@@ -72,10 +68,6 @@ foreach(control_target IN ITEMS control-parser control-osc-owned control-scanner
   add_executable(${control_target}-tests tests/${control_source}_test.cpp)
   target_link_libraries(${control_target}-tests PRIVATE runtime-core)
   target_compile_options(${control_target}-tests PRIVATE -Wall -Wextra -Wpedantic)
-  if(TELAR_RUNTIME_SANITIZERS)
-    target_compile_options(${control_target}-tests PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(${control_target}-tests PRIVATE -fsanitize=address,undefined)
-  endif()
   add_test(NAME ${control_target}-tests COMMAND ${control_target}-tests)
 endforeach()
 add_executable(control-engine-tests tests/control_engine_test.cpp tests/pty_response_queue_test.cpp)

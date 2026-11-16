@@ -67,9 +67,6 @@ set_target_properties(gui-freetype PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(gui-freetype INTERFACE "LINKER:--exclude-libs,$<TARGET_FILE_NAME:gui-freetype>")
 endif()
-if(TELAR_GUI_SANITIZERS)
-  target_compile_options(gui-freetype PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-endif()
 
 install(FILES "${telar_freetype_SOURCE_DIR}/docs/FTL.TXT" DESTINATION share/licenses/telar-gui RENAME freetype.txt)
 
@@ -91,9 +88,6 @@ target_compile_definitions(gui-harfbuzz PRIVATE
 set_target_properties(gui-harfbuzz PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(gui-harfbuzz INTERFACE "LINKER:--exclude-libs,$<TARGET_FILE_NAME:gui-harfbuzz>")
-endif()
-if(TELAR_GUI_SANITIZERS)
-  target_compile_options(gui-harfbuzz PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
 endif()
 
 install(FILES "${telar_harfbuzz_SOURCE_DIR}/COPYING" DESTINATION share/licenses/telar-gui RENAME harfbuzz.txt)

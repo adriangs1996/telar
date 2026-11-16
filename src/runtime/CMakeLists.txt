@@ -241,7 +241,6 @@ else()
   target_sources(runtime-core PRIVATE platform/proc_file/proc_file.cpp)
   target_link_libraries(runtime-core PUBLIC util)
 endif()
-option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)
 
 target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)
 add_dependencies(runtime-core cell-layout command-specs)
@@ -258,7 +257,6 @@ install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREF
 add_subdirectory(../cli "${CMAKE_CURRENT_BINARY_DIR}/cli")
 set_target_properties(telar PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
-option(TELAR_RUNTIME_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 if(TELAR_SANITIZERS AND TELAR_RUNTIME_DISTRIBUTABLE)
   message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
 endif()

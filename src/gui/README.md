@@ -222,7 +222,7 @@ Native integration tests use owned temporary runtimes and private clipboard/disp
 fixtures. Run native window cases serially to avoid focus interference. Core
 components can be tested without downloading or building Qt by configuring
 `-DTELAR_GUI_NATIVE=OFF`.
-Sanitizer builds use `-DTELAR_GUI_SANITIZERS=ON` in a separate build directory.
+Sanitizer builds use `-DTELAR_SANITIZERS=ON` in a separate build directory.
 
 ```sh
 cmake --build src/gui/out --target gui-lint --parallel 2

@@ -11,6 +11,11 @@ if(CMAKE_HOST_APPLE AND (NOT CMAKE_SYSTEM_NAME OR CMAKE_SYSTEM_NAME STREQUAL "Da
 endif()
 
 project(ebnf VERSION 0.1.0 LANGUAGES CXX)
+# The sanitize preset names the project's own option; the telar modules it builds read the
+# build-wide one.
+if(EBNF_SANITIZERS)
+  set(TELAR_SANITIZERS ON CACHE BOOL "Instrument all owned C++ targets with ASan/UBSan" FORCE)
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 option(EBNF_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)

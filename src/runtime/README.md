@@ -384,7 +384,7 @@ out/telar-runtime --socket "$runtime_directory/runtime.sock" --engine-arg pi --e
 ## Runtime telemetry
 
 Debug builds emit one JSON sample per second to `<socket>.runtime-<pid>.log`.
-Use `-DTELAR_RUNTIME_DIAGNOSTICS=ON` to enable the same counters in Release.
+Use `-DTELAR_DIAGNOSTICS=ON` to enable the same counters in Release.
 Default Release compiles out counters and sampling. Logs use `0600` permissions,
 rotate at 4 MiB and retain one previous file. A bounded asynchronous writer
 disables itself after an I/O failure; startup removes recognized orphan logs.
@@ -448,7 +448,7 @@ Only nondeterministic identities, timestamps and explicitly documented fixture
 paths are canonicalized.
 
 For ASan and UBSan, configure a separate Debug build with
-`-DTELAR_RUNTIME_SANITIZERS=ON`. This instruments C++ code; the independently
+`-DTELAR_SANITIZERS=ON`. This instruments C++ code; the independently
 built Ghostty and system libraries are not instrumented by that option.
 Run performance comparisons without concurrent builds or sanitizer binaries.
 
