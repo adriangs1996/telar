@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "prompt_editor_item.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/controls/native_cell_text.hpp"
 #include <QEasingCurve>
 #include <QQuickWindow>
@@ -15,6 +14,7 @@ static_assert(true);
 #include <algorithm>
 #include <exception>
 
+import telar.gui.prompt.editor;
 import telar.shell.syntax;
 
 namespace telar::gui::qt {
@@ -40,40 +40,41 @@ namespace telar::gui::qt {
     cacheColors();
   }
 
-  PromptEditorItem::~PromptEditorItem() = default;
-
-  QObject* PromptEditorItem::application() const noexcept {
-    return application_;
+  PromptEditorItem::~PromptEditorItem() {
+    if (controller_ != nullptr) {
+      controller_->detach(*this);
+    }
   }
 
-  void PromptEditorItem::setApplication(QObject* application) {
-    auto* next = qobject_cast<ApplicationController*>(application);
-    if (application_ == next) {
+  PromptController* PromptEditorItem::controller() const noexcept {
+    return controller_;
+  }
+
+  void PromptEditorItem::setController(PromptController* controller) {
+    if (controller_ == controller) {
       return;
     }
 
-    if (application_ != nullptr) {
-      disconnect(application_, nullptr, this, nullptr);
+    if (controller_ != nullptr) {
+      controller_->detach(*this);
     }
 
-    application_ = next;
-    if (application_ != nullptr) {
-      // A pane's output reaches here as often as it paints: the layout is kept when nothing it
-      // draws changed.
-      const auto pane = [this](qulonglong pane_id) {
-        if (pane_id == pane_id_) {
-          reuse_layout_ = true;
-          refresh();
-        }
-      };
-
-      connect(application_, &ApplicationController::promptChanged, this, pane);
-      connect(application_, &ApplicationController::terminalChanged, this, pane);
-      connect(application_, &ApplicationController::configurationChanged, this, &PromptEditorItem::refresh);
+    controller_ = controller;
+    if (controller_ != nullptr) {
+      controller_->attach(*this);
     }
 
     refresh();
-    emit applicationChanged();
+    emit controllerChanged();
+  }
+
+  // A pane's output reaches here as often as it paints: the layout is kept when nothing it draws
+  // changed.
+  void PromptEditorItem::refreshPane(std::uint64_t pane_id) {
+    if (pane_id == pane_id_) {
+      reuse_layout_ = true;
+      refresh();
+    }
   }
 
   QString PromptEditorItem::paneId() const {
@@ -157,7 +158,7 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::mode() const {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
     if (line == nullptr || line->editor().keymap() == prompt::Keymap::emacs) {
       return QStringLiteral("emacs");
     }
@@ -181,19 +182,19 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::block() const noexcept {
-    const auto selected = application_ == nullptr ? std::nullopt : application_->selectedBlock(pane_id_);
+    const auto selected = controller_ == nullptr ? std::nullopt : controller_->selectedBlock(pane_id_);
 
     return selected ? static_cast<int>(*selected) + 1 : 0;
   }
 
   int PromptEditorItem::blocks() const noexcept {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 
     return pane == nullptr ? 0 : static_cast<int>(pane->blocks.size());
   }
 
   QString PromptEditorItem::copying() const {
-    const auto* copy = application_ == nullptr ? nullptr : &application_->copy()->state();
+    const auto* copy = controller_ == nullptr ? nullptr : &controller_->copy();
     if (copy == nullptr || !*copy || (*copy)->pointer || (*copy)->pane_id != pane_id_) {
       return {};
     }
@@ -206,7 +207,7 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::queued() const noexcept {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
 
     return line != nullptr && line->queued();
   }
@@ -216,13 +217,13 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::answering() const noexcept {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
 
     return line != nullptr && line->answering();
   }
 
   int PromptEditorItem::secretKeys() const noexcept {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
 
     return line == nullptr ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), 64));
   }
@@ -247,7 +248,7 @@ namespace telar::gui::qt {
   // QML reads the choices on every state change, which a pane's output sends with each frame: the
   // list is rebuilt only when the line's menu or text moved on.
   QVariantList PromptEditorItem::choices() const {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
     if (line == nullptr || !line->menu()) {
       choices_line_ = nullptr;
       return {};
@@ -308,7 +309,7 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::choice() const noexcept {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
     if (line == nullptr || !line->menu()) {
       return -1;
     }
@@ -317,7 +318,7 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::menuLabel() const {
-    const auto* line = application_ == nullptr ? nullptr : application_->promptLine(pane_id_);
+    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
     if (line == nullptr || !line->menu()) {
       return {};
     }
@@ -328,13 +329,13 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::remote() const noexcept {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 
     return pane != nullptr && pane->shell.remote;
   }
 
   QString PromptEditorItem::host() const {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     if (pane == nullptr || !pane->shell.remote) {
       return {};
     }
@@ -343,13 +344,13 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::link() const noexcept {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 
     return pane == nullptr ? 0 : static_cast<int>(pane->shell.link_ms);
   }
 
   QString PromptEditorItem::interruptKey() const {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     const auto key = pane == nullptr ? Byte{0} : pane->shell.interrupt;
     if (key == 0) {
       return {};
@@ -367,13 +368,13 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::program() const {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 
     return pane == nullptr ? QString{} : QString::fromUtf8(pane->foreground.data(), static_cast<qsizetype>(pane->foreground.size()));
   }
 
   QString PromptEditorItem::directory() const {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     if (pane == nullptr) {
       return {};
     }
@@ -385,7 +386,7 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::branch() const {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     if (pane == nullptr || !pane->git.repository) {
       return {};
     }
@@ -394,7 +395,7 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::progress() const noexcept {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     if (pane == nullptr || pane->progress_state == PaneProgressState::remove) {
       return -1;
     }
@@ -407,23 +408,23 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::commands() const noexcept {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 
     return pane == nullptr ? 0 : static_cast<int>(pane->shell.commands);
   }
 
   int PromptEditorItem::status() const noexcept {
-    const auto* pane = application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 
     return pane == nullptr ? 0 : pane->shell.status;
   }
 
   QString PromptEditorItem::motion() const {
-    if (application_ == nullptr) {
+    if (controller_ == nullptr) {
       return QStringLiteral("spring");
     }
 
-    switch (application_->configuration().prompt.motion) {
+    switch (controller_->configuration().prompt.motion) {
     case PromptMotion::ease:
       return QStringLiteral("ease");
     case PromptMotion::none:
@@ -490,7 +491,7 @@ namespace telar::gui::qt {
     const auto previous_failed = failed_;
     const auto previous_cursor_hidden = cursor_hidden_;
 
-    if (application_ == nullptr || window() == nullptr || pane_id_ == 0) {
+    if (controller_ == nullptr || window() == nullptr || pane_id_ == 0) {
       surface_ = 0;
       cursor_hidden_ = false;
       if (previous_surface != surface_ || previous_cursor_hidden) {
@@ -514,26 +515,26 @@ namespace telar::gui::qt {
       emit metricsChanged();
     }
 
-    surface_ = static_cast<std::uint8_t>(application_->promptSurface(pane_id_));
-    cursor_hidden_ = application_->hidesTerminalCursor(pane_id_);
-    const auto* pane = application_->pane(pane_id_);
+    surface_ = static_cast<std::uint8_t>(controller_->surface(pane_id_));
+    cursor_hidden_ = controller_->hidesTerminalCursor(pane_id_);
+    const auto* pane = controller_->pane(pane_id_);
 
     failed_ = pane != nullptr && pane->shell.commands != 0 && pane->shell.status != 0;
-    maximum_rows_ = std::max<int>(1, application_->configuration().prompt.max_lines);
+    maximum_rows_ = std::max<int>(1, controller_->configuration().prompt.max_lines);
 
-    const auto* line = application_->promptLine(pane_id_);
+    const auto* line = controller_->line(pane_id_);
     const auto text = line == nullptr ? std::string_view{} : line->editor().text().view();
     const auto cursor = line == nullptr ? 0 : line->editor().text().cursor();
     const auto anchor = line == nullptr ? 0 : line->editor().text().anchor();
     const auto composing = preedit_.toUtf8();
-    const bool moving = application_->configuration().prompt.motion != PromptMotion::none;
+    const bool moving = controller_->configuration().prompt.motion != PromptMotion::none;
 
     track(text, moving && composing.isEmpty() && static_cast<prompt::Surface>(surface_) == prompt::Surface::editor);
     display_.assign(text.substr(0, cursor));
     display_.append(composing.constData(), static_cast<std::size_t>(composing.size()));
     display_.append(text.substr(cursor));
     const auto typed = display_.size();
-    const auto ghost = composing.isEmpty() && application_->configuration().prompt.ghost ? application_->promptSuggestion(pane_id_) : std::string_view{};
+    const auto ghost = composing.isEmpty() && controller_->configuration().prompt.ghost ? controller_->suggestion(pane_id_) : std::string_view{};
     // A new suggestion fades in; one that still fits what was typed stays as it was.
     if (ghost != std::string_view{ghost_}) {
       const bool continues = !ghost.empty() && std::string_view{ghost_}.ends_with(ghost);
@@ -564,7 +565,7 @@ namespace telar::gui::qt {
         ++end;
       }
 
-      const auto presence = application_->commandPresence(pane_id_, std::string_view{display_}.substr(start, end - start));
+      const auto presence = controller_->commandPresence(pane_id_, std::string_view{display_}.substr(start, end - start));
       if (presence == CommandPresence::missing || presence == CommandPresence::pending) {
         std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(start), styles_.begin() + static_cast<std::ptrdiff_t>(end), presence == CommandPresence::missing ? prompt::Style::missing : prompt::Style::pending);
       }

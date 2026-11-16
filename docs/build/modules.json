@@ -692,6 +692,7 @@
     "src/gui/ui/foundation/models/progress_value.hpp": "Qt moc/QML integration",
     "src/gui/ui/workspaces/project_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/models/projection.hpp": "Qt moc/QML integration",
+    "src/gui/ui/prompt/prompt_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/prompt/prompt_editor_item.hpp": "Qt moc/QML integration",
     "src/gui/ui/prompt/prompt_keys.hpp": "Qt moc/QML integration",
     "src/gui/ui/controls/provider_artwork.hpp": "Qt moc/QML integration",

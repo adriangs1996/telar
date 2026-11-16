@@ -46,6 +46,7 @@ static_assert(true);
 #include "ui/paths/path_picker_controller.hpp"
 #include "ui/peek/peek_controller.hpp"
 #include "ui/plugins/plugin_runner.hpp"
+#include "ui/prompt/prompt_controller.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/copy_controller.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
@@ -191,6 +192,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
+    Q_PROPERTY(telar::gui::qt::PromptController* prompt READ prompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::LinkStatusController* linkStatus READ linkStatus CONSTANT)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
     Q_PROPERTY(telar::gui::qt::PathPickerController* paths READ paths CONSTANT)
@@ -296,21 +298,12 @@ namespace telar::gui::qt {
 
     bool input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
     void paste(std::uint64_t pane_id, const QString& text);
-    // telar's command editor: who has the pane's keyboard, and the keys and text it takes.
-    [[nodiscard]] prompt::Surface promptSurface(std::uint64_t pane_id) const noexcept;
-    [[nodiscard]] bool editsPrompt(std::uint64_t pane_id) const noexcept;
-    [[nodiscard]] bool hidesTerminalCursor(std::uint64_t pane_id) const noexcept;
-    [[nodiscard]] const prompt::Line* promptLine(std::uint64_t pane_id) const noexcept;
-    [[nodiscard]] std::string_view promptSuggestion(std::uint64_t pane_id) const noexcept;
-    // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
-    [[nodiscard]] CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
     // Shows the pane's scrollback from `row`, counted from its top.
     void scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row);
-    // The command block selected in the pane, by index among its blocks, and selecting one, or
-    // none to go back to the live end.
-    [[nodiscard]] std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
+    // Selects a command block of the pane, by index among its blocks, or none to go back to the
+    // live end.
     void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
-    // False hands the key back to the terminal.
+    // The keys and text telar's command editor takes. False hands the key back to the terminal.
     bool promptKey(std::uint64_t pane_id, const prompt::KeyPress& key);
     // While the pane shows a document, its scroll keys move the document; every other key, as
     // q or Ctrl-C, reaches the program that shows it.
@@ -357,6 +350,10 @@ namespace telar::gui::qt {
 
     PeekController* peek() noexcept {
       return &peek_;
+    }
+
+    PromptController* prompt() noexcept {
+      return &prompt_;
     }
 
     LinkStatusController* linkStatus() noexcept {
@@ -467,6 +464,7 @@ namespace telar::gui::qt {
     void openComponentPick(std::size_t index);
     void restoreComponentPickFocus();
     void initializePlugins();
+    void initializePrompt();
     void applyPluginEffects(const PluginEffects& effects);
     void applyExpression(const InputExpression& expression);
     void scrollBinding(ScrollDirection direction);
@@ -683,6 +681,7 @@ namespace telar::gui::qt {
     PathPickerController paths_;
     MachinePromptController machine_prompt_;
     PeekController peek_;
+    PromptController prompt_;
     LinkStatusController link_status_;
     LinksController links_;
     CopyController copy_;

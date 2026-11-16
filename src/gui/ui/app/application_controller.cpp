@@ -157,6 +157,7 @@ namespace telar::gui::qt {
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
         peek_(store_, activity_),
+        prompt_(store_),
         link_status_(store_),
         links_(store_),
         copy_(store_),
@@ -253,6 +254,7 @@ namespace telar::gui::qt {
     refresh_timer_.setSingleShot(true);
     initializeNotifications();
     initializeGraphicsRecovery();
+    initializePrompt();
 
     connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
       error_.clear();
@@ -1312,6 +1314,25 @@ namespace telar::gui::qt {
     } catch (const std::exception& error) {
       fail(error);
     }
+  }
+
+  void ApplicationController::scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row) {
+    try {
+      session().scrollToRow(pane_id, row);
+    } catch (const std::exception& error) {
+      fail(error);
+    }
+  }
+
+  void ApplicationController::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
+    try {
+      session().selectBlock(pane_id, index);
+    } catch (const std::exception& error) {
+      fail(error);
+    }
+
+    emit promptChanged(pane_id);
+    emit terminalChanged(pane_id);
   }
 
   void ApplicationController::showDialog(Dialog kind) {

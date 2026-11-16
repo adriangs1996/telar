@@ -679,7 +679,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (application_->selectedBlock(pane_id_)) {
+    if (application_->prompt()->selectedBlock(pane_id_)) {
       application_->selectBlock(pane_id_, std::nullopt);
       return;
     }
@@ -793,7 +793,7 @@ namespace telar::gui::qt {
     const auto* current = pane();
     const auto& folds = current->folds;
     const auto& blocks = current->blocks;
-    const auto selected = application_->selectedBlock(pane_id_);
+    const auto selected = application_->prompt()->selectedBlock(pane_id_);
     const auto& session = application_->session();
     QVariantList segments;
 
@@ -858,7 +858,7 @@ namespace telar::gui::qt {
       push = static_cast<qreal>(std::min(0.0, below - cell));
     }
 
-    const auto selected = application_->selectedBlock(pane_id_);
+    const auto selected = application_->prompt()->selectedBlock(pane_id_);
 
     return QVariantMap{
         {QStringLiteral("index"), static_cast<int>(index)},

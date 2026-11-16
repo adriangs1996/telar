@@ -601,7 +601,7 @@ namespace telar::gui::qt {
       };
 
       hidden_rows_.assign(drawn, 0);
-      const bool editing = application_->promptSurface(pane_id_) == prompt::Surface::editor;
+      const bool editing = application_->prompt()->surface(pane_id_) == prompt::Surface::editor;
       const auto [first, count, cursor] = promptRows(screen, editing, liveFrom(current->blocks));
 
       for (auto row = first; row < first + count && row < rows; ++row) {
@@ -646,7 +646,7 @@ namespace telar::gui::qt {
       }
 
       const bool telar = application_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
-      const auto selected = application_->selectedBlock(pane_id_);
+      const auto selected = application_->prompt()->selectedBlock(pane_id_);
       auto& session = application_->session();
       const auto live_session = liveSession(*current);
       const auto host = current->shell.host.empty() ? QString{} : QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size()));
@@ -868,7 +868,7 @@ namespace telar::gui::qt {
     }
 
     // Where no key would land, the terminal's cursor is not drawn (see hidesTerminalCursor).
-    if (!cursor_override && application_->hidesTerminalCursor(pane_id_)) {
+    if (!cursor_override && application_->prompt()->hidesTerminalCursor(pane_id_)) {
       cursor_override = Cursor{};
     }
 
@@ -926,7 +926,7 @@ namespace telar::gui::qt {
         .graphics = current->graphics,
         .configuration = application_->configuration(),
         .font = font_,
-        .preedit = application_->editsPrompt(pane_id_) ? no_preedit : preedit_,
+        .preedit = application_->prompt()->edits(pane_id_) ? no_preedit : preedit_,
         .fonts = font_collection_,
         .grid = font_grid_,
         .selection = selection,
@@ -1011,13 +1011,13 @@ namespace telar::gui::qt {
       application_->copy()->copySelection(pane_id_);
     } else if (clipboard_shortcut && event->key() == Qt::Key_V) {
       application_->paste(pane_id_, QGuiApplication::clipboard()->text());
-    } else if (preedit_.isEmpty() && application_->editsPrompt(pane_id_)) {
+    } else if (preedit_.isEmpty() && application_->prompt()->edits(pane_id_)) {
       // telar's command editor takes the key; the terminal gets what it hands back, and at the
       // prompt nothing the editor cannot use reaches the shell's own line editor.
       QByteArray text;
       const auto key = promptKey(*event, text);
       const bool taken = key && application_->promptKey(pane_id_, *key);
-      if (!taken && (key || application_->promptSurface(pane_id_) != prompt::Surface::editor)) {
+      if (!taken && (key || application_->prompt()->surface(pane_id_) != prompt::Surface::editor)) {
         static_cast<void>(sendKeyPress(*event, current->screen.modes()));
       }
     } else if (preedit_.isEmpty()) {
@@ -1146,7 +1146,7 @@ namespace telar::gui::qt {
     case Qt::ImEnabled:
       return current->attached && !input_method_bypassed_;
     case Qt::ImCursorRectangle:
-      if (application_ != nullptr && application_->editsPrompt(pane_id_) && prompt_caret_.isValid()) {
+      if (application_ != nullptr && application_->prompt()->edits(pane_id_) && prompt_caret_.isValid()) {
         return prompt_caret_;
       }
 

@@ -1400,7 +1400,7 @@ Item {
 
     NativePromptEditor {
         id: editor
-        application: root.application
+        controller: root.application.prompt
         paneId: root.paneId
         grid: root.grid
         colors: root.colors

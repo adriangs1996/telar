@@ -5,6 +5,7 @@ static_assert(true);
 
 #pragma once
 
+#include "prompt_controller.hpp"
 #include "ui/controls/cell_text_grid.hpp"
 #include "ui/scene/ancestor_geometry.hpp"
 #include <QColor>
@@ -26,7 +27,6 @@ import telar.gui.prompt.layout;
 
 namespace telar::gui::qt {
 
-  class ApplicationController;
   class NativeCellText;
 
   // telar's command editor as the prompt line draws it: the command in the terminal's font,
@@ -36,7 +36,7 @@ namespace telar::gui::qt {
   class PromptEditorItem : public QQuickItem {
     Q_OBJECT
     QML_NAMED_ELEMENT(NativePromptEditor)
-    Q_PROPERTY(QObject* application READ application WRITE setApplication NOTIFY applicationChanged)
+    Q_PROPERTY(telar::gui::qt::PromptController* controller READ controller WRITE setController NOTIFY controllerChanged)
     Q_PROPERTY(QString paneId READ paneId WRITE setPaneId NOTIFY paneIdChanged)
     Q_PROPERTY(QVariantMap grid READ grid WRITE setGrid NOTIFY gridChanged)
     Q_PROPERTY(QVariantMap colors READ colors WRITE setColors NOTIFY colorsChanged)
@@ -95,8 +95,8 @@ namespace telar::gui::qt {
     explicit PromptEditorItem(QQuickItem* parent = nullptr);
     ~PromptEditorItem() override;
 
-    [[nodiscard]] QObject* application() const noexcept;
-    void setApplication(QObject* application);
+    [[nodiscard]] PromptController* controller() const noexcept;
+    void setController(PromptController* controller);
     [[nodiscard]] QString paneId() const;
     void setPaneId(const QString& identity);
     [[nodiscard]] QVariantMap grid() const;
@@ -142,8 +142,14 @@ namespace telar::gui::qt {
     [[nodiscard]] qreal cellWidth() const noexcept;
     [[nodiscard]] qreal cellHeight() const noexcept;
 
+    // Rebuilds the layout from the session's editor.
+    void refresh();
+    // The pane's line or screen moved: refreshes when this editor shows that pane, keeping the
+    // layout if nothing it draws changed.
+    void refreshPane(std::uint64_t pane_id);
+
   signals:
-    void applicationChanged();
+    void controllerChanged();
     void paneIdChanged();
     void gridChanged();
     void colorsChanged();
@@ -174,7 +180,6 @@ namespace telar::gui::qt {
       qint64 started_ms = 0;
     };
 
-    void refresh();
     void placeRuns();
     void track(std::string_view text, bool animate);
     void tick();
@@ -185,7 +190,7 @@ namespace telar::gui::qt {
 
     // Glyphs snap to the scene's pixels, so moving any ancestor repaints them.
     AncestorGeometry ancestors_;
-    QPointer<ApplicationController> application_;
+    QPointer<PromptController> controller_;
     CellTextGrid resolved_;
     std::vector<NativeCellText*> runs_;
     QVariantMap grid_;
