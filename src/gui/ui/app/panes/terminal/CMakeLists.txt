@@ -1,0 +1,29 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    copy_controller.cpp
+    copy_controller.hpp
+    graphics_scene.cpp
+    graphics_scene.hpp
+    image_resource.cpp
+    terminal_controller.cpp
+    terminal_controller.hpp
+    terminal_host.hpp
+    terminal_item.cpp
+    terminal_item.hpp
+    terminal_links.cpp
+    terminal_pointer.cpp
+    terminal_scene.cpp
+    terminal_scene.hpp
+    terminal_scroll.cpp
+    window_images.cpp
+  QML_FILES
+    CommandRail.qml
+    CommandSeparators.qml
+    JumpToEnd.qml
+    PromptLine.qml
+  REGISTERS)
+
+add_subdirectory(prompt)
+add_subdirectory(links)
+add_subdirectory(history)
+add_subdirectory(paths)

@@ -1,0 +1,27 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    native_mode_layout.cpp
+    native_mode_layout.hpp
+    sidebar_controller.cpp
+    sidebar_controller.hpp
+    tab_strip_layout.cpp
+    tab_strip_layout.hpp
+    tabs_controller.cpp
+    tabs_controller.hpp
+  QML_FILES
+    BarBadge.qml
+    MetricsGroup.qml
+    ModeBar.qml
+    NavigationBar.qml
+    Sidebar.qml
+    StatusBar.qml
+    TerminalTabs.qml
+  FP_CONTRACT_OFF
+    native_mode_layout.cpp
+    sidebar_controller.cpp
+    tab_strip_layout.cpp
+  REGISTERS)
+
+add_subdirectory(activity)
+add_subdirectory(workspaces)
+add_subdirectory(components)

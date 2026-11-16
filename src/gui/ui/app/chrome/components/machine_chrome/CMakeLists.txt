@@ -1,0 +1,11 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    machine_chrome_controller.cpp
+    machine_chrome_controller.hpp
+    machine_chrome_layout.cpp
+    machine_chrome_layout.hpp
+  QML_FILES
+    MachineChrome.qml
+  FP_CONTRACT_OFF
+    machine_chrome_layout.cpp
+  REGISTERS)

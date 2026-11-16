@@ -1,0 +1,12 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    attachment_image.cpp
+    attachment_image.hpp
+    attachment_shelf.cpp
+    attachment_shelf.hpp
+    attachments_controller.cpp
+    attachments_controller.hpp
+  QML_FILES
+    AttachmentModal.qml
+    AttachmentShelf.qml
+  REGISTERS)

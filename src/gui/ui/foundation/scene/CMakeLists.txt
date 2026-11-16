@@ -1,0 +1,18 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    alpha_mask_material.cpp
+    ancestor_geometry.cpp
+    chrome_icon_scene.cpp
+    chrome_text_scene.cpp
+    curve_mask_node.cpp
+    curve_scene.cpp
+    rounded_rectangle_scene.cpp
+    software_rounded_rectangle.cpp
+    text_scene.cpp
+    window_animation_clock.cpp
+  FP_CONTRACT_OFF
+    chrome_icon_scene.cpp
+    chrome_text_scene.cpp
+    rounded_rectangle_scene.cpp
+    software_rounded_rectangle.cpp
+    window_animation_clock.cpp)

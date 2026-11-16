@@ -1,0 +1,10 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    bundled_fonts.cpp
+    chrome_fonts.cpp
+    font_resolver.cpp
+    font_source.cpp
+    resident_fonts.cpp
+    terminal_font.cpp
+    window_font_catalog.cpp
+    window_font_catalog.hpp)

@@ -267,3 +267,36 @@ function(telar_add_probes target)
   get_property(probes DIRECTORY "${TELAR_PROCESS_SOURCE_DIR}" PROPERTY TELAR_PROBES)
   add_custom_target(${target} DEPENDS ${probes})
 endfunction()
+
+# telar_add_qml_sources(<target> [SOURCES <file>...] [QML_FILES <file>...]
+#                       [FP_CONTRACT_OFF <file>...] [REGISTERS])
+# Adds the files of the current folder to <target>, whose QML module an ancestor folder
+# defines. SOURCES are its C++ sources and headers; FP_CONTRACT_OFF, some of them, compile
+# with -ffp-contract=off. REGISTERS puts the folder on the target's include path, where
+# the generated QML type registration finds each registered header by its bare name.
+# QML_FILES are appended to the target's TELAR_QML_FILES, relative to the target's folder,
+# for the ancestor to pass to qt_add_qml_module once every folder is added: the module
+# keeps one resource and each file the resource path it has from the target's folder.
+function(telar_add_qml_sources target)
+  cmake_parse_arguments(PARSE_ARGV 1 qml "REGISTERS" "" "SOURCES;QML_FILES;FP_CONTRACT_OFF")
+  if(qml_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "telar_add_qml_sources(${target}): unexpected arguments ${qml_UNPARSED_ARGUMENTS}")
+  endif()
+  if(qml_SOURCES)
+    target_sources(${target} PRIVATE ${qml_SOURCES})
+  endif()
+  # Source properties belong to a directory: the target's is where its sources compile.
+  if(qml_FP_CONTRACT_OFF)
+    set_source_files_properties(${qml_FP_CONTRACT_OFF} TARGET_DIRECTORY ${target}
+      PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  endif()
+  if(qml_REGISTERS)
+    target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  endif()
+  get_target_property(directory ${target} SOURCE_DIR)
+  foreach(file IN LISTS qml_QML_FILES)
+    cmake_path(ABSOLUTE_PATH file BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE)
+    cmake_path(RELATIVE_PATH file BASE_DIRECTORY "${directory}")
+    set_property(TARGET ${target} APPEND PROPERTY TELAR_QML_FILES "${file}")
+  endforeach()
+endfunction()

@@ -1,0 +1,33 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    activity_selection.cpp
+    application_controller.cpp
+    application_controller.hpp
+    application_effects.cpp
+    binding_commands.cpp
+    component_commands.cpp
+    element_commands.cpp
+    graphics_recovery.cpp
+    key_bindings.cpp
+    machine_actions.cpp
+    machine_clients.cpp
+    machine_launch.cpp
+    machine_profiles.cpp
+    notification_commands.cpp
+    palette_commands.cpp
+    plugin_commands.cpp
+    pointer_dispatcher.cpp
+    prompt_commands.cpp
+    terminal_host.cpp
+    window_animation.cpp
+    window_geometry.cpp
+  QML_FILES
+    CommandDialog.qml
+    Main.qml
+  FP_CONTRACT_OFF
+    window_geometry.cpp
+  REGISTERS)
+
+add_subdirectory(chrome)
+add_subdirectory(panes)
+add_subdirectory(overlays)
