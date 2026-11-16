@@ -100,6 +100,8 @@ namespace telar::gui::qt {
     void open(PaletteMode mode);
     // Matches the query again while the palette is open, and notifies when the rows moved.
     void synchronize();
+    // The machines moved: a machine query, which starts with ':', matches them again.
+    void refreshMachines();
     // Notifies a change of the session the suggestion reads.
     void publish();
     // The dialog closed: no actions palette waits to be returned to.

@@ -224,6 +224,12 @@ namespace telar::gui::qt {
     }
   }
 
+  void PaletteController::refreshMachines() {
+    if (query().startsWith(QLatin1Char(':'))) {
+      synchronize();
+    }
+  }
+
   void PaletteController::collectNavigation(Matches& matches, std::string_view query) const {
     const auto& session = store_.session();
 

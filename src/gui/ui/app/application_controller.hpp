@@ -477,7 +477,6 @@ namespace telar::gui::qt {
     void chooseMachine(MachinePickerTarget target, bool alternate);
     void showMachinePrompt(std::optional<MachineToken> renamed = {});
     void setupMachine(MachineToken target);
-    void refreshMachinePicker();
     void initializeMachineProfiles();
     void applyMachineProfiles();
     void openRequestedMachine();

@@ -92,12 +92,6 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::refreshMachinePicker() {
-    if (palette_.query().startsWith(QLatin1Char(':'))) {
-      palette_.synchronize();
-    }
-  }
-
   void ApplicationController::chooseMachine(MachinePickerTarget target, bool alternate) {
     const auto intent = MachinePicker::choose(store_.machines(), target.machine, alternate);
     if (intent == MachinePicker::Intent::add) {
