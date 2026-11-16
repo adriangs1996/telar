@@ -222,7 +222,7 @@ namespace {
       QQuickWindow window;
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&client);
+      terminal.setController(client.terminals());
       for (const auto scale : scales) {
         auto target = QQuickRenderTarget::fromPaintDevice(&image);
 

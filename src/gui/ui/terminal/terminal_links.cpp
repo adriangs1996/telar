@@ -13,7 +13,6 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "terminal_preparation.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/links/link_presentation.hpp"
@@ -48,48 +47,11 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 
 import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
 import telar.gui.links.cell_links;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
-
-  ViewVersion ApplicationController::viewVersion() const noexcept {
-    auto version = session().viewVersion();
-
-    version.machine = store_.machineView();
-
-    return version;
-  }
-
-  Qt::KeyboardModifiers ApplicationController::pointerModifiers() const noexcept {
-    return pointer_modifiers_;
-  }
-
-  void ApplicationController::observePointerModifiers(Qt::KeyboardModifiers modifiers) {
-    if (pointer_modifiers_ != modifiers) {
-      pointer_modifiers_ = modifiers;
-      emit pointerModifiersChanged();
-    }
-  }
-
-  void ApplicationController::registerTerminal(TerminalItem& terminal) {
-    if (terminal.paneIdentity() != 0) {
-      terminals_.insert(terminal.paneIdentity(), &terminal);
-    }
-  }
-
-  void ApplicationController::unregisterTerminal(TerminalItem& terminal) {
-    const auto found = terminals_.find(terminal.paneIdentity());
-    if (found != terminals_.end() && *found == &terminal) {
-      terminals_.erase(found);
-    }
-  }
-
-  std::shared_ptr<const LinkHit> ApplicationController::shareLinkHit(const LinkHit& hit) {
-    return std::allocate_shared<LinkHit>(AllocatorRef<LinkHit, ApplicationAllocator>{memory_}, hit);
-  }
 
   TerminalSurface TerminalItem::terminalSurface() const {
     const auto bounds = mapRectToScene(boundingRect());
@@ -106,7 +68,7 @@ namespace telar::gui::qt {
   bool TerminalItem::linkEligible() const noexcept {
     const auto* current = pane();
 
-    return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog() == ApplicationController::Dialog::none && !application_->copy()->active();
+    return controller_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && controller_->dialog() == Store::Dialog::none && !controller_->copy().active();
   }
 
   LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexcept {
@@ -139,7 +101,7 @@ namespace telar::gui::qt {
 
   const Screen<Memory>* TerminalItem::drawnScreen() const {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr || !mapsRows() || view_rows_.empty()) {
+    if (current == nullptr || controller_ == nullptr || !mapsRows() || view_rows_.empty()) {
       return nullptr;
     }
 
@@ -149,7 +111,7 @@ namespace telar::gui::qt {
     }
 
     if (!drawn_screen_) {
-      drawn_screen_.emplace(application_->memory_);
+      drawn_screen_.emplace(controller_->memory());
     }
 
     const auto& screen = current->screen;
@@ -287,11 +249,15 @@ namespace telar::gui::qt {
 
   void TerminalItem::observeLinkPointer(QPointF position, Qt::KeyboardModifiers modifiers) {
     link_pointer_ = mapToScene(position);
-    if (application_ != nullptr) {
-      application_->observePointerModifiers(modifiers);
+    if (controller_ != nullptr) {
+      controller_->observePointerModifiers(modifiers);
     }
 
     refreshLinkHover();
+  }
+
+  void TerminalItem::cancelLinkGesture() noexcept {
+    link_gesture_.cancel();
   }
 
   void TerminalItem::refreshLinkHover() {
@@ -313,10 +279,10 @@ namespace telar::gui::qt {
     const auto surface = terminalSurface();
     const LinkStamp stamp{
         .cell = *cell,
-        .version = application_->viewVersion(),
+        .version = controller_->viewVersion(),
         .surface = surface,
         .screen_revision = view_rows_.empty() ? current->screen.revision() : drawnScreenKey() ^ std::bit_cast<std::uint64_t>(static_cast<double>(shift_)),
-        .modifiers = application_->pointerModifiers(),
+        .modifiers = controller_->pointerModifiers(),
         .presentation_revision = link_presentation_revision_,
         .frame_presented = presented_frame_id_ == current->screen.frameId(),
     };
@@ -330,7 +296,7 @@ namespace telar::gui::qt {
     auto resolved = resolveLink(position, linkModifiers(stamp.modifiers));
     if (resolved.hit != link_hover_.current()) {
       try {
-        shared_link_ = resolved.hit ? application_->shareLinkHit(*resolved.hit) : nullptr;
+        shared_link_ = resolved.hit ? controller_->shareLinkHit(*resolved.hit) : nullptr;
       } catch (const std::exception&) {
         clearLinkHover();
 
@@ -343,7 +309,7 @@ namespace telar::gui::qt {
     link_gesture_.validate(link_hover_.current(), stamp.version);
     setCursor(resolved.affordance == LinkAffordance::text ? Qt::IBeamCursor : Qt::PointingHandCursor);
     if (changed || rebuild_preview) {
-      link_preview_ = link_hover_.current() ? LinkPreview::layout(*link_hover_.current(), surface, font_.faces.front(), application_->chromeRatio()) : std::nullopt;
+      link_preview_ = link_hover_.current() ? LinkPreview::layout(*link_hover_.current(), surface, font_.faces.front(), controller_->chromeRatio()) : std::nullopt;
       emit linkHoverChanged();
       update();
     }
@@ -438,8 +404,8 @@ namespace telar::gui::qt {
 
     const auto plan = LinkPointerPolicy::press({.button = button, .modifiers = linkModifiers(event.modifiers()), .child_tracking = current != nullptr && current->screen.mouse().tracking != MouseTracking::none, .has_link = hit.has_value(), .openable = link_hover_.openable(surface), .frame_presented = current != nullptr && presented_frame_id_ == current->screen.frameId() && link_hover_.surfaceVisible(surface)});
     if (plan == LinkPress::arm_shared || plan == LinkPress::arm_exclusive) {
-      if (hit && application_ != nullptr) {
-        link_gesture_.begin(*hit, application_->viewVersion());
+      if (hit && controller_ != nullptr) {
+        link_gesture_.begin(*hit, controller_->viewVersion());
       }
     } else if (event.button() == Qt::LeftButton) {
       link_gesture_.cancel();
@@ -458,14 +424,14 @@ namespace telar::gui::qt {
 
   void TerminalItem::finishLinkRelease(const QMouseEvent& event) {
     observeLinkPointer(event.position(), event.modifiers());
-    if (event.button() != Qt::LeftButton || application_ == nullptr) {
+    if (event.button() != Qt::LeftButton || controller_ == nullptr) {
       return;
     }
 
     const auto current = link_hover_.openable(terminalSurface()) ? link_hover_.current() : std::nullopt;
-    const auto opened = link_gesture_.finish(current, application_->viewVersion());
+    const auto opened = link_gesture_.finish(current, controller_->viewVersion());
     if (opened) {
-      static_cast<void>(application_->links_.open(opened->match.target, opened->pane_id));
+      controller_->host().openLink(opened->match.target, opened->pane_id);
     }
   }
 

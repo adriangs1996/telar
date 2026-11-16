@@ -53,54 +53,26 @@ namespace telar::gui::qt {
     PointerDispatcher(PointerDispatcher&&) = delete;
     PointerDispatcher& operator=(PointerDispatcher&&) = delete;
     void setWindow(QQuickWindow& window);
-    void acquire(TerminalItem& terminal, Qt::MouseButton button);
-    void beginChild(const ChildMouseView& view, ChildMouseSample sample);
-    void release(Qt::MouseButton button);
     void presentHistoryActions(const HistoryActionSurface& surface);
-    void abandon(TerminalItem& terminal);
     void ungrab(TerminalItem& terminal);
-    void observeTerminalScroll(TerminalItem& terminal);
-    void retireTerminalScroll();
     bool eventFilter(QObject* watched, QEvent* event) override;
     bool handleNativeScroll(std::string_view event_type, const void* message);
 
   private:
-    struct Capture {
-      QPointer<TerminalItem> terminal;
-      ChildMouseGesture child{};
-      HistoryActionCapture history;
-      std::uint64_t pane_id = 0;
-      bool held = false;
-    };
-
-    struct Recipient {
-      QPointer<TerminalItem> terminal;
-      Qt::MouseButtons view_buttons;
-      Qt::MouseButtons child_buttons;
-    };
-
-    using Recipients = std::array<Recipient, static_cast<std::size_t>(MouseButton::none)>;
-
-    [[nodiscard]] Capture* capture(Qt::MouseButton button) noexcept;
-    [[nodiscard]] Recipients recipients() const;
-    [[nodiscard]] ChildMouseView view(const Capture& lease) const;
-    [[nodiscard]] static ChildMouseSample sample(const QMouseEvent& event, MousePhase phase, MouseButton button);
+    // The history actions a press holds, by button; the terminals hold theirs in their controller.
+    [[nodiscard]] HistoryActionCapture* capture(Qt::MouseButton button) noexcept;
     [[nodiscard]] bool occupied() const noexcept;
-    void report(std::uint64_t pane_id, const std::optional<ChildMouseReport>& report);
-    void cancelPane(std::uint64_t pane_id);
     void cancel();
     bool press(QMouseEvent& event);
     bool move(QMouseEvent& event);
     bool release(QMouseEvent& event);
-    static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 
     ApplicationController& application_;
     TabsController& tabs_;
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;
-    QPointer<TerminalItem> terminal_scroll_owner_;
-    std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
+    std::array<HistoryActionCapture, static_cast<std::size_t>(MouseButton::none)> captures_;
     bool delivering_ = false;
     bool handing_off_ = false;
   };

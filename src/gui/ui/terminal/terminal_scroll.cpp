@@ -11,7 +11,6 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "terminal_scene.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QWheelEvent>
@@ -66,11 +65,11 @@ namespace telar::gui::qt {
   bool TerminalItem::mapsRows() const noexcept {
     const auto* current = pane();
 
-    return current != nullptr && application_ != nullptr && application_->session().readsRows() && current->attached && current->scrollback_generation != 0 && !current->screen.modes().alternate_screen && current->screen.rows() != 0 && current->screen.columns() != 0;
+    return current != nullptr && controller_ != nullptr && controller_->session().readsRows() && current->attached && current->scrollback_generation != 0 && !current->screen.modes().alternate_screen && current->screen.rows() != 0 && current->screen.columns() != 0;
   }
 
   bool TerminalItem::smoothScroll() const noexcept {
-    return mapsRows() && application_->configuration().scroll.smooth;
+    return mapsRows() && controller_->configuration().scroll.smooth;
   }
 
   double TerminalItem::rowHeight() const noexcept {
@@ -170,7 +169,7 @@ namespace telar::gui::qt {
   // output followed), which the view glides to.
   void TerminalItem::synchronizeScroll() {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr) {
+    if (current == nullptr || controller_ == nullptr) {
       return;
     }
 
@@ -179,7 +178,7 @@ namespace telar::gui::qt {
       motion_.stop();
       expected_offset_.reset();
       view_rows_.clear();
-      application_->session().findPane(pane_id_)->shown_top.reset();
+      controller_->session().findPane(pane_id_)->shown_top.reset();
       top_row_ = current->screen.scroll().offset;
       if (std::exchange(shift_, 0) != 0) {
         emit scrollChanged();
@@ -188,7 +187,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    motion_.tune({.wheel_ms = static_cast<double>(application_->configuration().scroll.wheel_ms)});
+    motion_.tune({.wheel_ms = static_cast<double>(controller_->configuration().scroll.wheel_ms)});
     // At the end, the view follows the output; a fold that moves the end does not drag it along,
     // while a document that comes or grows at the end is output like any other.
     bool following = !motion_.moving() && motion_.position() >= motion_.limit() - (cell / 2);
@@ -199,7 +198,7 @@ namespace telar::gui::qt {
     followRuntimeView(following);
 
     // Copy mode reads whole rows: the view settles on the row at its top.
-    const auto& copy = application_->copy()->state();
+    const auto& copy = controller_->copy().state();
     if (copy && copy->pane_id == pane_id_ && !motion_.moving() && shift_ > 0) {
       motion_.glide(static_cast<double>(top_row_) * cell, scrollTime(), static_cast<double>(current->screen.rows()) * cell);
       driven_ = false;
@@ -217,7 +216,7 @@ namespace telar::gui::qt {
 
   // Rows the scrollback dropped above the view: it moves up as far to keep showing its rows.
   void TerminalItem::followDroppedRows(bool following) {
-    const auto dropped = application_->session().takeDroppedRows(pane_id_);
+    const auto dropped = controller_->session().takeDroppedRows(pane_id_);
     if (dropped == 0) {
       return;
     }
@@ -493,14 +492,14 @@ namespace telar::gui::qt {
     top_row_ = top;
     placeFoldMotion();
     // The session moves the view from where it is drawn, not from the runtime's view.
-    application_->session().findPane(pane_id_)->shown_top = top;
+    controller_->session().findPane(pane_id_)->shown_top = top;
     if (shift != shift_) {
       shift_ = shift;
       emit scrollChanged();
     }
 
     // The user's motion leads the runtime's view, at most once a frame; copy mode owns it while it reads.
-    const auto& copy = application_->copy()->state();
+    const auto& copy = controller_->copy().state();
     const bool copying = copy && copy->pane_id == pane_id_;
     // At rest, the runtime's view is where the view draws from, whoever moved it: a command
     // selected whose rows folds bring nearer the live end leaves the live screen drawn, which the
@@ -509,7 +508,7 @@ namespace telar::gui::qt {
       const auto desired = runtimeOffset(top);
       if (!expected_offset_ || *expected_offset_ != desired) {
         expected_offset_ = desired;
-        application_->session().scrollToRow(pane_id_, desired);
+        controller_->session().scrollToRow(pane_id_, desired);
         expected_offset_ = current->screen.scroll().offset;
         viewport_requests_ = current->viewport_requests;
       }
@@ -574,10 +573,10 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto margin = moving ? static_cast<std::uint64_t>(std::ceil(application_->configuration().scroll.overscan * static_cast<float>(rows))) : 0;
+    const auto margin = moving ? static_cast<std::uint64_t>(std::ceil(controller_->configuration().scroll.overscan * static_cast<float>(rows))) : 0;
     const auto first = top_row_ > margin ? top_row_ - margin : 0;
     const auto last = std::min(shown - 1, top_row_ + rows + margin);
-    auto& session = application_->session();
+    auto& session = controller_->session();
     const auto trimmed = current->scrollback_trimmed;
     // Contiguous runs of rows, which folds break apart.
     auto run_first = folds.row(first);
@@ -627,7 +626,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (application_->copy()->state()) {
+    if (controller_->copy().state()) {
       return false;
     }
 
@@ -675,16 +674,16 @@ namespace telar::gui::qt {
 
   void TerminalItem::scrollToEnd() {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr) {
+    if (current == nullptr || controller_ == nullptr) {
       return;
     }
 
-    if (application_->prompt()->selectedBlock(pane_id_)) {
-      application_->selectBlock(pane_id_, std::nullopt);
+    if (controller_->prompt().selectedBlock(pane_id_)) {
+      controller_->selectBlock(pane_id_, std::nullopt);
       return;
     }
 
-    application_->scrollPaneToRow(pane_id_, std::numeric_limits<std::uint32_t>::max());
+    controller_->scrollToRow(pane_id_, std::numeric_limits<std::uint32_t>::max());
     // The runtime may be at its end already, under a view that is not: the view goes there itself.
     const auto cell = rowHeight();
     if (mapsRows() && cell > 0) {
@@ -723,11 +722,11 @@ namespace telar::gui::qt {
 
   void TerminalItem::toggleFold(int index) {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr || index < 0 || std::cmp_greater_equal(index, current->blocks.size())) {
+    if (current == nullptr || controller_ == nullptr || index < 0 || std::cmp_greater_equal(index, current->blocks.size())) {
       return;
     }
 
-    auto& session = application_->session();
+    auto& session = controller_->session();
 
     session.fold(pane_id_, static_cast<std::size_t>(index), !session.folded(pane_id_, static_cast<std::size_t>(index)));
     refresh();
@@ -742,14 +741,14 @@ namespace telar::gui::qt {
     qreal rail_height = 1;
     Arrivals arrivals;
 
-    if (current != nullptr && application_ != nullptr) {
+    if (current != nullptr && controller_ != nullptr) {
       const auto& screen = current->screen;
       const auto total = static_cast<std::uint64_t>(screen.scroll().total_rows);
       const auto shown = std::max<std::uint64_t>(1, mapsRows() ? current->folds.shownRows(total) : total);
       const auto rows = static_cast<std::uint64_t>(screen.rows());
       const auto cell = rowHeight();
       const auto top = mapsRows() ? top_row_ : static_cast<std::uint64_t>(screen.scroll().offset);
-      const bool telar = application_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
+      const bool telar = controller_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
       const auto part = cell > 0 ? shift_ / cell : 0;
 
       rail_top = static_cast<qreal>((static_cast<double>(top) + part) / static_cast<double>(shown));
@@ -758,7 +757,7 @@ namespace telar::gui::qt {
         segments = railSegmentsFor(shown);
       }
 
-      if (telar && mapsRows() && application_->configuration().scroll.sticky_headers) {
+      if (telar && mapsRows() && controller_->configuration().scroll.sticky_headers) {
         sticky = pinnedBlock();
       }
 
@@ -793,8 +792,8 @@ namespace telar::gui::qt {
     const auto* current = pane();
     const auto& folds = current->folds;
     const auto& blocks = current->blocks;
-    const auto selected = application_->prompt()->selectedBlock(pane_id_);
-    const auto& session = application_->session();
+    const auto selected = controller_->prompt().selectedBlock(pane_id_);
+    const auto& session = controller_->session();
     QVariantList segments;
 
     for (std::size_t index = 0; index < blocks.size(); ++index) {
@@ -858,7 +857,7 @@ namespace telar::gui::qt {
       push = static_cast<qreal>(std::min(0.0, below - cell));
     }
 
-    const auto selected = application_->prompt()->selectedBlock(pane_id_);
+    const auto selected = controller_->prompt().selectedBlock(pane_id_);
 
     return QVariantMap{
         {QStringLiteral("index"), static_cast<int>(index)},
@@ -868,7 +867,7 @@ namespace telar::gui::qt {
         {QStringLiteral("status"), block.status},
         {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
         {QStringLiteral("selected"), selected == index},
-        {QStringLiteral("folded"), application_->session().folded(pane_id_, index)},
+        {QStringLiteral("folded"), controller_->session().folded(pane_id_, index)},
         {QStringLiteral("foldable"), output_end > output_first},
         {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
         {QStringLiteral("push"), push},
@@ -921,9 +920,9 @@ namespace telar::gui::qt {
     match_marks_.clear();
     QVariantList rail;
     const auto* current = pane();
-    const auto& copy = application_ == nullptr ? std::optional<CopyState>{} : application_->copy()->state();
+    const auto& copy = controller_ == nullptr ? std::optional<CopyState>{} : controller_->copy().state();
     if (current != nullptr && copy && copy->pane_id == pane_id_) {
-      const auto matches = application_->session().copyMode().matches();
+      const auto matches = controller_->session().copyMode().matches();
       const auto& screen = current->screen;
       const auto total = static_cast<std::uint64_t>(screen.scroll().total_rows);
       const bool mapped = !view_rows_.empty();

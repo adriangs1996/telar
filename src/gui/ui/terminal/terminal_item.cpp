@@ -20,7 +20,6 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_scene.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/terminal_font.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
@@ -138,8 +137,8 @@ namespace telar::gui::qt {
     }
   }
 
-  QObject* TerminalItem::application() const noexcept {
-    return application_;
+  TerminalController* TerminalItem::controller() const noexcept {
+    return controller_;
   }
 
   TerminalItem::~TerminalItem() {
@@ -147,8 +146,8 @@ namespace telar::gui::qt {
     QObject::disconnect(window_activity_connection_);
     QObject::disconnect(scroll_frame_connection_);
 
-    if (application_ != nullptr) {
-      application_->unregisterTerminal(*this);
+    if (controller_ != nullptr) {
+      controller_->unregisterTerminal(*this);
     }
 
     try {
@@ -159,53 +158,52 @@ namespace telar::gui::qt {
     }
   }
 
-  void TerminalItem::setApplication(QObject* application) {
-    auto* next = qobject_cast<ApplicationController*>(application);
-    if (next == application_) {
+  void TerminalItem::setController(TerminalController* controller) {
+    if (controller == controller_) {
       return;
     }
 
-    if (application_ != nullptr) {
+    if (controller_ != nullptr) {
       releaseKeys();
       releaseMouse();
-      application_->unregisterTerminal(*this);
-      application_->disconnect(this);
-      application_->copy()->disconnect(this);
-      application_->prompt()->disconnect(this);
+      controller_->unregisterTerminal(*this);
+      controller_->disconnect(this);
+      controller_->copy().disconnect(this);
+      controller_->prompt().disconnect(this);
     }
 
-    // QML owns the application; this item registers with it and unregisters before it changes.
-    application_ = tbc::raw(next);
+    // QML owns the controller; this item registers with it and unregisters before it changes.
+    controller_ = tbc::raw(controller);
     prepared_frame_.pane = {};
     prepared_frame_.links.reset();
     presented_frame_id_ = 0;
-    if (application_ != nullptr) {
-      connect(application_, &QObject::destroyed, this, [this] {
-        application_ = nullptr;
+    if (controller_ != nullptr) {
+      connect(controller_, &QObject::destroyed, this, [this] {
+        controller_ = nullptr;
         update();
-        emit applicationChanged();
+        emit controllerChanged();
       });
 
-      connect(application_, &ApplicationController::terminalChanged, this, [this](qulonglong pane_id) {
+      connect(controller_, &TerminalController::terminalChanged, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refresh();
         }
       });
 
-      connect(application_->prompt(), &PromptController::lineChanged, this, [this](qulonglong pane_id) {
+      connect(&controller_->prompt(), &PromptController::lineChanged, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refreshBlocks();
           update();
         }
       });
 
-      connect(application_, &ApplicationController::configurationChanged, this, &TerminalItem::measure);
-      connect(application_, &ApplicationController::machineChanged, this, &TerminalItem::invalidateMachine);
-      connect(application_, &ApplicationController::refreshed, this, &TerminalItem::refreshLinkHover);
-      connect(application_->copy(), &CopyController::activeChanged, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &ApplicationController::dialogChanged, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &ApplicationController::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &ApplicationController::inputReleasing, this, [this](qulonglong pane_id) {
+      connect(controller_, &TerminalController::configurationChanged, this, &TerminalItem::measure);
+      connect(controller_, &TerminalController::machineChanged, this, &TerminalItem::invalidateMachine);
+      connect(controller_, &TerminalController::refreshed, this, &TerminalItem::refreshLinkHover);
+      connect(&controller_->copy(), &CopyController::activeChanged, this, &TerminalItem::refreshLinkHover);
+      connect(controller_, &TerminalController::dialogChanged, this, &TerminalItem::refreshLinkHover);
+      connect(controller_, &TerminalController::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
+      connect(controller_, &TerminalController::inputReleasing, this, [this](qulonglong pane_id) {
         if (pane_id != pane_id_) {
           return;
         }
@@ -222,11 +220,11 @@ namespace telar::gui::qt {
     }
 
     measure();
-    if (application_ != nullptr) {
-      application_->registerTerminal(*this);
+    if (controller_ != nullptr) {
+      controller_->registerTerminal(*this);
     }
 
-    emit applicationChanged();
+    emit controllerChanged();
   }
 
   QString TerminalItem::paneId() const {
@@ -249,8 +247,8 @@ namespace telar::gui::qt {
 
     releaseKeys();
     releaseMouse();
-    if (application_ != nullptr) {
-      application_->unregisterTerminal(*this);
+    if (controller_ != nullptr) {
+      controller_->unregisterTerminal(*this);
     }
 
     wheel_.reset();
@@ -260,8 +258,8 @@ namespace telar::gui::qt {
     prepared_frame_.pane = {};
     prepared_frame_.links.reset();
     clearLinkHover();
-    if (application_ != nullptr) {
-      application_->registerTerminal(*this);
+    if (controller_ != nullptr) {
+      controller_->registerTerminal(*this);
     }
 
     ++appearance_;
@@ -270,11 +268,11 @@ namespace telar::gui::qt {
   }
 
   Pane<Memory>* TerminalItem::pane() const noexcept {
-    return application_ == nullptr ? nullptr : application_->pane(pane_id_);
+    return controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
   }
 
   void TerminalItem::measure() {
-    if (application_ == nullptr) {
+    if (controller_ == nullptr) {
       return;
     }
 
@@ -282,7 +280,7 @@ namespace telar::gui::qt {
       link_gesture_.cancel();
       link_stamp_.reset();
       const auto scale = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
-      auto resolved = application_->resolveFont(scale);
+      auto resolved = controller_->host().resolveFont(scale);
 
       font_ = std::move(resolved.font);
       font_grid_ = resolved.grid;
@@ -316,13 +314,13 @@ namespace telar::gui::qt {
   }
 
   void TerminalItem::resizeTerminal() {
-    if (application_ == nullptr || window() == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0) {
+    if (controller_ == nullptr || window() == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0) {
       return;
     }
 
     const TerminalGrid grid{.cell_width_px = font_grid_.width, .cell_height_px = font_grid_.height, .scale = font_scale_};
     if (const auto size = grid.fit(width(), height())) {
-      application_->resize(pane_id_, *size);
+      controller_->resize(pane_id_, *size);
     }
   }
 
@@ -357,8 +355,8 @@ namespace telar::gui::qt {
       }
     }
 
-    if (catalog != nullptr && application_ != nullptr) {
-      catalog->configure(application_->configuration().font);
+    if (catalog != nullptr && controller_ != nullptr) {
+      catalog->configure(controller_->configuration().font);
       if (font_collection_ != catalog->collection()) {
         font_collection_ = catalog->collection();
         fonts_ = ResidentFonts::shared(font_collection_);
@@ -408,7 +406,7 @@ namespace telar::gui::qt {
       font_catalog_->request({bytes.constData(), static_cast<std::size_t>(bytes.size())}, fonts::FontRole::primary);
     }
 
-    application_->prepareImagePlacements();
+    controller_->prepareImagePlacements();
   }
 
   void TerminalItem::requestRowFonts(std::span<const CellValue> cells) {
@@ -568,7 +566,7 @@ namespace telar::gui::qt {
     int rows_below = 0;
 
     hidden_rows_.clear();
-    if (current != nullptr && application_ != nullptr) {
+    if (current != nullptr && controller_ != nullptr) {
       const auto& screen = current->screen;
       const auto rows = static_cast<std::size_t>(screen.rows());
       // The rows drawn: the screen's own, or a view's, scrolled by pixels and folded.
@@ -602,7 +600,7 @@ namespace telar::gui::qt {
       };
 
       hidden_rows_.assign(drawn, 0);
-      const bool editing = application_->prompt()->surface(pane_id_) == prompt::Surface::editor;
+      const bool editing = controller_->prompt().surface(pane_id_) == prompt::Surface::editor;
       const auto [first, count, cursor] = promptRows(screen, editing, liveFrom(current->blocks));
 
       for (auto row = first; row < first + count && row < rows; ++row) {
@@ -646,9 +644,9 @@ namespace telar::gui::qt {
         rows_below = bottom > top ? static_cast<int>(std::min<std::uint64_t>(bottom - top, std::numeric_limits<int>::max())) : 0;
       }
 
-      const bool telar = application_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
-      const auto selected = application_->prompt()->selectedBlock(pane_id_);
-      auto& session = application_->session();
+      const bool telar = controller_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
+      const auto selected = controller_->prompt().selectedBlock(pane_id_);
+      auto& session = controller_->session();
       const auto live_session = liveSession(*current);
       const auto host = current->shell.host.empty() ? QString{} : QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size()));
 
@@ -826,8 +824,8 @@ namespace telar::gui::qt {
 
   void TerminalItem::selectBlock(int index) {
     const auto* current = pane();
-    if (current != nullptr && application_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
-      application_->selectBlock(pane_id_, static_cast<std::size_t>(index));
+    if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
+      controller_->selectBlock(pane_id_, static_cast<std::size_t>(index));
     }
   }
 
@@ -845,7 +843,7 @@ namespace telar::gui::qt {
 
   QSGNode* TerminalItem::updatePaintNode(QSGNode* previous, [[maybe_unused]] UpdatePaintNodeData* update_data) {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr || window() == nullptr || !font_collection_) {
+    if (current == nullptr || controller_ == nullptr || window() == nullptr || !font_collection_) {
       prepared_frame_.pane = {};
       prepared_frame_.links.reset();
       const std::unique_ptr<QSGNode> discarded{previous};
@@ -855,7 +853,7 @@ namespace telar::gui::qt {
 
     CellSelection selection;
     std::optional<Cursor> cursor_override;
-    const auto& copy = application_->copy()->state();
+    const auto& copy = controller_->copy().state();
     if (copy && copy->pane_id == pane_id_) {
       selection = copy->selection(copyGrid(current->screen));
       if (!copy->pointer) {
@@ -869,7 +867,7 @@ namespace telar::gui::qt {
     }
 
     // Where no key would land, the terminal's cursor is not drawn (see hidesTerminalCursor).
-    if (!cursor_override && application_->prompt()->hidesTerminalCursor(pane_id_)) {
+    if (!cursor_override && controller_->prompt().hidesTerminalCursor(pane_id_)) {
       cursor_override = Cursor{};
     }
 
@@ -925,9 +923,9 @@ namespace telar::gui::qt {
     const TerminalPresentation frame{
         .screen = current->screen,
         .graphics = current->graphics,
-        .configuration = application_->configuration(),
+        .configuration = controller_->configuration(),
         .font = font_,
-        .preedit = application_->prompt()->edits(pane_id_) ? no_preedit : preedit_,
+        .preedit = controller_->prompt().edits(pane_id_) ? no_preedit : preedit_,
         .fonts = font_collection_,
         .grid = font_grid_,
         .selection = selection,
@@ -990,41 +988,55 @@ namespace telar::gui::qt {
 
   void TerminalItem::keyPressEvent(QKeyEvent* event) {
     input_method_bypassed_ = false;
-    const auto* current = pane();
-    if (current == nullptr || application_ == nullptr) {
+    if (pane() == nullptr || controller_ == nullptr) {
       return;
     }
 
-    if (application_->handleBindingKey(*event, *this, !preedit_.isEmpty())) {
-      event->accept();
+    // The window's bindings and the views over the pane see the key first; what they leave, the
+    // window hands to type().
+    controller_->host().pressKey(*this, *event);
+    event->accept();
+  }
 
-      return;
+  bool TerminalItem::composing() const noexcept {
+    return !preedit_.isEmpty();
+  }
+
+  std::optional<TerminalKey> TerminalItem::type(const QKeyEvent& event) {
+    const auto* current = pane();
+    std::optional<TerminalKey> typed;
+    if (current == nullptr || controller_ == nullptr) {
+      return typed;
     }
 
     const Qt::KeyboardModifiers clipboard_modifiers = platform::usesCommandKey() ? Qt::ControlModifier : Qt::ControlModifier | Qt::ShiftModifier;
-    const auto clipboard_shortcut = (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == clipboard_modifiers;
-    const auto& copy = application_->copy()->state();
+    const auto clipboard_shortcut = (event.modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == clipboard_modifiers;
+    const auto& copy = controller_->copy().state();
     const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
 
-    if (preedit_.isEmpty() && application_->documents()->key(pane_id_, *event)) {
-      // The document the pane shows took a scroll key.
-    } else if (clipboard_shortcut && event->key() == Qt::Key_C && selected) {
-      application_->copy()->copySelection(pane_id_);
-    } else if (clipboard_shortcut && event->key() == Qt::Key_V) {
-      application_->paste(pane_id_, QGuiApplication::clipboard()->text());
-    } else if (preedit_.isEmpty() && application_->prompt()->edits(pane_id_)) {
+    if (clipboard_shortcut && event.key() == Qt::Key_C && selected) {
+      controller_->copy().copySelection(pane_id_);
+    } else if (clipboard_shortcut && event.key() == Qt::Key_V) {
+      controller_->paste(pane_id_, QGuiApplication::clipboard()->text());
+    } else if (preedit_.isEmpty() && controller_->prompt().edits(pane_id_)) {
       // telar's command editor takes the key; the terminal gets what it hands back, and at the
       // prompt nothing the editor cannot use reaches the shell's own line editor.
       QByteArray text;
-      const auto key = promptKey(*event, text);
-      const bool taken = key && application_->prompt()->key(pane_id_, *key);
-      if (!taken && (key || application_->prompt()->surface(pane_id_) != prompt::Surface::editor)) {
-        static_cast<void>(sendKeyPress(*event, current->screen.modes()));
+      const auto key = promptKey(event, text);
+      const bool taken = key && controller_->prompt().key(pane_id_, *key);
+      if (!taken && (key || controller_->prompt().surface(pane_id_) != prompt::Surface::editor)) {
+        typed = sendKeyPress(event, current->screen.modes());
       }
     } else if (preedit_.isEmpty()) {
-      static_cast<void>(sendKeyPress(*event, current->screen.modes()));
+      typed = sendKeyPress(event, current->screen.modes());
     }
 
+    wakeCursor();
+
+    return typed;
+  }
+
+  void TerminalItem::wakeCursor() {
     const bool cursor_changed = !std::exchange(cursor_on_, true);
 
     if (blink_.isActive()) {
@@ -1034,15 +1046,13 @@ namespace telar::gui::qt {
     if (cursor_changed) {
       update();
     }
-
-    event->accept();
   }
 
-  bool TerminalItem::sendKeyPress(const QKeyEvent& event, const InputModes& modes) {
+  std::optional<TerminalKey> TerminalItem::sendKeyPress(const QKeyEvent& event, const InputModes& modes) {
     const auto semantic = NativeKeyAdapter::terminalKey(event);
     const auto bytes = semantic ? encodeKey(*semantic, modes) : encodeKey(event, modes);
     if (bytes.isEmpty()) {
-      return false;
+      return std::nullopt;
     }
 
     auto* entry = std::ranges::find_if(pressed_keys_, [&](const auto& key) {
@@ -1055,7 +1065,7 @@ namespace telar::gui::qt {
     }
 
     if (entry == pressed_keys_.end()) {
-      return false;
+      return std::nullopt;
     }
 
     *entry = {
@@ -1068,17 +1078,12 @@ namespace telar::gui::qt {
         .semantic = semantic,
     };
 
-    const bool delivered = send(bytes);
-    if (delivered && semantic && application_ != nullptr) {
-      application_->attachments()->key(pane_id_, *semantic);
-    }
-
-    return delivered;
+    return send(bytes) ? semantic : std::nullopt;
   }
 
   void TerminalItem::keyReleaseEvent(QKeyEvent* event) {
     input_method_bypassed_ = false;
-    if (application_ != nullptr && application_->handleBindingKey(*event, *this, !preedit_.isEmpty())) {
+    if (controller_ != nullptr && controller_->host().releaseKey(*this, *event)) {
       event->accept();
 
       return;
@@ -1099,11 +1104,11 @@ namespace telar::gui::qt {
 
   void TerminalItem::inputMethodEvent(QInputMethodEvent* event) {
     if (!event->commitString().isEmpty()) {
-      if (application_ != nullptr) {
-        application_->interruptBindings();
+      if (controller_ != nullptr) {
+        controller_->host().interruptKeys();
       }
 
-      if (application_ == nullptr || !application_->prompt()->text(pane_id_, event->commitString())) {
+      if (controller_ == nullptr || !controller_->prompt().text(pane_id_, event->commitString())) {
         sendCommittedText(event->commitString());
       }
     }
@@ -1118,7 +1123,7 @@ namespace telar::gui::qt {
   }
 
   void TerminalItem::sendCommittedText(const QString& text) {
-    if (application_ == nullptr || !application_->copy()->active()) {
+    if (controller_ == nullptr || !controller_->copy().active()) {
       send(text.toUtf8());
 
       return;
@@ -1130,7 +1135,7 @@ namespace telar::gui::qt {
       const auto scalar = QString::fromRawData(text.constData() + offset, length);
       const QKeyEvent key{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, scalar};
 
-      static_cast<void>(application_->copy()->handleKey(pane_id_, key));
+      static_cast<void>(controller_->copy().handleKey(pane_id_, key));
       offset += length;
     }
   }
@@ -1147,7 +1152,7 @@ namespace telar::gui::qt {
     case Qt::ImEnabled:
       return current->attached && !input_method_bypassed_;
     case Qt::ImCursorRectangle:
-      if (application_ != nullptr && application_->prompt()->edits(pane_id_) && prompt_caret_.isValid()) {
+      if (controller_ != nullptr && controller_->prompt().edits(pane_id_) && prompt_caret_.isValid()) {
         return prompt_caret_;
       }
 
@@ -1196,9 +1201,9 @@ namespace telar::gui::qt {
       }
     }
 
-    const auto blinks = keyboard && current != nullptr && !application_->copy()->active() && current->screen.cursor().visible && current->screen.cursor().blink && (current->screen.cursor().shape != CursorShape::default_shape || application_->configuration().cursor_blink);
+    const auto blinks = keyboard && current != nullptr && !controller_->copy().active() && current->screen.cursor().visible && current->screen.cursor().blink && (current->screen.cursor().shape != CursorShape::default_shape || controller_->configuration().cursor_blink);
     if (blinks) {
-      blink_.setInterval(static_cast<int>(application_->configuration().blink_interval.count()));
+      blink_.setInterval(static_cast<int>(controller_->configuration().blink_interval.count()));
       if (!blink_.isActive()) {
         blink_.start();
       }
@@ -1241,7 +1246,7 @@ namespace telar::gui::qt {
   }
 
   bool TerminalItem::send(const QByteArray& bytes, PaneInputSource source) {
-    return application_ != nullptr && !bytes.isEmpty() && application_->input(pane_id_, bytes, source);
+    return controller_ != nullptr && !bytes.isEmpty() && controller_->input(pane_id_, bytes, source);
   }
 
 }

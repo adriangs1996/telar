@@ -229,7 +229,7 @@ Item {
                     // Commit the terminal grid once; animate only its viewport.
                     width: pane.record.content.width
                     height: pane.record.content.height
-                    application: root.application
+                    controller: root.application.terminals
                     paneId: pane.record.key
                     backgroundProvided: true
                     property bool focusReady: false

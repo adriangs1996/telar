@@ -53,6 +53,7 @@ static_assert(true);
 #include "ui/prompt/prompt_controller.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/copy_controller.hpp"
+#include "ui/terminal/terminal_controller.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
 #include "ui/workspaces/workspace_form_controller.hpp"
 #include "ui/workspaces/workspaces_controller.hpp"
@@ -108,7 +109,6 @@ static_assert(true);
 #include "input/wheel_accumulator.hpp"
 
 import telar.gui.components.builtin_content;
-import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
@@ -145,7 +145,7 @@ namespace telar::gui::qt {
   //
   // Each feature's state lives in its own controller, which reads the store and never calls
   // back here; this controller synchronizes them in order and runs what they ask of the window.
-  class ApplicationController final : public QObject {
+  class ApplicationController final : public QObject, private TerminalHost {
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 
@@ -181,6 +181,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY diagnosticChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY diagnosticChanged)
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
+    Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
     Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
     Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
@@ -274,16 +275,9 @@ namespace telar::gui::qt {
     bool eventFilter(QObject* watched, QEvent* event) override;
     [[nodiscard]] Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
-    [[nodiscard]] ResolvedFont resolveFont(qreal scale);
-    [[nodiscard]] ViewVersion viewVersion() const noexcept;
-    [[nodiscard]] Qt::KeyboardModifiers pointerModifiers() const noexcept;
-    void observePointerModifiers(Qt::KeyboardModifiers modifiers);
-    void registerTerminal(TerminalItem& terminal);
-    void unregisterTerminal(TerminalItem& terminal);
+    [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
     [[nodiscard]] DisplayMetrics displayMetrics(qreal density) const;
     void soundPlaybackFinished(std::optional<CommandFailure> failure);
-    [[nodiscard]] PointerDispatcher& pointerDispatcher() noexcept;
-    [[nodiscard]] std::shared_ptr<const LinkHit> shareLinkHit(const LinkHit& hit);
 
     Q_INVOKABLE void execute(Action action, const QString& target = {});
     Q_INVOKABLE void submitDialog(const QVariantMap& input);
@@ -292,15 +286,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void setSidebarWidth(qreal width);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
 
-    bool input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
-    void paste(std::uint64_t pane_id, const QString& text);
-    // Shows the pane's scrollback from `row`, counted from its top.
-    void scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row);
-    // Selects a command block of the pane, by index among its blocks, or none to go back to the
-    // live end.
-    void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
-    void resize(std::uint64_t pane_id, TerminalSize size);
-    void scroll(PaneScrollDelta delta);
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
     void interruptBindings();
 
@@ -364,6 +349,10 @@ namespace telar::gui::qt {
       return &copy_;
     }
 
+    TerminalController* terminals() noexcept {
+      return &terminals_;
+    }
+
     NotificationsController* notifications() noexcept {
       return &notifications_;
     }
@@ -407,9 +396,6 @@ namespace telar::gui::qt {
     // The error, the TLS proxy badge or whether the runtime is connected moved.
     void diagnosticChanged();
     // The attachment shelf's region or the attachment modal's layout moved.
-    // Each refresh() of what the window shows from the active session, for the C++ views that
-    // compare what they read on their own. No property notifies with it.
-    void refreshed();
     void statusModeChanged();
     void hostMetricsChanged();
     // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
@@ -418,10 +404,7 @@ namespace telar::gui::qt {
     void windowGeometryChanged();
     void sidebarGeometryChanged();
     void dialogChanged();
-    void terminalChanged(qulonglong pane_id);
     // The document a pane shows natively appeared, changed or went away.
-    void pointerModifiersChanged();
-    void inputReleasing(qulonglong pane_id);
     void notification(const QString& message);
     void machineChanged();
     void machinesChanged();
@@ -433,7 +416,6 @@ namespace telar::gui::qt {
     friend struct test::ComponentActions;
     friend class KeyBindings;
     friend class PointerDispatcher;
-    friend class TerminalItem;
 
     [[nodiscard]] BindingContext bindingContext() const;
     [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
@@ -453,6 +435,7 @@ namespace telar::gui::qt {
     void openComponentPick(std::size_t index);
     void initializePlugins();
     void initializePrompt();
+    void initializeTerminals();
     void applyPluginEffects(const PluginEffects& effects);
     void applyExpression(const InputExpression& expression);
     void scrollBinding(ScrollDirection direction);
@@ -578,12 +561,10 @@ namespace telar::gui::qt {
     void prepareFrame(PresentedFrame& frame);
     void prepareTerminalFrames(PresentedFrame& frame);
     void recordPreparedFrame(const PresentedFrame& frame);
-    [[nodiscard]] TerminalItem* visibleTerminal(std::uint64_t pane_id) const;
     [[nodiscard]] std::size_t collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
     void reconsiderFrame();
     void requestTerminalFrame();
     void configureFramePacer();
-    void prepareImagePlacements();
     void configureWindow();
     void synchronizeCadence();
     void initializeNotifications();
@@ -593,6 +574,13 @@ namespace telar::gui::qt {
     bool executeNavigation(Action action, const QString& target);
     bool executePane(Action action, std::uint64_t identity);
     void executeWindowAction(Action action);
+    // What the terminals ask of the window (terminal_host.cpp).
+    void pressKey(TerminalItem& terminal, QKeyEvent& event) override;
+    [[nodiscard]] bool releaseKey(TerminalItem& terminal, QKeyEvent& event) override;
+    void interruptKeys() override;
+    void focusPane(TerminalItem& terminal) override;
+    void ungrabPointer(TerminalItem& terminal) override;
+    void openLink(const LinkTarget& target, std::uint64_t pane_id) override;
 
     // Runs a user's mutation of the session, then commits it to the store, whose interacted()
     // publishes what the mutation wrote and refreshes the window.
@@ -660,6 +648,8 @@ namespace telar::gui::qt {
     LinkStatusController link_status_;
     LinksController links_;
     CopyController copy_;
+    // After the copy mode and the prompt, which the terminals read.
+    TerminalController terminals_;
     NotificationsController notifications_;
     ComponentsController components_;
     PluginRunner plugins_;
@@ -685,9 +675,7 @@ namespace telar::gui::qt {
     Viewport viewport_ = default_viewport;
     CellMetrics cell_metrics_;
     TerminalGrid terminal_grid_;
-    QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
     QByteArray hostname_;
-    Qt::KeyboardModifiers pointer_modifiers_;
   };
 
 }

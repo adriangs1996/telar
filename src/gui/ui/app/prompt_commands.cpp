@@ -8,13 +8,13 @@ static_assert(true);
 namespace telar::gui::qt {
 
   void ApplicationController::initializePrompt() {
-    connect(this, &ApplicationController::terminalChanged, &prompt_, &PromptController::refresh);
+    connect(&terminals_, &TerminalController::terminalChanged, &prompt_, &PromptController::refresh);
     connect(this, &ApplicationController::configurationChanged, &prompt_, &PromptController::configure);
     connect(&prompt_, &PromptController::historyRequested, this, [this] {
       execute(Action::history);
     });
     connect(&prompt_, &PromptController::blockChanged, this, [this](qulonglong pane_id) {
-      emit terminalChanged(pane_id);
+      emit terminals_.terminalChanged(pane_id);
       publishStatus();
     });
     connect(&prompt_, &PromptController::searchRequested, this, [this] {

@@ -23,8 +23,8 @@ static_assert(true);
 #include "ui/fonts/window_font_catalog.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/models/tab_leaves.hpp"
 #include "ui/foundation/process/launch_arguments.hpp"
-#include "ui/panes/pane_projection.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include "ui/terminal/window_images.hpp"
@@ -164,6 +164,7 @@ namespace telar::gui::qt {
         link_status_(store_),
         links_(store_),
         copy_(store_),
+        terminals_(store_, copy_, prompt_, *this, memory),
         notifications_(store_),
         components_(store_, configuration_source_, element_slots_, memory),
         plugins_(store_, configuration_source_, memory),
@@ -183,7 +184,7 @@ namespace telar::gui::qt {
 
     connect(this, &ApplicationController::configurationChanged, this, &ApplicationController::windowGeometryChanged);
     connect(&copy_, &CopyController::activeChanged, this, &ApplicationController::statusModeChanged);
-    connect(&copy_, &CopyController::paneChanged, this, &ApplicationController::terminalChanged);
+    connect(&copy_, &CopyController::paneChanged, &terminals_, &TerminalController::terminalChanged);
     connect(&copy_, &CopyController::inputStarted, this, [this] {
       key_bindings_.cancelSequence();
     });
@@ -252,7 +253,7 @@ namespace telar::gui::qt {
       restoreTerminalFocus();
     });
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
-      emit terminalChanged(pane_id);
+      emit terminals_.terminalChanged(pane_id);
       requestTerminalFrame();
     });
     connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
@@ -313,6 +314,7 @@ namespace telar::gui::qt {
       }
     });
 
+    initializeTerminals();
     synchronizeWorkbenchGeometry();
     measureDisplay();
   }
@@ -436,6 +438,7 @@ namespace telar::gui::qt {
     connect(&window, &QWindow::heightChanged, this, &ApplicationController::synchronizeWindowSize);
     connect(&window, &QWindow::screenChanged, this, &ApplicationController::synchronizeScreen);
     connect(&window, &QWindow::windowStateChanged, this, &ApplicationController::windowGeometryChanged);
+    terminals_.setWindow(window);
     observeFrames(window);
     synchronizeScreen();
     configureWindow();
@@ -482,7 +485,6 @@ namespace telar::gui::qt {
 
   void ApplicationController::observeFrames(QQuickWindow& window) {
     WindowImages::forWindow(window);
-    connect(&window, &QQuickWindow::afterAnimating, this, &ApplicationController::prepareImagePlacements);
     const auto generation = window_generation_;
     // Preparation runs while the scene graph synchronizes, with the GUI thread blocked, so it
     // never overlaps a present on the GUI thread.
@@ -525,34 +527,6 @@ namespace telar::gui::qt {
     );
   }
 
-  PointerDispatcher& ApplicationController::pointerDispatcher() noexcept {
-    return pointer_dispatcher_;
-  }
-
-  void ApplicationController::prepareImagePlacements() {
-    if (window_ == nullptr) {
-      return;
-    }
-
-    std::array<ImagePlacementSource, PaneLayout::maximum_panes> sources;
-    std::size_t count = 0;
-    const auto* tab = session().activeTab();
-    if (tab != nullptr) {
-      forEachLeaf(*tab, true, [&](const ClientLayoutPane& leaf) {
-        const auto* pane = session().findPane(leaf.pane_id);
-        const auto terminal = terminals_.constFind(leaf.pane_id);
-        if (pane != nullptr && pane->attached && terminal != terminals_.cend() && *terminal != nullptr && (*terminal)->window() == window_ && (*terminal)->isVisible()) {
-          sources[count++] = {.owner = *terminal, .store = &pane->graphics, .cell = (*terminal)->cellSize()};
-        }
-      });
-    }
-
-    if (const auto reach = WindowImages::forWindow(*window_).preparePlacements(std::span{sources}.first(count))) {
-      session().reportLimit(*reach);
-      notifications_.refresh();
-    }
-  }
-
   void ApplicationController::prepareFrame(PresentedFrame& frame) {
     frame = {};
     frame.machine_view = store_.machineView();
@@ -585,25 +559,16 @@ namespace telar::gui::qt {
 
     forEachLeaf(*tab, true, [&](const ClientLayoutPane& leaf) {
       const auto* pane = session().findPane(leaf.pane_id);
-      auto* terminal = pane != nullptr && pane->attached ? visibleTerminal(pane->id) : nullptr;
+      auto* terminal = pane != nullptr && pane->attached ? terminals_.visible(pane->id) : nullptr;
       if (terminal == nullptr) {
         return;
       }
 
-      const auto& prepared = terminal->prepared_frame_;
+      const auto& prepared = terminal->preparedFrame();
       if (prepared.pane.attached && prepared.pane.pane_id == pane->id && prepared.pane.attachment_generation == pane->attachment_generation) {
         frame.panes[frame.pane_count++] = {.frame = prepared, .terminal = terminal};
       }
     });
-  }
-
-  TerminalItem* ApplicationController::visibleTerminal(std::uint64_t pane_id) const {
-    const auto terminal = terminals_.constFind(pane_id);
-    if (terminal == terminals_.cend() || *terminal == nullptr || (*terminal)->window() != window_ || !(*terminal)->isVisible() || !(*terminal)->flags().testFlag(QQuickItem::ItemHasContents) || (*terminal)->width() <= 0 || (*terminal)->height() <= 0) {
-      return nullptr;
-    }
-
-    return *terminal;
   }
 
   std::size_t ApplicationController::collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
@@ -615,7 +580,7 @@ namespace telar::gui::qt {
     std::size_t count = 0;
 
     forEachLeaf(*tab, true, [&](const ClientLayoutPane& leaf) {
-      if (visibleTerminal(leaf.pane_id) == nullptr) {
+      if (terminals_.visible(leaf.pane_id) == nullptr) {
         return;
       }
 
@@ -671,7 +636,7 @@ namespace telar::gui::qt {
 
     const auto pane_id = session().changedPane();
     const auto* tab = session().activeTab();
-    if (tab == nullptr || !tab->layout.contains(pane_id) || (tab->fullscreen && tab->focused_pane != pane_id) || visibleTerminal(pane_id) == nullptr) {
+    if (tab == nullptr || !tab->layout.contains(pane_id) || (tab->fullscreen && tab->focused_pane != pane_id) || terminals_.visible(pane_id) == nullptr) {
       return;
     }
 
@@ -740,7 +705,7 @@ namespace telar::gui::qt {
         }
 
         auto* const terminal = pane.terminal.data();
-        if (terminal != nullptr && terminal->application() == this && terminal->paneIdentity() == identity.pane_id) {
+        if (terminal != nullptr && terminal->controller() == &terminals_ && terminal->paneIdentity() == identity.pane_id) {
           terminal->presentFrame(pane.frame);
         }
 
@@ -822,7 +787,7 @@ namespace telar::gui::qt {
       break;
     case Change::terminal:
       attachments_.reconcileFrame(session().changedPane());
-      emit terminalChanged(session().changedPane());
+      emit terminals_.terminalChanged(session().changedPane());
       if (session().takeChromeChange() && !refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
@@ -846,14 +811,14 @@ namespace telar::gui::qt {
     case Change::document:
       documents_.publish(session().changedPane());
       // Inline documents take rows of the view, or give them back.
-      emit terminalChanged(session().changedPane());
+      emit terminals_.terminalChanged(session().changedPane());
       requestTerminalFrame();
       break;
     case Change::copy_mode:
       copy_.publishSearch();
       publishStatus();
       if (const auto& copy = session().copyMode().state()) {
-        emit terminalChanged(copy->pane_id);
+        emit terminals_.terminalChanged(copy->pane_id);
       }
 
       break;
@@ -998,7 +963,7 @@ namespace telar::gui::qt {
     publishStatus();
     attachments_.publishGeometry();
     notifications_.publishView();
-    emit refreshed();
+    emit terminals_.refreshed();
     reconsiderFrame();
   }
 
@@ -1207,12 +1172,12 @@ namespace telar::gui::qt {
     } else if (action == Action::copy_mode) {
       if (store_.dialog().kind == Dialog::none && session().enterBlocks()) {
         prompt_.publish(session().changedPane());
-        emit terminalChanged(session().changedPane());
+        emit terminals_.terminalChanged(session().changedPane());
       } else if (store_.dialog().kind == Dialog::none) {
         static_cast<void>(session().enterCopyMode());
         publishStatus();
         if (const auto& copy = session().copyMode().state()) {
-          emit terminalChanged(copy->pane_id);
+          emit terminals_.terminalChanged(copy->pane_id);
         }
       }
     } else if (action == Action::cancel) {
@@ -1231,7 +1196,7 @@ namespace telar::gui::qt {
       const auto pane_id = copy->pane_id;
 
       session().leaveCopyMode();
-      emit terminalChanged(pane_id);
+      emit terminals_.terminalChanged(pane_id);
       publishStatus();
     }
 
@@ -1280,77 +1245,6 @@ namespace telar::gui::qt {
     }
   }
 
-  bool ApplicationController::input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source) {
-    const auto* const current = session().findPane(pane_id);
-    if (current == nullptr || !current->attached || current->exited || bytes.isEmpty()) {
-      return false;
-    }
-
-    const auto& copy = session().copyMode().state();
-    const auto previous = copy && copy->pointer ? copy->pane_id : 0;
-    bool delivered = false;
-
-    try {
-      session().input(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, source);
-      delivered = true;
-    } catch (const std::exception& error) {
-      fail(error);
-    }
-
-    if (previous != 0 && !session().copyMode().state()) {
-      copy_.publishChange(previous);
-    }
-
-    return delivered;
-  }
-
-  void ApplicationController::paste(std::uint64_t pane_id, const QString& text) {
-    try {
-      const auto bytes = text.toUtf8();
-
-      session().paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
-    } catch (const std::exception& error) {
-      fail(error);
-    }
-
-    prompt_.publishWrite();
-  }
-
-  void ApplicationController::resize(std::uint64_t pane_id, TerminalSize size) {
-    try {
-      session().resize(pane_id, size);
-    } catch (const std::exception& error) {
-      fail(error);
-    }
-  }
-
-  void ApplicationController::scroll(PaneScrollDelta delta) {
-    try {
-      session().scroll(delta);
-    } catch (const std::exception& error) {
-      fail(error);
-    }
-  }
-
-  void ApplicationController::scrollPaneToRow(std::uint64_t pane_id, std::uint32_t row) {
-    try {
-      session().scrollToRow(pane_id, row);
-    } catch (const std::exception& error) {
-      fail(error);
-    }
-  }
-
-  void ApplicationController::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
-    try {
-      session().selectBlock(pane_id, index);
-    } catch (const std::exception& error) {
-      fail(error);
-    }
-
-    prompt_.publish(pane_id);
-    emit terminalChanged(pane_id);
-  }
-
   void ApplicationController::showDialog(Dialog kind) {
     if (kind != Dialog::peek) {
       peek_.forget();
@@ -1396,8 +1290,8 @@ namespace telar::gui::qt {
 
   void ApplicationController::restoreTerminalFocus() {
     const auto* pane = session().focusedPane();
-    const auto terminal = pane != nullptr ? terminals_.value(pane->id) : nullptr;
-    if (terminal && terminal->isVisible() && store_.dialog().kind == Dialog::none) {
+    auto* const terminal = pane != nullptr ? terminals_.terminal(pane->id) : nullptr;
+    if (terminal != nullptr && terminal->isVisible() && store_.dialog().kind == Dialog::none) {
       terminal->forceActiveFocus(Qt::OtherFocusReason);
     }
   }
@@ -1422,7 +1316,7 @@ namespace telar::gui::qt {
         components_.closePanel();
         interruptBindings();
         for (const auto& pane : session().panes()) {
-          emit inputReleasing(pane->id);
+          terminals_.releaseInput(pane->id);
         }
       } else {
         restoreTerminalFocus();

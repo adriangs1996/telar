@@ -145,18 +145,6 @@ namespace telar::gui::qt {
     };
   }
 
-  // Calls `visit` with each pane leaf of `tab` in layout order; with `shown`, only the leaves the
-  // tab shows: the focused one alone when it is fullscreen.
-  template <Allocator Memory, typename Visit>
-  void forEachLeaf(const Tab<Memory>& tab, bool shown, Visit&& visit) {
-    for (const auto& node : tab.layout.nodes()) {
-      const auto* leaf = std::get_if<ClientLayoutPane>(&node);
-      if (leaf != nullptr && (!shown || !tab.fullscreen || leaf->pane_id == tab.focused_pane)) {
-        visit(*leaf);
-      }
-    }
-  }
-
   template <Allocator Memory>
   QVariantMap fullscreenPaneRecord(const Pane<Memory>* pane, std::span<const Agent<Memory>> agents, FullscreenPaneEntry entry) {
     auto record = pane == nullptr ? QVariantMap{} : paneChromeRecord(*pane, agents, entry.index);

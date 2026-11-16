@@ -52,6 +52,7 @@ namespace telar::gui::qt {
     notifications_.setDisplay(display, terminal_grid_);
     machine_chrome_.setDisplay(display);
     sidebar_.setDisplay(display);
+    terminals_.setChromeRatio(chromeRatio());
   }
 
   qreal ApplicationController::chromeRatio() const {

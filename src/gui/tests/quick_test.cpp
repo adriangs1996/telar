@@ -720,7 +720,7 @@ return {api_version = 2, client = {
       const auto pane_id = firstPane()->id;
       const auto command = QStringLiteral("'%1' render markdown --format native --pager '%2'\r").arg(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), source.fileName());
 
-      QVERIFY(client_->input(pane_id, command.toUtf8()));
+      QVERIFY(client_->terminals()->input(pane_id, command.toUtf8()));
       QTRY_VERIFY_WITH_TIMEOUT(firstPane()->document_shown, runtime_wait_ms);
       const auto named = [](this const auto& self, QQuickItem* item, QStringView name) -> QQuickItem* {
         if (item->objectName() == name) {
@@ -774,7 +774,7 @@ return {api_version = 2, client = {
       const auto pane_id = firstPane()->id;
       const auto command = QStringLiteral("clear; '%1' render markdown --format native '%2'; printf 'AFTER_INLINE\\n'\r").arg(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), source.fileName());
 
-      QVERIFY(client_->input(pane_id, command.toUtf8()));
+      QVERIFY(client_->terminals()->input(pane_id, command.toUtf8()));
       const auto placed = [&] {
         const auto documents = terminal->property("documents").toList();
 
@@ -799,7 +799,7 @@ return {api_version = 2, client = {
       tall.close();
       const auto tall_command = QStringLiteral("'%1' render markdown --format native '%2'; printf 'AFTER_TALL\\n'\r").arg(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), tall.fileName());
 
-      QVERIFY(client_->input(pane_id, tall_command.toUtf8()));
+      QVERIFY(client_->terminals()->input(pane_id, tall_command.toUtf8()));
       QTRY_VERIFY_WITH_TIMEOUT(firstPane()->inline_documents.size() == 2 && firstPane()->inline_documents.back().view_rows > static_cast<std::uint32_t>(firstPane()->screen.rows()), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("AFTER_TALL")), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(terminal->property("rowsBelow").toInt(), 0, runtime_wait_ms);
@@ -814,7 +814,7 @@ return {api_version = 2, client = {
 
       // Once the text they stand for is erased, scrollback and screen, the documents go and the rows
       // show what they hold.
-      QVERIFY(client_->input(pane_id, QByteArrayLiteral("printf '\\033[3J\\033[2J\\033[HSCREEN_CLEARED\\n'\r")));
+      QVERIFY(client_->terminals()->input(pane_id, QByteArrayLiteral("printf '\\033[3J\\033[2J\\033[HSCREEN_CLEARED\\n'\r")));
       QTRY_VERIFY_WITH_TIMEOUT(firstPane()->inline_documents.empty() && terminal->property("documents").toList().isEmpty(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("SCREEN_CLEARED")), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(terminal->property("cursorRow").toInt(), static_cast<int>(firstPane()->screen.cursor().y), runtime_wait_ms);
@@ -909,13 +909,13 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_id, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       temporary_tab = QString::number(firstPane()->location.tab_id);
-      const auto viewport = client_->viewVersion().viewport;
+      const auto viewport = client_->terminals()->viewVersion().viewport;
 
       constexpr int repetitions = 7;
 
       for (int index = 0; index < repetitions; ++index) {
         client_->execute(ApplicationController::Action::select_tab, original_tab);
-        QCOMPARE(client_->viewVersion().viewport, viewport);
+        QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
         const auto* pane = client_->pane(original_id);
 
         QVERIFY(pane != nullptr);
@@ -925,13 +925,13 @@ return {api_version = 2, client = {
         QCOMPARE(pane->size.cell_height_px, original_size.cell_height_px);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_id, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-        QCOMPARE(client_->viewVersion().viewport, viewport);
+        QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
 
         client_->execute(ApplicationController::Action::select_tab, temporary_tab);
-        QCOMPARE(client_->viewVersion().viewport, viewport);
+        QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_id, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-        QCOMPARE(client_->viewVersion().viewport, viewport);
+        QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
       }
     }
 
@@ -941,11 +941,11 @@ return {api_version = 2, client = {
       {
         ApplicationController isolated{memory_};
 
-        terminal.setApplication(&isolated);
-        QCOMPARE(terminal.application(), &isolated);
+        terminal.setController(isolated.terminals());
+        QCOMPARE(terminal.controller(), isolated.terminals());
       }
 
-      QCOMPARE(terminal.application(), nullptr);
+      QCOMPARE(terminal.controller(), nullptr);
     }
 
     Q_SLOT void promptDialogRenamesTab() {
@@ -1213,7 +1213,7 @@ return {api_version = 2, client = {
       QVERIFY(terminal != nullptr && pane != nullptr);
       constexpr auto path = QLatin1StringView("/tmp/telar/file.cpp");
 
-      client_->input(pane->id, "printf '\\033[2J\\033[H/tmp/telar/file.cpp\\n'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[2J\\033[H/tmp/telar/file.cpp\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(path), runtime_wait_ms);
       terminal->forceActiveFocus();
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -1230,7 +1230,7 @@ return {api_version = 2, client = {
       QVERIFY(client_->copy()->state() && client_->copy()->state()->linewise);
       QTest::keyClick(window_, Qt::Key_X);
       QVERIFY(!client_->copy()->state());
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
       const auto click_wait_ms = static_cast<int>(ClickTracker::interval.count()) + 1;
 
       QTest::qWait(click_wait_ms);
@@ -1251,7 +1251,7 @@ return {api_version = 2, client = {
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, end);
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_X);
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
       client_->execute(ApplicationController::Action::copy_mode);
       QInputMethodEvent committed;
 
@@ -1278,7 +1278,7 @@ return {api_version = 2, client = {
         clipboard->setMimeData(saved.release());
       });
 
-      client_->input(pane->id, "printf '\\033[2J\\033[H[docs](https://plain.test/x)\\n/tmp/telar/source.cpp:12:3\\n\\033]8;;https://destination.test\\033\\\\https://label.test\\033]8;;\\033\\\\\\nLINK_HOVER_READY\\n'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[2J\\033[H[docs](https://plain.test/x)\\n/tmp/telar/source.cpp:12:3\\n\\033]8;;https://destination.test\\033\\\\https://label.test\\033]8;;\\033\\\\\\nLINK_HOVER_READY\\n'\r");
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).startsWith(QLatin1StringView("[docs](https://plain.test/x)")) && screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("LINK_HOVER_READY")), qPrintable(QStringLiteral("columns=%1 contents=%2").arg(pane->screen.columns()).arg(screenText(pane->screen))), runtime_wait_ms);
       const auto path_row = logicalRowStart(pane->screen, 1);
       const auto osc_row = logicalRowStart(pane->screen, 2);
@@ -1287,7 +1287,7 @@ return {api_version = 2, client = {
       QVERIFY(path_row.has_value() && osc_row.has_value() && blank_row.has_value());
       terminal->forceActiveFocus();
       QTest::mouseMove(window_, cellCenter(*terminal, {.x = 2}));
-      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("https://plain.test/x"), qPrintable(QStringLiteral("hover=%1 active=%2 itemFocus=%3 copy=%4 modifiers=%5 frame=%6/%7 cursor=%8,%9").arg(terminal->hoveredLink()).arg(window_->isActive()).arg(terminal->hasActiveFocus()).arg(client_->copy()->active()).arg(client_->pointerModifiers().toInt()).arg(pane->acknowledged_frame).arg(pane->screen.frameId()).arg(QCursor::pos().x()).arg(QCursor::pos().y())));
+      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("https://plain.test/x"), qPrintable(QStringLiteral("hover=%1 active=%2 itemFocus=%3 copy=%4 modifiers=%5 frame=%6/%7 cursor=%8,%9").arg(terminal->hoveredLink()).arg(window_->isActive()).arg(terminal->hasActiveFocus()).arg(client_->copy()->active()).arg(client_->terminals()->pointerModifiers().toInt()).arg(pane->acknowledged_frame).arg(pane->screen.frameId()).arg(QCursor::pos().x()).arg(QCursor::pos().y())));
       QCOMPARE(terminal->cursor().shape(), Qt::PointingHandCursor);
       QTRY_VERIFY(terminal->linkPreview().value(QStringLiteral("visible")).toBool());
       QVERIFY(test::waitForGuiCondition([&] {
@@ -1306,10 +1306,10 @@ return {api_version = 2, client = {
       QCOMPARE(terminal->cursor().shape(), Qt::IBeamCursor);
       QTest::qWait(frame_settle_ms);
       QTest::keyPress(window_, Qt::Key_Control, Qt::ControlModifier);
-      QCOMPARE(client_->pointerModifiers(), Qt::KeyboardModifiers{Qt::ControlModifier});
+      QCOMPARE(client_->terminals()->pointerModifiers(), Qt::KeyboardModifiers{Qt::ControlModifier});
       QVERIFY(terminal->hasActiveFocus());
       QVERIFY(window_->isActive());
-      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("/tmp/telar/source.cpp:12:3"), qPrintable(QStringLiteral("Modifiers: %1; cursor: %2; preview: %3; copy: %4; contents: %5").arg(client_->pointerModifiers().toInt()).arg(terminal->cursor().shape()).arg(terminal->linkPreview().value(QStringLiteral("visible")).toBool()).arg(client_->copy()->active()).arg(screenText(pane->screen))));
+      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("/tmp/telar/source.cpp:12:3"), qPrintable(QStringLiteral("Modifiers: %1; cursor: %2; preview: %3; copy: %4; contents: %5").arg(client_->terminals()->pointerModifiers().toInt()).arg(terminal->cursor().shape()).arg(terminal->linkPreview().value(QStringLiteral("visible")).toBool()).arg(client_->copy()->active()).arg(screenText(pane->screen))));
       QTest::keyRelease(window_, Qt::Key_Control);
       QTRY_COMPARE(terminal->hoveredLink(), QString{});
       QTest::qWait(frame_settle_ms);
@@ -1352,7 +1352,7 @@ return {api_version = 2, client = {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<0;2;1m\x1b[<68;1;1M\x1b[<64;1;1M";
       const auto capture = QStringLiteral("stty raw -echo; printf '\\033[?1000h\\033[?1006h'; dd bs=1 count=%1 2>/dev/null | od -An -tx1 | tr -d ' \\n'; printf '\\033[?1000l\\033[?1006l'; stty sane\r").arg(expected.size());
 
-      client_->input(pane->id, capture.toUtf8());
+      client_->terminals()->input(pane->id, capture.toUtf8());
       QTRY_VERIFY_WITH_TIMEOUT(pane->screen.mouse().sgr && pane->screen.mouse().tracking == telar::MouseTracking::normal, runtime_wait_ms);
       client_->execute(ApplicationController::Action::copy_mode);
       QVERIFY(client_->copy()->active());
@@ -1575,7 +1575,7 @@ return {api_version = 2, client = {
       const auto* pane = firstPane();
 
       QVERIFY(terminal != nullptr && pane != nullptr);
-      client_->input(pane->id, "printf 'COPY_MODE_WORD_1\\nCOPY_MODE_WORD_2\\n'\r");
+      client_->terminals()->input(pane->id, "printf 'COPY_MODE_WORD_1\\nCOPY_MODE_WORD_2\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("COPY_MODE_WORD_2")), runtime_wait_ms);
       terminal->forceActiveFocus();
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
@@ -1625,7 +1625,7 @@ return {api_version = 2, client = {
       const auto link_presented = [terminal, pane] {
         return pane->acknowledged_frame == pane->screen.frameId() && !terminal->prepareLinkPresentation();
       };
-      client_->input(pane->id, "printf '\\033[2J\\033[Hhttps://pointer.test/x\\nPOINTER_LINK_READY\\n'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[2J\\033[Hhttps://pointer.test/x\\nPOINTER_LINK_READY\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("https://pointer.test/x")) && screenText(pane->screen).contains(QLatin1StringView("POINTER_LINK_READY")), runtime_wait_ms);
       terminal->forceActiveFocus();
       const auto position = cellCenter(*terminal, {.x = 2});
@@ -1646,12 +1646,12 @@ return {api_version = 2, client = {
       QTest::qWait(frame_settle_ms);
       QCOMPARE(recorder.targets().size(), 1);
       QTest::keyClick(window_, Qt::Key_X);
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
 
-      client_->input(pane->id, "printf '\\033[?1000h'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[?1000h'\r");
       QTRY_COMPARE(pane->screen.mouse().tracking, telar::MouseTracking::normal);
       const auto restore_tracking = qScopeGuard([this, identity = pane->id] {
-        client_->input(identity, "printf '\\033[?1000l'\r");
+        client_->terminals()->input(identity, "printf '\\033[?1000l'\r");
       });
       QTest::mouseMove(window_, position);
       QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://pointer.test/x"));
@@ -1659,7 +1659,7 @@ return {api_version = 2, client = {
       QTest::mouseClick(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
       QTest::qWait(frame_settle_ms);
       QCOMPARE(recorder.targets().size(), 1);
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
       QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
       QTest::mouseClick(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier | Qt::ShiftModifier, position);
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://pointer.test/x"), QStringLiteral("https://pointer.test/x")}), runtime_wait_ms);
@@ -1676,7 +1676,7 @@ return {api_version = 2, client = {
         return pane->acknowledged_frame == pane->screen.frameId() && !terminal->prepareLinkPresentation();
       };
       constexpr auto first_output = "printf '\\033[2J\\033[Hhttps://original.test\\nORIGINAL_READY\\n'\r";
-      client_->input(pane->id, first_output);
+      client_->terminals()->input(pane->id, first_output);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("https://original.test")) && screenText(pane->screen).contains(QLatin1StringView("ORIGINAL_READY")), runtime_wait_ms);
       terminal->forceActiveFocus();
       const auto position = cellCenter(*terminal, {.x = 2});
@@ -1685,9 +1685,9 @@ return {api_version = 2, client = {
       QTest::qWait(frame_settle_ms);
       QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
       QTest::mousePress(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
-      client_->input(pane->id, "printf '\\033[2J\\033[Hhttps://replaced.test\\nREPLACED_READY\\n'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[2J\\033[Hhttps://replaced.test\\nREPLACED_READY\\n'\r");
       QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://replaced.test"));
-      client_->input(pane->id, first_output);
+      client_->terminals()->input(pane->id, first_output);
       QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://original.test"));
       QTest::qWait(frame_settle_ms);
       QTest::mouseRelease(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
@@ -1715,7 +1715,7 @@ return {api_version = 2, client = {
       auto* terminal = terminalIn(window_->contentItem());
       QVERIFY(pane != nullptr && terminal != nullptr);
       constexpr std::string_view copy_uri = "https://copy.test/x";
-      client_->input(pane->id, "printf '\\033[2J\\033[Hhttps://copy.test/x\\nLINK_COPY_READY\\n'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[2J\\033[Hhttps://copy.test/x\\nLINK_COPY_READY\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("https://copy.test/x")) && screenText(pane->screen).contains(QLatin1StringView("LINK_COPY_READY")), runtime_wait_ms);
       terminal->forceActiveFocus();
       client_->execute(ApplicationController::Action::copy_mode);
@@ -1740,7 +1740,7 @@ return {api_version = 2, client = {
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
       QCOMPARE(peer.result().text, QStringLiteral("InvalidLink"));
 
-      client_->input(pane->id, "printf '\\033[2J\\033[H\\033]8;;https://osc8.test\\033\\\\SAFE\\033]8;;\\033\\\\\\n'\r");
+      client_->terminals()->input(pane->id, "printf '\\033[2J\\033[H\\033]8;;https://osc8.test\\033\\\\SAFE\\033]8;;\\033\\\\\\n'\r");
       QTRY_COMPARE_WITH_TIMEOUT(toQString(pane->screen.linkAt(0)), QStringLiteral("https://osc8.test"), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane->acknowledged_frame, pane->screen.frameId(), runtime_wait_ms);
       const auto cell = terminal->cellSize();
@@ -1941,7 +1941,7 @@ return {api_version = 2, client = {
       constexpr std::string_view expected = "\x1b[100;5u\x1b[100;5:3u";
       const auto capture = QStringLiteral("stty raw -echo; printf '\\033[>31u'; dd bs=1 count=%1 2>/dev/null | od -An -tx1 | tr -d ' \\n'; printf '\\033[<u'; stty sane\r").arg(expected.size());
 
-      client_->input(pane->id, capture.toUtf8());
+      client_->terminals()->input(pane->id, capture.toUtf8());
       QTRY_COMPARE_WITH_TIMEOUT(pane->screen.modes().kitty_keyboard_flags, kitty_flags, runtime_wait_ms);
       QKeyEvent command{QEvent::KeyPress, Qt::Key_F1, NativeKeyAdapter::super_modifier};
 
@@ -2157,7 +2157,7 @@ return {api_version = 2, client = {
 
       QVERIFY(terminal != nullptr && pane != nullptr);
       const auto clear_input = qScopeGuard([this, identity = pane->id] {
-        client_->input(identity, "\x15");
+        client_->terminals()->input(identity, "\x15");
       });
 
       terminal->forceActiveFocus();
@@ -2213,15 +2213,15 @@ return {api_version = 2, client = {
       QCOMPARE(client_->workspaceListCollapsed(), collapsed);
       sendTextKeys(QLatin1StringView("gk"));
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("gk")), runtime_wait_ms);
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
 
       QTest::keyClick(window_, Qt::Key_P, Qt::AltModifier);
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("GUI_BINDING_PASTE")), runtime_wait_ms);
-      client_->input(pane->id, "printf '");
+      client_->terminals()->input(pane->id, "printf '");
       QTest::keyClick(window_, Qt::Key_K, Qt::AltModifier);
       settleLua();
-      client_->input(pane->id, "\\n'\r");
+      client_->terminals()->input(pane->id, "\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("\nGUI_BINDING_KEYS ")), runtime_wait_ms);
       QTest::qWait(frame_settle_ms);
       const auto before_consume = screenText(pane->screen);
@@ -2480,7 +2480,7 @@ return {api_version=2, client={keybindings={
 
       const auto command = QByteArray{"printf '\\033_Ga=T,f=32,s=2,v=2,i=37,c=8,r=4,q=2;"} + pixels.toBase64() + "\\033\\\\'\r";
 
-      client_->input(pane->id, command);
+      client_->terminals()->input(pane->id, command);
       QTRY_VERIFY_WITH_TIMEOUT(!pane->graphics.placements().empty(), runtime_wait_ms);
       const auto placement = pane->graphics.placements().front();
 
@@ -2523,7 +2523,7 @@ return {api_version=2, client={keybindings={
                                   .arg(captured.height());
 
       QVERIFY2(expected_pixel, qPrintable(diagnostic));
-      client_->input(pane->id, "printf '\\033_Ga=d,d=I,i=37,q=2;\\033\\\\'\r");
+      client_->terminals()->input(pane->id, "printf '\\033_Ga=d,d=I,i=37,q=2;\\033\\\\'\r");
       QTRY_VERIFY_WITH_TIMEOUT(pane->graphics.placements().empty(), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
     }
@@ -2682,9 +2682,9 @@ return {api_version=2, client={keybindings={
       const auto pane_id = firstPane()->id;
       const auto change_directory = [this, pane_id](QString path) {
         path.replace(QLatin1Char('\''), QLatin1StringView("'\\''"));
-        client_->input(pane_id, QByteArray{"\x15"
-                                           "cd '"} +
-                                    path.toUtf8() + "' && pwd\r");
+        client_->terminals()->input(pane_id, QByteArray{"\x15"
+                                                        "cd '"} +
+                                                 path.toUtf8() + "' && pwd\r");
       };
 
       const auto restore = qScopeGuard([&] {
@@ -2725,7 +2725,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen, ScreenTextLayout::logical).contains(QStringLiteral("'folder/a b'\\''c.txt'")), qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
       QCOMPARE(toQString(firstPane()->cwd), root);
-      client_->input(pane_id, "\x15");
+      client_->terminals()->input(pane_id, "\x15");
       change_directory(original);
       QTRY_COMPARE_WITH_TIMEOUT(toQString(firstPane()->cwd), original, runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
@@ -3281,7 +3281,7 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(search, &paste);
       QTRY_COMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo GUI_HISTORY_FIXTURE")), qPrintable(QStringLiteral("columns=%1 contents=%2").arg(pane->screen.columns()).arg(screenText(pane->screen))), runtime_wait_ms);
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
 
       client_->execute(ApplicationController::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
@@ -3313,7 +3313,7 @@ return {api_version=2, client={keybindings={
       const auto restore = qScopeGuard([this] {
         client_->execute(ApplicationController::Action::cancel);
         if (const auto* pane = firstPane()) {
-          client_->input(pane->id, "\x15");
+          client_->terminals()->input(pane->id, "\x15");
         }
       });
 
@@ -3513,7 +3513,7 @@ return {api_version=2, client={keybindings={
       const auto activity = client_->activity()->rebuilds();
       const auto palette = client_->palette()->rebuilds();
       // The window refreshes, but no property of it moves, so QML reads none of them again.
-      const QSignalSpy refreshes{client_.get(), &ApplicationController::refreshed};
+      const QSignalSpy refreshes{client_->terminals(), &TerminalController::refreshed};
       const QSignalSpy title{client_.get(), &ApplicationController::titleChanged};
       const QSignalSpy diagnostic{client_.get(), &ApplicationController::diagnosticChanged};
       const QSignalSpy copy_mode{client_->copy(), &CopyController::activeChanged};
@@ -3691,7 +3691,7 @@ return {api_version=2, client={keybindings={
       const auto restore = qScopeGuard([this] {
         client_->execute(ApplicationController::Action::cancel);
         if (const auto* pane = firstPane()) {
-          client_->input(pane->id, "\x15");
+          client_->terminals()->input(pane->id, "\x15");
         }
       });
 
@@ -3750,7 +3750,7 @@ return {api_version=2, client={keybindings={
         client_->setWindow(*window_);
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
         if (const auto* pane = firstPane()) {
-          client_->input(pane->id, "\x15");
+          client_->terminals()->input(pane->id, "\x15");
         }
       });
 
@@ -3942,7 +3942,7 @@ return {api_version=2, client={keybindings={
         window_->showNormal();
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
         if (const auto* pane = firstPane()) {
-          client_->input(pane->id, "\x15");
+          client_->terminals()->input(pane->id, "\x15");
         }
       });
 
@@ -4047,7 +4047,7 @@ return {api_version=2, client={keybindings={
         client_->execute(ApplicationController::Action::cancel);
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
         if (const auto* pane = firstPane()) {
-          client_->input(pane->id, "\x15");
+          client_->terminals()->input(pane->id, "\x15");
         }
 
         client_->loadConfiguration({}, {}, {});
@@ -4221,9 +4221,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(!original_directory.isEmpty());
       const auto change_directory = [this, pane_id](QString directory) {
         directory.replace(QLatin1Char('\''), QLatin1StringView("'\\''"));
-        client_->input(pane_id, QByteArray{"\x15"
-                                           "cd '"} +
-                                    directory.toUtf8() + "' && pwd\r");
+        client_->terminals()->input(pane_id, QByteArray{"\x15"
+                                                        "cd '"} +
+                                                 directory.toUtf8() + "' && pwd\r");
       };
 
       const auto restore = qScopeGuard([&] {
@@ -4693,7 +4693,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == original_tabs + 1 && terminalReady() && firstPane()->id != original_identity, runtime_wait_ms);
       const auto pane_id = firstPane()->id;
 
-      client_->input(pane_id, "printf 'GUI_HISTORY_LIVE_METADATA\\n'\n");
+      client_->terminals()->input(pane_id, "printf 'GUI_HISTORY_LIVE_METADATA\\n'\n");
       const auto printed = [&] {
         const auto lines = screenText(firstPane()->screen, ScreenTextLayout::logical).split(QLatin1Char('\n'));
 
@@ -4703,7 +4703,7 @@ return {api_version=2, client={keybindings={
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(printed(), runtime_wait_ms);
-      client_->input(pane_id, "\x15");
+      client_->terminals()->input(pane_id, "\x15");
       client_->execute(ApplicationController::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_LIVE_METADATA"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
@@ -4891,7 +4891,7 @@ return {api_version=2, client={keybindings={
         QFAIL("Required terminal fixture is missing");
       }
 
-      client_->input(pane->id, "\x15");
+      client_->terminals()->input(pane->id, "\x15");
     }
 
     Q_SLOT void historyLongCommands() {
@@ -5286,7 +5286,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), single_rows, runtime_wait_ms);
       const auto expected = QStringLiteral("GUI_WORKBENCH_SIZE %1 %2").arg(single_rows).arg(single_columns);
 
-      client_->input(firstPane()->id, "printf 'GUI_WORKBENCH_SIZE '; stty size\r");
+      client_->terminals()->input(firstPane()->id, "printf 'GUI_WORKBENCH_SIZE '; stty size\r");
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen).contains(expected), qPrintable(screenText(firstPane()->screen)), runtime_wait_ms);
       QCOMPARE(firstPane()->size.cell_width_px, full->cell_width_px);
       QCOMPARE(firstPane()->size.cell_height_px, full->cell_height_px);
@@ -5375,7 +5375,7 @@ return {api_version=2, client={keybindings={
       const auto other_id = other_terminal->paneIdentity();
       const auto report = QStringLiteral("stty -echo; %1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(source_id).arg(firstPane()->generation);
 
-      client_->input(source_id, report.toUtf8());
+      client_->terminals()->input(source_id, report.toUtf8());
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(client_->pane(source_id)->screen, ScreenTextLayout::logical).contains(QStringLiteral("GUI_ATTENTION_READY")), qPrintable(screenText(client_->pane(source_id)->screen)), runtime_wait_ms);
       QProcess title_report;
 
@@ -5416,7 +5416,7 @@ return {api_version=2, client={keybindings={
 
       QCOMPARE(states.size(), 1);
       QCOMPARE(states.front()->parentItem()->property("statusColor").toString(), QStringLiteral("yellow"));
-      client_->input(source_id, "ready\r");
+      client_->terminals()->input(source_id, "ready\r");
       QTRY_COMPARE_WITH_TIMEOUT(states.front()->parentItem()->property("statusColor").toString(), QStringLiteral("green"), runtime_wait_ms);
       QCOMPARE(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"));
       QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
@@ -5432,7 +5432,7 @@ return {api_version=2, client={keybindings={
       client_->execute(ApplicationController::Action::focus_pane, QString::number(other_id));
       QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
       captureArtifact(QStringLiteral("ready-unfocused-wide"));
-      client_->input(source_id, "question\r");
+      client_->terminals()->input(source_id, "question\r");
       QTRY_COMPARE_WITH_TIMEOUT(states.front()->parentItem()->property("statusColor").toString(), QStringLiteral("yellow"), runtime_wait_ms);
       QCOMPARE(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"));
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
@@ -5528,7 +5528,7 @@ return {api_version=2, client={keybindings={
         const auto tab = client_->tabs()->rows()->data(client_->tabs()->rows()->index(count, 0), ListModel::record_role).toMap();
 
         QCOMPARE(tab.value(QStringLiteral("label")).toString(), QString::fromUtf8(command.label));
-        client_->input(firstPane()->id, "quit\r");
+        client_->terminals()->input(firstPane()->id, "quit\r");
         QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), count, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == source_id, runtime_wait_ms);
       }
@@ -7656,7 +7656,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(pane != nullptr);
       client_->execute(ApplicationController::Action::focus_pane, QString::number(pane->id));
-      client_->input(pane->id, "printf '\\033]0;cpp-title-fixture\\007'\n");
+      client_->terminals()->input(pane->id, "printf '\\033]0;cpp-title-fixture\\007'\n");
       QTRY_COMPARE_WITH_TIMEOUT(toQString(pane->title), QStringLiteral("cpp-title-fixture"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(window_->title().startsWith(QStringLiteral("configured cpp-title-fixture @ ")), runtime_wait_ms);
 
@@ -7726,7 +7726,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(pane != nullptr);
       const auto command = QStringLiteral("printf '\\033[2J\\033[HFRAME_PACING_WAIT\\n'; while [ ! -f ") + shellLiteral(release_path) + QStringLiteral(" ]; do sleep 0.01; done; printf 'FRAME_PACING_DONE\\n'\r");
 
-      client_->input(pane->id, command.toUtf8());
+      client_->terminals()->input(pane->id, command.toUtf8());
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("FRAME_PACING_WAIT")), runtime_wait_ms);
       QVERIFY(telar::gui::test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
@@ -7844,7 +7844,7 @@ return {api_version=2, client={keybindings={
         const auto previous_frame = pane->screen.frameId();
         const auto acknowledged = pane->acknowledged_frame;
 
-        client_->input(pane->id, QByteArrayLiteral("printf 'WINDOW_FRAME_OWNER\\n'\r"));
+        client_->terminals()->input(pane->id, QByteArrayLiteral("printf 'WINDOW_FRAME_OWNER\\n'\r"));
         QTRY_VERIFY2_WITH_TIMEOUT(pane->screen.frameId() > previous_frame, qPrintable(QStringLiteral("offset %1 total %2 rows %3 acked %4 frame %5").arg(pane->screen.scroll().offset).arg(pane->screen.scroll().total_rows).arg(pane->screen.rows()).arg(pane->acknowledged_frame).arg(pane->screen.frameId())), runtime_wait_ms);
         const auto pending_frame = pane->screen.frameId();
 
@@ -8341,7 +8341,7 @@ return {api_version=2, client={keybindings={
       const auto acknowledged = pane->acknowledged_frame;
       const auto previous_frame = pane->screen.frameId();
 
-      client_->input(pane->id, QByteArrayLiteral("printf 'DEFERRED_TERMINAL_FRAME\\n'\r"));
+      client_->terminals()->input(pane->id, QByteArrayLiteral("printf 'DEFERRED_TERMINAL_FRAME\\n'\r"));
       QTRY_VERIFY_WITH_TIMEOUT(pane->screen.frameId() > previous_frame, runtime_wait_ms);
       const auto pending_frame = pane->screen.frameId();
 
@@ -8390,7 +8390,7 @@ return {api_version=2, client={keybindings={
       const auto sgr_control = sgr ? QStringLiteral("\\033[?1006h") : QStringLiteral("\\033[?1006l");
       const auto capture = QStringLiteral("stty raw -echo; printf '\\033[2J\\033[H\\033[?1002h%1MOUSE_%s:' BEGIN; dd bs=1 count=%2 2>/dev/null | tee %3 | od -v -An -tx1 | tr -d ' \\n'; printf ':MOUSE_%s\\n\\033[?1002l\\033[?1006l' END; stty sane\r").arg(sgr_control).arg(capture_bytes).arg(shellLiteral(childMouseCapturePath(pane->id)));
 
-      client_->input(pane->id, capture.toUtf8());
+      client_->terminals()->input(pane->id, capture.toUtf8());
       QTRY_VERIFY_WITH_TIMEOUT(pane->screen.mouse().sgr == sgr && pane->screen.mouse().tracking == telar::MouseTracking::button, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane->acknowledged_frame, pane->screen.frameId(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!terminal.prepareLinkPresentation(), runtime_wait_ms);
@@ -8402,7 +8402,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(pane != nullptr);
       constexpr char padding_byte = ' ';
 
-      client_->input(pane->id, QByteArray{static_cast<qsizetype>(expected.size()) + 1, padding_byte});
+      client_->terminals()->input(pane->id, QByteArray{static_cast<qsizetype>(expected.size()) + 1, padding_byte});
       const auto expected_bytes = QByteArray{expected.data(), static_cast<qsizetype>(expected.size())} + padding_byte;
       const auto path = childMouseCapturePath(pane_id);
 

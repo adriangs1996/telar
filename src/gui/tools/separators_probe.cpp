@@ -168,7 +168,7 @@ namespace {
 
     TerminalItem terminal{window.contentItem()};
 
-    terminal.setApplication(&client);
+    terminal.setController(client.terminals());
     terminal.setPaneId(QString::number(pane_id));
     terminal.setSize(QSizeF{960, 820});
     QQmlEngine engine;

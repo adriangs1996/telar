@@ -160,7 +160,7 @@ namespace telar::gui::qt {
       }
     }
 
-    application_.observePointerModifiers(modifiers);
+    application_.terminals_.observePointerModifiers(modifiers);
     if (delivering_ || modifierOnly(event.key())) {
       return false;
     }
@@ -244,14 +244,14 @@ namespace telar::gui::qt {
         const auto& copy = application_.copy_.state();
         const auto copying = copy && !copy->pointer && application_.dialog() == ApplicationController::Dialog::none;
 
-        *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.viewVersion().machine};
+        *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.store_.machineView()};
       }
 
     } else if (lease == recipients_.end()) {
       return true;
     }
 
-    if (lease != recipients_.end() && lease->machine_view != application_.viewVersion().machine) {
+    if (lease != recipients_.end() && lease->machine_view != application_.store_.machineView()) {
       *lease = {};
 
       return true;
@@ -452,9 +452,9 @@ namespace telar::gui::qt {
   void KeyBindings::synthetic(KeyChord chord, std::uint64_t pane_id, const InputModes& modes) {
     auto key = NativeKeyAdapter::fromChord(chord);
 
-    application_.input(pane_id, encodeKey(key, modes));
+    application_.terminals_.input(pane_id, encodeKey(key, modes));
     key.phase = KeyPhase::release;
-    application_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
+    application_.terminals_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
   }
 
   int ApplicationController::controlModifier() {

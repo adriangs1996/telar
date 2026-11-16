@@ -271,7 +271,7 @@ namespace {
 
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{720, 300});
       QQmlEngine engine;
@@ -296,7 +296,7 @@ namespace {
       const auto* editor = line->findChild<PromptEditorItem*>();
 
       QVERIFY(editor != nullptr && editor->empty());
-      application.paste(pane_id, QStringLiteral("echo pasted"));
+      application.terminals()->paste(pane_id, QStringLiteral("echo pasted"));
       QVERIFY2(!editor->empty(), "the paste shows without another key");
       QKeyEvent wipe{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
 
@@ -390,7 +390,7 @@ namespace {
       // Output that changes nothing the line draws keeps its layout.
       const auto relayouts = relaid.count();
 
-      emit application.terminalChanged(pane_id);
+      emit application.terminals()->terminalChanged(pane_id);
       QCOMPARE(relaid.count(), relayouts);
       QCoreApplication::sendEvent(&terminal, &clear);
       type(terminal, "git s");
@@ -485,7 +485,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{720, 300});
       QQmlEngine engine;
@@ -550,7 +550,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{820, 420});
       QQmlEngine engine;
@@ -752,7 +752,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{820, 300});
       QQmlEngine engine;
@@ -865,7 +865,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane));
       terminal.setSize(QSizeF{720, 300});
       // The pieces a pane stacks over its terminal: the separators, the rail and the line.
@@ -976,10 +976,10 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
         run("seq 60");
         QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
-        application.scroll(PaneScrollDelta{.pane_id = pane, .rows = 3});
+        application.terminals()->scroll(PaneScrollDelta{.pane_id = pane, .rows = 3});
         QTRY_VERIFY_WITH_TIMEOUT(!at_bottom(), runtime_wait_ms);
         QTRY_VERIFY2_WITH_TIMEOUT(line->property("docked").toBool() && terminal.rowsBelow() == 3, qPrintable(QStringLiteral("docked %1 below %2 offset %3 total %4 rows %5").arg(line->property("docked").toBool()).arg(terminal.rowsBelow()).arg(application.pane(pane)->screen.scroll().offset).arg(application.pane(pane)->screen.scroll().total_rows).arg(application.pane(pane)->screen.rows())), runtime_wait_ms);
-        application.scroll(PaneScrollDelta{.pane_id = pane, .rows = -3});
+        application.terminals()->scroll(PaneScrollDelta{.pane_id = pane, .rows = -3});
         QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(!line->property("docked").toBool(), runtime_wait_ms);
         const auto where = [&] {
@@ -999,7 +999,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         run("seq 40");
         QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
         // The last command selected, as prefix+[ selects it with any keymap.
-        application.selectBlock(pane, application.pane(pane)->blocks.size() - 1);
+        application.terminals()->selectBlock(pane, application.pane(pane)->blocks.size() - 1);
         QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).has_value(), runtime_wait_ms);
         // gg goes to the scrollback's top and G back to the live end.
         const auto top_where = [&] {
@@ -1012,7 +1012,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
         QCoreApplication::sendEvent(&terminal, &end);
         QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.rowsBelow() == 0 && !application.prompt()->selectedBlock(pane), qPrintable(top_where()), runtime_wait_ms);
-        application.selectBlock(pane, application.pane(pane)->blocks.size() - 1);
+        application.terminals()->selectBlock(pane, application.pane(pane)->blocks.size() - 1);
         QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).has_value(), runtime_wait_ms);
         QKeyEvent up{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
 

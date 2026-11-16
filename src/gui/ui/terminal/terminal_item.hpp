@@ -12,12 +12,13 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/fold_map.hpp"
+#include "terminal_controller.hpp"
 #include "terminal_preparation.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/fonts/font_collection.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/terminal_font.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
+#include "ui/foundation/models/list_model.hpp"
 #include "ui/links/link_presentation.hpp"
 #include "ui/links/link_preview.hpp"
 #include <QKeyEvent>
@@ -66,7 +67,7 @@ namespace telar::gui::qt {
   class TerminalItem : public QQuickItem {
     Q_OBJECT
     QML_NAMED_ELEMENT(TerminalView)
-    Q_PROPERTY(QObject* application READ application WRITE setApplication NOTIFY applicationChanged)
+    Q_PROPERTY(telar::gui::qt::TerminalController* controller READ controller WRITE setController NOTIFY controllerChanged)
     Q_PROPERTY(QString paneId READ paneId WRITE setPaneId NOTIFY paneIdChanged)
     Q_PROPERTY(bool backgroundProvided READ backgroundProvided WRITE setBackgroundProvided NOTIFY backgroundProvidedChanged)
     Q_PROPERTY(QString hoveredLink READ hoveredLink NOTIFY linkHoverChanged)
@@ -132,8 +133,8 @@ namespace telar::gui::qt {
     TerminalItem(TerminalItem&&) = delete;
     TerminalItem& operator=(TerminalItem&&) = delete;
 
-    [[nodiscard]] QObject* application() const noexcept;
-    void setApplication(QObject* application);
+    [[nodiscard]] TerminalController* controller() const noexcept;
+    void setController(TerminalController* controller);
     [[nodiscard]] QString paneId() const;
     [[nodiscard]] std::uint64_t paneIdentity() const noexcept;
     void setPaneId(const QString& identity);
@@ -235,9 +236,34 @@ namespace telar::gui::qt {
 
     [[nodiscard]] std::optional<PresentedLink> prepareLinkPresentation() const;
 
+    // What the window routes to the terminal, as its parent: the keys its bindings leave, the
+    // frame it prepared and presents, and the pointer the window's dispatcher hands it.
+    //
+    // Whether an input method composes text; the keys it takes reach no binding but those it
+    // captures.
+    [[nodiscard]] bool composing() const noexcept;
+    // Types a key press the window left to the terminal: a clipboard shortcut, telar's command
+    // editor, or the bytes the pane's program reads. The key, when the program received it.
+    std::optional<TerminalKey> type(const QKeyEvent& event);
+    // The cursor shows at once after a key, and blinks again from there.
+    void wakeCursor();
+
+    [[nodiscard]] const TerminalPreparation& preparedFrame() const noexcept {
+      return prepared_frame_;
+    }
+
+    void presentFrame(const TerminalPreparation& preparation);
+    [[nodiscard]] ChildMouseView childMouseView() const;
+    void releaseMouse();
+    [[nodiscard]] static unsigned mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept;
+    void observeLinkPointer(QPointF position, Qt::KeyboardModifiers modifiers);
+    void cancelLinkGesture() noexcept;
+    // Drops the scroll the wheel accumulated, when another view takes the wheel.
+    void resetWheel() noexcept;
+
   signals:
     void documentsChanged();
-    void applicationChanged();
+    void controllerChanged();
     void paneIdChanged();
     void backgroundProvidedChanged();
     void linkHoverChanged();
@@ -270,8 +296,6 @@ namespace telar::gui::qt {
     void hoverLeaveEvent(QHoverEvent* event) override;
 
   private:
-    friend class ApplicationController;
-    friend class PointerDispatcher;
     friend class test::TerminalCursor;
 
     static constexpr std::size_t physical_key_capacity = 128;
@@ -284,17 +308,14 @@ namespace telar::gui::qt {
     void requestRowFonts(std::span<const CellValue> cells);
     void refresh();
     void refreshBlocks();
-    void presentFrame(const TerminalPreparation& preparation);
     void resizeTerminal();
     void synchronizeFocus();
     void releaseKeys();
     void invalidateMachine();
-    void releaseMouse();
     bool send(const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
-    [[nodiscard]] ChildMouseView childMouseView() const;
     [[nodiscard]] ChildMouseSample childMouseSample(const QMouseEvent& event, MousePhase phase, MouseButton button) const;
     void mousePacket(unsigned button, QPointF position, bool released);
-    bool sendKeyPress(const QKeyEvent& event, const InputModes& modes);
+    std::optional<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
     void sendCommittedText(const QString& text);
     void dispatchWheel(const QWheelEvent& event, std::int32_t lines);
 
@@ -364,12 +385,10 @@ namespace telar::gui::qt {
     void appendDrawnRow(std::size_t index) const;
     [[nodiscard]] int indexAt(QPointF position) const noexcept;
     [[nodiscard]] CopyPointerInput pointerInput(QPointF position, CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
-    [[nodiscard]] static unsigned mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept;
     [[nodiscard]] Pane<Memory>* pane() const noexcept;
     // The first command of the remote session the pane is in, counting the ssh that opened it;
     // past the last command when the pane's shell is its own. Its separators name the host.
     [[nodiscard]] static std::size_t liveSession(const Pane<Memory>& pane) noexcept;
-    void observeLinkPointer(QPointF position, Qt::KeyboardModifiers modifiers);
     void refreshLinkHover();
     void clearLinkHover();
     bool beginLinkPress(const QMouseEvent& event);
@@ -398,7 +417,7 @@ namespace telar::gui::qt {
       bool operator==(const LinkStamp&) const = default;
     };
 
-    ApplicationController* application_ = nullptr;
+    TerminalController* controller_ = nullptr;
     std::uint64_t pane_id_ = 0;
     std::vector<std::uint8_t> hidden_rows_;
     QVariantList separators_;

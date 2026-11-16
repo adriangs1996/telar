@@ -12,11 +12,9 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/input/mouse_buttons.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
-#include "ui/input/pointer_dispatcher.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QHoverEvent>
@@ -53,12 +51,6 @@ import telar.gui.input.key_encoder;
 import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
-
-  namespace {
-
-    using Action = ApplicationController::Action;
-
-  }
 
   int TerminalItem::indexAt(QPointF position) const noexcept {
     const auto* current = pane();
@@ -138,14 +130,14 @@ namespace telar::gui::qt {
 
   void TerminalItem::mousePressEvent(QMouseEvent* event) {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr) {
+    if (current == nullptr || controller_ == nullptr) {
       return;
     }
 
-    application_->pointerDispatcher().acquire(*this, event->button());
+    controller_->acquire(*this, event->button());
     const auto left = event->button() == Qt::LeftButton;
     const auto input = pointerInput(event->position(), CopyPointerKind::press, left);
-    if (application_->copy()->handlePointer(input)) {
+    if (controller_->copy().handlePointer(input)) {
       event->accept();
 
       return;
@@ -159,7 +151,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    application_->execute(Action::focus_pane, paneId());
+    controller_->host().focusPane(*this);
     forceActiveFocus(Qt::MouseFocusReason);
     selection_position_ = event->position();
     if (beginLinkPress(*event)) {
@@ -174,11 +166,11 @@ namespace telar::gui::qt {
       const auto view = childMouseView();
       const auto sample = childMouseSample(*event, MousePhase::press, button);
 
-      application_->pointerDispatcher().beginChild(view, sample);
+      controller_->beginChild(view, sample);
     } else if (left && input.pane_id != 0 && input.inside) {
-      selecting_ = application_->copy()->beginSelection(pane_id_, input.position);
+      selecting_ = controller_->copy().beginSelection(pane_id_, input.position);
     } else if (event->button() == Qt::MiddleButton && QGuiApplication::clipboard()->supportsSelection()) {
-      application_->paste(pane_id_, QGuiApplication::clipboard()->text(QClipboard::Selection));
+      controller_->paste(pane_id_, QGuiApplication::clipboard()->text(QClipboard::Selection));
     }
 
     event->accept();
@@ -205,7 +197,7 @@ namespace telar::gui::qt {
     }
 
     const auto input = pointerInput(event->position(), CopyPointerKind::drag, event->buttons().testFlag(Qt::LeftButton));
-    if (application_ != nullptr && application_->copy()->handlePointer(input)) {
+    if (controller_ != nullptr && controller_->copy().handlePointer(input)) {
       event->accept();
 
       return;
@@ -216,8 +208,8 @@ namespace telar::gui::qt {
 
   void TerminalItem::mouseReleaseEvent(QMouseEvent* event) {
     const auto release = qScopeGuard([this, button = event->button()] {
-      if (application_ != nullptr) {
-        application_->pointerDispatcher().release(button);
+      if (controller_ != nullptr) {
+        controller_->release(button);
       }
     });
 
@@ -231,7 +223,7 @@ namespace telar::gui::qt {
 
     const auto left = event->button() == Qt::LeftButton;
     const auto input = pointerInput(event->position(), CopyPointerKind::release, left);
-    const auto copied = application_ != nullptr && application_->copy()->handlePointer(input);
+    const auto copied = controller_ != nullptr && controller_->copy().handlePointer(input);
 
     if (left) {
       selecting_ = false;
@@ -243,41 +235,45 @@ namespace telar::gui::qt {
   }
 
   void TerminalItem::mouseUngrabEvent() {
-    if (application_ != nullptr) {
-      application_->pointerDispatcher().ungrab(*this);
+    if (controller_ != nullptr) {
+      controller_->host().ungrabPointer(*this);
     } else {
       releaseMouse();
     }
   }
 
   void TerminalItem::releaseMouse() {
-    if (application_ != nullptr) {
-      application_->pointerDispatcher().abandon(*this);
+    if (controller_ != nullptr) {
+      controller_->abandon(*this);
     }
 
     const auto selecting = std::exchange(selecting_, false);
-    if (selecting && application_ != nullptr) {
-      static_cast<void>(application_->copy()->handlePointer(pointerInput(selection_position_, CopyPointerKind::release)));
+    if (selecting && controller_ != nullptr) {
+      static_cast<void>(controller_->copy().handlePointer(pointerInput(selection_position_, CopyPointerKind::release)));
     }
 
     link_gesture_.cancel();
     captured_link_buttons_ = {};
   }
 
+  void TerminalItem::resetWheel() noexcept {
+    wheel_.reset();
+  }
+
   void TerminalItem::wheelEvent(QWheelEvent* event) {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr) {
+    if (current == nullptr || controller_ == nullptr) {
       return;
     }
 
-    if (application_->dialog() != ApplicationController::Dialog::none || link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())}) || !link_hover_.surfaceVisible(terminalSurface())) {
+    if (controller_->dialog() != Store::Dialog::none || link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())}) || !link_hover_.surfaceVisible(terminalSurface())) {
       wheel_.reset();
       event->accept();
 
       return;
     }
 
-    application_->pointerDispatcher().observeTerminalScroll(*this);
+    controller_->observeScroll(*this);
     if (scrollWheel(*event)) {
       event->accept();
 
@@ -286,7 +282,7 @@ namespace telar::gui::qt {
 
     const auto lines = wheel_.consume(scrollSample(*event, font_.cell.height()));
     const auto rows = lines * WheelAccumulator::rows_per_line;
-    if (lines != 0 && !application_->copy()->handlePointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {
+    if (lines != 0 && !controller_->copy().handlePointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {
       dispatchWheel(*event, lines);
     }
 
@@ -295,7 +291,7 @@ namespace telar::gui::qt {
 
   void TerminalItem::dispatchWheel(const QWheelEvent& event, std::int32_t lines) {
     const auto* current = pane();
-    if (current == nullptr || application_ == nullptr) {
+    if (current == nullptr || controller_ == nullptr) {
       return;
     }
 
@@ -322,7 +318,7 @@ namespace telar::gui::qt {
       return;
     }
     case WheelRoute::scroll:
-      application_->scroll({.pane_id = pane_id_, .rows = -rows});
+      controller_->scroll({.pane_id = pane_id_, .rows = -rows});
       return;
     }
   }
@@ -330,14 +326,14 @@ namespace telar::gui::qt {
   void TerminalItem::hoverMoveEvent(QHoverEvent* event) {
     const auto* current = pane();
 
-    if (application_ != nullptr && application_->copy()->handlePointer(pointerInput(event->position(), CopyPointerKind::move, false))) {
+    if (controller_ != nullptr && controller_->copy().handlePointer(pointerInput(event->position(), CopyPointerKind::move, false))) {
       setCursor(Qt::IBeamCursor);
       event->accept();
 
       return;
     }
 
-    if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog() == ApplicationController::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
+    if (controller_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && controller_->dialog() == Store::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
       const auto no_button = static_cast<unsigned>(MouseButton::none);
 
       mousePacket(ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);

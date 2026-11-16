@@ -6,6 +6,7 @@ static_assert(true);
 #include "panes_controller.hpp"
 #include "pane_projection.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/models/tab_leaves.hpp"
 #include <QList>
 #include <QString>
 #include <optional>

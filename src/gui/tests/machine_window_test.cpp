@@ -612,7 +612,7 @@ namespace {
       board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
       TerminalItem terminal{window.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       const auto previous_font = QGuiApplication::font();
       const auto restore_font = qScopeGuard([&] {
@@ -816,7 +816,7 @@ namespace {
       QVERIFY(remote.runtime_generation > generation);
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.remote_runtime));
-      application.input(pane_id, QByteArrayLiteral("REMOTE_AFTER_TERMINAL_STATUS"));
+      application.terminals()->input(pane_id, QByteArrayLiteral("REMOTE_AFTER_TERMINAL_STATUS"));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::pane_input), 1, wait_ms);
       QCOMPARE(textView(fixture.remote_runtime->last<PaneInput>().bytes), std::string_view{"REMOTE_AFTER_TERMINAL_STATUS"});
       QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), 0);
@@ -851,7 +851,7 @@ namespace {
 
       fixture.local_runtime->send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
       QTRY_VERIFY_WITH_TIMEOUT(local.findPane(pane_id) != nullptr && local.findPane(pane_id)->attached, wait_ms);
-      application.input(pane_id, QByteArrayLiteral("LOCAL_AFTER_REMOTE_STOP"));
+      application.terminals()->input(pane_id, QByteArrayLiteral("LOCAL_AFTER_REMOTE_STOP"));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), 1, wait_ms);
       QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"LOCAL_AFTER_REMOTE_STOP"});
       QCOMPARE(fixture.remote_runtime->count(ClientTag::pane_input), 0);
@@ -926,7 +926,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.ready(), wait_ms);
       QVERIFY(MachineWindow::client(application, Machines::local_slot).session.presented());
       QVERIFY(window.isVisible());
-      application.input(pane_id, QByteArrayLiteral("LOCAL_WITH_HIDDEN_STOP"));
+      application.terminals()->input(pane_id, QByteArrayLiteral("LOCAL_WITH_HIDDEN_STOP"));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), 1, wait_ms);
       QCOMPARE(fixture.local_runtime->count(ClientTag::open_pane), 1);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
@@ -2004,11 +2004,11 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
       TerminalItem old_terminal{previous.contentItem()};
 
-      old_terminal.setApplication(&application);
+      old_terminal.setController(application.terminals());
       old_terminal.setPaneId(QString::number(pane_id));
       TerminalItem terminal{current.contentItem()};
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       application.notifications()->publish({.title = "Local", .message = "local focus", .link = {}});
       const auto local_key = application.notifications()->identity(application.notifications()->center().items().front().id);
@@ -2065,7 +2065,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr, wait_ms);
       TerminalItem terminal;
 
-      terminal.setApplication(&application);
+      terminal.setController(application.terminals());
       terminal.setPaneId(QString::number(pane_id));
       QKeyEvent press{QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, QStringLiteral("a")};
 
@@ -2103,13 +2103,13 @@ namespace {
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       sendFrame(*fixture.local_runtime);
       QTRY_COMPARE_WITH_TIMEOUT(local.session.findPane(pane_id)->screen.frameId(), 1, wait_ms);
-      const auto previous_view = application.viewVersion();
+      const auto previous_view = application.terminals()->viewVersion();
       const auto old_frame = MachineWindow::capture(application);
 
       MachineWindow::select(application, fixture.remote.machine);
       QVERIFY(finishOpening(*fixture.remote_runtime));
       QTRY_VERIFY_WITH_TIMEOUT(local.session.panes().empty() && remote.session.activeTab() != nullptr, wait_ms);
-      QVERIFY(application.viewVersion().machine != previous_view.machine);
+      QVERIFY(application.terminals()->viewVersion().machine != previous_view.machine);
       QCOMPARE(fixture.local_runtime->count(ClientTag::detach_pane), 1);
       QCOMPARE(fixture.local_runtime->count(ClientTag::close_pane), 0);
       sendFrame(*fixture.remote_runtime);

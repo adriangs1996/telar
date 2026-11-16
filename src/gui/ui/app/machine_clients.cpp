@@ -207,7 +207,7 @@ namespace telar::gui::qt {
         this,
         [this, key](qulonglong pane_id) {
           if (findClient(key) != nullptr && key.machine.slot == store_.machines().active()) {
-            emit inputReleasing(pane_id);
+            terminals_.releaseInput(pane_id);
           }
         },
         Qt::DirectConnection
@@ -268,7 +268,7 @@ namespace telar::gui::qt {
   void ApplicationController::releaseMachineInput() {
     interruptBindings();
     for (const auto& pane : session().panes()) {
-      emit inputReleasing(pane->id);
+      terminals_.releaseInput(pane->id);
     }
   }
 

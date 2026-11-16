@@ -57,7 +57,6 @@ static_assert(true);
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
 import telar.gui.application.workspace_replica;
-import telar.gui.input.configuration;
 
 namespace telar::gui::qt {
 
@@ -66,9 +65,7 @@ namespace telar::gui::qt {
         application_(application),
         tabs_(tabs),
         native_events_(application.memory_),
-        history_scroll_events_(*this) {
-    connect(&application, &ApplicationController::inputReleasing, this, &PointerDispatcher::cancelPane);
-  }
+        history_scroll_events_(*this) {}
 
   void PointerDispatcher::setWindow(QQuickWindow& window) {
     if (window_ != nullptr) {
@@ -104,117 +101,27 @@ namespace telar::gui::qt {
     }
 
     if (input->valid) {
-      retireTerminalScroll();
+      application_.terminals_.retireScroll();
       application_.history_.scroll({.x = input->x, .y = input->y}, input->sample);
     }
 
     return true;
   }
 
-  void PointerDispatcher::observeTerminalScroll(TerminalItem& terminal) {
-    if (terminal_scroll_owner_ != &terminal) {
-      retireTerminalScroll();
-      terminal_scroll_owner_ = &terminal;
-    }
-  }
-
-  void PointerDispatcher::retireTerminalScroll() {
-    if (!terminal_scroll_owner_.isNull() && terminal_scroll_owner_->application() == &application_ && terminal_scroll_owner_->window() == window_) {
-      terminal_scroll_owner_->wheel_.reset();
-    }
-
-    terminal_scroll_owner_.clear();
-  }
-
-  PointerDispatcher::Capture* PointerDispatcher::capture(Qt::MouseButton button) noexcept {
+  HistoryActionCapture* PointerDispatcher::capture(Qt::MouseButton button) noexcept {
     const auto semantic = mouseButton(button);
 
     return semantic == MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
   }
 
   bool PointerDispatcher::occupied() const noexcept {
-    return std::ranges::any_of(captures_, &Capture::held);
-  }
-
-  void PointerDispatcher::acquire(TerminalItem& terminal, Qt::MouseButton button) {
-    if (auto* lease = capture(button)) {
-      *lease = {.terminal = &terminal, .history = {}, .pane_id = terminal.paneIdentity(), .held = true};
-    }
-  }
-
-  void PointerDispatcher::beginChild(const ChildMouseView& view, ChildMouseSample sample) {
-    if (sample.button == MouseButton::none) {
-      return;
-    }
-
-    auto& lease = captures_[static_cast<std::size_t>(sample.button)];
-
-    lease.child.begin(view, sample);
-    report(lease.pane_id, ChildMouseProjection::project(view, sample));
-  }
-
-  ChildMouseView PointerDispatcher::view(const Capture& lease) const {
-    if (const auto terminal = application_.terminals_.value(lease.pane_id); terminal != nullptr) {
-      return terminal->childMouseView();
-    }
-
-    const auto* current = application_.pane(lease.pane_id);
-    if (current == nullptr) {
-      return {};
-    }
-
-    ChildMouseView result{.pane_id = current->id, .location = current->location, .protocol = current->screen.mouse(), .columns = current->screen.columns(), .rows = current->screen.rows(), .cell_width_px = current->size.cell_width_px, .cell_height_px = current->size.cell_height_px, .attached = current->attached, .visible = false};
-
-    result.surface.attachment_generation = current->attachment_generation;
-
-    return result;
-  }
-
-  ChildMouseSample PointerDispatcher::sample(const QMouseEvent& event, MousePhase phase, MouseButton button) {
-    return {.button = button, .phase = phase, .position = {.x = static_cast<float>(event.position().x()), .y = static_cast<float>(event.position().y())}, .modifiers = TerminalItem::mouseModifiers(event.modifiers())};
-  }
-
-  void PointerDispatcher::report(std::uint64_t pane_id, const std::optional<ChildMouseReport>& report) {
-    if (!report) {
-      return;
-    }
-
-    MouseEncoder encoder;
-    const auto packet = encoder.encode(report->button, report->x, report->y, report->released, true);
-
-    application_.input(pane_id, QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, PaneInputSource::mouse);
-  }
-
-  void PointerDispatcher::release(Qt::MouseButton button) {
-    if (auto* lease = capture(button)) {
-      *lease = {};
-    }
+    return application_.terminals_.holdsPointer() || std::ranges::any_of(captures_, &HistoryActionCapture::held);
   }
 
   void PointerDispatcher::presentHistoryActions(const HistoryActionSurface& surface) {
     for (auto& lease : captures_) {
-      if (lease.history.held()) {
-        lease.history.present(surface);
-      }
-    }
-  }
-
-  void PointerDispatcher::abandon(TerminalItem& terminal) {
-    for (auto& lease : captures_) {
-      if (lease.terminal == &terminal) {
-        lease.terminal.clear();
-      }
-    }
-  }
-
-  void PointerDispatcher::cancelPane(std::uint64_t pane_id) {
-    for (auto& lease : captures_) {
-      if (lease.pane_id == pane_id) {
-        if (lease.child.owned()) {
-          report(pane_id, lease.child.cancel(view(lease)));
-        }
-
-        lease.terminal.clear();
+      if (lease.held()) {
+        lease.present(surface);
       }
     }
   }
@@ -223,26 +130,11 @@ namespace telar::gui::qt {
     tabs_.observeHover(std::nullopt);
     tabs_.cancelDrag();
     application_.history_.retireHover();
-    const auto previous_recipients = recipients();
-
-    for (std::size_t index = 0; index < captures_.size(); ++index) {
-      auto& lease = captures_[index];
-
-      lease.history.cancel();
-      const auto pane_id = lease.pane_id;
-      const auto outcome = lease.child.owned() ? std::optional{lease.child.cancel(view(lease))} : std::nullopt;
-
-      lease.terminal.clear();
-      if (outcome) {
-        report(pane_id, *outcome);
-      }
+    for (auto& lease : captures_) {
+      lease.cancel();
     }
 
-    for (const auto& recipient : previous_recipients) {
-      if (auto* const terminal = recipient.terminal.data(); terminal != nullptr) {
-        terminal->releaseMouse();
-      }
-    }
+    application_.terminals_.cancelPointer();
   }
 
   void PointerDispatcher::ungrab(TerminalItem& terminal) {
@@ -256,40 +148,6 @@ namespace telar::gui::qt {
     }
   }
 
-  PointerDispatcher::Recipients PointerDispatcher::recipients() const {
-    Recipients result;
-
-    for (const auto& [native, semantic] : mouse_buttons) {
-      const auto& lease = captures_[static_cast<std::size_t>(semantic)];
-      if (!lease.held || lease.terminal == nullptr) {
-        continue;
-      }
-
-      auto* recipient = std::ranges::find(result, lease.terminal, &Recipient::terminal);
-      if (recipient == result.end()) {
-        recipient = std::ranges::find(result, QPointer<TerminalItem>{}, &Recipient::terminal);
-        if (recipient == result.end()) {
-          continue;
-        }
-
-        recipient->terminal = lease.terminal;
-      }
-
-      auto& buttons = lease.child.owned() ? recipient->child_buttons : recipient->view_buttons;
-
-      buttons.setFlag(native);
-    }
-
-    return result;
-  }
-
-  void PointerDispatcher::deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons) {
-    QMouseEvent forwarded{event.type(), terminal.mapFromScene(event.position()), event.position(), event.globalPosition(), event.button(), buttons, event.modifiers(), event.source(), event.pointingDevice()};
-
-    forwarded.setTimestamp(event.timestamp());
-    QCoreApplication::sendEvent(&terminal, &forwarded);
-  }
-
   bool PointerDispatcher::press(QMouseEvent& event) {
     if (tabs_.press(event, application_.chromeRatio())) {
       return false;
@@ -297,14 +155,16 @@ namespace telar::gui::qt {
 
     application_.history_.observeHover(event.position(), HistoryHover::Observation::point);
     if (auto* lease = capture(event.button())) {
-      if (lease->history.held()) {
+      if (lease->held()) {
         *lease = {};
       }
 
       const auto& surface = application_.history_.presentedActions();
       HistoryActionCapture history;
       if (application_.store_.dialog().kind == ApplicationController::Dialog::history && surface.generation == application_.store_.dialog().generation && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
-        *lease = {.terminal = {}, .history = history, .held = true};
+        // The history takes the button from a terminal that held it.
+        *lease = history;
+        application_.terminals_.release(event.button());
 
         return true;
       }
@@ -337,31 +197,7 @@ namespace telar::gui::qt {
       return tab_consumed;
     }
 
-    const auto destinations = recipients();
-
-    for (const auto& destination : destinations) {
-      auto* const terminal = destination.terminal.data();
-      if (terminal != nullptr && (destination.child_buttons & event.buttons()) != Qt::NoButton) {
-        terminal->observeLinkPointer(terminal->mapFromScene(event.position()), event.modifiers());
-        if (destination.child_buttons.testFlag(Qt::LeftButton)) {
-          terminal->link_gesture_.cancel();
-        }
-      }
-    }
-
-    for (const auto& [native, semantic] : mouse_buttons) {
-      auto& lease = captures_[static_cast<std::size_t>(semantic)];
-      if (lease.held && lease.child.owned() && event.buttons().testFlag(native)) {
-        report(lease.pane_id, lease.child.deliver(view(lease), sample(event, MousePhase::drag, semantic)));
-      }
-    }
-
-    for (const auto& recipient : destinations) {
-      const auto held = recipient.view_buttons & event.buttons();
-      if (recipient.terminal != nullptr && held != Qt::NoButton) {
-        deliver(*recipient.terminal, event, held);
-      }
-    }
+    application_.terminals_.dragPointer(event);
 
     const auto* grabber = event.exclusiveGrabber(event.point(0));
 
@@ -373,15 +209,10 @@ namespace telar::gui::qt {
       return true;
     }
 
-    auto* lease = capture(event.button());
-    if (lease == nullptr || !lease->held) {
-      return false;
-    }
-
-    auto previous = std::exchange(*lease, Capture{});
-    if (previous.history.held()) {
+    if (auto* lease = capture(event.button()); lease != nullptr && lease->held()) {
+      auto previous = std::exchange(*lease, HistoryActionCapture{});
       const auto& surface = application_.history_.presentedActions();
-      const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
+      const auto action = previous.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
       const auto choice = surface.choice;
 
       if (application_.store_.dialog().kind != ApplicationController::Dialog::history || surface.generation != application_.store_.dialog().generation) {
@@ -395,18 +226,8 @@ namespace telar::gui::qt {
       return true;
     }
 
-    if (previous.child.owned()) {
-      report(previous.pane_id, previous.child.deliver(view(previous), sample(event, MousePhase::release, mouseButton(event.button()))));
-    } else if (previous.terminal != nullptr) {
-      Qt::MouseButtons held;
-
-      for (const auto& recipient : recipients()) {
-        if (recipient.terminal == previous.terminal) {
-          held = recipient.view_buttons & event.buttons();
-        }
-      }
-
-      deliver(*previous.terminal, event, held);
+    if (!application_.terminals_.releasePointer(event)) {
+      return false;
     }
 
     const auto* grabber = qobject_cast<TerminalItem*>(event.exclusiveGrabber(event.point(0)));
@@ -426,7 +247,7 @@ namespace telar::gui::qt {
       switch (event->type()) {
       case QEvent::Wheel:
         if (application_.store_.dialog().kind == ApplicationController::Dialog::history) {
-          retireTerminalScroll();
+          application_.terminals_.retireScroll();
         }
 
         return application_.history_.handleWheel(dynamic_cast<QWheelEvent&>(*event));

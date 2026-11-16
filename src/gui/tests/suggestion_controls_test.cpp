@@ -109,7 +109,7 @@ namespace {
 
       pane_id_ = record.value(QStringLiteral("key")).toString().toULongLong();
       terminal_ = std::make_unique<TerminalItem>(window_->contentItem());
-      terminal_->setApplication(client_.get());
+      terminal_->setController(client_->terminals());
       terminal_->setPaneId(QString::number(pane_id_));
       connect(&engine_, &QQmlEngine::warnings, this, [this](const QList<QQmlError>& errors) {
         for (const auto& error : errors) {
@@ -212,7 +212,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
       QVERIFY(!QFileInfo::exists(marker_));
-      client_->input(pane_id_, "\x15");
+      client_->terminals()->input(pane_id_, "\x15");
     }
 
     Q_SLOT void cleanupTestCase() {
