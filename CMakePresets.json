@@ -1,0 +1,119 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 4,
+    "patch": 5
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/${presetName}",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.toolchain/toolchain.cmake",
+        "GHOSTTY_VT_ROOT": "$env{GHOSTTY_VT_ROOT}"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Debug, every process and its tests",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release, every process, no tests",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "dist",
+      "displayName": "Release runtime and CLI for distribution (static on Linux)",
+      "inherits": "release",
+      "cacheVariables": {
+        "TELAR_RUNTIME_DISTRIBUTABLE": "ON",
+        "TELAR_BUILD_GUI": "OFF",
+        "TELAR_BUILD_AUTH": "OFF"
+      }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "Debug with ASan and UBSan",
+      "inherits": "dev",
+      "cacheVariables": {
+        "TELAR_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "Debug for CI: dev with the GoogleTest suite of ebnf and three-job checks",
+      "inherits": "dev",
+      "cacheVariables": {
+        "EBNF_GOOGLETEST": "ON",
+        "TELAR_CHECK_JOBS": "3"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "dist",
+      "configurePreset": "dist"
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize"
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

@@ -1,17 +1,17 @@
 dev_dir := justfile_directory() / ".dev"
 release_dev_dir := dev_dir / "release"
-release_build_dir := "out-dev-release"
-runtime_dir := justfile_directory() / "src/runtime"
-gui_dir := justfile_directory() / "src/gui"
+cpp := justfile_directory() / "tools/cpp"
+# The tree of each preset of CMakePresets.json; a process's programs are in its directory.
+build_dir := justfile_directory() / "out"
 renderer_dir := justfile_directory() / "tools/diagram-renderer"
-runtime := runtime_dir / "out/src/runtime/telar-runtime"
-cli := runtime_dir / "out/src/runtime/telar"
+runtime := build_dir / "dev/src/runtime/telar-runtime"
+cli := build_dir / "dev/src/runtime/telar"
 # The CLI built beside the runtime it starts, which the GUI and its integration tests find on PATH.
 dev_telar := dev_dir / "bin/telar"
-gui := gui_dir / "out/src/gui/telar-gui"
+gui := build_dir / "dev/src/gui/telar-gui"
 renderer := renderer_dir / "target/release/telar-diagram-renderer"
-# Optimized app builds never run tests, and each GUI test executable adds a QML import scan to configure.
-no_tests := "-DBUILD_TESTING=OFF"
+# The GUI's integration tests run against the development CLI.
+test_options := "-DTELAR_GUI_TEST_RUNTIME=" + dev_telar
 # All C++ projects use the repository-local pinned toolchain.
 
 # Show the available commands.
@@ -19,50 +19,28 @@ default:
     @just --list
 
 # Build the pinned libghostty-vt and bootstrap its verified Zig compiler.
-[working-directory: "src/runtime"]
 vt:
-    "{{ justfile_directory() }}/tools/cpp" vt
+    "{{ cpp }}" vt
 
 # Build the runtime and the GUI.
 build: runtime-build gui-build
 
-# Build the runtime, using out/Debug by default.
-[working-directory: "src/runtime"]
-runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-runtime telar
+# Build the runtime and its CLI in the tree of PRESET.
+runtime-build preset="dev": (configure preset)
+    "{{ cpp }}" build {{ preset }} -- --target telar-runtime telar
 
-# Build the GUI, using out/Debug by default.
-[working-directory: "src/gui"]
-gui-build directory="out" build_type="Debug": (gui-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-gui telar-gui-command
+# Build the GUI in the tree of PRESET.
+gui-build preset="dev": (configure preset)
+    "{{ cpp }}" build {{ preset }} -- --target telar-gui telar-gui-command
 
-# Build the standalone C++ auth daemon without the runtime or GUI dependencies.
-[working-directory: "src/auth-daemon"]
-auth-build directory="out" build_type="Debug": (auth-configure directory build_type)
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-auth-daemon
+# Build the auth daemon in the tree of PRESET.
+auth-build preset="dev": (configure preset)
+    "{{ cpp }}" build {{ preset }} -- --target telar-auth-daemon
 
 # Build and run the auth daemon tests. Extra arguments are passed to CTest.
-[working-directory: "src/auth-daemon"]
-auth-test *args: auth-build
-    "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
-
-# Refresh the auth daemon compilation database for clangd.
-auth-editor: (auth-configure "out" "Debug")
-
-# Analyze the auth daemon sources without applying fixes.
-[working-directory: "src/auth-daemon"]
-auth-lint: auth-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target lint
-
-# Format the auth daemon sources.
-[working-directory: "src/auth-daemon"]
-auth-format: auth-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format
-
-# Check the auth daemon formatting without changing sources.
-[working-directory: "src/auth-daemon"]
-auth-format-check: auth-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format-check
+auth-test *args: (configure "dev")
+    "{{ cpp }}" build dev -- --target src/auth-daemon/all
+    "{{ cpp }}" test dev -- -L '^auth' {{ args }}
 
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:
@@ -72,7 +50,7 @@ renderer:
 app: dev-bin gui-build (dev-app gui dev_dir)
 
 # Run optimized GUI/runtime builds with development config and their own socket/history.
-app-release: (dev-bin release_build_dir "Release" release_dev_dir) (gui-build release_build_dir "Release") (dev-app (gui_dir / release_build_dir / "src/gui/telar-gui") release_dev_dir)
+app-release: (dev-bin "release" release_dev_dir) (gui-build "release") (dev-app (build_dir / "release/src/gui/telar-gui") release_dev_dir)
 
 # Build and run the runtime on the development socket. Extra arguments are passed to it.
 run *args: runtime-build
@@ -85,101 +63,69 @@ stop:
 
 # Stop only the Release development runtime, including its panes.
 stop-release:
-    TELAR_SOCKET="{{ release_dev_dir }}/runtime.sock" "{{ runtime_dir }}/{{ release_build_dir }}/src/runtime/telar" server stop
+    TELAR_SOCKET="{{ release_dev_dir }}/runtime.sock" "{{ build_dir }}/release/src/runtime/telar" server stop
 
-# Build and run the runtime and GUI tests.
-test: runtime-test gui-test
+# Build everything and run every test. Extra arguments are passed to CTest.
+test *args: dev-bin
+    "{{ cpp }}" build dev
+    "{{ cpp }}" test dev -- {{ args }}
 
-# Build and run the runtime tests. Extra arguments are passed to CTest.
-[working-directory: "src/runtime"]
-runtime-test *args: (runtime-configure "out" "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out
-    "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
+# Build and run the runtime and CLI tests. Extra arguments are passed to CTest.
+runtime-test *args: (configure "dev")
+    "{{ cpp }}" build dev -- --target src/runtime/all src/cli/all
+    "{{ cpp }}" test dev -- -L '^(runtime|cli)\.' {{ args }}
 
 # Build and run the GUI tests, the integration ones against the runtime. Extra arguments are passed to CTest.
-[working-directory: "src/gui"]
-gui-test *args: dev-bin (gui-configure "out" "Debug" "-DTELAR_GUI_TEST_RUNTIME=" + dev_telar)
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out
-    "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
+gui-test *args: dev-bin
+    "{{ cpp }}" build dev -- --target src/gui/all
+    "{{ cpp }}" test dev -- -L '^gui\.' {{ args }}
 
-# Each tree's out/compile_commands.json covers the libraries it builds; the project's
-# .clangd-build.json then refreshes it on save.
-# Configure the CLI and auth daemon for clangd.
-editor: runtime-editor
-    "{{ justfile_directory() }}/tools/cpp" configure cli
-    "{{ justfile_directory() }}/tools/cpp" configure auth
+# Refresh the compilation database and generated headers that clangd reads in out/dev.
+editor: (configure "dev")
+    "{{ cpp }}" build dev -- --target cell-layout gui-editor --parallel 2
 
-# Refresh the runtime compilation database and generated headers for clangd.
-[working-directory: "src/runtime"]
-runtime-editor: (runtime-configure "out" "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target cell-layout
+# Analyze the C++ sources of the dev tree with clang-tidy, without applying fixes.
+lint jobs="2": (configure "dev")
+    "{{ cpp }}" exec -- cmake "-DJOBS={{ jobs }}" -DCHECK=lint "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
-# Analyze the production runtime sources without applying fixes.
-[working-directory: "src/runtime"]
-runtime-lint jobs="2" directory="out": (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" -DCHECK=lint "-DBUILD_DIRECTORY={{ directory }}" -P ../../cmake/scripts/check.cmake
-
-# Analyze the GUI sources with its clang-tidy profile.
-[working-directory: "src/gui"]
-gui-lint: (gui-configure "out" "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target lint
-
-# Build the optimized lifetime checker that each project's .tbc.json names.
+# Build the optimized lifetime checker that the repository's .tbc.json names.
 lifetime-checker:
-    "{{ justfile_directory() }}/tools/cpp" configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-    "{{ justfile_directory() }}/tools/cpp" build tbc -B lib/tbc/out/release -- --target tbc-lint
+    "{{ cpp }}" configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+    "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-lint
 
-# Check the lifetimes of the production runtime, CLI and telar library sources.
-[working-directory: "src/runtime"]
-runtime-lifetime directory="out": lifetime-checker (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DCHECK=lifetime "-DBUILD_DIRECTORY={{ directory }}" -P ../../cmake/scripts/check.cmake
+# Check the lifetimes of the C++ sources of the dev tree.
+lifetime: lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=lifetime "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
-# Check the lifetimes of the GUI sources.
-[working-directory: "src/gui"]
-gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target lifetime
+# Check that the module interfaces keep no function body outside the allowlist.
+interface-bodies: lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=interface_bodies "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
-# Check that the runtime, CLI and telar library interfaces keep no function body outside the allowlist.
-[working-directory: "src/runtime"]
-runtime-interface-bodies directory="out": lifetime-checker (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DCHECK=interface_bodies "-DBUILD_DIRECTORY={{ directory }}" -P ../../cmake/scripts/check.cmake
-
-# Check that the GUI interfaces keep no function body outside the allowlist.
-[working-directory: "src/gui"]
-gui-interface-bodies: lifetime-checker (gui-configure "out" "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target interface-bodies
-
-# Check the blank lines of docs/code-style.md in the runtime, CLI and telar library units; FIX=ON inserts them.
-[working-directory: "src/runtime"]
-runtime-blank-lines directory="out" fix="OFF": lifetime-checker (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DCHECK=blank_lines "-DBUILD_DIRECTORY={{ directory }}" "-DFIX={{ fix }}" -P ../../cmake/scripts/check.cmake
-
-# Check the blank lines of docs/code-style.md in the GUI units.
-[working-directory: "src/gui"]
-gui-blank-lines: lifetime-checker (gui-configure "out" "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target blank-lines
+# Check the blank lines of docs/code-style.md; FIX=ON inserts them.
+blank-lines fix="OFF": lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=blank_lines "-DBUILD_DIRECTORY={{ build_dir }}/dev" "-DFIX={{ fix }}" -P cmake/scripts/check.cmake
 
 # Format every C++, Objective-C++ and module file in the repository with the root .clang-format.
 format:
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -P cmake/scripts/format.cmake
+    "{{ cpp }}" exec -- cmake -P cmake/scripts/format.cmake
 
 # Check the formatting of every C++, Objective-C++ and module file without changing it.
 format-check:
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DMODE=format-check -P cmake/scripts/format.cmake
+    "{{ cpp }}" exec -- cmake -DMODE=format-check -P cmake/scripts/format.cmake
 
 # Package the Release Telar.app, install it under APPS and link its `telar` into BIN.
 [macos]
-install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" no_tests) (gui-configure "out-release" "Release" no_tests)
+install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (configure "dist") (configure "release")
     #!/usr/bin/env bash
     set -euo pipefail
     stage="{{ dev_dir }}/stage"
     app="Telar.app"
     rm -rf "$stage"
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ runtime_dir }}/out-release" --target telar-runtime telar
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --install "{{ runtime_dir }}/out-release" --prefix "$stage"
+    "{{ cpp }}" build dist
+    "{{ cpp }}" exec -- cmake --install "{{ build_dir }}/dist" --prefix "$stage"
     install -m 755 "{{ renderer }}" "$stage/bin/telar-diagram-renderer"
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ gui_dir }}/out-release" --target telar-gui telar-gui-command
-    python3 "{{ gui_dir }}/tools/package_macos.py" --release --build "{{ gui_dir }}/out-release" --runtime-prefix "$stage" --output "$stage/$app"
+    "{{ cpp }}" build release -- --target telar-gui telar-gui-command
+    python3 "{{ justfile_directory() }}/src/gui/tools/package_macos.py" --release --build "{{ build_dir }}/release" --runtime-prefix "$stage" --output "$stage/$app"
     mkdir -p "{{ apps }}" "{{ bin }}"
     rm -rf "{{ apps }}/$app"
     cp -R "$stage/$app" "{{ apps }}/$app"
@@ -199,18 +145,21 @@ proxy-test *args:
 proxy-test-linux:
     python3 src/proxy/tests/linux/run.py
 
-# Build EBNF and run tests with color. Extra arguments are forwarded to CTest.
+# Build EBNF and run its GoogleTest suite with color in the ci tree. Extra arguments are forwarded to CTest.
 [positional-arguments]
-[working-directory: "lib/ebnf"]
 ebnf-test *args:
-    "{{ justfile_directory() }}/tools/cpp" configure ebnf -- -DEBNF_GOOGLETEST=ON
-    "{{ justfile_directory() }}/tools/cpp" build ebnf -- --target ebnf ebnf_tests
-    GTEST_COLOR=yes "{{ justfile_directory() }}/tools/cpp" test ebnf -- -L lib.ebnf -V "$@"
+    "{{ cpp }}" configure ci
+    "{{ cpp }}" build ci -- --target ebnf ebnf_tests
+    GTEST_COLOR=yes "{{ cpp }}" test ci -- -L lib.ebnf -V "$@"
+
+# Configure the tree of PRESET; a tree with tests runs the GUI's integration tests against the development CLI.
+configure preset="dev":
+    "{{ cpp }}" configure {{ preset }} -- {{ if preset == "release" { "" } else if preset == "dist" { "" } else { test_options } }}
 
 [private]
-dev-bin directory="out" build_type="Debug" state_dir=dev_dir: (runtime-build directory build_type)
+dev-bin preset="dev" state_dir=dev_dir: (runtime-build preset)
     mkdir -p -m 700 "{{ state_dir }}" "{{ state_dir }}/bin"
-    ln -sf "{{ runtime_dir }}/{{ directory }}/src/runtime/telar" "{{ state_dir }}/bin/telar"
+    ln -sf "{{ build_dir }}/{{ preset }}/src/runtime/telar" "{{ state_dir }}/bin/telar"
 
 [private]
 dev-app binary state_dir:
@@ -221,22 +170,6 @@ dev-app binary state_dir:
     export TELAR_DEVELOPMENT_CONFIG="{{ justfile_directory() }}/dev/config.lua"
     "{{ state_dir }}/bin/telar" server endpoint > /dev/null
     exec "{{ binary }}"
-
-# Both platforms use the verified repository-local compiler and managed libraries.
-[private]
-[working-directory: "src/runtime"]
-runtime-configure directory build_type *options:
-    "{{ justfile_directory() }}/tools/cpp" configure runtime -B "{{ directory }}" --config {{ build_type }} -- {{ options }}
-
-[private]
-[working-directory: "src/auth-daemon"]
-auth-configure directory build_type *options:
-    "{{ justfile_directory() }}/tools/cpp" configure auth -B "{{ directory }}" --config {{ build_type }} -- {{ options }}
-
-[private]
-[working-directory: "src/gui"]
-gui-configure directory build_type *options:
-    "{{ justfile_directory() }}/tools/cpp" configure gui -B "{{ directory }}" --config {{ build_type }} -- -DTELAR_GUI_QT_BUILD_DIR="{{ justfile_directory() }}/.qt-cache" {{ options }}
 
 alias b := build
 alias r := run

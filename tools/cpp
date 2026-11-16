@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""One pinned toolchain entry point for development, CI and release builds."""
+"""One pinned toolchain entry point for development, CI and release builds.
+
+    tools/cpp configure [PRESET] [-B DIR] [--headless] [-- CMAKE_ARGUMENT...]
+    tools/cpp build [PRESET] [-B DIR] [-- BUILD_ARGUMENT...]
+    tools/cpp test [PRESET] [-B DIR] [-- CTEST_ARGUMENT...]
+    tools/cpp exec -- COMMAND ARGUMENT...
+
+PRESET is a configure preset of CMakePresets.json, dev by default, and its tree is
+out/PRESET unless -B names another. tbc in its place is the tbc linter, a project of
+its own under lib/tbc whose build type --config selects.
+"""
 import argparse
 import fcntl
 import hashlib
@@ -11,13 +21,12 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECTS = {'runtime': 'src/runtime', 'cli': 'src/cli',
-            'gui': 'src/gui', 'auth': 'src/auth-daemon',
-            **{name: 'lib/' + name for name in ('base', 'sys', 'vocabulary', 'wire', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
-            'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf'}
-# Every project but tbc is the root project with the processes it builds; a library
-# builds with none.
-PROCESSES = {'runtime': ('RUNTIME', 'CLI'), 'cli': ('CLI',), 'gui': ('GUI',), 'auth': ('AUTH',)}
+PRESETS_FILE = ROOT / 'CMakePresets.json'
+# The tree of the repository is configured by a preset of CMakePresets.json into
+# out/<preset>; the tbc linter is a project of its own.
+PRESETS = tuple(preset['name'] for preset in json.loads(PRESETS_FILE.read_text())['configurePresets']
+                if not preset.get('hidden'))
+TBC = 'tbc'
 CACHE = ROOT / '.toolchain'
 
 
@@ -96,13 +105,14 @@ def main():
         if extra[:2] == ['cmake', '--build'] and len(extra) > 2:
             lock_build(Path(extra[2]))
         os.execvp(extra[0], extra)
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('command', choices=('bootstrap', 'vt', 'configure', 'build', 'test', 'exec'))
-    parser.add_argument('project', nargs='?', choices=tuple(PROJECTS))
-    parser.add_argument('-B', '--build-dir', type=Path)
-    parser.add_argument('--config', choices=('Debug', 'Release', 'RelWithDebInfo'), default='Debug')
-    parser.add_argument('--sanitizers', action='store_true')
-    parser.add_argument('--headless', action='store_true')
+    parser.add_argument('preset', nargs='?', choices=(*PRESETS, TBC),
+                        help='a configure preset of CMakePresets.json (default dev), or tbc for the linter project')
+    parser.add_argument('-B', '--build-dir', type=Path, help='the tree; out/<preset> by default')
+    parser.add_argument('--config', choices=('Debug', 'Release', 'RelWithDebInfo'), default='Debug',
+                        help='the build type of the tbc project; a preset names its own')
+    parser.add_argument('--headless', action='store_true', help='without the native clipboard and window')
     args, extra = parser.parse_known_args()
     if extra and extra[0] == '--':
         extra = extra[1:]
@@ -113,39 +123,36 @@ def main():
         print(vt())
         return
     if args.command == 'exec':
-        if args.project or not extra:
+        if args.preset or not extra:
             parser.error('Use tools/cpp exec -- COMMAND ARG...')
         os.execvp(extra[0], extra)
-    if args.project is None:
-        parser.error('A project is required')
-    source = ROOT / PROJECTS[args.project]
-    build = (args.build_dir or source / 'out').resolve()
+    preset = args.preset or 'dev'
+    if preset == TBC:
+        source = ROOT / 'lib/tbc'
+        build = (args.build_dir or source / 'out').resolve()
+    else:
+        source = ROOT
+        build = (args.build_dir or ROOT / 'out' / preset).resolve()
     if args.command == 'configure':
-        options = ['-DCMAKE_BUILD_TYPE=' + args.config,
-                   '-DCMAKE_TOOLCHAIN_FILE=' + str(chain),
-                   '-DTELAR_SANITIZERS=' + ('ON' if args.sanitizers else 'OFF')]
-        if args.project == 'tbc':
-            options += ['-DTBC_SANITIZERS=' + ('ON' if args.sanitizers else 'OFF')]
+        if preset == TBC:
             llvm = (CACHE / 'bin/clang').resolve().parents[1]
-            options += ['-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'),
-                        '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
-        if args.project != 'tbc':
-            selected = PROCESSES.get(args.project, ())
-            options += [f'-DTELAR_BUILD_{process}=' + ('ON' if process in selected else 'OFF')
-                        for process in ('RUNTIME', 'CLI', 'GUI', 'AUTH')]
+            options = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + args.config, '-DCMAKE_TOOLCHAIN_FILE=' + str(chain),
+                       '-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'), '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
+        else:
+            options = ['--preset', preset]
             if not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
                 options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))
         if args.headless:
             options += ['-DTELAR_CLIPBOARD_NATIVE=OFF', '-DTELAR_GUI_NATIVE=OFF']
-        command = ['cmake', '-S', str(ROOT if args.project != 'tbc' else source), '-B', str(build), '-G', 'Ninja', *options, *extra]
+        command = ['cmake', '-S', str(source), '-B', str(build), *options, *extra]
         # Ninja already regenerates a configured tree when its CMake inputs change,
-        # so only a changed command line or toolchain has to run CMake here.
-        identity = hashlib.sha256('\0'.join(command).encode() + chain.read_bytes()).hexdigest()
+        # so only a changed command line, preset or toolchain has to run CMake here.
+        identity = hashlib.sha256('\0'.join(command).encode() + chain.read_bytes() + PRESETS_FILE.read_bytes()).hexdigest()
         stamp = build / '.telar-configure'
         if (build / 'build.ninja').exists() and stamp.exists() and stamp.read_text() == identity:
             return
         stamp.unlink(missing_ok=True)
-        run(*command)
+        run(*command, cwd=source)
         stamp.write_text(identity)
     elif args.command == 'build':
         lock_build(build)

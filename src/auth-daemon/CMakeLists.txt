@@ -19,7 +19,7 @@ install(TARGETS telar-auth-daemon RUNTIME DESTINATION bin)
 
 if(BUILD_TESTING)
   add_test(NAME auth-daemon-smoke COMMAND telar-auth-daemon)
-  set_tests_properties(auth-daemon-smoke PROPERTIES TIMEOUT 10)
+  set_tests_properties(auth-daemon-smoke PROPERTIES TIMEOUT 10 LABELS auth)
 endif()
 
 telar_register_checks(telar-auth-daemon CHECKS lint lifetime)
