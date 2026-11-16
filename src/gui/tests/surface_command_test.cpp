@@ -1,4 +1,4 @@
-#include "qt/surface_command.hpp"
+#include "ui/components/surface_command.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>

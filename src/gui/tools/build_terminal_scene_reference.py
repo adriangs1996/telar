@@ -13,6 +13,17 @@ def run(command, directory, log):
         raise RuntimeError(f'Reference build failed; see {log}')
 
 
+# The scene sources, by their path below src/gui.
+SCENES = ['ui/scene/text_scene.cpp', 'ui/scene/text_scene.hpp', 'ui/terminal/terminal_scene.cpp', 'ui/terminal/terminal_scene.hpp']
+
+
+def historical(root, revision, relative):
+    """The path of a scene source at `revision`, which predates ui/ when it still has src/gui/qt."""
+    current = 'src/gui/' + relative
+    found = subprocess.run(['git', 'cat-file', '-e', revision + ':' + current], cwd=root, capture_output=True)
+    return current if found.returncode == 0 else 'src/gui/qt/' + Path(relative).name
+
+
 def main():
     parser = argparse.ArgumentParser(description='Build historical C++ terminal scenes against the current probe, Qt and font libraries; public scene APIs must be compatible')
     parser.add_argument('--build-dir', required=True, type=Path)
@@ -23,12 +34,12 @@ def main():
     build = options.build_dir.resolve()
     output = options.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    (output / 'qt').mkdir()
     revision = subprocess.check_output(['git', 'rev-parse', '--verify', options.revision + '^{commit}'], cwd=root, text=True).strip()
     sources = {}
     adaptations = {}
-    for name in ['text_scene.cpp', 'text_scene.hpp', 'terminal_scene.cpp', 'terminal_scene.hpp']:
-        source = 'src/gui/qt/' + name
+    for relative in SCENES:
+        name = Path(relative).name
+        source = historical(root, revision, relative)
         contents = subprocess.check_output(['git', 'show', revision + ':' + source], cwd=root)
         original = contents
         if name == 'text_scene.hpp':
@@ -37,20 +48,25 @@ def main():
         if contents != original:
             adaptations[source] = dict(original_sha256=hashlib.sha256(original).hexdigest(), built_sha256=hashlib.sha256(contents).hexdigest(),
                                        change='Specialize the historical glyph-cache forward declaration and member for the current standard cache policy; rendering bodies are unchanged.')
-        (output / 'qt' / name).write_bytes(contents)
+        (output / relative).parent.mkdir(parents=True, exist_ok=True)
+        (output / relative).write_bytes(contents)
         sources[source] = hashlib.sha256(original).hexdigest()
 
     database = json.loads((build / 'compile_commands.json').read_text())
     objects = []
     commands = []
-    for relative in ['tools/terminal_scene_probe.cpp', 'qt/text_scene.cpp', 'qt/terminal_scene.cpp']:
+    for relative in ['tools/terminal_scene_probe.cpp', 'ui/scene/text_scene.cpp', 'ui/terminal/terminal_scene.cpp']:
         row = next(row for row in database if Path(row['file']).as_posix().endswith('/' + relative))
         arguments = shlex.split(row['command'])
         source = root / 'src/gui' / relative if relative.startswith('tools/') else output / relative
         target = output / (source.stem + '.o')
         arguments[arguments.index('-o') + 1] = str(target)
         arguments[-1] = str(source)
-        arguments.insert(1, '-I' + str(output))
+        # Sources from before src/gui/ui include their old src/gui/qt siblings by bare name and the
+        # rest of the GUI as ../<folder>; ui/ and each of its folders stand in for that one folder.
+        ui = root / 'src/gui/ui'
+        overlays = [output, *(output / Path(scene).parent for scene in SCENES)]
+        arguments[1:1] = ['-I' + str(directory) for directory in [*overlays, ui, *sorted(ui.iterdir())]]
         run(arguments, Path(row['directory']), output / (source.stem + '.log'))
         objects.append(str(target))
         commands.append(arguments)

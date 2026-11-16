@@ -3,10 +3,10 @@
 static_assert(true);
 #endif
 
-#include "../qt/list_model.hpp"
-#include "../qt/pane_motion_layout.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/panes/pane_motion_layout.hpp"
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRectF>
@@ -22,8 +22,8 @@ static_assert(true);
 #include <span>
 #include <variant>
 
-#include "qt/list_model.hpp"
-#include "qt/pane_motion_layout.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/panes/pane_motion_layout.hpp"
 
 import telar.gui.presentation.frame_pacer;
 import telar.gui.core.metrics;

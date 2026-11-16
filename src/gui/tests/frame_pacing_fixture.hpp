@@ -3,12 +3,12 @@
 static_assert(true);
 #endif
 
-#include "../qt/application.hpp"
-#include "../qt/pointer_dispatcher.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/application.hpp"
+#include "ui/input/pointer_dispatcher.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -24,8 +24,8 @@ static_assert(true);
 #include <variant>
 
 #pragma once
-#include "qt/application.hpp"
-#include "qt/pointer_dispatcher.hpp"
+#include "ui/app/application.hpp"
+#include "ui/input/pointer_dispatcher.hpp"
 
 import telar.gui.layout.geometry;
 import telar.gui.presentation.tab_drop;

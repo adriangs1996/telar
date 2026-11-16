@@ -1,6 +1,6 @@
-#include "qt/bundled_fonts.hpp"
-#include "qt/native_rounded_rectangle.hpp"
 #include "shape_atlas.hpp"
+#include "ui/controls/native_rounded_rectangle.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QFile>

@@ -4,15 +4,15 @@ static_assert(true);
 #endif
 
 #include "../core/terminal_size.hpp"
-#include "../qt/native_pane_attention.hpp"
-#include "../qt/pane_attention_value.hpp"
-#include "../qt/window_animation_clock.hpp"
 #include "controlled_awake_clock.hpp"
 #include "gui_wait.hpp"
 #include "shape_atlas.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/panes/native_pane_attention.hpp"
+#include "ui/panes/pane_attention_value.hpp"
+#include "ui/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QDebug>
@@ -60,9 +60,9 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-#include "qt/native_pane_attention.hpp"
-#include "qt/pane_attention_value.hpp"
-#include "qt/window_animation_clock.hpp"
+#include "ui/panes/native_pane_attention.hpp"
+#include "ui/panes/pane_attention_value.hpp"
+#include "ui/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;

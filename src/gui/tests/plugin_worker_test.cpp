@@ -5,14 +5,14 @@ static_assert(true);
 
 #include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
-#include "../qt/plugin_packages.hpp"
-#include "../qt/plugin_worker.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "ui/plugins/plugin_packages.hpp"
+#include "ui/plugins/plugin_worker.hpp"
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>
@@ -57,8 +57,8 @@ static_assert(true);
 #include <vector>
 
 #include "application/dependencies.hpp"
-#include "qt/plugin_packages.hpp"
-#include "qt/plugin_worker.hpp"
+#include "ui/plugins/plugin_packages.hpp"
+#include "ui/plugins/plugin_worker.hpp"
 
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;

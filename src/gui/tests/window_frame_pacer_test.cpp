@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../qt/window_frame_pacer.hpp"
 #include "gui_wait.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/app/window_frame_pacer.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QObject>
@@ -27,7 +27,7 @@ static_assert(true);
 #include <string_view>
 #include <variant>
 
-#include "qt/window_frame_pacer.hpp"
+#include "ui/app/window_frame_pacer.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.frame_pacer;

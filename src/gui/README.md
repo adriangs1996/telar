@@ -21,13 +21,29 @@ interfaces and preprocessor contracts retain documented textual boundaries.
 | `machines`, `transport` | Profiles, SSH discovery, connection state and bounded framing |
 | `components`, `config` | Lua configuration, plugins and configured surfaces |
 | `fonts`, `presentation`, `core` | Shaping, physical geometry and reusable value types |
-| `qt` | QML models, events, scene nodes and asynchronous adapters |
+| `ui` | The Qt Quick interface: QML, controllers, scene nodes and asynchronous adapters |
 | `platform` | Native window effects, clocks, clipboard, process and socket facilities |
 | `tests`, `tools` | Regression fixtures, probes, generators and packaging |
 
 Application policies use explicit allocators and compile-time dependency selection.
 Domain components can be used without constructing a window. Native APIs stay in
-platform adapters; reusable font and layout code does not depend on QML.
+platform adapters; reusable font and layout code does not depend on QML. Outside
+tests and tools, only `ui`, the native adapters in `platform` and `main.cpp` include Qt.
+
+`ui` has one folder per feature, holding its QML, its controller and its layouts.
+Everything is one QML module, `Telar.Gui`, so a QML file imports it to use a type
+from another folder.
+
+| Folder | What lives there |
+| --- | --- |
+| `app` | `Application` (the `GuiController` QML sees), `Main.qml`, the runtime connection and window plumbing |
+| `scene`, `controls`, `fonts` | Scene-graph primitives and shaders, reusable chrome and form controls, font loading |
+| `input`, `config` | Key bindings and pointer routing; Lua configuration loading |
+| `chrome`, `panes`, `terminal` | Sidebar, tabs and bars; pane headers and motion; the terminal item and its scene |
+| `activity`, `workspaces` | Agent, task and command cards; workspace and project lists |
+| `history`, `palette`, `prompt`, `paths`, `suggestions`, `peek` | One overlay each |
+| `links`, `documents`, `attachments`, `notifications` | Link previews, inline documents, image attachments, notifications |
+| `machines`, `components`, `plugins` | Remote machines; Lua elements, panels and picks; plugin workers |
 
 Native font discovery is owned by `platform/font.h`, `platform/macos/font.m` and
 `platform/linux/font.c`. macOS optical terminal text uses the CoreText glyph

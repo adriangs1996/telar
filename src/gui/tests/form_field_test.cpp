@@ -3,16 +3,16 @@
 static_assert(true);
 #endif
 
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/form_input_context.hpp"
-#include "../qt/native_form_field.hpp"
-#include "../qt/projection.hpp"
-#include "../qt/utf16_encoding.hpp"
 #include "clipboard_fixture.hpp"
 #include "frame_fixture.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
 #include "telar_base/text/utf8.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/app/utf16_encoding.hpp"
+#include "ui/controls/form_input_context.hpp"
+#include "ui/controls/native_form_field.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 #include <QClipboard>
 #include <QFont>
 #include <QGuiApplication>
@@ -50,11 +50,11 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "qt/bundled_fonts.hpp"
-#include "qt/form_input_context.hpp"
-#include "qt/native_form_field.hpp"
-#include "qt/projection.hpp"
-#include "qt/utf16_encoding.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/app/utf16_encoding.hpp"
+#include "ui/controls/form_input_context.hpp"
+#include "ui/controls/native_form_field.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 
 import telar.gui.text.bounded_editor;
 

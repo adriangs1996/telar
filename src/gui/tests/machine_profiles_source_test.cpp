@@ -5,13 +5,13 @@ static_assert(true);
 
 #include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
-#include "../qt/machine_profiles_source.hpp"
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "ui/machines/machine_profiles_source.hpp"
 #include <QElapsedTimer>
 #include <QObject>
 #include <QSignalSpy>
@@ -46,7 +46,7 @@ static_assert(true);
 #include <system_error>
 
 #include "application/dependencies.hpp"
-#include "qt/machine_profiles_source.hpp"
+#include "ui/machines/machine_profiles_source.hpp"
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;

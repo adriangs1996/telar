@@ -5,14 +5,6 @@ static_assert(true);
 
 #include "../core/memory.hpp"
 #include "../core/terminal_size.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/list_model.hpp"
-#include "../qt/native_agent_status.hpp"
-#include "../qt/native_progress_ring.hpp"
-#include "../qt/native_tab_activity.hpp"
-#include "../qt/progress_value.hpp"
-#include "../qt/projection.hpp"
-#include "../qt/tab_strip_layout.hpp"
 #include "../terminal/screen.hpp"
 #include "qml_fixture.hpp"
 #include "shape_atlas.hpp"
@@ -23,6 +15,14 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "ui/activity/native_agent_status.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/chrome/native_tab_activity.hpp"
+#include "ui/chrome/tab_strip_layout.hpp"
+#include "ui/controls/native_progress_ring.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/panes/progress_value.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -76,14 +76,14 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-#include "qt/bundled_fonts.hpp"
-#include "qt/list_model.hpp"
-#include "qt/native_agent_status.hpp"
-#include "qt/native_progress_ring.hpp"
-#include "qt/native_tab_activity.hpp"
-#include "qt/progress_value.hpp"
-#include "qt/projection.hpp"
-#include "qt/tab_strip_layout.hpp"
+#include "ui/activity/native_agent_status.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/chrome/native_tab_activity.hpp"
+#include "ui/chrome/tab_strip_layout.hpp"
+#include "ui/controls/native_progress_ring.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/panes/progress_value.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.tab_drop;

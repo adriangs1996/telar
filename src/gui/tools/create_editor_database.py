@@ -34,10 +34,10 @@ def main():
     build = options.build_dir.resolve()
     source = Path(__file__).resolve().parents[1]
     entries = json.loads((build / 'compile_commands.json').read_text())
-    qt_headers = [*sorted((source / 'qt').rglob('*.hpp')), source / 'platform/environment.hpp']
+    ui_headers = [*sorted((source / 'ui').rglob('*.hpp')), source / 'platform/environment.hpp']
     test_headers = sorted((source / 'tests').rglob('*.hpp'))
 
-    write_header_database(build, entries, qt_headers, source / 'qt/application.cpp', 'qt')
+    write_header_database(build, entries, ui_headers, source / 'ui/app/application.cpp', 'ui')
     write_header_database(build, entries, test_headers, source / 'tests/quick_test.cpp', 'tests')
 
 

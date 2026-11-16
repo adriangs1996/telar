@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../qt/history_selection_layout.hpp"
 #include "qml_fixture.hpp"
+#include "ui/history/history_selection_layout.hpp"
 #include <QDebug>
 #include <QEvent>
 #include <QMetaObject>
@@ -27,7 +27,7 @@ static_assert(true);
 #include <mutex>
 
 #pragma once
-#include "qt/history_selection_layout.hpp"
+#include "ui/history/history_selection_layout.hpp"
 
 import telar.gui.platform.awake_clock;
 

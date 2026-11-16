@@ -1,0 +1,161 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "application/dependencies.hpp"
+#include "core/memory.hpp"
+#include "image_resource.hpp"
+#include "tbc/view.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include <QObject>
+#include <QQuickWindow>
+#include <QTimer>
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <limits>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <tuple>
+#include <utility>
+
+#pragma once
+
+#include "application/dependencies.hpp"
+#include "tbc/view.hpp"
+
+import telar.gui.core.metrics;
+import telar.gui.graphics.placeholder;
+import telar.gui.graphics.texture_cache;
+
+namespace telar::gui::qt {
+
+  class GraphicsScene;
+
+  struct ImagePlacementSource {
+    QQuickItem* owner = nullptr;
+    const GraphicsStore<Memory>* store = nullptr;
+    QSizeF cell;
+  };
+
+  struct WindowImage {
+    ImageTextureHandle handle = 0;
+    std::uint64_t generation = 0;
+    Rect bounds;
+  };
+
+  struct WindowImageStatistics {
+    std::uint64_t frame = 0;
+    std::size_t resident_bytes = 0;
+    std::size_t images = 0;
+    std::size_t spares = 0;
+    std::size_t uploads_started = 0;
+    std::size_t image_draws = 0;
+    std::size_t placements = 0;
+    std::size_t dropped_placements = 0;
+    ImageResourceUsage resources{};
+  };
+
+  class WindowImages final : public QObject {
+  public:
+    explicit WindowImages(QQuickWindow& window);
+    static WindowImages& forWindow(QQuickWindow& window);
+    [[nodiscard]] static WindowImages* findWindow(const QQuickWindow& window) noexcept;
+    void attach(GraphicsScene& scene) noexcept;
+    void detach(GraphicsScene& scene) noexcept;
+    void beginCatalogSnapshot() noexcept;
+    void observeCatalog(const GraphicsStore<Memory>& store) noexcept;
+    // The reach names the selection's declared limit.
+    [[nodiscard]] tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
+    [[nodiscard]] const ImagePlacementSelection& placements() const noexcept;
+    [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene& scene, const GraphicsStore<Memory>& store, ImageKey key);
+    void append(GraphicsScene& scene, QSGNode& parent, ImageTextureHandle handle, const ImageGeometry& geometry);
+    void requestUpdate(const GraphicsScene& scene);
+    [[nodiscard]] WindowImageStatistics statistics() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+  private:
+    struct Resources {
+      std::array<ImageResource, image_texture_capacity> images;
+      void release(ImageTextureHandle handle) noexcept;
+    };
+
+    using Residency = ImageResidency<Resources>;
+    using Image = GraphicsStore<Memory>::Image;
+
+    struct CatalogRows {
+      GraphicsLifetime lifetime;
+      ImageTextureHandle first_row = 0;
+    };
+
+    struct PlacementSourceStamp {
+      GraphicsLifetime lifetime;
+      std::uint64_t revision = 0;
+      ImageDisplayBox::Cell cell;
+
+      bool operator==(const PlacementSourceStamp&) const noexcept = default;
+    };
+
+    static constexpr std::size_t cached_source_capacity = 64;
+    static constexpr std::size_t catalog_bucket_capacity = image_texture_capacity * 2;
+
+    [[nodiscard]] PlacementSourceStamp placementStamp(const ImagePlacementSource& source) const noexcept;
+    [[nodiscard]] bool placementSourcesChanged(std::span<const ImagePlacementSource> sources) noexcept;
+    void selectPlacements(std::span<const ImagePlacementSource> sources) noexcept;
+    [[nodiscard]] bool placementHasExtent(GraphicsLifetime catalog, const GraphicsPlacement& placement, ImageSourceRect source, std::span<const ImagePlacementSource> views) const noexcept;
+    void prepare();
+    void finish();
+    void admitDraws();
+    void admitLayer(const QSGNode& layer, ImageDrawBudget& budget);
+    void orderScenes();
+    template <typename Use>
+    void visitVisibleTextures(const Use& use) const noexcept;
+    template <typename Use>
+    void observeVisibleTextures(const Use& use) noexcept;
+    void clear();
+    void stopRendering();
+    void scheduleTimer(std::uint32_t delay_ms);
+    void cancelTimer();
+    void wakeWaitingScenes() noexcept;
+    void notifyReady(const GraphicsScene& scene, ImageTextureIdentity identity) noexcept;
+    void requestImage(GraphicsScene& scene, const GraphicsStore<Memory>& store, const Image& image);
+    void indexCatalogs() noexcept;
+    [[nodiscard]] std::size_t catalogBucket(GraphicsLifetime lifetime) const noexcept;
+    [[nodiscard]] bool upload(ImageTextureHandle handle, const Image& image);
+    [[nodiscard]] bool canRetry(const Image& image, std::size_t retained_bytes) const noexcept;
+    [[nodiscard]] std::optional<WindowImage> newest(ImageTextureIdentity identity) const noexcept;
+
+    QQuickWindow& window_;
+    QTimer timer_;
+    Resources resources_;
+    tbc::view<Residency, tbc::lt::self> residency_{resources_};
+    ImagePlacementSelection placements_;
+    std::array<PlacementSourceStamp, cached_source_capacity> placement_sources_{};
+    std::size_t placement_source_count_ = 0;
+    bool placement_sources_cached_ = false;
+    bool placement_limit_reached_ = false;
+    std::array<bool, Residency::capacity> retained_{};
+    std::array<bool, Residency::capacity> visible_rows_{};
+    std::array<CatalogRows, catalog_bucket_capacity> catalogs_{};
+    std::array<ImageTextureHandle, Residency::capacity> next_catalog_row_{};
+    std::array<std::uint16_t, Residency::capacity> occupied_catalog_buckets_{};
+    std::size_t catalog_count_ = 0;
+    GraphicsScene* first_scene_ = nullptr;
+    std::uint64_t now_ns_ = 0;
+    std::size_t global_retained_bytes_ = 0;
+    std::size_t image_draws_ = 0;
+    std::atomic<std::uint64_t> timer_deadline_ns_{0};
+    std::uint64_t active_timer_deadline_ns_ = 0;
+    std::atomic<bool> requested_visible_{false};
+  };
+
+}

@@ -4,11 +4,6 @@ static_assert(true);
 #endif
 
 #include "../application/dependencies.hpp"
-#include "../qt/application.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/list_model.hpp"
-#include "../qt/notification_layout.hpp"
-#include "../qt/projection.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -17,6 +12,11 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/application.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/notifications/notification_layout.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QColor>
@@ -54,11 +54,11 @@ static_assert(true);
 #include <string_view>
 
 #include "application/dependencies.hpp"
-#include "qt/application.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/list_model.hpp"
-#include "qt/notification_layout.hpp"
-#include "qt/projection.hpp"
+#include "ui/app/application.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/notifications/notification_layout.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

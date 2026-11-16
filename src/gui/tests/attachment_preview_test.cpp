@@ -7,8 +7,8 @@ static_assert(true);
 #include "../attachments/capture.hpp"
 #include "../attachments/sensitive_bytes.hpp"
 #include "../attachments/types.hpp"
-#include "../qt/attachment_preview.hpp"
 #include "assertions.hpp"
+#include "ui/attachments/attachment_preview.hpp"
 #include <QBuffer>
 #include <QByteArray>
 #include <QCoreApplication>
@@ -27,10 +27,10 @@ static_assert(true);
 #include <stdexcept>
 
 #include "application/dependencies.hpp"
-#include "attachment_preview.hpp"
 #include "attachments/capture.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
+#include "ui/attachments/attachment_preview.hpp"
 
 import telar.gui.attachments.marker_input;
 

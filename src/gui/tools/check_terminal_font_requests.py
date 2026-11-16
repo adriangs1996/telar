@@ -93,7 +93,7 @@ def build_probe(build, source, output):
     header.write_text(generated)
     probe = Path(__file__).with_name('terminal_font_requests_probe.cpp')
     database = json.loads((build / 'compile_commands.json').read_text())
-    row = next(row for row in database if row['file'].endswith('/qt/terminal_item.cpp'))
+    row = next(row for row in database if row['file'].endswith('/ui/terminal/terminal_item.cpp'))
     command = row.get('arguments') or shlex.split(row['command'])
     compiler = command[0]
     obj = output / 'probe.o'

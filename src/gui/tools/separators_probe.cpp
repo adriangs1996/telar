@@ -9,8 +9,6 @@ static_assert(true);
 // final rendered window are the oracle a candidate must reproduce.
 
 #include "../application/dependencies.hpp"
-#include "../qt/application.hpp"
-#include "../qt/terminal_item.hpp"
 #include "../tests/gui_wait.hpp"
 #include "../tests/qml_fixture.hpp"
 #include "../tests/wire_runtime.hpp"
@@ -20,6 +18,8 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/application.hpp"
+#include "ui/terminal/terminal_item.hpp"
 #include <QCommandLineParser>
 #include <QCryptographicHash>
 #include <QFile>

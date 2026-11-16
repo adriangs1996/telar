@@ -19,8 +19,8 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/configuration_source.hpp"
+#include "ui/config/configuration_source.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -38,8 +38,8 @@ static_assert(true);
 #include <iostream>
 
 #include "application/dependencies.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/configuration_source.hpp"
+#include "ui/config/configuration_source.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 
 import telar.gui.config.plugin_effects;
 import telar.gui.core.metrics;

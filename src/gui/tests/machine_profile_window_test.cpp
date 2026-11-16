@@ -5,11 +5,6 @@ static_assert(true);
 
 #include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
-#include "../qt/application.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/machine_client.hpp"
-#include "../qt/machine_client_key.hpp"
-#include "../qt/machine_profiles_source.hpp"
 #include "assertions.hpp"
 #include "gui_wait.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -18,6 +13,11 @@ static_assert(true);
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "ui/app/application.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/machines/machine_client.hpp"
+#include "ui/machines/machine_client_key.hpp"
+#include "ui/machines/machine_profiles_source.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -57,11 +57,11 @@ static_assert(true);
 #include <system_error>
 
 #include "application/dependencies.hpp"
-#include "qt/application.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/machine_client.hpp"
-#include "qt/machine_client_key.hpp"
-#include "qt/machine_profiles_source.hpp"
+#include "ui/app/application.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/machines/machine_client.hpp"
+#include "ui/machines/machine_client_key.hpp"
+#include "ui/machines/machine_profiles_source.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../qt/application.hpp"
+#include "ui/app/application.hpp"
 #include <QDebug>
 #include <QPointF>
 #include <array>
@@ -13,7 +13,7 @@ static_assert(true);
 #include <string_view>
 
 #pragma once
-#include "qt/application.hpp"
+#include "ui/app/application.hpp"
 
 import telar.gui.history.browser;
 import telar.gui.presentation.history_filter_geometry;

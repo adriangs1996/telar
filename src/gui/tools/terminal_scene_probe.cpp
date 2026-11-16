@@ -6,14 +6,6 @@ static_assert(true);
 #include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
 #include "../platform/window.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/font_asset.hpp"
-#include "../qt/font_collection.hpp"
-#include "../qt/font_resolver.hpp"
-#include "../qt/font_source.hpp"
-#include "../qt/resident_fonts.hpp"
-#include "../qt/terminal_scene.hpp"
-#include "../qt/window_images.hpp"
 #include "../terminal/screen.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -22,6 +14,14 @@ static_assert(true);
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/font_asset.hpp"
+#include "ui/fonts/font_collection.hpp"
+#include "ui/fonts/font_resolver.hpp"
+#include "ui/fonts/font_source.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/terminal/terminal_scene.hpp"
+#include "ui/terminal/window_images.hpp"
 #include <QColor>
 #include <QCommandLineParser>
 #include <QFile>
@@ -60,15 +60,15 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/font_asset.hpp"
-#include "qt/font_collection.hpp"
-#include "qt/font_resolver.hpp"
-#include "qt/font_source.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/terminal_scene.hpp"
-#include "qt/window_images.hpp"
 #include "terminal/screen.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/font_asset.hpp"
+#include "ui/fonts/font_collection.hpp"
+#include "ui/fonts/font_resolver.hpp"
+#include "ui/fonts/font_source.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/terminal/terminal_scene.hpp"
+#include "ui/terminal/window_images.hpp"
 
 import telar.gui.core.metrics;
 import telar.config.gui;

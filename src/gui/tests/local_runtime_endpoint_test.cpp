@@ -1,5 +1,5 @@
 #include "core/memory.hpp"
-#include "qt/local_runtime_endpoint.hpp"
+#include "ui/app/local_runtime_endpoint.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>

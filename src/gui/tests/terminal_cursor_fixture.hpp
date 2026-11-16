@@ -1,6 +1,6 @@
 #pragma once
 
-#include "qt/terminal_item.hpp"
+#include "ui/terminal/terminal_item.hpp"
 
 namespace telar::gui::test {
 

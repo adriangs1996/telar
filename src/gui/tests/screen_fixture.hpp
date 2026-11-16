@@ -4,12 +4,12 @@ static_assert(true);
 #endif
 
 #include "../application/dependencies.hpp"
-#include "../qt/projection.hpp"
 #include "../terminal/cell_position.hpp"
 #include "../terminal/screen.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/app/projection.hpp"
 #include <QString>
 #include <QtCore/qchar.h>
 #include <algorithm>
@@ -21,8 +21,8 @@ static_assert(true);
 #pragma once
 
 #include "application/dependencies.hpp"
-#include "qt/projection.hpp"
 #include "terminal/screen.hpp"
+#include "ui/app/projection.hpp"
 
 import telar.gui.links.path_expansion;
 

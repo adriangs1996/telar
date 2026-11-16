@@ -3,13 +3,13 @@
 static_assert(true);
 #endif
 
-#include "../qt/alpha_mask_material.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/native_chrome_icon.hpp"
-#include "../qt/resident_fonts.hpp"
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
+#include "ui/controls/native_chrome_icon.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/scene/alpha_mask_material.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QGuiApplication>
@@ -49,10 +49,10 @@ static_assert(true);
 #include <thread>
 #include <utility>
 
-#include "qt/alpha_mask_material.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/native_chrome_icon.hpp"
-#include "qt/resident_fonts.hpp"
+#include "ui/controls/native_chrome_icon.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/scene/alpha_mask_material.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

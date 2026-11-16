@@ -5,17 +5,17 @@ static_assert(true);
 
 #include "../platform/font.h"
 #include "../platform/window.hpp"
-#include "../qt/alpha_mask_material.hpp"
-#include "../qt/alpha_mask_vertex.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/chrome_glyph_images.hpp"
-#include "../qt/chrome_text_scene.hpp"
-#include "../qt/font_collection.hpp"
-#include "../qt/resident_fonts.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/font_collection.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/scene/alpha_mask_material.hpp"
+#include "ui/scene/alpha_mask_vertex.hpp"
+#include "ui/scene/chrome_glyph_images.hpp"
+#include "ui/scene/chrome_text_scene.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QColor>
@@ -60,13 +60,13 @@ static_assert(true);
 #include <vector>
 
 #include "platform/window.hpp"
-#include "qt/alpha_mask_material.hpp"
-#include "qt/alpha_mask_vertex.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/chrome_glyph_images.hpp"
-#include "qt/chrome_text_scene.hpp"
-#include "qt/font_collection.hpp"
-#include "qt/resident_fonts.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/font_collection.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/scene/alpha_mask_material.hpp"
+#include "ui/scene/alpha_mask_vertex.hpp"
+#include "ui/scene/chrome_glyph_images.hpp"
+#include "ui/scene/chrome_text_scene.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

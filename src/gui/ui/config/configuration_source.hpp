@@ -1,0 +1,207 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "application/dependencies.hpp"
+#include "configuration_loader.hpp"
+#include "core/memory.hpp"
+#include "lua_host.hpp"
+#include "tbc/view.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "ui/fonts/font_cache.hpp"
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <cerrno>
+#include <charconv>
+#include <chrono>
+#include <cinttypes>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <exception>
+#include <fcntl.h>
+#include <functional>
+#include <initializer_list>
+#include <lauxlib.h>
+#include <limits.h>
+#include <limits>
+#include <lua.h>
+#include <lualib.h>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <sys/stat.h>
+#include <system_error>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <variant>
+
+#include <QByteArray>
+#include <QFutureWatcher>
+#include <QList>
+#include <QString>
+#include <QTimer>
+
+#pragma once
+#include "application/dependencies.hpp"
+
+import telar.gui.components.builtin_content;
+import telar.gui.components.configuration;
+import telar.gui.presentation.client_view_state;
+import telar.gui.config.plugin_query;
+import telar.gui.config.plugin_effects;
+import telar.gui.config.gui_query;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.configuration;
+import telar.config.client;
+import telar.gui.input.key_encoder;
+import telar.gui.input.binding_effects;
+
+namespace telar::gui {
+
+  template <Allocator Memory>
+  class ConfigurationGeneration;
+
+}
+
+namespace telar::gui::qt {
+
+  // Owns the client configuration. Its Lua VM lives on the Lua thread: everything here that
+  // runs Lua is asynchronous, and everything synchronous reads data fixed at load or copied
+  // out of a Lua result.
+  class ConfigurationSource final : public QObject {
+    Q_OBJECT
+
+  public:
+    using BarRender = ConfigurationSnapshot::BarRender;
+    using PanelRender = Owned<RenderedContent<components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+    using PickRender = Owned<components::PickItems, ApplicationAllocator>;
+    using Effects = Owned<ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
+    using Actions = ResolvedActions<ApplicationAllocator>;
+    using ElementsRender = Owned<RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
+    template <typename Value>
+    using Done = std::function<void(LuaOutcome<Value>)>;
+
+    // The source keeps the application's allocator, and what is prepared with it, region `a`.
+    explicit ConfigurationSource(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, QObject* parent = nullptr);
+    ~ConfigurationSource() override;
+    ConfigurationSource(const ConfigurationSource&) = delete;
+    ConfigurationSource& operator=(const ConfigurationSource&) = delete;
+    ConfigurationSource(ConfigurationSource&&) = delete;
+    ConfigurationSource& operator=(ConfigurationSource&&) = delete;
+    void open(const ConfigurationSelection& selection);
+    void requestReload();
+    void poll();
+    [[nodiscard]] const Configuration& configuration() const noexcept;
+    [[nodiscard]] ResolvedFont resolveFont(const FontConfiguration& font, qreal scale);
+    [[nodiscard]] QString error() const;
+    [[nodiscard]] const InputConfiguration& input() const noexcept;
+    [[nodiscard]] const BindingMap<BindingAction>& keymap() const noexcept;
+    void invoke(BindingAction action, BindingContext context, Done<Effects> done);
+    void expression(BindingAction action, BindingContext context, Done<InputExpression> done);
+    // A command tab comes from the configured rows or from the actions a render resolved.
+    [[nodiscard]] tbc::view<std::optional<runtime::config::CommandTabView>, tbc::lt::a> commandTab(BindingAction action, tbc::view<const Actions*, tbc::lt::a> resolved = nullptr) const;
+    [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] const components::Definitions* definitions() const noexcept;
+    [[nodiscard]] const RenderedContent<components::BarContent::capacity, ApplicationAllocator>* fixedBar(components::Position position) const noexcept;
+    void renderBar(components::Position position, const components::Context& context, Done<BarRender> done);
+    void renderPanel(std::size_t index, const components::Context& context, Done<PanelRender> done);
+    void renderPick(std::size_t index, const components::Context& context, Done<PickRender> done);
+    void closePanel();
+    void renderElements(components::Slot slot, std::uint64_t instance, const components::Context& context, const QByteArray& item, Done<ElementsRender> done);
+    void invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context& context, const QByteArray& item, Done<Effects> done);
+    void forgetElements(std::uint64_t instance);
+    [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char* field) const;
+    [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState& view = {});
+    [[nodiscard]] PluginPage queryPlugins(const ClientCommand& request);
+    void setPluginEnabled(const ClientCommand& request, bool enabled);
+    [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
+    // No Lua call is queued or running, so every result has been delivered.
+    [[nodiscard]] bool luaIdle() const noexcept;
+    [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] PluginInvocation pluginInvocation(const ClientCommand& request, BindingContext context) const;
+    [[nodiscard]] PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
+    void authorizePlugin(const PluginInvocation& invocation, const PluginEffects& effects) const;
+
+  signals:
+    void changed();
+    void themeChanged();
+    void failed();
+
+  private:
+    using Generation = ConfigurationGeneration<ApplicationAllocator>;
+
+    // Runs `work` with the current generation on the Lua thread and marks results that
+    // arrive after that generation was replaced.
+    template <typename Value, typename Work>
+    void run(Work work, Done<Value> done);
+    [[nodiscard]] std::optional<ExtendedActionDescription> extendedAction(BindingAction action, const Actions* resolved) const;
+    void retire();
+    [[nodiscard]] ConfigurationReloadRequest request(bool force);
+    void schedule(bool force);
+    void complete();
+    void adopt(tbc::view<PreparedConfiguration, tbc::lt::a> result);
+    void fail(const std::exception& error);
+    void updateAppearance(Appearance appearance);
+    void reload();
+
+    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
+    tbc::view<FontCache<ApplicationAllocator>, tbc::lt::a> fonts_;
+    QTimer poll_;
+    QTimer debounce_;
+    ConfigurationWatch watch_;
+    Configuration configuration_;
+    Appearance appearance_ = Appearance::unknown;
+    std::optional<ThemeValues> locked_theme_;
+    InputConfiguration default_input_;
+    // The default keymap is compiled from the input beside it, so the source stays where Qt made it.
+    tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
+    tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
+    tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
+    tbc::view<std::array<std::optional<BarRender>, components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
+    ConfigurationSnapshot::CommandArguments arguments_;
+    tbc::view<std::optional<PluginPackages>, tbc::lt::a> plugins_;
+    PluginOverrides plugin_overrides_;
+    runtime::plugins::TrustStore trust_;
+    std::uint64_t next_generation_ = 1;
+    std::uint64_t revision_ = 0;
+    std::uint64_t active_revision_ = 0;
+    QString path_;
+    QString profile_;
+    QByteArray source_path_;
+    QByteArray profile_name_;
+    QString theme_;
+    QString trust_path_;
+    QString module_root_;
+    QString error_;
+    bool loaded_ = false;
+    bool busy_ = false;
+    bool pending_reload_ = false;
+    bool pending_poll_ = false;
+    QFutureWatcher<PreparedConfiguration> task_;
+    std::array<char, ConfigurationQuery::capacity> query_buffer_{};
+    // Declared last so it stops, finishing its current call, before the generation it runs dies.
+    LuaHost lua_;
+  };
+
+}

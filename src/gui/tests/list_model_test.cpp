@@ -1,4 +1,4 @@
-#include "list_model.hpp"
+#include "ui/app/list_model.hpp"
 #include <QAbstractItemModelTester>
 #include <QCoreApplication>
 #include <QPersistentModelIndex>

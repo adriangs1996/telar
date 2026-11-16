@@ -17,7 +17,7 @@ namespace third_party {
 
 // CASE: library.view_of_local
 // PAIR: library.view
-// SOURCE: src/gui/qt/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A library type with a trivial destructor views the object it is built from.
 // SCENARIO: A library view of a local library string is returned.
@@ -30,7 +30,7 @@ library::string_view libraryViewOfLocal() {
 
 // CASE: library.view_of_parameter
 // PAIR: library.view
-// SOURCE: src/gui/qt/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A library view of a caller's object may outlive the call.
 // SCENARIO: The viewed string belongs to the caller; accept.
@@ -68,7 +68,7 @@ int* libraryElementCopy() {
 
 // CASE: library.container_storage_escape
 // PAIR: library.owner_pointer
-// SOURCE: src/gui/qt/configuration_source.cpp :: optionalText
+// SOURCE: src/gui/ui/config/configuration_source.cpp :: optionalText
 // STATUS: implemented
 // CONTRACT: A pointer returned by a library container designates its storage.
 // SCENARIO: The data of a local library container is returned.
@@ -81,7 +81,7 @@ const int* libraryContainerStorageEscape() {
 
 // CASE: library.non_container_pointer
 // PAIR: library.owner_pointer
-// SOURCE: src/gui/qt/curve_scene.cpp :: QQuickWindow::createTextureFromImage
+// SOURCE: src/gui/ui/scene/curve_scene.cpp :: QQuickWindow::createTextureFromImage
 // STATUS: implemented
 // CONTRACT: A pointer from a library owner that is not a container has no inferable relation to it and is not reported.
 // SCENARIO: A created object outlives the local component that created it; accept.
@@ -94,7 +94,7 @@ int* libraryNonContainerPointer() {
 
 // CASE: library.views_in_owner_dead
 // PAIR: library.views_in_owner
-// SOURCE: src/gui/qt/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A library container of views keeps the borrows of the views appended to it.
 // SCENARIO: The appended view's string dies before the container is read.
@@ -111,7 +111,7 @@ void libraryViewsInOwnerDead() {
 
 // CASE: library.views_in_owner_live
 // PAIR: library.views_in_owner
-// SOURCE: src/gui/qt/application.cpp :: Application
+// SOURCE: src/gui/ui/app/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: Views stored in a library container may be read while their source is alive.
 // SCENARIO: The string outlives the read; accept.

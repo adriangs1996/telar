@@ -3,15 +3,15 @@
 static_assert(true);
 #endif
 
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/cell_text_grid.hpp"
-#include "../qt/mode_projection.hpp"
-#include "../qt/native_cell_text.hpp"
-#include "../qt/projection.hpp"
 #include "qml_fixture.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/chrome/mode_projection.hpp"
+#include "ui/controls/cell_text_grid.hpp"
+#include "ui/controls/native_cell_text.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFont>
@@ -55,11 +55,11 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "qt/bundled_fonts.hpp"
-#include "qt/cell_text_grid.hpp"
-#include "qt/mode_projection.hpp"
-#include "qt/native_cell_text.hpp"
-#include "qt/projection.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/chrome/mode_projection.hpp"
+#include "ui/controls/cell_text_grid.hpp"
+#include "ui/controls/native_cell_text.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;

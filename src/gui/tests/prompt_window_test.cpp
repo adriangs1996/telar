@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "../application/dependencies.hpp"
-#include "../qt/application.hpp"
-#include "../qt/key_adapter.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
@@ -15,6 +13,8 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/application.hpp"
+#include "ui/input/key_adapter.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <algorithm>
@@ -65,18 +65,18 @@ static_assert(true);
 #if (defined(__APPLE__))
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/external_link_opener.hpp"
-#include "../qt/list_model.hpp"
-#include "../qt/machine_chrome_layout.hpp"
-#include "../qt/machine_client.hpp"
-#include "../qt/machine_client_key.hpp"
-#include "../qt/prompt_editor_item.hpp"
-#include "../qt/terminal_item.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/links/external_link_opener.hpp"
+#include "ui/machines/machine_chrome_layout.hpp"
+#include "ui/machines/machine_client.hpp"
+#include "ui/machines/machine_client_key.hpp"
+#include "ui/prompt/prompt_editor_item.hpp"
+#include "ui/terminal/terminal_item.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
@@ -124,9 +124,9 @@ static_assert(true);
 #include <memory>
 
 #include "application/dependencies.hpp"
-#include "qt/application.hpp"
+#include "ui/app/application.hpp"
 #ifdef __APPLE__
-#include "qt/key_adapter.hpp"
+#include "ui/input/key_adapter.hpp"
 #include <QBuffer>
 #include <QDebug>
 #include <QFont>
@@ -137,13 +137,13 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "qt/bundled_fonts.hpp"
-#include "qt/external_link_opener.hpp"
-#include "qt/list_model.hpp"
-#include "qt/machine_chrome_layout.hpp"
-#include "qt/machine_client.hpp"
-#include "qt/machine_client_key.hpp"
-#include "qt/terminal_item.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/links/external_link_opener.hpp"
+#include "ui/machines/machine_chrome_layout.hpp"
+#include "ui/machines/machine_client.hpp"
+#include "ui/machines/machine_client_key.hpp"
+#include "ui/terminal/terminal_item.hpp"
 
 import telar.gui.transport.runtime_link;
 import telar.wire.content;

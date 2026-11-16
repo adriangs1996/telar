@@ -4,16 +4,16 @@ static_assert(true);
 #endif
 
 #include "../core/terminal_size.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/component_projection.hpp"
-#include "../qt/metrics_projection.hpp"
-#include "../qt/mode_projection.hpp"
-#include "../qt/projection.hpp"
 #include "qml_fixture.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/chrome/metrics_projection.hpp"
+#include "ui/chrome/mode_projection.hpp"
+#include "ui/components/component_projection.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -48,11 +48,11 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "qt/bundled_fonts.hpp"
-#include "qt/component_projection.hpp"
-#include "qt/metrics_projection.hpp"
-#include "qt/mode_projection.hpp"
-#include "qt/projection.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/chrome/metrics_projection.hpp"
+#include "ui/chrome/mode_projection.hpp"
+#include "ui/components/component_projection.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application.host_effects;

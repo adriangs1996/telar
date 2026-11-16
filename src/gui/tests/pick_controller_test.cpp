@@ -39,11 +39,11 @@ static_assert(true);
 
 #include "telar_client/serializers/telar_frame.hpp"
 
-#include "../qt/lua_host.hpp"
-#include "../qt/pick_controller.hpp"
-#include "../qt/surface_command.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_config/terminal/control/policy.hpp"
+#include "ui/components/pick_controller.hpp"
+#include "ui/components/surface_command.hpp"
+#include "ui/config/lua_host.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -69,8 +69,8 @@ static_assert(true);
 #include <sys/stat.h>
 
 #include "core/memory.hpp"
-#include "qt/pick_controller.hpp"
-#include "qt/surface_command.hpp"
+#include "ui/components/pick_controller.hpp"
+#include "ui/components/surface_command.hpp"
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;

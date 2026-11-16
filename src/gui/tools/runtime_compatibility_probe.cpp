@@ -1,6 +1,6 @@
 #include "application/dependencies.hpp"
-#include "qt/runtime_connection.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "ui/app/runtime_connection.hpp"
 #include <QCoreApplication>
 #include <QObject>
 #include <QString>

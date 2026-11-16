@@ -4,19 +4,19 @@ static_assert(true);
 #endif
 
 #include "../platform/font.h"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/chrome_fonts.hpp"
-#include "../qt/chrome_text_scene.hpp"
-#include "../qt/font_asset.hpp"
-#include "../qt/font_source.hpp"
-#include "../qt/native_cell_text.hpp"
-#include "../qt/native_chrome_text.hpp"
-#include "../qt/resident_fonts.hpp"
-#include "../qt/window_font_catalog.hpp"
 #include "frame_fixture.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/controls/native_cell_text.hpp"
+#include "ui/controls/native_chrome_text.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/chrome_fonts.hpp"
+#include "ui/fonts/font_asset.hpp"
+#include "ui/fonts/font_source.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/fonts/window_font_catalog.hpp"
+#include "ui/scene/chrome_text_scene.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QDebug>
@@ -66,15 +66,15 @@ static_assert(true);
 #include <type_traits>
 #include <utility>
 
-#include "qt/bundled_fonts.hpp"
-#include "qt/chrome_fonts.hpp"
-#include "qt/chrome_text_scene.hpp"
-#include "qt/font_asset.hpp"
-#include "qt/font_source.hpp"
-#include "qt/native_cell_text.hpp"
-#include "qt/native_chrome_text.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/window_font_catalog.hpp"
+#include "ui/controls/native_cell_text.hpp"
+#include "ui/controls/native_chrome_text.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/chrome_fonts.hpp"
+#include "ui/fonts/font_asset.hpp"
+#include "ui/fonts/font_source.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/fonts/window_font_catalog.hpp"
+#include "ui/scene/chrome_text_scene.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;

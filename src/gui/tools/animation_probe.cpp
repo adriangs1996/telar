@@ -5,18 +5,18 @@ static_assert(true);
 
 #include "../application/dependencies.hpp"
 #include "../platform/window.hpp"
-#include "../qt/application.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/list_model.hpp"
-#include "../qt/modal_reveal_layout.hpp"
-#include "../qt/native_rounded_rectangle.hpp"
-#include "../qt/tab_strip_layout.hpp"
-#include "../qt/window_animation_clock.hpp"
 #include "../tests/platform/window_activation.hpp"
 #include "animation_presentation.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/app/application.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/chrome/tab_strip_layout.hpp"
+#include "ui/controls/modal_reveal_layout.hpp"
+#include "ui/controls/native_rounded_rectangle.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/scene/window_animation_clock.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>
@@ -38,13 +38,13 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
-#include "qt/application.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/list_model.hpp"
-#include "qt/modal_reveal_layout.hpp"
-#include "qt/native_rounded_rectangle.hpp"
-#include "qt/tab_strip_layout.hpp"
-#include "qt/window_animation_clock.hpp"
+#include "ui/app/application.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/chrome/tab_strip_layout.hpp"
+#include "ui/controls/modal_reveal_layout.hpp"
+#include "ui/controls/native_rounded_rectangle.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;

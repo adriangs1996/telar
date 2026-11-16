@@ -3,13 +3,13 @@
 static_assert(true);
 #endif
 
-#include "../qt/remote_bridge.hpp"
-#include "../qt/ssh_options.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "ui/machines/remote_bridge.hpp"
+#include "ui/machines/ssh_options.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -37,8 +37,8 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-#include "remote_bridge.hpp"
-#include "ssh_options.hpp"
+#include "ui/machines/remote_bridge.hpp"
+#include "ui/machines/ssh_options.hpp"
 
 import telar.gui.machines.discovery;
 import telar.client;

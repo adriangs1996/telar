@@ -4,10 +4,10 @@ static_assert(true);
 #endif
 
 #include "../platform/environment.hpp"
-#include "../qt/external_link_opener.hpp"
-#include "../qt/projection.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/links/external_link_opener.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QProcess>
@@ -39,9 +39,9 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-#include "external_link_opener.hpp"
 #include "platform/environment.hpp"
-#include "projection.hpp"
+#include "ui/app/projection.hpp"
+#include "ui/links/external_link_opener.hpp"
 
 import telar.gui.links.cell_links;
 import telar.gui.platform.login_shell;

@@ -30,8 +30,9 @@ def build(build_directory, output):
             raise RuntimeError(f'Diagnostic build failed: {output / (name + ".log")}')
 
     compiler = None
-    for name in ('application', 'runtime_connection', 'terminal_item'):
-        row = next(row for row in database if row['file'].endswith('/qt/' + name + '.cpp'))
+    for source in ('app/application', 'app/runtime_connection', 'terminal/terminal_item'):
+        name = Path(source).name
+        row = next(row for row in database if row['file'].endswith('/ui/' + source + '.cpp'))
         arguments = shlex.split(row['command'])
         compiler = arguments[0]
         target = output / (name + '.o')

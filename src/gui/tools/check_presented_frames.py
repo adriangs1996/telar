@@ -38,7 +38,7 @@ def observer(source):
 def build_probe(build, source, output, sanitize=False, unsafe=False):
     output.mkdir()
     database = json.loads((build / 'compile_commands.json').read_text())
-    row = next(row for row in database if row['file'].endswith('/qt/application.cpp'))
+    row = next(row for row in database if row['file'].endswith('/ui/app/application.cpp'))
     application_header = Path(row['file']).with_suffix('.hpp')
     command = row.get('arguments') or shlex.split(row['command'])
     compiler = command[0]

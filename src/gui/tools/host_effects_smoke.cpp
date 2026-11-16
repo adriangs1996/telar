@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../qt/command_process.hpp"
-#include "../qt/sound_player.hpp"
-#include "../qt/system_notifier.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/app/command_process.hpp"
+#include "ui/notifications/sound_player.hpp"
+#include "ui/notifications/system_notifier.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -30,9 +30,9 @@ static_assert(true);
 #include <system_error>
 #include <utility>
 
-#include "qt/command_process.hpp"
-#include "qt/sound_player.hpp"
-#include "qt/system_notifier.hpp"
+#include "ui/app/command_process.hpp"
+#include "ui/notifications/sound_player.hpp"
+#include "ui/notifications/system_notifier.hpp"
 
 import telar.gui.text.notification_payload;
 

@@ -6,9 +6,6 @@ static_assert(true);
 #include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
 #include "../core/terminal_size.hpp"
-#include "../qt/application.hpp"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/list_model.hpp"
 #include "controlled_awake_clock.hpp"
 #include "qml_fixture.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -20,6 +17,9 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "ui/app/application.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
@@ -59,9 +59,9 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-#include "qt/application.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/list_model.hpp"
+#include "ui/app/application.hpp"
+#include "ui/app/list_model.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

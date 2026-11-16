@@ -1,8 +1,8 @@
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
-#include "qt/application.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/terminal_item.hpp"
+#include "ui/app/application.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/terminal/terminal_item.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>

@@ -4,12 +4,12 @@ static_assert(true);
 #endif
 
 #include "../core/memory.hpp"
-#include "../qt/plugin_packages.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/open_directory.h"
+#include "ui/plugins/plugin_packages.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -44,7 +44,7 @@ static_assert(true);
 #include <utility>
 
 #include "core/memory.hpp"
-#include "qt/plugin_packages.hpp"
+#include "ui/plugins/plugin_packages.hpp"
 
 import telar.base.text;
 import telar.gui.tests.plugin_catalog_cases;

@@ -1,6 +1,6 @@
 #include "application/dependencies.hpp"
 #include "assertions.hpp"
-#include "qt/native_pointer_events.hpp"
+#include "ui/input/native_pointer_events.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>

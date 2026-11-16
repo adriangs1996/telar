@@ -27,7 +27,7 @@ def copy_qml_modules(base, build, destination, qtpaths):
     imports = query(qtpaths, 'QT_INSTALL_QML')
     scanner = query(qtpaths, 'QT_INSTALL_LIBEXECS') / 'qmlimportscanner'
     modules = json.loads(subprocess.check_output(
-        [str(scanner), '-rootPath', str(base / 'qt'), '-importPath', str(build), '-importPath', str(imports)],
+        [str(scanner), '-rootPath', str(base / 'ui'), '-importPath', str(build), '-importPath', str(imports)],
         text=True))
 
     def nested_modules(directory, names):

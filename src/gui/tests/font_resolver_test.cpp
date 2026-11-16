@@ -5,16 +5,16 @@ static_assert(true);
 
 #include "../core/memory.hpp"
 #include "../platform/font.h"
-#include "../qt/bundled_fonts.hpp"
-#include "../qt/font_cache.hpp"
-#include "../qt/font_resolver.hpp"
-#include "../qt/font_source.hpp"
-#include "../qt/resident_fonts.hpp"
-#include "../qt/terminal_font.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/font_cache.hpp"
+#include "ui/fonts/font_resolver.hpp"
+#include "ui/fonts/font_source.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/fonts/terminal_font.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFont>
@@ -53,12 +53,12 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "platform/font.h"
-#include "qt/bundled_fonts.hpp"
-#include "qt/font_cache.hpp"
-#include "qt/font_resolver.hpp"
-#include "qt/font_source.hpp"
-#include "qt/resident_fonts.hpp"
-#include "qt/terminal_font.hpp"
+#include "ui/fonts/bundled_fonts.hpp"
+#include "ui/fonts/font_cache.hpp"
+#include "ui/fonts/font_resolver.hpp"
+#include "ui/fonts/font_source.hpp"
+#include "ui/fonts/resident_fonts.hpp"
+#include "ui/fonts/terminal_font.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;
