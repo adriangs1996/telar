@@ -2460,6 +2460,65 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->error(), QString{});
     }
 
+    // One change of the dialog that moves the line search to another pane and another kind
+    // reaches every prompt line as one value: the line it leaves never hosts the new kind, not even
+    // between the kind and the pane.
+    Q_SLOT void lineSearchMovesBetweenPanesAtOnce() {
+      auto* terminal = terminalIn(window_->contentItem());
+      if (terminal == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
+      QKeyEvent prefix{QEvent::KeyPress, Qt::Key_B, control};
+      QKeyEvent split{QEvent::KeyPress, Qt::Key_Percent, Qt::NoModifier, QStringLiteral("%")};
+
+      QCoreApplication::sendEvent(terminal, &prefix);
+      QCoreApplication::sendEvent(terminal, &split);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
+      const auto key = [this](int row) {
+        return client_->panes()->rows()->data(client_->panes()->rows()->index(row, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      };
+      const auto first = key(0);
+      const auto second = key(1);
+      const auto line = [this](const QString& pane) -> QQuickItem* {
+        for (auto* item : test::visualItems(*window_->contentItem(), QString{})) {
+          if (item->property("scrollbackSearch").isValid() && item->property("paneId").toString() == pane) {
+            return item;
+          }
+        }
+
+        return nullptr;
+      };
+
+      // The search leaves the first pane, which has no focus, so its line hosts nothing before
+      // or after.
+      client_->execute(window_actions::Action::focus_pane, second);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(line(first) != nullptr && line(second) != nullptr, runtime_wait_ms);
+      auto* first_line = line(first);
+      auto* second_line = line(second);
+
+      test::HistoryPresentation::showLineSearch(*client_, Store::Dialog::history, first.toULongLong());
+      QVERIFY(!first_line->property("searching").toBool());
+      const QSignalSpy first_scrollback{first_line, SIGNAL(scrollbackSearchChanged())};
+      const QSignalSpy first_search{first_line, SIGNAL(searchChanged())};
+
+      // The scrollback search would show on the first pane's line if the kind arrived before the
+      // pane.
+      test::HistoryPresentation::showLineSearch(*client_, Store::Dialog::copy_search, second.toULongLong());
+      QVERIFY(second_line->property("scrollbackSearch").toBool());
+      QCOMPARE(first_scrollback.count(), 0);
+      QCOMPARE(first_search.count(), 0);
+
+      test::HistoryPresentation::showLineSearch(*client_, Store::Dialog::none, 0);
+      QVERIFY(!second_line->property("searching").toBool());
+      client_->execute(window_actions::Action::close_pane, second);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      QCOMPARE(client_->error(), QString{});
+    }
+
     Q_SLOT void kittyGraphicsRendering() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto const* pane = firstPane();

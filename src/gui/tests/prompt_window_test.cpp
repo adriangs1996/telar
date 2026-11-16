@@ -208,8 +208,7 @@ namespace {
         pathPicker: application.paths
         copy: application.copy
         prompt: application.prompt
-        lineSearch: application.lineSearch
-        lineSearchPane: application.lineSearchPane
+        lineSearch: ({kind: application.lineSearch, pane: application.lineSearchPane})
         controlModifier: application.controlModifier
         superModifier: application.superModifier
         onCancelled: application.execute(WindowActions.Action.cancel)

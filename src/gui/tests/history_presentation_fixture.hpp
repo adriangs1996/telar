@@ -48,6 +48,13 @@ namespace telar::gui::test {
       return QPointF{(target->bounds.x + target->bounds.width / 2) / surface.scale, (target->bounds.y + target->bounds.height / 2) / surface.scale};
     }
 
+    // Sets the dialog and the pane whose prompt line hosts it, then announces them, as the last two
+    // steps of the window's showDialog do, so a test chooses any pane and kind in one change.
+    static void showLineSearch(qt::ApplicationController& application, qt::Store::Dialog kind, std::uint64_t pane_id) {
+      application.store_.setDialog(kind, pane_id);
+      emit application.dialogChanged();
+    }
+
     static void describe(qt::ApplicationController& application) {
       const auto& surface = application.history()->presented_surface_;
 

@@ -96,8 +96,8 @@ Window {
         typography: root.geometry.typography
         headerHeight: root.geometry.paneHeader
         dialog: telar.dialog
-        lineSearch: telar.lineSearch
-        lineSearchPane: telar.lineSearchPane
+        // The kind and the pane in one value, read together on each dialogChanged.
+        lineSearch: ({kind: telar.lineSearch, pane: telar.lineSearchPane})
         prefixPending: telar.prefixPending
         controlModifier: telar.controlModifier
         superModifier: telar.superModifier

@@ -20,11 +20,11 @@ Item {
     required property var typography
     // The height of a pane's header band.
     required property real headerHeight
-    // The dialog open over the workbench, a Store.Dialog; the search a prompt line hosts and the
-    // pane whose line it is.
+    // The dialog open over the workbench, a Store.Dialog.
     required property int dialog
-    required property int lineSearch
-    required property string lineSearchPane
+    // The search a prompt line hosts, {kind: a Store.Dialog, pane: the key of the pane whose line
+    // it is}, as one value that changes at once.
+    required property var lineSearch
     required property bool prefixPending
     // The platform's Control and Command modifiers, as event modifier masks.
     required property int controlModifier
@@ -400,7 +400,6 @@ Item {
                     copy: root.copy
                     prompt: root.prompt
                     lineSearch: root.lineSearch
-                    lineSearchPane: root.lineSearchPane
                     controlModifier: root.controlModifier
                     superModifier: root.superModifier
                     terminal: terminal

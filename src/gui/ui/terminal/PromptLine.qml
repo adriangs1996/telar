@@ -24,9 +24,9 @@ Item {
     required property var pathPicker
     required property CopyController copy
     required property var prompt
-    // The search the window hosts in a prompt line, a Store.Dialog, and the pane whose line it is.
-    required property int lineSearch
-    required property string lineSearchPane
+    // The search the window hosts in a prompt line, {kind: a Store.Dialog, pane: the key of the
+    // pane whose line it is}. One value, so the kind and the pane never disagree for a moment.
+    required property var lineSearch
     // The platform's Control and Command modifiers, as event modifier masks.
     required property int controlModifier
     required property int superModifier
@@ -46,8 +46,8 @@ Item {
     readonly property bool queueing: root.running && root.focused && (!editor.empty || editor.queued)
     // The history or the paths, searched from the editor's row, the rows they find under it.
     // The scrollback search lives in the line of the pane copy mode reads, whatever runs there.
-    readonly property bool scrollbackSearch: root.lineSearchPane === root.paneId && root.lineSearch === Store.Dialog.copy_search
-    readonly property int search: (root.editing && root.focused || root.scrollbackSearch) && root.lineSearchPane === root.paneId ? root.lineSearch : Store.Dialog.none
+    readonly property bool scrollbackSearch: root.lineSearch.pane === root.paneId && root.lineSearch.kind === Store.Dialog.copy_search
+    readonly property int search: (root.editing && root.focused || root.scrollbackSearch) && root.lineSearch.pane === root.paneId ? root.lineSearch.kind : Store.Dialog.none
     readonly property bool searching: root.search !== Store.Dialog.none
     // The rows a search shows at most, newest or best nearest the query.
     readonly property int searchRows: 8
@@ -833,7 +833,7 @@ Item {
     // A search the line stops hosting while it is open, as when its pane loses the focus,
     // closes; so does one whose field loses the keyboard to a click elsewhere in the window.
     function abandonSearch() {
-        if (!root.searching && root.lineSearch !== Store.Dialog.none && root.lineSearchPane === root.paneId) {
+        if (!root.searching && root.lineSearch.kind !== Store.Dialog.none && root.lineSearch.pane === root.paneId) {
             root.cancelled();
         }
     }
@@ -848,7 +848,7 @@ Item {
     }
 
     Component.onDestruction: {
-        if (root.lineSearchPane === root.paneId && root.lineSearch !== Store.Dialog.none) {
+        if (root.lineSearch.pane === root.paneId && root.lineSearch.kind !== Store.Dialog.none) {
             root.cancelled();
         }
     }
