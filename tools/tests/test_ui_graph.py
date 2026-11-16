@@ -43,9 +43,9 @@ class UiGraph(unittest.TestCase):
         self.git('add', '-A')
         return self.git('write-tree')
 
-    def run_report(self, files, verbose=False, rules=False):
+    def run_report(self, files, verbose=False, rules=False, moves=None):
         rev = self.tree(files)
-        lines, code = graph.report(rev, graph.load_sources(rev, self.repository), verbose, rules)
+        lines, code = graph.report(rev, graph.load_sources(rev, self.repository), verbose, rules, moves)
         return lines[1:], code
 
     def test_a_node_is_a_directory_at_any_depth(self):
@@ -123,8 +123,9 @@ class UiGraph(unittest.TestCase):
             'foundation/models': ['design'],
         })
         self.assertEqual(code, 1)
-        self.assertEqual(lines[lines.index('rule violations: 2'):], [
-            'rule violations: 2',
+        self.assertEqual(lines[lines.index('rule violations: 3'):], [
+            'rule violations: 3',
+            '   components is outside app, design, foundation',
             '   QML app/chrome -> components',
             '   QML foundation/models -> design',
         ])
@@ -205,16 +206,23 @@ class UiGraph(unittest.TestCase):
 
         self.assertEqual(lines[2], "C++ as is edges 9 cycles: [(9, '...')]")
 
-    def test_rules_allow_foundation_design_and_children(self):
+    def test_rules_allow_foundation_design_and_descendants(self):
         lines, code = self.run_report({
+            # foundation/ uses its own subfolders; design/ uses those and foundation/.
             'foundation/models/projection.hpp': include('foundation/text/utf16_encoding.hpp'),
             'foundation/text/utf16_encoding.hpp': '',
-            'design/BarPill.qml': 'Item {}\n',
+            'design/BarPill.qml': 'Item { ElementHost {} }\n',
+            'design/elements/ElementHost.qml': 'Item { ChromeText {} }\n',
+            'design/controls/ChromeText.qml': 'Item {}\n',
             'design/bar_metric.hpp': include('foundation/models/projection.hpp'),
-            'app/application_controller.hpp': include('app/chrome/sidebar.hpp') + include('design/bar_metric.hpp'),
+            # A directory of app/ is reachable from its parent and from any further ancestor.
+            'app/application_controller.hpp': include('app/chrome/sidebar.hpp') + include('design/bar_metric.hpp')
+                                              + include('app/chrome/activity/card.hpp'),
             'app/chrome/sidebar.hpp': include('app/chrome/activity/card.hpp') + include('foundation/models/projection.hpp'),
             'app/chrome/activity/card.hpp': include('design/bar_metric.hpp'),
             'app/chrome/Sidebar.qml': 'Item { BarPill {} }\n',
+            'app/Main.qml': 'Item { AgentCard {} }\n',
+            'app/chrome/activity/AgentCard.qml': 'Item {}\n',
         }, rules=True)
 
         self.assertEqual(code, 0)
@@ -222,15 +230,18 @@ class UiGraph(unittest.TestCase):
 
     def test_rules_reject_each_forbidden_edge(self):
         lines, code = self.run_report({
-            # foundation/ may not use design/.
-            'foundation/models/projection.hpp': include('design/bar_metric.hpp'),
-            'design/bar_metric.hpp': '',
-            # A widget may not use its parent, its grandchild or a sibling.
+            # foundation/ uses only foundation/.
+            'foundation/models/projection.hpp': include('design/bar_metric.hpp') + include('app/chrome/sidebar.hpp'),
+            # design/ uses only foundation/ and design/.
+            'design/bar_metric.hpp': include('app/chrome/sidebar.hpp'),
+            # A widget may not use its parent, its grandparent, a sibling or a cousin.
             'app/chrome/sidebar.hpp': include('app/application_controller.hpp') + include('app/panes/pane.hpp'),
-            'app/application_controller.hpp': include('app/chrome/activity/card.hpp'),
-            'app/chrome/activity/card.hpp': '',
+            'app/chrome/activity/card.hpp': include('app/application_controller.hpp')
+                                            + include('app/panes/terminal/item.hpp'),
+            'app/application_controller.hpp': '',
             'app/panes/pane.hpp': '',
-            # Folders outside app/ that are not foundation/ or design/ are nobody's children.
+            'app/panes/terminal/item.hpp': '',
+            # Every folder lives in app/, design/ or foundation/, and nobody may use one that does not.
             'scene/clock.hpp': include('chrome/bar.hpp'),
             'chrome/bar.hpp': '',
             'app/panes/PaneArea.qml': 'Item { Sidebar {} }\n',
@@ -238,14 +249,78 @@ class UiGraph(unittest.TestCase):
         }, rules=True)
 
         self.assertEqual(code, 1)
-        self.assertEqual(lines[lines.index('rule violations: 6'):], [
-            'rule violations: 6',
-            '   C++ app -> app/chrome/activity',
+        self.assertEqual(lines[lines.index('rule violations: 11'):], [
+            'rule violations: 11',
+            '   chrome is outside app, design, foundation',
+            '   scene is outside app, design, foundation',
             '   C++ app/chrome -> app',
             '   C++ app/chrome -> app/panes',
+            '   C++ app/chrome/activity -> app',
+            '   C++ app/chrome/activity -> app/panes/terminal',
+            '   C++ design -> app/chrome',
+            '   C++ foundation/models -> app/chrome',
             '   C++ foundation/models -> design',
             '   C++ scene -> chrome',
             '   QML app/panes -> app/chrome',
+        ])
+
+    def test_rules_reject_cycles(self):
+        lines, code = self.run_report({
+            'foundation/fonts/glyphs.hpp': include('foundation/scene/nodes.hpp'),
+            'foundation/scene/nodes.hpp': include('foundation/fonts/glyphs.hpp'),
+            'design/Pill.qml': 'Item { Ring {} }\n',
+            'design/bars/Ring.qml': 'Item { Pill {} }\n',
+        }, rules=True)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[lines.index('rule violations: 2'):], [
+            'rule violations: 2',
+            "   C++ cycle ['foundation/fonts', 'foundation/scene']",
+            "   QML cycle ['design', 'design/bars']",
+        ])
+
+    def test_moves_read_folder_and_target_pairs(self):
+        self.assertEqual(graph.load_moves('# header\n\nchrome   app/chrome  # the bars\ncontrols design/controls/\n'),
+                         {'chrome': 'app/chrome', 'controls': 'design/controls'})
+        with self.assertRaisesRegex(ValueError, 'line 1'):
+            graph.load_moves('chrome\n')
+        with self.assertRaisesRegex(ValueError, 'line 2: chrome is moved twice'):
+            graph.load_moves('chrome app/chrome\nchrome app/panes\n')
+
+    def test_a_folder_takes_the_target_of_its_longest_listed_prefix(self):
+        moves = {'chrome': 'app/chrome', 'chrome/activity': 'app/chrome/cards', 'foundation': 'foundation'}
+
+        self.assertEqual(graph.moved('chrome', moves), 'app/chrome')
+        self.assertEqual(graph.moved('chrome/activity', moves), 'app/chrome/cards')
+        self.assertEqual(graph.moved('chrome/activity/rows', moves), 'app/chrome/cards/rows')
+        self.assertEqual(graph.moved('chrome/tabs', moves), 'app/chrome/tabs')
+        self.assertEqual(graph.moved('panes', moves), 'panes')
+
+    def test_rules_judge_the_folders_at_their_moved_places(self):
+        files = {
+            'app/application_controller.hpp': include('chrome/sidebar.hpp') + include('activity/card.hpp'),
+            'chrome/sidebar.hpp': include('activity/card.hpp') + include('controls/text.hpp'),
+            'chrome/Sidebar.qml': 'Item { AgentCard {} }\n',
+            'activity/card.hpp': include('panes/pane.hpp'),
+            'activity/AgentCard.qml': 'Item { ChromeText {} }\n',
+            'panes/pane.hpp': include('controls/text.hpp'),
+            'controls/text.hpp': include('foundation/text/utf16.hpp'),
+            'controls/ChromeText.qml': 'Item {}\n',
+            'design/BarPill.qml': 'Item { ChromeText {} }\n',
+            'foundation/text/utf16.hpp': '',
+        }
+        moves = {'chrome': 'app/chrome', 'activity': 'app/chrome/activity', 'panes': 'app/panes',
+                 'controls': 'design'}
+
+        lines, code = self.run_report(files, verbose=True, rules=True, moves=moves)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[lines.index('QML edges:'):], [
+            'QML edges:',
+            "   app/chrome -> ['app/chrome/activity']",
+            "   app/chrome/activity -> ['design']",
+            'rule violations: 1',
+            '   C++ app/chrome/activity -> app/panes',
         ])
 
 

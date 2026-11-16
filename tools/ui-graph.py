@@ -21,9 +21,21 @@ app/ that are not shared headers (the root and U4's runtime_connection/applicati
 and QML. `-v` lists the edges of the third graph, the files that include the root header and the
 QML edges.
 
-`--rules` checks the target rules of the UI and exits with 1 when any edge breaks them:
-anyone may use foundation/, foundation/ may not use design/, and a directory of the app/ tree
-is reachable only from its parent directory.
+`--rules` checks the target rules of the UI and exits with 1 when anything breaks them:
+- Every folder lives in one of three trees: app/, design/ or foundation/.
+- Anyone may use foundation/. foundation/ uses only its own subfolders.
+- design/ uses only foundation/ and its own subfolders. Anyone outside foundation/ may use it.
+- A directory of the app/ tree is reachable only from its ancestors: its parent, its parent's
+  parent, up to app/ itself. Never from a sibling, a cousin or a descendant.
+- Neither the C++ graph nor the QML graph has a cycle.
+
+`--moves FILE` judges the revision as if each folder were already where FILE moves it. Each
+line of FILE is `folder target`, both below ui/, and `#` starts a comment; a folder takes the
+target of its longest listed prefix, and a folder that is not listed stays where it is. Edges
+between folders that land in the same directory disappear. `ui-moves.txt` beside this tool
+holds the moves to the target tree, so that
+  ui-graph.py HEAD --rules --moves tools/ui-moves.txt
+prints the edges that moving the folders will not fix.
 
 The revision is read with git, so no checkout is needed. Run it from anywhere in the repository:
   ui-graph.py HEAD
@@ -61,6 +73,8 @@ SHARED_HEADERS = {
 }
 # Long cycles print as their size only.
 CYCLE_LISTING_LIMIT = 8
+# The trees of the target layout of ui/.
+TREES = ('app', 'design', 'foundation')
 
 
 def main():
@@ -70,10 +84,13 @@ def main():
                         help='list the edges without root edges and the files that include the root header')
     parser.add_argument('--rules', action='store_true',
                         help='check the target rules of the UI and exit with 1 on violations')
+    parser.add_argument('--moves', metavar='FILE', type=Path,
+                        help='judge the folders as if they were already where FILE moves them')
     arguments = parser.parse_args()
 
     sources = load_sources(arguments.rev, ROOT)
-    lines, code = report(arguments.rev, sources, arguments.verbose, arguments.rules)
+    moves = load_moves(arguments.moves.read_text()) if arguments.moves else None
+    lines, code = report(arguments.rev, sources, arguments.verbose, arguments.rules, moves)
     print('\n'.join(lines))
     sys.exit(code)
 
@@ -100,6 +117,51 @@ def load_sources(rev, repository):
         offset = start + size + 1
 
     return sources
+
+
+def load_moves(text):
+    """Return {folder: target} from lines of `folder target`; `#` starts a comment."""
+    moves = {}
+    for number, line in enumerate(text.splitlines(), 1):
+        fields = line.split('#', 1)[0].split()
+        if not fields:
+            continue
+        if len(fields) != 2:
+            raise ValueError(f'line {number}: expected `folder target`, got {line!r}')
+
+        source, target = (field.strip('/') for field in fields)
+        if source in moves:
+            raise ValueError(f'line {number}: {source} is moved twice')
+        moves[source] = target
+
+    return moves
+
+
+def moved(node, moves):
+    """The directory of `node` once each folder of `moves` is at its target."""
+    parts = node.split('/')
+    for end in range(len(parts), 0, -1):
+        target = moves.get('/'.join(parts[:end]))
+        if target is not None:
+            return '/'.join([target, *parts[end:]])
+
+    return node
+
+
+def move_edges(edges, qml, moves):
+    """Return the C++ edges and the QML graph with their folders at the targets of `moves`."""
+    include = []
+    for path, node, included, header in edges:
+        node, included = moved(node, moves), moved(included, moves)
+        if node != included:
+            include.append((path, node, included, header))
+
+    graph = collections.defaultdict(set)
+    for node, targets in qml.items():
+        node = moved(node, moves)
+        graph[node] |= {moved(target, moves) for target in targets} - {node}
+
+    return include, graph
 
 
 def folder(path):
@@ -247,13 +309,17 @@ def strongly_connected(graph):
 
 def allowed(node, target):
     """Whether the target rules of the UI let `node` depend on `target`."""
-    top = target.split('/')[0]
-    if top == 'foundation':
+    user = node.split('/')[0]
+    used = target.split('/')[0]
+    if user == 'foundation':
+        return used == 'foundation'
+    if user == 'design':
+        return used in ('foundation', 'design')
+    if used in ('foundation', 'design'):
         return True
-    if top == 'design':
-        return node.split('/')[0] != 'foundation'
 
-    return '/' in target and target.rsplit('/', 1)[0] == node
+    # A directory of app/ is reachable only from its ancestors.
+    return user == 'app' and target.startswith(node + '/')
 
 
 def summary(label, graph):
@@ -262,9 +328,13 @@ def summary(label, graph):
     return f'{label} edges {edges} cycles: {cycles}'
 
 
-def report(rev, sources, verbose, rules):
-    """Return the report lines and the exit code."""
+def report(rev, sources, verbose, rules, moves=None):
+    """Return the report lines and the exit code, with the folders at the targets of `moves`."""
     edges = include_edges(sources)
+    qml = qml_graph(sources)
+    if moves:
+        edges, qml = move_edges(edges, qml, moves)
+
     root_users = set()
     root_folders = set()
     shared_uses = collections.Counter()
@@ -277,14 +347,14 @@ def report(rev, sources, verbose, rules):
         if header in SHARED_HEADERS:
             shared_uses[header] += 1
 
-    qml = qml_graph(sources)
+    as_is = include_graph(edges, drop_root=False, shared_out=False)
     without_root = include_graph(edges, drop_root=True, shared_out=True)
     lines = [
         f'== {rev}',
         f'root header includers outside app: {len(root_users)} files in {len(root_folders)} folders: '
         f'{sorted(root_folders)}',
         f'shared app headers used from outside: {dict(shared_uses)}',
-        summary('C++ as is', include_graph(edges, drop_root=False, shared_out=False)),
+        summary('C++ as is', as_is),
         summary('C++ shared->foundation', include_graph(edges, drop_root=False, shared_out=True)),
         summary('C++ shared out + no root edges', without_root),
         summary('QML', qml),
@@ -299,11 +369,18 @@ def report(rev, sources, verbose, rules):
     if not rules:
         return lines, 0
 
-    violations = sorted({('C++', node, target) for _, node, target, _ in edges if not allowed(node, target)}
-                        | {('QML', node, target) for node, targets in qml.items() for target in targets
-                           if not allowed(node, target)})
+    folders = {folder(path) for path in sources}
+    if moves:
+        folders = {moved(node, moves) for node in folders}
+    violations = sorted(f'{node} is outside {", ".join(TREES)}' for node in folders
+                        if node.split('/')[0] not in TREES)
+    violations += sorted({f'C++ {node} -> {target}' for _, node, target, _ in edges if not allowed(node, target)}
+                         | {f'QML {node} -> {target}' for node, targets in qml.items() for target in targets
+                            if not allowed(node, target)})
+    violations += [f'{kind} cycle {cycle}' for kind, graph in (('C++', as_is), ('QML', qml))
+                   for cycle in strongly_connected(graph)]
     lines.append(f'rule violations: {len(violations)}')
-    lines += [f'   {kind} {node} -> {target}' for kind, node, target in violations]
+    lines += [f'   {violation}' for violation in violations]
     return lines, 1 if violations else 0
 
 
