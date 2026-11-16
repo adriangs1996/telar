@@ -7,13 +7,15 @@ Item {
     id: root
     objectName: "machinePromptPanel"
 
-    required property var controller
+    required property MachinePromptController controller
+    required property var colors
+    required property var typography
     property real ratio: 1
-    readonly property var colors: controller.colors
-    readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.machinePrompt.state
-    readonly property var regions: controller.machinePrompt.geometry
+    readonly property var state: controller.state
+    readonly property var regions: controller.geometry
     property alias queryField: query
+    // Escape on an empty composition: the window closes the prompt.
+    signal cancelled()
 
     clip: true
 
@@ -30,7 +32,7 @@ Item {
     }
 
     Connections {
-        target: root.controller.machinePrompt
+        target: root.controller
         function onChanged() {
             root.synchronizeEditor();
         }
@@ -65,13 +67,13 @@ Item {
             color: root.colors.surface0
             z: -1
         }
-        onTextEdited: root.controller.machinePrompt.search(text)
-        onLimitReached: requested => root.controller.machinePrompt.reportLimit(requested)
-        Keys.onReturnPressed: root.controller.machinePrompt.submit(root.state.revision)
-        Keys.onEnterPressed: root.controller.machinePrompt.submit(root.state.revision)
+        onTextEdited: root.controller.search(text)
+        onLimitReached: requested => root.controller.reportLimit(requested)
+        Keys.onReturnPressed: root.controller.submit(root.state.revision)
+        Keys.onEnterPressed: root.controller.submit(root.state.revision)
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
-                root.controller.execute(WindowActions.Action.cancel);
+                root.cancelled();
             }
         }
     }

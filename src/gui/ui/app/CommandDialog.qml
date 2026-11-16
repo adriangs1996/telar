@@ -176,8 +176,11 @@ Popup {
             anchors.fill: parent
             active: root.machineMode
             sourceComponent: MachinePromptPanel {
-                controller: telar
+                controller: telar.machinePrompt
+                colors: telar.colors
+                typography: telar.windowGeometry.typography
                 ratio: root.ratio
+                onCancelled: telar.execute(WindowActions.Action.cancel)
             }
         }
 
