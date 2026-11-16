@@ -299,9 +299,6 @@ namespace telar::gui::qt {
     // Selects a command block of the pane, by index among its blocks, or none to go back to the
     // live end.
     void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
-    // The keys and text telar's command editor takes. False hands the key back to the terminal.
-    bool promptKey(std::uint64_t pane_id, const prompt::KeyPress& key);
-    bool promptText(std::uint64_t pane_id, const QString& text);
     void resize(std::uint64_t pane_id, TerminalSize size);
     void scroll(PaneScrollDelta delta);
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
@@ -422,7 +419,6 @@ namespace telar::gui::qt {
     void sidebarGeometryChanged();
     void dialogChanged();
     void terminalChanged(qulonglong pane_id);
-    void promptChanged(qulonglong pane_id);
     // The document a pane shows natively appeared, changed or went away.
     void pointerModifiersChanged();
     void inputReleasing(qulonglong pane_id);
@@ -597,13 +593,6 @@ namespace telar::gui::qt {
     bool executeNavigation(Action action, const QString& target);
     bool executePane(Action action, std::uint64_t identity);
     void executeWindowAction(Action action);
-
-    // Text the line's editor took from outside the keyboard reaches its view.
-    void publishPromptWrite() {
-      if (const auto pane_id = session().takePromptWrite()) {
-        emit promptChanged(*pane_id);
-      }
-    }
 
     // Runs a user's mutation of the session, then commits it to the store, whose interacted()
     // publishes what the mutation wrote and refreshes the window.

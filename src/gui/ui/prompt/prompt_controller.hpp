@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "ui/store/store.hpp"
 #include <QObject>
+#include <QString>
 #include <QtQml/qqmlregistration.h>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +18,7 @@ static_assert(true);
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.input.copy_mode;
+import telar.gui.prompt.editor;
 import telar.gui.prompt.line;
 import telar.gui.prompt.routing;
 
@@ -25,11 +27,12 @@ namespace telar::gui::qt {
   class PromptEditorItem;
 
   // telar's command editor in each pane: who has the pane's keyboard, the line the editor holds
-  // and what it suggests, and the command block selected from it.
+  // and what it suggests, the keys and text it takes, and the command block selected from it.
   //
   // It reads the store. The editors that draw a line attach to it, and the window tells it when a
-  // pane's line or screen moved, or the configuration changed: it refreshes the editors of that
-  // pane directly, since a pane's output reaches here as often as it paints.
+  // pane's screen moved, or the configuration changed: it refreshes the editors of that pane
+  // directly, since a pane's output reaches here as often as it paints. What a key asks of the
+  // window (the history search, the scrollback search, the status) goes up as a signal.
   class PromptController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(PromptController)
@@ -58,6 +61,15 @@ namespace telar::gui::qt {
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] const std::optional<CopyState>& copy() const noexcept;
 
+    // The keys and text telar's command editor takes. False hands the key or the text back to the
+    // terminal.
+    bool key(std::uint64_t pane_id, const prompt::KeyPress& key);
+    bool text(std::uint64_t pane_id, const QString& text);
+    // The pane's line moved: its editors refresh, then lineChanged tells the terminal.
+    void publish(qulonglong pane_id);
+    // Text the line's editor took from outside the keyboard reaches its view.
+    void publishWrite();
+
     void attach(PromptEditorItem& editor);
     void detach(PromptEditorItem& editor);
     // The pane's line or screen moved: its editors refresh, keeping their layout if nothing they
@@ -65,6 +77,16 @@ namespace telar::gui::qt {
     void refresh(qulonglong pane_id);
     // The configuration changed: every editor lays its line out again.
     void configure();
+
+  signals:
+    void lineChanged(qulonglong pane_id);
+    // A key at the prompt asked for the history search.
+    void historyRequested();
+    // A key selected a command block or left it: the pane scrolls, and copy mode may begin on it.
+    void blockChanged(qulonglong pane_id);
+    // A key asked to search a command's output.
+    void searchRequested();
+    void failed(const QString& message);
 
   private:
     Store& store_;

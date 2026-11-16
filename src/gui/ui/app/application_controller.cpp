@@ -1086,7 +1086,7 @@ namespace telar::gui::qt {
   void ApplicationController::interacted() {
     // Exceptions stay on this side of the signal that delivered the interaction.
     try {
-      publishPromptWrite();
+      prompt_.publishWrite();
       // A controller's interaction may have published a notification, such as a reached limit.
       notifications_.present();
 
@@ -1206,7 +1206,7 @@ namespace telar::gui::qt {
       showDialog(dialogFor(action));
     } else if (action == Action::copy_mode) {
       if (store_.dialog().kind == Dialog::none && session().enterBlocks()) {
-        emit promptChanged(session().changedPane());
+        prompt_.publish(session().changedPane());
         emit terminalChanged(session().changedPane());
       } else if (store_.dialog().kind == Dialog::none) {
         static_cast<void>(session().enterCopyMode());
@@ -1313,7 +1313,7 @@ namespace telar::gui::qt {
       fail(error);
     }
 
-    publishPromptWrite();
+    prompt_.publishWrite();
   }
 
   void ApplicationController::resize(std::uint64_t pane_id, TerminalSize size) {
@@ -1347,7 +1347,7 @@ namespace telar::gui::qt {
       fail(error);
     }
 
-    emit promptChanged(pane_id);
+    prompt_.publish(pane_id);
     emit terminalChanged(pane_id);
   }
 

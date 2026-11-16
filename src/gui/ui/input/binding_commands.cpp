@@ -409,7 +409,7 @@ namespace telar::gui::qt {
 
     if (expression.kind == InputExpression::Kind::paste) {
       session().paste(pane->id, expression.paste.view());
-      publishPromptWrite();
+      prompt_.publishWrite();
     } else {
       for (const auto key : std::span{expression.keys}.first(expression.length)) {
         key_bindings_.synthetic(key, pane->id, pane->screen.modes());

@@ -171,6 +171,7 @@ namespace telar::gui::qt {
       application_->unregisterTerminal(*this);
       application_->disconnect(this);
       application_->copy()->disconnect(this);
+      application_->prompt()->disconnect(this);
     }
 
     // QML owns the application; this item registers with it and unregisters before it changes.
@@ -191,7 +192,7 @@ namespace telar::gui::qt {
         }
       });
 
-      connect(application_, &ApplicationController::promptChanged, this, [this](qulonglong pane_id) {
+      connect(application_->prompt(), &PromptController::lineChanged, this, [this](qulonglong pane_id) {
         if (pane_id == pane_id_) {
           refreshBlocks();
           update();
@@ -1016,7 +1017,7 @@ namespace telar::gui::qt {
       // prompt nothing the editor cannot use reaches the shell's own line editor.
       QByteArray text;
       const auto key = promptKey(*event, text);
-      const bool taken = key && application_->promptKey(pane_id_, *key);
+      const bool taken = key && application_->prompt()->key(pane_id_, *key);
       if (!taken && (key || application_->prompt()->surface(pane_id_) != prompt::Surface::editor)) {
         static_cast<void>(sendKeyPress(*event, current->screen.modes()));
       }
@@ -1102,7 +1103,7 @@ namespace telar::gui::qt {
         application_->interruptBindings();
       }
 
-      if (application_ == nullptr || !application_->promptText(pane_id_, event->commitString())) {
+      if (application_ == nullptr || !application_->prompt()->text(pane_id_, event->commitString())) {
         sendCommittedText(event->commitString());
       }
     }
