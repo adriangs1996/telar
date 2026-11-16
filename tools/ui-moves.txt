@@ -10,7 +10,7 @@ config          foundation/config
 controls        design/controls
 documents       app/panes/documents
 fonts           foundation/fonts
-history         app/overlays/history
+history         app/panes/terminal/history
 link_status     app/overlays/link_status
 links           app/panes/terminal/links
 machine_chrome  app/chrome/components/machine_chrome
@@ -18,7 +18,7 @@ machine_prompt  app/overlays/machine_prompt
 notifications   app/overlays/notifications
 palette         app/overlays/palette
 panes           app/panes
-paths           app/overlays/paths
+paths           app/panes/terminal/paths
 peek            app/overlays/peek
 plugins         foundation/plugins
 prompt          app/panes/terminal/prompt
