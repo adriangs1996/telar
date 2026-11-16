@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "notifications_controller.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/qt/deadline_timer.hpp"
+#include "ui/foundation/timing/deadline_timer.hpp"
 #include <QLatin1Char>
 #include <exception>
 #include <limits>

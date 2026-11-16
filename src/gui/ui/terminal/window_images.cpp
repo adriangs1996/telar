@@ -10,7 +10,7 @@ static_assert(true);
 #include "image_resource.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/foundation/qt/deadline_timer.hpp"
+#include "ui/foundation/timing/deadline_timer.hpp"
 #include "ui/scene/scene_nodes.hpp"
 #include <QEvent>
 #include <QImage>

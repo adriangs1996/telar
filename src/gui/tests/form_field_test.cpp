@@ -12,7 +12,7 @@ static_assert(true);
 #include "ui/controls/native_form_field.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/qt/utf16_encoding.hpp"
+#include "ui/foundation/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QFont>
 #include <QGuiApplication>
@@ -54,7 +54,7 @@ static_assert(true);
 #include "ui/controls/native_form_field.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/qt/utf16_encoding.hpp"
+#include "ui/foundation/text/utf16_encoding.hpp"
 
 import telar.gui.text.bounded_editor;
 

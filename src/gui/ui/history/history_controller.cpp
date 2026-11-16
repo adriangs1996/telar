@@ -6,7 +6,7 @@ static_assert(true);
 #include "history_controller.hpp"
 #include "platform/window.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/qt/utf16_encoding.hpp"
+#include "ui/foundation/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QStringView>

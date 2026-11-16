@@ -11,7 +11,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/foundation/qt/deadline_timer.hpp"
+#include "ui/foundation/timing/deadline_timer.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include <QByteArray>
 #include <QMetaObject>
