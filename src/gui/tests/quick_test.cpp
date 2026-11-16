@@ -1025,7 +1025,7 @@ return {api_version = 2, client = {
       });
 
       const auto entries = [this] {
-        return client_->workspaceFormState().value(QStringLiteral("entries")).toStringList();
+        return client_->workspaceForm()->state().value(QStringLiteral("entries")).toStringList();
       };
 
       const auto focused = [this] {
@@ -1045,7 +1045,7 @@ return {api_version = 2, client = {
       typeText(root.path() + QLatin1Char('/'));
       QTRY_COMPARE_WITH_TIMEOUT(entries(), (QStringList{QStringLiteral("alpha"), QStringLiteral("beta")}), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Down);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceFormState().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceForm()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("workspace-folders"));
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_COMPARE_WITH_TIMEOUT(field->text(), root.filePath(QStringLiteral("beta")) + QLatin1Char('/'), runtime_wait_ms);
@@ -1060,7 +1060,7 @@ return {api_version = 2, client = {
 
       QTRY_COMPARE_WITH_TIMEOUT(field->text(), missing, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->workspaceFormState().value(QStringLiteral("confirmCreate")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->workspaceForm()->state().value(QStringLiteral("confirmCreate")).toBool(), runtime_wait_ms);
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::new_workspace);
       QVERIFY(!QFileInfo::exists(missing));
       captureArtifact(QStringLiteral("workspace-confirm"));

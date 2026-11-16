@@ -708,6 +708,7 @@
     "src/gui/ui/panes/panes_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/activity/activity_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/palette/palette_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/workspaces/workspace_form_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/store/store.hpp": "Qt moc/QML integration",
     "src/gui/ui/machines/ssh_options.hpp": "Qt moc/QML integration",
     "src/gui/ui/components/surface_command.hpp": "Qt moc/QML integration",

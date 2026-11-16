@@ -15,7 +15,7 @@ Item {
     property real ratio: 1
     readonly property var colors: controller.colors
     readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.workspaceFormState
+    readonly property var state: controller.workspaceForm.state
     readonly property var entries: state.entries ?? []
     readonly property int selection: state.selection ?? 0
     readonly property bool confirmCreate: state.confirmCreate ?? false
@@ -59,7 +59,7 @@ Item {
         directory.text = path;
         directory.input.cursorPosition = path.length;
         directory.input.forceActiveFocus();
-        root.controller.editWorkspaceDirectory(path);
+        root.controller.workspaceForm.edit(path);
     }
 
     Connections {
@@ -68,7 +68,7 @@ Item {
             if (root.controller.dialog === Store.Dialog.new_workspace) {
                 name.text = "";
                 directory.text = "";
-                root.controller.editWorkspaceDirectory("");
+                root.controller.workspaceForm.edit("");
             }
         }
     }
@@ -163,15 +163,15 @@ Item {
                 typography: root.typography
                 ratio: root.ratio
                 placeholderText: "~/projects/my-app"
-                onEdited: root.controller.editWorkspaceDirectory(text)
+                onEdited: root.controller.workspaceForm.edit(text)
                 onSubmitted: root.submit()
                 onCancelled: root.cancel()
-                onMoved: delta => root.controller.moveWorkspaceDirectory(delta)
+                onMoved: delta => root.controller.workspaceForm.move(delta)
                 onTabbed: backward => {
                     if (backward) {
                         name.input.forceActiveFocus();
                     } else {
-                        root.useDirectory(root.controller.acceptWorkspaceDirectory());
+                        root.useDirectory(root.controller.workspaceForm.accept());
                     }
                 }
             }
@@ -266,7 +266,7 @@ Item {
                             id: pointer
                             anchors.fill: parent
                             identity: "workspaceFolder:" + (root.entries[row.entry] ?? "")
-                            onActivated: root.useDirectory(root.controller.chooseWorkspaceDirectory(row.entry))
+                            onActivated: root.useDirectory(root.controller.workspaceForm.choose(row.entry))
                         }
                     }
                 }

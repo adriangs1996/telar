@@ -3,42 +3,21 @@
 static_assert(true);
 #endif
 
+#include "workspace_form_controller.hpp"
 #include "platform/environment.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "ui/app/application.hpp"
 #include <QByteArray>
 #include <QFileInfo>
-#include <QString>
+#include <QStringList>
 #include <QtConcurrentRun>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <charconv>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <exception>
-#include <filesystem>
-#include <optional>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
-#include <vector>
-
-#include "platform/environment.hpp"
 
 import telar.gui.links.path_expansion;
 import telar.gui.machines.picker;
-import telar.gui.paths.label;
 
 namespace telar::gui::qt {
 
@@ -50,93 +29,112 @@ namespace telar::gui::qt {
 
   }
 
-  QVariantMap Application::workspaceFormState() const {
+  WorkspaceFormController::WorkspaceFormController(Store& store, QObject* parent)
+      : QObject(parent),
+        store_(store) {
+    connect(&lister_, &QFutureWatcher<DirectoryCompletion>::finished, this, &WorkspaceFormController::land);
+  }
+
+  bool WorkspaceFormController::isOpen() const noexcept {
+    return store_.dialog().kind == Store::Dialog::new_workspace;
+  }
+
+  bool WorkspaceFormController::local() const noexcept {
+    return store_.machines().active() == Machines::local_slot;
+  }
+
+  QVariantMap WorkspaceFormController::state() const {
     QStringList entries;
 
-    if (workspaceListingCurrent()) {
-      for (const auto& name : workspace_form_.completion.entries) {
+    if (listingCurrent()) {
+      for (const auto& name : completion_.entries) {
         entries.append(QString::fromStdString(name));
       }
     }
 
     return {
         {QStringLiteral("entries"), entries},
-        {QStringLiteral("selection"), static_cast<int>(workspace_form_.selection)},
-        {QStringLiteral("confirmCreate"), workspace_form_.confirm_create},
-        {QStringLiteral("completes"), store_.machines().active() == Machines::local_slot},
+        {QStringLiteral("selection"), static_cast<int>(selection_)},
+        {QStringLiteral("confirmCreate"), confirm_create_},
+        {QStringLiteral("completes"), local()},
     };
   }
 
-  void Application::resetWorkspaceForm() {
-    workspace_form_ = {};
-    emit workspaceFormChanged();
+  void WorkspaceFormController::reset() {
+    wanted_.clear();
+    listing_.clear();
+    landed_.clear();
+    completion_ = {};
+    selection_ = 0;
+    confirm_create_ = false;
+    emit changed();
   }
 
-  // Folders are listed only on this computer: a remote machine's directories
-  // are not here to list or to check.
-  void Application::editWorkspaceDirectory(const QString& text) {
-    if (store_.dialog().kind != Dialog::new_workspace) {
+  // Folders are listed only on this computer: a remote machine's directories are not here to list
+  // or to check.
+  void WorkspaceFormController::edit(const QString& text) {
+    if (!isOpen()) {
       return;
     }
 
-    workspace_form_.confirm_create = false;
-    workspace_form_.selection = 0;
-    workspace_form_.wanted.clear();
-    if (store_.machines().active() == Machines::local_slot) {
+    confirm_create_ = false;
+    selection_ = 0;
+    wanted_.clear();
+    if (local()) {
       try {
         const auto typed = text.toUtf8();
-        const auto expanded = expandWorkspaceDirectory(text).toUtf8();
+        const auto expanded = expand(text).toUtf8();
 
-        workspace_form_.wanted = QString::fromStdString(DirectoryCompletion::query({.text = view(typed), .expanded = view(expanded)}));
+        wanted_ = QString::fromStdString(DirectoryCompletion::query({.text = view(typed), .expanded = view(expanded)}));
       } catch (const std::exception&) {
         // An unexpandable path lists nothing; submitting it reports why.
-        workspace_form_.wanted.clear();
+        wanted_.clear();
       }
     }
 
-    if (!workspaceListingCurrent()) {
-      listWorkspaceDirectory();
+    if (!listingCurrent()) {
+      list();
     }
 
-    emit workspaceFormChanged();
+    emit changed();
   }
 
-  void Application::moveWorkspaceDirectory(int delta) {
-    const auto count = workspaceListingCurrent() ? workspace_form_.completion.entries.size() : 0;
-    if (store_.dialog().kind != Dialog::new_workspace || count == 0) {
+  void WorkspaceFormController::move(int delta) {
+    const auto count = listingCurrent() ? completion_.entries.size() : 0;
+    if (!isOpen() || count == 0) {
       return;
     }
 
-    const auto selected = static_cast<long long>(workspace_form_.selection) + delta;
+    const auto selected = static_cast<long long>(selection_) + delta;
 
-    workspace_form_.selection = static_cast<std::size_t>(std::clamp(selected, 0LL, static_cast<long long>(count - 1)));
-    emit workspaceFormChanged();
+    selection_ = static_cast<std::size_t>(std::clamp(selected, 0LL, static_cast<long long>(count - 1)));
+    emit changed();
   }
 
-  QString Application::acceptWorkspaceDirectory() {
-    if (store_.dialog().kind != Dialog::new_workspace || !workspaceListingCurrent() || workspace_form_.completion.entries.empty()) {
+  QString WorkspaceFormController::accept() {
+    if (!isOpen() || !listingCurrent() || completion_.entries.empty()) {
       return {};
     }
 
-    return chooseWorkspaceDirectory(static_cast<int>(workspace_form_.selection));
+    return choose(static_cast<int>(selection_));
   }
 
-  QString Application::chooseWorkspaceDirectory(int index) {
-    const auto& entries = workspace_form_.completion.entries;
-    if (store_.dialog().kind != Dialog::new_workspace || !workspaceListingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
+  QString WorkspaceFormController::choose(int index) {
+    const auto& entries = completion_.entries;
+    if (!isOpen() || !listingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
       return {};
     }
 
-    return QString::fromStdString(workspace_form_.completion.join(static_cast<std::size_t>(index)));
+    return QString::fromStdString(completion_.join(static_cast<std::size_t>(index)));
   }
 
-  bool Application::workspaceListingCurrent() const {
-    return !workspace_form_.wanted.isEmpty() && workspace_form_.wanted == workspace_form_.landed;
+  bool WorkspaceFormController::listingCurrent() const {
+    return !wanted_.isEmpty() && wanted_ == landed_;
   }
 
-  QString Application::expandWorkspaceDirectory(const QString& text) const {
+  QString WorkspaceFormController::expand(const QString& text) const {
     const platform::ProcessEnvironment environment;
-    const auto* pane = session().focusedPane();
+    const auto* pane = store_.session().focusedPane();
     const std::string_view base = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd};
     const auto typed = text.toUtf8();
     const auto expanded = PathExpansion::expand({.text = view(typed), .base = base}, environment);
@@ -144,62 +142,60 @@ namespace telar::gui::qt {
     return QString::fromUtf8(expanded.view().data(), static_cast<qsizetype>(expanded.view().size()));
   }
 
-  void Application::listWorkspaceDirectory() {
-    if (workspace_listing_.isRunning() || workspace_form_.wanted.isEmpty()) {
+  void WorkspaceFormController::list() {
+    if (lister_.isRunning() || wanted_.isEmpty()) {
       return;
     }
 
-    workspace_form_.listing = workspace_form_.wanted;
-    workspace_listing_.setFuture(QtConcurrent::run([query = workspace_form_.listing.toStdString()] {
+    listing_ = wanted_;
+    lister_.setFuture(QtConcurrent::run([query = listing_.toStdString()] {
       return DirectoryCompletion::list(query);
     }));
   }
 
-  void Application::landWorkspaceDirectory() {
-    auto result = workspace_listing_.result();
+  void WorkspaceFormController::land() {
+    auto result = lister_.result();
 
-    if (store_.dialog().kind != Dialog::new_workspace) {
+    if (!isOpen()) {
       return;
     }
 
     if (result.matched > DirectoryCompletion::maximum_entries) {
-      session().reportLimit({.name = "workspace_form.completion_entries", .noun = "directories", .value = DirectoryCompletion::maximum_entries, .requested = result.matched, .route = {}});
-      refreshNotifications();
+      store_.session().reportLimit({.name = "workspace_form.completion_entries", .noun = "directories", .value = DirectoryCompletion::maximum_entries, .requested = result.matched, .route = {}});
+      store_.commit();
     }
 
-    workspace_form_.completion = std::move(result);
-    workspace_form_.landed = workspace_form_.listing;
-    workspace_form_.selection = 0;
-    if (!workspaceListingCurrent()) {
-      listWorkspaceDirectory();
+    completion_ = std::move(result);
+    landed_ = listing_;
+    selection_ = 0;
+    if (!listingCurrent()) {
+      list();
     }
 
-    emit workspaceFormChanged();
+    emit changed();
   }
 
-  // Names the workspace after its folder when the name is empty, and asks once
-  // before creating a folder that does not exist. False keeps the form open.
-  bool Application::submitWorkspace(const QVariantMap& input) {
+  bool WorkspaceFormController::submit(const QVariantMap& input) {
     const auto name = input.value(QStringLiteral("text")).toString();
     const auto typed = input.value(QStringLiteral("path")).toString();
-    const bool local = store_.machines().active() == Machines::local_slot;
+    const bool on_this_computer = local();
     QString directory;
 
     if (!typed.trimmed().isEmpty()) {
-      directory = local ? expandWorkspaceDirectory(typed) : typed;
+      directory = on_this_computer ? expand(typed) : typed;
     }
 
     bool create = false;
 
-    if (local && !directory.isEmpty()) {
+    if (on_this_computer && !directory.isEmpty()) {
       const QFileInfo folder{directory};
       if (folder.exists() && !folder.isDir()) {
         throw std::invalid_argument{"NotADirectory"};
       }
 
-      if (!folder.exists() && !workspace_form_.confirm_create) {
-        workspace_form_.confirm_create = true;
-        emit workspaceFormChanged();
+      if (!folder.exists() && !confirm_create_) {
+        confirm_create_ = true;
+        emit changed();
 
         return false;
       }
@@ -214,7 +210,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    session().createWorkspace({.name = view(label), .path = view(folder), .create_directory = create});
+    store_.session().createWorkspace({.name = view(label), .path = view(folder), .create_directory = create});
 
     return true;
   }

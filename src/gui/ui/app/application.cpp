@@ -181,6 +181,7 @@ namespace telar::gui::qt {
         panes_(store_, element_slots_),
         activity_(store_, element_slots_, memory),
         palette_(store_),
+        workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
     initializeMachineProfiles();
@@ -206,7 +207,6 @@ namespace telar::gui::qt {
     connect(this, &Application::windowGeometryChanged, this, &Application::measurePalette);
     connect(this, &Application::windowGeometryChanged, this, &Application::pathPickerGeometryChanged);
     connect(this, &Application::pathPickerChanged, this, &Application::pathPickerGeometryChanged);
-    connect(&workspace_listing_, &QFutureWatcher<DirectoryCompletion>::finished, this, &Application::landWorkspaceDirectory);
     connect(this, &Application::prefixChanged, this, &Application::statusModeChanged);
     connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
     connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
@@ -1040,7 +1040,7 @@ namespace telar::gui::qt {
       const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
 
       if (store_.dialog().kind == Dialog::new_workspace) {
-        if (!submitWorkspace(input)) {
+        if (!workspace_form_.submit(input)) {
           return;
         }
       } else if (store_.dialog().kind == Dialog::rename_tab) {
@@ -1331,7 +1331,7 @@ namespace telar::gui::qt {
     pointer_dispatcher_.presentHistoryActions({});
 
     if (kind == Dialog::new_workspace || store_.dialog().kind == Dialog::new_workspace) {
-      resetWorkspaceForm();
+      workspace_form_.reset();
     }
 
     // The focused pane's prompt line hosts the history and path searches while its shell waits

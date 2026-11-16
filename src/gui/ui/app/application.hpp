@@ -45,6 +45,7 @@ static_assert(true);
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
+#include "ui/workspaces/workspace_form_controller.hpp"
 #include "ui/workspaces/workspaces_controller.hpp"
 #include "window_frame_pacer.hpp"
 #include <QByteArray>
@@ -201,7 +202,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
     Q_PROPERTY(QVariantMap pathPickerState READ pathPickerState NOTIFY pathPickerChanged)
-    Q_PROPERTY(QVariantMap workspaceFormState READ workspaceFormState NOTIFY workspaceFormChanged)
+    Q_PROPERTY(telar::gui::qt::WorkspaceFormController* workspaceForm READ workspaceForm CONSTANT)
     Q_PROPERTY(QVariantMap pathPickerGeometry READ pathPickerGeometry NOTIFY pathPickerGeometryChanged)
 
   public:
@@ -339,10 +340,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void ascendPath();
     Q_INVOKABLE void insertPath(bool absolute);
     Q_INVOKABLE void activatePath(const QVariantMap& choice);
-    Q_INVOKABLE void editWorkspaceDirectory(const QString& text);
-    Q_INVOKABLE void moveWorkspaceDirectory(int delta);
-    Q_INVOKABLE QString acceptWorkspaceDirectory();
-    Q_INVOKABLE QString chooseWorkspaceDirectory(int index);
     Q_INVOKABLE void usePaletteResult(const QVariantMap& choice);
     Q_INVOKABLE void submitSuggestion(const QString& revision);
     Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
@@ -405,6 +402,10 @@ namespace telar::gui::qt {
       return &palette_;
     }
 
+    WorkspaceFormController* workspaceForm() noexcept {
+      return &workspace_form_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -418,7 +419,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap runtimeLinkState() const;
     [[nodiscard]] QVariantMap runtimeLinkGeometry() const;
     [[nodiscard]] QVariantMap pathPickerState() const;
-    [[nodiscard]] QVariantMap workspaceFormState() const;
     [[nodiscard]] QVariantMap pathPickerGeometry() const;
     [[nodiscard]] QVariantMap sidebarGeometry() const;
     [[nodiscard]] QVariantMap machineContext() const;
@@ -456,7 +456,6 @@ namespace telar::gui::qt {
   signals:
     void prefixChanged();
     void pathPickerChanged();
-    void workspaceFormChanged();
     void pathPickerGeometryChanged();
     void titleChanged();
     // The error, the TLS proxy badge or whether the runtime is connected moved.
@@ -612,26 +611,6 @@ namespace telar::gui::qt {
     [[nodiscard]] PathPickerPlacement pathPlacement() const;
     QString path_query_;
     std::size_t path_selection_ = 0;
-
-    // The new workspace form's folder suggestions. Listings run one at a time
-    // on a worker; the query typed meanwhile starts once the running one lands.
-    struct WorkspaceForm {
-      QString wanted;
-      QString listing;
-      QString landed;
-      DirectoryCompletion completion;
-      std::size_t selection = 0;
-      bool confirm_create = false;
-    };
-
-    void resetWorkspaceForm();
-    void listWorkspaceDirectory();
-    void landWorkspaceDirectory();
-    bool submitWorkspace(const QVariantMap& input);
-    [[nodiscard]] bool workspaceListingCurrent() const;
-    [[nodiscard]] QString expandWorkspaceDirectory(const QString& text) const;
-    WorkspaceForm workspace_form_;
-    QFutureWatcher<DirectoryCompletion> workspace_listing_;
     static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};
 
     struct PresentedPane {
@@ -838,6 +817,7 @@ namespace telar::gui::qt {
     PanesController panes_;
     ActivityController activity_;
     PaletteController palette_;
+    WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer notification_timer_;
     // The active session's notification revision the window last presented.
