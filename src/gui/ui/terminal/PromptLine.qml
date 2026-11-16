@@ -20,10 +20,10 @@ Item {
     required property var grid
     // What the line hosts: the history and path searches, the scrollback search of copy mode,
     // and the editor.
-    required property var history
-    required property var pathPicker
+    required property HistoryController history
+    required property PathPickerController pathPicker
     required property CopyController copy
-    required property var prompt
+    required property PromptController prompt
     // The search the window hosts in a prompt line, {kind: a Store.Dialog, pane: the key of the
     // pane whose line it is}. One value, so the kind and the pane never disagree for a moment.
     required property var lineSearch

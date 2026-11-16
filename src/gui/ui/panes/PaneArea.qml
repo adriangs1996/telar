@@ -12,10 +12,10 @@ Item {
     required property CopyController copy
     // The controllers of the overlays a pane hosts: the attachment shelf, and the history, path
     // and prompt searches of its prompt line.
-    required property var attachments
-    required property var history
-    required property var pathPicker
-    required property var prompt
+    required property AttachmentsController attachments
+    required property HistoryController history
+    required property PathPickerController pathPicker
+    required property PromptController prompt
     required property var colors
     required property var typography
     // The height of a pane's header band.

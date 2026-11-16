@@ -13,7 +13,7 @@ NativeRoundedRectangle {
     // The components the bar shows in its slots, with the machine chrome they may place; without
     // them, it shows the host metrics.
     property ComponentsController components: null
-    property var machineChrome: null
+    property MachineChromeController machineChrome: null
     // A mod's bottom bar, which replaces the components; mode, TLS and diagnostics stay native.
     property var drawn: null
     property string diagnostic

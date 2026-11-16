@@ -11,7 +11,7 @@ Popup {
     // The host metrics, by name, that metric nodes read.
     property var hostMetrics: ({})
     // The machine chrome that `ui.builtin("machines")` shows.
-    property var machineChrome: null
+    property MachineChromeController machineChrome: null
     required property var colors
     required property var typography
     property real ratio: 1

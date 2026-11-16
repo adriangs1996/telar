@@ -8,7 +8,7 @@ FocusScope {
     required property AttachmentsController controller
     required property var colors
     required property var typography
-    readonly property var shelf: controller.shelf
+    readonly property AttachmentShelfController shelf: controller.shelf
     readonly property var state: shelf.modal
     readonly property var regions: controller.modalGeometry
     readonly property var host: regions.host

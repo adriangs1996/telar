@@ -10,7 +10,7 @@ Rectangle {
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var shelf: controller.shelf
+    readonly property AttachmentShelfController shelf: controller.shelf
     readonly property bool modalOpen: (shelf.modal.id ?? "").length > 0
     readonly property var region: controller.geometry
     readonly property real padding: 6 * ratio

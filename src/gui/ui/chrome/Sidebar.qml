@@ -14,7 +14,7 @@ NativeRoundedRectangle {
     property ActivityController activity: null
     // The machine list's controller, and the active machine: its label, and whether one needs
     // attention.
-    property var machineChrome: null
+    property MachineChromeController machineChrome: null
     property var machineContext: ({})
     property real ratio: 1
     property real textScale: 1
