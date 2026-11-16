@@ -25,7 +25,7 @@ namespace telar::gui::qt {
       });
     });
     connect(&palette_, &PaletteController::actionRequested, this, [this](PaletteAction chosen) {
-      const auto action = static_cast<Action>(chosen.value);
+      const auto action = static_cast<window_actions::Action>(chosen.value);
 
       applyInteraction([&] {
         showDialog(Dialog::none);

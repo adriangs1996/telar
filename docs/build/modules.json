@@ -741,6 +741,7 @@
     "src/gui/ui/scene/text_scene.hpp": "Qt moc/QML integration",
     "src/gui/ui/fonts/typography_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/text/utf16_encoding.hpp": "Qt moc/QML integration",
+    "src/gui/ui/foundation/input/window_actions.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/window_animation_clock.hpp": "Qt moc/QML integration",
     "src/gui/ui/fonts/window_font_catalog.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/timing/window_frame_pacer.hpp": "Qt moc/QML integration",

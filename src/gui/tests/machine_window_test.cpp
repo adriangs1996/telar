@@ -1523,7 +1523,7 @@ namespace {
 
       QVERIFY(!opening.launch);
       window->resize(latest_size);
-      application.execute(ApplicationController::Action::toggle_sidebar);
+      application.execute(window_actions::Action::toggle_sidebar);
       QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), latest_size.width(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("status")).toRectF().bottom(), latest_size.height(), wait_ms);
       const auto geometry_changed = [&] {
@@ -1810,7 +1810,7 @@ namespace {
       fixture.remote_socket_->disconnectFromServer();
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("enabled")).toBool(), wait_ms);
       QCOMPARE(activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("statusWord")).toString(), QStringLiteral("offline"));
-      application.execute(ApplicationController::Action::select_agent, identity.toString());
+      application.execute(window_actions::Action::select_agent, identity.toString());
       QVERIFY(application.connected());
       QCOMPARE(application.pane(pane_id)->attached, true);
     }
@@ -1838,12 +1838,12 @@ namespace {
       agents.front().session_id.front() = 2;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(activityRow(application, 0).value(QStringLiteral("key")).toString() != retired, wait_ms);
-      application.execute(ApplicationController::Action::select_agent, retired);
+      application.execute(window_actions::Action::select_agent, retired);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QVERIFY(!MachineWindow::pendingActivity(application));
       const auto current = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
-      application.execute(ApplicationController::Action::select_agent, current);
+      application.execute(window_actions::Action::select_agent, current);
       QVERIFY(MachineWindow::pendingActivity(application));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
       QVERIFY(fixture.remote_runtime->last<OpenPane>().target.id != agent_pane);
@@ -1857,7 +1857,7 @@ namespace {
       QVERIFY(!MachineWindow::pendingActivity(application));
       QCOMPARE(fixture.remote_runtime->count(ClientTag::create_pane), 0);
       static_cast<void>(MachineWindow::replace(application, fixture.remote.machine.slot));
-      application.execute(ApplicationController::Action::select_agent, current);
+      application.execute(window_actions::Action::select_agent, current);
       QVERIFY(!MachineWindow::pendingActivity(application));
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 2);
     }
@@ -1885,7 +1885,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
-      application.execute(ApplicationController::Action::select_agent, retired);
+      application.execute(window_actions::Action::select_agent, retired);
       QVERIFY(MachineWindow::pendingActivity(application));
       tasks.front().workspace = replacement_workspace;
       fixture.remote_runtime->send(WorkspaceList{.revision = 2, .entries = projects, .worktrees = tasks});
@@ -1896,13 +1896,13 @@ namespace {
       const auto openings = fixture.remote_runtime->count(ClientTag::open_pane);
       const auto local_openings = fixture.local_runtime->count(ClientTag::open_pane);
 
-      application.execute(ApplicationController::Action::select_agent, retired);
+      application.execute(window_actions::Action::select_agent, retired);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::request_workspace_snapshot), workspace_requests);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), openings);
       const auto current = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       QVERIFY(current != retired);
-      application.execute(ApplicationController::Action::select_agent, current);
+      application.execute(window_actions::Action::select_agent, current);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), openings + 1, wait_ms);
       const auto opening = fixture.remote_runtime->last<OpenPane>();
 
@@ -1929,9 +1929,9 @@ namespace {
       agents.front().pane_id = agent_pane;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
-      application.execute(ApplicationController::Action::select_agent, activityRow(application, 0).value(QStringLiteral("key")).toString());
+      application.execute(window_actions::Action::select_agent, activityRow(application, 0).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
-      application.execute(ApplicationController::Action::cancel);
+      application.execute(window_actions::Action::cancel);
       QVERIFY(!MachineWindow::pendingActivity(application));
       QVERIFY(finishOpening(*fixture.local_runtime));
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
@@ -1974,11 +1974,11 @@ namespace {
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("After reconnect")).isEmpty(), wait_ms);
       QVERIFY(activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString() != old_agent);
-      application.execute(ApplicationController::Action::select_agent, old_agent);
+      application.execute(window_actions::Action::select_agent, old_agent);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QVERIFY(!MachineWindow::pendingActivity(application));
       QVERIFY(remote.session.panes().empty());
-      application.execute(ApplicationController::Action::select_agent, activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString());
+      application.execute(window_actions::Action::select_agent, activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
     }

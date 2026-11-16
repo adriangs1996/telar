@@ -11,7 +11,7 @@ namespace telar::gui::qt {
     connect(&terminals_, &TerminalController::terminalChanged, &prompt_, &PromptController::refresh);
     connect(this, &ApplicationController::configurationChanged, &prompt_, &PromptController::configure);
     connect(&prompt_, &PromptController::historyRequested, this, [this] {
-      execute(Action::history);
+      execute(window_actions::Action::history);
     });
     connect(&prompt_, &PromptController::blockChanged, this, [this](qulonglong pane_id) {
       emit terminals_.terminalChanged(pane_id);

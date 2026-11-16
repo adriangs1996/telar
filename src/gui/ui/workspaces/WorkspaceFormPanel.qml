@@ -48,7 +48,7 @@ Item {
     }
 
     function cancel() {
-        root.controller.execute(ApplicationController.Action.cancel);
+        root.controller.execute(WindowActions.Action.cancel);
     }
 
     function useDirectory(path) {

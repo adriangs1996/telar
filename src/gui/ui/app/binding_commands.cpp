@@ -76,8 +76,8 @@ namespace telar::gui::qt {
 
   namespace {
 
-    std::optional<ApplicationController::Action> nativeAction(BindingActionKind kind) noexcept {
-      using Native = ApplicationController::Action;
+    std::optional<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
+      using Native = window_actions::Action;
       using Binding = BindingActionKind;
       constexpr auto actions = std::to_array<std::pair<Binding, Native>>({
           {Binding::new_tab, Native::new_tab},

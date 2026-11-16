@@ -56,7 +56,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.dialog().kind != Dialog::none) {
-      execute(Action::cancel);
+      execute(window_actions::Action::cancel);
     }
 
     components_.rememberPickFocus();

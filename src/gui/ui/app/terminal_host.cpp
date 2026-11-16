@@ -44,7 +44,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::focusPane(TerminalItem& terminal) {
-    execute(Action::focus_pane, terminal.paneId());
+    execute(window_actions::Action::focus_pane, terminal.paneId());
   }
 
   void ApplicationController::ungrabPointer(TerminalItem& terminal) {

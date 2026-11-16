@@ -71,7 +71,7 @@ Item {
         Keys.onEnterPressed: root.controller.machinePrompt.submit(root.state.revision)
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
-                root.controller.execute(ApplicationController.Action.cancel);
+                root.controller.execute(WindowActions.Action.cancel);
             }
         }
     }

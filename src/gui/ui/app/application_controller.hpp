@@ -31,6 +31,7 @@ static_assert(true);
 #include "ui/documents/documents_controller.hpp"
 #include "ui/fonts/font_resolver.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
+#include "ui/foundation/input/window_actions.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
@@ -110,7 +111,6 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.core.metrics;
-import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.tab_drop;
 import telar.gui.machines.picker;
@@ -122,7 +122,6 @@ import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
-import telar.gui.prompt.routing;
 import telar.gui.prompt.line;
 import telar.gui.prompt.editor;
 import telar.gui.presentation.history_filter_geometry;
@@ -152,8 +151,6 @@ namespace telar::gui::qt {
     Q_OBJECT
     QML_NAMED_ELEMENT(ApplicationController)
     QML_UNCREATABLE("Use the running GUI controller")
-    // QML names every enum value with its enum, so Action::palette and Dialog::palette do not clash.
-    Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
     Q_PROPERTY(telar::gui::qt::AttachmentsController* attachments READ attachments CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
@@ -200,60 +197,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::WorkspaceFormController* workspaceForm READ workspaceForm CONSTANT)
 
   public:
-    enum class Action : quint8 {
-      none,
-      new_tab,
-      select_tab,
-      select_tab_index,
-      next_tab,
-      previous_tab,
-      move_tab_next,
-      move_tab_previous,
-      focus_left,
-      focus_right,
-      focus_up,
-      focus_down,
-      resize_left,
-      resize_right,
-      resize_up,
-      resize_down,
-      detach,
-      close_tab,
-      select_workspace,
-      focus_pane,
-      select_agent,
-      split_horizontal,
-      split_vertical,
-      close_pane,
-      fullscreen,
-      toggle_sidebar,
-      toggle_workspace_list,
-      history,
-      palette,
-      goto_picker,
-      leave_worktree,
-      forget_gone_worktrees,
-      new_workspace,
-      rename_tab,
-      rename_workspace,
-      cancel,
-      copy_mode,
-      path_picker,
-      suggest_command,
-      machine_picker,
-      next_machine,
-      previous_machine,
-      add_machine,
-    };
-    Q_ENUM(Action)
-
-    enum class MachineEditAction : quint8 {
-      rename,
-      remove,
-    };
-    Q_ENUM(MachineEditAction)
-
-    Q_INVOKABLE void editMachineResult(const QVariantMap& choice, MachineEditAction action);
+    Q_INVOKABLE void editMachineResult(const QVariantMap& choice, telar::gui::qt::window_actions::MachineEditAction action);
     Q_INVOKABLE void peekActivity(const QString& identity);
 
     using Dialog = Store::Dialog;
@@ -279,7 +223,7 @@ namespace telar::gui::qt {
     [[nodiscard]] DisplayMetrics displayMetrics(qreal density) const;
     void soundPlaybackFinished(std::optional<CommandFailure> failure);
 
-    Q_INVOKABLE void execute(Action action, const QString& target = {});
+    Q_INVOKABLE void execute(telar::gui::qt::window_actions::Action action, const QString& target = {});
     Q_INVOKABLE void submitDialog(const QVariantMap& input);
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
@@ -449,7 +393,7 @@ namespace telar::gui::qt {
       QStringList arguments;
     };
 
-    bool executeMachineAction(Action action);
+    bool executeMachineAction(window_actions::Action action);
     void moveMachine(int delta);
     void chooseMachine(MachinePickerTarget target, bool alternate);
     void showMachinePrompt(std::optional<MachineToken> renamed = {});
@@ -571,9 +515,9 @@ namespace telar::gui::qt {
     void initializeGraphicsRecovery();
     void scheduleGraphicsRecovery();
     void restoreTerminalFocus();
-    bool executeNavigation(Action action, const QString& target);
-    bool executePane(Action action, std::uint64_t identity);
-    void executeWindowAction(Action action);
+    bool executeNavigation(window_actions::Action action, const QString& target);
+    bool executePane(window_actions::Action action, std::uint64_t identity);
+    void executeWindowAction(window_actions::Action action);
     // What the terminals ask of the window (terminal_host.cpp).
     void pressKey(TerminalItem& terminal, QKeyEvent& event) override;
     [[nodiscard]] bool releaseKey(TerminalItem& terminal, QKeyEvent& event) override;

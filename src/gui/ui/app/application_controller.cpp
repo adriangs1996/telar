@@ -100,36 +100,33 @@ namespace telar::gui::qt {
       };
     }
 
-    auto paneDirection(ApplicationController::Action action) noexcept -> PaneDirection {
-      using Action = ApplicationController::Action;
-
+    auto paneDirection(window_actions::Action action) noexcept -> PaneDirection {
       switch (action) {
-      case Action::focus_left:
-      case Action::resize_left:
+      case window_actions::Action::focus_left:
+      case window_actions::Action::resize_left:
         return PaneDirection::left;
-      case Action::focus_right:
-      case Action::resize_right:
+      case window_actions::Action::focus_right:
+      case window_actions::Action::resize_right:
         return PaneDirection::right;
-      case Action::focus_up:
-      case Action::resize_up:
+      case window_actions::Action::focus_up:
+      case window_actions::Action::resize_up:
         return PaneDirection::up;
       default:
         return PaneDirection::down;
       }
     }
 
-    auto dialogFor(ApplicationController::Action action) -> ApplicationController::Dialog {
-      using Action = ApplicationController::Action;
+    auto dialogFor(window_actions::Action action) -> ApplicationController::Dialog {
       using Dialog = ApplicationController::Dialog;
 
       switch (action) {
-      case Action::palette:
+      case window_actions::Action::palette:
         return Dialog::palette;
-      case Action::new_workspace:
+      case window_actions::Action::new_workspace:
         return Dialog::new_workspace;
-      case Action::rename_tab:
+      case window_actions::Action::rename_tab:
         return Dialog::rename_tab;
-      case Action::rename_workspace:
+      case window_actions::Action::rename_workspace:
         return Dialog::rename_workspace;
       default:
         return Dialog::none;
@@ -153,7 +150,7 @@ namespace telar::gui::qt {
         panes_(store_, element_slots_),
         activity_(store_, element_slots_, memory),
         sidebar_(store_, workspaces_, activity_),
-        palette_(store_, PaletteAction{.value = static_cast<int>(Action::suggest_command)}),
+        palette_(store_, PaletteAction{.value = static_cast<int>(window_actions::Action::suggest_command)}),
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
         machine_chrome_(store_),
@@ -237,7 +234,7 @@ namespace telar::gui::qt {
     });
     connect(this, &ApplicationController::machinesChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
-      execute(Action::machine_picker);
+      execute(window_actions::Action::machine_picker);
     });
     connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](MachineToken token) {
       applyInteraction([this, token] {
@@ -252,7 +249,7 @@ namespace telar::gui::qt {
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
     connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
-      execute(Action::select_tab, QString::number(tab_id));
+      execute(window_actions::Action::select_tab, QString::number(tab_id));
       restoreTerminalFocus();
     });
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
@@ -910,14 +907,14 @@ namespace telar::gui::qt {
         throw EncodingError{"ClientPromptUnavailable"};
       }
 
-      executeWindowAction(Action::goto_picker);
+      executeWindowAction(window_actions::Action::goto_picker);
       break;
     case ClientAction::client_open_history:
       if (copy_.active() || store_.dialog().kind != Dialog::none) {
         throw EncodingError{"ClientPromptUnavailable"};
       }
 
-      executeWindowAction(Action::history);
+      executeWindowAction(window_actions::Action::history);
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::client_copy_mode:
@@ -926,7 +923,7 @@ namespace telar::gui::qt {
           throw EncodingError{"CopyModeUnavailable"};
         }
 
-        executeWindowAction(Action::copy_mode);
+        executeWindowAction(window_actions::Action::copy_mode);
         if (!copy_.active()) {
           throw EncodingError{"CopyModeUnavailable"};
         }
@@ -1016,10 +1013,10 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::execute(Action action, const QString& target) {
+  void ApplicationController::execute(window_actions::Action action, const QString& target) {
     key_bindings_.cancelSequence();
     applyInteraction([&] {
-      if (action != Action::copy_mode && (action != Action::cancel || store_.dialog().kind == Dialog::none)) {
+      if (action != window_actions::Action::copy_mode && (action != window_actions::Action::cancel || store_.dialog().kind == Dialog::none)) {
         copy_.leaveKeyboard();
       }
 
@@ -1088,32 +1085,32 @@ namespace telar::gui::qt {
     }
   }
 
-  bool ApplicationController::executeNavigation(Action action, const QString& target) {
+  bool ApplicationController::executeNavigation(window_actions::Action action, const QString& target) {
     const auto identity = target.toULongLong();
 
-    if (action == Action::new_tab) {
+    if (action == window_actions::Action::new_tab) {
       session().createTab();
-    } else if (action == Action::select_tab) {
+    } else if (action == window_actions::Action::select_tab) {
       if (const auto* active = session().activeTab()) {
         session().selectTab({.workspace = active->location.workspace, .tab_id = identity});
       }
-    } else if (action == Action::select_tab_index) {
+    } else if (action == window_actions::Action::select_tab_index) {
       session().selectTabIndex(static_cast<std::size_t>(identity));
-    } else if (action == Action::next_tab || action == Action::previous_tab) {
-      session().selectTabOffset(action == Action::next_tab ? 1 : -1);
-    } else if (action == Action::move_tab_next || action == Action::move_tab_previous) {
-      session().moveTab(action == Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
-    } else if (action == Action::close_tab) {
+    } else if (action == window_actions::Action::next_tab || action == window_actions::Action::previous_tab) {
+      session().selectTabOffset(action == window_actions::Action::next_tab ? 1 : -1);
+    } else if (action == window_actions::Action::move_tab_next || action == window_actions::Action::move_tab_previous) {
+      session().moveTab(action == window_actions::Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
+    } else if (action == window_actions::Action::close_tab) {
       if (const auto* active = session().activeTab()) {
         session().closeTab({.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
       }
-    } else if (action == Action::select_workspace) {
+    } else if (action == window_actions::Action::select_workspace) {
       session().selectWorkspace(parseLocation(target));
-    } else if (action == Action::leave_worktree) {
+    } else if (action == window_actions::Action::leave_worktree) {
       session().leaveWorktree();
-    } else if (action == Action::forget_gone_worktrees) {
+    } else if (action == window_actions::Action::forget_gone_worktrees) {
       session().forgetGoneWorktrees();
-    } else if (action == Action::select_agent) {
+    } else if (action == window_actions::Action::select_agent) {
       selectActivity(target);
     } else {
       return false;
@@ -1122,22 +1119,22 @@ namespace telar::gui::qt {
     return true;
   }
 
-  bool ApplicationController::executePane(Action action, std::uint64_t identity) {
-    if (action == Action::focus_left || action == Action::focus_right || action == Action::focus_up || action == Action::focus_down) {
+  bool ApplicationController::executePane(window_actions::Action action, std::uint64_t identity) {
+    if (action == window_actions::Action::focus_left || action == window_actions::Action::focus_right || action == window_actions::Action::focus_up || action == window_actions::Action::focus_down) {
       session().focusDirection(paneDirection(action));
-    } else if (action == Action::resize_left || action == Action::resize_right || action == Action::resize_up || action == Action::resize_down) {
+    } else if (action == window_actions::Action::resize_left || action == window_actions::Action::resize_right || action == window_actions::Action::resize_up || action == window_actions::Action::resize_down) {
       session().resizeDirection(paneDirection(action));
-    } else if (action == Action::focus_pane) {
+    } else if (action == window_actions::Action::focus_pane) {
       session().focusPane(identity);
-    } else if (action == Action::split_horizontal) {
+    } else if (action == window_actions::Action::split_horizontal) {
       session().split(ClientLayoutAxis::horizontal);
-    } else if (action == Action::split_vertical) {
+    } else if (action == window_actions::Action::split_vertical) {
       session().split(ClientLayoutAxis::vertical);
-    } else if (action == Action::close_pane) {
+    } else if (action == window_actions::Action::close_pane) {
       if (const auto* pane = session().focusedPane()) {
         session().closePane(identity == 0 ? pane->id : identity);
       }
-    } else if (action == Action::fullscreen) {
+    } else if (action == window_actions::Action::fullscreen) {
       session().toggleFullscreen();
     } else {
       return false;
@@ -1146,33 +1143,33 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void ApplicationController::executeWindowAction(Action action) {
+  void ApplicationController::executeWindowAction(window_actions::Action action) {
     if (executeMachineAction(action)) {
       return;
     }
 
-    if (action == Action::detach) {
+    if (action == window_actions::Action::detach) {
       if (window_ != nullptr) {
         window_->close();
       }
-    } else if (action == Action::toggle_sidebar) {
+    } else if (action == window_actions::Action::toggle_sidebar) {
       session().setSidebarVisible(!session().configuration().sidebar_visible);
       emit windowGeometryChanged();
-    } else if (action == Action::toggle_workspace_list) {
+    } else if (action == window_actions::Action::toggle_workspace_list) {
       session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
       emit windowGeometryChanged();
-    } else if (action == Action::history) {
+    } else if (action == window_actions::Action::history) {
       showDialog(Dialog::history);
       history_.open();
-    } else if (action == Action::palette || action == Action::goto_picker) {
-      showPalette(action == Action::palette ? PaletteMode::actions : PaletteMode::navigate);
-    } else if (action == Action::path_picker) {
+    } else if (action == window_actions::Action::palette || action == window_actions::Action::goto_picker) {
+      showPalette(action == window_actions::Action::palette ? PaletteMode::actions : PaletteMode::navigate);
+    } else if (action == window_actions::Action::path_picker) {
       showPathPicker();
-    } else if (action == Action::suggest_command) {
+    } else if (action == window_actions::Action::suggest_command) {
       showPalette(PaletteMode::suggest);
-    } else if (action == Action::new_workspace || action == Action::rename_tab || action == Action::rename_workspace) {
+    } else if (action == window_actions::Action::new_workspace || action == window_actions::Action::rename_tab || action == window_actions::Action::rename_workspace) {
       showDialog(dialogFor(action));
-    } else if (action == Action::copy_mode) {
+    } else if (action == window_actions::Action::copy_mode) {
       if (store_.dialog().kind == Dialog::none && session().enterBlocks()) {
         prompt_.publish(session().changedPane());
         emit terminals_.terminalChanged(session().changedPane());
@@ -1183,7 +1180,7 @@ namespace telar::gui::qt {
           emit terminals_.terminalChanged(copy->pane_id);
         }
       }
-    } else if (action == Action::cancel) {
+    } else if (action == window_actions::Action::cancel) {
       cancelCurrentInteraction();
     }
   }

@@ -374,13 +374,13 @@ namespace {
       constexpr qsizetype action_count = 29;
 
       QCOMPARE(application.commands().size(), action_count);
-      application.execute(ApplicationController::Action::next_machine);
+      application.execute(window_actions::Action::next_machine);
       QCOMPARE(machines.active(), slot);
-      application.execute(ApplicationController::Action::next_machine);
+      application.execute(window_actions::Action::next_machine);
       QCOMPARE(machines.active(), Machines::local_slot);
-      application.execute(ApplicationController::Action::previous_machine);
+      application.execute(window_actions::Action::previous_machine);
       QCOMPARE(machines.active(), slot);
-      application.execute(ApplicationController::Action::machine_picker);
+      application.execute(window_actions::Action::machine_picker);
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 4);
       const auto offline = requireValue(machines.find(MachineId::fromRaw(2)), "Expected disabled picker row");
 
@@ -388,14 +388,14 @@ namespace {
       QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
       QTRY_VERIFY(machines.row(offline).enabled);
       QCOMPARE(machines.active(), slot);
-      application.execute(ApplicationController::Action::machine_picker);
+      application.execute(window_actions::Action::machine_picker);
       auto toggle = machineChoice(application, QStringLiteral("Offline"));
 
       toggle.insert(QStringLiteral("alternate"), true);
       application.palette()->activate(toggle);
       QTRY_VERIFY(!machines.row(offline).enabled);
       QCOMPARE(machines.active(), slot);
-      application.execute(ApplicationController::Action::machine_picker);
+      application.execute(window_actions::Action::machine_picker);
       auto local = machineChoice(application, QStringLiteral("Personal"));
 
       local.insert(QStringLiteral("alternate"), true);
@@ -411,7 +411,7 @@ namespace {
       QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
       auto& application = fixture.application;
 
-      application.execute(ApplicationController::Action::machine_picker);
+      application.execute(window_actions::Action::machine_picker);
       application.palette()->search(QStringLiteral(":unmatched"));
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 1);
       application.palette()->activate(machineChoice(application, QStringLiteral("Add machine…")));
@@ -435,14 +435,14 @@ namespace {
       QTRY_VERIFY(machines.findDestination("window-added@fixture").has_value());
       const auto slot = requireValue(machines.findDestination("window-added@fixture"), "Expected newly saved destination");
 
-      application.execute(ApplicationController::Action::machine_picker);
-      application.editMachineResult(machineChoice(application, QStringLiteral("Added")), ApplicationController::MachineEditAction::rename);
+      application.execute(window_actions::Action::machine_picker);
+      application.editMachineResult(machineChoice(application, QStringLiteral("Added")), window_actions::MachineEditAction::rename);
       QCOMPARE(application.machinePrompt()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("Added"));
       application.machinePrompt()->search(QStringLiteral("Renamed"));
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       QTRY_COMPARE(machines.row(slot).label.view(), std::string_view{"Renamed"});
-      application.execute(ApplicationController::Action::machine_picker);
-      application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), ApplicationController::MachineEditAction::remove);
+      application.execute(window_actions::Action::machine_picker);
+      application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), window_actions::MachineEditAction::remove);
       QTRY_VERIFY(!machines.row(slot).used);
       QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 2);
@@ -455,15 +455,15 @@ namespace {
       auto& application = fixture.application;
       const auto slot = remoteSlot(application);
 
-      application.execute(ApplicationController::Action::machine_picker);
+      application.execute(window_actions::Action::machine_picker);
       const auto stale = machineChoice(application, QStringLiteral("Build"));
 
       fixture.replace(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Renamed","destination":"window@fixture","enabled":false}]})");
       QTRY_VERIFY(application.palette()->state().value(QStringLiteral("revision")) != stale.value(QStringLiteral("revision")));
-      application.editMachineResult(stale, ApplicationController::MachineEditAction::remove);
+      application.editMachineResult(stale, window_actions::MachineEditAction::remove);
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
       QVERIFY(MachineProfileWindow::machines(application).row(slot).used);
-      application.execute(ApplicationController::Action::add_machine);
+      application.execute(window_actions::Action::add_machine);
       application.machinePrompt()->search(QStringLiteral("invalid label"));
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       application.machinePrompt()->search(QStringLiteral("window-invalid@fixture"));
@@ -482,7 +482,7 @@ namespace {
       const auto slot = remoteSlot(application);
 
       QTRY_VERIFY(MachineProfileWindow::machines(application).row(slot).needs_setup);
-      application.execute(ApplicationController::Action::machine_picker);
+      application.execute(window_actions::Action::machine_picker);
       application.palette()->activate(machineChoice(application, QStringLiteral("Missing")));
       QTRY_COMPARE(fixture.runtime->count(ClientTag::create_tab), std::size_t{1});
       const auto request = fixture.runtime->last<CreateTab>();

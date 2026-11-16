@@ -51,18 +51,18 @@ import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 
-  bool ApplicationController::executeMachineAction(Action action) {
+  bool ApplicationController::executeMachineAction(window_actions::Action action) {
     switch (action) {
-    case Action::machine_picker:
+    case window_actions::Action::machine_picker:
       showPalette(PaletteMode::machines);
       break;
-    case Action::next_machine:
+    case window_actions::Action::next_machine:
       moveMachine(1);
       break;
-    case Action::previous_machine:
+    case window_actions::Action::previous_machine:
       moveMachine(-1);
       break;
-    case Action::add_machine:
+    case window_actions::Action::add_machine:
       showMachinePrompt();
       break;
     default:
@@ -130,7 +130,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::editMachineResult(const QVariantMap& choice, MachineEditAction action) {
+  void ApplicationController::editMachineResult(const QVariantMap& choice, window_actions::MachineEditAction action) {
     const auto target = palette_.chosenMachine(choice);
     if (!target || !target->machine || !store_.machines().contains(*target->machine) || target->machine->slot == Machines::local_slot) {
       return;
@@ -139,7 +139,7 @@ namespace telar::gui::qt {
     const auto token = *target->machine;
 
     applyInteraction([&] {
-      if (action == MachineEditAction::rename) {
+      if (action == window_actions::MachineEditAction::rename) {
         showMachinePrompt(token);
       } else {
         const auto label = store_.machines().row(token.slot).label.view();

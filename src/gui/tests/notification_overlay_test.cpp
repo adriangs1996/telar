@@ -260,7 +260,7 @@ namespace {
 
       window.resize(window_width, window_height);
       client.setWindow(window);
-      client.execute(ApplicationController::Action::toggle_sidebar);
+      client.execute(window_actions::Action::toggle_sidebar);
       const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
 
       overlay->setParentItem(window.contentItem());

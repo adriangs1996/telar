@@ -76,7 +76,7 @@ Item {
         Keys.onBacktabPressed: root.controller.paths.ascend()
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
-                root.controller.execute(ApplicationController.Action.cancel);
+                root.controller.execute(WindowActions.Action.cancel);
             }
         }
         Keys.onPressed: event => event.accepted = keys.handle(event)

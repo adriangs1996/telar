@@ -64,7 +64,7 @@ Item {
     TapHandler {
         onTapped: {
             if (root.focusTarget) {
-                root.application.execute(ApplicationController.Action.focus_pane, root.paneId);
+                root.application.execute(WindowActions.Action.focus_pane, root.paneId);
                 root.focusTarget.forceActiveFocus();
             }
         }

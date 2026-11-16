@@ -82,7 +82,7 @@ Item {
             typography: root.typography
             ratio: root.ratio
             onSubmitted: revision => root.controller.palette.submitSuggestion(revision)
-            onBackRequested: root.controller.execute(ApplicationController.Action.cancel)
+            onBackRequested: root.controller.execute(WindowActions.Action.cancel)
         }
     }
 
@@ -132,10 +132,10 @@ Item {
                 }
                 const choice = {key: root.state.selectedKey ?? "", revision: root.state.revision};
                 if (event.key === Qt.Key_R) {
-                    root.controller.editMachineResult(choice, ApplicationController.MachineEditAction.rename);
+                    root.controller.editMachineResult(choice, WindowActions.MachineEditAction.rename);
                     event.accepted = true;
                 } else if (event.key === Qt.Key_D) {
-                    root.controller.editMachineResult(choice, ApplicationController.MachineEditAction.remove);
+                    root.controller.editMachineResult(choice, WindowActions.MachineEditAction.remove);
                     event.accepted = true;
                 } else {
                     event.accepted = false;
@@ -143,7 +143,7 @@ Item {
             }
             Keys.onEscapePressed: {
                 if (!query.cancelComposition()) {
-                    root.controller.execute(ApplicationController.Action.cancel);
+                    root.controller.execute(WindowActions.Action.cancel);
                 }
             }
         }
@@ -158,7 +158,7 @@ Item {
             colors: root.colors
             pixelSize: root.typography.body
             ratio: root.ratio
-            onActivated: root.controller.execute(ApplicationController.Action.cancel)
+            onActivated: root.controller.execute(WindowActions.Action.cancel)
         }
 
         PaletteKeycap {

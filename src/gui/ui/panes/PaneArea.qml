@@ -91,7 +91,7 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         onPressed: {
-                            root.application.execute(ApplicationController.Action.focus_pane, pane.record.key);
+                            root.application.execute(WindowActions.Action.focus_pane, pane.record.key);
                             terminal.forceActiveFocus(Qt.MouseFocusReason);
                         }
                     }
@@ -134,7 +134,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     onPressed: {
-                        root.application.execute(ApplicationController.Action.focus_pane, pane.record.key);
+                        root.application.execute(WindowActions.Action.focus_pane, pane.record.key);
                         terminal.forceActiveFocus(Qt.MouseFocusReason);
                     }
                 }

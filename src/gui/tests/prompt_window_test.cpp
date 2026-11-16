@@ -618,7 +618,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QVERIFY(application.prompt()->line(pane_id)->editor().text().view() == "git s");
 
       // The path search starts from the word before the caret and writes the path over it.
-      application.execute(ApplicationController::Action::path_picker);
+      application.execute(window_actions::Action::path_picker);
       QCOMPARE(application.lineSearch(), telar::gui::qt::ApplicationController::Dialog::paths);
       QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::find_paths) != 0, wait_ms);
       const auto find = runtime.last<FindPaths>();
