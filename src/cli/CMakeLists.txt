@@ -64,7 +64,7 @@ endif()
 
 # Machines, CLI installation and window startup.
 if(TELAR_LINKED_SQLITE)
-  target_link_libraries(cli-core PUBLIC "${SQLITE3_LIBRARY}")
+  target_link_libraries(cli-core PUBLIC deps::sqlite3)
   target_compile_definitions(cli-core PUBLIC TELAR_LINKED_SQLITE=1)
 endif()
 

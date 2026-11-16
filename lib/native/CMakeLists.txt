@@ -6,7 +6,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 # The headers of the runtime's pinned native libraries: nghttp2, Brotli and zstd from the managed
 # build, and zlib, SQLite and libpcap from it on Linux and from the SDK on macOS. Each process that
 # calls into a library links it itself.
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/native_libraries.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/deps/native.cmake")
 
 add_library(telar-native STATIC zlib/zlib.cpp)
 add_library(telar::native ALIAS telar-native)

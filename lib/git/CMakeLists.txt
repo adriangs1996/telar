@@ -7,15 +7,8 @@ if(NOT TARGET telar-platform)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../platform" "${CMAKE_BINARY_DIR}/telar-platform")
 endif()
 
-# zlib as the runtime links it: the managed static build on Linux, the SDK's
-# copy on macOS. A parent project that found it already is reused.
-if(NOT ZLIB_LIBRARY)
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/native_libraries.cmake")
-  else()
-    find_library(ZLIB_LIBRARY NAMES z PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" NO_DEFAULT_PATH REQUIRED)
-  endif()
-endif()
+# zlib as the runtime links it: the managed static build on Linux, the SDK's copy on macOS.
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/deps/native.cmake")
 
 if(NOT TARGET telar-native)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../native" "${CMAKE_BINARY_DIR}/telar-native")
@@ -27,7 +20,7 @@ endif()
 add_library(telar-git STATIC git.cpp git-config.cpp git-format.cpp git-history.cpp git-objects.cpp git-worktree.cpp)
 add_library(telar::git ALIAS telar-git)
 telar_modules(telar-git EXCLUDE checkout)
-target_link_libraries(telar-git PUBLIC telar::platform telar::git-checkout telar::native OpenSSL::Crypto "${ZLIB_LIBRARY}")
+target_link_libraries(telar-git PUBLIC telar::platform telar::git-checkout telar::native OpenSSL::Crypto deps::zlib)
 target_compile_options(telar-git PRIVATE -Wall -Wextra -Wpedantic)
 
 telar_editor_flags(telar-git)

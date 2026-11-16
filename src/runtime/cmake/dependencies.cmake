@@ -42,36 +42,12 @@ int main() {}" TELAR_MUSL)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/openssl.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/native_libraries.cmake")
-
-# Earlier configurations searched the system for these; the managed build
-# supplies them now.
-foreach(variable IN ITEMS NGHTTP2_ROOT NGHTTP2_INCLUDE_DIR NGHTTP2_LIBRARY BROTLI_ROOT BROTLI_INCLUDE_DIR
-    BROTLI_DECODER_LIBRARY BROTLI_ENCODER_LIBRARY BROTLI_COMMON_LIBRARY ZSTD_ROOT ZSTD_INCLUDE_DIR ZSTD_LIBRARY
-    ZLIB_LIBRARY SQLITE3_LIBRARY PCAP_LIBRARY)
-  unset(${variable} CACHE)
-endforeach()
+include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/deps/native.cmake")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # The CLI links the managed SQLite for history instead of loading whatever
   # the system has.
   set(TELAR_LINKED_SQLITE ON)
-else()
-  # macOS links the SDK's copies, which Apple patches with the OS, and never
-  # a package manager's.
-  set(sdk "${CMAKE_OSX_SYSROOT}")
-  if(NOT IS_ABSOLUTE "${sdk}")
-    if(NOT sdk)
-      set(sdk macosx)
-    endif()
-
-    execute_process(COMMAND xcrun --sdk "${sdk}" --show-sdk-path
-      OUTPUT_VARIABLE sdk OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
-  endif()
-
-  find_library(SQLITE3_LIBRARY NAMES sqlite3 PATHS "${sdk}/usr/lib" NO_DEFAULT_PATH REQUIRED)
-  find_library(ZLIB_LIBRARY NAMES z PATHS "${sdk}/usr/lib" NO_DEFAULT_PATH REQUIRED)
-  find_library(PCAP_LIBRARY NAMES pcap PATHS "${sdk}/usr/lib" NO_DEFAULT_PATH REQUIRED)
 endif()
 
 if(TELAR_LINUX_DISTRIBUTABLE)
