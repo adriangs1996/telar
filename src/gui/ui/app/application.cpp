@@ -143,7 +143,6 @@ namespace telar::gui::qt {
         memory_(memory),
         history_(store_),
         configuration_source_(memory),
-        pick_controller_(*this, memory, configuration_source_),
         plugin_worker_(memory, *this),
         machine_profiles_(memory),
         attachments_(store_, memory),
@@ -162,6 +161,7 @@ namespace telar::gui::qt {
         peek_(store_, activity_),
         copy_(store_),
         notifications_(store_),
+        components_(store_, configuration_source_, element_slots_, memory),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -1369,7 +1369,7 @@ namespace telar::gui::qt {
     connect(&attachments_, &AttachmentsController::modalChanged, this, [this](bool open) {
       if (open) {
         closeComponentPick();
-        closeComponentPanel();
+        components_.closePanel();
         interruptBindings();
         for (const auto& pane : session().panes()) {
           emit inputReleasing(pane->id);

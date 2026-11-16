@@ -55,34 +55,12 @@ namespace telar::gui::qt {
   }
 
   void Application::refreshElementBars() {
-    element_slots_.begin(ElementSlots::bar_slots);
-    if (!element_slots_.active()) {
-      element_slots_.finish(ElementSlots::bar_slots);
-      if (!element_bars_.isEmpty()) {
-        element_bars_.clear();
-        emit elementBarsChanged();
-      }
-
-      return;
-    }
-
-    const QVariantMap item{
+    components_.refreshElementBars({
         {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
         {QStringLiteral("machine"), machineContext().value(QStringLiteral("label"))},
         {QStringLiteral("tab_count"), tabs_.count()},
         {QStringLiteral("sidebar_visible"), sidebarVisible()},
-    };
-
-    auto bars = element_slots_.elements(ElementSlots::bar_slots, QStringLiteral("window"), item);
-    element_slots_.finish(ElementSlots::bar_slots);
-    if (bars != element_bars_) {
-      element_bars_ = std::move(bars);
-      emit elementBarsChanged();
-    }
-  }
-
-  QVariantMap Application::elementBars() const {
-    return element_bars_;
+    });
   }
 
   QVariantMap ElementSlots::tabItem(const QVariantMap& record, int position) {
@@ -169,7 +147,7 @@ namespace telar::gui::qt {
       if (node.callback != components::Element::none) {
         const auto hold = key_bindings_.hold();
 
-        configuration_source_.invokeElement(instance->id, node.callback, componentContext(), instance->item, [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
+        configuration_source_.invokeElement(instance->id, node.callback, components_.context(), instance->item, [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
           luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
             applyEffects(**outcome.value);
           });

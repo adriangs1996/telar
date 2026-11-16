@@ -195,9 +195,9 @@ Item {
     Popup {
         id: overflowPopup
         Connections {
-            target: overflowPopup.visible ? root.controller : null
-            function onComponentsChanged() {
-                if (root.controller.componentPanel.open ?? false) {
+            target: overflowPopup.visible ? root.controller.components : null
+            function onChanged() {
+                if (root.controller.components.panel.open ?? false) {
                     overflowPopup.close();
                 }
             }

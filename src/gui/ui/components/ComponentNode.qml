@@ -82,11 +82,11 @@ KeyboardAction {
     // A bar yields its tooltips to an open panel or pick; a panel's own nodes yield only to a pick.
     // Called from the hover-guarded binding so that only the hovered node tracks these projections.
     function tooltipCovered() {
-        if (controller.componentPick.open ?? false) {
+        if (controller.components.pick.open ?? false) {
             return true;
         }
 
-        return !(surface.open ?? false) && (controller.componentPanel.open ?? false);
+        return !(surface.open ?? false) && (controller.components.panel.open ?? false);
     }
 
     Accessible.role: node.clickable ? Accessible.Button : Accessible.StaticText

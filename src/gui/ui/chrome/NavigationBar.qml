@@ -45,7 +45,7 @@ NativeRoundedRectangle {
     readonly property real sideRoom: Math.max(0, paletteButton.x - identity.x - 3 * controlGap - tabsFloor)
     readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28, sideRoom))
     // A mod's top bar replaces every control; the window buttons keep their inset.
-    readonly property var drawn: controller?.elementBars?.top_bar ?? null
+    readonly property var drawn: controller?.components?.elementBars?.top_bar ?? null
 
     color: colors.topbarBackground
     replaceBackground: true

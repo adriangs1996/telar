@@ -183,7 +183,7 @@ namespace telar::gui::qt {
     try {
       const auto repeating = router_.repeatAction();
       const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
-      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copy_.active() || application_.dialog() != Application::Dialog::none || application_.pick_controller_.isOpen(), .repeat = policy});
+      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copy_.active() || application_.dialog() != Application::Dialog::none || application_.components_.pickOpen(), .repeat = policy});
       const auto consumed = apply(decision);
 
       if (input.phase == KeyPhase::release) {

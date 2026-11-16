@@ -11,7 +11,7 @@ Popup {
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var state: controller.componentPanel
+    readonly property var state: controller.components.panel
     readonly property var anchor: state.anchor ?? Qt.point(-1, -1)
     readonly property real margin: 12 * ratio
     readonly property real headerHeight: 32 * ratio
@@ -27,7 +27,7 @@ Popup {
         generation: root.state.identity ?? ""
     }
     visible: state.open ?? false
-    focus: !(controller.componentPick.open ?? false)
+    focus: !(controller.components.pick.open ?? false)
     modal: false
     padding: margin
     width: Math.max(0, Math.min((state.width ?? 420) * ratio, (parent?.width ?? 720) - 2 * margin))
@@ -36,9 +36,9 @@ Popup {
     y: settledY + entranceOffset * (1 - motion.reveal)
     opacity: motion.reveal
     objectName: "configuredPanel"
-    closePolicy: (controller.componentPick.open ?? false) ? Popup.NoAutoClose : Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    closePolicy: (controller.components.pick.open ?? false) ? Popup.NoAutoClose : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     background: DialogSurface { colors: root.colors; ratio: root.ratio }
-    onClosed: if (state.open) controller.closeComponentPanel()
+    onClosed: if (state.open) controller.components.closePanel()
 
     contentItem: Item {
         ChromeText {
@@ -68,7 +68,7 @@ Popup {
             pixelSize: root.typography.body
             cornerRadius: 5 * root.ratio
             Accessible.name: "Refresh panel"
-            onClicked: root.controller.refreshComponentPanel()
+            onClicked: root.controller.components.refreshPanel()
         }
 
         ChromeButton {
@@ -80,7 +80,7 @@ Popup {
             pixelSize: root.typography.body
             cornerRadius: 5 * root.ratio
             Accessible.name: "Close panel"
-            onClicked: root.controller.closeComponentPanel()
+            onClicked: root.controller.components.closePanel()
         }
 
         Flickable {

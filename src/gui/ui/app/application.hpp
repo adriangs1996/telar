@@ -23,10 +23,8 @@ static_assert(true);
 #include "ui/activity/activity_controller.hpp"
 #include "ui/attachments/attachments_controller.hpp"
 #include "ui/chrome/tabs_controller.hpp"
-#include "ui/components/component_surface_state.hpp"
+#include "ui/components/components_controller.hpp"
 #include "ui/components/element_slots.hpp"
-#include "ui/components/pick_controller.hpp"
-#include "ui/components/surface_command.hpp"
 #include "ui/config/configuration_source.hpp"
 #include "ui/fonts/font_resolver.hpp"
 #include "ui/history/history_controller.hpp"
@@ -174,11 +172,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
     Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
-    Q_PROPERTY(QVariantMap componentBars READ componentBars NOTIFY componentsChanged)
-    // Mod content for the top and bottom bars, by slot name; empty while QML draws them.
-    Q_PROPERTY(QVariantMap elementBars READ elementBars NOTIFY elementBarsChanged)
-    Q_PROPERTY(QVariantMap componentPanel READ componentPanel NOTIFY componentsChanged)
-    Q_PROPERTY(QVariantMap componentPick READ componentPick NOTIFY pickChanged)
+    Q_PROPERTY(telar::gui::qt::ComponentsController* components READ components CONSTANT)
     Q_PROPERTY(QString error READ error NOTIFY diagnosticChanged)
     Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY diagnosticChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY diagnosticChanged)
@@ -372,6 +366,10 @@ namespace telar::gui::qt {
       return &notifications_;
     }
 
+    ComponentsController* components() noexcept {
+      return &components_;
+    }
+
     HistoryController* history() noexcept {
       return &history_;
     }
@@ -396,17 +394,10 @@ namespace telar::gui::qt {
     [[nodiscard]] QString title() const;
     [[nodiscard]] QVariantMap statusMode() const;
     [[nodiscard]] QVariantMap hostMetrics() const;
-    [[nodiscard]] QVariantMap componentBars() const;
-    [[nodiscard]] QVariantMap componentPanel() const;
     Q_INVOKABLE void activateComponent(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor);
     // A click on a mod element: runs its action, URL or Lua function.
     Q_INVOKABLE void activateElement(const QString& slot, const QString& key, const QString& revision, int element);
-    [[nodiscard]] QVariantMap elementBars() const;
-    Q_INVOKABLE void closeComponentPanel();
-    Q_INVOKABLE void refreshComponentPanel();
-    [[nodiscard]] QVariantMap componentPick() const;
     Q_INVOKABLE void closeComponentPick();
-    Q_INVOKABLE void filterComponentPick(const QString& query);
     Q_INVOKABLE void chooseComponentPick(int row, const QString& identity);
     [[nodiscard]] bool prefixPending() const noexcept;
     [[nodiscard]] QString error() const;
@@ -423,14 +414,11 @@ namespace telar::gui::qt {
     // The error, the TLS proxy badge or whether the runtime is connected moved.
     void diagnosticChanged();
     // The attachment shelf's region or the attachment modal's layout moved.
-    void elementBarsChanged();
     // Each refresh() of what the window shows from the active session, for the C++ views that
     // compare what they read on their own. No property notifies with it.
     void refreshed();
     void statusModeChanged();
     void hostMetricsChanged();
-    void componentsChanged();
-    void pickChanged();
     // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
     void configurationChanged();
     // The window was resized, or the sidebar shown, hidden, resized or its workspace list folded.
@@ -457,8 +445,6 @@ namespace telar::gui::qt {
     friend class KeyBindings;
     friend class PointerDispatcher;
     friend class TerminalItem;
-    template <typename Host, Allocator Memory, typename Source>
-    friend class PickController;
 
     [[nodiscard]] BindingContext bindingContext() const;
     [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
@@ -471,31 +457,13 @@ namespace telar::gui::qt {
     void executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved);
     void executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
     void initializeComponents();
-    void resetComponents();
-    void tickComponents();
-    void projectComponents();
-    void projectComponentSource(std::size_t index, bool panel);
-    void armComponents();
-    void renderComponentSource(std::size_t index, bool panel);
-    void applyComponentRender(std::size_t index, bool panel, const components::Context& context, bool truncated = false);
-    void componentCommandFinished(const ComponentCommandOwner& owner, SurfaceCommandResult result);
-    [[nodiscard]] const ComponentSlotState::Bar* componentBar(std::size_t index) const;
-    [[nodiscard]] bool componentActionsLive(const ConfigurationSource::Actions& actions) const;
     void initializeElements();
     // The mod content a record carries for its slots, keyed by slot name.
     void refreshElementBars();
     void activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString& identity, const QPointF& anchor, const ConfigurationSource::Actions& resolved);
-    void toggleComponentPanel(std::size_t index);
-    [[nodiscard]] components::Context componentContext() const;
-    [[nodiscard]] bool componentCommandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const;
     void initializePicks();
     void openComponentPick(std::size_t index);
     void restoreComponentPickFocus();
-    [[nodiscard]] PickOwner pickOwner() const;
-    [[nodiscard]] bool pickOwnerCurrent(const PickOwner& owner) const;
-    [[nodiscard]] components::Context pickContext() const;
-    void pickCommitted();
-    void pickFailed(const QString& message);
     void startPlugin(const PluginInvocation& invocation);
     void applyPluginEffects(const PluginEffects& effects);
     void applyExpression(const InputExpression& expression);
@@ -694,18 +662,12 @@ namespace telar::gui::qt {
     // The theme and font QML reads, built on first read after each configurationChanged.
     mutable std::optional<QVariantMap> colors_;
     mutable std::optional<QVariantMap> font_;
-    tbc::view<PickController<Application, ApplicationAllocator, ConfigurationSource>, tbc::lt::self> pick_controller_;
     QPointer<QQuickItem> component_pick_return_focus_;
-    ComponentSurfaceState component_surfaces_;
     tbc::view<ElementSlots, tbc::lt::self> element_slots_{configuration_source_, [this] {
-                                                            return componentContext();
+                                                            return components_.context();
                                                           },
         this};
-    QVariantMap element_bars_;
-    QTimer component_timer_;
-    tbc::view<SurfaceCommand, tbc::lt::self> component_command_;
-    std::optional<ComponentCommandOwner> component_command_owner_;
-    std::uint64_t next_component_revision_ = 0;
+    // Where the pressed component action that is running was pressed, for a panel it opens.
     std::optional<QPointF> component_action_anchor_;
     tbc::view<PluginWorker<Application>, tbc::lt::self> plugin_worker_;
 
@@ -743,6 +705,7 @@ namespace telar::gui::qt {
     PeekController peek_;
     CopyController copy_;
     NotificationsController notifications_;
+    ComponentsController components_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;

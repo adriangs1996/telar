@@ -27,7 +27,7 @@ NativeRoundedRectangle {
     readonly property real metricsWidth: Math.max(0, contentWidth - (tlsChip.visible ? tlsChip.width + badgeGap : 0))
     readonly property real density: Screen.devicePixelRatio
     // A mod's bottom bar replaces the components; mode, TLS and diagnostics stay native.
-    readonly property var drawn: controller?.elementBars?.bottom_bar ?? null
+    readonly property var drawn: controller?.components?.elementBars?.bottom_bar ?? null
 
     color: colors.bottombarBackground
     replaceBackground: true
@@ -53,7 +53,7 @@ NativeRoundedRectangle {
             id: components
             anchors.fill: parent
             visible: root.mode.kind === 0 && root.controller !== null && root.drawn === null
-            readonly property var slots: root.controller?.componentBars ?? ({})
+            readonly property var slots: root.controller?.components?.bars ?? ({})
             readonly property real gap: 24 * root.ratio
             readonly property var fitted: ComponentFit.allocate([
                 {nodes: leftSlot.fitNodes, gap: leftSlot.gap, width: leftSlot.implicitWidth, minimumWidth: leftSlot.errorWidth, tabs: false, overflowWidth: leftSlot.overflowWidth},

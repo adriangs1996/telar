@@ -188,7 +188,7 @@ namespace telar::gui::test {
     };
 
     [[nodiscard]] static std::optional<Action> retain(const qt::Application& application) {
-      const auto& rendered = application.component_surfaces_.panel.panel;
+      const auto& rendered = application.components_.surfaces_.panel.panel;
       if (!rendered || rendered->content.nodes().empty()) {
         return std::nullopt;
       }
@@ -1753,7 +1753,7 @@ return {api_version = 2, client = {
     Q_SLOT void configuredComponentUrlsAndActions() {
       const RecordedLinks recorder{directory_.filePath(QStringLiteral("configured links λ.txt"))};
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
       const QTemporaryDir directory;
@@ -1792,19 +1792,19 @@ return {api_version = 2, client = {
         return true;
       };
       QVERIFY(click(QStringLiteral("label"), QStringLiteral("Action λ")));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Configured links"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Configured links"));
       QVERIFY(click(QStringLiteral("button"), QStringLiteral("Close action")));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QVERIFY(click(QStringLiteral("label"), QStringLiteral("Bar URL")));
       const QStringList bar_targets{QStringLiteral("https://bar-only.test")};
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), bar_targets, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QVERIFY(click(QStringLiteral("button"), QStringLiteral("Panel URL")));
       const QStringList all_targets{QStringLiteral("https://bar-only.test"), QStringLiteral("https://panel-only.test")};
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), all_targets, runtime_wait_ms);
-      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -2775,7 +2775,7 @@ return {api_version=2, client={keybindings={
           sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, *held);
         }
 
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         test::waitForSynchronizedFrame(*window_, runtime_wait_ms);
       });
@@ -2816,8 +2816,8 @@ return {api_version=2, client={keybindings={
       QVERIFY2(!client_->pointerDispatcher().capturedTab().has_value(), "A stale tab hit must not capture a different configured widget");
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, point);
       held.reset();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Tab-safe action"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Tab-safe action"));
     }
 
     Q_SLOT void tabDragReordersOnlyAfterRelease() {
@@ -3518,7 +3518,7 @@ return {api_version=2, client={keybindings={
       const QSignalSpy diagnostic{client_.get(), &Application::diagnosticChanged};
       const QSignalSpy copy_mode{client_->copy(), &CopyController::activeChanged};
       const QSignalSpy attachments{client_->attachments(), &AttachmentsController::geometryChanged};
-      const QSignalSpy element_bars{client_.get(), &Application::elementBarsChanged};
+      const QSignalSpy element_bars{client_->components(), &ComponentsController::elementBarsChanged};
 
       // Each selection commits and flushes before it returns; no runtime message runs in between.
       for (const auto row : {1, 0, 1}) {
@@ -5737,7 +5737,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredBarsAndPanels() {
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -5770,7 +5770,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       const auto slot = [&](const char* name) {
-        return client_->componentBars().value(QString::fromLatin1(name)).toMap();
+        return client_->components()->bars().value(QString::fromLatin1(name)).toMap();
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(slot("center").value(QStringLiteral("kind")).toString(), QStringLiteral("tabs"), runtime_wait_ms);
@@ -5788,13 +5788,13 @@ return {api_version=2, client={keybindings={
       });
 
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 8, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("nodes")).toList().size(), 8, runtime_wait_ms);
       const auto* popup = window_->findChild<QObject*>(QStringLiteral("configuredPanel"));
 
       QVERIFY(popup != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("error")).toString(), QString{});
       QTRY_VERIFY_WITH_TIMEOUT(entrance_samples.size() > 1 && motion->reveal() == 1, runtime_wait_ms);
       QCOMPARE(entrance_samples.front(), qreal{0});
       QCOMPARE(entrance_samples.back(), qreal{1});
@@ -5829,15 +5829,15 @@ return {api_version=2, client={keybindings={
       }
 
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       const auto left = slot("left");
 
       client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       // The panel opens empty; its nodes arrive when the Lua thread renders it.
       QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("button"), QStringLiteral("Dismiss")) != nullptr, runtime_wait_ms);
       const auto* dismiss_action = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
@@ -5847,7 +5847,7 @@ return {api_version=2, client={keybindings={
       const auto action_center = dismiss_action->mapToScene(dismiss_action->boundingRect().center()).toPoint();
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_center);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       client_->execute(Application::Action::history);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::history, runtime_wait_ms);
       client_->execute(Application::Action::cancel);
@@ -5857,7 +5857,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void configuredTooltipsYieldToOpenSurfaces() {
       const auto cleanup = qScopeGuard([this] {
         client_->closeComponentPick();
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -5907,7 +5907,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(!panel_tooltip->property("visible").toBool());
 
-      client_->refreshComponentPanel();
+      client_->components()->refreshPanel();
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(!panel_tooltip->property("visible").toBool());
 
@@ -5928,13 +5928,13 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!own_tooltip->property("visible").toBool(), runtime_wait_ms);
       QVERIFY(!panel_tooltip->property("visible").toBool());
 
-      client_->closeComponentPanel();
+      client_->components()->closePanel();
       QTRY_VERIFY_WITH_TIMEOUT(panel_tooltip->property("visible").toBool(), runtime_wait_ms);
 
       QTest::mouseMove(window_, center(*pick_button));
       QTRY_VERIFY_WITH_TIMEOUT(pick_tooltip->property("visible").toBool(), runtime_wait_ms);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, center(*pick_button));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!pick_tooltip->property("visible").toBool(), runtime_wait_ms);
 
       const auto pickRowArea = [this]() -> QQuickItem* {
@@ -5961,7 +5961,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void configuredPanelKeyboardActions() {
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -5990,10 +5990,10 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("error")).toString().isEmpty() || componentItem(QStringLiteral("button"), QStringLiteral("Toggle sidebar")) != nullptr, runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("error")).toString().isEmpty() || componentItem(QStringLiteral("button"), QStringLiteral("Toggle sidebar")) != nullptr, runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("error")).toString(), QString{});
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       auto* close = componentPanelCloseButton();
 
@@ -6025,7 +6025,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->sidebarVisible(), !sidebar);
       QTest::keyRelease(window_, Qt::Key_Space);
       QCOMPARE(client_->sidebarVisible(), !sidebar);
-      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       QTest::keyClick(window_, Qt::Key_Tab, Qt::ShiftModifier);
       QTRY_VERIFY_WITH_TIMEOUT(close->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Tab);
@@ -6037,7 +6037,7 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Close with keyboard")), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       verifyConfiguredPickReturnsKeyboardFocus();
       QCOMPARE(client_->error(), QString{});
     }
@@ -6046,7 +6046,7 @@ return {api_version=2, client={keybindings={
       const bool accessibility = QAccessible::isActive();
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, accessibility, sidebar] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -6081,10 +6081,10 @@ return {api_version=2, client={keybindings={
       verifyAccessibleComponentName(components::Kind::group, QStringLiteral("Named group 1"), "Named group 1 Ready");
       QVERIFY(!QTest::currentTestFailed());
       const QPointer<QQuickItem> before{componentActionItem(components::Kind::group, QStringLiteral("Named group 1"))};
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
-      client_->refreshComponentPanel();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+      client_->components()->refreshPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
       verifyAccessibleComponentName(components::Kind::group, QStringLiteral("Named group 2"), "Named group 2 Ready");
       QVERIFY(!QTest::currentTestFailed());
       QCOMPARE(componentActionItem(components::Kind::group, QStringLiteral("Named group 2")), before.data());
@@ -6119,7 +6119,7 @@ return {api_version=2, client={keybindings={
       const auto sidebar = client_->sidebarVisible();
       const auto collapsed = client_->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -6146,7 +6146,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       for (const bool pointer : {false, true}) {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
         QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
         verifyPluginTargetMutation(pointer);
@@ -6160,7 +6160,7 @@ return {api_version=2, client={keybindings={
       const auto sidebar = client_->sidebarVisible();
       const auto collapsed = client_->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -6197,10 +6197,10 @@ return {api_version=2, client={keybindings={
       }
 
       const auto saved = retained.value();
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
       const auto current = test::ComponentActions::retain(*client_);
       if (!current) {
         QFAIL("The mutated component has no named action");
@@ -6218,7 +6218,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->sidebarVisible(), !sidebar);
       QCOMPARE(client_->workspaceListCollapsed(), collapsed);
       QCOMPARE(client_->error(), QString{});
-      client_->closeComponentPanel();
+      client_->components()->closePanel();
       QVERIFY(!test::ComponentActions::run(*client_, saved));
       QVERIFY(client_->error().contains(QStringLiteral("expired")));
       client_->dismissDiagnostic();
@@ -6245,7 +6245,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredDefinitionRejectsMutatedTarget() {
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -6265,7 +6265,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       for (const bool pointer : {false, true}) {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration(path, {}, {});
         QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
         verifyDefinitionTargetMutation(pointer);
@@ -6275,7 +6275,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredDefinitionUsesValidatedTarget() {
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -6305,10 +6305,10 @@ return {api_version=2, client={keybindings={
       }
 
       const auto validated_definition = validated.value();
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
       QCOMPARE(client_->error(), QString{});
       const auto current = test::ComponentActions::retain(*client_);
       if (!current) {
@@ -6322,11 +6322,11 @@ return {api_version=2, client={keybindings={
       QVERIFY(std::holds_alternative<DefinitionActionDescription>(current_definition.destination));
       QVERIFY(std::get<DefinitionActionDescription>(validated_definition.destination).index == std::get<DefinitionActionDescription>(current_definition.destination).index);
       QVERIFY(test::ComponentActions::run(*client_, validated_definition));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Validated target")) != nullptr, runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
       QVERIFY(!test::ComponentActions::run(*client_, validated_definition));
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"));
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"));
       QVERIFY(client_->error().contains(QStringLiteral("expired")));
       client_->dismissDiagnostic();
       QCOMPARE(client_->error(), QString{});
@@ -6335,7 +6335,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void configuredActionCaptionRefresh() {
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -6348,7 +6348,7 @@ return {api_version=2, client={keybindings={
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       for (const auto kind : {components::Kind::button, components::Kind::group}) {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=t.action.toggle_sidebar()})") : QStringLiteral("ui.group({on_click=t.action.toggle_sidebar(),ui.label(caption)})");
         const auto config = QStringLiteral(R"(
         local t=require('telar');local ui=t.ui;local renders=0
@@ -6369,10 +6369,10 @@ return {api_version=2, client={keybindings={
 
         before->forceActiveFocus(Qt::TabFocusReason);
         QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
-        const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+        const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
-        client_->refreshComponentPanel();
-        QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+        client_->components()->refreshPanel();
+        QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 2")) != nullptr, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         const QPointer<QQuickItem> after{componentActionItem(kind, QStringLiteral("Stable target 2"))};
@@ -6413,7 +6413,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       const auto slot = [this] {
-        return client_->componentBars().value(QStringLiteral("left")).toMap();
+        return client_->components()->bars().value(QStringLiteral("left")).toMap();
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(slot().value(QStringLiteral("nodes")).toList().size(), 2, runtime_wait_ms);
@@ -6442,7 +6442,7 @@ return {api_version=2, client={keybindings={
       const auto sidebar = client_->sidebarVisible();
       const auto collapsed = client_->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -6459,7 +6459,7 @@ return {api_version=2, client={keybindings={
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       for (const auto kind : {components::Kind::button, components::Kind::group}) {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text='Stable target',action=action})") : QStringLiteral("ui.group({on_click=action,ui.label('Stable target')})");
         const auto configuration = QStringLiteral(R"(
         local t=require('telar');local ui=t.ui;local renders=0
@@ -6489,7 +6489,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void configuredGroupKeyboardActions() {
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -6510,7 +6510,7 @@ return {api_version=2, client={keybindings={
     )");
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->bars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(configuredKeyboardGroupsReady(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const QPointer<QQuickItem> first{componentGroup(QStringLiteral("First keyboard group"))};
@@ -6536,10 +6536,10 @@ return {api_version=2, client={keybindings={
       }
 
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Group keyboard target"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Group keyboard target"));
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       first->forceActiveFocus(Qt::TabFocusReason);
       QTest::keyClick(window_, Qt::Key_Space, Qt::ShiftModifier);
       QCOMPARE(client_->sidebarVisible(), sidebar);
@@ -6584,7 +6584,7 @@ return {api_version=2, client={keybindings={
           QTest::keyClick(window_, Qt::Key_Escape);
         }
 
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -6637,11 +6637,11 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_VERIFY_WITH_TIMEOUT(componentGroup(caption)->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Overflow keyboard target"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Overflow keyboard target"));
       QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       chip->forceActiveFocus(Qt::TabFocusReason);
       QTest::keyClick(window_, Qt::Key_Space);
       QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
@@ -6656,7 +6656,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void configuredBuiltinPriority() {
       const auto original_size = window_->size();
       const auto cleanup = qScopeGuard([this, original_size] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         window_->resize(original_size);
         client_->loadConfiguration({}, {}, {});
         test::waitForSynchronizedFrame(*window_, runtime_wait_ms);
@@ -6677,7 +6677,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       const auto nodes = [this](const char* name) {
-        return client_->componentBars().value(QString::fromLatin1(name)).toMap().value(QStringLiteral("nodes")).toList();
+        return client_->components()->bars().value(QString::fromLatin1(name)).toMap().value(QStringLiteral("nodes")).toList();
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(nodes("left").size(), 4, runtime_wait_ms);
@@ -6728,7 +6728,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredGroupPriority() {
       const auto cleanup = qScopeGuard([this] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -6754,7 +6754,7 @@ return {api_version=2, client={keybindings={
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 3, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->bars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 3, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* kept = componentItem(QStringLiteral("label"), QStringLiteral("Keep λ"));
 
@@ -6787,20 +6787,20 @@ return {api_version=2, client={keybindings={
         QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
       }
 
-      const auto surface = client_->componentBars().value(QStringLiteral("left")).toMap();
+      const auto surface = client_->components()->bars().value(QStringLiteral("left")).toMap();
       const auto source = surface.value(QStringLiteral("source")).toInt();
       const auto generation = surface.value(QStringLiteral("generation")).toString();
       const auto revision = surface.value(QStringLiteral("revision")).toString();
 
       client_->activateComponent(source, 0, generation + QStringLiteral("stale"), revision, bounds.center());
-      QVERIFY(!client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QVERIFY(!client_->components()->panel().value(QStringLiteral("open")).toBool());
       client_->activateComponent(source, 0, generation, revision + QStringLiteral("stale"), bounds.center());
-      QVERIFY(!client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QVERIFY(!client_->components()->panel().value(QStringLiteral("open")).toBool());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Kept action"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Kept action"));
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     }
 
     Q_SLOT void configuredGroupChromeAndGaps() {
@@ -6872,7 +6872,7 @@ return {api_version=2, client={keybindings={
           QTest::keyClick(window_, Qt::Key_Escape);
         }
 
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -6948,11 +6948,11 @@ return {api_version=2, client={keybindings={
 
         QVERIFY(viewport.contains(action_point));
         QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_point.toPoint());
-        QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), source + QStringLiteral(" action"), runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), source + QStringLiteral(" action"), runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), source + QStringLiteral(" source")) != nullptr, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
         QTest::keyClick(window_, Qt::Key_Escape);
-        QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       }
     }
 
@@ -6963,7 +6963,7 @@ return {api_version=2, client={keybindings={
           QTest::keyClick(window_, Qt::Key_Escape);
         }
 
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -7017,8 +7017,8 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(viewport.contains(action_point));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_point.toPoint());
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Hidden action panel"));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Hidden action panel"));
       QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Hidden action retained its source")) != nullptr, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
       const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_OVERFLOW_ACTION_SCREENSHOT");
@@ -7028,7 +7028,7 @@ return {api_version=2, client={keybindings={
       }
 
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
       QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
@@ -7063,7 +7063,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       const auto right = [this] {
-        return client_->componentBars().value(QStringLiteral("right")).toMap();
+        return client_->components()->bars().value(QStringLiteral("right")).toMap();
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(right().value(QStringLiteral("nodes")).toList().size(), 1, runtime_wait_ms);
@@ -7122,7 +7122,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       const auto right = [this] {
-        return client_->componentBars().value(QStringLiteral("right")).toMap();
+        return client_->components()->bars().value(QStringLiteral("right")).toMap();
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(right().value(QStringLiteral("error")).toString(), QStringLiteral("Command failed"), runtime_wait_ms);
@@ -7168,7 +7168,7 @@ return {api_version=2, client={keybindings={
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->closeComponentPick();
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -7198,10 +7198,10 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->error(), QString{});
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("rows")).toList().size(), 2, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("rows")).toList().size(), 2, runtime_wait_ms);
       auto* query = window_->findChild<QQuickItem*>(QStringLiteral("configuredPickQuery"));
 
       QVERIFY(query != nullptr);
@@ -7210,8 +7210,8 @@ return {api_version=2, client={keybindings={
         client_->execute(Application::Action::toggle_sidebar);
         QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), visible, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-        QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
-        QVERIFY(client_->componentPick().value(QStringLiteral("open")).toBool());
+        QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
+        QVERIFY(client_->components()->pick().value(QStringLiteral("open")).toBool());
         QVERIFY(query->hasActiveFocus());
       }
 
@@ -7219,20 +7219,20 @@ return {api_version=2, client={keybindings={
         QTest::keyClick(window_, key);
       }
 
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("rows")).toList().size(), 1, runtime_wait_ms);
-      QCOMPARE(client_->componentPick().value(QStringLiteral("rows")).toList().first().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Unicode λ"));
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("rows")).toList().size(), 1, runtime_wait_ms);
+      QCOMPARE(client_->components()->pick().value(QStringLiteral("rows")).toList().first().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Unicode λ"));
       QVERIFY(QMetaObject::invokeMethod(query, "select", Q_ARG(int, 0), Q_ARG(int, 3)));
       QInputMethodEvent preedit{QStringLiteral("中"), {{QInputMethodEvent::Cursor, 1, 1, {}}}};
 
       QCoreApplication::sendEvent(query, &preedit);
       QTRY_VERIFY_WITH_TIMEOUT(query->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QVERIFY(client_->componentPick().value(QStringLiteral("open")).toBool());
+      QVERIFY(client_->components()->pick().value(QStringLiteral("open")).toBool());
       QTRY_VERIFY_WITH_TIMEOUT(!query->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QCOMPARE(query->property("text").toString(), QStringLiteral("details"));
       QCOMPARE(query->property("selectedText").toString(), QStringLiteral("det"));
-      QCOMPARE(client_->componentPick().value(QStringLiteral("rows")).toList().size(), 1);
-      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QCOMPARE(client_->components()->pick().value(QStringLiteral("rows")).toList().size(), 1);
+      QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto frame = window_->grabWindow();
 
@@ -7243,14 +7243,14 @@ return {api_version=2, client={keybindings={
       }
 
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(([&] {
         QFile file{marker};
         return file.open(QIODevice::ReadOnly) && file.readAll() == QByteArray::fromHex("c3a120cebb3b24286c69746572616c29");
       })(),
           runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("selecting")).toBool(), runtime_wait_ms);
-      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("selecting")).toBool(), runtime_wait_ms);
+      QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       const auto panel_focused = [this] {
         const auto* popup = window_->findChild<QObject*>(QStringLiteral("configuredPanel"));
         const auto* content = popup != nullptr ? popup->property("contentItem").value<QQuickItem*>() : nullptr;
@@ -7262,16 +7262,16 @@ return {api_version=2, client={keybindings={
 
       QTRY_VERIFY_WITH_TIMEOUT(panel_focused(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       client_->loadConfiguration(path, {}, {});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      client_->closeComponentPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      client_->components()->closePanel();
     }
 
     Q_SLOT void routedPluginCatalog() {
@@ -8522,7 +8522,7 @@ return {api_version=2, client={keybindings={
     }
 
     [[nodiscard]] bool configuredKeyboardGroupsReady() const {
-      const auto generation = client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("generation")).toString();
+      const auto generation = client_->components()->bars().value(QStringLiteral("left")).toMap().value(QStringLiteral("generation")).toString();
       const auto* first = componentGroup(QStringLiteral("First keyboard group"));
       const auto* second = componentGroup(QStringLiteral("Second keyboard group"));
       const auto* first_label = componentItem(QStringLiteral("label"), QStringLiteral("First keyboard group"));
@@ -8632,7 +8632,7 @@ return {api_version=2, client={keybindings={
     void verifyPluginCaptionRefresh(components::Kind kind, bool pointer) {
       const auto sidebar = client_->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->sidebarVisible() != sidebar) {
           client_->execute(Application::Action::toggle_sidebar);
@@ -8679,10 +8679,10 @@ return {api_version=2, client={keybindings={
         QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       }
 
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
-      client_->refreshComponentPanel();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+      client_->components()->refreshPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable plugin 2")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QCOMPARE(componentActionItem(kind, QStringLiteral("Stable plugin 2")), before.data());
@@ -8721,10 +8721,10 @@ return {api_version=2, client={keybindings={
         QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       }
 
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
       QCOMPARE(client_->error(), QString{});
       if (pointer) {
         QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
@@ -8739,8 +8739,8 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
       QCOMPARE(client_->workspaceListCollapsed(), collapsed);
       QCOMPARE(client_->error(), QString{});
-      client_->refreshComponentPanel();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+      client_->components()->refreshPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin"));
@@ -8757,7 +8757,7 @@ return {api_version=2, client={keybindings={
     void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {
       const auto cleanup = qScopeGuard([this] {
         client_->closeComponentPick();
-        client_->closeComponentPanel();
+        client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
       });
 
@@ -8801,10 +8801,10 @@ return {api_version=2, client={keybindings={
         QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       }
 
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
-      client_->refreshComponentPanel();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+      client_->components()->refreshPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 2")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QCOMPARE(componentActionItem(kind, QStringLiteral("Stable target 2")), before.data());
@@ -8817,10 +8817,10 @@ return {api_version=2, client={keybindings={
       }
 
       if (picker) {
-        QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-        QCOMPARE(client_->componentPick().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"));
+        QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        QCOMPARE(client_->components()->pick().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"));
       } else {
-        QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"), runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"), runtime_wait_ms);
       }
 
       QCOMPARE(client_->error(), QString{});
@@ -8845,10 +8845,10 @@ return {api_version=2, client={keybindings={
         QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       }
 
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
-      QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+      QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
       QCOMPARE(client_->error(), QString{});
       if (pointer) {
         QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
@@ -8859,16 +8859,16 @@ return {api_version=2, client={keybindings={
 
       // The rendered button keeps the destination it was resolved with; only a new render
       // picks up the mutated table.
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable target"));
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Second destination"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Second destination"), runtime_wait_ms);
     }
 
     void verifyComponentCaptionMouseRefresh(components::Kind kind, bool sidebar) {
@@ -8885,10 +8885,10 @@ return {api_version=2, client={keybindings={
         }
       });
 
-      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
-      client_->refreshComponentPanel();
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+      client_->components()->refreshPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 3")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QCOMPARE(componentActionItem(kind, QStringLiteral("Stable target 3")), before.data());
@@ -8911,10 +8911,10 @@ return {api_version=2, client={keybindings={
       });
 
       const auto refresh = [this] {
-        const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+        const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
-        client_->refreshComponentPanel();
-        QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+        client_->components()->refreshPanel();
+        QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       };
 
@@ -8956,7 +8956,7 @@ return {api_version=2, client={keybindings={
       pressed = true;
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -9041,24 +9041,24 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Choose mode")), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       const auto* query = window_->findChild<QQuickItem*>(QStringLiteral("configuredPickQuery"));
 
       QVERIFY(query != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       const auto* pick = window_->findChild<QObject*>(QStringLiteral("configuredPick"));
 
       QVERIFY(pick != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(!pick->property("visible").toBool(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Choose mode")), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Tab, Qt::ShiftModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Close with keyboard")), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Enter, Qt::KeypadModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     }
 
     [[nodiscard]] QQuickItem* componentItem(const QString& kind, const QString& text = {}) const {

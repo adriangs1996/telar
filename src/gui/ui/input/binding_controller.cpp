@@ -185,27 +185,11 @@ namespace telar::gui::qt {
   }
 
   BindingContext Application::bindingContext() const {
-    BindingContext context{.sidebar_visible = session().configuration().sidebar_visible};
-    const auto* active = session().activeTab();
-    if (active == nullptr) {
-      return context;
-    }
-
-    context.focused_pane_id = active->focused_pane;
-    context.active_tab_index = active->position;
-    context.pane_count = static_cast<std::uint16_t>(std::ranges::count_if(active->layout.nodes(), [](const auto& node) {
-      return std::holds_alternative<ClientLayoutPane>(node);
-    }));
-
-    context.tab_count = static_cast<std::uint16_t>(std::ranges::count_if(session().tabs(), [&](const auto& tab) {
-      return sameWorkspace(tab->location.workspace, active->location.workspace);
-    }));
-
-    return context;
+    return sessionBindingContext(session());
   }
 
   std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) const {
-    if (store_.dialog().kind != Dialog::none || pick_controller_.isOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
+    if (store_.dialog().kind != Dialog::none || components_.pickOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
       return {};
     }
 
@@ -226,7 +210,7 @@ namespace telar::gui::qt {
 
     const bool dismiss = event.type() == QEvent::KeyPress && !event.isAutoRepeat() && event.key() == Qt::Key_Escape && event.modifiers() == Qt::NoModifier;
 
-    if (pick_controller_.isOpen()) {
+    if (components_.pickOpen()) {
       if (dismiss) {
         auto* field = qobject_cast<NativeFormField*>(&recipient);
         if (field != nullptr && field->cancelComposition()) {
@@ -241,8 +225,8 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (component_surfaces_.open_panel && dismiss) {
-      closeComponentPanel();
+    if (components_.panelOpen() && dismiss) {
+      components_.closePanel();
 
       return true;
     }
@@ -257,7 +241,7 @@ namespace telar::gui::qt {
   bool Application::runBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     try {
       const bool configured = action.kind == BindingActionKind::extended || action.kind == BindingActionKind::command_tab;
-      if (resolved != nullptr && ((configured && action.generation != configuration_source_.configurationGeneration()) || !resolved->contains(action) || !componentActionsLive(*resolved))) {
+      if (resolved != nullptr && ((configured && action.generation != configuration_source_.configurationGeneration()) || !resolved->contains(action) || !components_.actionsLive(*resolved))) {
         throw std::invalid_argument{"Validated component action expired"};
       }
 
@@ -365,10 +349,10 @@ namespace telar::gui::qt {
       executeCommandTab(action, resolved);
       break;
     case BindingActionKind::close_panel:
-      closeComponentPanel();
+      components_.closePanel();
       break;
     case BindingActionKind::refresh_panel:
-      refreshComponentPanel();
+      components_.refreshPanel();
       break;
     case BindingActionKind::extended:
       if (const auto named = configuration_source_.namedAction(action, resolved)) {
@@ -386,7 +370,7 @@ namespace telar::gui::qt {
   void Application::executeNamedAction(const NamedActionDescription& named) {
     if (const auto* definition = std::get_if<DefinitionActionDescription>(&named)) {
       if (definition->kind == DefinitionActionDescription::Kind::panel) {
-        toggleComponentPanel(definition->index);
+        components_.togglePanel(definition->index, component_action_anchor_.value_or(QPointF{-1, -1}));
       } else {
         openComponentPick(definition->index);
       }

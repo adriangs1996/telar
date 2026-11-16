@@ -11,7 +11,7 @@ Popup {
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var state: controller.componentPick
+    readonly property var state: controller.components.pick
     readonly property var rows: state.rows ?? []
     readonly property real margin: 16 * ratio
     readonly property real fieldHeight: 36 * ratio
@@ -79,7 +79,7 @@ Popup {
             formControl: true
             maximumBytes: 512
             placeholderText: root.state.placeholder ?? "Filter choices…"
-            onTextEdited: root.controller.filterComponentPick(text)
+            onTextEdited: root.controller.components.filterPick(text)
             onAccepted: root.choose()
             Keys.priority: Keys.BeforeItem
             Keys.onUpPressed: root.move(-1)
