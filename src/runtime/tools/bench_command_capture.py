@@ -8,10 +8,10 @@ in ns per cycle; the digest of the marks, blocks and captured commands must matc
 
 Build each variant in its own Release directory with
 
-    tools/cpp configure runtime -B <dir> --config Release
-    tools/cpp build runtime -B <dir> -- --target command-capture-probe
+    tools/cpp configure release -B <dir>
+    tools/cpp build release -B <dir> -- --target command-capture-probe
 
-and pass the two directories. The host gate of tools/benchmark_host.py discards the whole
+and pass the two trees. The host gate of tools/benchmark_host.py discards the whole
 series when another build runs or the load is too high, so start it on a quiet host.
 `command-capture-probe --describe <case>` shows what one cycle of a case reaches.
 """

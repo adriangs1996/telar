@@ -16,12 +16,13 @@ vendored code, and depend only on the commit:
 - export import edges: module pairs where an interface re-exports the import.
 - critical path: the longest chain of interface imports, which bounds the build.
 
-`--build DIR` adds what depends on the machine. It configures and builds the
-three processes from nothing with the justfile recipes, as a fresh worktree
-does, and samples the memory of the whole process tree for the peak. On the
-finished trees it counts the lines each module unit carries in its global
-fragment, preprocessed with its real flags, and the units `ninja -n` rebuilds
-after touching the interface of each hub. Each machine keeps its own entry in
+`--build DIR` adds what depends on the machine. It configures DIR from nothing
+with the dev preset and builds the three processes in it, as `just
+runtime-build` and `just gui-build` do in a fresh worktree, and samples the
+memory of the whole process tree for the peak. On the finished tree it counts
+the lines each module unit carries in its global fragment, preprocessed with
+its real flags, and the units `ninja -n` rebuilds for each process after
+touching the interface of each hub. Each machine keeps its own entry in
 the output, so running the script on another machine adds to the baseline.
 """
 import argparse
@@ -48,7 +49,7 @@ STANDARD_MODULES = {'std', 'std.compat'}
 HUB_TABLE = 25
 CYCLE_LIMIT = 10000
 # The targets `just runtime-build` and `just gui-build` build: the three processes.
-TREES = {
+PROCESSES = {
     'runtime': ('telar-runtime', 'telar'),
     'gui': ('telar-gui', 'telar-gui-command'),
 }
@@ -61,7 +62,7 @@ PREPROCESSED_RE = re.compile(r'^(?:export\s+)?(?:__preprocessed_)?module\s*([\w.
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--output', type=Path, default=ROOT / 'docs/build/module-metrics.json')
-    parser.add_argument('--build', type=Path, help='empty directory for the cold build of the three processes')
+    parser.add_argument('--build', type=Path, help='empty directory for the tree of the cold build of the three processes')
     parser.add_argument('--reuse', action='store_true', help='measure a finished --build directory without building')
     parser.add_argument('--machine', default=platform.node().split('.')[0], help='label of this machine in the output')
     parser.add_argument('--hubs', type=int, default=8, help='modules with most dependents to touch with ninja -n')
@@ -360,12 +361,11 @@ def build_metrics(directory, reuse, units, graph, metrics, hub_count):
     if not reuse:
         result['cold_build'] = cold_build(directory)
 
-    trees = {name: directory / name for name in TREES}
-    result['compile_units'] = {name: len(compile_commands(tree, TREES[name])) for name, tree in trees.items()}
-    result['global_fragment'] = global_fragments(trees, units)
+    result['compile_units'] = {name: len(compile_commands(directory, targets)) for name, targets in PROCESSES.items()}
+    result['global_fragment'] = global_fragments(directory, units)
 
     hubs = list(metrics['transitive_dependents'])[:hub_count]
-    result['ninja_rebuilds'] = {hub: rebuilds(ROOT / graph['interface'][hub], trees) for hub in hubs}
+    result['ninja_rebuilds'] = {hub: rebuilds(ROOT / graph['interface'][hub], directory) for hub in hubs}
 
     return result
 
@@ -383,33 +383,34 @@ def physical_memory():
 
 
 def cold_build(directory):
-    """Wall time and peak resident memory of configuring and building each tree.
+    """Wall time and peak resident memory of configuring the tree and building each process.
 
     Configure is timed apart: it can wait for another worktree building a shared
-    dependency, which says nothing about the cost of compiling telar.
+    dependency, which says nothing about the cost of compiling telar. The runtime
+    builds first, so the GUI's time leaves out the libraries both link.
     """
     directory.mkdir(parents=True, exist_ok=True)
+    cpp = [sys.executable, str(ROOT / 'tools/cpp')]
+    steps = [('configure', None, [*cpp, 'configure', 'dev', '-B', str(directory)])]
+    steps += [('build', name, [*cpp, 'build', 'dev', '-B', str(directory), '--', '--target', *targets])
+              for name, targets in PROCESSES.items()]
     result = {}
-    for name in TREES:
-        entry = {}
-        for step, arguments in (('configure', [f'{name}-configure', str(directory / name), 'Debug']),
-                                ('build', [f'{name}-build', str(directory / name)])):
-            started = time.monotonic()
-            process = subprocess.Popen(['just', '--justfile', str(ROOT / 'justfile'), *arguments])
-            peak, load = sample_tree(process)
-            if process.returncode != 0:
-                raise SystemExit(f'just {arguments[0]} failed with {process.returncode}')
+    for step, name, command in steps:
+        started = time.monotonic()
+        process = subprocess.Popen(command)
+        peak, load = sample_tree(process)
+        if process.returncode != 0:
+            raise SystemExit(f'{" ".join(command[1:])} failed with {process.returncode}')
 
-            entry[step + '_seconds'] = round(time.monotonic() - started, 1)
-            entry[step + '_peak_memory_mib'] = peak >> 10
-            entry[step + '_load_average'] = load
+        entry = result.setdefault(name or 'tree', {})
+        entry[step + '_seconds'] = round(time.monotonic() - started, 1)
+        entry[step + '_peak_memory_mib'] = peak >> 10
+        entry[step + '_load_average'] = load
 
-        result[name] = entry
-
-    trees = list(result.values())
-    result['build_seconds'] = round(sum(entry['build_seconds'] for entry in trees), 1)
-    result['peak_memory_mib'] = max(max(entry['configure_peak_memory_mib'], entry['build_peak_memory_mib'])
-                                    for entry in trees)
+    builds = [result[name] for name in PROCESSES]
+    result['build_seconds'] = round(sum(entry['build_seconds'] for entry in builds), 1)
+    result['peak_memory_mib'] = max([result['tree']['configure_peak_memory_mib']] +
+                                    [entry['build_peak_memory_mib'] for entry in builds])
     return result
 
 
@@ -457,15 +458,14 @@ def compile_commands(tree, targets):
     return [line for line in commands.splitlines() if OBJECT_RE.search(line)]
 
 
-def global_fragments(trees, units):
+def global_fragments(tree, units):
     """Preprocessed lines before the module declaration of each production module unit."""
     paths = {str(ROOT / unit['path']): unit['path'] for unit in units}
     commands = {}
-    for tree in trees.values():
-        for entry in json.loads((tree / 'compile_commands.json').read_text()):
-            source = str(Path(entry['directory'], entry['file']).resolve())
-            if source in paths and paths[source] not in commands:
-                commands[paths[source]] = (entry['directory'], preprocess_arguments(entry))
+    for entry in json.loads((tree / 'compile_commands.json').read_text()):
+        source = str(Path(entry['directory'], entry['file']).resolve())
+        if source in paths and paths[source] not in commands:
+            commands[paths[source]] = (entry['directory'], preprocess_arguments(entry))
 
     with ThreadPoolExecutor(os.cpu_count()) as pool:
         lines = dict(zip(commands, pool.map(lambda item: fragment_lines(*item), commands.values())))
@@ -513,18 +513,19 @@ def fragment_lines(directory, arguments):
     return 0
 
 
-def rebuilds(interface, trees):
-    """Compile units `ninja -n` runs in each tree after touching the interface."""
+def rebuilds(interface, tree):
+    """Compile units `ninja -n` runs for each process's targets after touching the interface."""
     before = interface.stat()
     result = {}
     try:
         os.utime(interface)
-        for name, tree in trees.items():
-            result[name] = dry_run(tree, TREES[name])
+        for name, targets in PROCESSES.items():
+            result[name] = dry_run(tree, targets)
+        # The processes share the libraries' units, which the tree compiles once.
+        result['total'] = dry_run(tree, [target for targets in PROCESSES.values() for target in targets])
     finally:
         os.utime(interface, ns=(before.st_atime_ns, before.st_mtime_ns))
 
-    result['total'] = sum(result.values())
     return result
 
 

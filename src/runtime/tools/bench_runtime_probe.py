@@ -19,10 +19,10 @@ ratios separate from them.
 
 Build each variant in its own Release directory with
 
-    tools/cpp configure runtime -B <dir> --config Release
-    tools/cpp build runtime -B <dir> -- --target telar-runtime runtime-probe
+    tools/cpp configure release -B <dir>
+    tools/cpp build release -B <dir> -- --target telar-runtime runtime-probe
 
-and pass the two directories. The host gate of tools/benchmark_host.py discards the whole
+and pass the two trees. The host gate of tools/benchmark_host.py discards the whole
 series when another build runs or the load is too high, so start it on a quiet host.
 """
 import argparse
@@ -210,7 +210,8 @@ def main():
         parser.error('--count reads the counters of macOS /usr/bin/time -l')
 
     names = ('baseline', 'candidate', 'control') if options.control else ('baseline', 'candidate')
-    directories = {name: getattr(options, name).resolve() for name in names}
+    # The runtime's programs are in its directory of each tree.
+    directories = {name: getattr(options, name).resolve() / 'src/runtime' for name in names}
     for name, directory in directories.items():
         for binary in ('telar-runtime', 'runtime-probe'):
             if not (directory / binary).is_file():

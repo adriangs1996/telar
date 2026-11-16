@@ -53,9 +53,9 @@ def build(build_directory, output):
     arguments[position:position] = objects
     run(arguments, build_directory, 'link')
     manifest = dict(scope=__doc__, build_directory=str(build_directory), commands=commands,
-                    original_sha256=hashlib.sha256((build_directory / 'telar-gui').read_bytes()).hexdigest(),
+                    original_sha256=hashlib.sha256((build_directory / 'src/gui/telar-gui').read_bytes()).hexdigest(),
                     binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
-                    archive_sha256=hashlib.sha256((build_directory / 'libgui-quick.a').read_bytes()).hexdigest())
+                    archive_sha256=hashlib.sha256((build_directory / 'src/gui/libgui-quick.a').read_bytes()).hexdigest())
     (output / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')
     return binary
 

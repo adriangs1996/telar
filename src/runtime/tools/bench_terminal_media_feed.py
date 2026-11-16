@@ -7,10 +7,10 @@ the probe's own timer around that loop, in ns per iteration of the workload.
 
 Build each variant in its own Release directory with
 
-    tools/cpp configure runtime -B <dir> --config Release
-    tools/cpp build runtime -B <dir> -- --target terminal-media-feed-probe
+    tools/cpp configure release -B <dir>
+    tools/cpp build release -B <dir> -- --target terminal-media-feed-probe
 
-and pass the two directories. The host gate of tools/benchmark_host.py discards the whole
+and pass the two trees. The host gate of tools/benchmark_host.py discards the whole
 series when another build runs or the load is too high, so start it on a quiet host.
 """
 import argparse
@@ -50,8 +50,8 @@ def iterations_for(binaries, case, target_ns, maximum):
 def main(probe_name=PROBE, description=__doc__):
     """Alternate the two builds of probe_name; bench_command_capture.py runs it for its own probe."""
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--baseline', type=Path, required=True, help='Release build directory of the baseline')
-    parser.add_argument('--candidate', type=Path, required=True, help='Release build directory of the candidate')
+    parser.add_argument('--baseline', type=Path, required=True, help='Release tree of the baseline')
+    parser.add_argument('--candidate', type=Path, required=True, help='Release tree of the candidate')
     parser.add_argument('--output', type=Path, required=True, help='new directory for the report and the host gate')
     parser.add_argument('--case', action='append', help='workload to run; repeat it for several, all by default')
     parser.add_argument('--pairs', type=int, default=7)
@@ -61,7 +61,7 @@ def main(probe_name=PROBE, description=__doc__):
     if not 1 <= options.pairs <= 31 or not options.sample_ms > 0 or options.max_iterations < 100:
         parser.error('Expected 1..31 pairs, a positive sample duration and at least 100 iterations')
 
-    binaries = {name: (getattr(options, name) / probe_name).resolve() for name in ('baseline', 'candidate')}
+    binaries = {name: (getattr(options, name) / 'src/runtime' / probe_name).resolve() for name in ('baseline', 'candidate')}
     for name, binary in binaries.items():
         if not binary.is_file():
             parser.error(f'No {probe_name} in the {name} directory; build it with --target {probe_name}')

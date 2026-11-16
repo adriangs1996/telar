@@ -36,7 +36,7 @@ def build_probe(build, output, source, sanitize):
     command[command.index('-o') + 1] = str(output / source.stem)
     command = [str(source) if arg == entry['file'] else arg for arg in command]
     command[1:1] = ['-I' + str(ROOT / 'src/gui')]
-    command.append(str(build / 'telar-platform/libtelar-platform.a'))
+    command.append(str(build / 'lib/platform/libtelar-platform.a'))
     dependencies = output / (source.stem + '.d')
     command.extend(['-MMD', '-MF', str(dependencies)])
     if sanitize:
@@ -102,7 +102,7 @@ def main():
     runtimes = {'A': args.before.resolve(strict=True), 'B': args.after.resolve(strict=True)}
     manifest = dict(scope=__doc__, sanitize=args.sanitize, build=str(args.build.resolve()),
                     runtimes={label: executable_identity(binary) for label, binary in runtimes.items()},
-                    platform_archive=executable_identity(args.build.resolve() / 'telar-platform/libtelar-platform.a'),
+                    platform_archive=executable_identity(args.build.resolve() / 'lib/platform/libtelar-platform.a'),
                     sources={file.name: hashlib.sha256(file.read_bytes()).hexdigest()
                              for file in (source, Path(__file__), ROOT / 'src/gui/terminal/screen.hpp')})
     save(output / 'manifest.json', manifest)

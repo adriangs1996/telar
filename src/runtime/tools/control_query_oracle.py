@@ -65,4 +65,4 @@ class Probe:
         return result
 
 GHOSTTY = ROOT / 'dependencies/control-baselines/ghostty-application/libghostty-control-oracle-threaded.dylib'
-NATIVE = ROOT / 'out-control-native-df/libcontrol-query-probe.dylib'
+NATIVE = ROOT.parents[1] / 'out/dev/src/runtime/libcontrol-query-probe.dylib'

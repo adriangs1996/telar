@@ -62,7 +62,7 @@ def cases():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--native', type=Path, default=ROOT / 'out-control-row/libcontrol-query-probe.dylib')
+    parser.add_argument('--native', type=Path, default=ROOT.parents[1] / 'out/dev/src/runtime/libcontrol-query-probe.dylib')
     parser.add_argument('--reference', type=Path, default=ROOT / 'dependencies/control-ghostty-oracle-desktop/lib/libghostty-control-oracle.dylib')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-splits', action='store_true')

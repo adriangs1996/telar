@@ -106,7 +106,8 @@ def serve(binary, output):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--build-dir', type=Path, default=Path(__file__).resolve().parents[1] / 'out')
+    parser.add_argument('--build-dir', type=Path, default=Path(__file__).resolve().parents[3] / 'out/dev/src/gui',
+                        help="the GUI's directory of a tree, which builds gui-host-effects-smoke")
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--session', action='store_true', help=argparse.SUPPRESS)
     options = parser.parse_args()

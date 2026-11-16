@@ -43,7 +43,7 @@ command.remove('-c')
 probe = output / 'disconnected-clients-probe'
 command[command.index('-o') + 1] = str(probe)
 command = [str(source) if word == entry['file'] else word for word in command]
-command.append(str(build / 'telar-platform/libtelar-platform.a'))
+command.append(str(build / 'lib/platform/libtelar-platform.a'))
 with (output / 'build.log').open('w') as log:
     subprocess.run(command, cwd=entry['directory'], stdout=log, stderr=subprocess.STDOUT, check=True)
 variants = {'A': args.before.resolve(strict=True), 'B': args.after.resolve(strict=True)}
