@@ -8,37 +8,26 @@ static_assert(true);
 #include "application_effects.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "launch_arguments.hpp"
 #include "platform/window.hpp"
 #include "projection.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/protocol/clients.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "ui/chrome/metrics_projection.hpp"
 #include "ui/chrome/mode_projection.hpp"
 #include "ui/fonts/terminal_font.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
-#include "ui/history/history_filters_layout.hpp"
-#include "ui/history/history_footer_layout.hpp"
-#include "ui/history/history_inspection_layout.hpp"
 #include "ui/machines/machine_client.hpp"
 #include "ui/panes/pane_projection.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include "ui/terminal/window_images.hpp"
-#include "ui/workspaces/project_projection.hpp"
-#include "utf16_encoding.hpp"
 #include <QAbstractItemModel>
 #include <QClipboard>
 #include <QCryptographicHash>
@@ -65,35 +54,22 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <bit>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <filesystem>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string>
 #include <string_view>
-#include <system_error>
-#include <tuple>
 #include <utility>
-#include <variant>
-#include <vector>
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "platform/window.hpp"
-#include "utf16_encoding.hpp"
 
 import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
@@ -184,6 +160,7 @@ namespace telar::gui::qt {
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
         peek_(store_, activity_),
+        copy_(store_),
         workspace_form_(store_),
         hostname_(platform::hostName()) {
     initializeMachines();
@@ -196,7 +173,23 @@ namespace telar::gui::qt {
     palette_.setCommands(commands());
 
     connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
-    connect(this, &Application::copyModeChanged, this, &Application::statusModeChanged);
+    connect(&copy_, &CopyController::activeChanged, this, &Application::statusModeChanged);
+    connect(&copy_, &CopyController::paneChanged, this, &Application::terminalChanged);
+    connect(&copy_, &CopyController::inputStarted, this, [this] {
+      key_bindings_.cancelSequence();
+    });
+    connect(&copy_, &CopyController::searchRequested, this, [this] {
+      showDialog(Dialog::copy_search);
+    });
+    connect(&copy_, &CopyController::linkRequested, this, [this](qulonglong pane_id, CellPosition cursor) {
+      openCopyLink(pane_id, cursor);
+    });
+    connect(&copy_, &CopyController::closeRequested, this, [this] {
+      showDialog(Dialog::none);
+    });
+    connect(&copy_, &CopyController::failed, this, &Application::reportFailure);
+    // The search reads the command the dialog's line was opened on.
+    connect(this, &Application::dialogChanged, &copy_, &CopyController::publishSearch);
     // The prefix mode lists the keymap's hints.
     connect(this, &Application::configurationChanged, this, &Application::statusModeChanged);
     connect(this, &Application::configurationChanged, this, [this] {
@@ -833,7 +826,7 @@ namespace telar::gui::qt {
       requestTerminalFrame();
       break;
     case Change::copy_mode:
-      emit copySearchChanged();
+      copy_.publishSearch();
       publishStatus();
       if (const auto& copy = session().copyMode().state()) {
         emit terminalChanged(copy->pane_id);
@@ -921,14 +914,14 @@ namespace telar::gui::qt {
     // Name prompts: none opens over copy mode or another prompt, and
     // copy mode does not start over a prompt.
     case ClientAction::client_open_goto:
-      if (copyModeActive() || store_.dialog().kind != Dialog::none) {
+      if (copy_.active() || store_.dialog().kind != Dialog::none) {
         throw EncodingError{"ClientPromptUnavailable"};
       }
 
       executeWindowAction(Action::goto_picker);
       break;
     case ClientAction::client_open_history:
-      if (copyModeActive() || store_.dialog().kind != Dialog::none) {
+      if (copy_.active() || store_.dialog().kind != Dialog::none) {
         throw EncodingError{"ClientPromptUnavailable"};
       }
 
@@ -936,13 +929,13 @@ namespace telar::gui::qt {
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::client_copy_mode:
-      if (!copyModeActive()) {
+      if (!copy_.active()) {
         if (store_.dialog().kind != Dialog::none) {
           throw EncodingError{"CopyModeUnavailable"};
         }
 
         executeWindowAction(Action::copy_mode);
-        if (!copyModeActive()) {
+        if (!copy_.active()) {
           throw EncodingError{"CopyModeUnavailable"};
         }
       }
@@ -1034,7 +1027,7 @@ namespace telar::gui::qt {
     key_bindings_.cancelSequence();
     applyInteraction([&] {
       if (action != Action::copy_mode && (action != Action::cancel || store_.dialog().kind == Dialog::none)) {
-        leaveKeyboardCopyMode();
+        copy_.leaveKeyboard();
       }
 
       if (!executeNavigation(action, target) && !executePane(action, target.toULongLong())) {
@@ -1282,7 +1275,7 @@ namespace telar::gui::qt {
     }
 
     if (previous != 0 && !session().copyMode().state()) {
-      publishCopyChange(previous);
+      copy_.publishChange(previous);
     }
 
     return delivered;
@@ -1452,7 +1445,7 @@ namespace telar::gui::qt {
       return statusModeRecord(StatusMode::prefix, key_bindings_.modeHints());
     }
 
-    return statusModeRecord(copyModeActive() ? StatusMode::copy : StatusMode::normal);
+    return statusModeRecord(copy_.active() ? StatusMode::copy : StatusMode::normal);
   }
 
   QVariantMap Application::hostMetrics() const {
@@ -1497,10 +1490,7 @@ namespace telar::gui::qt {
       emit diagnosticChanged();
     }
 
-    if (const auto copy_mode = copyModeActive(); copy_mode != published.copy_mode) {
-      published.copy_mode = copy_mode;
-      emit copyModeChanged();
-    }
+    copy_.publish();
   }
 
   QString Application::error() const {

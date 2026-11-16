@@ -170,6 +170,7 @@ namespace telar::gui::qt {
       releaseMouse();
       application_->unregisterTerminal(*this);
       application_->disconnect(this);
+      application_->copy()->disconnect(this);
     }
 
     // QML owns the application; this item registers with it and unregisters before it changes.
@@ -200,7 +201,7 @@ namespace telar::gui::qt {
       connect(application_, &Application::configurationChanged, this, &TerminalItem::measure);
       connect(application_, &Application::machineChanged, this, &TerminalItem::invalidateMachine);
       connect(application_, &Application::refreshed, this, &TerminalItem::refreshLinkHover);
-      connect(application_, &Application::copyModeChanged, this, &TerminalItem::refreshLinkHover);
+      connect(application_->copy(), &CopyController::activeChanged, this, &TerminalItem::refreshLinkHover);
       connect(application_, &Application::dialogChanged, this, &TerminalItem::refreshLinkHover);
       connect(application_, &Application::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
       connect(application_, &Application::inputReleasing, this, [this](qulonglong pane_id) {
@@ -853,7 +854,7 @@ namespace telar::gui::qt {
 
     CellSelection selection;
     std::optional<Cursor> cursor_override;
-    const auto& copy = application_->copyState();
+    const auto& copy = application_->copy()->state();
     if (copy && copy->pane_id == pane_id_) {
       selection = copy->selection(copyGrid(current->screen));
       if (!copy->pointer) {
@@ -1001,13 +1002,13 @@ namespace telar::gui::qt {
 
     const Qt::KeyboardModifiers clipboard_modifiers = platform::usesCommandKey() ? Qt::ControlModifier : Qt::ControlModifier | Qt::ShiftModifier;
     const auto clipboard_shortcut = (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == clipboard_modifiers;
-    const auto& copy = application_->copyState();
+    const auto& copy = application_->copy()->state();
     const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
 
     if (preedit_.isEmpty() && application_->documentKey(pane_id_, *event)) {
       // The document the pane shows took a scroll key.
     } else if (clipboard_shortcut && event->key() == Qt::Key_C && selected) {
-      application_->copySelection(pane_id_);
+      application_->copy()->copySelection(pane_id_);
     } else if (clipboard_shortcut && event->key() == Qt::Key_V) {
       application_->paste(pane_id_, QGuiApplication::clipboard()->text());
     } else if (preedit_.isEmpty() && application_->editsPrompt(pane_id_)) {
@@ -1116,7 +1117,7 @@ namespace telar::gui::qt {
   }
 
   void TerminalItem::sendCommittedText(const QString& text) {
-    if (application_ == nullptr || !application_->copyModeActive()) {
+    if (application_ == nullptr || !application_->copy()->active()) {
       send(text.toUtf8());
 
       return;
@@ -1128,7 +1129,7 @@ namespace telar::gui::qt {
       const auto scalar = QString::fromRawData(text.constData() + offset, length);
       const QKeyEvent key{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, scalar};
 
-      static_cast<void>(application_->handleCopyKey(pane_id_, key));
+      static_cast<void>(application_->copy()->handleKey(pane_id_, key));
       offset += length;
     }
   }
@@ -1194,7 +1195,7 @@ namespace telar::gui::qt {
       }
     }
 
-    const auto blinks = keyboard && current != nullptr && !application_->copyModeActive() && current->screen.cursor().visible && current->screen.cursor().blink && (current->screen.cursor().shape != CursorShape::default_shape || application_->configuration().cursor_blink);
+    const auto blinks = keyboard && current != nullptr && !application_->copy()->active() && current->screen.cursor().visible && current->screen.cursor().blink && (current->screen.cursor().shape != CursorShape::default_shape || application_->configuration().cursor_blink);
     if (blinks) {
       blink_.setInterval(static_cast<int>(application_->configuration().blink_interval.count()));
       if (!blink_.isActive()) {

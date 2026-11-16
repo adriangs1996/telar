@@ -1048,11 +1048,11 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         QTRY_VERIFY_WITH_TIMEOUT((query = line->findChild<QQuickItem*>(QStringLiteral("scrollbackSearch"))) != nullptr, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
         QTest::keyClick(&window, Qt::Key_3);
-        QTRY_VERIFY2_WITH_TIMEOUT(application.copySearchState().value(QStringLiteral("count")).toInt() > 0, qPrintable(QStringLiteral("search %1").arg(QString::fromUtf8(QJsonDocument::fromVariant(application.copySearchState()).toJson(QJsonDocument::Compact)))), runtime_wait_ms);
+        QTRY_VERIFY2_WITH_TIMEOUT(application.copy()->searchState().value(QStringLiteral("count")).toInt() > 0, qPrintable(QStringLiteral("search %1").arg(QString::fromUtf8(QJsonDocument::fromVariant(application.copy()->searchState()).toJson(QJsonDocument::Compact)))), runtime_wait_ms);
         QTest::keyClick(&window, Qt::Key_Return);
-        QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::Application::Dialog::none) && application.copyModeActive() && application.copySearchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::Application::Dialog::none) && application.copy()->active() && application.copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
         type(terminal, "q");
-        QTRY_VERIFY_WITH_TIMEOUT(!application.copyModeActive(), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(!application.copy()->active(), runtime_wait_ms);
         QKeyEvent back{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
         QCoreApplication::sendEvent(&terminal, &back);

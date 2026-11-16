@@ -183,7 +183,7 @@ namespace telar::gui::qt {
     try {
       const auto repeating = router_.repeatAction();
       const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
-      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copyModeActive() || application_.dialog() != Application::Dialog::none || application_.pick_controller_.isOpen(), .repeat = policy});
+      const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copy_.active() || application_.dialog() != Application::Dialog::none || application_.pick_controller_.isOpen(), .repeat = policy});
       const auto consumed = apply(decision);
 
       if (input.phase == KeyPhase::release) {
@@ -241,7 +241,7 @@ namespace telar::gui::qt {
       }
 
       if (lease != recipients_.end()) {
-        const auto& copy = application_.copyState();
+        const auto& copy = application_.copy_.state();
         const auto copying = copy && !copy->pointer && application_.dialog() == Application::Dialog::none;
 
         *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.viewVersion().machine};
@@ -261,7 +261,7 @@ namespace telar::gui::qt {
       if (event.phase != KeyPhase::release) {
         const QKeyEvent key{QEvent::KeyPress, event.key, event.modifiers, event.scan, event.native_key, event.native_modifiers, event.text, event.phase == KeyPhase::repeat};
 
-        static_cast<void>(application_.handleCopyKey(lease->owner, key));
+        static_cast<void>(application_.copy_.handleKey(lease->owner, key));
       }
 
       return true;

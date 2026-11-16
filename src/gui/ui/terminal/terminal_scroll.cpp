@@ -199,7 +199,7 @@ namespace telar::gui::qt {
     followRuntimeView(following);
 
     // Copy mode reads whole rows: the view settles on the row at its top.
-    const auto& copy = application_->copyState();
+    const auto& copy = application_->copy()->state();
     if (copy && copy->pane_id == pane_id_ && !motion_.moving() && shift_ > 0) {
       motion_.glide(static_cast<double>(top_row_) * cell, scrollTime(), static_cast<double>(current->screen.rows()) * cell);
       driven_ = false;
@@ -500,7 +500,7 @@ namespace telar::gui::qt {
     }
 
     // The user's motion leads the runtime's view, at most once a frame; copy mode owns it while it reads.
-    const auto& copy = application_->copyState();
+    const auto& copy = application_->copy()->state();
     const bool copying = copy && copy->pane_id == pane_id_;
     // At rest, the runtime's view is where the view draws from, whoever moved it: a command
     // selected whose rows folds bring nearer the live end leaves the live screen drawn, which the
@@ -627,7 +627,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (application_->copyState()) {
+    if (application_->copy()->state()) {
       return false;
     }
 
@@ -921,7 +921,7 @@ namespace telar::gui::qt {
     match_marks_.clear();
     QVariantList rail;
     const auto* current = pane();
-    const auto& copy = application_ == nullptr ? std::optional<CopyState>{} : application_->copyState();
+    const auto& copy = application_ == nullptr ? std::optional<CopyState>{} : application_->copy()->state();
     if (current != nullptr && copy && copy->pane_id == pane_id_) {
       const auto matches = application_->session().copyMode().matches();
       const auto& screen = current->screen;

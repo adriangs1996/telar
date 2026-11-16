@@ -324,7 +324,7 @@ namespace telar::gui::qt {
   void Application::executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     pending_activity_.reset();
     if (action.kind != BindingActionKind::copy_mode) {
-      leaveKeyboardCopyMode();
+      copy_.leaveKeyboard();
     }
 
     if (const auto native = nativeAction(action.kind)) {

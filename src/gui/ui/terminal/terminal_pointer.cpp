@@ -145,7 +145,7 @@ namespace telar::gui::qt {
     application_->pointerDispatcher().acquire(*this, event->button());
     const auto left = event->button() == Qt::LeftButton;
     const auto input = pointerInput(event->position(), CopyPointerKind::press, left);
-    if (application_->handleCopyPointer(input)) {
+    if (application_->copy()->handlePointer(input)) {
       event->accept();
 
       return;
@@ -176,7 +176,7 @@ namespace telar::gui::qt {
 
       application_->pointerDispatcher().beginChild(view, sample);
     } else if (left && input.pane_id != 0 && input.inside) {
-      selecting_ = application_->beginSelection(pane_id_, input.position);
+      selecting_ = application_->copy()->beginSelection(pane_id_, input.position);
     } else if (event->button() == Qt::MiddleButton && QGuiApplication::clipboard()->supportsSelection()) {
       application_->paste(pane_id_, QGuiApplication::clipboard()->text(QClipboard::Selection));
     }
@@ -205,7 +205,7 @@ namespace telar::gui::qt {
     }
 
     const auto input = pointerInput(event->position(), CopyPointerKind::drag, event->buttons().testFlag(Qt::LeftButton));
-    if (application_ != nullptr && application_->handleCopyPointer(input)) {
+    if (application_ != nullptr && application_->copy()->handlePointer(input)) {
       event->accept();
 
       return;
@@ -231,7 +231,7 @@ namespace telar::gui::qt {
 
     const auto left = event->button() == Qt::LeftButton;
     const auto input = pointerInput(event->position(), CopyPointerKind::release, left);
-    const auto copied = application_ != nullptr && application_->handleCopyPointer(input);
+    const auto copied = application_ != nullptr && application_->copy()->handlePointer(input);
 
     if (left) {
       selecting_ = false;
@@ -257,7 +257,7 @@ namespace telar::gui::qt {
 
     const auto selecting = std::exchange(selecting_, false);
     if (selecting && application_ != nullptr) {
-      static_cast<void>(application_->handleCopyPointer(pointerInput(selection_position_, CopyPointerKind::release)));
+      static_cast<void>(application_->copy()->handlePointer(pointerInput(selection_position_, CopyPointerKind::release)));
     }
 
     link_gesture_.cancel();
@@ -286,7 +286,7 @@ namespace telar::gui::qt {
 
     const auto lines = wheel_.consume(scrollSample(*event, font_.cell.height()));
     const auto rows = lines * WheelAccumulator::rows_per_line;
-    if (lines != 0 && !application_->handleCopyPointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {
+    if (lines != 0 && !application_->copy()->handlePointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {
       dispatchWheel(*event, lines);
     }
 
@@ -330,7 +330,7 @@ namespace telar::gui::qt {
   void TerminalItem::hoverMoveEvent(QHoverEvent* event) {
     const auto* current = pane();
 
-    if (application_ != nullptr && application_->handleCopyPointer(pointerInput(event->position(), CopyPointerKind::move, false))) {
+    if (application_ != nullptr && application_->copy()->handlePointer(pointerInput(event->position(), CopyPointerKind::move, false))) {
       setCursor(Qt::IBeamCursor);
       event->accept();
 

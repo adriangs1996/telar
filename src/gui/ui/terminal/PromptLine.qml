@@ -885,7 +885,7 @@ Item {
 
         Item {
             id: scrollback
-            readonly property var current: root.application.copySearchState
+            readonly property var current: root.application.copy.searchState
             readonly property bool focused: query.activeFocus
             readonly property bool inspecting: false
             height: 2 * root.line
@@ -896,7 +896,7 @@ Item {
             Timer {
                 id: typing
                 interval: 90
-                onTriggered: root.application.searchScrollback(query.text)
+                onTriggered: root.application.copy.search(query.text)
             }
 
             CellText {
@@ -959,22 +959,22 @@ Item {
                         Qt.callLater(root.keepSearch);
                     }
                 }
-                Keys.onUpPressed: root.application.stepScrollbackMatch(false)
-                Keys.onDownPressed: root.application.stepScrollbackMatch(true)
+                Keys.onUpPressed: root.application.copy.step(false)
+                Keys.onDownPressed: root.application.copy.step(true)
                 Keys.onReturnPressed: {
                     typing.stop();
-                    root.application.searchScrollback(query.text);
-                    root.application.finishScrollbackSearch();
+                    root.application.copy.search(query.text);
+                    root.application.copy.finishSearch();
                 }
                 Keys.onEnterPressed: {
                     typing.stop();
-                    root.application.searchScrollback(query.text);
-                    root.application.finishScrollbackSearch();
+                    root.application.copy.search(query.text);
+                    root.application.copy.finishSearch();
                 }
                 Keys.onTabPressed: {
                     if (scrollback.current.scopes) {
                         typing.stop();
-                        root.application.toggleCopySearchScope();
+                        root.application.copy.toggleSearchScope();
                     }
                 }
                 Keys.onEscapePressed: {
@@ -983,7 +983,7 @@ Item {
                     }
                     // Nothing found: the cursor goes back where the search began.
                     typing.stop();
-                    root.application.searchScrollback("");
+                    root.application.copy.search("");
                     root.application.execute(GuiController.Action.cancel);
                 }
             }

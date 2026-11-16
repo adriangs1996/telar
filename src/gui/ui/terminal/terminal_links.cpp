@@ -106,7 +106,7 @@ namespace telar::gui::qt {
   bool TerminalItem::linkEligible() const noexcept {
     const auto* current = pane();
 
-    return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog() == Application::Dialog::none && !application_->copyModeActive();
+    return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog() == Application::Dialog::none && !application_->copy()->active();
   }
 
   LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexcept {

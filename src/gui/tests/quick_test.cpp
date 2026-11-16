@@ -1225,11 +1225,11 @@ return {api_version = 2, client = {
       QCOMPARE(clipboard->text(), QStringLiteral("unchanged clipboard"));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), path, runtime_wait_ms);
-      QVERIFY(!client_->copyModeActive());
+      QVERIFY(!client_->copy()->active());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
-      QVERIFY(client_->copyState() && client_->copyState()->linewise);
+      QVERIFY(client_->copy()->state() && client_->copy()->state()->linewise);
       QTest::keyClick(window_, Qt::Key_X);
-      QVERIFY(!client_->copyState());
+      QVERIFY(!client_->copy()->state());
       client_->input(pane->id, "\x15");
       const auto click_wait_ms = static_cast<int>(ClickTracker::interval.count()) + 1;
 
@@ -1257,7 +1257,7 @@ return {api_version = 2, client = {
 
       committed.setCommitString(QStringLiteral("q"));
       QCoreApplication::sendEvent(terminal, &committed);
-      QVERIFY(!client_->copyModeActive());
+      QVERIFY(!client_->copy()->active());
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -1287,7 +1287,7 @@ return {api_version = 2, client = {
       QVERIFY(path_row.has_value() && osc_row.has_value() && blank_row.has_value());
       terminal->forceActiveFocus();
       QTest::mouseMove(window_, cellCenter(*terminal, {.x = 2}));
-      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("https://plain.test/x"), qPrintable(QStringLiteral("hover=%1 active=%2 itemFocus=%3 copy=%4 modifiers=%5 frame=%6/%7 cursor=%8,%9").arg(terminal->hoveredLink()).arg(window_->isActive()).arg(terminal->hasActiveFocus()).arg(client_->copyModeActive()).arg(client_->pointerModifiers().toInt()).arg(pane->acknowledged_frame).arg(pane->screen.frameId()).arg(QCursor::pos().x()).arg(QCursor::pos().y())));
+      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("https://plain.test/x"), qPrintable(QStringLiteral("hover=%1 active=%2 itemFocus=%3 copy=%4 modifiers=%5 frame=%6/%7 cursor=%8,%9").arg(terminal->hoveredLink()).arg(window_->isActive()).arg(terminal->hasActiveFocus()).arg(client_->copy()->active()).arg(client_->pointerModifiers().toInt()).arg(pane->acknowledged_frame).arg(pane->screen.frameId()).arg(QCursor::pos().x()).arg(QCursor::pos().y())));
       QCOMPARE(terminal->cursor().shape(), Qt::PointingHandCursor);
       QTRY_VERIFY(terminal->linkPreview().value(QStringLiteral("visible")).toBool());
       QVERIFY(test::waitForGuiCondition([&] {
@@ -1309,7 +1309,7 @@ return {api_version = 2, client = {
       QCOMPARE(client_->pointerModifiers(), Qt::KeyboardModifiers{Qt::ControlModifier});
       QVERIFY(terminal->hasActiveFocus());
       QVERIFY(window_->isActive());
-      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("/tmp/telar/source.cpp:12:3"), qPrintable(QStringLiteral("Modifiers: %1; cursor: %2; preview: %3; copy: %4; contents: %5").arg(client_->pointerModifiers().toInt()).arg(terminal->cursor().shape()).arg(terminal->linkPreview().value(QStringLiteral("visible")).toBool()).arg(client_->copyModeActive()).arg(screenText(pane->screen))));
+      QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("/tmp/telar/source.cpp:12:3"), qPrintable(QStringLiteral("Modifiers: %1; cursor: %2; preview: %3; copy: %4; contents: %5").arg(client_->pointerModifiers().toInt()).arg(terminal->cursor().shape()).arg(terminal->linkPreview().value(QStringLiteral("visible")).toBool()).arg(client_->copy()->active()).arg(screenText(pane->screen))));
       QTest::keyRelease(window_, Qt::Key_Control);
       QTRY_COMPARE(terminal->hoveredLink(), QString{});
       QTest::qWait(frame_settle_ms);
@@ -1355,14 +1355,14 @@ return {api_version = 2, client = {
       client_->input(pane->id, capture.toUtf8());
       QTRY_VERIFY_WITH_TIMEOUT(pane->screen.mouse().sgr && pane->screen.mouse().tracking == telar::MouseTracking::normal, runtime_wait_ms);
       client_->execute(Application::Action::copy_mode);
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       constexpr int wheel_notch = 120;
       const QPointF local{1, 1};
       QWheelEvent owned{local, terminal->mapToGlobal(local), {}, {0, wheel_notch}, Qt::NoButton, Qt::ShiftModifier, Qt::NoScrollPhase, false};
 
       QCoreApplication::sendEvent(terminal, &owned);
       QTest::qWait(frame_settle_ms);
-      QVERIFY(pane->screen.mouse().sgr && client_->copyModeActive());
+      QVERIFY(pane->screen.mouse().sgr && client_->copy()->active());
       client_->execute(Application::Action::cancel);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::ShiftModifier, terminal->mapToScene(local).toPoint());
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, terminal->mapToScene(local).toPoint());
@@ -1580,7 +1580,7 @@ return {api_version = 2, client = {
       terminal->forceActiveFocus();
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
       QTest::keyClick(window_, Qt::Key_BracketLeft);
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       const auto* mode_bar = window_->findChild<NativeModeLayout*>();
 
       QVERIFY(mode_bar != nullptr);
@@ -1589,9 +1589,9 @@ return {api_version = 2, client = {
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::copy_search);
       client_->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
       // The match found holds the cursor, nothing selected; y copies the match.
-      QTRY_VERIFY_WITH_TIMEOUT(client_->copyState() && !client_->copyState()->anchor.has_value() && client_->copySearchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->copy()->state() && !client_->copy()->state()->anchor.has_value() && client_->copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Y);
-      QVERIFY(!client_->copyModeActive());
+      QVERIFY(!client_->copy()->active());
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("COPY_MODE_WORD_1"), runtime_wait_ms);
 
       CommandPeer peer{memory_};
@@ -1599,11 +1599,11 @@ return {api_version = 2, client = {
       peer.open(socket_);
       QTRY_VERIFY_WITH_TIMEOUT(peer.ready(), runtime_wait_ms);
       peer.request(telar::ClientAction::client_copy_mode, 1);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->copyModeActive(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->copy()->active(), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
       QTest::keyPress(window_, Qt::Key_Q);
-      QVERIFY(!client_->copyModeActive());
+      QVERIFY(!client_->copy()->active());
       QTest::qWait(frame_settle_ms);
       const auto before_repeat = screenText(pane->screen);
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_Q, Qt::NoModifier, QStringLiteral("q"), true};
@@ -1724,7 +1724,7 @@ return {api_version = 2, client = {
       QTest::keyClick(window_, Qt::Key_Up);
       QTest::keyClick(window_, Qt::Key_O);
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{toQString(copy_uri)}), runtime_wait_ms);
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       QTest::keyClick(window_, Qt::Key_Q);
 
       CommandPeer peer{memory_};
@@ -1846,7 +1846,7 @@ return {api_version = 2, client = {
       const auto uri = QUrl::fromLocalFile(file_path).toEncoded();
 
       client_->execute(Application::Action::copy_mode);
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       peer.request(telar::ClientAction::client_open_link, 1, {uri.constData(), static_cast<std::size_t>(uri.size())});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
@@ -1872,9 +1872,9 @@ return {api_version = 2, client = {
 
       QTRY_VERIFY_WITH_TIMEOUT(editor_ready(), runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(qobject_cast<TerminalItem*>(window_->activeFocusItem()) != nullptr && qobject_cast<TerminalItem*>(window_->activeFocusItem())->paneIdentity() != source_id, qPrintable(windowObservation(*window_)), runtime_wait_ms);
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       QTest::keyClick(window_, Qt::Key_Q);
-      QVERIFY(!client_->copyModeActive());
+      QVERIFY(!client_->copy()->active());
       const auto next_editor_directory = directory_.filePath(QStringLiteral("next-editor"));
 
       QVERIFY(QDir{}.mkpath(next_editor_directory));
@@ -2181,7 +2181,7 @@ return {api_version = 2, client = {
       QVERIFY(!client_->prefixPending());
       settleLua();
       QCOMPARE(client_->error(), QString{});
-      QVERIFY2(client_->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialog())).arg(static_cast<int>(client_->copyModeActive()))));
+      QVERIFY2(client_->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialog())).arg(static_cast<int>(client_->copy()->active()))));
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), true};
 
       QCoreApplication::sendEvent(window_, &repeated);
@@ -3516,7 +3516,7 @@ return {api_version=2, client={keybindings={
       const QSignalSpy refreshes{client_.get(), &Application::refreshed};
       const QSignalSpy title{client_.get(), &Application::titleChanged};
       const QSignalSpy diagnostic{client_.get(), &Application::diagnosticChanged};
-      const QSignalSpy copy_mode{client_.get(), &Application::copyModeChanged};
+      const QSignalSpy copy_mode{client_->copy(), &CopyController::activeChanged};
       const QSignalSpy attachments{client_.get(), &Application::attachmentGeometryChanged};
       const QSignalSpy element_bars{client_.get(), &Application::elementBarsChanged};
 
@@ -5016,12 +5016,12 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->text(), QStringLiteral("@"));
       client_->execute(Application::Action::cancel);
       client_->execute(Application::Action::copy_mode);
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       peer.request(telar::ClientAction::client_open_goto, 3);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
       QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
-      QVERIFY(client_->copyModeActive());
+      QVERIFY(client_->copy()->active());
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::none);
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->error(), QString{});

@@ -193,7 +193,7 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::copying() const {
-    const auto* copy = application_ == nullptr ? nullptr : &application_->copyState();
+    const auto* copy = application_ == nullptr ? nullptr : &application_->copy()->state();
     if (copy == nullptr || !*copy || (*copy)->pointer || (*copy)->pane_id != pane_id_) {
       return {};
     }

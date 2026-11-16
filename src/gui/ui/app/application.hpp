@@ -47,6 +47,7 @@ static_assert(true);
 #include "ui/peek/peek_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
+#include "ui/terminal/copy_controller.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
 #include "ui/workspaces/workspace_form_controller.hpp"
 #include "ui/workspaces/workspaces_controller.hpp"
@@ -121,7 +122,6 @@ import telar.gui.presentation.notification_center;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.line;
 import telar.gui.prompt.editor;
-import telar.gui.input.copy_mode;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::test {
@@ -184,16 +184,9 @@ namespace telar::gui::qt {
     Q_PROPERTY(QString error READ error NOTIFY diagnosticChanged)
     Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY diagnosticChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY diagnosticChanged)
-    Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY copyModeChanged)
+    Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
     Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
-    // The command whose output the scrollback search reads, empty while it reads the whole
-    // scrollback; and whether Tab can switch between the two.
-    Q_PROPERTY(QString copySearchScope READ copySearchScope NOTIFY dialogChanged)
-    Q_PROPERTY(bool copySearchScopes READ copySearchScopes NOTIFY dialogChanged)
-    // The scrollback search as it is typed: its query, whether an answer is awaited, how many
-    // matches and which one the cursor is on, and what it reads.
-    Q_PROPERTY(QVariantMap copySearchState READ copySearchState NOTIFY copySearchChanged)
     // The history or path search the focused pane's prompt line hosts in place of the dialog.
     Q_PROPERTY(telar::gui::qt::Store::Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
     Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
@@ -307,14 +300,6 @@ namespace telar::gui::qt {
 
     Q_INVOKABLE void execute(Action action, const QString& target = {});
     Q_INVOKABLE void submitDialog(const QVariantMap& input);
-    Q_INVOKABLE void toggleCopySearchScope();
-    // The scrollback searched for `text` as it is typed, from where the search began.
-    Q_INVOKABLE void searchScrollback(const QString& text);
-    Q_INVOKABLE void stepScrollbackMatch(bool forward);
-    Q_INVOKABLE void finishScrollbackSearch();
-    [[nodiscard]] QVariantMap copySearchState() const;
-    [[nodiscard]] QString copySearchScope() const;
-    [[nodiscard]] bool copySearchScopes() const;
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
     Q_INVOKABLE void registerTabStrip(QQuickItem* strip);
@@ -352,12 +337,6 @@ namespace telar::gui::qt {
     void scroll(PaneScrollDelta delta);
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
     void interruptBindings();
-    [[nodiscard]] bool copyModeActive() const noexcept;
-    [[nodiscard]] const std::optional<CopyState>& copyState() const noexcept;
-    bool handleCopyKey(std::uint64_t pane_id, const QKeyEvent& event);
-    bool beginSelection(std::uint64_t pane_id, CopyPoint local);
-    bool handleCopyPointer(const CopyPointerInput& input);
-    void copySelection(std::uint64_t pane_id);
     bool openLink(const LinkTarget& target, std::optional<std::uint64_t> source_id = {});
     void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
     void pluginWorkerFinished(std::uint64_t execution, const PluginInvocation& invocation, const PluginWorkerResult& result);
@@ -396,6 +375,10 @@ namespace telar::gui::qt {
 
     PeekController* peek() noexcept {
       return &peek_;
+    }
+
+    CopyController* copy() noexcept {
+      return &copy_;
     }
 
     HistoryController* history() noexcept {
@@ -448,7 +431,6 @@ namespace telar::gui::qt {
     void titleChanged();
     // The error, the TLS proxy badge or whether the runtime is connected moved.
     void diagnosticChanged();
-    void copyModeChanged();
     // The attachment shelf's region or the attachment modal's layout moved.
     void attachmentGeometryChanged();
     void elementBarsChanged();
@@ -466,7 +448,6 @@ namespace telar::gui::qt {
     void runtimeLinkChanged();
     void sidebarGeometryChanged();
     void dialogChanged();
-    void copySearchChanged();
     void terminalChanged(qulonglong pane_id);
     void promptChanged(qulonglong pane_id);
     // The document a pane shows natively appeared, changed or went away.
@@ -661,8 +642,6 @@ namespace telar::gui::qt {
     void synchronizeTabStrip();
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
-    void publishCopyChange(std::uint64_t previous_pane);
-    void leaveKeyboardCopyMode();
     void openCopyLink(std::uint64_t pane_id, CellPosition point);
     void present(const PresentedFrame& frame);
     void prepareFrame(PresentedFrame& frame);
@@ -780,6 +759,7 @@ namespace telar::gui::qt {
     PathPickerController paths_;
     MachinePromptController machine_prompt_;
     PeekController peek_;
+    CopyController copy_;
     WorkspaceFormController workspace_form_;
     QTimer refresh_timer_;
     QTimer notification_timer_;
@@ -794,7 +774,6 @@ namespace telar::gui::qt {
       QString error;
       QString tls_badge_color;
       bool connected = false;
-      bool copy_mode = false;
     };
 
     // What the attachment geometries are measured from.
