@@ -870,12 +870,12 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-quick PRIVATE ui/attachments/attachments_controller.cpp ui/attachments/attachments_controller.hpp ui/plugins/plugin_commands.cpp ui/plugins/plugin_runner.cpp ui/plugins/plugin_runner.hpp ui/prompt/prompt_commands.cpp)
   target_sources(gui-quick PRIVATE ui/components/components_controller.cpp ui/components/components_controller.hpp ui/components/component_commands.cpp ui/components/element_commands.cpp ui/components/element_slots.cpp ui/components/element_slots.hpp)
   target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
-  target_sources(gui-quick PRIVATE ui/history/history_controller.cpp ui/history/history_controller.hpp ui/history/history_pointer.cpp ui/chrome/tab_drag_commands.cpp ui/input/binding_commands.cpp ui/input/key_bindings.cpp ui/terminal/copy_controller.cpp ui/terminal/copy_controller.hpp ui/links/link_commands.cpp)
+  target_sources(gui-quick PRIVATE ui/history/history_controller.cpp ui/history/history_controller.hpp ui/history/history_pointer.cpp ui/chrome/tab_drag_commands.cpp ui/input/binding_commands.cpp ui/input/key_bindings.cpp ui/terminal/copy_controller.cpp ui/terminal/copy_controller.hpp ui/links/links_controller.cpp ui/links/links_controller.hpp)
   target_sources(gui-quick PRIVATE ui/app/palette_commands.cpp ui/paths/path_picker_controller.cpp ui/paths/path_picker_controller.hpp ui/paths/path_picker_projection.cpp ui/workspaces/workspace_form_controller.cpp ui/workspaces/workspace_form_controller.hpp)
   target_sources(gui-quick PRIVATE ui/machines/machine_commands.cpp ui/machines/machine_profile_commands.cpp ui/machines/machine_picker_commands.cpp ui/machines/machine_prompt_controller.cpp ui/machines/machine_prompt_controller.hpp ui/machines/machine_launch_commands.cpp ui/machines/machine_activity_commands.cpp)
   target_sources(gui-quick PRIVATE ui/store/store.cpp ui/store/store.hpp)
   target_sources(gui-quick PRIVATE ui/workspaces/workspaces_controller.cpp ui/workspaces/workspaces_controller.hpp ui/chrome/tabs_controller.cpp ui/chrome/tabs_controller.hpp ui/panes/panes_controller.cpp ui/panes/panes_controller.hpp ui/activity/activity_controller.cpp ui/activity/activity_controller.hpp ui/palette/palette_controller.cpp ui/palette/palette_controller.hpp)
-  target_sources(gui-quick PRIVATE ui/peek/peek_controller.cpp ui/peek/peek_controller.hpp ui/links/link_status_commands.cpp)
+  target_sources(gui-quick PRIVATE ui/peek/peek_controller.cpp ui/peek/peek_controller.hpp ui/links/link_status_controller.cpp ui/links/link_status_controller.hpp)
   set_source_files_properties(ui/palette/palette_controller.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   target_sources(gui-quick PRIVATE ui/history/history_empty_layout.cpp ui/history/history_empty_layout.hpp ui/history/history_loading_layout.cpp ui/history/history_loading_layout.hpp ui/history/history_selection_layout.cpp ui/history/history_selection_layout.hpp)
   target_sources(gui-quick PRIVATE ui/controls/modal_reveal_layout.cpp ui/controls/modal_reveal_layout.hpp)
@@ -945,7 +945,7 @@ if(TELAR_GUI_NATIVE)
 
   # The generated QML type registrations include each registered header by its bare name.
   # Sources spell ui/ headers from src/gui; only the registrations need these folders.
-  foreach(folder IN ITEMS activity app attachments chrome components controls documents history machines notifications palette panes paths peek prompt store terminal workspaces)
+  foreach(folder IN ITEMS activity app attachments chrome components controls documents history links machines notifications palette panes paths peek prompt store terminal workspaces)
     target_include_directories(gui-quick PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui/${folder}")
   endforeach()
 

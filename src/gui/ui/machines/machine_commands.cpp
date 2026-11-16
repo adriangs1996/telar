@@ -197,7 +197,7 @@ namespace telar::gui::qt {
         source->needs_setup = source->connection.link().setup_repairs;
         summarizeMachine(source->key);
         if (key.machine.slot == store_.machines().active()) {
-          emit runtimeLinkChanged();
+          link_status_.publish();
         }
       }
     });

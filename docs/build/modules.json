@@ -652,6 +652,8 @@
     "src/gui/ui/foundation/process/launch_arguments.hpp": "Qt moc/QML integration",
     "src/gui/ui/links/link_presentation.hpp": "Qt moc/QML integration",
     "src/gui/ui/links/link_preview.hpp": "Qt moc/QML integration",
+    "src/gui/ui/links/link_status_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/links/links_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/models/list_model.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/local_runtime_endpoint.hpp": "Qt moc/QML integration",
     "src/gui/ui/config/lua_host.hpp": "Qt moc/QML integration",

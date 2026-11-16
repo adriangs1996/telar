@@ -59,6 +59,7 @@ namespace telar::gui::qt {
     paths_.setDisplay(display);
     machine_prompt_.setDisplay(display);
     peek_.setDisplay(display);
+    link_status_.setDisplay(display);
     attachments_.setDisplay(display);
     notifications_.setDisplay(display, terminal_grid_);
   }

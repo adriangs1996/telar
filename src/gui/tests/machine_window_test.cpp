@@ -166,6 +166,10 @@ import telar.wire.layout;
 namespace telar::gui::test {
 
   struct MachineWindow {
+    static qt::LinksController& links(qt::ApplicationController& application) {
+      return application.links_;
+    }
+
     static void armPlugin(qt::ApplicationController& application, qt::MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
       application.plugins_.owner_ = qt::PluginRunner::Owner{.source = source, .runtime_generation = runtime_generation, .execution = execution};
     }
@@ -2164,13 +2168,13 @@ namespace {
       const auto original = local.key;
 
       MachineWindow::select(application, fixture.remote.machine);
-      application.linkOpeningFinished(original, LinkOpeningFailure::launch);
+      MachineWindow::links(application).linkOpeningFinished(original, LinkOpeningFailure::launch);
       QVERIFY(application.notifications()->center().items().empty());
       QCOMPARE(local.session.notifications().items().size(), 1);
       const auto retired = fixture.remote;
 
       static_cast<void>(MachineWindow::replace(application, retired.machine.slot));
-      application.linkOpeningFinished(retired, LinkOpeningFailure::process);
+      MachineWindow::links(application).linkOpeningFinished(retired, LinkOpeningFailure::process);
       QVERIFY(application.notifications()->center().items().empty());
     }
   };

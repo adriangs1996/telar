@@ -31,7 +31,8 @@ static_assert(true);
 #include "ui/input/key_bindings.hpp"
 #include "ui/input/pointer_dispatcher.hpp"
 #include "ui/input/scroll_event.hpp"
-#include "ui/links/external_link_opener.hpp"
+#include "ui/links/link_status_controller.hpp"
+#include "ui/links/links_controller.hpp"
 #include "ui/machines/machine_activity_target.hpp"
 #include "ui/machines/machine_client.hpp"
 #include "ui/machines/machine_client_key.hpp"
@@ -165,8 +166,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal chromeRatio READ chromeRatio NOTIFY configurationChanged)
     Q_PROPERTY(qreal chromeTextScale READ chromeTextScale NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap windowGeometry READ windowGeometry NOTIFY windowGeometryChanged)
-    Q_PROPERTY(QVariantMap runtimeLinkState READ runtimeLinkState NOTIFY runtimeLinkChanged)
-    Q_PROPERTY(QVariantMap runtimeLinkGeometry READ runtimeLinkGeometry NOTIFY runtimeLinkChanged)
     Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
     Q_PROPERTY(bool machineListCollapsed READ machineListCollapsed NOTIFY sidebarGeometryChanged)
@@ -192,6 +191,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
+    Q_PROPERTY(telar::gui::qt::LinkStatusController* linkStatus READ linkStatus CONSTANT)
     Q_PROPERTY(telar::gui::qt::PaletteController* palette READ palette CONSTANT)
     Q_PROPERTY(telar::gui::qt::PathPickerController* paths READ paths CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspaceFormController* workspaceForm READ workspaceForm CONSTANT)
@@ -322,8 +322,6 @@ namespace telar::gui::qt {
     void scroll(PaneScrollDelta delta);
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
     void interruptBindings();
-    bool openLink(const LinkTarget& target, std::optional<std::uint64_t> source_id = {});
-    void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
 
     WorkspacesController* workspaces() noexcept {
       return &workspaces_;
@@ -361,6 +359,10 @@ namespace telar::gui::qt {
       return &peek_;
     }
 
+    LinkStatusController* linkStatus() noexcept {
+      return &link_status_;
+    }
+
     CopyController* copy() noexcept {
       return &copy_;
     }
@@ -383,8 +385,6 @@ namespace telar::gui::qt {
     [[nodiscard]] qreal chromeRatio() const;
     [[nodiscard]] qreal chromeTextScale() const;
     [[nodiscard]] QVariantMap windowGeometry() const;
-    [[nodiscard]] QVariantMap runtimeLinkState() const;
-    [[nodiscard]] QVariantMap runtimeLinkGeometry() const;
     [[nodiscard]] QVariantMap sidebarGeometry() const;
     [[nodiscard]] QVariantMap machineContext() const;
     [[nodiscard]] bool machineListCollapsed() const noexcept;
@@ -426,7 +426,6 @@ namespace telar::gui::qt {
     void configurationChanged();
     // The window was resized, or the sidebar shown, hidden, resized or its workspace list folded.
     void windowGeometryChanged();
-    void runtimeLinkChanged();
     void sidebarGeometryChanged();
     void dialogChanged();
     void terminalChanged(qulonglong pane_id);
@@ -595,7 +594,6 @@ namespace telar::gui::qt {
     void synchronizeTabStrip();
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
-    void openCopyLink(std::uint64_t pane_id, CellPosition point);
     void present(const PresentedFrame& frame);
     void prepareFrame(PresentedFrame& frame);
     void prepareTerminalFrames(PresentedFrame& frame);
@@ -684,7 +682,6 @@ namespace telar::gui::qt {
     std::optional<WindowFramePacer<>> frame_pacer_;
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
-    tbc::view<ExternalLinkOpener<ApplicationLinkHost, ApplicationController, MachineClientKey>, tbc::lt::self> link_opener_;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     WorkspacesController workspaces_;
@@ -695,6 +692,8 @@ namespace telar::gui::qt {
     PathPickerController paths_;
     MachinePromptController machine_prompt_;
     PeekController peek_;
+    LinkStatusController link_status_;
+    LinksController links_;
     CopyController copy_;
     NotificationsController notifications_;
     ComponentsController components_;

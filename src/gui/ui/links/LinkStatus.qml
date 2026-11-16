@@ -8,8 +8,8 @@ Item {
     objectName: "runtimeLinkStatus"
 
     required property var controller
-    readonly property var state: controller.runtimeLinkState
-    readonly property var regions: controller.runtimeLinkGeometry
+    readonly property var state: controller.linkStatus.state
+    readonly property var regions: controller.linkStatus.geometry
     readonly property var typography: controller.windowGeometry.typography
     readonly property var colors: controller.colors
 

@@ -60,7 +60,7 @@ namespace telar::gui::qt {
         static_cast<void>(runBinding(*action, &resolved));
       } else if (!url.empty()) {
         if (const auto target = LinkTarget::fromUri(url)) {
-          static_cast<void>(openLink(*target));
+          static_cast<void>(links_.open(*target));
         }
       }
     } catch (const std::exception& error) {

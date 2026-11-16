@@ -465,7 +465,7 @@ namespace telar::gui::qt {
     const auto current = link_hover_.openable(terminalSurface()) ? link_hover_.current() : std::nullopt;
     const auto opened = link_gesture_.finish(current, application_->viewVersion());
     if (opened) {
-      static_cast<void>(application_->openLink(opened->match.target, opened->pane_id));
+      static_cast<void>(application_->links_.open(opened->match.target, opened->pane_id));
     }
   }
 

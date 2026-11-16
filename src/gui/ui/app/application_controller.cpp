@@ -147,7 +147,6 @@ namespace telar::gui::qt {
         attachments_(store_, memory),
         key_bindings_(*this),
         pointer_dispatcher_(*this),
-        link_opener_(*this),
         sound_player_(*this),
         system_notifier_(memory),
         workspaces_(store_),
@@ -158,6 +157,8 @@ namespace telar::gui::qt {
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
         peek_(store_, activity_),
+        link_status_(store_),
+        links_(store_),
         copy_(store_),
         notifications_(store_),
         components_(store_, configuration_source_, element_slots_, memory),
@@ -185,7 +186,7 @@ namespace telar::gui::qt {
       showDialog(Dialog::copy_search);
     });
     connect(&copy_, &CopyController::linkRequested, this, [this](qulonglong pane_id, CellPosition cursor) {
-      openCopyLink(pane_id, cursor);
+      links_.openAt(pane_id, cursor);
     });
     connect(&copy_, &CopyController::closeRequested, this, [this] {
       showDialog(Dialog::none);
@@ -229,8 +230,9 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
     connect(&peek_, &PeekController::failed, this, &ApplicationController::reportFailure);
-    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::runtimeLinkChanged);
-    connect(this, &ApplicationController::machineChanged, this, &ApplicationController::runtimeLinkChanged);
+    connect(this, &ApplicationController::machineChanged, &link_status_, &LinkStatusController::publish);
+    connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
+    connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
     connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
     connect(workspaces_.rows(), &QAbstractItemModel::rowsInserted, this, &ApplicationController::sidebarGeometryChanged);
     connect(workspaces_.rows(), &QAbstractItemModel::rowsRemoved, this, &ApplicationController::sidebarGeometryChanged);
@@ -951,7 +953,7 @@ namespace telar::gui::qt {
       }
 
       const auto* focused = session().focusedPane();
-      if (!openLink(*target, focused == nullptr ? std::nullopt : std::optional{focused->id})) {
+      if (!links_.open(*target, focused == nullptr ? std::nullopt : std::optional{focused->id})) {
         throw EncodingError{"LinkOpeningUnavailable"};
       }
 

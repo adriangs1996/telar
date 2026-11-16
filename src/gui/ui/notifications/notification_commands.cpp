@@ -83,7 +83,7 @@ namespace telar::gui::qt {
       const auto bytes = uri.toUtf8();
 
       if (const auto link = LinkTarget::fromUri({bytes.constData(), static_cast<std::size_t>(bytes.size())})) {
-        static_cast<void>(openLink(*link));
+        static_cast<void>(links_.open(*link));
       }
     });
   }

@@ -159,7 +159,7 @@ namespace telar::gui::qt {
         static_cast<void>(runBinding(rendered->bindings[node.action], &rendered->actions));
       } else if (const auto url = rendered->view(node.url); !url.empty()) {
         if (const auto target = LinkTarget::fromUri(url)) {
-          static_cast<void>(openLink(*target));
+          static_cast<void>(links_.open(*target));
         }
       }
     } catch (const std::exception& error) {
