@@ -12,7 +12,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
-#include "ui/activity/agent_status_value.hpp"
+#include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/progress_value.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QString>

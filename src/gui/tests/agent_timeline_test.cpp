@@ -13,10 +13,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "ui/activity/agent_projection.hpp"
-#include "ui/activity/agent_status_value.hpp"
 #include "ui/activity/native_agent_status.hpp"
 #include "ui/chrome/sidebar_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QAbstractItemModel>
@@ -72,10 +72,10 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "ui/activity/agent_projection.hpp"
-#include "ui/activity/agent_status_value.hpp"
 #include "ui/activity/native_agent_status.hpp"
 #include "ui/chrome/sidebar_projection.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
+#include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
 

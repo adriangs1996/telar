@@ -4,9 +4,9 @@ static_assert(true);
 #endif
 
 #include "native_agent_status.hpp"
-#include "agent_status_value.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/scene/window_animation_clock.hpp"
 #include <QAnyStringView>
 #include <QPointer>

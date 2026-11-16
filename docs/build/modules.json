@@ -587,7 +587,7 @@
     "src/gui/platform/window.hpp": "Objective-C++ ABI",
     "src/gui/ui/activity/activity_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/activity/agent_projection.hpp": "Qt moc/QML integration",
-    "src/gui/ui/activity/agent_status_value.hpp": "Qt moc/QML integration",
+    "src/gui/ui/foundation/models/agent_status_value.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/alpha_mask.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/alpha_mask_material.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/alpha_mask_vertex.hpp": "Qt moc/QML integration",

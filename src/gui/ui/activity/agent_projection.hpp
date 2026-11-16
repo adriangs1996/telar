@@ -3,13 +3,13 @@
 static_assert(true);
 #endif
 
-#include "agent_status_value.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/screen.hpp"
+#include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
