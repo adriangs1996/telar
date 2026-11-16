@@ -199,7 +199,8 @@ namespace telar::gui::qt {
 
       connect(application_, &Application::configurationChanged, this, &TerminalItem::measure);
       connect(application_, &Application::machineChanged, this, &TerminalItem::invalidateMachine);
-      connect(application_, &Application::stateChanged, this, &TerminalItem::refreshLinkHover);
+      connect(application_, &Application::refreshed, this, &TerminalItem::refreshLinkHover);
+      connect(application_, &Application::copyModeChanged, this, &TerminalItem::refreshLinkHover);
       connect(application_, &Application::dialogChanged, this, &TerminalItem::refreshLinkHover);
       connect(application_, &Application::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
       connect(application_, &Application::inputReleasing, this, [this](qulonglong pane_id) {

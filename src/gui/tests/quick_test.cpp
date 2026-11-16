@@ -3510,6 +3510,13 @@ return {api_version=2, client={keybindings={
       const auto workspaces = client_->workspaces()->rebuilds();
       const auto tabs = client_->tabs()->rebuilds();
       const auto panes = client_->panes()->rebuilds();
+      // The window refreshes, but no property of it moves, so QML reads none of them again.
+      const QSignalSpy refreshes{client_.get(), &Application::refreshed};
+      const QSignalSpy title{client_.get(), &Application::titleChanged};
+      const QSignalSpy diagnostic{client_.get(), &Application::diagnosticChanged};
+      const QSignalSpy copy_mode{client_.get(), &Application::copyModeChanged};
+      const QSignalSpy attachments{client_.get(), &Application::attachmentGeometryChanged};
+      const QSignalSpy element_bars{client_.get(), &Application::elementBarsChanged};
 
       // Each selection commits and flushes before it returns; no runtime message runs in between.
       for (const auto row : {1, 0, 1}) {
@@ -3520,6 +3527,12 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->workspaces()->rebuilds(), workspaces);
       QCOMPARE(client_->tabs()->rebuilds(), tabs);
       QCOMPARE(client_->panes()->rebuilds(), panes);
+      QCOMPARE(refreshes.count(), 3);
+      QCOMPARE(title.count(), 0);
+      QCOMPARE(diagnostic.count(), 0);
+      QCOMPARE(copy_mode.count(), 0);
+      QCOMPARE(attachments.count(), 0);
+      QCOMPARE(element_bars.count(), 0);
     }
 
     Q_SLOT void historyCardPressCannotFollowAReplacedRecord() {

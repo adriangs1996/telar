@@ -87,7 +87,7 @@ namespace telar::gui::qt {
     // A block selected or left scrolls the pane, and copy mode may begin on it.
     if (session().takeBlockChange()) {
       emit terminalChanged(pane_id);
-      emit stateChanged();
+      publishStatus();
     }
 
     // A search of a command's output asks for its query.

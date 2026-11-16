@@ -155,7 +155,7 @@ namespace telar::gui::qt {
         source->session.connected(source->identity, RuntimeProtocol::readsRows(source->connection.schema()));
         summarizeMachine(source->key);
         if (key.machine.slot == store_.machines().active()) {
-          emit stateChanged();
+          publishStatus();
           emit hostMetricsChanged();
         }
       }
@@ -204,7 +204,7 @@ namespace telar::gui::qt {
 
     connect(&client.connection, &RuntimeConnection::errorChanged, this, [this, key] {
       if (findClient(key) != nullptr && key.machine.slot == store_.machines().active()) {
-        emit stateChanged();
+        publishStatus();
       }
     });
   }

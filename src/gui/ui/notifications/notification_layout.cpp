@@ -136,7 +136,7 @@ namespace telar::gui::qt {
     controller_ = controller;
     if (controller_) {
       connect(controller, &Application::notificationsChanged, this, &NotificationLayout::scheduleLayout);
-      connect(controller, &Application::stateChanged, this, &NotificationLayout::scheduleLayout);
+      connect(controller, &Application::refreshed, this, &NotificationLayout::scheduleLayout);
       connect(controller, &Application::windowGeometryChanged, this, &NotificationLayout::invalidate);
       connect(controller, &Application::configurationChanged, this, &NotificationLayout::invalidate);
       connect(controller, &QObject::destroyed, this, &NotificationLayout::invalidate);

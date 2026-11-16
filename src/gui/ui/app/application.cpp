@@ -197,7 +197,9 @@ namespace telar::gui::qt {
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
 
     connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
-    connect(this, &Application::stateChanged, this, &Application::statusModeChanged);
+    connect(this, &Application::copyModeChanged, this, &Application::statusModeChanged);
+    // The prefix mode lists the keymap's hints.
+    connect(this, &Application::configurationChanged, this, &Application::statusModeChanged);
     connect(this, &Application::configurationChanged, this, &Application::paletteChanged);
     connect(&store_, &Store::interacted, this, &Application::interacted);
     connect(&store_, &Store::changed, this, &Application::synchronize);
@@ -222,7 +224,7 @@ namespace telar::gui::qt {
     });
     connect(&history_, &HistoryController::failed, this, [this](const QString& message) {
       error_ = message;
-      emit stateChanged();
+      publishStatus();
     });
     connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
     connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
@@ -265,7 +267,7 @@ namespace telar::gui::qt {
 
     connect(&configuration_source_, &ConfigurationSource::failed, this, [this] {
       error_ = configuration_source_.error();
-      emit stateChanged();
+      publishStatus();
     });
 
     connect(&configuration_source_, &ConfigurationSource::themeChanged, this, [this] {
@@ -813,7 +815,7 @@ namespace telar::gui::qt {
       break;
     case Change::peek:
       refreshPeek();
-      emit stateChanged();
+      publishStatus();
       break;
     case Change::document:
       emit documentChanged(session().changedPane());
@@ -823,7 +825,7 @@ namespace telar::gui::qt {
       break;
     case Change::copy_mode:
       emit copySearchChanged();
-      emit stateChanged();
+      publishStatus();
       if (const auto& copy = session().copyMode().state()) {
         emit terminalChanged(copy->pane_id);
       }
@@ -968,7 +970,9 @@ namespace telar::gui::qt {
     }
 
     scheduleGraphicsRecovery();
-    emit stateChanged();
+    publishStatus();
+    publishAttachmentGeometry();
+    emit refreshed();
     reconsiderFrame();
   }
 
@@ -1170,7 +1174,7 @@ namespace telar::gui::qt {
         emit terminalChanged(session().changedPane());
       } else if (store_.dialog().kind == Dialog::none) {
         static_cast<void>(session().enterCopyMode());
-        emit stateChanged();
+        publishStatus();
         if (const auto& copy = session().copyMode().state()) {
           emit terminalChanged(copy->pane_id);
         }
@@ -1192,7 +1196,7 @@ namespace telar::gui::qt {
 
       session().leaveCopyMode();
       emit terminalChanged(pane_id);
-      emit stateChanged();
+      publishStatus();
     }
 
     showDialog(Dialog::none);
@@ -1340,7 +1344,7 @@ namespace telar::gui::qt {
 
   void Application::fail(const std::exception& error) {
     error_ = QString::fromUtf8(error.what());
-    emit stateChanged();
+    publishStatus();
   }
 
   // Each pane delegate reads the theme a score of times; it is built once per configuration.
@@ -1435,7 +1439,31 @@ namespace telar::gui::qt {
     error_.clear();
     session().dismissDiagnostic();
     connection().dismissError();
-    emit stateChanged();
+    publishStatus();
+  }
+
+  void Application::publishStatus() {
+    auto& published = published_status_;
+    auto title = this->title();
+    if (title != published.title) {
+      published.title = std::move(title);
+      emit titleChanged();
+    }
+
+    auto error = this->error();
+    auto tls_badge_color = tlsBadgeColor();
+    const auto connected = this->connected();
+    if (error != published.error || tls_badge_color != published.tls_badge_color || connected != published.connected) {
+      published.error = std::move(error);
+      published.tls_badge_color = std::move(tls_badge_color);
+      published.connected = connected;
+      emit diagnosticChanged();
+    }
+
+    if (const auto copy_mode = copyModeActive(); copy_mode != published.copy_mode) {
+      published.copy_mode = copy_mode;
+      emit copyModeChanged();
+    }
   }
 
   QString Application::error() const {

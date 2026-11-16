@@ -14,6 +14,7 @@ static_assert(true);
 #include <cstddef>
 #include <exception>
 #include <stdexcept>
+#include <utility>
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
@@ -56,8 +57,12 @@ namespace telar::gui::qt {
   void Application::refreshElementBars() {
     element_slots_.begin(ElementSlots::bar_slots);
     if (!element_slots_.active()) {
-      element_bars_.clear();
       element_slots_.finish(ElementSlots::bar_slots);
+      if (!element_bars_.isEmpty()) {
+        element_bars_.clear();
+        emit elementBarsChanged();
+      }
+
       return;
     }
 
@@ -68,8 +73,12 @@ namespace telar::gui::qt {
         {QStringLiteral("sidebar_visible"), sidebarVisible()},
     };
 
-    element_bars_ = element_slots_.elements(ElementSlots::bar_slots, QStringLiteral("window"), item);
+    auto bars = element_slots_.elements(ElementSlots::bar_slots, QStringLiteral("window"), item);
     element_slots_.finish(ElementSlots::bar_slots);
+    if (bars != element_bars_) {
+      element_bars_ = std::move(bars);
+      emit elementBarsChanged();
+    }
   }
 
   QVariantMap Application::elementBars() const {

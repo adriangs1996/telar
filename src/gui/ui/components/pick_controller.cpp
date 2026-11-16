@@ -75,7 +75,7 @@ namespace telar::gui::qt {
 
   void Application::pickFailed(const QString& message) {
     error_ = message;
-    emit stateChanged();
+    publishStatus();
   }
 
   void Application::openComponentPick(std::size_t index) {

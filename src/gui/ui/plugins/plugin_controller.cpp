@@ -92,7 +92,6 @@ namespace telar::gui::qt {
       applyPluginEffects(*result.effects);
 
       refresh();
-      emit stateChanged();
     } catch (const std::exception& error) {
       fail(error);
     }

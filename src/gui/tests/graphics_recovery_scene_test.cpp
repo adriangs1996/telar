@@ -186,7 +186,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!label->isVisible(), wait_ms);
       QVERIFY(!paneChrome(application).value(QStringLiteral("imagesPaused")).toBool());
 
-      const QSignalSpy connection_changes{&application, &Application::stateChanged};
+      const QSignalSpy connection_changes{&application, &Application::diagnosticChanged};
 
       runtime.send(GraphicsImageChunk{.header = resumed, .key = {.image_id = 1, .generation = 1}, .bytes = std::array<Byte, pixel_bytes>{}});
       QTRY_VERIFY_WITH_TIMEOUT(!application.connected(), wait_ms);

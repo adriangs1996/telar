@@ -119,6 +119,24 @@ namespace telar::gui::qt {
     return {{QStringLiteral("host"), global(host.pixels(host.cellArea()))}, {QStringLiteral("bounds"), global(bounds)}, {QStringLiteral("title"), local(geometry.title)}, {QStringLiteral("close"), local(geometry.close)}, {QStringLiteral("image"), local(geometry.image)}, {QStringLiteral("footer"), local(geometry.footer)}};
   }
 
+  void Application::publishAttachmentGeometry() {
+    const auto density = terminal_grid_.scale;
+    const auto* const tab = session().activeTab();
+    const auto shelf = tab != nullptr && attachments_.hasVisibleItems();
+    const AttachmentInputs inputs{
+        .host = session().workbenchGeometry(),
+        .terminal = displayMetrics(density).geometry.terminal,
+        .reserved = shelf ? tab->layout.reservedArea() : CellRectangle{},
+        .density = density,
+        .shelf = shelf,
+    };
+
+    if (published_attachments_ != inputs) {
+      published_attachments_ = inputs;
+      emit attachmentGeometryChanged();
+    }
+  }
+
   void Application::attachmentShelfChanged() {
     const bool active = !attachments_.modal().isEmpty();
     if (active != attachment_modal_active_) {

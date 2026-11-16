@@ -145,8 +145,8 @@ namespace telar::gui::qt {
     // QML names every enum value with its enum, so Action::palette and Dialog::palette do not clash.
     Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
     Q_PROPERTY(AttachmentShelf* attachments READ attachments CONSTANT)
-    Q_PROPERTY(QVariantMap attachmentGeometry READ attachmentGeometry NOTIFY stateChanged)
-    Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY stateChanged)
+    Q_PROPERTY(QVariantMap attachmentGeometry READ attachmentGeometry NOTIFY attachmentGeometryChanged)
+    Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY attachmentGeometryChanged)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -169,18 +169,18 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY configurationChanged)
     Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY configurationChanged)
     Q_PROPERTY(qreal windowControls READ windowControls NOTIFY windowGeometryChanged)
-    Q_PROPERTY(QString title READ title NOTIFY stateChanged)
+    Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
     Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
     Q_PROPERTY(QVariantMap componentBars READ componentBars NOTIFY componentsChanged)
     // Mod content for the top and bottom bars, by slot name; empty while QML draws them.
-    Q_PROPERTY(QVariantMap elementBars READ elementBars NOTIFY stateChanged)
+    Q_PROPERTY(QVariantMap elementBars READ elementBars NOTIFY elementBarsChanged)
     Q_PROPERTY(QVariantMap componentPanel READ componentPanel NOTIFY componentsChanged)
     Q_PROPERTY(QVariantMap componentPick READ componentPick NOTIFY pickChanged)
-    Q_PROPERTY(QString error READ error NOTIFY stateChanged)
-    Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY stateChanged)
-    Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
-    Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY stateChanged)
+    Q_PROPERTY(QString error READ error NOTIFY diagnosticChanged)
+    Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY diagnosticChanged)
+    Q_PROPERTY(bool connected READ connected NOTIFY diagnosticChanged)
+    Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY copyModeChanged)
     Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
     Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
     // The command whose output the scrollback search reads, empty while it reads the whole
@@ -470,7 +470,16 @@ namespace telar::gui::qt {
     void pathPickerChanged();
     void workspaceFormChanged();
     void pathPickerGeometryChanged();
-    void stateChanged();
+    void titleChanged();
+    // The error, the TLS proxy badge or whether the runtime is connected moved.
+    void diagnosticChanged();
+    void copyModeChanged();
+    // The attachment shelf's region or the attachment modal's layout moved.
+    void attachmentGeometryChanged();
+    void elementBarsChanged();
+    // Each refresh() of what the window shows from the active session, for the C++ views that
+    // compare what they read on their own. No property notifies with it.
+    void refreshed();
     void statusModeChanged();
     void hostMetricsChanged();
     void componentsChanged();
@@ -699,6 +708,11 @@ namespace telar::gui::qt {
     bool updateViewport(qreal width, qreal height);
     void observeFrames(QQuickWindow& window);
     void refresh();
+    // Notifies the title, diagnostic and copy mode properties whose value moved since they were
+    // last published.
+    void publishStatus();
+    // Notifies the attachment geometries when what they are measured from moved.
+    void publishAttachmentGeometry();
     void refreshAgents();
     void fitSidebarWhenReady();
     [[nodiscard]] float sidebarNaturalWidth() const;
@@ -910,6 +924,29 @@ namespace telar::gui::qt {
     QTimer notification_timer_;
     QTimer graphics_resume_timer_;
     QString error_;
+
+    // What the status properties last published, so publishStatus() notifies only what moved.
+    struct PublishedStatus {
+      QString title;
+      QString error;
+      QString tls_badge_color;
+      bool connected = false;
+      bool copy_mode = false;
+    };
+
+    // What the attachment geometries are measured from.
+    struct AttachmentInputs {
+      WorkbenchGeometry host;
+      Rect terminal;
+      CellRectangle reserved;
+      double density = 1;
+      bool shelf = false;
+
+      bool operator==(const AttachmentInputs&) const = default;
+    };
+
+    PublishedStatus published_status_;
+    std::optional<AttachmentInputs> published_attachments_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     QMetaObject::Connection screen_refresh_connection_;

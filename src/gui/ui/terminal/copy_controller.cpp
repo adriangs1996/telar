@@ -61,7 +61,7 @@ namespace telar::gui::qt {
       }
 
       emit terminalChanged(pane_id);
-      emit stateChanged();
+      publishStatus();
     } catch (const std::exception& error) {
       fail(error);
     }
@@ -80,7 +80,7 @@ namespace telar::gui::qt {
       emit terminalChanged(copy->pane_id);
     }
 
-    emit stateChanged();
+    publishStatus();
   }
 
   void Application::leaveKeyboardCopyMode() {
