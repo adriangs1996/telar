@@ -3,40 +3,12 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "ui/app/application_controller.hpp"
-#include <QString>
-#include <QtCore/qtmetamacros.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
+#include "application_controller.hpp"
 #include <cstdint>
 #include <exception>
-#include <fcntl.h>
-#include <limits.h>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <sys/stat.h>
-#include <tuple>
-#include <utility>
 #include <variant>
 
 import telar.gui.config.plugin_effects;
-import telar.gui.input.copy_pointer;
 import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {
