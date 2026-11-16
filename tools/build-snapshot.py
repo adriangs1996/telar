@@ -20,14 +20,22 @@ build directories compare: $BUILD (the tree), $ROOT (the repository), $TOOLCHAIN
 $QT and $DEPS (the shared caches, keeping their key directories) and $SDK. Paths
 are normalized lexically, so `lib/wire/../base/include` is `lib/base/include`.
 
-    build-snapshot.py record src/gui/out -o gui.json
-    build-snapshot.py diff gui.json src/gui/out
+    build-snapshot.py record out/dev -o dev.json
+    build-snapshot.py diff dev.json out/dev
+    build-snapshot.py diff runtime.json gui.json out/dev
 
-`diff` takes a snapshot file or a configured tree on each side, prints the
-differences grouped by kind and exits with 1 if there are any. Include
-directories that only change order are not a difference when no header could
-resolve differently: no file under one of the swapped directories exists under
-the other. That check reads the directories, so it needs the trees on disk.
+`diff` takes snapshot files or configured trees, prints the differences grouped
+by kind and exits with 1 if there are any. Include directories that only change
+order are not a difference when no header could resolve differently: no file
+under one of the swapped directories exists under the other. That check reads
+the directories, so it needs the trees on disk.
+
+A snapshot also records which source directory each directory of the tree
+builds, so trees that place a folder's outputs elsewhere compare: a path under
+a base tree's directory for src/gui is read as the same path under the new
+tree's directory for src/gui. With several base trees, the last tree is their
+union: each base is compared with what the new tree builds of it, and what the
+new tree builds that no base does is listed on its own.
 """
 import argparse
 import collections
@@ -40,7 +48,7 @@ import shlex
 import subprocess
 import sys
 
-VERSION = 1
+VERSION = 2
 # Arguments that only name files of the build directory, with the arguments they consume.
 DROPPED = {'-o': 1, '-c': 0, '-MD': 0, '-MMD': 0, '-MT': 1, '-MF': 1, '-MQ': 1}
 # Options whose value is a separate argument; they are recorded joined to it.
@@ -50,6 +58,8 @@ INCLUDES = ('-isystem', '-iquote', '-idirafter', '-iframework', '-I', '-F')
 OBJECT_DIR_RE = re.compile(r'(?:^|/)CMakeFiles/([^/]+)\.dir/')
 LINKER_RE = re.compile(r'^(\w+?)_(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY)_LINKER__')
 GROUP_LIMIT = 8
+INSTALL_HEADER = '# Install script for directory: '
+BUILD_PATH_RE = re.compile(r'\$BUILD((?:/[^/"\s:;,=]+)*)')
 
 
 def main():
@@ -59,8 +69,8 @@ def main():
     record_parser.add_argument('build', type=Path)
     record_parser.add_argument('-o', '--output', type=Path, help='file to write; standard output by default')
     diff_parser = commands.add_parser('diff', help='compare two snapshots or configured trees')
-    diff_parser.add_argument('base', type=Path)
-    diff_parser.add_argument('new', type=Path)
+    diff_parser.add_argument('trees', type=Path, nargs='+', metavar='tree',
+                             help='base snapshots or trees, then the new one')
     diff_parser.add_argument('-v', '--verbose', action='store_true', help='list every member of each group')
     args = parser.parse_args()
 
@@ -72,10 +82,26 @@ def main():
             sys.stdout.write(text)
         return 0
 
-    base, new = load(args.base), load(args.new)
-    report = compare(base, new)
+    if len(args.trees) < 2:
+        parser.error('diff needs a base and a new snapshot or tree')
+
+    *bases, new = map(load, args.trees)
+    if len(bases) == 1:
+        report = compare(relocate(bases[0], new), new)
+        print_report(report, args.verbose)
+        return 1 if report['failures'] else 0
+
+    failed = False
+    for path, base in zip(args.trees, bases):
+        print(f'== {path}')
+        report = compare(relocate(base, new), new, subset=True)
+        print_report(report, args.verbose)
+        failed = failed or bool(report['failures'])
+
+    print(f'== only in {args.trees[-1]}')
+    report = extra(bases, new)
     print_report(report, args.verbose)
-    return 1 if report['failures'] else 0
+    return 1 if failed or report['failures'] else 0
 
 
 def load(path):
@@ -104,11 +130,25 @@ def record(build):
         },
         # Where the placeholders pointed, so diff can read the directories it compares.
         'placeholders': paths.locations(),
+        'directories': source_directories(build, paths),
         'flag_sets': compiled['flag_sets'],
         'compile': compiled['sources'],
         'link': link_entries(build, paths, objects),
         'tests': test_entries(build, cache, paths),
     }
+
+
+def source_directories(build, paths):
+    """The source directory each directory of the tree builds, from its install script."""
+    directories = {}
+    for script in build.rglob('cmake_install.cmake'):
+        with script.open() as lines:
+            header = lines.readline()
+        if header.startswith(INSTALL_HEADER):
+            binary = script.parent.relative_to(build).as_posix()
+            directories['' if binary == '.' else binary] = paths.path(header[len(INSTALL_HEADER):].strip())
+
+    return directories
 
 
 def read_cache(build):
@@ -387,15 +427,55 @@ def normalize_value(value, paths):
 
 # Comparing.
 
-def compare(base, new):
-    """Differences grouped by kind: {kind: {description: [members]}}, and which kinds fail."""
+def relocate(base, new):
+    """The base snapshot with each path under one of its directories moved to the new
+    tree's directory for the same source directory."""
+    sources = {source: binary for binary, source in new.get('directories', {}).items()}
+    moves = {}
+    for binary, source in base.get('directories', {}).items():
+        if source in sources and sources[source] != binary:
+            moves[binary] = sources[source]
+    if not moves:
+        return base
+
+    def move(match):
+        path = match[1].lstrip('/')
+        parts = path.split('/') if path else []
+        for length in range(len(parts), -1, -1):
+            prefix = '/'.join(parts[:length])
+            if prefix in moves:
+                moved = '/'.join(filter(None, [moves[prefix], *parts[length:]]))
+                return '$BUILD' + ('/' + moved if moved else '')
+
+        return match[0]
+
+    return json.loads(BUILD_PATH_RE.sub(move, json.dumps(base)))
+
+
+def extra(bases, new):
+    """What the new tree compiles, links and tests that no base tree does."""
+    groups = collections.defaultdict(lambda: collections.defaultdict(list))
+    relocated = [relocate(base, new) for base in bases]
+    for field, kind, member in (('compile', 'compile', 'sources'), ('link', 'link', 'targets'), ('tests', 'tests', 'tests')):
+        known = set().union(*(base[field] for base in relocated))
+        for key in sorted(new[field].keys() - known):
+            groups[f'{kind}: only in new'][member].append(key)
+
+    return {'groups': groups, 'failures': list(groups)}
+
+
+def compare(base, new, subset=False):
+    """Differences grouped by kind: {kind: {description: [members]}}, and which kinds fail.
+    A subset base is one of several trees the new one unites, so what only the new tree
+    has is not a difference."""
     groups = collections.defaultdict(lambda: collections.defaultdict(list))
     directories = DirectoryIndex(new.get('placeholders', {}))
 
     for key in sorted(base['compile'].keys() - new['compile'].keys()):
         groups['compile: only in base']['sources'].append(key)
     for key in sorted(new['compile'].keys() - base['compile'].keys()):
-        groups['compile: only in new']['sources'].append(key)
+        if not subset:
+            groups['compile: only in new']['sources'].append(key)
     for key in sorted(base['compile'].keys() & new['compile'].keys()):
         before = base['flag_sets'][base['compile'][key]]
         after = new['flag_sets'][new['compile'][key]]
@@ -405,7 +485,8 @@ def compare(base, new):
     for key in sorted(base['link'].keys() - new['link'].keys()):
         groups['link: only in base']['targets'].append(key)
     for key in sorted(new['link'].keys() - base['link'].keys()):
-        groups['link: only in new']['targets'].append(key)
+        if not subset:
+            groups['link: only in new']['targets'].append(key)
     for key in sorted(base['link'].keys() & new['link'].keys()):
         for kind, description in compare_link(base['link'][key], new['link'][key]):
             groups[kind][description].append(key)
@@ -413,7 +494,8 @@ def compare(base, new):
     for key in sorted(base['tests'].keys() - new['tests'].keys()):
         groups['tests: only in base']['tests'].append(key)
     for key in sorted(new['tests'].keys() - base['tests'].keys()):
-        groups['tests: only in new']['tests'].append(key)
+        if not subset:
+            groups['tests: only in new']['tests'].append(key)
     for key in sorted(base['tests'].keys() & new['tests'].keys()):
         for field in ('command', 'properties'):
             # CTest names a command only once its executable exists, so a tree that

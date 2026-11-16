@@ -72,7 +72,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     base = Path(__file__).resolve().parents[1]
     root = base.parents[1]
-    parser.add_argument('--build', type=Path, default=base / 'out')
+    parser.add_argument('--build', type=Path, default=root / 'out/release', help='Release tree configured with the managed Qt')
     parser.add_argument('--runtime-prefix', type=Path, required=True)
     parser.add_argument('--output', type=Path, default=base / 'out-adoption' / 'Telar C++ Preview.app')
     parser.add_argument('--macdeployqt', type=Path, help='Explicit deployment tool override')
@@ -81,10 +81,12 @@ def main():
     args = parser.parse_args()
     if sys.platform != 'darwin':
         parser.error('macOS packaging must run on macOS')
-    build = args.build.resolve()
+    tree = args.build.resolve()
+    # The GUI's programs and QML modules are in its directory of the tree.
+    build = tree / 'src/gui'
     prefix = args.runtime_prefix.resolve()
     output = args.output.absolute()
-    cache = (build / 'CMakeCache.txt').read_text()
+    cache = (tree / 'CMakeCache.txt').read_text()
     if 'CMAKE_BUILD_TYPE:STRING=Release\n' not in cache:
         parser.error('the GUI build must be Release')
     if output.exists() or output.is_symlink():

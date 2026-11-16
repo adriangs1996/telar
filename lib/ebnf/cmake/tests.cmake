@@ -24,4 +24,4 @@ include(GoogleTest)
 gtest_discover_tests(ebnf_tests
   DISCOVERY_MODE PRE_TEST
   DISCOVERY_TIMEOUT 30
-  PROPERTIES TIMEOUT 30)
+  PROPERTIES TIMEOUT 30 LABELS lib.ebnf)

@@ -1,12 +1,3 @@
-cmake_minimum_required(VERSION 4.4.5)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
-project(telar_lua LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
-
-if(NOT TARGET telar-base)
-  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../base" "${CMAKE_BINARY_DIR}/telar-base")
-endif()
-
 set(TELAR_LUA_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../vendor/lua-5.5.1/src")
 set(TELAR_LUA_NAMES
   lapi lauxlib lbaselib lcode lcorolib lctype ldebug ldo ldump lfunc lgc
@@ -23,10 +14,10 @@ add_library(telar-lua-vm STATIC ${TELAR_LUA_SOURCES})
 target_include_directories(telar-lua-vm SYSTEM PUBLIC "${TELAR_LUA_SOURCE_DIR}")
 target_compile_definitions(telar-lua-vm PRIVATE LUA_USE_POSIX)
 target_link_libraries(telar-lua-vm PRIVATE telar::build_flags)
+# Position independent, as every telar library is: the runtime's test libraries are shared.
+set_target_properties(telar-lua-vm PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 telar_add_library(telar-lua
   SOURCES lua.cpp
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar-lua-vm telar::base)
-
-telar_editor_flags(telar-lua)

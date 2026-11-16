@@ -1,6 +1,3 @@
-if(NOT TARGET telar-config)
-  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../lib/config" "${CMAKE_BINARY_DIR}/telar-config")
-endif()
 # The configuration check validates icons with libghostty-vt.
 include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/deps/ghostty.cmake")
 file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}/../../../lib/config/bootstrap.lua" telar_window_config_bootstrap_file)

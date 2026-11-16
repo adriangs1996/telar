@@ -277,10 +277,8 @@ if(TELAR_GUI_NATIVE)
     pkg_check_modules(GUI_WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
     find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS WaylandCompositor
       PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
-    if(NOT TARGET Qt6::WaylandCompositorPrivate)
-      find_package(Qt6WaylandCompositorPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
-        PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6WaylandCompositorPrivate" NO_DEFAULT_PATH)
-    endif()
+    find_package(Qt6WaylandCompositorPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
+      PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6WaylandCompositorPrivate" NO_DEFAULT_PATH)
     telar_add_test(gui-background-effect-server QT NO_TEST SOURCES ${PROJECT_SOURCE_DIR}/tools/background_effect_server.cpp LIBRARIES gui-core Qt6::WaylandCompositorPrivate PkgConfig::GUI_WAYLAND_SERVER
       CHECKS lint lifetime blank_lines)
     qt_generate_wayland_protocol_server_sources(gui-background-effect-server FILES "${GUI_BACKGROUND_EFFECT_XML}")
@@ -316,7 +314,7 @@ if(TELAR_GUI_NATIVE)
     target_include_directories(gui-optical-text-test PRIVATE "${PROJECT_SOURCE_DIR}/platform/macos")
   endif()
   telar_add_test(gui-qt-dependency COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/test_qt_dependency.py"
-    LABELS gui.platform ENVIRONMENT "TELAR_GUI_QT_CACHE=${PROJECT_BINARY_DIR}/CMakeCache.txt" TIMEOUT 30)
+    LABELS gui.platform ENVIRONMENT "TELAR_GUI_QT_CACHE=${CMAKE_BINARY_DIR}/CMakeCache.txt" TIMEOUT 30)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Test
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
   # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.

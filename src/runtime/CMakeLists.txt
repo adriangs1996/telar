@@ -1,22 +1,8 @@
-cmake_minimum_required(VERSION 4.4.5)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
 project(telar_runtime LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
-telar_checks(PREFIX runtime)
 
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
 include(cmake/dependencies.cmake)
-add_subdirectory(../../lib/config "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
-add_subdirectory(../../lib/tls "${CMAKE_CURRENT_BINARY_DIR}/telar-tls")
-add_subdirectory(../../lib/native "${CMAKE_CURRENT_BINARY_DIR}/telar-native")
-
-# Static headless distribution builds must not acquire desktop dependencies.
-if(TELAR_LINUX_DISTRIBUTABLE)
-  option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" OFF)
-endif()
-include("${CMAKE_CURRENT_SOURCE_DIR}/../../lib/clipboard/cmake/library.cmake")
 
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_INCLUDES "${GHOSTTY_VT_INCLUDE_DIR}")
@@ -214,19 +200,13 @@ target_sources(runtime-core PRIVATE
 telar_modules(runtime-core
   MACOS_SOURCES platform/frameworks/frameworks.cppm redirect/record/record.cppm redirect/record/record.cpp
   LINUX_SOURCES platform/proc_file/proc_file.cppm platform/proc_file/proc_file.cpp)
-set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # Third-party headers, as the other dependencies': the project neither warns about nor annotates them.
 target_include_directories(runtime-core SYSTEM PUBLIC "${TELAR_NATIVE_INCLUDE_DIR}")
-if(NOT TARGET telar-render)
-  add_subdirectory(../../lib/render "${CMAKE_CURRENT_BINARY_DIR}/telar-render")
-endif()
 target_link_libraries(runtime-core PUBLIC tbc::tbc telar::config telar::native telar::tls telar-clipboard telar::render)
 target_link_libraries(runtime-core PUBLIC deps::nghttp2)
 target_link_libraries(runtime-core PUBLIC deps::pcap)
-add_subdirectory(../../lib/git "${CMAKE_CURRENT_BINARY_DIR}/telar-git")
 target_link_libraries(runtime-core PUBLIC telar::git)
-add_subdirectory(../../lib/ebnf "${CMAKE_CURRENT_BINARY_DIR}/ebnf")
 target_link_libraries(runtime-core PUBLIC ebnf::ebnf)
 target_link_libraries(runtime-core PUBLIC deps::zlib deps::brotli_decoder deps::brotli_encoder deps::brotli_common deps::zstd)
 target_link_libraries(runtime-core PUBLIC deps::ghostty_vt deps::sqlite3 Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
@@ -240,34 +220,12 @@ endif()
 target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)
 add_dependencies(runtime-core cell-layout command-specs)
 
-include(CTest)
 add_executable(telar-runtime main.cpp)
 target_link_libraries(telar-runtime PRIVATE runtime-core)
 telar_register_checks(runtime-core telar-runtime ghostty-manifest CHECKS ${TELAR_CHECKS})
 install(TARGETS telar-runtime RUNTIME DESTINATION bin)
 # The pinned libraries are linked into both executables; their licenses travel with them.
 install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREFIX}/share/licenses/" DESTINATION share/telar/licenses)
-
-# `telar server` and the endpoint discovery start the runtime installed beside the CLI,
-# and panes get the CLI beside the runtime, so both build into the same directory.
-add_subdirectory(../cli "${CMAKE_CURRENT_BINARY_DIR}/cli")
-set_target_properties(telar PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-
-if(TELAR_SANITIZERS AND TELAR_RUNTIME_DISTRIBUTABLE)
-  message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
-endif()
-
-# The installed executables may link only the base system (glibc on Linux);
-# every distributable build checks it.
-if(TELAR_RUNTIME_DISTRIBUTABLE)
-  set(TELAR_LINKAGE_KIND "$<IF:$<PLATFORM_ID:Darwin>,macos,linux-headless>")
-  add_custom_target(distributable-linkage ALL
-    COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" "${TELAR_LINKAGE_KIND}"
-            "$<TARGET_FILE:telar-runtime>" "$<TARGET_FILE:telar>" "$<TARGET_FILE:telar-config-check>"
-    DEPENDS telar-runtime telar telar-config-check
-    VERBATIM)
-endif()
 
 if(BUILD_TESTING)
   add_subdirectory(tests)

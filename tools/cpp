@@ -15,6 +15,9 @@ PROJECTS = {'runtime': 'src/runtime', 'cli': 'src/cli',
             'gui': 'src/gui', 'auth': 'src/auth-daemon',
             **{name: 'lib/' + name for name in ('base', 'sys', 'vocabulary', 'wire', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
             'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf'}
+# Every project but tbc is the root project with the processes it builds; a library
+# builds with none.
+PROCESSES = {'runtime': ('RUNTIME', 'CLI'), 'cli': ('CLI',), 'gui': ('GUI',), 'auth': ('AUTH',)}
 CACHE = ROOT / '.toolchain'
 
 
@@ -126,12 +129,15 @@ def main():
             llvm = (CACHE / 'bin/clang').resolve().parents[1]
             options += ['-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'),
                         '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
-        needs_vt = args.project in ('runtime', 'cli', 'gui', 'config')
-        if needs_vt and not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
-            options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))
+        if args.project != 'tbc':
+            selected = PROCESSES.get(args.project, ())
+            options += [f'-DTELAR_BUILD_{process}=' + ('ON' if process in selected else 'OFF')
+                        for process in ('RUNTIME', 'CLI', 'GUI', 'AUTH')]
+            if not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
+                options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))
         if args.headless:
             options += ['-DTELAR_CLIPBOARD_NATIVE=OFF', '-DTELAR_GUI_NATIVE=OFF']
-        command = ['cmake', '-S', str(source), '-B', str(build), '-G', 'Ninja', *options, *extra]
+        command = ['cmake', '-S', str(ROOT if args.project != 'tbc' else source), '-B', str(build), '-G', 'Ninja', *options, *extra]
         # Ninja already regenerates a configured tree when its CMake inputs change,
         # so only a changed command line or toolchain has to run CMake here.
         identity = hashlib.sha256('\0'.join(command).encode() + chain.read_bytes()).hexdigest()

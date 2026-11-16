@@ -1,11 +1,7 @@
-cmake_minimum_required(VERSION 4.4.5)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_gui LANGUAGES C CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
-telar_checks(PREFIX gui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
-# clangd, gui-lint and per-file incremental rebuilds need one compile command per source.
+# clangd, lint and per-file incremental rebuilds need one compile command per source.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(telar_gui_batch_default 0)
 else()
@@ -14,11 +10,6 @@ endif()
 set(TELAR_GUI_BATCH_SIZE ${telar_gui_batch_default} CACHE STRING "Sources compiled together in gui-quick; 0 compiles each one alone")
 
 get_filename_component(TELAR_ROOT "../.." ABSOLUTE)
-add_subdirectory("${TELAR_ROOT}/lib/config" "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
-add_subdirectory("${TELAR_ROOT}/lib/machines" "${CMAKE_CURRENT_BINARY_DIR}/telar-machines")
-add_subdirectory("${TELAR_ROOT}/lib/shell" "${CMAKE_CURRENT_BINARY_DIR}/telar-shell")
-add_subdirectory("${TELAR_ROOT}/lib/render" "${CMAKE_CURRENT_BINARY_DIR}/telar-render")
-add_subdirectory("${TELAR_ROOT}/lib/ebnf" "${CMAKE_CURRENT_BINARY_DIR}/ebnf")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(Threads REQUIRED)
 
@@ -148,7 +139,6 @@ target_compile_options(telar-gui-command PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(telar-gui-command PRIVATE telar::build_flags)
 
 add_library(gui-config INTERFACE)
-include("${TELAR_ROOT}/cmake/deps/ghostty.cmake")
 target_link_libraries(gui-core PUBLIC deps::ghostty_vt)
 target_link_libraries(gui-config INTERFACE gui-core deps::ghostty_vt)
 target_include_directories(gui-config INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -164,8 +154,6 @@ file(GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/clangd/domain/compile_flags.txt"
   CONTENT "-xc++\n-std=c++${CMAKE_CXX_STANDARD}\n-I$<JOIN:$<REMOVE_DUPLICATES:$<TARGET_PROPERTY:gui-editor-context,INTERFACE_INCLUDE_DIRECTORIES>>,\n-I>\n-D$<JOIN:$<TARGET_PROPERTY:gui-editor-context,INTERFACE_COMPILE_DEFINITIONS>,\n-D>\n")
 
-include(CTest)
-
 if(TELAR_GUI_NATIVE)
   add_library(gui-fonts STATIC fonts/face/face.cpp fonts/face/ligature_coverage.cpp fonts/font_requests/font_requests.cpp fonts/row_text_layout/row_text_layout.cpp)
   target_link_libraries(gui-fonts PUBLIC gui-core gui-harfbuzz)
@@ -175,10 +163,8 @@ if(TELAR_GUI_NATIVE)
   include(cmake/qt.cmake)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Gui Qml Quick QuickControls2 Network Concurrent ShaderTools Svg
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
-  if(NOT TARGET Qt6::GuiPrivate)
-    find_package(Qt6GuiPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
-      PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
-  endif()
+  find_package(Qt6GuiPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
+    PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
   add_library(gui-surface-command STATIC ui/components/surface_command.cpp)
   target_link_libraries(gui-surface-command PUBLIC gui-posix Qt6::Core)
@@ -226,10 +212,8 @@ if(TELAR_GUI_NATIVE)
     find_package(Fontconfig REQUIRED)
     find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS WaylandClient
       PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
-    if(NOT TARGET Qt6::WaylandClientPrivate)
-      find_package(Qt6WaylandClientPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
-        PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6WaylandClientPrivate" NO_DEFAULT_PATH)
-    endif()
+    find_package(Qt6WaylandClientPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
+      PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6WaylandClientPrivate" NO_DEFAULT_PATH)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GUI_WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
     pkg_check_modules(GUI_XCB REQUIRED IMPORTED_TARGET xcb)
@@ -319,7 +303,7 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-quick PRIVATE ui/config/configuration_loader.cpp)
   target_sources(gui-quick PRIVATE ui/app/notification_commands.cpp ui/app/graphics_recovery.cpp ui/notifications/notifications_controller.cpp ui/notifications/notifications_controller.hpp ui/app/window_geometry.cpp ui/app/application_effects.cpp ui/foundation/machines/machine_effects.cpp ui/foundation/machines/machine_effects.hpp)
   add_custom_target(gui-editor-ui
-    COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_editor_database.py" --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_editor_database.py" --build-dir "${CMAKE_BINARY_DIR}"
     DEPENDS tools/create_editor_database.py
     VERBATIM)
   add_dependencies(gui-editor gui-editor-ui)

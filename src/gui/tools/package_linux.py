@@ -63,15 +63,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     base = Path(__file__).resolve().parents[1]
     root = base.parents[1]
-    parser.add_argument('--build', type=Path, required=True, help='Release GUI build configured with the managed Qt')
+    parser.add_argument('--build', type=Path, required=True, help='Release tree configured with the managed Qt')
     parser.add_argument('--headless', type=Path, required=True, help='Unpacked headless tree whose bin holds the static tools')
     parser.add_argument('--output', type=Path, required=True, help='New directory to stage the tree in')
     args = parser.parse_args()
     if not sys.platform.startswith('linux'):
         parser.error('Linux packaging must run on Linux')
-    build = args.build.resolve()
+    tree = args.build.resolve()
+    # The GUI's programs and QML modules are in its directory of the tree.
+    build = tree / 'src/gui'
     output = args.output.absolute()
-    cache = (build / 'CMakeCache.txt').read_text()
+    cache = (tree / 'CMakeCache.txt').read_text()
     if 'CMAKE_BUILD_TYPE:STRING=Release\n' not in cache:
         parser.error('the GUI build must be Release')
     if output.exists() or output.is_symlink():

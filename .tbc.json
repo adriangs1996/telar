@@ -1,0 +1,4 @@
+{
+  "build_directory": "out/dev",
+  "linter": "lib/tbc/out/release/tbc-lint"
+}

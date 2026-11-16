@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Install a module package privately and compile an external source consumer."""
+"""Install the telar-base module package of a tree privately and compile an external source consumer.
+
+The tree builds the package's archives first: cmake --build <tree> --target telar-base.
+"""
 import argparse
 import os
 from pathlib import Path
@@ -27,7 +30,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='telar-module-consumer-') as directory:
         directory = Path(directory)
         stage, source, consumer = (directory / name for name in ('stage', 'source', 'build'))
-        run(cmake, '--install', build, '--prefix', stage)
+        run(cmake, '--install', build, '--component', package, '--prefix', stage)
         if list(stage.rglob('*.pcm')) or list(stage.rglob('*.bmi')):
             raise RuntimeError('The package must distribute sources, not local BMIs')
         source.mkdir()
