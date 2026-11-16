@@ -7,7 +7,7 @@ import Telar.Gui
 Item {
     id: root
 
-    required property var application
+    required property DocumentsController controller
     required property string paneId
     required property var view
     property var colors: ({})
@@ -35,11 +35,11 @@ Item {
 
             function report() {
                 // A deferred call may run after the document went and its delegate with it.
-                if (typeof root === "undefined" || !root || !root.application || typeof inlineDocument === "undefined" || !inlineDocument) {
+                if (typeof root === "undefined" || !root || !root.controller || typeof inlineDocument === "undefined" || !inlineDocument) {
                     return;
                 }
                 if (inlineDocument.shown && zone.cell > 0 && body.implicitHeight > 0) {
-                    root.application.documents.measure(root.paneId, zone.modelData.id, zone.needed);
+                    root.controller.measure(root.paneId, zone.modelData.id, zone.needed);
                 }
             }
 
@@ -60,7 +60,7 @@ Item {
 
             NativeDocument {
                 id: inlineDocument
-                controller: root.application.documents
+                controller: root.controller
                 paneId: root.paneId
                 documentId: zone.modelData.id
                 colors: root.colors

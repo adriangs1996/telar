@@ -8,7 +8,7 @@ Item {
     id: root
     objectName: "documentView"
 
-    required property var application
+    required property DocumentsController controller
     required property string paneId
     property var colors: ({})
     property var grid: ({})
@@ -17,6 +17,8 @@ Item {
     property Item focusTarget: null
 
     readonly property bool shown: nativeDocument.shown
+    // A click on the document while it can take the keyboard: the window focuses the pane.
+    signal focusRequested(string paneId)
 
     visible: shown
 
@@ -48,7 +50,7 @@ Item {
 
     NativeDocument {
         id: nativeDocument
-        controller: root.application.documents
+        controller: root.controller
         paneId: root.paneId
         colors: root.colors
         monoFamily: documentTheme.monoFamily
@@ -64,7 +66,7 @@ Item {
     TapHandler {
         onTapped: {
             if (root.focusTarget) {
-                root.application.execute(WindowActions.Action.focus_pane, root.paneId);
+                root.focusRequested(root.paneId);
                 root.focusTarget.forceActiveFocus();
             }
         }

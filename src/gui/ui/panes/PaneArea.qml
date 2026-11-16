@@ -332,7 +332,7 @@ Item {
                 InlineDocuments {
                     anchors.fill: parent
                     transform: Translate { y: -viewport.rise }
-                    application: root.application
+                    controller: root.application.documents
                     paneId: pane.record.key
                     view: terminal
                     colors: root.application.colors
@@ -399,12 +399,13 @@ Item {
                 DocumentView {
                     anchors.fill: parent
                     z: 4
-                    application: root.application
+                    controller: root.application.documents
                     paneId: pane.record.key
                     colors: root.application.colors
                     grid: root.application.windowGeometry.typography.grid
                     ratio: root.ratio
                     focusTarget: terminal
+                    onFocusRequested: paneId => root.application.execute(WindowActions.Action.focus_pane, paneId)
                 }
             }
 
