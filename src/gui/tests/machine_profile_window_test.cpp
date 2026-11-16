@@ -17,7 +17,7 @@ static_assert(true);
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/machines/machine_profiles_source.hpp"
+#include "ui/machine_prompt/machine_profiles_source.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -61,7 +61,7 @@ static_assert(true);
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/machines/machine_profiles_source.hpp"
+#include "ui/machine_prompt/machine_profiles_source.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

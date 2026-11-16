@@ -12,7 +12,7 @@ static_assert(true);
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/machines/machine_profiles_source.hpp"
+#include "ui/machine_prompt/machine_profiles_source.hpp"
 #include <QLatin1StringView>
 #include <QString>
 #include <QVariantList>

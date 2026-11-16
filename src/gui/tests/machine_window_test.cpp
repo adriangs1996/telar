@@ -80,7 +80,7 @@ static_assert(true);
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/links/external_link_opener.hpp"
-#include "ui/machines/machine_chrome_layout.hpp"
+#include "ui/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/terminal/terminal_item.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
@@ -145,7 +145,7 @@ static_assert(true);
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/links/external_link_opener.hpp"
-#include "ui/machines/machine_chrome_layout.hpp"
+#include "ui/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/terminal/terminal_item.hpp"
 
 import telar.gui.tests.activity_fixture;

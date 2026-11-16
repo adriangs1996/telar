@@ -12,7 +12,8 @@ documents       app/panes/documents
 fonts           foundation/fonts
 history         app/overlays/history
 links           app/panes/terminal/links
-machines        app/chrome/components/machine_chrome
+machine_chrome  app/chrome/components/machine_chrome
+machine_prompt  app/overlays/machine_prompt
 notifications   app/overlays/notifications
 palette         app/overlays/palette
 panes           app/panes

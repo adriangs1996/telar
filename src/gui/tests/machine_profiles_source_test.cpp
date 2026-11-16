@@ -11,7 +11,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "ui/machines/machine_profiles_source.hpp"
+#include "ui/machine_prompt/machine_profiles_source.hpp"
 #include <QElapsedTimer>
 #include <QObject>
 #include <QSignalSpy>
@@ -46,7 +46,7 @@ static_assert(true);
 #include <system_error>
 
 #include "application/dependencies.hpp"
-#include "ui/machines/machine_profiles_source.hpp"
+#include "ui/machine_prompt/machine_profiles_source.hpp"
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;
