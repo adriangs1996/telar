@@ -346,5 +346,71 @@
       "gui-glyphs": "no link consumer; add_dependencies of gui-lint, gui-lifetime, gui-interface-bodies, gui-blank-lines",
       "gui-clock": "linked by gui-awake-clock-test and gui-wall-clock-test"
     }
+  },
+  "fb3": {
+    "commit": "3b6f15c0d74fabdaf427c58c3f318d04a44acc7b",
+    "date": "2026-11-16",
+    "machine": {
+      "system": "Darwin 25.6.0 arm64",
+      "cpus": 8,
+      "memory_mib": 16384
+    },
+    "note": "One tree, out/dev, replaces the runtime, gui, cli and auth trees. Another agent shared the machine; builds were serialized with it, but its other work shows in the load averages. The older per-process trees under src/gui were moved out of the way while measuring: qmlimportscanner walks src/gui at configure and reads the QML they hold.",
+    "tree": {
+      "directory": "out/dev",
+      "configure": "tools/cpp configure dev -- -DTELAR_GUI_TEST_RUNTIME=<root>/.dev/bin/telar"
+    },
+    "snapshot": {
+      "compiled_sources": 1586,
+      "flag_sets": 174,
+      "linked": {
+        "static": 43,
+        "executable": 238,
+        "shared": 1
+      },
+      "tests": 198
+    },
+    "cold_build": {
+      "how": "Configured and built from an empty out/dev with tools/cpp, memory sampled as tools/module-metrics.py does. build_production builds telar-runtime, telar, telar-gui and telar-gui-command; build_all then builds the rest of the default target, which now also holds the library tests and the ebnf and clipboard executables.",
+      "configure_seconds": 14.5,
+      "configure_peak_memory_mib": 109,
+      "configure_load_average": 2.5,
+      "build_production_seconds": 120.7,
+      "build_production_peak_memory_mib": 2373,
+      "build_production_load_average": 6.4,
+      "build_all_seconds": 103.0,
+      "build_all_peak_memory_mib": 2588,
+      "build_all_load_average": 9.0,
+      "production_seconds": 120.7,
+      "all_seconds": 223.7,
+      "peak_memory_mib": 2588
+    },
+    "gui_release_batch_units": 10,
+    "problems": {
+      "B1": {
+        "if_not_target_lines": 0
+      },
+      "B2": {
+        "compile_units_in_both_old_trees": 139,
+        "objects": 80,
+        "module_interfaces": 59,
+        "compiled_in_the_single_tree": 139,
+        "times_each": 1,
+        "targets_compiling_a_source_twice": 0
+      },
+      "B3": {
+        "deployment_target": "26.0 in cmake/TelarToolchain.cmake for every process and managed dependency on macOS"
+      },
+      "B14": {
+        "presets": [
+          "dev",
+          "release",
+          "dist",
+          "sanitize",
+          "ci"
+        ],
+        "separate_project": "lib/tbc"
+      }
+    }
   }
 }
