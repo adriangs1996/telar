@@ -3,12 +3,12 @@
 static_assert(true);
 #endif
 
+#include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/fonts/typography_projection.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QQuickWindow>
@@ -51,13 +51,6 @@ namespace telar::gui::qt {
     attachments_.setDisplay(display);
     notifications_.setDisplay(display, terminal_grid_);
     sidebar_.setDisplay(display);
-  }
-
-  QVariantMap ApplicationController::machineContext() const {
-    return {
-        {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
-        {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
-    };
   }
 
   qreal ApplicationController::chromeRatio() const {

@@ -873,7 +873,7 @@ if(TELAR_GUI_NATIVE)
   set_source_files_properties(ui/history/history_empty_layout.cpp ui/history/history_loading_layout.cpp ui/history/history_selection_layout.cpp ui/history/history_row_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   target_sources(gui-quick PRIVATE ui/terminal/terminal_pointer.cpp ui/terminal/terminal_scroll.cpp ui/terminal/terminal_links.cpp ui/links/link_preview.cpp ui/input/pointer_dispatcher.cpp ui/input/native_pointer_events.cpp ui/history/history_scroll_events.cpp)
   target_sources(gui-quick PRIVATE ui/config/configuration_loader.cpp)
-  target_sources(gui-quick PRIVATE ui/app/notification_commands.cpp ui/app/graphics_recovery.cpp ui/notifications/notifications_controller.cpp ui/notifications/notifications_controller.hpp ui/chrome/chrome_commands.cpp ui/app/application_effects.cpp)
+  target_sources(gui-quick PRIVATE ui/app/notification_commands.cpp ui/app/graphics_recovery.cpp ui/notifications/notifications_controller.cpp ui/notifications/notifications_controller.hpp ui/app/window_geometry.cpp ui/app/application_effects.cpp)
   add_custom_target(gui-editor-ui
     COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_editor_database.py" --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS tools/create_editor_database.py
@@ -908,7 +908,7 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-quick PRIVATE ui/scene/window_animation_clock.cpp ui/chrome/native_tab_activity.cpp ui/chrome/native_tab_activity.hpp ui/controls/native_progress_ring.cpp ui/controls/native_progress_ring.hpp)
   target_sources(gui-quick PRIVATE ui/panes/native_pane_attention.cpp ui/panes/native_pane_attention.hpp)
   set_source_files_properties(ui/panes/native_pane_attention.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  set_source_files_properties(ui/panes/pane_header_layout.cpp ui/chrome/chrome_commands.cpp ui/chrome/sidebar_controller.cpp ui/notifications/notification_layout.cpp ui/scene/window_animation_clock.cpp ui/chrome/native_tab_activity.cpp ui/controls/native_progress_ring.cpp ui/activity/native_agent_status.cpp ui/scene/rounded_rectangle_scene.cpp ui/scene/software_rounded_rectangle.cpp ui/controls/native_rounded_rectangle.cpp ui/controls/provider_artwork.cpp ui/scene/chrome_text_scene.cpp ui/scene/chrome_icon_scene.cpp ui/controls/native_chrome_icon.cpp ui/controls/native_cell_text.cpp ui/chrome/native_mode_layout.cpp ui/chrome/tab_strip_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  set_source_files_properties(ui/panes/pane_header_layout.cpp ui/app/window_geometry.cpp ui/chrome/sidebar_controller.cpp ui/notifications/notification_layout.cpp ui/scene/window_animation_clock.cpp ui/chrome/native_tab_activity.cpp ui/controls/native_progress_ring.cpp ui/activity/native_agent_status.cpp ui/scene/rounded_rectangle_scene.cpp ui/scene/software_rounded_rectangle.cpp ui/controls/native_rounded_rectangle.cpp ui/controls/provider_artwork.cpp ui/scene/chrome_text_scene.cpp ui/scene/chrome_icon_scene.cpp ui/controls/native_chrome_icon.cpp ui/controls/native_cell_text.cpp ui/chrome/native_mode_layout.cpp ui/chrome/tab_strip_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   qt_add_shaders(gui-quick gui-curve-shaders
     PREFIX "/telar/shaders"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/scene/shaders"

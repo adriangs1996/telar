@@ -1514,6 +1514,13 @@ namespace telar::gui::qt {
     return metricsRecord(session().hostMetrics());
   }
 
+  QVariantMap ApplicationController::machineContext() const {
+    return {
+        {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
+        {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
+    };
+  }
+
   QString ApplicationController::tlsBadgeColor() const {
     const auto& proxy = session().proxyStatus();
     if (!proxy.active && !proxy.system_trusted) {
