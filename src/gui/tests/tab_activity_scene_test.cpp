@@ -15,10 +15,10 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
-#include "ui/activity/native_agent_status.hpp"
-#include "ui/chrome/native_tab_activity.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
+#include "ui/controls/native_agent_status.hpp"
 #include "ui/controls/native_progress_ring.hpp"
+#include "ui/controls/native_tab_activity.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/progress_value.hpp"
@@ -76,10 +76,10 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-#include "ui/activity/native_agent_status.hpp"
-#include "ui/chrome/native_tab_activity.hpp"
 #include "ui/chrome/tab_strip_layout.hpp"
+#include "ui/controls/native_agent_status.hpp"
 #include "ui/controls/native_progress_ring.hpp"
+#include "ui/controls/native_tab_activity.hpp"
 #include "ui/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/progress_value.hpp"
