@@ -119,8 +119,8 @@ from wherever it is unpacked. `telar` finds `telar-gui` and `telar-runtime`
 beside the file a symlink resolves to.
 
 The build for servers, where remote mode runs the runtime, is the C++
-runtime and CLI without a window: `src/runtime` builds `telar`,
-`telar-runtime` and `telar-config-check` side by side. The release makes
+runtime and CLI without a window: the `dist` preset of `CMakePresets.json`
+builds `telar`, `telar-runtime` and `telar-config-check` side by side. The release makes
 them static musl executables ([details](#the-linux-headless-build)), and
 the desktop archive carries the same files.
 
@@ -223,8 +223,9 @@ The labels come from GitHub's
 Both Linux architectures build on native runners, so every archive is built
 and smoke-tested on the architecture it ships for.
 
-`packaging/release/macos.sh` pins the macOS deployment target to 26.0 with
-`CMAKE_OSX_DEPLOYMENT_TARGET` for the runtime and the GUI.
+`cmake/TelarToolchain.cmake` sets the macOS deployment target,
+`CMAKE_OSX_DEPLOYMENT_TARGET`, to 26.0 for every process and managed
+dependency, and `packaging/release/macos.sh` pins the same value.
 
 `packaging/release/check-linkage.sh` fails the build when a binary links
 anything outside that table or asks for glibc newer than 2.38 or a

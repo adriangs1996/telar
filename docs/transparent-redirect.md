@@ -145,7 +145,7 @@ exclusions and restoration after shutdown:
 
 ```sh
 /usr/bin/python3 src/runtime/tools/check_incoming.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --ssh-client CONTROLLED_HOST --live
 ```
 
@@ -337,9 +337,9 @@ so a retry does not release the same reference twice.
 From the repository root:
 
 ```sh
-cmake --build src/runtime/out --target telar-runtime redirect-tests tls-tests
-ctest --test-dir src/runtime/out -R '^(redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
-python3 src/runtime/tools/check_redirect.py --runtime src/runtime/out/telar-runtime
+cmake --build out/dev --target telar-runtime redirect-tests tls-tests
+ctest --test-dir out/dev -R '^(redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
+python3 src/runtime/tools/check_redirect.py --runtime out/dev/src/runtime/telar-runtime
 ```
 
 The tests cover native PF syntax, target validation, startup rollback and stale
@@ -355,7 +355,7 @@ For native acceptance, run this as your account in a terminal:
 
 ```sh
 python3 src/runtime/tools/check_redirect.py \
-  --runtime src/runtime/out/telar-runtime --live
+  --runtime out/dev/src/runtime/telar-runtime --live
 ```
 
 It asks sudo only for administrative helper operations. It redirects ephemeral
@@ -375,7 +375,7 @@ The separate process-selection acceptance check is:
 
 ```sh
 /usr/bin/python3 src/runtime/tools/check_redirect.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --live --process-selection --ssh-origin YOUR_CONTROLLED_LAN_HOST
 ```
 
@@ -396,7 +396,7 @@ the selected child process when combined with `--process-selection`.
 
 ```sh
 /usr/bin/python3 src/runtime/tools/check_redirect.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --ssh-origin CONTROLLED_HOST --bound-interface IFACE --live
 ```
 

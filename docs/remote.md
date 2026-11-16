@@ -28,8 +28,8 @@ CLI without a GUI, using the headless profile of the
 
 ```sh
 tools/cpp bootstrap
-tools/cpp configure runtime -B .dev/runtime-headless --config Release --headless
-tools/cpp build runtime -B .dev/runtime-headless -- --target telar telar-runtime telar-config-check
+tools/cpp configure release -B .dev/runtime-headless --headless -- -DTELAR_BUILD_GUI=OFF -DTELAR_BUILD_AUTH=OFF
+tools/cpp build release -B .dev/runtime-headless -- --target telar telar-runtime telar-config-check
 ```
 
 Put `telar`, `telar-runtime` and `telar-config-check` together on the remote

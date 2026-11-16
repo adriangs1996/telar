@@ -2,16 +2,17 @@
 
 ## Builds
 
-One build directory per variant; never overwrite a measured one. Release
-builds keep the probes (`BUILD_TESTING` stays on), but the default target skips
-them, so name `runtime-probes` and `gui-probes` beside it:
+One tree per variant; never overwrite a measured one. A Release tree keeps the
+probes only with `BUILD_TESTING` on, and the default target skips them, so name
+`runtime-probes` and `gui-probes` beside it:
 
 ```sh
-tools/cpp configure runtime -B $SCRATCH/A/runtime --config Release
-tools/cpp build runtime -B $SCRATCH/A/runtime -- --target all runtime-probes
-tools/cpp configure gui -B $SCRATCH/A/gui --config Release -- -DTELAR_GUI_QT_BUILD_DIR="$PWD/.qt-cache"
-tools/cpp build gui -B $SCRATCH/A/gui -- --target all gui-probes
+tools/cpp configure release -B $SCRATCH/A -- -DBUILD_TESTING=ON
+tools/cpp build release -B $SCRATCH/A -- --target all runtime-probes gui-probes
 ```
+
+The runtime's programs and probes are in `$SCRATCH/A/src/runtime`, the GUI's in
+`$SCRATCH/A/src/gui`.
 
 `-DTELAR_DIAGNOSTICS=ON` adds the allocation and timing counters of Debug to
 an optimized build; use them for work census, never for timing.

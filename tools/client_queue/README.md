@@ -18,8 +18,8 @@ tools/client_queue/instrument.py ../queue-head
 tools/client_queue/instrument.py ../queue-main
 
 # Head: the pinned toolchain, Release.
-(cd ../queue-head && tools/setup-checkout && tools/cpp configure runtime -B out/release --config Release \
-  && tools/cpp build runtime -B out/release --target telar telar-runtime checkpoint-probe pane-traffic-probe)
+(cd ../queue-head && tools/setup-checkout && tools/cpp configure release -- -DBUILD_TESTING=ON -DTELAR_BUILD_GUI=OFF \
+  && tools/cpp build release -- --target telar telar-runtime checkpoint-probe pane-traffic-probe)
 
 # main: as its CI builds services/runtime-cpp (Homebrew LLVM and libraries on macOS), Release.
 B=$(brew --prefix)/opt

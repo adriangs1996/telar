@@ -1,15 +1,18 @@
 # ebnf
 
-Standalone C++23 project. Run these commands from `lib/ebnf`.
+C++23 library and executable of the repository's tree. Run these commands from
+the repository root.
 
 ## Requirements
 
 Use the [shared pinned toolchain](../../docs/build/cpp-modules.md). From the
 repository root, run `tools/cpp bootstrap`, then add `.toolchain/bin` to `PATH`.
 This provides LLVM/clangd 23.1.5, CMake 4.4.5, Ninja 1.13.2 and Just 1.59.0.
-The presets select `.toolchain/toolchain.cmake`; do not mix compiler installations
-inside an existing build directory. Python 3.9+ and the native development SDK
-are prerequisites. The first test configure fetches verified GoogleTest sources.
+The root presets select `.toolchain/toolchain.cmake`; do not mix compiler
+installations inside an existing build directory. Python 3.9+ and the native
+development SDK are prerequisites. The GoogleTest suite builds where
+`EBNF_GOOGLETEST` is on, as in the ci preset, whose configure fetches verified
+GoogleTest sources.
 
 The lexer, parser and matcher are real module interfaces; link `ebnf::ebnf` and
 import `telar.ebnf.lexer`, `telar.ebnf.parser` or `telar.ebnf.matcher`. TBC
@@ -18,7 +21,7 @@ annotation headers remain textual.
 ## Build and test
 
 With Just installed, configure, build, and run tests with GoogleTest colors in one
-command. Run from the repository root or `lib/ebnf`. Extra arguments go to CTest:
+command, in the ci preset's tree, `out/ci`. Extra arguments go to CTest:
 
 ```sh
 just ebnf-test
@@ -26,14 +29,14 @@ just ebnf-test -R '^Lexer\.'
 just ebnf-test -R '^Grammar\.' --stop-on-failure
 ```
 
-The recipe uses the Debug preset and verbose test output so successful tests also
-show their GoogleTest output. Without Just, run the steps directly:
+The recipe uses verbose test output so successful tests also show their
+GoogleTest output. Without Just, run the steps directly:
 
 ```sh
-cmake --preset debug
-cmake --build --preset debug
-ctest --preset debug
-./out/debug/ebnf
+tools/cpp configure ci
+tools/cpp build ci -- --target ebnf ebnf_tests
+tools/cpp test ci -- -L '^lib\.ebnf$'
+out/ci/lib/ebnf/ebnf
 ```
 
 The executable currently only returns success. `ebnf-smoke` checks that it starts
@@ -41,13 +44,8 @@ and exits successfully. `ToolchainTest.Cpp23IsEnabled` is the initial GoogleTest
 check; it verifies the language mode, not parser behavior.
 
 GoogleTest v1.18.0 is fetched into each build directory with a pinned commit and
-SHA-256 checksum. It is only needed when `BUILD_TESTING=ON`. To build without tests
-or downloading GoogleTest:
-
-```sh
-cmake --preset release -DBUILD_TESTING=OFF
-cmake --build --preset release
-```
+SHA-256 checksum. It is only needed when `EBNF_GOOGLETEST=ON`; the dev, release,
+sanitize and dist presets build without it, and without network access.
 
 For an existing offline checkout, pass
 `-DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/path/to/googletest` when configuring.
@@ -58,7 +56,7 @@ no CMake edits are needed. CTest discovers individual `TEST` and `TEST_F` cases
 automatically. To run one suite:
 
 ```sh
-ctest --preset debug -R '^ToolchainTest\.'
+tools/cpp test ci -- -R '^ToolchainTest\.'
 ```
 
 ## Lexer and parser boundary
@@ -87,7 +85,7 @@ to the lexer. Tokenizer implementations must return `std::size_t` and include
 Run the lexer and parser-boundary tests with:
 
 ```sh
-ctest --preset debug -R '^(Lexer\.|Grammar\.)'
+tools/cpp test ci -- -R '^(Lexer\.|Grammar\.)'
 ```
 
 ## Syntax tree
@@ -117,7 +115,7 @@ recursion stays bounded for untrusted specs. The caller must keep the source tex
 alive while the tree's text views use it.
 
 ```sh
-ctest --preset debug -R '^(AST|Alternation|Concatenation|Factor|Term|Rule|Comment|Dynamic|Description|Glue|SyntaxError|Literal)\.'
+tools/cpp test ci -- -R '^(AST|Alternation|Concatenation|Factor|Term|Rule|Comment|Dynamic|Description|Glue|SyntaxError|Literal)\.'
 ```
 
 ## Command specs
@@ -205,56 +203,44 @@ Both queries are `noexcept` and never allocate: all state lives in the caller's
 nonterminals, terminals and distinct candidates, and 65535 grammar slots.
 
 ```sh
-ctest --preset debug -R '^(Matcher|MatcherCompile|Spec|SpecCompile)\.'
+tools/cpp test ci -- -R '^(Matcher|MatcherCompile|Spec|SpecCompile)\.'
 ```
 
 The timing benchmark is a disabled test; run it from a Release build:
 
 ```sh
-cmake --preset release && cmake --build --preset release
-./out/release/ebnf_tests --gtest_also_run_disabled_tests --gtest_filter='*Benchmark*'
+tools/cpp configure release -B out/release-tests -- -DBUILD_TESTING=ON -DEBNF_GOOGLETEST=ON
+tools/cpp build release -B out/release-tests -- --target ebnf_tests
+out/release-tests/lib/ebnf/ebnf_tests --gtest_also_run_disabled_tests --gtest_filter='*Benchmark*'
 ```
 
 ## Other build configurations
 
-Release and sanitizer builds have separate directories. To enable tests explicitly:
+The sanitize preset enables AddressSanitizer and UndefinedBehaviorSanitizer for
+every telar target, ebnf's included:
 
 ```sh
-cmake --preset release -DBUILD_TESTING=ON
-cmake --build --preset release
-ctest --preset release
-
-cmake --preset sanitize
-cmake --build --preset sanitize
-ctest --preset sanitize
-```
-
-The sanitizer preset enables AddressSanitizer and UndefinedBehaviorSanitizer. It
-requires GCC or Clang with the GNU-style driver and installed sanitizer runtimes.
-On macOS, use upstream LLVM for sanitizer builds. With LLVM on `PATH`, replace
-an existing sanitizer configuration's compiler with:
-
-```sh
-CXX=clang++ cmake --fresh --preset sanitize
+tools/cpp configure sanitize -- -DEBNF_GOOGLETEST=ON
+tools/cpp build sanitize -- --target ebnf ebnf_tests
+tools/cpp test sanitize -- -L '^lib\.ebnf$'
 ```
 
 To make compiler warnings fail the build:
 
 ```sh
-cmake --preset debug -DEBNF_WARNINGS_AS_ERRORS=ON
+tools/cpp configure ci -- -DEBNF_WARNINGS_AS_ERRORS=ON
 ```
 
 ## Editor
 
-Configure the Debug preset before opening C++ files. CMake generates
-`out/debug/compile_commands.json`, which `.clangd` uses for compiler flags and
-include paths. Do not edit or commit the generated database. No symlink is needed.
-The other presets generate their own databases without changing the editor's
-Debug configuration.
+Configure the dev preset before opening C++ files (`just editor`). CMake
+generates `out/dev/compile_commands.json`, which the repository's `.clangd` uses
+for compiler flags and include paths. Do not edit or commit the generated
+database. No symlink is needed.
 
 Use `clangd` as the editor's C++ language server and `clang-format` as its C++
 formatter. `.editorconfig` sets two-space indentation and LF line endings.
-Debug symbols are available in `out/debug/ebnf` for LLDB or GDB.
+Debug symbols are available in `out/ci/lib/ebnf/ebnf` for LLDB or GDB.
 
 ## Debug in LazyVim
 
@@ -262,12 +248,12 @@ Enable `dap.core` and `lang.clangd` in `:LazyExtras`, restart Neovim, and
 check that `codelldb` is installed in `:Mason`. Install it with
 `:MasonInstall codelldb` if necessary.
 
-Build and open Neovim from this directory:
+Build from the repository root, then open Neovim from `lib/ebnf`:
 
 ```sh
-cmake --preset debug
-cmake --build --preset debug
-nvim tests/parser_test.cpp
+tools/cpp configure ci
+tools/cpp build ci -- --target ebnf ebnf_tests
+cd lib/ebnf && nvim tests/parser_test.cpp
 ```
 
 The working directory must be `lib/ebnf`: nvim-dap reads
@@ -296,21 +282,22 @@ automatically and shows variables, watches, and the call stack.
 | `<leader>dt` | Stop debugging |
 
 Rebuild after changing code, before starting another session. Inside Neovim,
-run `:!cmake --build --preset debug`. Launching the debugger does not build
+run `:!cmake --build ../../out/ci --target ebnf ebnf_tests`. Launching the debugger does not build
 the executable automatically.
 
 ## Format and analyze
 
 ```sh
-cmake --build --preset debug --target format
-cmake --build --preset debug --target format-check
-cmake --build --preset debug --target lint
+just format
+just format-check
+cmake --build out/ci --target lint
 ```
 
 `format` edits every C++ source, header and `.cppm` module interface Git tracks in the
 repository; `format-check` reports formatting errors without changing files. Both skip
 vendored code. `lint` runs `clang-tidy` on the sources of the library, the executable and
-the tests, and fails on enabled diagnostics; `lifetime` runs tbc-lint on them. The targets
+the tests, among the rest of the tree, and fails on enabled diagnostics; `lifetime`
+runs tbc-lint on them. The targets
 come from the repository's `cmake/TelarChecks.cmake`. Build first if sources need
 generated headers. Tooling is explicit; normal builds do not run it.
 
@@ -323,4 +310,5 @@ CMake also discovers implementation `.cpp`, `.cc`, and `.cxx` files outside
 remains the executable's explicit entry point and is not included in the tests.
 Build directories, vendored dependencies, and generated code are excluded.
 Formatting discovers new C++ files automatically; lint follows the CMake targets.
-Local preset overrides belong in `CMakeUserPresets.json`, which Git ignores.
+Local preset overrides belong in the repository's `CMakeUserPresets.json`, which Git
+ignores.

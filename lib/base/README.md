@@ -32,24 +32,24 @@ import telar.base.memory.allocators;
 import telar.base.diagnostics;
 ```
 
-## Standalone checks
+## Checks
 
 ```sh
-tools/cpp configure base
-tools/cpp build base
-tools/cpp test base
+tools/cpp configure
+tools/cpp build -- --target lib/base/all
+tools/cpp test -- -L '^lib\.base$'
 ```
 
-The standalone build compiles every module interface and each remaining ABI header separately, with only the
+The tests build compiles every module interface and each remaining ABI header separately, with only the
 base include directory available. Regression tests cover allocator injection,
 budgets, retained bytes, limits and JSON errors without loading the client
 protocol. Module sources, residual headers and the `telar::base` CMake target can also be installed with
-`cmake --install` and consumed with `find_package(telar-base CONFIG REQUIRED)`.
+`cmake --install out/dev --component telar-base` and consumed with `find_package(telar-base CONFIG REQUIRED)`.
 
 ## Editor
 
 Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
-`tools/cpp configure base` generates `out/compile_commands.json`.
+`tools/cpp configure` generates the repository's `out/dev/compile_commands.json`, which covers this library.
 Build the project before opening importers, then launch `.toolchain/bin/clangd`
 with `--experimental-modules-support`. Module interfaces have their own compile
 commands; the remaining native ABI and macro headers borrow consumer commands.

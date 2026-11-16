@@ -128,12 +128,12 @@ parser drops bytes below `0x20` inside an OSC, and BEL and ESC end it. Its
 | `render.max_pane_document_bytes` | 16 MiB | Their encoded bytes in all |
 | `render.max_nesting` | 32 | Quote and list depth recorded; deeper blocks keep this depth |
 
-## Standalone checks
+## Checks
 
 ```sh
-tools/cpp configure render
-tools/cpp build render
-tools/cpp test render
+tools/cpp configure
+tools/cpp build -- --target lib/render/all
+tools/cpp test -- -L '^lib\.render$'
 ```
 
 The tests cover the Markdown structure, round trips and rejection of corrupt

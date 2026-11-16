@@ -16,13 +16,14 @@ libcrypto beside the system libraries, without the runtime's terminal engine,
 SQLite, pcap or frameworks. `telar server` (without `stop`, `endpoint` or `bridge`)
 replaces itself with the `telar-runtime` installed beside it.
 
-The runtime's build includes this directory and writes `telar` next to
-`telar-runtime`. To build only the CLI:
+The repository's tree builds this directory and writes `telar` next to
+`telar-runtime`, in `out/<preset>/src/runtime`. To build and test only the CLI,
+from the repository root:
 
 ```sh
-../../tools/cpp configure cli --config Release
-cmake --build out
-ctest --test-dir out --output-on-failure
+tools/cpp configure
+tools/cpp build -- --target src/cli/all
+tools/cpp test -- -L '^cli\.'
 ```
 
 `config check` execs the sibling `telar-config-check`, installed beside `telar`.

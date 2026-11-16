@@ -231,10 +231,10 @@ the package's channels. Closing Desktop does not trigger any of this recovery.
 ## Verification
 
 ```sh
-cmake --build src/runtime/out --target telar-runtime plugin-traffic-tests plugin-tests traffic-flow-tests
-ctest --test-dir src/runtime/out -R '^(plugin-traffic-tests|plugin-tests|traffic-flow-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime plugin-traffic-tests plugin-tests traffic-flow-tests
+ctest --test-dir out/dev -R '^(plugin-traffic-tests|plugin-tests|traffic-flow-tests)$' --output-on-failure
 python3 src/runtime/tools/check_traffic_workers.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 

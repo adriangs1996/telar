@@ -85,16 +85,16 @@ reparses `$((cmd) )` as a command substitution), `{` and `}` are word
 characters in fish, a backtick inside double quotes inside backticks, and
 expansions inside heredoc bodies, which are one token.
 
-## Standalone checks
+## Checks
 
 ```sh
-tools/cpp configure shell
-tools/cpp build shell
-tools/cpp test shell
-tools/cpp configure shell -B lib/shell/out-sanitize --sanitizers
-tools/cpp configure shell -B lib/shell/out-release --config Release
-tools/cpp build shell -B lib/shell/out-release
-lib/shell/out-release/telar-shell-bench
+tools/cpp configure
+tools/cpp build -- --target lib/shell/all
+tools/cpp test -- -L '^lib\.shell$'
+tools/cpp configure sanitize
+tools/cpp configure release -B out/release-tests -- -DBUILD_TESTING=ON
+tools/cpp build release -B out/release-tests -- --target telar-shell-bench
+out/release-tests/lib/shell/telar-shell-bench
 ```
 
 The tests are tables of lines and their expected tokens, verdicts, segments and

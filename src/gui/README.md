@@ -116,9 +116,12 @@ CMake fetches and verifies the pinned font dependencies. From the repository roo
 
 ```sh
 tools/cpp bootstrap
-tools/cpp configure gui --config Release -- -DTELAR_GUI_QT_JOBS=2
-tools/cpp build gui -- --parallel 2
+tools/cpp configure release -- -DTELAR_GUI_QT_JOBS=2
+tools/cpp build release -- --target telar-gui telar-gui-command --parallel 2
 ```
+
+The GUI builds in the repository's single tree, `out/<preset>`, and its programs
+are in `out/<preset>/src/gui`.
 
 `tools/cpp configure` also bootstraps the verified Zig compiler that builds the pinned libghostty-vt.
 The native Xcode SDK is required on macOS. On Linux, use the documented desktop
@@ -128,8 +131,8 @@ toolchain and managed Qt build.
 ## Run and configuration
 
 ```sh
-src/gui/out/telar-gui
-src/gui/out/telar-gui --socket /path/to/runtime.sock
+out/dev/src/gui/telar-gui
+out/dev/src/gui/telar-gui --socket /path/to/runtime.sock
 ```
 
 Endpoint selection uses `--socket`, `TELAR_SOCKET`, then `telar server endpoint`
@@ -200,32 +203,31 @@ Configure and build `gui-editor` before opening headers, so generated headers an
 Qt metadata exist:
 
 ```sh
-tools/cpp configure gui
-tools/cpp build gui -- --target gui-editor --parallel 2
+just editor
 ```
 
-`.clangd` uses `out/compile_commands.json` for modules and their importers.
-The editor target also generates supplemental contexts under `out/clangd` for
-textual adapters. Launch `.toolchain/bin/clangd --experimental-modules-support`.
-`.clangd-build.json` refreshes the same pinned configuration on save.
+The root `.clangd` uses `out/dev/compile_commands.json` for modules and their
+importers. The editor target also generates supplemental contexts under
+`out/dev/clangd` for textual adapters. Launch `.toolchain/bin/clangd --experimental-modules-support`.
+The root `.clangd-build.json` refreshes the same pinned configuration on save.
 
 ## Tests and static analysis
 
 Build the relevant test targets before running their CTest entries:
 
 ```sh
-tools/cpp build gui -- --target gui-core-test gui-config-test
-tools/cpp test gui -- -R '^gui-(core|config)$'
+tools/cpp build -- --target gui-core-test gui-config-test
+tools/cpp test -- -R '^gui-(core|config)$'
 ```
 
 Native integration tests use owned temporary runtimes and private clipboard/display
 fixtures. Run native window cases serially to avoid focus interference. Core
 components can be tested without downloading or building Qt by configuring
 `-DTELAR_GUI_NATIVE=OFF`.
-Sanitizer builds use `-DTELAR_SANITIZERS=ON` in a separate build directory.
+Sanitizer builds use the sanitize preset, in `out/sanitize`.
 
 ```sh
-cmake --build src/gui/out --target gui-lint --parallel 2
+cmake --build out/dev --target lint --parallel 2
 ```
 
 Keep the existing clang-tidy profile, thresholds and diagnostics enabled. Generated
@@ -291,7 +293,7 @@ coverage checks after metrics, shaping and rasterization at three sizes. Compare
 frozen reference and candidate probes with:
 
 ```sh
-cmake --build src/gui/out --target gui-font-coverage-probe
+cmake --build out/dev --target gui-font-coverage-probe
 python3 src/gui/tools/check_font_coverage.py \
   /path/to/reference/gui-font-coverage-probe \
   /path/to/candidate/gui-font-coverage-probe out-font-coverage

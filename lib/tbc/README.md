@@ -119,9 +119,8 @@ cmake --build --preset debug --target lifetime-check
 Several sources are checked in parallel, one per physical core unless `-j N`
 says otherwise; each source's diagnostics are printed together. Consumer projects
 name the optimized checker in their `.tbc.json`, which `just lifetime-checker`
-builds at `out/release/tbc-lint`. `just runtime-lifetime` checks the runtime, the
-CLI and the telar libraries, `just gui-lifetime` the GUI, and the `lifetime-check`
-target each standalone library and the auth daemon.
+builds at `out/release/tbc-lint`. `just lifetime` checks every target of the
+repository's dev tree that registers for the lifetime check.
 
 The compilation database supplies C++23 flags, includes, definitions, and the
 macOS SDK. For an isolated source file, arguments after `--` replace the database:

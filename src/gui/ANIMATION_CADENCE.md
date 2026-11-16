@@ -101,7 +101,7 @@ full-panel presentation benchmark. Linux and x86-64 were not run in this pass.
 Freeze each variant's Release probe before changing source, then run:
 
 ```sh
-cmake --build src/gui/out --target gui-animation-probe
+cmake --build out/dev --target gui-animation-probe
 python3 src/gui/tools/check_animation_cadence.py \
   /path/to/A/gui-animation-probe /path/to/B/gui-animation-probe \
   src/gui/out-animation-results/new-comparison \

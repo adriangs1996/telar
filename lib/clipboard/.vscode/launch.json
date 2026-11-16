@@ -5,11 +5,11 @@
       "name": "clipboard: main",
       "type": "codelldb",
       "request": "launch",
-      "program": "${workspaceFolder}/out/debug/clipboard",
+      "program": "${workspaceFolder}/../../out/dev/lib/clipboard/clipboard",
       "cwd": "${workspaceFolder}",
       "preRunCommands": ["breakpoint set --name main --one-shot true"],
       "windows": {
-        "program": "${workspaceFolder}/out/debug/clipboard.exe"
+        "program": "${workspaceFolder}/../../out/dev/lib/clipboard/clipboard.exe"
       }
     }
   ]

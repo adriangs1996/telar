@@ -47,8 +47,7 @@ an oracle proves the output did not change.
    all three targets.
 
 5. **Validate the tree.** `just runtime-test`, `just gui-test`,
-   `just runtime-lint`, `just gui-lint`, `just runtime-lifetime`,
-   `just gui-lifetime`, `python3 tools/check-cpp-modules.py`, and every new
+   `just lint`, `just lifetime`, `python3 tools/check-cpp-modules.py`, and every new
    oracle test. Done when all are green and the final build is re-measured
    against `A` across every workload, including those you did not target.
 

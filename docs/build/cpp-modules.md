@@ -317,49 +317,45 @@ Desde la raíz del repositorio, con Python 3.9+, Git y el SDK nativo disponibles
 tools/cpp bootstrap
 export PATH="$PWD/.toolchain/bin:$PATH"
 
-tools/cpp configure runtime --config Debug
-tools/cpp build runtime -- --parallel 3
+tools/cpp configure dev -- -DTELAR_GUI_QT_JOBS=3
+tools/cpp build dev -- --parallel 3
 ulimit -n 8192
-tools/cpp test runtime
-
-tools/cpp configure gui --config Debug -- -DTELAR_GUI_QT_JOBS=3
-tools/cpp build gui -- --parallel 3
-tools/cpp test gui
+tools/cpp test dev
 ```
 
-El primer configure de runtime/CLI/GUI prepara Zig y VT automáticamente; el de GUI
-construye Qt antes de resolver sus paquetes. No abre una ventana ni instala la app.
-Para tests GUI de integración, pasar
-`-DTELAR_GUI_TEST_RUNTIME="$PWD/src/runtime/out/telar"` al configure: apunta
-al CLI recién construido, que inicia su runtime hermano en el fixture privado.
+Un solo árbol, `out/<preset>`, construye las bibliotecas, el runtime, el CLI, la GUI
+y el daemon de auth; los presets de `CMakePresets.json` son `dev`, `release`, `dist`
+(runtime y CLI para distribución), `sanitize` y `ci`, y `-DTELAR_BUILD_{RUNTIME,CLI,GUI,AUTH}=OFF`
+deja fuera un proceso. Los programas de cada proceso quedan en
+`out/<preset>/src/<proceso>`. El primer configure prepara Zig y VT
+automáticamente y construye Qt antes de resolver sus paquetes. No abre una ventana
+ni instala la app. Para tests GUI de integración, pasar
+`-DTELAR_GUI_TEST_RUNTIME="$PWD/.dev/bin/telar"` al configure, como hace `just`:
+apunta al CLI recién construido, que inicia su runtime hermano en el fixture privado.
 
 ```sh
-# Use separate directories for each build variant.
-tools/cpp configure runtime -B .dev/runtime-release --config Release \
-  -- -DTELAR_RUNTIME_DISTRIBUTABLE=ON
-tools/cpp build runtime -B .dev/runtime-release -- --target distributable-linkage --parallel 3
-tools/cpp configure runtime -B .dev/runtime-sanitize --sanitizers
-tools/cpp build runtime -B .dev/runtime-sanitize -- --parallel 3
-tools/cpp test runtime -B .dev/runtime-sanitize
+# Each preset builds into its own tree.
+tools/cpp configure dist
+tools/cpp build dist -- --target distributable-linkage --parallel 3
+tools/cpp configure sanitize
+tools/cpp build sanitize -- --parallel 3
+tools/cpp test sanitize
 
 # Linux without graphical integration.
-tools/cpp configure runtime -B .dev/runtime-headless --config Release --headless
+tools/cpp configure release -B .dev/runtime-headless --headless -- -DTELAR_BUILD_GUI=OFF
 
-# Standalone: the wrapper resolves each project dependency.
-tools/cpp configure cli --config Release
-tools/cpp build cli -- --parallel 3
-tools/cpp test cli
-tools/cpp configure base
-tools/cpp build base -- --parallel 3
-tools/cpp test base
-python3 tools/check-cpp-package.py --build lib/base/out
+# One process, its libraries and tests; a library's tests carry LABELS lib.<library>.
+tools/cpp build dev -- --target src/cli/all
+tools/cpp test dev -- -L '^cli\.'
+tools/cpp build dev -- --target telar-base telar-base-tests
+tools/cpp test dev -- -L '^lib\.base$'
+python3 tools/check-cpp-package.py --build out/dev
 ```
 
-También acepta `client`, `platform`, `lua`, `plugins`, `config`, `tls`, `shell`,
-`auth`, `ebnf` y `tbc`. Las bibliotecas sin tests standalone se verifican compilando
-su interfaz y mediante consumidores de runtime/CLI/GUI. Para EBNF/TBC/auth,
-los presets equivalentes seleccionan el mismo toolchain: ejecutar primero el
-bootstrap y usar el PATH anterior. `tools/cpp exec -- COMANDO` aplica ese entorno
+`tools/cpp configure tbc` configura el linter, que sigue siendo un proyecto aparte.
+Las bibliotecas sin tests propios se verifican compilando su interfaz y mediante
+consumidores de runtime/CLI/GUI. TBC usa sus propios presets con el mismo
+toolchain: ejecutar primero el bootstrap y usar el PATH anterior. `tools/cpp exec -- COMANDO` aplica ese entorno
 sin modificar la configuración global del shell. `just runtime-build`,
 `just gui-build`, `just editor` y las recetas lint usan la misma selección.
 
@@ -371,13 +367,13 @@ y rechaza una configuración incompatible. No instala nada en el sistema.
 
 ### Editor y análisis
 
-Configurar y construir el proyecto antes de abrir importadores. Sus `.clangd`
-apuntan a `out/compile_commands.json`; para un build alternativo, pasar
-`--compile-commands-dir=/ruta/al/build`. Usar:
+Configurar y construir el árbol antes de abrir importadores (`just editor`). El
+`.clangd` de la raíz apunta a `out/dev/compile_commands.json`; para otro árbol,
+pasar `--compile-commands-dir=/ruta/al/arbol`. Usar:
 
 ```sh
 .toolchain/bin/clangd --experimental-modules-support
-python3 tools/check-cpp-editor.py --build lib/base/out \
+python3 tools/check-cpp-editor.py --build out/dev \
   --file lib/base/tests/base_test.cpp
 ```
 

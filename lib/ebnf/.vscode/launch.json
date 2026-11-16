@@ -5,36 +5,36 @@
       "name": "ebnf: main",
       "type": "codelldb",
       "request": "launch",
-      "program": "${workspaceFolder}/out/debug/ebnf",
+      "program": "${workspaceFolder}/../../out/ci/lib/ebnf/ebnf",
       "cwd": "${workspaceFolder}",
       "preRunCommands": ["breakpoint set --name main --one-shot true"],
       "windows": {
-        "program": "${workspaceFolder}/out/debug/ebnf.exe"
+        "program": "${workspaceFolder}/../../out/ci/lib/ebnf/ebnf.exe"
       }
     },
     {
       "name": "ebnf: filtered tests",
       "type": "codelldb",
       "request": "launch",
-      "program": "${workspaceFolder}/out/debug/ebnf_tests",
+      "program": "${workspaceFolder}/../../out/ci/lib/ebnf/ebnf_tests",
       "cwd": "${workspaceFolder}",
       "args": [
         "--gtest_filter=${input:gtestFilter}",
         "--gtest_break_on_failure"
       ],
       "windows": {
-        "program": "${workspaceFolder}/out/debug/ebnf_tests.exe"
+        "program": "${workspaceFolder}/../../out/ci/lib/ebnf/ebnf_tests.exe"
       }
     },
     {
       "name": "ebnf: all tests",
       "type": "codelldb",
       "request": "launch",
-      "program": "${workspaceFolder}/out/debug/ebnf_tests",
+      "program": "${workspaceFolder}/../../out/ci/lib/ebnf/ebnf_tests",
       "cwd": "${workspaceFolder}",
       "args": ["--gtest_break_on_failure"],
       "windows": {
-        "program": "${workspaceFolder}/out/debug/ebnf_tests.exe"
+        "program": "${workspaceFolder}/../../out/ci/lib/ebnf/ebnf_tests.exe"
       }
     }
   ],

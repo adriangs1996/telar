@@ -216,11 +216,11 @@ Import a PCAP through the same data channel. Every imported event is labelled
 From the repository root, run the focused checks:
 
 ```sh
-cmake --build src/runtime/out --target telar-runtime traffic-tests plugin-tests tls-tests
-ctest --test-dir src/runtime/out -R '^(traffic-tests|plugin-tests|tls-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime traffic-tests plugin-tests tls-tests
+ctest --test-dir out/dev -R '^(traffic-tests|plugin-tests|tls-tests)$' --output-on-failure
 cmake --build src/desktop-mode/out/debug --target traffic_dbg
 python3 src/runtime/tools/check_traffic.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 
@@ -236,7 +236,7 @@ checks exact UDP bytes and interface attribution, and shuts both down. Add
 
 ```sh
 python3 src/runtime/tools/check_traffic_live.py \
-  --runtime src/runtime/out/telar-runtime
+  --runtime out/dev/src/runtime/telar-runtime
 ```
 
 This establishes loopback acceptance only. Physical interfaces, VPN devices
@@ -246,7 +246,7 @@ The verifier also has an optional controlled-host check for a routed interface:
 
 ```sh
 /usr/bin/python3 src/runtime/tools/check_traffic_live.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg \
   --ssh-origin CONTROLLED_HOST
 ```
@@ -295,11 +295,11 @@ reuse it. A Lua regression covers both reused and changed indices, missing
 openings, stale packets, mismatched indices and duplicate openings.
 
 ```sh
-cmake --build src/runtime/out --target traffic-interface-probe
+cmake --build out/dev --target traffic-interface-probe
 /usr/bin/python3 src/runtime/tools/check_traffic_live.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --interface-probe src/runtime/out/traffic-interface-probe
+  --interface-probe out/dev/src/runtime/traffic-interface-probe
 ```
 
 The same `--interface-probe` argument enables this stage in `check_network.py`.

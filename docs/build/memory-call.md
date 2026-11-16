@@ -202,12 +202,12 @@ servicio puede tomar el allocator concreto, o llamar a través de
 ## Reproducir
 
 ```sh
-tools/cpp configure base -B out/thin --config Release
-tools/cpp build base -B out/thin -- --target base-probes
+tools/cpp configure release -B out/thin -- -DBUILD_TESTING=ON
+tools/cpp build release -B out/thin -- --target base-probes
 # Una variante más por directorio, por ejemplo -DTELAR_THIN_LTO=OFF, o
 # -DCMAKE_PROJECT_INCLUDE con un fichero que añada los flags a
 # CMAKE_CXX_COMPILE_OPTIONS_IPO y CMAKE_CXX_LINK_OPTIONS_IPO.
-tools/bench_memory_call.py --variant thin=out/thin --variant nolto=out/nolto \
+tools/bench_memory_call.py --variant thin=out/thin/lib/base --variant nolto=out/nolto/lib/base \
     --host-report /tmp/memory-call-host.json --output /tmp/memory-call.json
 
 src/runtime/tools/bench_proxy.py \

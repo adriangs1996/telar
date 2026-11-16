@@ -22,7 +22,7 @@ under `telar.client.codecs` or `telar.client.serializers` to use a narrower grap
 ## Editor
 
 Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
-`tools/cpp configure client` generates `out/compile_commands.json`.
+`tools/cpp configure` generates the repository's `out/dev/compile_commands.json`, which covers this library.
 Build the project before opening importers, then launch `.toolchain/bin/clangd`
 with `--experimental-modules-support`. Module interfaces have their own compile
 commands; the remaining native ABI and macro headers borrow consumer commands.

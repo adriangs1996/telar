@@ -2,6 +2,8 @@
 # The build trees of CMakePresets.json, and any other tree beside them.
 /out/
 /out-*/
+# Local overrides of CMakePresets.json.
+/CMakeUserPresets.json
 # Verified Qt sources, private builds and installed SDKs managed by CMake.
 /.qt-cache
 # Verified sources and private builds of the other pinned native dependencies.

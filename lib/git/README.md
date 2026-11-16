@@ -130,12 +130,12 @@ until its file or the index changes. Large buffers are released after use.
 `telar-git-tests --time DIRECTORY` times a first read, repeated reads and
 `changed()`.
 
-## Standalone checks
+## Checks
 
 ```sh
-tools/cpp configure git
-tools/cpp build git
-tools/cpp test git
+tools/cpp configure
+tools/cpp build -- --target lib/git/all
+tools/cpp test -- -L '^lib\.git$'
 ```
 
 The tests build repositories with the `git` CLI (the library never runs it)
@@ -162,6 +162,6 @@ links it too.
 ## Editor
 
 Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).
-`tools/cpp configure git` generates `out/compile_commands.json`.
+`tools/cpp configure` generates the repository's `out/dev/compile_commands.json`, which covers this library.
 Build the project before opening importers, then launch `.toolchain/bin/clangd`
 with `--experimental-modules-support`.

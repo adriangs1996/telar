@@ -11,53 +11,42 @@ From the repository root:
 ```sh
 just auth-build
 just auth-test
-just auth-lint
-just auth-format-check
-just auth-format
+just lint
+just format-check
+just format
 ```
 
-`just auth-editor` configures `out/compile_commands.json` without building the
-runtime or GUI. `just editor` includes this project too. `.clangd` uses that
-database, and `.clangd-build.json` refreshes it on save in editors that support it.
-The format and clang-tidy profiles are shared with the C++ runtime through
-relative symlinks. The `format`, `format-check`, `lint` and `lifetime` targets come from the
-repository's `cmake/TelarChecks.cmake`; TBC is not a build dependency.
+The daemon builds in the repository's single tree, `out/dev` for the dev
+preset, whose `compile_commands.json` the root `.clangd` reads and `just
+editor` refreshes. `just lint` and the tree's `lint` and `lifetime` targets
+cover it with every other registered target; the format and clang-tidy
+profiles are shared with the C++ runtime through relative symlinks. TBC is
+not a build dependency.
 
-Use `../../tools/cpp bootstrap` and add `../../.toolchain/bin` to `PATH`.
-The presets use the pinned LLVM 23.1.5 / CMake 4.4.5 / Ninja 1.13.2 toolchain. Formatting and
-linting additionally require clang-format and clang-tidy, preferably from the
-compiler's LLVM installation. The `just` recipes select Homebrew LLVM on macOS
-and the default toolchain on Linux, like the GUI recipes.
+Use `tools/cpp bootstrap` and add `.toolchain/bin` to `PATH`. The presets use
+the pinned LLVM 23.1.5 / CMake 4.4.5 / Ninja 1.13.2 toolchain.
 
-## Standalone CMake
+## Other trees
 
-Run these commands from `src/auth-daemon/`. Select a compiler with `CXX`
-on the first configuration or pass `-DCMAKE_CXX_COMPILER=/path/to/clang++`.
-The presets do not hardcode a compiler installation.
+`tools/cpp configure sanitize` enables AddressSanitizer and
+UndefinedBehaviorSanitizer in `out/sanitize`. The only test currently checks
+that the scaffold executable exits successfully:
 
 ```sh
-cmake --preset debug
-cmake --build --preset debug
-ctest --preset debug
-cmake --build --preset debug --target lint format-check
+tools/cpp configure sanitize
+tools/cpp build sanitize -- --target telar-auth-daemon
+tools/cpp test sanitize -- -L '^auth$'
 ```
 
-The `release` and `sanitize` presets use `out-release/` and `out-sanitize/`.
-`sanitize` enables AddressSanitizer and UndefinedBehaviorSanitizer. The only
-test currently checks that the scaffold executable exits successfully.
+`TELAR_AUTH_WARNINGS_AS_ERRORS=ON` makes compiler warnings fatal, and
+`-DTELAR_BUILD_AUTH=OFF` leaves the daemon out of a tree. Installing a tree
+places the executable in `bin/` under the chosen prefix, beside what the
+tree's other processes install:
 
 ```sh
-cmake --preset sanitize
-cmake --build --preset sanitize
-ctest --preset sanitize
+tools/cpp configure release
+tools/cpp build release -- --target telar-auth-daemon
+cmake --install out/release --prefix /path/to/staging
 ```
 
-`TELAR_AUTH_WARNINGS_AS_ERRORS=ON` makes compiler warnings fatal.
-`BUILD_TESTING=OFF` disables CTest registration. Installation places the
-executable in `bin/` under the chosen prefix:
-
-```sh
-cmake --install out-release --prefix /path/to/staging
-```
-
-This installs the executable only, not a system service or a privileged helper.
+This installs the executable, not a system service or a privileged helper.

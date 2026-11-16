@@ -159,7 +159,7 @@ an explicit reconstruction-error event for an invalid fragment:
 
 ```sh
 python3 src/runtime/tools/check_traffic.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg --fragments
 ```
 
@@ -214,7 +214,7 @@ structured recording queries:
 
 ```sh
 python3 src/runtime/tools/check_traffic.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg --datagrams
 ```
 
@@ -397,18 +397,18 @@ client features. The example does not install trust or change redirection.
 ## Verification
 
 ```sh
-cmake --build src/runtime/out --target telar-runtime traffic-tests traffic-flow-tests http-message-tests http2-endpoint-tests redirect-tests tls-tests
-ctest --test-dir src/runtime/out -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|network-check-tests|tls-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime traffic-tests traffic-flow-tests http-message-tests http2-endpoint-tests redirect-tests tls-tests
+ctest --test-dir out/dev -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|network-check-tests|tls-tests)$' --output-on-failure
 cmake --build src/desktop-mode/out/debug --target traffic_dbg
 python3 src/runtime/tools/check_traffic_hooks.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg
 python3 src/runtime/tools/check_traffic_hooks.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg --http-edit
 # Use a test Python environment with tools/requirements-network.txt installed.
 python3 src/runtime/tools/check_traffic_hooks.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg --http2-edit
 ```
 
@@ -455,7 +455,7 @@ recovery, run from an interactive terminal:
 
 ```sh
 python3 src/runtime/tools/check_network.py \
-  --runtime src/runtime/out/telar-runtime \
+  --runtime out/dev/src/runtime/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg \
   --ssh-origin CONTROLLED_HOST
 ```
@@ -476,7 +476,7 @@ selection and incoming-only/combined IPv4 checks passed on 2026-10-30.
 The routed capture stage also checks packets in both directions on the actual
 LAN/VPN interface; the earlier loopback capture result does not establish that
 new stage's coverage.
-`--interface-probe src/runtime/out/traffic-interface-probe` adds the
+`--interface-probe out/dev/src/runtime/traffic-interface-probe` adds the
 [temporary virtual-interface check](traffic-capture.md#check-delivery-without-root).
 Its native creation, binary packet delivery, removal and recreation checks
 passed through Desktop Lua on 2026-10-30.

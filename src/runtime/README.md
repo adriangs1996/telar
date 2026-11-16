@@ -48,19 +48,18 @@ Live grant revocation and package-bound administration/recording are supported.
 flow and HTTP data across client reconnects, with cursor queries and PCAPNG
 export. Repeater workflows belong to clients.
 
-From this directory:
+From the repository root, which builds the pinned libghostty-vt first:
 
 ```sh
-python3 tools/build_ghostty.py --build-dir dependencies/ghostty --prefix dependencies/install
-../../tools/cpp configure runtime --config Release -- -DGHOSTTY_VT_ROOT="$PWD/dependencies/install"
-cmake --build out
-ctest --test-dir out --output-on-failure
+tools/cpp configure
+tools/cpp build -- --target src/runtime/all src/cli/all
+tools/cpp test -- -L '^(runtime|cli)\.'
 runtime_directory=$(mktemp -d)
-out/telar-runtime --socket "$runtime_directory/runtime.sock"
+out/dev/src/runtime/telar-runtime --socket "$runtime_directory/runtime.sock"
 ```
 
-The build also produces `out/telar`, the command-line interface in
-[`src/cli`](../cli/README.md), beside `out/telar-runtime`. `telar`
+The build also produces `out/dev/src/runtime/telar`, the command-line interface in
+[`src/cli`](../cli/README.md), beside `telar-runtime`. `telar`
 starts the runtime installed next to it, and panes receive that `telar` as
 `TELAR_BIN_PATH`. `telar-runtime` keeps only the runtime itself, its workers and
 the privileged `traffic` helpers.
@@ -218,16 +217,16 @@ From the repository root, refresh the compilation database and generated
 headers with:
 
 ```sh
-just runtime-editor
+just editor
 ```
 
 This builds the existing `cell-layout` target to generate `cell_layout.inc`;
 the other generated fragments are refreshed during CMake configuration.
 
-`.clangd-build.json` declares the same commands for Neovim configurations that
-support build-on-save. They run asynchronously on save
-and use `out/` as the build directory. Other editors can invoke
-`just runtime-editor` on save.
+The repository's `.clangd-build.json` declares the same command for Neovim
+configurations that support build-on-save. It runs asynchronously on save
+and uses `out/dev` as the build directory. Other editors can invoke
+`just editor` on save.
 
 ## Static analysis
 
@@ -235,29 +234,24 @@ The pinned bootstrap supplies `clang-tidy` and `run-clang-tidy` beside the
 configured compiler. From the repository root, run:
 
 ```sh
-just runtime-lint
+just lint
 ```
 
-This configures `out`, refreshes Ninja's compilation database, and builds the
-object targets of every selected runtime, CLI and platform translation unit.
+This configures `out/dev`, refreshes Ninja's compilation database, and builds the
+object targets of every selected translation unit of the tree, the runtime's,
+the CLI's and the libraries' among them.
 Their dependencies prepare generated headers, BMI and response modmaps before
 analysis, including tools outside the normal executable build. Test translation
 units are excluded. Both preparation and analysis use the same source selection
 and the configured compiler's LLVM tools. The preparation is incremental.
 
-The default parallelism is two; `just runtime-lint 4` selects four. A second
-argument selects a separate build directory:
+The default parallelism is two; `just lint 4` selects four. The direct script
+entry point performs the same preparation after configuration, in any tree:
 
 ```sh
-just runtime-lint 3 "$PWD/.dev/runtime-lint"
-```
-
-The direct script entry point performs the same preparation after configuration:
-
-```sh
-tools/cpp configure runtime -B .dev/runtime-lint --config Debug
+tools/cpp configure dev -B .dev/lint -- -DTELAR_BUILD_GUI=OFF
 tools/cpp exec -- cmake -DJOBS=3 -DCHECK=lint \
-  -DBUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
+  -DBUILD_DIRECTORY="$PWD/.dev/lint" \
   -P cmake/scripts/check.cmake
 ```
 
@@ -378,7 +372,7 @@ Suggestions are unavailable until an engine command is supplied. Each
 `--engine-arg` adds one argument, including the executable. For a Pi RPC engine:
 
 ```sh
-out/telar-runtime --socket "$runtime_directory/runtime.sock" --engine-arg pi --engine-arg --mode --engine-arg rpc
+out/dev/src/runtime/telar-runtime --socket "$runtime_directory/runtime.sock" --engine-arg pi --engine-arg --mode --engine-arg rpc
 ```
 
 ## Runtime telemetry
@@ -406,9 +400,9 @@ literal scope names, timestamps and thread identities, not terminal content,
 commands or prompts.
 
 ```sh
-../../tools/cpp configure runtime -B out-debug --config Debug
-../../tools/cpp build runtime -B out-debug
-out-debug/telar-runtime --socket "$runtime_directory/debug.sock" --trace "$runtime_directory/runtime.trace.json"
+tools/cpp configure
+tools/cpp build -- --target telar-runtime telar
+out/dev/src/runtime/telar-runtime --socket "$runtime_directory/debug.sock" --trace "$runtime_directory/runtime.trace.json"
 ```
 
 Stop the daemon normally to flush the final batch. Open the JSON in Perfetto.
@@ -442,13 +436,13 @@ spaces and a quote, cursor position, and rejection of a stale process identity.
 `process-probe`, `reporter-probe`, `hook-probe`, `resume-probe` and
 `graphics-probe` talk to actual daemon sockets. The default build and
 `just runtime-test` skip every probe CTest does not run; build them with
-`cmake --build out --target runtime-probes`. The agent fixture executes
+`cmake --build out/dev --target runtime-probes`. The agent fixture executes
 inside a PTY and reports through an independently authenticated connection.
 Only nondeterministic identities, timestamps and explicitly documented fixture
 paths are canonicalized.
 
-For ASan and UBSan, configure a separate Debug build with
-`-DTELAR_SANITIZERS=ON`. This instruments C++ code; the independently
+For ASan and UBSan, use the sanitize preset's tree,
+`tools/cpp configure sanitize`. This instruments C++ code; the independently
 built Ghostty and system libraries are not instrumented by that option.
 Run performance comparisons without concurrent builds or sanitizer binaries.
 
