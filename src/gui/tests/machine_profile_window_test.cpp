@@ -261,7 +261,7 @@ namespace {
       const auto& machines = MachineProfileWindow::machines(fixture.application);
 
       QTRY_VERIFY_WITH_TIMEOUT(machines.active() != Machines::local_slot, wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(fixture.application.panes()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(fixture.application.panes()->rows()->rowCount(), 1, wait_ms);
       QVERIFY(machines.row(machines.active()).pinned);
       QVERIFY(!MachineProfileWindow::profiles(fixture.application).error().isEmpty());
     }
@@ -302,7 +302,7 @@ namespace {
       QCOMPARE(machines.active(), slot);
       QVERIFY(machines.row(slot).pinned && machines.row(slot).enabled);
       QVERIFY(!MachineProfileWindow::profiles(application).profiles().rows().front().enabled());
-      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, wait_ms);
       QVERIFY(MachineProfileWindow::client(application, slot)->named_launch);
       QCOMPARE(fixture.runtime->count(ClientTag::open_pane), std::size_t{0});
       QCOMPARE(application.error(), QString{});
@@ -317,7 +317,7 @@ namespace {
 
       QCOMPARE(machines.active(), remoteSlot(fixture.application));
       QVERIFY(machines.row(machines.active()).pinned);
-      QTRY_COMPARE_WITH_TIMEOUT(fixture.application.panes()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(fixture.application.panes()->rows()->rowCount(), 1, wait_ms);
       QVERIFY(!MachineProfileWindow::client(fixture.application, machines.active())->named_launch);
     }
 
@@ -331,7 +331,7 @@ namespace {
 
       QVERIFY(selected != Machines::local_slot);
       QVERIFY(machines.row(selected).pinned && machines.row(selected).id.value() == 0);
-      QTRY_COMPARE_WITH_TIMEOUT(temporary.application.panes()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(temporary.application.panes()->rows()->rowCount(), 1, wait_ms);
       temporary.replace(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Saved","destination":"window-command@fixture","enabled":false}]})");
       auto* const client = MachineProfileWindow::client(temporary.application, selected);
 

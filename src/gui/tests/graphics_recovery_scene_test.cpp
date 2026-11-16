@@ -98,7 +98,7 @@ namespace {
   }
 
   QVariantMap paneChrome(Application& application) {
-    const auto* model = application.panes();
+    const auto* model = application.panes()->rows();
 
     return model->data(model->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("chrome")).toMap();
   }
@@ -135,7 +135,7 @@ namespace {
 
       runtime.send(TabSnapshot{.request_id = 1, .location = location, .panes = descriptors});
       runtime.send(PaneForeground{.pane_id = 1, .name = "nvim"});
-      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(paneChrome(application).value(QStringLiteral("program")).toString(), QStringLiteral("nvim"), wait_ms);
 
       QQmlEngine engine;
@@ -147,7 +147,7 @@ namespace {
 
       item->setParentItem(window.contentItem());
       item->setSize(window.size());
-      QObject::connect(application.panes(), &QAbstractItemModel::dataChanged, item.get(), [&] {
+      QObject::connect(application.panes()->rows(), &QAbstractItemModel::dataChanged, item.get(), [&] {
         item->setProperty("record", paneChrome(application));
       });
 

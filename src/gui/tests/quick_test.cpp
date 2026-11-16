@@ -613,7 +613,7 @@ return {api_version = 2, client = {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       }
 
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
       seedHistory();
     }
@@ -867,7 +867,7 @@ return {api_version = 2, client = {
       const auto* terminal = terminalIn(window_->contentItem());
 
       QVERIFY(terminal != nullptr);
-      QCOMPARE(client_->panes()->rowCount(), 1);
+      QCOMPARE(client_->panes()->rows()->rowCount(), 1);
       const auto fits_framed_content = [this, terminal] {
         const auto bounds = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
         const auto density = window_->effectiveDevicePixelRatio();
@@ -1443,7 +1443,7 @@ return {api_version = 2, client = {
         sendMouse(window, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, first);
         sendMouse(window, QEvent::MouseButtonPress, Qt::MiddleButton, held, first);
         client_->execute(Application::Action::split_horizontal);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         QVERIFY(retained != nullptr);
         QTRY_VERIFY_WITH_TIMEOUT(!retained->hasActiveFocus(), runtime_wait_ms);
         const auto second = cellCenter(terminal, {.x = 1, .y = 1});
@@ -1459,7 +1459,7 @@ return {api_version = 2, client = {
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
         client_->execute(Application::Action::split_horizontal);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
 
         QVERIFY(other != nullptr && other != &terminal);
@@ -1488,7 +1488,7 @@ return {api_version = 2, client = {
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
         client_->execute(Application::Action::split_horizontal);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
 
         QVERIFY(other != nullptr && other != &terminal);
@@ -1533,7 +1533,7 @@ return {api_version = 2, client = {
 
       verifyChildMouse(expected, [this, expected](QQuickWindow& window, TerminalItem& terminal) {
         client_->execute(Application::Action::split_horizontal);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
 
         QVERIFY(other != nullptr && other != &terminal);
@@ -1545,7 +1545,7 @@ return {api_version = 2, client = {
         sendMouse(window, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, cellCenter(terminal, {}));
         sendMouse(window, QEvent::MouseButtonPress, Qt::MiddleButton, Qt::LeftButton | Qt::MiddleButton, cellCenter(*other, {}));
         client_->execute(Application::Action::close_pane, QString::number(other_id));
-        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(client_->pane(other_id) == nullptr, runtime_wait_ms);
         const auto* remaining = terminalIn(window.contentItem());
 
@@ -1850,7 +1850,7 @@ return {api_version = 2, client = {
       peer.request(telar::ClientAction::client_open_link, 1, {uri.constData(), static_cast<std::size_t>(uri.size())});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       const auto arguments = [&] {
         QFile file{editor_path + QStringLiteral(".args")};
 
@@ -1859,8 +1859,8 @@ return {api_version = 2, client = {
 
       QTRY_COMPARE_WITH_TIMEOUT(arguments(), file_path.toUtf8() + '\n', runtime_wait_ms);
       const auto editor_ready = [&] {
-        for (int row = 0; row < client_->panes()->rowCount(); ++row) {
-          const auto record = client_->panes()->data(client_->panes()->index(row, 0), ListModel::record_role).toMap();
+        for (int row = 0; row < client_->panes()->rows()->rowCount(); ++row) {
+          const auto record = client_->panes()->rows()->data(client_->panes()->rows()->index(row, 0), ListModel::record_role).toMap();
           const auto* pane = client_->pane(record.value(QStringLiteral("key")).toString().toULongLong());
           if (pane != nullptr && pane->id != source_id && screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("FILE_EDITOR_READY"))) {
             return true;
@@ -1898,7 +1898,7 @@ return {api_version = 2, client = {
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(positioned_arguments(), QByteArray{"+call cursor(12, 3)\n"} + file_path.toUtf8() + '\n', runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
       client_->execute(Application::Action::focus_pane, QString::number(source_id));
       const QSignalSpy feedback{client_.get(), &Application::notificationsChanged};
       const auto missing_uri = uri + ".missing";
@@ -2271,9 +2271,9 @@ return {api_version = 2, client = {
 
     Q_SLOT void paneSurfacesShareTheChromeStyle() {
       client_->execute(Application::Action::split_horizontal);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       client_->execute(Application::Action::split_vertical);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
       // A new pane grows from zero size while the layout animates; a loaded machine can still be
       // on the first animation frame after any fixed wait.
       const auto settled = [this] {
@@ -2324,16 +2324,16 @@ return {api_version = 2, client = {
 
       QVERIFY(split != actions.end());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, (*split)->mapToScene((*split)->boundingRect().center()).toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 4, runtime_wait_ms);
-      while (client_->panes()->rowCount() > 1) {
-        const auto count = client_->panes()->rowCount();
-        const auto key = client_->panes()->data(client_->panes()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 4, runtime_wait_ms);
+      while (client_->panes()->rows()->rowCount() > 1) {
+        const auto count = client_->panes()->rows()->rowCount();
+        const auto key = client_->panes()->rows()->data(client_->panes()->rows()->index(count - 1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
 
         // Model projections can arrive before the acknowledgement releases the
         // preceding pane operation. Wait for that operation before closing again.
         QTRY_VERIFY_WITH_TIMEOUT(!test::FramePacing::requestsPending(*client_), runtime_wait_ms);
         client_->execute(Application::Action::close_pane, key);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), count - 1, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), count - 1, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       }
 
@@ -2349,8 +2349,8 @@ return {api_version = 2, client = {
       const QSignalSpy heights{terminal, &QQuickItem::heightChanged};
 
       client_->execute(Application::Action::split_horizontal);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
-      const auto split_id = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
+      const auto split_id = client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
       auto* layout = window_->findChild<PaneMotionLayout*>();
 
       QVERIFY(layout != nullptr);
@@ -2373,7 +2373,7 @@ return {api_version = 2, client = {
       QCOMPARE(widths.size(), 1);
       QVERIFY(heights.size() <= 1);
       client_->execute(Application::Action::close_pane, split_id);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
       QVERIFY(terminal != nullptr);
@@ -2394,20 +2394,20 @@ return {api_version = 2, client = {
 
       QCoreApplication::sendEvent(terminal, &prefix);
       QCoreApplication::sendEvent(terminal, &split);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
-      QCOMPARE(client_->dividers()->rowCount(), 1);
-      const auto divider = client_->dividers()->data(client_->dividers()->index(0, 0), ListModel::record_role).toMap();
-      const auto first_width = client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("width")).toReal();
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
+      QCOMPARE(client_->panes()->dividers()->rowCount(), 1);
+      const auto divider = client_->panes()->dividers()->data(client_->panes()->dividers()->index(0, 0), ListModel::record_role).toMap();
+      const auto first_width = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("width")).toReal();
 
       client_->resizeDivider(divider.value(QStringLiteral("key")).toString().toInt(), divider.value(QStringLiteral("x")).toReal() + divider_drag_pixels, divider.value(QStringLiteral("y")).toReal(), true);
-      const auto resized_width = client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("width")).toReal();
+      const auto resized_width = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("width")).toReal();
 
       QVERIFY(resized_width > first_width);
-      const auto split_id = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+      const auto split_id = client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
 
       QTRY_VERIFY_WITH_TIMEOUT(client_->pane(split_id.toULongLong())->screen.frameId() > 0, runtime_wait_ms);
-      const auto first_index = client_->panes()->index(0, 0);
-      const auto first_record = client_->panes()->data(first_index, ListModel::record_role).toMap();
+      const auto first_index = client_->panes()->rows()->index(0, 0);
+      const auto first_record = client_->panes()->rows()->data(first_index, ListModel::record_role).toMap();
       constexpr qsizetype bottom_band_index = 1;
       const auto bands = first_record.value(QStringLiteral("panels")).toList();
 
@@ -2418,7 +2418,7 @@ return {api_version = 2, client = {
 
       QTest::qWait(frame_settle_ms);
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, (workbench_origin + frame_origin + bottom_band.center()).toPoint());
-      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->data(first_index, ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(first_index, ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, (workbench_origin + frame_origin + bottom_band.center()).toPoint());
       client_->execute(Application::Action::focus_pane, split_id);
 
@@ -2442,16 +2442,16 @@ return {api_version=2, client={keybindings={
       // alt+h runs a Lua callback, whose result reaches the event loop after the Lua thread
       // returns; alt+l waits behind it.
       QTest::keyClick(window_, Qt::Key_H, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_L, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
       client_->execute(Application::Action::close_pane, split_id);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
 
       client_->execute(Application::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), 2, runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
       const auto first_tab = client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
 
@@ -2529,7 +2529,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void paletteModesKeepQueriesAndRejectStaleChoices() {
-      const auto original_panes = client_->panes()->rowCount();
+      const auto original_panes = client_->panes()->rows()->rowCount();
 
       client_->execute(Application::Action::palette);
       client_->searchPalette(QStringLiteral(">Split right"));
@@ -2542,7 +2542,7 @@ return {api_version=2, client={keybindings={
       client_->searchPalette(QStringLiteral(">no matching command exists here"));
       client_->usePaletteResult({{QStringLiteral("key"), key}, {QStringLiteral("revision"), revision}});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
-      QCOMPARE(client_->panes()->rowCount(), original_panes);
+      QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->searchPalette(QStringLiteral("@context query"));
       client_->setPaletteMode('>');
       QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral(">context query"));
@@ -2556,7 +2556,7 @@ return {api_version=2, client={keybindings={
       client_->searchPalette(QStringLiteral(">Split right"));
       client_->usePaletteResult({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
       QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
-      QCOMPARE(client_->panes()->rowCount(), original_panes);
+      QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->execute(Application::Action::cancel);
       QCOMPARE(client_->error(), QString{});
     }
@@ -5181,20 +5181,20 @@ return {api_version=2, client={keybindings={
       const auto source_id = firstPane()->id;
 
       client_->execute(Application::Action::split_horizontal);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       const auto gutter = static_cast<std::uint16_t>(client_->configuration().pane_gaps);
       const auto first_outer_columns = (full->cols - gutter) / 2;
       const auto second_outer_columns = full->cols - gutter - first_outer_columns;
 
       QTRY_COMPARE_WITH_TIMEOUT(client_->pane(source_id)->screen.columns(), first_outer_columns - border_cells, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->pane(source_id)->screen.rows(), full->rows - vertical_chrome, runtime_wait_ms);
-      const auto second_record = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap();
+      const auto second_record = client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap();
       const auto second_id = second_record.value(QStringLiteral("key")).toString().toULongLong();
 
       QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.columns(), second_outer_columns - border_cells, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.rows(), full->rows - vertical_chrome, runtime_wait_ms);
       client_->execute(Application::Action::split_vertical);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
       client_->execute(Application::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != source_id, runtime_wait_ms);
@@ -5222,9 +5222,9 @@ return {api_version=2, client={keybindings={
       const auto source_id = firstPane()->id;
 
       client_->execute(Application::Action::split_horizontal);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       client_->execute(Application::Action::fullscreen);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       const auto entries = [&] {
         return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("fullscreenPaneEntry"));
       };
@@ -5245,7 +5245,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(hidden->mapToScene({0, hidden->height()}).y() <= terminalIn(window_->contentItem())->mapToScene({0, 0}).y());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, hidden->mapToScene({hidden->width() / 2, hidden->height() / 2}).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->id, source_id, runtime_wait_ms);
-      QCOMPARE(client_->panes()->rowCount(), 1);
+      QCOMPARE(client_->panes()->rows()->rowCount(), 1);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && entries().size() == 2, runtime_wait_ms);
       const auto leave = [&]() -> const QQuickItem* {
         for (const auto* action : telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("paneAction"))) {
@@ -5261,7 +5261,7 @@ return {api_version=2, client={keybindings={
       const auto* button = leave();
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene({button->width() / 2, button->height() / 2}).toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(entries().isEmpty(), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
     }
@@ -5284,7 +5284,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(source_terminal != nullptr);
       client_->execute(Application::Action::split_horizontal);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       const QPointer<TerminalItem> other_terminal{focusedTerminalBeside(*window_, *source_terminal)};
 
       QVERIFY(other_terminal != nullptr);
@@ -5360,10 +5360,10 @@ return {api_version=2, client={keybindings={
       client_->execute(Application::Action::focus_pane, QString::number(other_id));
       QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
       client_->execute(Application::Action::fullscreen);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
       client_->execute(Application::Action::fullscreen);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
     }
@@ -8485,21 +8485,21 @@ return {api_version=2, client={keybindings={
     }
 
     void verifyGroupPaneHeaderFocus() {
-      QCOMPARE(client_->panes()->rowCount(), 1);
+      QCOMPARE(client_->panes()->rows()->rowCount(), 1);
       std::optional<std::uint64_t> created;
       const auto cleanup = qScopeGuard([this, &created] {
-        if (created.has_value() && client_->panes()->rowCount() > 1) {
+        if (created.has_value() && client_->panes()->rows()->rowCount() > 1) {
           client_->execute(Application::Action::close_pane, QString::number(*created));
           static_cast<void>(test::waitForGuiCondition([this] {
-            return client_->panes()->rowCount() == 1;
+            return client_->panes()->rows()->rowCount() == 1;
           },
               runtime_wait_ms));
         }
       });
 
       client_->execute(Application::Action::split_horizontal);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
-      created = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString().toULongLong();
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
+      created = client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString().toULongLong();
       const auto focused = [this, &created] {
         const auto* item = qobject_cast<TerminalItem*>(window_->activeFocusItem());
 
@@ -8523,7 +8523,7 @@ return {api_version=2, client={keybindings={
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, label->mapToScene(label->boundingRect().center()).toPoint());
       QTRY_VERIFY_WITH_TIMEOUT(target != nullptr && target->hasActiveFocus(), runtime_wait_ms);
       client_->execute(Application::Action::close_pane, QString::number(*created));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
     }
 
@@ -8989,11 +8989,11 @@ return {api_version=2, client={keybindings={
     }
 
     [[nodiscard]] Pane<telar::Memory>* firstPane() const {
-      if (client_->panes()->rowCount() == 0) {
+      if (client_->panes()->rows()->rowCount() == 0) {
         return nullptr;
       }
 
-      const auto record = client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap();
+      const auto record = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap();
 
       return client_->pane(record.value(QStringLiteral("key")).toString().toULongLong());
     }

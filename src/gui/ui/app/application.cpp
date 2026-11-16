@@ -111,24 +111,11 @@ import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.utf8;
-import telar.gui.model.records;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 
   namespace {
-
-    // Calls `visit` with each pane leaf of `tab` in layout order; with `shown`, only the leaves the
-    // tab shows: the focused one alone when it is fullscreen.
-    template <typename Visit>
-    void forEachLeaf(const Tab<Memory>& tab, bool shown, Visit&& visit) {
-      for (const auto& node : tab.layout.nodes()) {
-        const auto* leaf = std::get_if<ClientLayoutPane>(&node);
-        if (leaf != nullptr && (!shown || !tab.fullscreen || leaf->pane_id == tab.focused_pane)) {
-          visit(*leaf);
-        }
-      }
-    }
 
     auto parseLocation(const QString& key) -> WorkspaceLocation {
       return {
@@ -192,6 +179,7 @@ namespace telar::gui::qt {
         system_notifier_(memory),
         workspaces_(store_),
         tabs_(store_, element_slots_),
+        panes_(store_, element_slots_),
         hostname_(platform::hostName()) {
     // First of configurationChanged's connections: every slot and binding it reaches, directly
     // or through the signals chained to it, reads the new theme rather than a cached one.
@@ -750,7 +738,11 @@ namespace telar::gui::qt {
       const auto notification_revision = client.session.notificationRevision();
       const auto graphics_revision = client.session.graphicsRecoveryRevision();
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
-      store_.touch();
+      // Terminal frames and documents reach their panes directly, and are the bulk of the
+      // traffic; every other change may move what the projections read.
+      if (change != Change::none && change != Change::terminal && change != Change::document) {
+        store_.touch();
+      }
       if (change == Change::stopped || change == Change::closed) {
         client.connection.finishSession();
         if (change == Change::closed) {
@@ -968,9 +960,7 @@ namespace telar::gui::qt {
 
   void Application::refresh() {
     synchronize();
-    refreshAgents();
     refreshPeek();
-    refreshPanes();
     refreshPalette();
     refreshElementBars();
     if (store_.dialog().kind == Dialog::paths) {
@@ -982,83 +972,10 @@ namespace telar::gui::qt {
     reconsiderFrame();
   }
 
-  QVariantList Application::fullscreenEntries(const Tab<Memory>& tab) {
-    QVariantList entries;
-
-    if (!tab.fullscreen) {
-      return entries;
-    }
-
-    std::uint16_t index = 0;
-    const auto agents = std::span<const Agent<Memory>>{session().agents()};
-
-    forEachLeaf(tab, false, [&](const ClientLayoutPane& leaf) {
-      ++index;
-      entries.append(fullscreenPaneRecord(session().findPane(leaf.pane_id), agents, {.pane_id = leaf.pane_id, .index = index, .focused = tab.focused_pane == leaf.pane_id}));
-    });
-
-    return entries;
-  }
-
   void Application::refreshPanes() {
     synchronizeAttachments();
-    element_slots_.begin(ElementSlots::pane_slots);
-    auto* tab = session().activeTab();
-    QList<QVariantMap> panes;
-    QList<QVariantMap> dividers;
-
-    if (tab != nullptr) {
-      const auto& geometry = session().workbenchGeometry();
-      const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
-      const auto fullscreen_entries = fullscreenEntries(*tab);
-      const auto motion_context = QStringLiteral("%1/%2/%3/%4/%5")
-                                      .arg(store_.machineView())
-                                      .arg(static_cast<int>(tab->location.workspace.kind))
-                                      .arg(tab->location.workspace.id)
-                                      .arg(tab->location.tab_id)
-                                      .arg(tab->fullscreen);
-
-      for (const auto& placement : tab->layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen)) {
-        const auto* pane = session().findPane(placement.pane_id);
-        if (pane == nullptr) {
-          continue;
-        }
-
-        auto record = paneRecord(*pane, placement, geometry, tab->focused_pane == pane->id, terminal_grid_.scale);
-
-        record.insert(QStringLiteral("motionContext"), motion_context);
-        record.insert(QStringLiteral("fullscreen"), tab->fullscreen);
-        if (tab->fullscreen) {
-          record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
-        }
-
-        auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id));
-
-        if (element_slots_.active()) {
-          chrome.insert(QStringLiteral("elements"), element_slots_.elements(ElementSlots::pane_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
-        }
-
-        record.insert(QStringLiteral("chrome"), std::move(chrome));
-        panes.append(std::move(record));
-      }
-
-      for (const auto& divider : tab->layout.dividers()) {
-        const auto bounds = geometry.pixels(divider.bounds);
-        QVariantMap record;
-
-        record.insert(QStringLiteral("key"), QString::number(divider.node_index));
-        record.insert(QStringLiteral("x"), bounds.x / terminal_grid_.scale);
-        record.insert(QStringLiteral("y"), bounds.y / terminal_grid_.scale);
-        record.insert(QStringLiteral("width"), bounds.width / terminal_grid_.scale);
-        record.insert(QStringLiteral("height"), bounds.height / terminal_grid_.scale);
-        record.insert(QStringLiteral("horizontal"), divider.axis == ClientLayoutAxis::horizontal);
-        dividers.append(record);
-      }
-    }
-
-    panes_.reconcile(std::move(panes));
-    dividers_.reconcile(std::move(dividers));
-    element_slots_.finish(ElementSlots::pane_slots);
+    panes_.setScale(terminal_grid_.scale);
+    panes_.synchronize();
   }
 
   void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
@@ -1150,6 +1067,8 @@ namespace telar::gui::qt {
     synchronizeTabStrip();
     workspaces_.synchronize();
     tabs_.synchronize();
+    refreshAgents();
+    refreshPanes();
     history_.synchronize();
   }
 

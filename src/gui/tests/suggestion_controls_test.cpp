@@ -104,8 +104,8 @@ namespace {
       window_->resize(window_width, window_height);
       client_->setWindow(*window_);
       client_->open(socket_);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, wait_ms);
-      const auto record = client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap();
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, wait_ms);
+      const auto record = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap();
 
       pane_id_ = record.value(QStringLiteral("key")).toString().toULongLong();
       terminal_ = std::make_unique<TerminalItem>(window_->contentItem());

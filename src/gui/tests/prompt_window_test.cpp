@@ -857,8 +857,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       window.resize(QSize{720, 300});
       application.setWindow(window);
       application.open(socket);
-      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rowCount(), 1, runtime_wait_ms);
-      const auto record = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap();
+      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, runtime_wait_ms);
+      const auto record = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap();
       const auto pane = record.value(QStringLiteral("key")).toString().toULongLong();
 
       QTRY_COMPARE_WITH_TIMEOUT(application.promptSurface(pane), prompt::Surface::editor, runtime_wait_ms);

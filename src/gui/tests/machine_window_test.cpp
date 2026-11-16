@@ -596,7 +596,7 @@ namespace {
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->prompt().has_value(), wait_ms);
-      const auto before = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
+      const auto before = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
 
       QImage image{2, 3, QImage::Format_RGBA8888};
 
@@ -663,7 +663,7 @@ namespace {
 
       QCOMPARE(pointingAreas(*shelf_view), 2);
       QCOMPARE(pointingAreas(*modal_view), 1);
-      const auto after = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
+      const auto after = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
       const auto rows = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
 
       QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
@@ -696,7 +696,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 2, wait_ms);
       QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\x7f"});
       QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->items().isEmpty() && application.attachmentGeometry().isEmpty(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal(), before, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal(), before, wait_ms);
 
       QCoreApplication::sendEvent(&terminal, &paste);
       QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);

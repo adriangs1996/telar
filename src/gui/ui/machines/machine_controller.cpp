@@ -247,8 +247,7 @@ namespace telar::gui::qt {
   void Application::forgetMachineView() {
     history_.forget();
     graphics_resume_timer_.stop();
-    panes_.reconcile({});
-    dividers_.reconcile({});
+    panes_.forget();
     tabs_.forget();
     workspaces_.forget();
     agents_.reconcile({});

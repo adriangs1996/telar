@@ -18,7 +18,7 @@ Item {
     PaneMotionLayout {
         id: motion
         anchors.fill: parent
-        model: root.application.panes
+        model: root.application.panes.rows
     }
 
     Repeater {
@@ -426,7 +426,7 @@ Item {
     }
 
     Repeater {
-        model: root.application.dividers
+        model: root.application.panes.dividers
 
         delegate: MouseArea {
             required property var record

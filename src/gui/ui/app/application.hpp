@@ -39,6 +39,7 @@ static_assert(true);
 #include "ui/machines/machine_profiles_source.hpp"
 #include "ui/notifications/sound_player.hpp"
 #include "ui/notifications/system_notifier.hpp"
+#include "ui/panes/panes_controller.hpp"
 #include "ui/plugins/plugin_worker.hpp"
 #include "ui/store/store.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
@@ -148,8 +149,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY stateChanged)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
-    Q_PROPERTY(QAbstractItemModel* panes READ panes CONSTANT)
-    Q_PROPERTY(QAbstractItemModel* dividers READ dividers CONSTANT)
+    Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
     Q_PROPERTY(QAbstractItemModel* agents READ agents CONSTANT)
     Q_PROPERTY(telar::gui::qt::HistoryController* history READ history CONSTANT)
     Q_PROPERTY(int controlModifier READ controlModifier CONSTANT)
@@ -404,16 +404,12 @@ namespace telar::gui::qt {
       return &tabs_;
     }
 
-    QAbstractItemModel* panes() noexcept {
+    PanesController* panes() noexcept {
       return &panes_;
     }
 
     QAbstractItemModel* agents() noexcept {
       return &agents_;
-    }
-
-    QAbstractItemModel* dividers() noexcept {
-      return &dividers_;
     }
 
     HistoryController* history() noexcept {
@@ -724,7 +720,6 @@ namespace telar::gui::qt {
     [[nodiscard]] HistoryModalMetrics historyMetrics() const;
     [[nodiscard]] TabDropSurface tabDropSurface() const;
     void synchronizeTabStrip();
-    [[nodiscard]] QVariantList fullscreenEntries(const Tab<Memory>& tab);
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
     void publishCopyChange(std::uint64_t previous_pane);
@@ -887,8 +882,7 @@ namespace telar::gui::qt {
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     WorkspacesController workspaces_;
     TabsController tabs_;
-    ListModel panes_;
-    ListModel dividers_;
+    PanesController panes_;
     ListModel agents_;
     QString palette_query_;
 
