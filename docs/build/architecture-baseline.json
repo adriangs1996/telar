@@ -412,5 +412,221 @@
         "separate_project": "lib/tbc"
       }
     }
+  },
+  "fb4": {
+    "commit": "7ef6774f7",
+    "date": "2026-11-17",
+    "machine": {
+      "system": "Darwin 25.6.0 arm64",
+      "cpus": 8,
+      "memory_mib": 16384
+    },
+    "note": "One target per domain of process_layers: runtime 31, gui 23, cli 20. Measured at 7ef6774f7, this track rebased onto build-ui-architecture at 32ffa1c38, so the UI track's changes since fb3 are in it too; the track was rebased onto 822c8f615 afterwards, which moves ui/ sources only. Another agent shared the machine; builds were serialized with it. The per-process trees of before FB3 were still under src/<process>/out, which qmlimportscanner walks at configure; fb3 had moved them aside, so configure_seconds does not compare.",
+    "tree": {
+      "directory": "out/dev",
+      "configure": "tools/cpp configure dev -- -DTELAR_GUI_TEST_RUNTIME=<root>/.dev/bin/telar"
+    },
+    "snapshot": {
+      "compiled_sources": 1430,
+      "flag_sets": 158,
+      "linked": {
+        "static": 114,
+        "executable": 238,
+        "shared": 1
+      },
+      "tests": 198,
+      "against_build_ui_architecture": "tools/build-snapshot.py diff --by-source: every source keeps its flags. Gone are 158 BMI-only compilations (gui-core's and the libraries' interfaces with -fobjc-arc) built for two Objective-C++ tests that import no module, and gui-platform and gui-fonts are now gui-platform-native and gui-fonts-native. The same 198 tests with the same commands. telar-runtime, telar, telar-gui and telar-gui-command link the same sources; the other binaries link a subset."
+    },
+    "cold_build": {
+      "how": "Configured and built from an empty out/dev with tools/cpp, memory sampled as tools/module-metrics.py does. build_production builds telar-runtime, telar, telar-gui and telar-gui-command; build_all then builds the rest of the default target, which now also holds the library tests and the ebnf and clipboard executables.",
+      "configure_seconds": 52.9,
+      "configure_peak_memory_mib": 138,
+      "configure_load_average": 5.2,
+      "build_production_seconds": 124.0,
+      "build_production_peak_memory_mib": 2367,
+      "build_production_load_average": 6.7,
+      "build_all_seconds": 117.6,
+      "build_all_peak_memory_mib": 2495,
+      "build_all_load_average": 8.4,
+      "production_seconds": 124.0,
+      "all_seconds": 241.6,
+      "peak_memory_mib": 2495,
+      "against_fb3": {
+        "all_seconds_percent": 8.0,
+        "peak_memory_percent": -3.6,
+        "threshold_percent": 10
+      }
+    },
+    "tests": {
+      "command": "tools/cpp test dev",
+      "passed": 198,
+      "failed": 0,
+      "seconds": 449.7
+    },
+    "incremental": {
+      "how": "Default target fully built, one no-op build, then touch the source and time tools/cpp build dev, the default target of the single tree. Hub and non-hub by transitive dependent domains in process_layers. Measured twice; the second run is in seconds_repeat. The load averages are the one-minute averages right after each build, raised by that build's own parallel links.",
+      "runtime hub": {
+        "domain": "transport",
+        "source": "src/runtime/transport/connection/connection.cpp",
+        "seconds": 3.8,
+        "compiled": 1,
+        "scanned": 1,
+        "archived": 1,
+        "linked": 32,
+        "steps": 37,
+        "seconds_repeat": 4.1,
+        "load_average": 12.4,
+        "fb0_seconds": 5.0,
+        "fb0_linked": 32
+      },
+      "runtime non-hub": {
+        "domain": "editors",
+        "source": "src/runtime/editors/remote_editor/remote_editor.cpp",
+        "seconds": 3.3,
+        "compiled": 1,
+        "scanned": 1,
+        "archived": 1,
+        "linked": 28,
+        "steps": 33,
+        "seconds_repeat": 3.3,
+        "load_average": 13.2,
+        "fb0_seconds": 4.4,
+        "fb0_linked": 32
+      },
+      "gui hub": {
+        "domain": "core",
+        "source": "src/gui/core/metrics/metrics.cpp",
+        "seconds": 12.5,
+        "compiled": 1,
+        "scanned": 1,
+        "archived": 1,
+        "linked": 136,
+        "steps": 141,
+        "seconds_repeat": 12.5,
+        "load_average": 13.7,
+        "fb0_seconds": 13.7,
+        "fb0_linked": 136
+      },
+      "gui non-hub": {
+        "domain": "peek",
+        "source": "src/gui/peek/screen/screen.cpp",
+        "seconds": 9.8,
+        "compiled": 1,
+        "scanned": 1,
+        "archived": 1,
+        "linked": 80,
+        "steps": 85,
+        "seconds_repeat": 9.7,
+        "load_average": 13.7,
+        "fb0_seconds": 13.3,
+        "fb0_linked": 136
+      }
+    },
+    "gui_release_batch_units": 10,
+    "problems": {
+      "B12": {
+        "runtime": {
+          "binaries": 72,
+          "most_linked_domain": {
+            "target": "runtime-diagnostics",
+            "binaries": 68
+          },
+          "domains_by_linking_binaries": {
+            "runtime-diagnostics": 68,
+            "runtime-platform": 68,
+            "runtime-suggestions": 68,
+            "runtime-terminal": 68,
+            "runtime-transport": 68,
+            "runtime-graphics": 64,
+            "runtime-command_capture": 63,
+            "runtime-history": 63,
+            "runtime-shell_integration": 63,
+            "runtime-agents": 62,
+            "runtime-editors": 62,
+            "runtime-exchange_capture": 62,
+            "runtime-http": 62,
+            "runtime-http1": 62,
+            "runtime-http2": 62,
+            "runtime-metrics": 62,
+            "runtime-model": 62,
+            "runtime-observation": 62,
+            "runtime-paths": 62,
+            "runtime-persistence": 62,
+            "runtime-plugins": 62,
+            "runtime-proxy": 62,
+            "runtime-redirect": 62,
+            "runtime-runtime": 62,
+            "runtime-tls": 62,
+            "runtime-traffic": 62,
+            "runtime-vocabulary": 62,
+            "runtime-workspaces": 62,
+            "runtime-worktrees": 62,
+            "runtime-config": 2,
+            "runtime-cli": 1
+          }
+        },
+        "gui": {
+          "binaries": 149,
+          "most_linked_domain": {
+            "target": "gui-core",
+            "binaries": 146
+          },
+          "domains_by_linking_binaries": {
+            "gui-core": 146,
+            "gui-text": 137,
+            "gui-terminal": 125,
+            "gui-input": 122,
+            "gui-machines": 118,
+            "gui-palette": 118,
+            "gui-layout": 109,
+            "gui-history": 107,
+            "gui-model": 107,
+            "gui-presentation": 107,
+            "gui-suggestions": 107,
+            "gui-platform": 105,
+            "gui-graphics": 91,
+            "gui-paths": 89,
+            "gui-links": 88,
+            "gui-prompt": 88,
+            "gui-application": 87,
+            "gui-components": 87,
+            "gui-peek": 87,
+            "gui-config": 86,
+            "gui-attachments": 59,
+            "gui-fonts": 45,
+            "gui-transport": 44
+          }
+        },
+        "cli": {
+          "binaries": 6,
+          "most_linked_domain": {
+            "target": "cli-output",
+            "binaries": 8
+          },
+          "domains_by_linking_binaries": {
+            "cli-output": 8,
+            "cli-command_limit": 7,
+            "cli-control_session": 6,
+            "cli-runtime_observer": 6,
+            "cli-server": 6,
+            "cli-worktree_git": 6,
+            "cli-base": 4,
+            "cli-plugin": 4,
+            "cli-tab": 4,
+            "cli-window": 4,
+            "cli-hook": 3,
+            "cli-hooks": 3,
+            "cli-history": 2,
+            "cli-integration": 2,
+            "cli-machine_ssh": 2,
+            "cli-project_setup": 2,
+            "cli-worktree": 2,
+            "cli-launch_commands": 1,
+            "cli-machine": 1,
+            "cli-render": 1
+          }
+        }
+      }
+    }
   }
 }
