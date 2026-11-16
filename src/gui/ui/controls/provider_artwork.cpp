@@ -54,7 +54,7 @@ namespace telar::gui::qt {
       return pixels;
     }
 
-    // The default mark wears Shade, Telar's default theme and brand colors; every other preset has its own.
+    // The default mark wears Zenburn, Telar's default theme and brand colors; every other preset has its own.
     QString telarSource(bool monochrome, int theme) {
       if (monochrome) {
         return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");

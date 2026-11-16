@@ -847,8 +847,8 @@ export {
                     SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {127, 159, 127}}, .italic = false},
                     SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {191, 235, 191}}, .italic = false},
                     SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {191, 235, 191}}, .italic = false},
-                    SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {147, 224, 227}}, .italic = false},
-                    SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {147, 224, 227}}, .italic = false},
+                    SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {167, 209, 206}}, .italic = false},
+                    SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {167, 209, 206}}, .italic = false},
                     SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {189, 224, 243}}, .italic = false},
                     SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {220, 220, 204}}, .italic = false},
                     SyntaxStyleValues{.color = {.kind = CellColor::Kind::rgb, .channels = {223, 175, 143}}, .italic = false},
@@ -860,7 +860,8 @@ export {
         },
     }};
 
-    inline constexpr ThemeValues default_theme_values = theme_presets[0].values;
+    // Zenburn is Telar's default theme and wears its brand colors.
+    inline constexpr ThemeValues default_theme_values = std::ranges::find(theme_presets, std::string_view{"zenburn"}, &ThemePreset::name)->values;
 
   }
 }

@@ -161,42 +161,43 @@ export {
       bool operator==(const Color&) const = default;
     };
 
+    // Zenburn's projected colors, so a window paints the default theme before its configuration loads.
     struct DefaultTheme {
-      static constexpr Color background = Color::rgb(0x191c22);
-      static constexpr Color foreground = Color::rgb(0xd8dee9);
-      static constexpr Color surface = Color::rgb(0x242933);
-      static constexpr Color elevated = Color::rgb(0x3b4252);
-      static constexpr Color border = Color::rgb(0x4c566a);
-      static constexpr Color muted = Color::rgb(0x7b88a1);
-      static constexpr Color accent = Color::rgb(0x88c0d0);
-      static constexpr Color selection = Color::rgb(0x434c5e);
-      static constexpr Color cursor = accent;
-      static constexpr Color success = Color::rgb(0xa3be8c);
-      static constexpr Color warning = Color::rgb(0xebcb8b);
-      static constexpr Color failure = Color::rgb(0xbf616a);
+      static constexpr Color background = Color::rgb(0x2b2b2b);
+      static constexpr Color foreground = Color::rgb(0xdcdccc);
+      static constexpr Color surface = Color::rgb(0x383838);
+      static constexpr Color elevated = Color::rgb(0x4f4f4f);
+      static constexpr Color border = Color::rgb(0x5f5f5f);
+      static constexpr Color muted = Color::rgb(0x989890);
+      static constexpr Color accent = Color::rgb(0xf0dfaf);
+      static constexpr Color selection = elevated;
+      static constexpr Color cursor = Color::rgb(0xffffef);
+      static constexpr Color success = Color::rgb(0x8fb28f);
+      static constexpr Color warning = Color::rgb(0xf0dfaf);
+      static constexpr Color failure = Color::rgb(0xe37170);
       static constexpr std::size_t palette_size = 16;
       static constexpr std::array<Color, palette_size> palette{
-          Color::rgb(0x3b4252),
-          Color::rgb(0xbf616a),
-          Color::rgb(0xa3be8c),
-          Color::rgb(0xebcb8b),
-          Color::rgb(0x81a1c1),
-          Color::rgb(0xb48ead),
-          Color::rgb(0x88c0d0),
-          Color::rgb(0xe5e9f0),
-          Color::rgb(0x616e88),
-          Color::rgb(0xbf616a),
-          Color::rgb(0xa3be8c),
-          Color::rgb(0xebcb8b),
-          Color::rgb(0x81a1c1),
-          Color::rgb(0xb48ead),
-          Color::rgb(0x8fbcbb),
-          Color::rgb(0xeceff4),
+          Color::rgb(0x4f4f4f),
+          Color::rgb(0xcc9393),
+          Color::rgb(0x8fb28f),
+          Color::rgb(0xe0cf9f),
+          Color::rgb(0x94bff3),
+          Color::rgb(0xdc8cc3),
+          Color::rgb(0x8cd0d3),
+          Color::rgb(0xdcdccc),
+          Color::rgb(0x709080),
+          Color::rgb(0xdca3a3),
+          Color::rgb(0xafd8af),
+          Color::rgb(0xf0dfaf),
+          Color::rgb(0xbde0f3),
+          Color::rgb(0xec93d3),
+          Color::rgb(0x93e0e3),
+          Color::rgb(0xffffef),
       };
     };
 
     struct Theme {
-      ThemeName name = ThemeName::shade;
+      ThemeName name = ThemeName::zenburn;
       Color background = DefaultTheme::background;
       Color foreground = DefaultTheme::foreground;
       Color surface = DefaultTheme::surface;

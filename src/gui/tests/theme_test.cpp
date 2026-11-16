@@ -182,7 +182,6 @@ namespace {
 
     require(func != plain && type != plain && func != type, "Shade must color functions and types apart from the text and each other");
     require(shade.syntaxStyle(SyntaxRole::parameter).color == plain && shade.syntaxStyle(SyntaxRole::property).color != plain, "Shade must keep parameters in the text color and color properties");
-    require(default_theme_values == shade, "Shade must be the default theme");
     const auto projected = projectTheme(shade);
     bool syntax_kept = true;
 
@@ -209,6 +208,7 @@ namespace {
 
     require(zenburn_func != zenburn_plain && zenburn_type != zenburn_plain && zenburn_func != zenburn_type, "Zenburn must color functions and types apart from the text and each other");
     require(zenburn.terminal.background == ThemeRgb{43, 43, 43}, "Zenburn must paint the terminal zenburn-bg-1");
+    require(default_theme_values == zenburn, "Zenburn must be the default theme");
   }
 
   void utf8InspectionPreservesValidationErrors() {
