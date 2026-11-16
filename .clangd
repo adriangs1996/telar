@@ -1,4 +1,6 @@
 CompileFlags:
+  # The dev preset's tree, which every source of the repository but lib/tbc's compiles in.
+  CompilationDatabase: out/dev
   # clangd rebuilds its own BMIs with its parsing options and cache identity.
   # The compilation database supplies the source graph for import discovery.
   Remove: ['-fmodule-file=*', '-fmodule-output=*']

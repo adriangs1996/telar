@@ -1,8 +1,0 @@
-CompileFlags:
-  CompilationDatabase: out
-
----
-If:
-  PathMatch: src/.*
-CompileFlags:
-  CompilationDatabase: out

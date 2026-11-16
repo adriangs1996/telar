@@ -1,0 +1,12 @@
+{
+  "build_directory": "out/dev",
+  "commands": [
+    [
+      "tools/cpp",
+      "exec",
+      "--",
+      "just",
+      "editor"
+    ]
+  ]
+}
