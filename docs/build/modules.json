@@ -600,7 +600,7 @@
     "src/gui/ui/attachments/attachment_shelf.hpp": "Qt moc/QML integration",
     "src/gui/ui/fonts/box_font.hpp": "Qt moc/QML integration",
     "src/gui/ui/fonts/bundled_fonts.hpp": "Qt moc/QML integration",
-    "src/gui/ui/fonts/cell_glyphs.hpp": "Qt moc/QML integration",
+    "src/gui/ui/scene/cell_glyphs.hpp": "Qt moc/QML integration",
     "src/gui/ui/controls/cell_text_grid.hpp": "Qt moc/QML integration",
     "src/gui/ui/fonts/chrome_fonts.hpp": "Qt moc/QML integration",
     "src/gui/ui/scene/chrome_glyph_images.hpp": "Qt moc/QML integration",

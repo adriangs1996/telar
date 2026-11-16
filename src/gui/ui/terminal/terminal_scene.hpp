@@ -14,8 +14,8 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "ui/fonts/cell_glyphs.hpp"
 #include "ui/fonts/terminal_font.hpp"
+#include "ui/scene/cell_glyphs.hpp"
 #include "ui/scene/text_scene.hpp"
 #include <QList>
 #include <QQuickWindow>

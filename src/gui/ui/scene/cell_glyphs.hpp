@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "box_font.hpp"
+#include "curve_scene.hpp"
+#include "scene_nodes.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
+#include "ui/fonts/box_font.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/scene/curve_scene.hpp"
-#include "ui/scene/scene_nodes.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
