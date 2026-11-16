@@ -4,7 +4,8 @@ include_guard(GLOBAL)
 # sources of the targets that registered for it (telar_register_checks, which the
 # helpers of TelarTargets.cmake call):
 #
-#   lint              clang-tidy, with the .clang-tidy nearest each source
+#   lint              clang-tidy, with the .clang-tidy nearest each source; a source with
+#                     none in the project has no lint profile and is not linted
 #   lifetime          tbc-lint's lifetime analysis
 #   blank_lines       tbc-lint's blank lines of docs/code-style.md
 #   interface_bodies  tbc-lint's rule that module interfaces keep no function bodies
@@ -84,6 +85,27 @@ function(_telar_checks_define prefix)
     endforeach()
   endforeach()
 
+  # clang-tidy analyses a source with the .clang-tidy nearest it, its project's profile. A
+  # folder without one has no lint profile, so lint leaves its sources out; the profiles it
+  # uses go to <build>/checks/lint-profiles.txt for the check to verify.
+  list(REMOVE_DUPLICATES scope_lint)
+  set(linted)
+  set(profiles)
+  foreach(source IN LISTS scope_lint)
+    _telar_lint_profile("${source}" profile)
+    if(profile)
+      list(APPEND linted "${source}")
+      list(APPEND profiles "${profile}")
+    endif()
+  endforeach()
+  set(scope_lint ${linted})
+  if(profiles)
+    list(REMOVE_DUPLICATES profiles)
+    list(SORT profiles)
+    list(JOIN profiles "\n" content)
+    file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/checks/lint-profiles.txt" CONTENT "${content}\n" @ONLY)
+  endif()
+
   set(script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/check.cmake")
   foreach(check IN LISTS TELAR_CHECKS)
     if(NOT scope_${check})
@@ -100,6 +122,27 @@ function(_telar_checks_define prefix)
       USES_TERMINAL
       VERBATIM)
   endforeach()
+endfunction()
+
+# Sets <out> to the .clang-tidy nearest the source within the project, or to nothing.
+function(_telar_lint_profile source out)
+  cmake_path(GET source PARENT_PATH directory)
+  while(TRUE)
+    if(EXISTS "${directory}/.clang-tidy")
+      set(${out} "${directory}/.clang-tidy" PARENT_SCOPE)
+      return()
+    endif()
+    if(directory STREQUAL CMAKE_SOURCE_DIR)
+      break()
+    endif()
+    cmake_path(GET directory PARENT_PATH parent)
+    cmake_path(IS_PREFIX CMAKE_SOURCE_DIR "${parent}" NORMALIZE inside)
+    if(NOT inside OR parent STREQUAL directory)
+      break()
+    endif()
+    set(directory "${parent}")
+  endwhile()
+  set(${out} "" PARENT_SCOPE)
 endfunction()
 
 # Sets <out> to the absolute paths of the target's sources and module interfaces that

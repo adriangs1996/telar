@@ -115,17 +115,22 @@ if(CHECK STREQUAL "lint")
   if(NOT version_match OR CMAKE_MATCH_1 LESS 23)
     message(FATAL_ERROR "The lint profiles require clang-tidy 23 or newer; found ${clang_tidy}")
   endif()
-  if(EXISTS "${project}/.clang-tidy")
-    execute_process(COMMAND "${clang_tidy}" --verify-config "--config-file=${project}/.clang-tidy"
-      COMMAND_ERROR_IS_FATAL ANY)
-  endif()
-
   telar_check_prepare(sources patterns)
-  # Each source is analysed with the .clang-tidy nearest it, its project's profile.
+  # Each source is analysed with the .clang-tidy nearest it, its project's profile; the
+  # scope holds only sources that have one, and configuring lists the profiles.
+  file(STRINGS "${build}/checks/lint-profiles.txt" profiles)
+  foreach(profile IN LISTS profiles)
+    execute_process(COMMAND "${clang_tidy}" --verify-config "--config-file=${profile}"
+      COMMAND_ERROR_IS_FATAL ANY)
+  endforeach()
+  # run-clang-tidy first lists the checks of the working directory, the project root,
+  # which has no profile of its own: -allow-no-checks lets that probe pass. Every source
+  # in the scope has a profile, so none is analysed without checks.
   execute_process(COMMAND "${run_clang_tidy}"
       -clang-tidy-binary "${clang_tidy}"
       -p "${build}" -j "${JOBS}"
       -export-fixes "${build}/clang-tidy.yaml"
+      -allow-no-checks
       -quiet
       ${patterns}
     WORKING_DIRECTORY "${project}"
