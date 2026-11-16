@@ -215,7 +215,7 @@ namespace telar::gui::qt {
     }
 
     pending_activity_.reset();
-    clearActivityHover();
+    activity_.clearHover();
     releaseMachineInput();
     showDialog(Dialog::none);
     session().invalidateSuggestion();
@@ -250,8 +250,7 @@ namespace telar::gui::qt {
     panes_.forget();
     tabs_.forget();
     workspaces_.forget();
-    agents_.reconcile({});
-    activity_selection_.reset();
+    activity_.forget();
     error_.clear();
     frame_pacer_.reset();
     if (window_) {

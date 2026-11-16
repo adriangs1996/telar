@@ -73,17 +73,14 @@ namespace telar::gui::qt {
 
     peek_origin_ = PeekOrigin{.target = target, .window = window_generation_};
     peek_editor_.clear();
-    if (pointer_revision == pointer_revision_) {
-      activity_hover_ = identity;
-      emit activityHoverChanged();
-    }
+    activity_.showHover(identity, pointer_revision);
 
     showDialog(Dialog::peek);
     emit peekChanged();
   }
 
   bool Application::peekOriginValid() const {
-    if (store_.dialog().kind != Dialog::peek || !peek_origin_ || peek_origin_->window != window_generation_ || !activityAvailable(peek_origin_->target)) {
+    if (store_.dialog().kind != Dialog::peek || !peek_origin_ || peek_origin_->window != window_generation_ || !activity_.available(peek_origin_->target)) {
       return false;
     }
 

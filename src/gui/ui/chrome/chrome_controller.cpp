@@ -224,8 +224,10 @@ namespace telar::gui::qt {
     const auto age = QStringLiteral("59m");
     float card_width = 0;
 
-    for (int row = 0; row < agents_.rowCount(); ++row) {
-      const auto record = agents_.data(agents_.index(row), ListModel::record_role).toMap();
+    const auto& cards = activity_.records();
+
+    for (int row = 0; row < cards.rowCount(); ++row) {
+      const auto record = cards.data(cards.index(row), ListModel::record_role).toMap();
       const auto ports = record.value(QStringLiteral("ports")).toString();
       const auto status = record.value(QStringLiteral("status")).toString();
       const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + padding);

@@ -3510,6 +3510,7 @@ return {api_version=2, client={keybindings={
       const auto workspaces = client_->workspaces()->rebuilds();
       const auto tabs = client_->tabs()->rebuilds();
       const auto panes = client_->panes()->rebuilds();
+      const auto activity = client_->activity()->rebuilds();
       // The window refreshes, but no property of it moves, so QML reads none of them again.
       const QSignalSpy refreshes{client_.get(), &Application::refreshed};
       const QSignalSpy title{client_.get(), &Application::titleChanged};
@@ -3527,6 +3528,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->workspaces()->rebuilds(), workspaces);
       QCOMPARE(client_->tabs()->rebuilds(), tabs);
       QCOMPARE(client_->panes()->rebuilds(), panes);
+      QCOMPARE(client_->activity()->rebuilds(), activity);
       QCOMPARE(refreshes.count(), 3);
       QCOMPARE(title.count(), 0);
       QCOMPARE(diagnostic.count(), 0);

@@ -203,11 +203,11 @@ namespace telar::gui::test {
     }
 
     static void refreshActivity(qt::Application& application) {
-      application.refreshAgents();
+      application.activity_.synchronize();
     }
 
-    static const void* cachedActivityTargets(const qt::Application& application) {
-      return application.activity_targets_.data();
+    static std::uint64_t activityRebuilds(qt::Application& application) {
+      return application.activity()->rebuilds();
     }
 
     static bool pendingActivity(const qt::Application& application) {
@@ -215,11 +215,11 @@ namespace telar::gui::test {
     }
 
     static void pointerMoved(qt::Application& application) {
-      application.observeActivityPointer();
+      application.activity_.observePointer();
     }
 
     static void pointerMoved(qt::Application& application, QPointF position) {
-      application.observeActivityPointer(true, position);
+      application.activity_.observePointer(true, position);
     }
 
     static void rename(qt::Application& application, Machines::Slot slot, std::string_view label) {
@@ -361,13 +361,13 @@ namespace {
 #endif
 
   QVariantMap activityRow(Application& application, int row) {
-    const auto* model = application.agents();
+    const auto* model = application.activity()->rows();
 
     return model->data(model->index(row, 0), ListModel::record_role).toMap();
   }
 
   QVariantMap activityNamed(Application& application, const QString& title) {
-    for (int row = 0; row < application.agents()->rowCount(); ++row) {
+    for (int row = 0; row < application.activity()->rows()->rowCount(); ++row) {
       const auto record = activityRow(application, row);
       if (record.value(QStringLiteral("title")).toString() == title) {
         return record;
@@ -1323,14 +1323,14 @@ namespace {
       std::array agents{agent};
 
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       application.peekActivity(key);
       QVERIFY(MachineWindow::pendingActivity(application));
       QVERIFY(finishOpening(*fixture.remote_runtime));
       QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
-      QCOMPARE(application.activityHover(), key);
+      QCOMPARE(application.activity()->hovered(), key);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 1, wait_ms);
       QCOMPARE(fixture.local_runtime->count(ClientTag::read_pane), 0);
       QVERIFY(MachineWindow::client(application, fixture.remote.machine.slot).session.findPane(inspected_pane) == nullptr);
@@ -1346,7 +1346,7 @@ namespace {
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.activeFocusItem() != nullptr && window.activeFocusItem()->objectName() == QStringLiteral("commandSearch"), wait_ms);
       QTest::mouseMove(&window, QPoint{});
-      QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.activity()->hovered().isEmpty(), wait_ms);
       for (const auto byte : std::string_view{"Continue the remote task"}) {
         QTest::keyClick(&window, byte);
       }
@@ -1398,7 +1398,7 @@ namespace {
       const std::array agents{activityAgent("Local inspected")};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       application.peekActivity(key);
@@ -1444,13 +1444,13 @@ namespace {
       // Another machine lists only the agents that wait on the person.
       agents.front().status = AgentStatus::blocked;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       application.peekActivity(activityRow(application, 0).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
       MachineWindow::pointerMoved(application);
       QVERIFY(finishOpening(*fixture.remote_runtime));
       QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
-      QVERIFY(application.activityHover().isEmpty());
+      QVERIFY(application.activity()->hovered().isEmpty());
     }
 
     Q_SLOT static void restoredRootReceivesTheLatestWindowAndSidebarGeometry() {
@@ -1578,30 +1578,30 @@ namespace {
       remote_agents.front().status = AgentStatus::blocked;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = local_agents});
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = remote_agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 2, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 2, wait_ms);
       const auto local = activityNamed(application, QStringLiteral("Local hover")).value(QStringLiteral("key")).toString();
       const auto remote = activityNamed(application, QStringLiteral("Remote hover")).value(QStringLiteral("key")).toString();
 
-      application.hoverActivity(local);
-      QVERIFY(application.activityHover().isEmpty());
+      application.activity()->hover(local);
+      QVERIFY(application.activity()->hovered().isEmpty());
       MachineWindow::pointerMoved(application);
-      application.hoverActivity(local);
-      QCOMPARE(application.activityHover(), local);
+      application.activity()->hover(local);
+      QCOMPARE(application.activity()->hovered(), local);
       QCoreApplication::processEvents();
-      application.hoverActivity(remote);
-      application.hoverActivity(QString{});
-      QCOMPARE(application.activityHover(), local);
+      application.activity()->hover(remote);
+      application.activity()->hover(QString{});
+      QCOMPARE(application.activity()->hovered(), local);
       MachineWindow::pointerMoved(application);
-      application.hoverActivity(remote);
-      QCOMPARE(application.activityHover(), remote);
+      application.activity()->hover(remote);
+      QCOMPARE(application.activity()->hovered(), remote);
       QCoreApplication::processEvents();
       MachineWindow::pointerMoved(application);
-      application.hoverActivity(QStringLiteral("retired-activity"));
-      QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+      application.activity()->hover(QStringLiteral("retired-activity"));
+      QTRY_VERIFY_WITH_TIMEOUT(application.activity()->hovered().isEmpty(), wait_ms);
       MachineWindow::pointerMoved(application);
-      application.hoverActivity(local);
-      application.hoverActivity(QString{});
-      QVERIFY(application.activityHover().isEmpty());
+      application.activity()->hover(local);
+      application.activity()->hover(QString{});
+      QVERIFY(application.activity()->hovered().isEmpty());
     }
 
     Q_SLOT static void activityHoverRejectsCardsOutsideDeliveredPointer() {
@@ -1629,7 +1629,7 @@ namespace {
 
       agents.front().session_id.front() = 1;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto identity = activityNamed(application, QStringLiteral("Pointer geometry")).value(QStringLiteral("key")).toString();
 
       QQuickItem clipper{window.contentItem()};
@@ -1644,47 +1644,47 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
 
       MachineWindow::pointerMoved(application, clipped_pointer);
-      application.hoverActivity(identity, &card);
-      QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+      application.activity()->hover(identity, &card);
+      QTRY_VERIFY_WITH_TIMEOUT(application.activity()->hovered().isEmpty(), wait_ms);
       MachineWindow::pointerMoved(application, visible_pointer);
-      application.hoverActivity(identity, &card);
-      QCOMPARE(application.activityHover(), identity);
+      application.activity()->hover(identity, &card);
+      QCOMPARE(application.activity()->hovered(), identity);
       QCoreApplication::processEvents();
 
       clipper.setX(moved_card_x);
       MachineWindow::pointerMoved(application, visible_pointer);
-      application.hoverActivity(identity, &card);
-      QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+      application.activity()->hover(identity, &card);
+      QTRY_VERIFY_WITH_TIMEOUT(application.activity()->hovered().isEmpty(), wait_ms);
       MachineWindow::pointerMoved(application, moved_pointer);
-      application.hoverActivity(identity, &card);
-      QCOMPARE(application.activityHover(), identity);
+      application.activity()->hover(identity, &card);
+      QCOMPARE(application.activity()->hovered(), identity);
 
       const QQuickWindow foreign_window;
       QQuickItem foreign_card{foreign_window.contentItem()};
 
-      application.hoverActivity(QString{}, &foreign_card);
-      QCOMPARE(application.activityHover(), identity);
+      application.activity()->hover(QString{}, &foreign_card);
+      QCOMPARE(application.activity()->hovered(), identity);
 
       QQuickItem peer_card{&clipper};
 
       peer_card.setSize(card_size);
-      application.hoverActivity(identity, &peer_card);
-      application.hoverActivity(identity, &card);
+      application.activity()->hover(identity, &peer_card);
+      application.activity()->hover(identity, &card);
       QCoreApplication::processEvents();
-      application.hoverActivity(QString{}, &peer_card);
-      QCOMPARE(application.activityHover(), identity);
+      application.activity()->hover(QString{}, &peer_card);
+      QCOMPARE(application.activity()->hovered(), identity);
 
       card.setParentItem(nullptr);
-      application.hoverActivity(QString{}, &card);
-      QVERIFY(application.activityHover().isEmpty());
+      application.activity()->hover(QString{}, &card);
+      QVERIFY(application.activity()->hovered().isEmpty());
       card.setParentItem(&clipper);
       QCoreApplication::processEvents();
 
       MachineWindow::pointerMoved(application, terminal_pointer);
-      application.hoverActivity(identity, &card);
-      QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
-      application.hoverActivity(identity, &card);
-      QVERIFY(application.activityHover().isEmpty());
+      application.activity()->hover(identity, &card);
+      QTRY_VERIFY_WITH_TIMEOUT(application.activity()->hovered().isEmpty(), wait_ms);
+      application.activity()->hover(identity, &card);
+      QVERIFY(application.activity()->hovered().isEmpty());
     }
 
     Q_SLOT static void resizingPeekShowsTheRecentTailAndRetiresItsHiddenEditor() {
@@ -1705,7 +1705,7 @@ namespace {
       const std::array agents{activityAgent("Local inspected")};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       application.peekActivity(activityRow(application, 0).value(QStringLiteral("key")).toString());
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
       const auto read = fixture.local_runtime->last<ReadPane>();
@@ -1771,7 +1771,7 @@ namespace {
       fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects, .worktrees = remote_tasks});
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = local_agents});
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = remote_agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 3, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 3, wait_ms);
       const auto local = activityNamed(application, QStringLiteral("Local agent"));
       const auto hidden = activityNamed(application, QStringLiteral("Remote agent"));
 
@@ -1785,12 +1785,12 @@ namespace {
       QVERIFY(remote.session.panes().empty());
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::acknowledge_agent), 0);
-      const auto* cached = MachineWindow::cachedActivityTargets(application);
+      const auto rebuilds = MachineWindow::activityRebuilds(application);
       constexpr std::size_t unchanged_refreshes = 256;
 
       for (std::size_t iteration = 0; iteration < unchanged_refreshes; ++iteration) {
         MachineWindow::refreshActivity(application);
-        QCOMPARE(MachineWindow::cachedActivityTargets(application), cached);
+        QCOMPARE(MachineWindow::activityRebuilds(application), rebuilds);
       }
 
       remote_agents.front().session_title = "Remote still waiting";
@@ -1828,7 +1828,7 @@ namespace {
       // Another machine lists only the agents that wait on the person.
       agents.front().status = AgentStatus::blocked;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       agents.front().session_id.front() = 2;
@@ -1878,7 +1878,7 @@ namespace {
       // Only the active machine lists its tracked commands; the remote one is selected but still opening.
       MachineWindow::select(application, fixture.remote.machine);
       fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects, .worktrees = tasks});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       application.execute(Application::Action::select_agent, retired);
@@ -1924,7 +1924,7 @@ namespace {
 
       agents.front().pane_id = agent_pane;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       application.execute(Application::Action::select_agent, activityRow(application, 0).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
       application.execute(Application::Action::cancel);
@@ -1953,7 +1953,7 @@ namespace {
 
       fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects});
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto old_agent = activityNamed(application, QStringLiteral("Before reconnect")).value(QStringLiteral("key")).toString();
 
       fixture.remote_socket_->disconnectFromServer();

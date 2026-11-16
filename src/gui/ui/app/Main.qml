@@ -66,7 +66,7 @@ Window {
         colors: telar.colors
         typography: sidebar.regions.typography
         regions: telar.sidebarGeometry
-        agentModel: telar.agents
+        agentModel: telar.activity.rows
         preferredWidth: telar.sidebarWidth
         textScale: telar.chromeTextScale
         onAgentSelected: key => telar.execute(GuiController.Action.select_agent, key)

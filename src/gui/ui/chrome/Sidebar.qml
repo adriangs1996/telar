@@ -169,7 +169,7 @@ NativeRoundedRectangle {
             x: parent.width - width - root.headerInset
             width: implicitWidth
             height: parent.height
-            text: root.controller?.activityAgentCount ?? activityList.count
+            text: root.controller?.activity?.agentCount ?? activityList.count
             color: root.colors.subtext0
             pixelSize: root.typography.small
             elide: Text.ElideNone
@@ -186,8 +186,8 @@ NativeRoundedRectangle {
         height: root.regions.activity.height
         model: root.expanded ? root.agentModel : null
         controller: root.controller
-        hoverIdentity: root.controller?.activityHover ?? ""
-        semanticHover: typeof root.controller?.hoverActivity === "function"
+        hoverIdentity: root.controller?.activity?.hovered ?? ""
+        semanticHover: typeof root.controller?.activity?.hover === "function"
         colors: root.colors
         typography: root.typography
         geometry: root.regions.cards
@@ -200,7 +200,7 @@ NativeRoundedRectangle {
         onPeekRequested: key => root.agentPeekRequested(key)
         onHovered: (key, card) => {
             if (activityList.semanticHover) {
-                root.controller.hoverActivity(key, card);
+                root.controller.activity.hover(key, card);
             }
         }
     }

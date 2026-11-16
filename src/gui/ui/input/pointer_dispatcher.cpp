@@ -78,11 +78,11 @@ namespace telar::gui::qt {
     window_ = &window;
     history_scroll_events_.setActive(true);
 
-    application_.observeActivityPointer(false);
+    application_.activity_.observePointer(false);
     window.installEventFilter(this);
     connect(&window, &QWindow::activeChanged, this, [this] {
       if (window_ != nullptr && !window_->isActive()) {
-        application_.observeActivityPointer(false);
+        application_.activity_.observePointer(false);
         cancel();
       }
     });
@@ -328,7 +328,7 @@ namespace telar::gui::qt {
       application_.history_.observeHover(event.position(), event.buttons() == Qt::NoButton ? HistoryHover::Observation::point : HistoryHover::Observation::retained);
     }
 
-    application_.observeActivityPointer(true, event.position());
+    application_.activity_.observePointer(true, event.position());
     const auto tab_consumed = updateTabDrag(event, false);
 
     if (!occupied()) {
@@ -432,7 +432,7 @@ namespace telar::gui::qt {
       case QEvent::MouseButtonDblClick: {
         auto& mouse = dynamic_cast<QMouseEvent&>(*event);
 
-        application_.observeActivityPointer(true, mouse.position());
+        application_.activity_.observePointer(true, mouse.position());
         observeTabHover(mouse.position());
 
         return press(mouse);
@@ -459,7 +459,7 @@ namespace telar::gui::qt {
 
         application_.history_.retireHover();
         application_.attachments_.observePointer(std::nullopt);
-        application_.observeActivityPointer(false);
+        application_.activity_.observePointer(false);
         return false;
       case QEvent::MouseButtonRelease: {
         auto& mouse = dynamic_cast<QMouseEvent&>(*event);

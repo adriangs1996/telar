@@ -166,7 +166,6 @@ namespace telar::gui::qt {
       : QObject(parent),
         memory_(memory),
         history_(store_),
-        activity_targets_(AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory}),
         configuration_source_(memory),
         pick_controller_(*this, memory, configuration_source_),
         plugin_worker_(memory, *this),
@@ -180,6 +179,7 @@ namespace telar::gui::qt {
         workspaces_(store_),
         tabs_(store_, element_slots_),
         panes_(store_, element_slots_),
+        activity_(store_, element_slots_, memory),
         hostname_(platform::hostName()) {
     initializeMachines();
     initializeMachineProfiles();
@@ -394,6 +394,7 @@ namespace telar::gui::qt {
     frame_pacer_.reset();
     frame_pacer_.emplace(window);
     history_.setWindow(&window);
+    activity_.setWindow(&window);
     pointer_dispatcher_.presentHistoryActions({});
     key_bindings_.setWindow(window);
     pointer_dispatcher_.setWindow(window);
@@ -1064,7 +1065,13 @@ namespace telar::gui::qt {
     synchronizeTabStrip();
     workspaces_.synchronize();
     tabs_.synchronize();
-    refreshAgents();
+    const auto activity_rebuilds = activity_.rebuilds();
+    activity_.synchronize();
+    if (activity_.rebuilds() != activity_rebuilds) {
+      // The sidebar's natural width follows the widest card.
+      fitSidebarWhenReady();
+    }
+
     refreshPanes();
     history_.synchronize();
   }
@@ -1474,5 +1481,4 @@ namespace telar::gui::qt {
 
     return toQString(session().error());
   }
-
 }

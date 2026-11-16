@@ -1,0 +1,433 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "activity_controller.hpp"
+#include "activity_projection.hpp"
+#include "agent_projection.hpp"
+#include "ui/machines/machine_client.hpp"
+#include <QByteArray>
+#include <QList>
+#include <QMetaObject>
+#include <QVariantMap>
+#include <algorithm>
+#include <ranges>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include <variant>
+
+import telar.gui.presentation.activity_order;
+
+namespace telar::gui::qt {
+
+  namespace {
+
+    using Order = ActivityOrder<Memory>;
+
+    bool containsActivityPointer(const QQuickItem& card, QPointF position) {
+      if (!card.isVisible() || !card.isEnabled()) {
+        return false;
+      }
+
+      for (const auto* item = &card; item != nullptr; item = item->parentItem()) {
+        if ((item == &card || item->clip()) && !item->contains(item->mapFromScene(position))) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    MachineActivityTarget activityTarget(const MachineClient& source, const Order::Entry& entry) {
+      if (entry.agent) {
+        const auto& agent = source.session.agents()[*entry.agent];
+
+        return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Agent{.key = {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation}, .session = agent.session_id}};
+      }
+
+      if (!entry.worktree) {
+        throw std::logic_error{"ActivityEntryWithoutOwner"};
+      }
+
+      const auto& row = source.session.workspaceList().worktrees()[*entry.worktree];
+
+      return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Command{.worktree = row.id, .workspace = row.workspace.value_or(0)}};
+    }
+
+    struct ListedProcess {
+      std::size_t source;
+      const ListedPane* pane;
+    };
+
+    // Programs before idle shells; inside each, the newest foreground first. Ages sampled at different
+    // moments compare as `age_a - sampled_a < age_b - sampled_b`, rearranged to stay unsigned.
+    bool precedes(const ListedProcess& left, const ListedProcess& right) noexcept {
+      if (left.pane->shell != right.pane->shell) {
+        return !left.pane->shell;
+      }
+
+      const auto left_age = left.pane->age.age_ns + right.pane->age.sampled_ns;
+      const auto right_age = right.pane->age.age_ns + left.pane->age.sampled_ns;
+      if (left_age != right_age) {
+        return left_age < right_age;
+      }
+
+      return std::tie(left.source, left.pane->pane_id) < std::tie(right.source, right.pane->pane_id);
+    }
+
+    std::string_view workspaceName(const GuiSession& session, const ListedPane& pane) {
+      if (pane.location.workspace.kind != WorkspaceLocation::Kind::workspace) {
+        return {};
+      }
+
+      const auto& workspaces = session.workspaceList().entries();
+      const auto found = std::ranges::find_if(workspaces, [&](const auto& workspace) {
+        return sameWorkspace(workspace.location, pane.location.workspace);
+      });
+
+      return found == workspaces.end() ? std::string_view{} : std::string_view{found->name};
+    }
+
+    QVariantMap activityRecord(const GuiSession& session, const Order::Entry& entry, AgentRecordContext context, bool active_source) {
+      if (!entry.agent) {
+        if (!entry.worktree) {
+          throw std::logic_error{"ActivityEntryWithoutOwner"};
+        }
+
+        return commandRecord(session.workspaceList().worktrees()[*entry.worktree], context);
+      }
+
+      const auto& agent = session.agents()[*entry.agent];
+      const auto& workspaces = session.workspaces();
+      const auto workspace = std::ranges::find_if(workspaces, [&](const auto& candidate) {
+        return agent.location.workspace.kind == WorkspaceLocation::Kind::workspace && sameWorkspace(agent.location.workspace, candidate.location);
+      });
+
+      context.branch = workspace == workspaces.end() ? std::string_view{} : std::string_view{workspace->branch};
+      const auto* tab = active_source ? session.activeTab() : nullptr;
+
+      context.selected = tab != nullptr && agent.pane_id == tab->focused_pane && sameTab(agent.location, tab->location);
+      if (entry.worktree) {
+        return taskRecord(agent, session.workspaceList().worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact);
+      }
+
+      return agentRecord(agent, context);
+    }
+
+  }
+
+  ActivityController::ActivityController(Store& store, ElementSlots& elements, ApplicationAllocator& memory, QObject* parent)
+      : QObject(parent),
+        store_(store),
+        elements_(elements),
+        memory_(memory),
+        targets_(AllocatorRef<RowTarget, ApplicationAllocator>{memory}) {}
+
+  QAbstractItemModel* ActivityController::rows() noexcept {
+    return &rows_;
+  }
+
+  const ListModel& ActivityController::records() const noexcept {
+    return rows_;
+  }
+
+  int ActivityController::agentCount() const noexcept {
+    return agent_count_;
+  }
+
+  std::uint64_t ActivityController::rebuilds() const noexcept {
+    return rebuilds_;
+  }
+
+  void ActivityController::forget() {
+    rows_.reconcile({});
+    selection_.reset();
+  }
+
+  void ActivityController::invalidate() noexcept {
+    versions_ = {};
+  }
+
+  void ActivityController::setWindow(QQuickWindow* window) noexcept {
+    window_ = window;
+  }
+
+  QString ActivityController::identity(const MachineActivityTarget& target) {
+    const auto& source = target.source;
+    const auto prefix = QStringLiteral("machine:") + QString::number(source.machine.slot) + QLatin1Char(':') + QString::number(source.machine.generation) + QLatin1Char(':') + QString::number(source.generation) + QLatin1Char(':') + QString::number(target.runtime_generation);
+
+    if (const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner)) {
+      QByteArray session;
+
+      session.reserve(static_cast<qsizetype>(agent->session.size()));
+      for (const auto byte : agent->session) {
+        session.append(static_cast<char>(byte));
+      }
+
+      return prefix + QStringLiteral(":agent:") + QString::number(agent->key.pane_id) + QLatin1Char(':') + QString::number(agent->key.pane_generation) + QLatin1Char(':') + QString::fromLatin1(session.toHex());
+    }
+
+    if (const auto* process = std::get_if<MachineActivityTarget::Process>(&target.owner)) {
+      return prefix + QStringLiteral(":process:") + QString::number(process->pane_id) + QLatin1Char(':') + QString::number(process->pane_generation);
+    }
+
+    const auto command = std::get<MachineActivityTarget::Command>(target.owner);
+
+    return prefix + QStringLiteral(":command:") + QString::number(command.worktree) + QLatin1Char(':') + QString::number(command.workspace);
+  }
+
+  void ActivityController::synchronize() {
+    const auto active = store_.machines().active();
+    // The top bar names the active machine, so only cards from other machines repeat theirs.
+    const auto machineLabel = [active](const SourceVersion& version, Machines::Slot slot) {
+      return slot == active ? std::string_view{} : version.label.view();
+    };
+
+    std::array<std::optional<SourceVersion>, Machines::capacity> versions;
+
+    for (std::size_t index = 0; index < store_.clients().size(); ++index) {
+      const auto& client = store_.clients()[index];
+      const auto& row = store_.machines().row(static_cast<Machines::Slot>(index));
+      if (row.used && row.live && client) {
+        versions[index] = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == MachinePhase::connected && (*client)->session.ready(), .label = row.label};
+      }
+    }
+
+    const auto view = store_.session().viewVersion();
+    const Selection selection{.slot = active, .tabs = view.active_tab, .panes = view.panes};
+    if (versions == versions_ && selection_ == selection) {
+      // The cards stay as they are, and so do the mod instances drawing them.
+      return;
+    }
+
+    ++rebuilds_;
+    elements_.begin(ElementSlots::agent_slots);
+    Vector<Order::Source, ApplicationAllocator> sources{AllocatorRef<Order::Source, ApplicationAllocator>{memory_}};
+
+    sources.reserve(Machines::capacity);
+    for (std::size_t index = 0; index < versions.size(); ++index) {
+      if (!versions[index]) {
+        continue;
+      }
+
+      const auto slot = static_cast<Machines::Slot>(index);
+      const auto& session = store_.client(slot).session;
+      const auto* tab = session.activeTab();
+
+      sources.push_back({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList(), .focused = tab == nullptr ? std::nullopt : std::optional{tab->focused_pane}});
+    }
+
+    Order::Plan order;
+
+    Order::write(sources, active, order);
+    QList<QVariantMap> records;
+
+    records.reserve(static_cast<qsizetype>(order.count));
+    Vector<RowTarget, ApplicationAllocator> targets{AllocatorRef<RowTarget, ApplicationAllocator>{memory_}};
+
+    targets.reserve(order.count);
+    for (const auto& entry : order.view()) {
+      const auto slot = sources[entry.source].slot;
+      const auto& source = store_.client(slot);
+      const auto& version = versions[slot];
+      if (!version) {
+        throw std::logic_error{"ActivitySourceWithoutVersion"};
+      }
+
+      const auto target = activityTarget(source, entry);
+      const auto key = identity(target);
+      const AgentRecordContext context{.machine = machineLabel(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
+      auto record = activityRecord(source.session, entry, context, slot == active);
+
+      record.insert(QStringLiteral("key"), key);
+      if (elements_.active()) {
+        record.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::agent_slots, key, ElementSlots::agentItem(record)));
+      }
+
+      records.append(std::move(record));
+      targets.push_back({.identity = key, .target = target});
+    }
+
+    const auto agent_count = static_cast<int>(records.size());
+    Vector<ListedProcess, ApplicationAllocator> processes{AllocatorRef<ListedProcess, ApplicationAllocator>{memory_}};
+
+    // Processes are the active machine's; the other machines are summarized by their sidebar row.
+    for (std::size_t index = 0; index < sources.size(); ++index) {
+      if (sources[index].slot != active) {
+        continue;
+      }
+
+      const auto& session = store_.client(sources[index].slot).session;
+
+      for (const auto& pane : session.paneList()) {
+        const auto held = std::ranges::any_of(session.agents(), [&](const auto& agent) {
+          return agent.pane_id == pane.pane_id && agent.pane_generation == pane.pane_generation;
+        });
+        if (!held) {
+          processes.push_back({.source = index, .pane = &pane});
+        }
+      }
+    }
+
+    std::ranges::sort(processes, precedes);
+    if (!processes.empty()) {
+      records.append(processHeaderRecord(static_cast<qsizetype>(processes.size())));
+    }
+
+    records.reserve(records.size() + static_cast<qsizetype>(processes.size()));
+    targets.reserve(targets.size() + processes.size());
+    for (const auto& process : processes) {
+      const auto slot = sources[process.source].slot;
+      const auto& source = store_.client(slot);
+      const auto& version = *versions[slot];
+      const auto& pane = *process.pane;
+      const MachineActivityTarget target{.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Process{.pane_id = pane.pane_id, .pane_generation = pane.pane_generation}};
+      const auto key = identity(target);
+      const auto* tab = slot == active ? source.session.activeTab() : nullptr;
+      const AgentRecordContext context{.machine = machineLabel(version, slot), .selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location), .connected = version.connected};
+      auto record = processRecord(pane, workspaceName(source.session, pane), context);
+
+      record.insert(QStringLiteral("key"), key);
+      records.append(std::move(record));
+      targets.push_back({.identity = key, .target = target});
+    }
+
+    targets_ = std::move(targets);
+    rows_.reconcile(std::move(records));
+    elements_.finish(ElementSlots::agent_slots);
+    versions_ = std::move(versions);
+    selection_ = selection;
+    if (agent_count_ != agent_count) {
+      agent_count_ = agent_count;
+      emit agentCountChanged();
+    }
+  }
+
+  const MachineActivityTarget* ActivityController::target(const QString& identity) const {
+    const auto row = std::ranges::find(targets_, identity, &RowTarget::identity);
+
+    return row == targets_.end() ? nullptr : &row->target;
+  }
+
+  bool ActivityController::available(const MachineActivityTarget& target) const {
+    const auto* client = store_.find(target.source);
+    const auto slot = target.source.machine.slot;
+    if (client == nullptr || client->runtime_generation != target.runtime_generation || !store_.machines().shown(slot) || !store_.machines().row(slot).live || !store_.machines().row(slot).enabled || client->phase != MachinePhase::connected || !client->session.ready()) {
+      return false;
+    }
+
+    if (const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner)) {
+      return std::ranges::any_of(client->session.agents(), [&](const auto& candidate) {
+        return candidate.pane_id == agent->key.pane_id && candidate.pane_generation == agent->key.pane_generation && candidate.session_id == agent->session;
+      });
+    }
+
+    if (const auto* process = std::get_if<MachineActivityTarget::Process>(&target.owner)) {
+      return std::ranges::any_of(client->session.paneList(), [&](const auto& pane) {
+        return pane.pane_id == process->pane_id && pane.pane_generation == process->pane_generation;
+      });
+    }
+
+    const auto command = std::get<MachineActivityTarget::Command>(target.owner);
+    const auto* row = client->session.workspaceList().worktree(command.worktree);
+
+    return row != nullptr && row->workspace && *row->workspace == command.workspace;
+  }
+
+  QString ActivityController::hovered() const {
+    return hovered_;
+  }
+
+  void ActivityController::hover(const QString& identity, QQuickItem* card) {
+    const auto owned_exit = identity.isEmpty() && card != nullptr && hover_card_ == card;
+    if (!hover_pending_ && !owned_exit) {
+      return;
+    }
+
+    if (identity.isEmpty()) {
+      if (card != nullptr && hover_card_ != card) {
+        return;
+      }
+
+      hover_card_.clear();
+    } else {
+      if (card != nullptr && (card->window() != window_ || !pointer_position_ || !containsActivityPointer(*card, *pointer_position_))) {
+        return;
+      }
+
+      const auto* listed = target(identity);
+      if (listed == nullptr || !available(*listed)) {
+        return;
+      }
+
+      if (card != nullptr) {
+        if (hover_card_ != card) {
+          hover_card_ = card;
+        }
+      } else if (hovered_ != identity) {
+        hover_card_.clear();
+      }
+    }
+
+    hover_seen_ = true;
+    if (hovered_ != identity) {
+      hovered_ = identity;
+      emit hoveredChanged();
+    }
+  }
+
+  void ActivityController::clearHover() {
+    hover_card_.clear();
+
+    if (hovered_.isEmpty()) {
+      return;
+    }
+
+    hovered_.clear();
+    emit hoveredChanged();
+  }
+
+  void ActivityController::showHover(const QString& identity, std::uint64_t pointer_revision) {
+    if (pointer_revision != pointer_revision_) {
+      return;
+    }
+
+    hovered_ = identity;
+    emit hoveredChanged();
+  }
+
+  void ActivityController::observePointer(bool hover_input, std::optional<QPointF> position) {
+    ++pointer_revision_;
+    pointer_position_ = position;
+    hover_pending_ = hover_input;
+    hover_seen_ = false;
+    if (!hover_input) {
+      clearHover();
+
+      return;
+    }
+
+    if (hover_reset_queued_) {
+      return;
+    }
+
+    hover_reset_queued_ = true;
+    QMetaObject::invokeMethod(this, [this] {
+      hover_pending_ = false;
+      hover_reset_queued_ = false;
+      if (!hover_seen_) {
+        clearHover();
+      }
+    },
+        Qt::QueuedConnection);
+  }
+
+  std::uint64_t ActivityController::pointerRevision() const noexcept {
+    return pointer_revision_;
+  }
+
+}

@@ -20,6 +20,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
+#include "ui/activity/activity_controller.hpp"
 #include "ui/attachments/attachment_shelf.hpp"
 #include "ui/chrome/tabs_controller.hpp"
 #include "ui/components/component_surface_state.hpp"
@@ -150,7 +151,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
-    Q_PROPERTY(QAbstractItemModel* agents READ agents CONSTANT)
+    Q_PROPERTY(telar::gui::qt::ActivityController* activity READ activity CONSTANT)
     Q_PROPERTY(telar::gui::qt::HistoryController* history READ history CONSTANT)
     Q_PROPERTY(int controlModifier READ controlModifier CONSTANT)
     Q_PROPERTY(int superModifier READ superModifier CONSTANT)
@@ -198,8 +199,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
     Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
     Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
-    Q_PROPERTY(QString activityHover READ activityHover NOTIFY activityHoverChanged)
-    Q_PROPERTY(int activityAgentCount READ activityAgentCount NOTIFY activityCountChanged)
     Q_PROPERTY(QVariantMap paletteState READ paletteState NOTIFY paletteChanged)
     Q_PROPERTY(QVariantMap paletteGeometry READ paletteGeometry NOTIFY paletteChanged)
     Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
@@ -276,9 +275,6 @@ namespace telar::gui::qt {
     Q_INVOKABLE void reportPeekLimit(qulonglong requested_bytes);
     [[nodiscard]] QVariantMap peekState() const;
     [[nodiscard]] QVariantMap peekGeometry() const;
-    [[nodiscard]] QString activityHover() const;
-    [[nodiscard]] int activityAgentCount() const noexcept;
-    Q_INVOKABLE void hoverActivity(const QString& identity, QQuickItem* card = nullptr);
 
     using Dialog = Store::Dialog;
 
@@ -408,8 +404,8 @@ namespace telar::gui::qt {
       return &panes_;
     }
 
-    QAbstractItemModel* agents() noexcept {
-      return &agents_;
+    ActivityController* activity() noexcept {
+      return &activity_;
     }
 
     HistoryController* history() noexcept {
@@ -505,8 +501,6 @@ namespace telar::gui::qt {
     void machinesChanged();
     void machinePromptChanged();
     void peekChanged();
-    void activityHoverChanged();
-    void activityCountChanged();
     void machineLaunchFailed(const QString& error);
 
   private:
@@ -717,17 +711,13 @@ namespace telar::gui::qt {
     void publishStatus();
     // Notifies the attachment geometries when what they are measured from moved.
     void publishAttachmentGeometry();
-    void refreshAgents();
     void fitSidebarWhenReady();
     [[nodiscard]] float sidebarNaturalWidth() const;
-    [[nodiscard]] bool activityAvailable(const MachineActivityTarget& target) const;
     void selectActivity(const QString& identity, bool peek = false);
     void settleActivity();
     [[nodiscard]] bool peekOriginValid() const;
     void refreshPeek();
     void openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
-    void observeActivityPointer(bool hover_input = true, std::optional<QPointF> position = {});
-    void clearActivityHover();
     void presentChange(Change change);
     void initializeAttachments();
     void attachmentShelfChanged();
@@ -799,33 +789,6 @@ namespace telar::gui::qt {
     Store store_;
     HistoryController history_;
 
-    struct ActivitySourceVersion {
-      MachineClientKey source;
-      std::uint64_t runtime_generation;
-      std::uint64_t agents;
-      std::uint64_t workspaces;
-      std::uint64_t panes;
-      bool connected;
-      runtime::FixedText<MachineLimits::label_bytes> label;
-
-      bool operator==(const ActivitySourceVersion& other) const noexcept {
-        return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && panes == other.panes && connected == other.connected && label.view() == other.label.view();
-      }
-    };
-
-    struct ActivitySelection {
-      Machines::Slot slot;
-      std::uint64_t tabs;
-      std::uint64_t panes;
-
-      bool operator==(const ActivitySelection&) const noexcept = default;
-    };
-
-    struct ActivityRowTarget {
-      QString identity;
-      MachineActivityTarget target;
-    };
-
     struct PendingActivity {
       MachineActivityTarget target;
       std::uint64_t window;
@@ -838,20 +801,9 @@ namespace telar::gui::qt {
       std::uint64_t window;
     };
 
-    std::array<std::optional<ActivitySourceVersion>, Machines::capacity> activity_versions_;
-    std::optional<ActivitySelection> activity_selection_;
-    Vector<ActivityRowTarget, ApplicationAllocator> activity_targets_;
     std::optional<PendingActivity> pending_activity_;
     std::optional<PeekOrigin> peek_origin_;
     QString peek_editor_;
-    QString activity_hover_;
-    int activity_agent_count_ = 0;
-    QPointer<QQuickItem> activity_hover_card_;
-    std::optional<QPointF> activity_pointer_position_;
-    bool activity_hover_pending_ = false;
-    bool activity_hover_seen_ = false;
-    bool activity_hover_reset_queued_ = false;
-    std::uint64_t pointer_revision_ = 0;
     std::optional<MachineClientKey> sound_owner_;
     ConfigurationSource configuration_source_;
     // The theme and font QML reads, built on first read after each configurationChanged.
@@ -901,7 +853,7 @@ namespace telar::gui::qt {
     WorkspacesController workspaces_;
     TabsController tabs_;
     PanesController panes_;
-    ListModel agents_;
+    ActivityController activity_;
     QString palette_query_;
 
     struct PaletteEditorPosition {

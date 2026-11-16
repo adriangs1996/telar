@@ -45,7 +45,7 @@ namespace telar::gui::qt {
 
     connect(&element_slots_, &ElementSlots::contentChanged, this, [this] {
       // Agent records skip unchanged activity; mod content is a change of its own.
-      activity_versions_ = {};
+      activity_.invalidate();
       refresh();
     });
 
