@@ -708,6 +708,8 @@ namespace telar::gui::qt {
     bool updateViewport(qreal width, qreal height);
     void observeFrames(QQuickWindow& window);
     void refresh();
+    // Drops the theme and font QML reads and notifies a new configuration.
+    void publishConfiguration();
     // Notifies the title, diagnostic and copy mode properties whose value moved since they were
     // last published.
     void publishStatus();

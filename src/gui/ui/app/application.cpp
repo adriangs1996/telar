@@ -181,13 +181,6 @@ namespace telar::gui::qt {
         tabs_(store_, element_slots_),
         panes_(store_, element_slots_),
         hostname_(platform::hostName()) {
-    // First of configurationChanged's connections: every slot and binding it reaches, directly
-    // or through the signals chained to it, reads the new theme rather than a cached one.
-    connect(this, &Application::configurationChanged, this, [this] {
-      colors_.reset();
-      font_.reset();
-    });
-
     initializeMachines();
     initializeMachineProfiles();
     initializeAttachments();
@@ -259,7 +252,7 @@ namespace telar::gui::qt {
       sidebar_fit_pending_ = true;
       fitSidebarWhenReady();
 
-      emit configurationChanged();
+      publishConfiguration();
       history_.setMetrics(historyMetrics());
       configureWindow();
       refresh();
@@ -277,7 +270,7 @@ namespace telar::gui::qt {
         }
       }
 
-      emit configurationChanged();
+      publishConfiguration();
       refresh();
     });
 
@@ -1345,6 +1338,14 @@ namespace telar::gui::qt {
   void Application::fail(const std::exception& error) {
     error_ = QString::fromUtf8(error.what());
     publishStatus();
+  }
+
+  void Application::publishConfiguration() {
+    // Qt notifies QML bindings before any connected slot, so the cache is dropped before the
+    // signal rather than in a slot of it.
+    colors_.reset();
+    font_.reset();
+    emit configurationChanged();
   }
 
   // Each pane delegate reads the theme a score of times; it is built once per configuration.
