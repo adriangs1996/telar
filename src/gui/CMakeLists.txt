@@ -124,8 +124,8 @@ target_sources(gui-core PRIVATE
   text/notification_payload/notification_payload.cpp
   transport/runtime_link/runtime_link.cpp
 )
-target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
-target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
+target_link_libraries(gui-core PUBLIC tbc::tbc telar::shell telar::render ebnf::ebnf)
+target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(gui-core PUBLIC telar::config telar::machines gui-harfbuzz)
 target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)
 set_source_files_properties(terminal/glyphs/curve_cache/box_curve.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
