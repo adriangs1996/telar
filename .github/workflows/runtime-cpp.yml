@@ -89,20 +89,20 @@ jobs:
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
           tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
-          tools/cpp exec -- cmake -DJOBS=3 -DRUNTIME_BUILD_DIRECTORY=src/runtime/out -P src/runtime/cmake/lifetime.cmake
+          tools/cpp exec -- cmake -DJOBS=3 -DCHECK=lifetime -DBUILD_DIRECTORY=src/runtime/out -P cmake/scripts/check.cmake
           for project in auth; do
-            tools/cpp build "$project" -B ".dev/ci/$project" -- --target lifetime-check
+            tools/cpp build "$project" -B ".dev/ci/$project" -- --target lifetime
           done
 
       - name: Check interface bodies
         if: matrix.configuration == 'Release'
         working-directory: ${{ github.workspace }}
-        run: tools/cpp exec -- cmake -DJOBS=3 -DRUNTIME_BUILD_DIRECTORY=src/runtime/out -P src/runtime/cmake/interface_bodies.cmake
+        run: tools/cpp exec -- cmake -DJOBS=3 -DCHECK=interface_bodies -DBUILD_DIRECTORY=src/runtime/out -P cmake/scripts/check.cmake
 
       - name: Check blank lines
         if: matrix.configuration == 'Release'
         working-directory: ${{ github.workspace }}
-        run: tools/cpp exec -- cmake -DJOBS=3 -DRUNTIME_BUILD_DIRECTORY=src/runtime/out -P src/runtime/cmake/blank_lines.cmake
+        run: tools/cpp exec -- cmake -DJOBS=3 -DCHECK=blank_lines -DBUILD_DIRECTORY=src/runtime/out -P cmake/scripts/check.cmake
 
       - name: Retain validation reports
         if: always()

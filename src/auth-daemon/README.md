@@ -20,8 +20,8 @@ just auth-format
 runtime or GUI. `just editor` includes this project too. `.clangd` uses that
 database, and `.clangd-build.json` refreshes it on save in editors that support it.
 The format and clang-tidy profiles are shared with the C++ runtime through
-relative symlinks. Tooling targets use the existing generic CMake script in
-`lib/tbc/cmake/tooling.cmake`; TBC is not a build dependency.
+relative symlinks. The `format`, `format-check`, `lint` and `lifetime` targets come from the
+repository's `cmake/TelarChecks.cmake`; TBC is not a build dependency.
 
 Use `../../tools/cpp bootstrap` and add `../../.toolchain/bin` to `PATH`.
 The presets use the pinned LLVM 23.1.5 / CMake 4.4.5 / Ninja 1.13.2 toolchain. Formatting and

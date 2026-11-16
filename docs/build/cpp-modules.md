@@ -598,9 +598,9 @@ tools/cpp exec -- just runtime-lint 3 "$PWD/.dev/tooling-fix/runtime-lint"
 
 # The same preparation is available through the direct script entry point.
 tools/cpp configure runtime -B .dev/runtime-lint --config Debug
-tools/cpp exec -- cmake -DJOBS=3 \
-  -DRUNTIME_BUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
-  -P src/runtime/cmake/lint.cmake
+tools/cpp exec -- cmake -DJOBS=3 -DCHECK=lint \
+  -DBUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
+  -P cmake/scripts/check.cmake
 
 python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
 ```

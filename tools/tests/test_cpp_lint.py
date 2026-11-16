@@ -31,12 +31,16 @@ export constexpr int fixture_value() { return LINT_VALUE; }
             (source / 'main.cpp').write_text(importer)
             (source / 'tools/hidden.cpp').write_text(importer)
             (source / 'tests/never.cpp').write_text('#error Unrelated tests must not be built or linted\n')
+            # Each source is linted with the .clang-tidy nearest it: here, the runtime's profile.
+            (source / '.clang-tidy').write_text((ROOT / 'src/runtime/.clang-tidy').read_text())
             (source / 'CMakeLists.txt').write_text('''cmake_minimum_required(VERSION 4.4.5)
 project(lint_fixture LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include("''' + str(ROOT / 'cmake/TelarChecks.cmake') + '''")
+telar_checks()
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/generated.hpp"
   COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/seed.hpp" "${CMAKE_BINARY_DIR}/generated.hpp"
   DEPENDS seed.hpp)
@@ -50,6 +54,7 @@ target_link_libraries(importer PRIVATE provider)
 add_executable(hidden-tool EXCLUDE_FROM_ALL tools/hidden.cpp)
 target_link_libraries(hidden-tool PRIVATE provider)
 add_executable(unrelated-tests tests/never.cpp)
+telar_register_checks(provider importer hidden-tool CHECKS lint)
 ''')
             env = dict(os.environ, PATH=str(CMAKE.parent) + os.pathsep + os.environ['PATH'])
             def run(*args):
@@ -64,8 +69,8 @@ add_executable(unrelated-tests tests/never.cpp)
                         if Path(entry['file']).relative_to(source).parts[0] != 'tests']
             outputs = [Path(entry['output']) for entry in selected]
             self.assertFalse(any(path.exists() for path in outputs))
-            command = [CMAKE, '-DRUNTIME_BUILD_DIRECTORY=' + str(binary), '-DJOBS=2',
-                       '-P', ROOT / 'src/runtime/cmake/lint.cmake']
+            command = [CMAKE, '-DCHECK=lint', '-DBUILD_DIRECTORY=' + str(binary), '-DJOBS=2',
+                       '-P', ROOT / 'cmake/scripts/check.cmake']
             first = run(*command)
             self.assertEqual(first.returncode, 0, first.stdout)
             self.assertIn('for 3 files', first.stdout)
@@ -85,7 +90,8 @@ add_executable(unrelated-tests tests/never.cpp)
             (source / 'tools/added.cpp').write_text(importer)
             with (source / 'CMakeLists.txt').open('a') as project:
                 project.write('add_executable(added-tool EXCLUDE_FROM_ALL tools/added.cpp)\n'
-                              'target_link_libraries(added-tool PRIVATE provider)\n')
+                              'target_link_libraries(added-tool PRIVATE provider)\n'
+                              'telar_register_checks(added-tool CHECKS lint)\n')
             third = run(*command)
             self.assertEqual(third.returncode, 0, third.stdout)
             self.assertIn('for 4 files', third.stdout)

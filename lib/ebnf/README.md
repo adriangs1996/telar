@@ -307,11 +307,11 @@ cmake --build --preset debug --target format-check
 cmake --build --preset debug --target lint
 ```
 
-`format` edits C++ sources, headers and `.cppm` module interfaces. `format-check` reports formatting errors
-without changing files. Both skip build directories, generated files, and vendored
-code. These commands share TBC's tooling helper. `lint` runs `clang-tidy` on the translation units in the selected build's
-compilation database, excluding dependencies and generated code, and fails on
-enabled diagnostics. Test sources are included. Build first if sources need
+`format` edits every C++ source, header and `.cppm` module interface Git tracks in the
+repository; `format-check` reports formatting errors without changing files. Both skip
+vendored code. `lint` runs `clang-tidy` on the sources of the library, the executable and
+the tests, and fails on enabled diagnostics; `lifetime` runs tbc-lint on them. The targets
+come from the repository's `cmake/TelarChecks.cmake`. Build first if sources need
 generated headers. Tooling is explicit; normal builds do not run it.
 
 The format follows the repository root's `.clang-format`. The tidy configuration

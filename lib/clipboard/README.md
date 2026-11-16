@@ -134,16 +134,18 @@ Rebuild before debugging changed code; launching does not build automatically.
 cmake --build --preset debug --target format
 cmake --build --preset debug --target format-check
 cmake --build --preset debug --target lint
-cmake --build --preset debug --target lifetime-check
+cmake --build --preset debug --target lifetime
+cmake --build --preset debug --target blank-lines
 ```
 
-Formatting and clang-tidy reuse `../ebnf/cmake/tooling.cmake` rather than copying it.
-Formatting discovers project C++ files; lint analyzes translation units in the
-selected compilation database. Build directories and generated or vendored code
-are excluded. Tooling runs explicitly, not during normal builds.
+The targets come from the repository's `cmake/TelarChecks.cmake`. `format` and
+`format-check` cover every C++ file Git tracks in the repository; `lint`,
+`lifetime` and `blank-lines` analyze the sources of the targets that register for
+them: the library, the `clipboard` executable and its test. Tooling runs
+explicitly, not during normal builds.
 Add new implementation files to the `clipboard` target in `CMakeLists.txt`.
 
-`lifetime-check` reuses TBC's CMake helper and `.tbc.json` editor configuration.
+`lifetime` uses the tbc-lint that `.tbc.json` names.
 Build the sibling checker first if `../tbc/out/debug/tbc-lint` does not exist:
 
 ```sh

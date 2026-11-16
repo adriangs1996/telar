@@ -126,7 +126,7 @@ runtime-editor: (runtime-configure "out" "Debug")
 # Analyze the production runtime sources without applying fixes.
 [working-directory: "src/runtime"]
 runtime-lint jobs="2" directory="out": (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lint.cmake
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" -DCHECK=lint "-DBUILD_DIRECTORY={{ directory }}" -P ../../cmake/scripts/check.cmake
 
 # Analyze the GUI sources with its clang-tidy profile.
 [working-directory: "src/gui"]
@@ -141,7 +141,7 @@ lifetime-checker:
 # Check the lifetimes of the production runtime, CLI and telar library sources.
 [working-directory: "src/runtime"]
 runtime-lifetime directory="out": lifetime-checker (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lifetime.cmake
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DCHECK=lifetime "-DBUILD_DIRECTORY={{ directory }}" -P ../../cmake/scripts/check.cmake
 
 # Check the lifetimes of the GUI sources.
 [working-directory: "src/gui"]
@@ -151,7 +151,7 @@ gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
 # Check that the runtime, CLI and telar library interfaces keep no function body outside the allowlist.
 [working-directory: "src/runtime"]
 runtime-interface-bodies directory="out": lifetime-checker (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/interface_bodies.cmake
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DCHECK=interface_bodies "-DBUILD_DIRECTORY={{ directory }}" -P ../../cmake/scripts/check.cmake
 
 # Check that the GUI interfaces keep no function body outside the allowlist.
 [working-directory: "src/gui"]
@@ -161,7 +161,7 @@ gui-interface-bodies: lifetime-checker (gui-configure "out" "Debug")
 # Check the blank lines of docs/code-style.md in the runtime, CLI and telar library units; FIX=ON inserts them.
 [working-directory: "src/runtime"]
 runtime-blank-lines directory="out" fix="OFF": lifetime-checker (runtime-configure directory "Debug")
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" "-DFIX={{ fix }}" -P cmake/blank_lines.cmake
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DCHECK=blank_lines "-DBUILD_DIRECTORY={{ directory }}" "-DFIX={{ fix }}" -P ../../cmake/scripts/check.cmake
 
 # Check the blank lines of docs/code-style.md in the GUI units.
 [working-directory: "src/gui"]
@@ -170,11 +170,11 @@ gui-blank-lines: lifetime-checker (gui-configure "out" "Debug")
 
 # Format every C++, Objective-C++ and module file in the repository with the root .clang-format.
 format:
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -P cmake/format.cmake
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -P cmake/scripts/format.cmake
 
 # Check the formatting of every C++, Objective-C++ and module file without changing it.
 format-check:
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DMODE=format-check -P cmake/format.cmake
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DMODE=format-check -P cmake/scripts/format.cmake
 
 # Package the Release Telar.app, install it under APPS and link its `telar` into BIN.
 [macos]

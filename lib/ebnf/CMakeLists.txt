@@ -25,9 +25,12 @@ if(NOT TARGET tbc::tbc)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
 endif()
 
+# The interfaces keep function bodies and fail the lifetime analysis, so they are not yet
+# checked for either.
 telar_add_library(ebnf-core ALIAS ebnf::ebnf
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}"
-  DEPS telar::tbc)
+  DEPS telar::tbc
+  CHECKS lint blank_lines)
 
 add_library(ebnf_options INTERFACE)
 target_include_directories(ebnf_options INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -85,32 +88,10 @@ if(BUILD_TESTING)
   include(cmake/tests.cmake)
 endif()
 
-# Test translation units can instantiate templates with test doubles, so their diagnostics stay separate.
-set(ebnf_lifetime_sources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
-foreach(source IN LISTS ebnf_sources)
-  list(APPEND ebnf_lifetime_sources "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
-endforeach()
-tbc_add_lifetime_check(lifetime-check ${ebnf_lifetime_sources})
-
+# The quality checks of the library, the executable and, when built, the tests.
+telar_checks()
+telar_register_checks(ebnf CHECKS lint lifetime)
 if(BUILD_TESTING)
-  set(ebnf_test_lifetime_sources)
-  foreach(source IN LISTS ebnf_test_sources)
-    list(APPEND ebnf_test_lifetime_sources "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
-  endforeach()
-  tbc_add_lifetime_check(lifetime-check-tests ${ebnf_test_lifetime_sources})
+  telar_register_checks(ebnf_tests CHECKS lint lifetime)
 endif()
-
-get_filename_component(ebnf_compiler_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
-foreach(mode IN ITEMS format format-check lint)
-  add_custom_target(${mode}
-    COMMAND "${CMAKE_COMMAND}"
-      "-DMODE=${mode}"
-      "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
-      "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
-      "-DCOMPILER_DIR=${ebnf_compiler_directory}"
-      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tooling.cmake"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    USES_TERMINAL
-    VERBATIM)
-endforeach()
 endif()

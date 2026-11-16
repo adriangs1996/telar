@@ -86,6 +86,7 @@ if(APPLE)
 endif()
 include(cmake/window.cmake)
 install(TARGETS telar RUNTIME DESTINATION bin)
+telar_register_checks(cli-core cli-launch telar telar-config-check CHECKS ${TELAR_CHECKS})
 
 include(CTest)
 if(BUILD_TESTING)
@@ -130,6 +131,8 @@ if(BUILD_TESTING)
     add_test(NAME exec-runtime-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/exec_runtime_test.py" --telar "$<TARGET_FILE:telar>" --prepare-probe "$<TARGET_FILE:repository-prepare-probe>")
     set_tests_properties(exec-runtime-cli-tests PROPERTIES TIMEOUT 90)
   endif()
+  telar_register_checks(cli-test-check hook-tests integration-tests json-text-tests arguments-tests
+    hook-mapping-probe repository-prepare-probe CHECKS lint blank_lines)
 endif()
 
 if(BUILD_TESTING)

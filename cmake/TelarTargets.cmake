@@ -1,28 +1,12 @@
 include_guard(GLOBAL)
 
 include("${CMAKE_CURRENT_LIST_DIR}/TelarBuild.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TelarChecks.cmake")
 
 # How every telar library, domain and test is declared. A library or domain is a
 # static archive whose module interfaces are every .cppm below its folder; a test
 # builds beside the process it tests. Each helper registers its target for the
 # quality checks of cmake/TelarChecks.cmake, which take their scope from here.
-
-# The quality checks a target can register for.
-set(TELAR_CHECKS lint lifetime blank_lines interface_bodies)
-
-# telar_register_checks(<target> CHECKS <check>...): adds the target's sources to the
-# scope of each check. The helpers call it; a target they do not create yet calls it
-# itself.
-function(telar_register_checks target)
-  cmake_parse_arguments(PARSE_ARGV 1 register "" "" "CHECKS")
-  foreach(check IN LISTS register_CHECKS)
-    if(NOT check IN_LIST TELAR_CHECKS)
-      message(FATAL_ERROR "${target}: unknown check '${check}'; the checks are ${TELAR_CHECKS}")
-    endif()
-  endforeach()
-  set_property(TARGET ${target} APPEND PROPERTY TELAR_CHECKS ${register_CHECKS})
-  set_property(GLOBAL APPEND PROPERTY TELAR_CHECK_TARGETS ${target})
-endfunction()
 
 # telar_modules(<target> [EXCLUDE <folder>...]): makes every module interface below
 # the current folder part of the target's public module file set, so scanning,

@@ -3,6 +3,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
 project(telar_runtime LANGUAGES C CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
+telar_checks(PREFIX runtime)
 
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
@@ -243,6 +244,7 @@ add_dependencies(runtime-core cell-layout command-specs)
 include(CTest)
 add_executable(telar-runtime main.cpp)
 target_link_libraries(telar-runtime PRIVATE runtime-core)
+telar_register_checks(runtime-core telar-runtime ghostty-manifest CHECKS ${TELAR_CHECKS})
 install(TARGETS telar-runtime RUNTIME DESTINATION bin)
 # The pinned libraries are linked into both executables; their licenses travel with them.
 install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREFIX}/share/licenses/" DESTINATION share/telar/licenses)

@@ -1,10 +1,10 @@
 # Formats every C++, Objective-C++ and module file Git tracks outside vendored code with
 # the root .clang-format, or with MODE=format-check fails on the first one that differs.
-#   cmake [-DMODE=format-check] [-DCLANG_FORMAT=<path>] -P cmake/format.cmake
+#   cmake [-DMODE=format-check] [-DCLANG_FORMAT=<path>] -P cmake/scripts/format.cmake
 # The style needs the pinned clang-format, so only the repository toolchain is searched.
 cmake_minimum_required(VERSION 3.25)
 
-get_filename_component(root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+get_filename_component(root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 if(NOT DEFINED MODE)
   set(MODE format)
 endif()

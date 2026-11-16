@@ -256,9 +256,9 @@ The direct script entry point performs the same preparation after configuration:
 
 ```sh
 tools/cpp configure runtime -B .dev/runtime-lint --config Debug
-tools/cpp exec -- cmake -DJOBS=3 \
-  -DRUNTIME_BUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
-  -P src/runtime/cmake/lint.cmake
+tools/cpp exec -- cmake -DJOBS=3 -DCHECK=lint \
+  -DBUILD_DIRECTORY="$PWD/.dev/runtime-lint" \
+  -P cmake/scripts/check.cmake
 ```
 
 Build and analysis errors propagate to the caller; the command does not run tests

@@ -106,19 +106,8 @@ if(CLIPBOARD_WARNINGS_AS_ERRORS AND NOT MSVC)
   set_property(SOURCE ${clipboard_strict_sources} APPEND PROPERTY COMPILE_OPTIONS -Werror)
 endif()
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/../tbc/cmake/tbcLifetimeCheck.cmake")
-tbc_add_lifetime_check(lifetime-check "${CMAKE_CURRENT_SOURCE_DIR}/cli.cpp")
-
-get_filename_component(clipboard_compiler_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
-foreach(mode IN ITEMS format format-check lint)
-  add_custom_target(${mode}
-    COMMAND "${CMAKE_COMMAND}"
-      "-DMODE=${mode}"
-      "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
-      "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
-      "-DCOMPILER_DIR=${clipboard_compiler_directory}"
-      -P "${CMAKE_CURRENT_SOURCE_DIR}/../ebnf/cmake/tooling.cmake"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    USES_TERMINAL
-    VERBATIM)
-endforeach()
+telar_checks()
+telar_register_checks(clipboard CHECKS lint lifetime)
+if(TARGET clipboard-test)
+  telar_register_checks(clipboard-test CHECKS lint)
+endif()

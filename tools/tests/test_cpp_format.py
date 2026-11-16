@@ -1,4 +1,4 @@
-"""Exercise the EBNF format entry point without invoking a real formatter."""
+"""Exercise TBC's format entry point without invoking a real formatter."""
 import json
 import os
 from pathlib import Path
@@ -48,7 +48,7 @@ if '-i' in args:
     def invoke(self, mode):
         return subprocess.run([CMAKE, '-DMODE=' + mode, '-DSOURCE_DIR=' + str(self.source),
                                '-DBINARY_DIR=' + str(self.binary), '-DCOMPILER_DIR=' + str(self.tool),
-                               '-P', str(ROOT / 'lib/ebnf/cmake/tooling.cmake')],
+                               '-P', str(ROOT / 'lib/tbc/cmake/tooling.cmake')],
                               env=dict(os.environ, FORMAT_LOG=str(self.log)), text=True,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 

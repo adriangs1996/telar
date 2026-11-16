@@ -36,4 +36,4 @@ jobs:
       - uses: ./.github/actions/cpp-toolchain
 
       - name: Check the C++ formatting of the whole tree
-        run: cmake -DMODE=format-check -P cmake/format.cmake
+        run: cmake -DMODE=format-check -P cmake/scripts/format.cmake

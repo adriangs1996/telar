@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 4.4.5)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_gui LANGUAGES C CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TelarTargets.cmake")
+telar_checks(PREFIX gui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, gui-lint and per-file incremental rebuilds need one compile command per source.
@@ -144,43 +145,6 @@ target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GN
 target_compile_options(telar-gui-command PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(telar-gui-command PRIVATE telar::build_flags)
 
-set(TELAR_GUI_LINT_JOBS 2 CACHE STRING "Parallel clang-tidy processes")
-add_custom_target(gui-lint
-  COMMAND "${CMAKE_COMMAND}"
-    "-DGUI_BUILD_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}"
-    "-DGUI_LINT_JOBS=${TELAR_GUI_LINT_JOBS}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lint.cmake"
-  USES_TERMINAL
-  VERBATIM)
-add_dependencies(gui-lint gui-posix gui-glyphs telar-gui-command)
-
-add_custom_target(gui-lifetime
-  COMMAND "${CMAKE_COMMAND}"
-    "-DGUI_BUILD_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}"
-    "-DTBC_LINTER=${TBC_LINTER}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lifetime.cmake"
-  USES_TERMINAL
-  VERBATIM)
-add_dependencies(gui-lifetime gui-posix gui-glyphs telar-gui-command)
-
-add_custom_target(gui-interface-bodies
-  COMMAND "${CMAKE_COMMAND}"
-    "-DGUI_BUILD_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}"
-    "-DTBC_LINTER=${TBC_LINTER}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/interface_bodies.cmake"
-  USES_TERMINAL
-  VERBATIM)
-add_dependencies(gui-interface-bodies gui-posix gui-glyphs telar-gui-command)
-
-add_custom_target(gui-blank-lines
-  COMMAND "${CMAKE_COMMAND}"
-    "-DGUI_BUILD_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}"
-    "-DTBC_LINTER=${TBC_LINTER}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/blank_lines.cmake"
-  USES_TERMINAL
-  VERBATIM)
-add_dependencies(gui-blank-lines gui-posix gui-glyphs telar-gui-command)
-
 add_library(gui-config INTERFACE)
 include("${TELAR_ROOT}/cmake/deps/ghostty.cmake")
 target_link_libraries(gui-core PUBLIC deps::ghostty_vt)
@@ -205,7 +169,6 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-fonts PUBLIC gui-core gui-harfbuzz)
   target_link_libraries(gui-editor-context INTERFACE gui-fonts)
   target_compile_options(gui-fonts PRIVATE -ffp-contract=off)
-  add_dependencies(gui-lint gui-fonts)
 
   include(cmake/qt.cmake)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Gui Qml Quick QuickControls2 Network Concurrent ShaderTools Svg
@@ -218,11 +181,9 @@ if(TELAR_GUI_NATIVE)
   add_library(gui-surface-command STATIC ui/components/surface_command.cpp)
   target_link_libraries(gui-surface-command PUBLIC gui-posix Qt6::Core)
   add_dependencies(gui-surface-command telar-gui-command)
-  add_dependencies(gui-lint gui-surface-command)
 
   add_library(gui-machine-profiles STATIC ui/machines/machine_profiles_source.cpp ui/machines/machine_profiles_source.hpp)
   target_link_libraries(gui-machine-profiles PUBLIC gui-posix Qt6::Concurrent)
-  add_dependencies(gui-lint gui-machine-profiles)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
   endif()
@@ -299,7 +260,6 @@ if(TELAR_GUI_NATIVE)
 
   add_library(gui-clipboard-images STATIC ui/attachments/attachment_preview.cpp ui/attachments/attachment_preview.hpp ui/attachments/clipboard_images.cpp ui/attachments/clipboard_images.hpp)
   target_link_libraries(gui-clipboard-images PUBLIC gui-platform Qt6::Concurrent)
-  add_dependencies(gui-lint gui-clipboard-images)
 
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
@@ -436,7 +396,6 @@ if(TELAR_GUI_NATIVE)
   endif()
   target_link_libraries(telar-gui PRIVATE gui-quick gui-quickplugin)
   add_dependencies(telar-gui telar-gui-command)
-  add_dependencies(gui-lint telar-gui)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts
@@ -540,6 +499,16 @@ if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 telar_gui_scan_moc_imports()
+
+# The quality checks cover the GUI's libraries and programs; the tests register themselves.
+telar_register_checks(gui-core gui-posix CHECKS ${TELAR_CHECKS})
+if(TELAR_GUI_NATIVE)
+  telar_register_checks(gui-fonts gui-surface-command gui-machine-profiles gui-platform gui-keyboard
+    gui-clipboard-images gui-quick telar-gui CHECKS ${TELAR_CHECKS})
+  if(APPLE)
+    telar_register_checks(telar-gui-launcher CHECKS ${TELAR_CHECKS})
+  endif()
+endif()
 
 # Probes and smoke tools run by hand or by tools/ scripts, never by CTest: building them on
 # every test run costs a full module compile each. `cmake --build out --target gui-probes`
