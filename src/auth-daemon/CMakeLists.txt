@@ -1,4 +1,4 @@
-project(telar_auth_daemon LANGUAGES CXX)
+telar_process(auth-daemon)
 
 option(TELAR_AUTH_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 

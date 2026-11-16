@@ -1,4 +1,4 @@
-project(telar_runtime LANGUAGES C CXX)
+telar_process(runtime)
 
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 

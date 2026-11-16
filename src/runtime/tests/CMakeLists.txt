@@ -34,7 +34,7 @@ telar_add_test(command-capture-probe PROBE SOURCES command_capture_probe.cpp LIB
 telar_add_test(control-query-accounting-probe PROBE SOURCES control_accounting_probe.cpp LIBRARIES runtime-core runtime-test-fixtures)
 telar_add_test(control-queue-tests SOURCES control_queue_test.cpp pty_response_queue_test.cpp LIBRARIES runtime-core runtime-test-fixtures
   LABELS runtime.terminal TIMEOUT 15)
-target_include_directories(control-queue-tests PRIVATE "${PROJECT_SOURCE_DIR}")
+target_include_directories(control-queue-tests PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
 target_compile_options(control-queue-tests PRIVATE -Wall -Wextra -Wpedantic)
 # The parser and the ordinary scans run from runtime-core's control module. Each scan test calls
 # both of its instruction sets: the target's vectors and the byte loop of a target without them.
@@ -52,8 +52,8 @@ telar_add_test(runtime-clipboard-tests SOURCES runtime_clipboard_test.cpp LIBRAR
   LABELS runtime.runtime TIMEOUT 15)
 if(APPLE AND TELAR_CLIPBOARD_NATIVE)
   target_sources(runtime-clipboard-tests PRIVATE runtime_clipboard_native_test.cpp
-    "${PROJECT_SOURCE_DIR}/../gui/tests/platform/macos/private_clipboard.mm")
-  target_include_directories(runtime-clipboard-tests PRIVATE "${PROJECT_SOURCE_DIR}/../gui/tests")
+    "${TELAR_PROCESS_SOURCE_DIR}/../gui/tests/platform/macos/private_clipboard.mm")
+  target_include_directories(runtime-clipboard-tests PRIVATE "${TELAR_PROCESS_SOURCE_DIR}/../gui/tests")
   set_target_properties(runtime-clipboard-tests PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES)
   target_compile_options(runtime-clipboard-tests PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
   target_compile_definitions(runtime-clipboard-tests PRIVATE TELAR_TEST_NATIVE_CLIPBOARD=1)
@@ -64,7 +64,7 @@ if(TELAR_CLIPBOARD_NATIVE AND TELAR_CLIPBOARD_INTEGRATION_TESTS AND CMAKE_SYSTEM
     find_program(clipboard_test_${program} ${program} REQUIRED)
   endforeach()
   telar_add_test(runtime-clipboard-native-tests COMMAND Python3::Interpreter -B
-    "${PROJECT_SOURCE_DIR}/tools/check_runtime_clipboard.py" --telar "$<TARGET_FILE:telar>"
+    "${TELAR_PROCESS_SOURCE_DIR}/tools/check_runtime_clipboard.py" --telar "$<TARGET_FILE:telar>"
     LABELS runtime.runtime TIMEOUT 60)
 endif()
 telar_add_test(control-clipboard-tests SOURCES control_clipboard_test.cpp LIBRARIES runtime-core runtime-test-fixtures
@@ -161,7 +161,7 @@ telar_add_test(ip-fragment-tests SOURCES ip_fragments_test.cpp LIBRARIES runtime
 telar_add_test(datagram-tests SOURCES datagram_test.cpp LIBRARIES runtime-core runtime-test-fixtures
   LABELS runtime.traffic)
 
-telar_add_test(plugin-action-worker COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/compare_action_workers.py" --cpp "$<TARGET_FILE:telar-runtime>"
+telar_add_test(plugin-action-worker COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/compare_action_workers.py" --cpp "$<TARGET_FILE:telar-runtime>"
   LABELS runtime.plugins TIMEOUT 90)
 
 # Probes run by hand or by tools/ scripts, never by CTest: building them on every test run

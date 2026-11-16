@@ -8,6 +8,16 @@ include("${CMAKE_CURRENT_LIST_DIR}/TelarChecks.cmake")
 # builds beside the process it tests. Each helper registers its target for the
 # quality checks of cmake/TelarChecks.cmake, which take their scope from here.
 
+# telar_process(<name>): the folder that calls it is the process <name>. Its source and
+# binary directories become TELAR_PROCESS_SOURCE_DIR and TELAR_PROCESS_BINARY_DIR for the
+# helpers called here and in the folders below, which build tests and probes beside the
+# process.
+macro(telar_process name)
+  set(TELAR_PROCESS "${name}")
+  set(TELAR_PROCESS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+  set(TELAR_PROCESS_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+endmacro()
+
 # telar_modules(<target> [EXCLUDE <folder>...] [MACOS_SOURCES <file>...]
 #               [LINUX_SOURCES <file>...]): makes every module interface below the
 # current folder part of the target's public module file set, so scanning, transitive
@@ -178,8 +188,8 @@ function(telar_add_test name)
         # Static Qt links the QML plugins a program imports. Like the process's own programs,
         # a test scans the process's QML and finds its QML modules in its build directory.
         set_target_properties(${name} PROPERTIES
-          QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS "${PROJECT_SOURCE_DIR}"
-          QT_QML_IMPORT_PATH "${PROJECT_BINARY_DIR}")
+          QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS "${TELAR_PROCESS_SOURCE_DIR}"
+          QT_QML_IMPORT_PATH "${TELAR_PROCESS_BINARY_DIR}")
       else()
         add_executable(${name} ${test_SOURCES})
       endif()
@@ -194,12 +204,12 @@ function(telar_add_test name)
       endif()
     endif()
     set_target_properties(${name} PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-      LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-      ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+      RUNTIME_OUTPUT_DIRECTORY "${TELAR_PROCESS_BINARY_DIR}"
+      LIBRARY_OUTPUT_DIRECTORY "${TELAR_PROCESS_BINARY_DIR}"
+      ARCHIVE_OUTPUT_DIRECTORY "${TELAR_PROCESS_BINARY_DIR}")
     if(test_PROBE)
       set_target_properties(${name} PROPERTIES EXCLUDE_FROM_ALL ON)
-      set_property(DIRECTORY "${PROJECT_SOURCE_DIR}" APPEND PROPERTY TELAR_PROBES ${name})
+      set_property(DIRECTORY "${TELAR_PROCESS_SOURCE_DIR}" APPEND PROPERTY TELAR_PROBES ${name})
     endif()
     telar_register_checks(${name} CHECKS ${test_CHECKS})
   elseif(test_COMMAND)
@@ -217,7 +227,7 @@ function(telar_add_test name)
   if(NOT test_TEST)
     set(test_TEST ${name})
   endif()
-  add_test(NAME ${test_TEST} COMMAND ${test_COMMAND} ${test_ARGS} WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
+  add_test(NAME ${test_TEST} COMMAND ${test_COMMAND} ${test_ARGS} WORKING_DIRECTORY "${TELAR_PROCESS_BINARY_DIR}")
   set_tests_properties(${test_TEST} PROPERTIES LABELS "${test_LABELS}")
   if(test_TIMEOUT)
     set_tests_properties(${test_TEST} PROPERTIES TIMEOUT ${test_TIMEOUT})
@@ -229,6 +239,6 @@ endfunction()
 
 # telar_add_probes(<target>): the target that builds every PROBE of this process.
 function(telar_add_probes target)
-  get_property(probes DIRECTORY "${PROJECT_SOURCE_DIR}" PROPERTY TELAR_PROBES)
+  get_property(probes DIRECTORY "${TELAR_PROCESS_SOURCE_DIR}" PROPERTY TELAR_PROBES)
   add_custom_target(${target} DEPENDS ${probes})
 endfunction()

@@ -1,4 +1,4 @@
-project(telar_gui LANGUAGES C CXX)
+telar_process(gui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, lint and per-file incremental rebuilds need one compile command per source.

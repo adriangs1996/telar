@@ -1,4 +1,4 @@
-project(telar_cli LANGUAGES C CXX)
+telar_process(cli)
 
 find_package(Threads REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
