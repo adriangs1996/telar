@@ -157,7 +157,7 @@ namespace telar::gui::qt {
     registerComponentFonts();
     component_timer_.setSingleShot(true);
     connect(&component_timer_, &QTimer::timeout, this, &Application::tickComponents);
-    // Layout changes share this signal; only a new Lua generation retires its surfaces.
+    // A theme change shares this signal; only a new Lua generation retires its surfaces.
     connect(this, &Application::configurationChanged, this, [this] {
       if (component_surfaces_.generation != configuration_source_.configurationGeneration()) {
         resetComponents();

@@ -361,7 +361,7 @@ namespace {
     command.request_id = 1;
     command.route = {.id = 1, .generation = 1};
     command.action = ClientAction::sidebar_hide;
-    require(deliver(client, command) == Change::configuration && !client.configuration().sidebar_visible, "routed sidebar commands must update window state");
+    require(deliver(client, command) == Change::sidebar && !client.configuration().sidebar_visible, "routed sidebar commands must update window state");
     constexpr std::uint16_t expected_sidebar_columns = 42;
     const auto hidden = transport.last<CompleteClientCommand>();
 
@@ -423,7 +423,7 @@ namespace {
     const auto logical_width = client.configuration().sidebar_width;
     ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::sidebar_resize, .value = preferred_columns};
 
-    require(deliver(client, command) == Change::configuration, "an exact sidebar column request must update semantic layout state");
+    require(deliver(client, command) == Change::sidebar, "an exact sidebar column request must update semantic layout state");
     const auto resized = transport.last<CompleteClientCommand>();
 
     require(resized.status == ClientCommandStatus::applied && resized.value == command.value && resized.text == "hidden", "a resize must report the clamped width without changing visibility");
@@ -798,7 +798,7 @@ namespace {
     const auto attachments = transport.count(ClientTag::open_pane);
     ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::workspace_list_collapse};
 
-    require(deliver(client, command) == Change::configuration && client.workspaceListCollapsed(), "routed collapse must update the projection preference");
+    require(deliver(client, command) == Change::sidebar && client.workspaceListCollapsed(), "routed collapse must update the projection preference");
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::applied, "collapse command must complete as applied");
     require(transport.last<UpdateClientLayout>().workspace_list_collapsed, "collapse preference must be retained by the runtime");
 
@@ -814,7 +814,7 @@ namespace {
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::failed, "invalid status must receive a failed completion");
 
     command.status = ClientCommandStatus::request;
-    require(deliver(client, command) == Change::configuration && !client.workspaceListCollapsed(), "routed expand must reveal workspaces again");
+    require(deliver(client, command) == Change::sidebar && !client.workspaceListCollapsed(), "routed expand must reveal workspaces again");
     require(!transport.last<UpdateClientLayout>().workspace_list_collapsed, "expanded preference must be retained too");
   }
 

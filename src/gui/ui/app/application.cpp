@@ -783,8 +783,8 @@ namespace telar::gui::qt {
 
   void Application::presentChange(Change change) {
     switch (change) {
-    case Change::configuration:
-      emit configurationChanged();
+    case Change::sidebar:
+      emit windowGeometryChanged();
       refresh();
       break;
     case Change::terminal:
@@ -1146,10 +1146,10 @@ namespace telar::gui::qt {
       }
     } else if (action == Action::toggle_sidebar) {
       session().setSidebarVisible(!session().configuration().sidebar_visible);
-      emit configurationChanged();
+      emit windowGeometryChanged();
     } else if (action == Action::toggle_workspace_list) {
       session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
-      emit configurationChanged();
+      emit windowGeometryChanged();
     } else if (action == Action::history) {
       showDialog(Dialog::history);
       history_.open();
@@ -1197,7 +1197,7 @@ namespace telar::gui::qt {
 
   void Application::setSidebarWidth(qreal width) {
     session().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
-    emit configurationChanged();
+    emit windowGeometryChanged();
   }
 
   void Application::synchronizeFontMetrics() {

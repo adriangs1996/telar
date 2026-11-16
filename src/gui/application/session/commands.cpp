@@ -71,7 +71,7 @@ namespace telar::gui {
     case ClientAction::workspace_list_expand:
       setWorkspaceListCollapsed(message.action == ClientAction::workspace_list_collapse);
 
-      return Change::configuration;
+      return Change::sidebar;
     case ClientAction::client_clipboard_copy:
       clipboard_ = message.text;
       reply.text = {};
@@ -252,7 +252,7 @@ namespace telar::gui {
     reply.value = sidebar_columns_;
     reply.text = configuration_.sidebar_visible ? "visible" : "hidden";
 
-    return changed ? Change::configuration : Change::none;
+    return changed ? Change::sidebar : Change::none;
   }
 
   PaneDirection Session::parseDirection(std::string_view text) {

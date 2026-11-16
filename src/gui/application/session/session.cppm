@@ -67,7 +67,8 @@ export {
     enum class Change : std::uint8_t {
       none,
       model,
-      configuration,
+      // The sidebar was shown, hidden or resized, or its workspace list collapsed or expanded.
+      sidebar,
       terminal,
       clipboard,
       history,

@@ -34,7 +34,7 @@ namespace telar::gui::qt {
   }
 
   void Application::initializeElements() {
-    // Layout changes share this signal; only a new Lua generation owns new functions.
+    // A theme change shares this signal; only a new Lua generation owns new functions.
     connect(this, &Application::configurationChanged, this, [this] {
       element_slots_.adopt(configuration_source_.configurationGeneration());
     });

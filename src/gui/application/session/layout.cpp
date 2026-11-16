@@ -1319,7 +1319,7 @@ namespace telar::gui {
       deferred_tab_ = message.active_tab;
     }
 
-    return Change::configuration;
+    return Change::sidebar;
   }
 
   Change Session::apply(const TabClosed& message) {

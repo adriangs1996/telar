@@ -165,9 +165,9 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
     Q_PROPERTY(bool machineListCollapsed READ machineListCollapsed NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(int machineCount READ machineCount NOTIFY machinesChanged)
-    Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY configurationChanged)
-    Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY configurationChanged)
-    Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY configurationChanged)
+    Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY sidebarGeometryChanged)
+    Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY sidebarGeometryChanged)
+    Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY sidebarGeometryChanged)
     Q_PROPERTY(qreal windowControls READ windowControls NOTIFY windowGeometryChanged)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
@@ -484,7 +484,9 @@ namespace telar::gui::qt {
     void hostMetricsChanged();
     void componentsChanged();
     void pickChanged();
+    // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
     void configurationChanged();
+    // The window was resized, or the sidebar shown, hidden, resized or its workspace list folded.
     void windowGeometryChanged();
     void runtimeLinkChanged();
     void sidebarGeometryChanged();

@@ -5051,7 +5051,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(peer.result().value >= minimum_width && peer.result().value < maximum_width);
       const auto width = peer.result().value;
       const auto visibility = peer.result().text;
-      const QSignalSpy unchanged{client_.get(), &Application::configurationChanged};
+      const QSignalSpy unchanged{client_.get(), &Application::windowGeometryChanged};
 
       QVERIFY(unchanged.isValid());
       peer.request(telar::ClientAction::sidebar_resize, 3, {}, width);
@@ -5189,6 +5189,46 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->sidebarVisible(), !visible);
       QCOMPARE(client_->sidebarWidth(), before_width);
       QCOMPARE(client_->error(), QString{});
+    }
+
+    Q_SLOT void sidebarLayoutLeavesTheConfigurationAlone() {
+      const auto visible = client_->sidebarVisible();
+      const auto width = client_->sidebarWidth();
+      const auto collapsed = client_->workspaceListCollapsed();
+      const auto restore = qScopeGuard([this, visible, width, collapsed] {
+        if (client_->sidebarVisible() != visible) {
+          client_->execute(Application::Action::toggle_sidebar);
+        }
+
+        if (client_->workspaceListCollapsed() != collapsed) {
+          client_->execute(Application::Action::toggle_workspace_list);
+        }
+
+        client_->setSidebarWidth(width);
+      });
+
+      if (!visible) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+
+      // The fonts, the theme and the mods stay; only what is laid out around the sidebar moves.
+      const QSignalSpy configuration{client_.get(), &Application::configurationChanged};
+      const QSignalSpy sidebar{client_.get(), &Application::sidebarGeometryChanged};
+      const auto terminal = [this] {
+        return client_->windowGeometry().value(QStringLiteral("terminal")).toRectF().width();
+      };
+      const auto terminal_width = terminal();
+      constexpr qreal widened = 40;
+
+      client_->setSidebarWidth(client_->sidebarWidth() + widened);
+      QVERIFY(terminal() < terminal_width);
+      client_->execute(Application::Action::toggle_workspace_list);
+      QCOMPARE(client_->workspaceListCollapsed(), !collapsed);
+      client_->execute(Application::Action::toggle_sidebar);
+      QVERIFY(!client_->sidebarVisible());
+      QVERIFY(terminal() > terminal_width);
+      QVERIFY(sidebar.count() >= 3);
+      QCOMPARE(configuration.count(), 0);
     }
 
     Q_SLOT void newTabsRecoverTheFullGridAfterNestedSplits() {
