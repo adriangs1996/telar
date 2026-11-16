@@ -2,9 +2,9 @@ name: tbc
 
 on:
   push:
-    paths: [".clang-format", "lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: [".clang-format", "lib/tbc/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   pull_request:
-    paths: [".clang-format", "lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: [".clang-format", "lib/tbc/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   workflow_dispatch:
 
 permissions:
@@ -57,13 +57,6 @@ jobs:
           cmake --build --preset debug --target format-check
           cmake --build --preset debug --target lint
           cmake --build --preset debug --target blank-lines
-
-      - name: Check EBNF module consumers
-        working-directory: lib/ebnf
-        run: |
-          cmake --preset ${{ matrix.preset }}
-          cmake --build --preset ${{ matrix.preset }}
-          ctest --preset ${{ matrix.preset }}
 
       - name: Check dependency-free library package
         if: matrix.preset == 'debug'

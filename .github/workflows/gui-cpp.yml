@@ -5,10 +5,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/gui-cpp.yml'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'src/CMakeLists.txt'
       - 'src/gui/**'
       - 'packaging/release/install-linux-deps.sh'
-      - 'lib/telar-*/**'
-      - 'lib/tbc/**'
+      - 'lib/**'
       - 'docs/build/interface-bodies-allowlist.txt'
       - 'cmake/**'
       - 'justfile'
@@ -22,10 +24,12 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/gui-cpp.yml'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'src/CMakeLists.txt'
       - 'src/gui/**'
       - 'packaging/release/install-linux-deps.sh'
-      - 'lib/telar-*/**'
-      - 'lib/tbc/**'
+      - 'lib/**'
       - 'docs/build/interface-bodies-allowlist.txt'
       - 'cmake/**'
       - 'justfile'
@@ -73,7 +77,7 @@ jobs:
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .qt-cache
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
 
       - name: Test dependency integrity and package isolation
         run: python3 -m unittest discover -s src/gui/tools -p test_qt_dependency.py -v
@@ -82,37 +86,36 @@ jobs:
         run: |
           echo "GHOSTTY_VT_ROOT=$(tools/cpp vt | tail -n 1)" >> "$GITHUB_ENV"
 
+      # The GUI and the libraries; runtime-cpp.yml builds the other processes.
       - name: Configure with managed Qt
         run: |
-          cmake -S src/gui -B src/gui/out -G Ninja \
-            -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
-            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.toolchain/toolchain.cmake" \
-            -DGHOSTTY_VT_ROOT="$GHOSTTY_VT_ROOT" -DTELAR_GUI_QT_JOBS=3
+          tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
+            -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS=3
 
       - name: Build GUI and focused regression tests
         run: |
-          cmake --build src/gui/out --parallel 3 \
+          tools/cpp build ci -- --parallel 3 \
             --target telar-gui gui-status-bar-test gui-native-pointer-events-test
-          ctest --test-dir src/gui/out --output-on-failure -R '^gui-(qt-dependency|status-bar|native-pointer-events)$'
+          tools/cpp test ci -- -R '^gui-(qt-dependency|status-bar|native-pointer-events)$'
 
       - name: Test native macOS navigation
         if: runner.os == 'macOS'
         run: |
-          cmake --build src/gui/out --parallel 3 --target gui-native-window-appearance-test
-          QT_QUICK_BACKEND=software ctest --test-dir src/gui/out --output-on-failure -R '^gui-native-window-appearance$'
+          tools/cpp build ci -- --parallel 3 --target gui-native-window-appearance-test
+          QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui-native-window-appearance$'
 
       - name: Check lifetimes
         if: matrix.configuration == 'Release'
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
           tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
-          cmake --build src/gui/out --target gui-lifetime
+          tools/cpp build ci -- --target lifetime
 
       - name: Check interface bodies
         if: matrix.configuration == 'Release'
-        run: cmake --build src/gui/out --target gui-interface-bodies
+        run: tools/cpp build ci -- --target interface-bodies
 
       # Only the macOS units have had the blank lines of docs/code-style.md applied.
       - name: Check blank lines
         if: matrix.configuration == 'Release' && runner.os == 'macOS'
-        run: cmake --build src/gui/out --target gui-blank-lines
+        run: tools/cpp build ci -- --target blank-lines
