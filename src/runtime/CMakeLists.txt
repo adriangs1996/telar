@@ -1,4 +1,4 @@
-telar_process(runtime)
+telar_process(runtime OPTIONS -Wall -Wextra -Wpedantic)
 
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
@@ -64,9 +64,6 @@ foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "F
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shell_integration/${script_file}")
 endforeach()
 configure_file(shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
-# The remote command `ssh` sends is encoded at compile time, which takes more steps than the
-# compiler allows by default.
-set_source_files_properties(shell_integration/shell_integration.cppm PROPERTIES COMPILE_OPTIONS "-fconstexpr-steps=16777216")
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"
@@ -88,141 +85,39 @@ add_custom_command(
   VERBATIM)
 add_custom_target(command-specs DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.inc")
 
-if(APPLE)
-  set(TELAR_PLATFORM macos)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(TELAR_PLATFORM linux)
-else()
+if(NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(FATAL_ERROR "The runtime supports macOS and Linux")
 endif()
 
-add_library(runtime-core STATIC
-  cli/server/server.cpp
-  config/loader/loader.cpp
-  diagnostics/line/line.cpp
-  diagnostics/operation/operation.cpp
-  diagnostics/runtime_counters/runtime_counters.cpp
-  graphics/file_input/file_input.cpp
-  graphics/pane_media/pane_media.cpp
-  graphics/png_decoder.cpp
-  graphics/prepared_images/prepared_images.cpp
-  graphics/synchronizer/synchronizer.cpp
-  history/store/database.cpp
-  metrics/host_sampler/host_sampler.cpp
-  model/client_layouts/client_layouts.cpp
-  model/client_layouts/client_layouts-launch_record.cpp
-  model/slot_store/slot_store.cpp
-  observation/processor/processor.cpp
-  paths/query_task/query_task.cpp
-  persistence/session_store/session_store.cpp
-  platform/background_executor/background_executor.cpp
-  platform/descriptor_path/descriptor_path.cpp
-  platform/event_loop/${TELAR_PLATFORM}/event_loop.cpp
-  platform/git_status/git_status.cpp
-  platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
-  platform/launch_program/launch_program.cpp
-  platform/local_listener/local_listener.cpp
-  platform/name_resolutions/name_resolutions.cpp
-  platform/private_tunnel/private_tunnel.cpp
-  platform/process_probe/${TELAR_PLATFORM}/process_inspector.cpp
-  platform/process_probe/process_inspector.cpp
-  platform/request_worker/request_worker.cpp
-  platform/session_host/session_host.cpp
-  platform/signals/signals.cpp
-  platform/stream_read_buffer/stream_read_buffer.cpp
-  platform/system_certificates/system_certificates.cpp
-  runtime/client_control/client_control.cpp
-  runtime/delivery/client_delivery/client_delivery.cpp
-  runtime/execution_service/execution_service-execution.cpp
-  runtime/execution_service/execution_service.cpp
-  runtime/media_service/media_service.cpp
-  runtime/runtime/runtime.cpp
-  runtime/runtime_telemetry/runtime_telemetry.cpp
-  terminal/control/checksum/checksum.cpp
-  terminal/control/clipboard/clipboard.cpp
-  terminal/control/control.cpp
-  terminal/control/engine/engine.cpp
-  terminal/control/glyph/glyph.cpp
-  terminal/control/graphics_payload.cpp
-  terminal/control/pty_response_queue.cpp
-  terminal/control/vt_state.cpp
-  terminal/ghostty/ghostty.cpp
-  terminal/graphics_storage/graphics_storage.cpp
-  terminal/kitty/kitty.cpp
-  terminal/osc_scanner/osc_scanner.cpp
-  terminal/text_reader/cell_projection.cpp
-  terminal/text_reader/text_reader.cpp
-  transport/connection/connection.cpp
-  vocabulary/exchange/exchange.cpp
-  vocabulary/frames/frames.cpp
-  vocabulary/traffic/traffic.cpp
-  agents/description_generator/description_generator.cpp
-  agents/screen_inference/screen_inference.cpp
-  agents/snapshot/snapshot.cpp
-  command_capture/tracker/tracker.cpp
-  editors/remote_editor/remote_editor.cpp
-  history/event/event.cpp
-  history/store/store.cpp
-  shell_integration/git_context/git_context.cpp
-  shell_integration/shell_integration.cpp
-  shell_integration/token/token.cpp
-  shell_integration/words/words.cpp
-  suggestions/engine/engine.cpp
-  workspaces/git_probe/git_probe.cpp
-  worktrees/git_probe/git_probe.cpp)
-# The traffic domain: proxy, TLS interception, HTTP, redirection, capture and plugins.
-target_sources(runtime-core PRIVATE
-  exchange_capture/pipeline/pipeline.cpp
-  exchange_capture/producer/producer.cpp
-  http/content/content.cpp
-  http/message/message.cpp
-  http1/head/head.cpp
-  http2/direction_observer/direction_observer.cpp
-  http2/frame_reader/frame_reader.cpp
-  plugins/run_worker/run_worker.cpp
-  plugins/service/service.cpp
-  plugins/tap_configuration/tap_configuration.cpp
-  plugins/worker/worker.cpp
-  proxy/authenticate/authenticate.cpp
-  proxy/http2_capture_streams/http2_capture_streams.cpp
-  proxy/intercepted_relay/intercepted_relay.cpp
-  proxy/runtime/runtime.cpp
-  redirect/direction/direction.cpp
-  redirect/ingress/ingress.cpp
-  redirect/pf_rules/pf_rules.cpp
-  redirect/socket_owners/socket_owners.cpp
-  tls/interception/interception.cpp
-  tls/system_root_bundle/system_root_bundle.cpp
-  traffic/capture/capture.cpp
-  traffic/capture_analysis/capture_analysis.cpp
-  traffic/control_backend/control_backend.cpp
-  traffic/control_protocol/control_protocol.cpp)
-telar_modules(runtime-core
-  MACOS_SOURCES platform/frameworks/frameworks.cppm redirect/record/record.cppm redirect/record/record.cpp
-  LINUX_SOURCES platform/proc_file/proc_file.cppm platform/proc_file/proc_file.cpp)
-target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated")
+# What every domain of the runtime compiles and links with.
+target_include_directories(runtime-settings INTERFACE . "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # Third-party headers, as the other dependencies': the project neither warns about nor annotates them.
-target_include_directories(runtime-core SYSTEM PUBLIC "${TELAR_NATIVE_INCLUDE_DIR}")
-target_link_libraries(runtime-core PUBLIC tbc::tbc telar::config telar::native telar::tls telar-clipboard telar::render)
-target_link_libraries(runtime-core PUBLIC deps::nghttp2)
-target_link_libraries(runtime-core PUBLIC deps::pcap)
-target_link_libraries(runtime-core PUBLIC telar::git)
-target_link_libraries(runtime-core PUBLIC ebnf::ebnf)
-target_link_libraries(runtime-core PUBLIC deps::zlib deps::brotli_decoder deps::brotli_encoder deps::brotli_common deps::zstd)
-target_link_libraries(runtime-core PUBLIC deps::ghostty_vt deps::sqlite3 Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
+target_include_directories(runtime-settings SYSTEM INTERFACE "${TELAR_NATIVE_INCLUDE_DIR}")
+target_link_libraries(runtime-settings INTERFACE tbc::tbc telar::config telar::native telar::tls telar-clipboard telar::render)
+target_link_libraries(runtime-settings INTERFACE deps::nghttp2)
+target_link_libraries(runtime-settings INTERFACE deps::pcap)
+target_link_libraries(runtime-settings INTERFACE telar::git)
+target_link_libraries(runtime-settings INTERFACE ebnf::ebnf)
+target_link_libraries(runtime-settings INTERFACE deps::zlib deps::brotli_decoder deps::brotli_encoder deps::brotli_common deps::zstd)
+target_link_libraries(runtime-settings INTERFACE deps::ghostty_vt deps::sqlite3 Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
-  target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
+  target_link_libraries(runtime-settings INTERFACE "-framework IOKit" "-framework CoreFoundation" "-framework Security")
 else()
-  target_compile_definitions(runtime-core PUBLIC _GNU_SOURCE)
-  target_link_libraries(runtime-core PUBLIC util)
+  target_compile_definitions(runtime-settings INTERFACE _GNU_SOURCE)
+  target_link_libraries(runtime-settings INTERFACE util)
 endif()
 
-target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)
-add_dependencies(runtime-core cell-layout command-specs)
+# The domains of docs/build/modules.json (process_layers), lowest first.
+foreach(domain IN ITEMS diagnostics transport config suggestions platform paths shell_integration
+    workspaces worktrees metrics terminal history command_capture graphics agents vocabulary
+    observation model http1 http exchange_capture http2 tls redirect traffic proxy plugins editors
+    persistence runtime cli)
+  add_subdirectory(${domain})
+endforeach()
 
 add_executable(telar-runtime main.cpp)
-target_link_libraries(telar-runtime PRIVATE runtime-core)
-telar_register_checks(runtime-core telar-runtime ghostty-manifest CHECKS ${TELAR_CHECKS})
+target_link_libraries(telar-runtime PRIVATE runtime-terminal runtime-plugins runtime-cli)
+telar_register_checks(telar-runtime ghostty-manifest CHECKS ${TELAR_CHECKS})
 install(TARGETS telar-runtime RUNTIME DESTINATION bin)
 # The pinned libraries are linked into both executables; their licenses travel with them.
 install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREFIX}/share/licenses/" DESTINATION share/telar/licenses)

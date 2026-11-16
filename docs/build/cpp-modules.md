@@ -14,7 +14,7 @@ El runtime y el cliente siguen siendo procesos y bibliotecas separados.
 | plugins | `telar::plugins` | plataforma | manifiestos, paquetes, permisos |
 | config | `telar::config` | Lua, plugins | opciones y validación |
 | TLS | `telar::tls` | config, OpenSSL | certificados y trust |
-| runtime | `runtime-core` | TLS, clipboard, VT, bibliotecas nativas | módulos por interfaz de componente |
+| runtime | `runtime-<dominio>`, uno por dominio | TLS, clipboard, VT, bibliotecas nativas | módulos por interfaz de componente |
 | CLI | `cli-<dominio>`, uno por dominio; `cli-launch` | TLS | módulos de argumentos, comandos y conexión |
 | GUI | `gui-core`, auxiliares | config, VT, Qt | módulos de dominio; fronteras nativas separadas |
 | auth | `telar-auth-daemon` | sistema | `main` sin API propia |

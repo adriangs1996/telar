@@ -6,7 +6,7 @@ import telar.sys.posix;
 import telar.base.text;
 import telar.platform.primitives;
 
-// Linux only (LINUX_SOURCES of runtime-core).
+// Linux only (LINUX_SOURCES of runtime-platform).
 // Interface: platform/linux/proc_file.cppm
 export {
   namespace telar::runtime {

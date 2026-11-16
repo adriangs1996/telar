@@ -6,8 +6,8 @@ module;
 
 export module telar.runtime.platform.frameworks;
 
-// macOS only (MACOS_SOURCES of runtime-core). The SDK frameworks the runtime reads, and links
-// in runtime-core: CoreFoundation, IOKit's power sources and Security's keychains. Their
+// macOS only (MACOS_SOURCES of runtime-platform). The SDK frameworks the runtime reads, and links
+// in runtime-settings: CoreFoundation, IOKit's power sources and Security's keychains. Their
 // headers stay in this global module fragment only; importers reach their declarations
 // through these using-declarations instead of including them.
 export {
