@@ -171,7 +171,7 @@ export {
 
     private:
       // Each name a theme may give, with the preset it selects.
-      static constexpr std::array<std::pair<std::string_view, std::string_view>, 18> presets{{
+      static constexpr std::array<std::pair<std::string_view, std::string_view>, 19> presets{{
           {"cybervenom", "cybervenom"},
           {"shade", "shade"},
           {"vesper", "vesper"},
@@ -190,6 +190,7 @@ export {
           {"kanagawa_dragon", "kanagawa-dragon"},
           {"terminal", "terminal"},
           {"default", "terminal"},
+          {"zenburn", "zenburn"},
       }};
 
       static std::optional<std::string_view> preset(const lua::Value& value);

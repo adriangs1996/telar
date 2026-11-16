@@ -62,7 +62,7 @@ Options before COMMAND:
   --profile NAME    Overlay a named Lua profile before CLI options
   --theme NAME      UI theme: shade (default), cybervenom, vesper, catppuccin,
                     tokyo-night, kanagawa, kanagawa-dragon, pierre-dark,
-                    pierre-dark-soft, terminal
+                    pierre-dark-soft, zenburn, terminal
   --remote DEST     Attach to the runtime on an SSH host (needs telar on the remote PATH)
   --machine LABEL   Show a saved machine first; the window still holds every enabled one
   --fresh           Start a runtime that sets the previous session aside instead of

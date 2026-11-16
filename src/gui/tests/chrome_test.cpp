@@ -711,6 +711,7 @@ namespace {
       QVERIFY(!default_mark.isNull());
       // The default mark wears Shade; Cybervenom keeps its own violet mark.
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::cybervenom)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::zenburn)) != default_mark);
       QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
       const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
 

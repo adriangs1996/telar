@@ -1726,7 +1726,7 @@ namespace telar::runtime::cli {
       }
     }
 
-    static constexpr auto names = std::to_array<std::string_view>({"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom"});
+    static constexpr auto names = std::to_array<std::string_view>({"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn"});
     if (std::ranges::find(names, text) == names.end()) {
       throw std::invalid_argument{"UnknownTheme"};
     }

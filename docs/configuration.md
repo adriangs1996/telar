@@ -265,7 +265,7 @@ Each preset defines Telar's chrome roles and the native terminal's foreground,
 background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
 `cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
 `kanagawa-dragon`, `pierre-dark`,
-`pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
+`pierre-dark-soft`, `zenburn`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors.
 Shade is Nord on a `#191c22` polar night with `#d8dee9` text: control
 flow in aurora red, fields and properties in aurora yellow, constants in aurora
@@ -273,7 +273,13 @@ orange. It uses `#88c0d0` accents and no italics or bold. Shade's `panel_bg` is
 `default`: the chrome takes the terminal background, which the window paints
 `#191c22`.
 Cybervenom uses a `#211b2f` background, `#aa87f5` accents, and its own terminal
-and syntax palettes. The window uses the preset's terminal
+and syntax palettes.
+Zenburn sits on `zenburn-bg-1` (`#2b2b2b`) with `#dcdccc` text and every
+surface on Zenburn's own grey scale. Roles are told apart by hue, not weight:
+keywords `#f0dfaf`, functions `#93e0e3`, types `#bde0f3`, properties `#dfaf8f`,
+constants and numbers `#bfebbf`, strings `#cc9393`. It uses `#f0dfaf` accents
+and no italics or bold.
+The window uses the preset's terminal
 colors; child truecolor and OSC overrides still apply. The `terminal` preset
 uses host-relative chrome roles and a neutral explicit palette, since the
 window has no exterior terminal to inherit from.

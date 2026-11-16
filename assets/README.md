@@ -131,7 +131,7 @@ theme's background, the spider its text tones and the thread, feet and cursor
 its accent. Any theme without its own file uses `telar-mark.svg`, in Shade's
 colors. One per theme: `shade`, `cybervenom`, `vesper`, `catppuccin`,
 `tokyo-night`, `pierre-dark`, `pierre-dark-soft`, `kanagawa`,
-`kanagawa-dragon` and `terminal`.
+`kanagawa-dragon`, `zenburn` and `terminal`.
 
 `telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
 `97993c9dd5df544d6356ba483e8fad68df8ef21142c34d69b85be1178d357d91`, and

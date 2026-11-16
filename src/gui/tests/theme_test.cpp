@@ -194,6 +194,21 @@ namespace {
     const auto dragon = themeValuesByName("kanagawa_dragon");
 
     require(dragon.syntaxStyle(SyntaxRole::keyword).italic && dragon.syntaxStyle(SyntaxRole::comment).italic, "generated preset metadata must retain keyword and comment italics");
+    const auto zenburn = themeValuesByName("Zenburn");
+    bool zenburn_styled = false;
+
+    for (std::size_t index = 0; index < syntax_names.size(); ++index) {
+      const auto style = zenburn.syntaxStyle(static_cast<SyntaxRole>(index));
+      zenburn_styled = zenburn_styled || style.italic || style.bold;
+    }
+
+    require(zenburn.base == ThemeName::zenburn && !zenburn_styled, "Zenburn must not set italic or bold syntax roles");
+    const auto zenburn_plain = zenburn.syntaxStyle(SyntaxRole::plain).color;
+    const auto zenburn_func = zenburn.syntaxStyle(SyntaxRole::func).color;
+    const auto zenburn_type = zenburn.syntaxStyle(SyntaxRole::type).color;
+
+    require(zenburn_func != zenburn_plain && zenburn_type != zenburn_plain && zenburn_func != zenburn_type, "Zenburn must color functions and types apart from the text and each other");
+    require(zenburn.terminal.background == ThemeRgb{43, 43, 43}, "Zenburn must paint the terminal zenburn-bg-1");
   }
 
   void utf8InspectionPreservesValidationErrors() {
