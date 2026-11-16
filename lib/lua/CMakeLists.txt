@@ -22,6 +22,7 @@ set_source_files_properties(${TELAR_LUA_SOURCES} PROPERTIES LANGUAGE CXX)
 add_library(telar-lua-vm STATIC ${TELAR_LUA_SOURCES})
 target_include_directories(telar-lua-vm SYSTEM PUBLIC "${TELAR_LUA_SOURCE_DIR}")
 target_compile_definitions(telar-lua-vm PRIVATE LUA_USE_POSIX)
+target_link_libraries(telar-lua-vm PRIVATE telar::build_flags)
 
 add_library(telar-lua STATIC lua.cpp)
 add_library(telar::lua ALIAS telar-lua)

@@ -12,6 +12,7 @@ set(TELAR_MD4C_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../vendor/md4c-0.6.0/src
 add_library(telar-render-md4c STATIC "${TELAR_MD4C_SOURCE_DIR}/md4c.c" "${TELAR_MD4C_SOURCE_DIR}/entity.c")
 target_include_directories(telar-render-md4c SYSTEM PUBLIC "${TELAR_MD4C_SOURCE_DIR}")
 set_target_properties(telar-render-md4c PROPERTIES C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(telar-render-md4c PRIVATE telar::build_flags)
 
 add_library(telar-render STATIC document/document.cpp markdown/markdown.cpp terminal/terminal.cpp)
 add_library(telar::render ALIAS telar-render)

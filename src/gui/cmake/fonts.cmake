@@ -62,6 +62,7 @@ list(APPEND gui_freetype_sources "${telar_freetype_SOURCE_DIR}/src/base/ftdebug.
 add_library(gui-freetype STATIC ${gui_freetype_sources})
 target_include_directories(gui-freetype SYSTEM PUBLIC "${telar_freetype_SOURCE_DIR}/include")
 target_compile_definitions(gui-freetype PRIVATE FT2_BUILD_LIBRARY HAVE_UNISTD_H HAVE_FCNTL_H)
+target_link_libraries(gui-freetype PRIVATE telar::build_flags)
 set_target_properties(gui-freetype PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(gui-freetype INTERFACE "LINKER:--exclude-libs,$<TARGET_FILE_NAME:gui-freetype>")
@@ -82,7 +83,7 @@ FetchContent_MakeAvailable(telar_harfbuzz)
 add_library(gui-harfbuzz STATIC "${telar_harfbuzz_SOURCE_DIR}/src/harfbuzz.cc")
 find_package(Threads REQUIRED)
 target_include_directories(gui-harfbuzz SYSTEM PUBLIC "${telar_harfbuzz_SOURCE_DIR}/src")
-target_link_libraries(gui-harfbuzz PUBLIC gui-freetype Threads::Threads)
+target_link_libraries(gui-harfbuzz PUBLIC gui-freetype Threads::Threads PRIVATE telar::build_flags)
 target_compile_definitions(gui-harfbuzz PRIVATE
   HAVE_STDBOOL_H HAVE_UNISTD_H HAVE_SYS_MMAN_H HAVE_PTHREAD=1 HAVE_FREETYPE=1
   HAVE_FT_GET_VAR_BLEND_COORDINATES=1 HAVE_FT_SET_VAR_BLEND_COORDINATES=1

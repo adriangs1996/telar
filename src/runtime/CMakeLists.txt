@@ -60,7 +60,7 @@ if(NOT GHOSTTY_VT_HAS_WUFFS_PNG)
 endif()
 
 add_executable(ghostty-manifest tools/ghostty_manifest.cpp)
-target_link_libraries(ghostty-manifest PRIVATE ghostty-vt)
+target_link_libraries(ghostty-manifest PRIVATE ghostty-vt telar::build_flags)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/config/bootstrap.lua" telar_config_bootstrap_file)

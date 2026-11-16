@@ -13,6 +13,8 @@ FetchContent_Declare(googletest
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   SYSTEM)
 FetchContent_MakeAvailable(googletest)
+target_link_libraries(gtest PRIVATE telar::build_flags)
+target_link_libraries(gtest_main PRIVATE telar::build_flags)
 
 add_executable(ebnf_tests ${ebnf_test_sources} ${ebnf_sources})
 target_link_libraries(ebnf_tests PRIVATE ebnf_options GTest::gtest_main)

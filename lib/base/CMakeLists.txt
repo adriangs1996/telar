@@ -86,10 +86,11 @@ set_target_properties(telar-base PROPERTIES EXPORT_NAME base)
 set_target_properties(telar-tbc PROPERTIES EXPORT_NAME tbc)
 # And the telar.sys modules text.cpp reads socket addresses through, as telar::sys.
 set_target_properties(telar-sys PROPERTIES EXPORT_NAME sys)
+# The modules carry the build-wide variants they were compiled with, as telar::build_flags.
 configure_package_config_file(cmake/telar-base-config.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/telar-base-config.cmake"
   INSTALL_DESTINATION "${telar_base_package_directory}")
-install(TARGETS telar-base telar-tbc telar-sys EXPORT telar-base-targets
+install(TARGETS telar-base telar-tbc telar-sys telar-build-flags EXPORT telar-base-targets
   ARCHIVE DESTINATION lib
   FILE_SET CXX_MODULES DESTINATION share/telar-base/modules)
 install(DIRECTORY include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")

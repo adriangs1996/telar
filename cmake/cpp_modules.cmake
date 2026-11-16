@@ -48,11 +48,18 @@ set(TELAR_COMPILE_JOBS ${telar_default_compile_jobs} CACHE STRING "Parallel comp
 set_property(GLOBAL PROPERTY JOB_POOLS telar_compile=${TELAR_COMPILE_JOBS})
 set(CMAKE_JOB_POOL_COMPILE telar_compile)
 
-add_compile_definitions(TELAR_DEBUG=$<CONFIG:Debug>
+# The build-wide variants every telar target compiles and links with. A library
+# passes them on to its importers (telar_modules), so a module interface is
+# compiled with the flags of the code that imports it; a target that imports
+# none links them itself.
+add_library(telar-build-flags INTERFACE)
+add_library(telar::build_flags ALIAS telar-build-flags)
+set_target_properties(telar-build-flags PROPERTIES EXPORT_NAME build_flags)
+target_compile_definitions(telar-build-flags INTERFACE TELAR_DEBUG=$<CONFIG:Debug>
   TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_DIAGNOSTICS}>>)
 if(TELAR_SANITIZERS)
-  add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
-  add_link_options(-fsanitize=address,undefined)
+  target_compile_options(telar-build-flags INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(telar-build-flags INTERFACE -fsanitize=address,undefined)
 endif()
 
 # Optimized builds link with ThinLTO, so a function body can inline into
@@ -105,11 +112,6 @@ function(telar_modules target)
   endif()
   target_sources(${target} PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${interfaces})
   target_compile_features(${target} PUBLIC cxx_std_23)
-  target_compile_definitions(${target} PUBLIC TELAR_DEBUG=$<CONFIG:Debug>
-    TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_DIAGNOSTICS}>>)
-  if(TELAR_SANITIZERS)
-    target_compile_options(${target} PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(${target} PUBLIC -fsanitize=address,undefined)
-  endif()
+  target_link_libraries(${target} PUBLIC telar::build_flags)
   set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()
