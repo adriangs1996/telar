@@ -134,7 +134,8 @@ endfunction()
 # With SOURCES, a test program <name> (qt_add_executable with QT), or with STATIC or
 # SHARED a library for tests to link, whose .cppm sources are module interfaces. It
 # builds into the process's build directory, where tools and tests find it beside the
-# process, and a test runs there. LIBRARIES are linked privately into a program and publicly into a library.
+# process, and a test runs there. LIBRARIES are linked privately into a program and
+# publicly into a library.
 # CTest runs the program as TEST (default <name>) with ARGS, unless NO_TEST, or PROBE,
 # a program run by hand that only the <process>-probes target builds. Without SOURCES
 # it registers the test <test> that runs COMMAND. A test carries LABELS

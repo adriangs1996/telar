@@ -323,6 +323,10 @@ if(TELAR_GUI_NATIVE)
     DEPENDS tools/create_editor_database.py
     VERBATIM)
   add_dependencies(gui-editor gui-editor-ui)
+  # Run by hand by tools/check_notification_desktop.py, so a tree configured without
+  # tests builds it too.
+  telar_add_test(gui-host-effects-smoke QT PROBE SOURCES tools/host_effects_smoke.cpp
+    LIBRARIES gui-core deps::ghostty_vt Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
 
   target_sources(gui-quick PRIVATE ui/notifications/notification_layout.cpp ui/notifications/notification_layout.hpp)
   target_sources(gui-quick PRIVATE ui/machines/machine_chrome_layout.cpp ui/machines/machine_chrome_layout.hpp ui/machines/machine_chrome_controller.cpp ui/machines/machine_chrome_controller.hpp)

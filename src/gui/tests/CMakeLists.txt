@@ -304,8 +304,6 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${PROJECT_SOURCE_DIR}/ui/attachments/attachment_preview.cpp LIBRARIES gui-core Qt6::Gui
     TEST gui-attachment-preview LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-attachment-preview-test PRIVATE "${PROJECT_SOURCE_DIR}")
-  telar_add_test(gui-host-effects-smoke QT PROBE SOURCES ${PROJECT_SOURCE_DIR}/tools/host_effects_smoke.cpp LIBRARIES gui-core deps::ghostty_vt Qt6::Core Qt6::Gui
-    CHECKS lint lifetime blank_lines)
 
   if(APPLE)
     if(NOT DEFINED CMAKE_OBJC_COMPILER AND "$ENV{OBJC}" STREQUAL "" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
