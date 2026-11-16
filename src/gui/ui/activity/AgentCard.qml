@@ -7,11 +7,12 @@ ActivityFrame {
     id: root
 
     required property var typography
-    property var controller: null
     // Mod content for this card and its pieces, by slot name.
     readonly property var elements: record.elements ?? ({})
     readonly property bool drawn: elements.agent_card !== undefined
     readonly property var builtins: ({agent_mark: markPiece, agent_title: titlePiece, agent_project: projectPiece, agent_status: statusPiece})
+    // A click on an element a mod drew in a card; the window runs it.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     implicitHeight: record.compact ? geometry.compactHeight : geometry.agentHeight
 
@@ -122,7 +123,7 @@ ActivityFrame {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+            onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
             builtins: root.builtins
         }
     }
@@ -135,7 +136,7 @@ ActivityFrame {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
+        onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
         builtins: root.builtins
     }
 

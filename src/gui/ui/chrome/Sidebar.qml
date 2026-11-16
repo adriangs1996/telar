@@ -185,7 +185,6 @@ NativeRoundedRectangle {
         width: root.regions.activity.width
         height: root.regions.activity.height
         model: root.expanded ? root.agentModel : null
-        controller: root.controller
         hoverIdentity: root.controller?.activity?.hovered ?? ""
         semanticHover: typeof root.controller?.activity?.hover === "function"
         colors: root.colors
@@ -198,6 +197,7 @@ NativeRoundedRectangle {
         visible: root.expanded
         onSelected: key => root.agentSelected(key)
         onPeekRequested: key => root.agentPeekRequested(key)
+        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
         onHovered: (key, card) => {
             if (activityList.semanticHover) {
                 root.controller.activity.hover(key, card);

@@ -14,12 +14,13 @@ ListView {
     property real sectionGap: 0
     property real ratio: 1
     property real textScale: 1
-    property var controller: null
     property string hoverIdentity: ""
     property bool semanticHover: false
     signal selected(string key)
     signal peekRequested(string key)
     signal hovered(string key, Item card)
+    // A click on an element a mod drew in a card; the window runs it.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     clip: true
     cacheBuffer: 0
@@ -102,7 +103,6 @@ ListView {
             AgentCard {
                 id: agent
                 objectName: "agentCard"
-                controller: root.controller
                 record: entry.record
                 geometry: root.geometry
                 colors: root.colors
@@ -114,6 +114,7 @@ ListView {
                 onHoverRequested: key => root.hovered(key, agent)
                 onSelected: key => root.selected(key)
                 onPeekRequested: key => root.peekRequested(key)
+                onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
             }
         }
 
