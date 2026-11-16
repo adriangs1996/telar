@@ -136,6 +136,9 @@ namespace telar::gui::qt {
     void forget();
     void setWindow(QQuickWindow* window);
     void setMetrics(const HistoryModalMetrics& metrics);
+    // Rebuilds what QML reads when an input it depends on moved since the last call. The window
+    // calls it on every flush of the store, in the order its projections depend on each other.
+    void synchronize();
     // Reports a failure in the dialog while it is open, and to the window otherwise.
     void fail(const std::exception& error);
     // Runs while the GUI thread is blocked in the scene graph's synchronization.
@@ -215,7 +218,6 @@ namespace telar::gui::qt {
       }
     };
 
-    void synchronize();
     [[nodiscard]] Inputs inputs();
     [[nodiscard]] QVariantMap buildState() const;
     [[nodiscard]] QVariantMap buildInspection() const;
@@ -245,7 +247,6 @@ namespace telar::gui::qt {
       }
 
       store_.commit();
-      synchronize();
     }
 
     Store& store_;

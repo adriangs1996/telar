@@ -97,7 +97,8 @@ namespace telar::gui::qt {
     // Starts a user interaction: interacting() lets the window cancel what the interaction
     // supersedes, before the mutation runs.
     void begin();
-    // Ends a user interaction: interacted() runs its effects now, and changed() follows.
+    // Ends a user interaction: interacted() runs its effects, and changed() follows at once, so
+    // what the user did shows in the same turn. Runtime messages keep waiting for touch()'s flush.
     void commit();
 
   signals:

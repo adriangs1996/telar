@@ -108,7 +108,6 @@ namespace telar::gui::qt {
     search_timer_.setSingleShot(true);
     search_timer_.setInterval(debounce_ms);
     connect(&search_timer_, &QTimer::timeout, this, &HistoryController::query);
-    connect(&store_, &Store::changed, this, &HistoryController::synchronize);
   }
 
   void HistoryController::open() {

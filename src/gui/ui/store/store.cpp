@@ -109,7 +109,9 @@ namespace telar::gui::qt {
 
   void Store::commit() {
     emit interacted();
-    touch();
+    // A flush already queued finds nothing left to report.
+    touched_ = true;
+    flush();
   }
 
 }

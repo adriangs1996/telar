@@ -779,6 +779,9 @@ namespace telar::gui::qt {
 
     void interacted();
     void interactionFailed(const std::exception& error);
+    // Brings every projection that reads the store up to date, in the order they depend on each
+    // other; each one rebuilds only what moved since its last pass.
+    void synchronize();
 
     ApplicationAllocator& memory_;
     Store store_;

@@ -210,6 +210,7 @@ namespace telar::gui::qt {
     connect(this, &Application::stateChanged, this, &Application::statusModeChanged);
     connect(this, &Application::configurationChanged, this, &Application::paletteChanged);
     connect(&store_, &Store::interacted, this, &Application::interacted);
+    connect(&store_, &Store::changed, this, &Application::synchronize);
     connect(&store_, &Store::interacting, this, [this] {
       pending_activity_.reset();
     });
@@ -1200,6 +1201,10 @@ namespace telar::gui::qt {
     } catch (const std::exception& error) {
       interactionFailed(error);
     }
+  }
+
+  void Application::synchronize() {
+    history_.synchronize();
   }
 
   void Application::interactionFailed(const std::exception& error) {
