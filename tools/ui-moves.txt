@@ -27,4 +27,5 @@ scene           foundation/scene
 store           foundation/store
 suggestions     app/overlays/palette/suggestions
 terminal        app/panes/terminal
+workspace_form  app/overlays/workspace_form
 workspaces      app/chrome/workspaces

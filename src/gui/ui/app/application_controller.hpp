@@ -56,7 +56,7 @@ static_assert(true);
 #include "ui/terminal/copy_controller.hpp"
 #include "ui/terminal/terminal_controller.hpp"
 #include "ui/terminal/terminal_preparation.hpp"
-#include "ui/workspaces/workspace_form_controller.hpp"
+#include "ui/workspace_form/workspace_form_controller.hpp"
 #include "ui/workspaces/workspaces_controller.hpp"
 #include <QByteArray>
 #include <QColor>

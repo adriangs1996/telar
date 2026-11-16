@@ -715,7 +715,7 @@
     "src/gui/ui/panes/panes_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/activity/activity_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/palette/palette_controller.hpp": "Qt moc/QML integration",
-    "src/gui/ui/workspaces/workspace_form_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/workspace_form/workspace_form_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/paths/path_picker_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/machine_prompt/machine_prompt_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/peek/peek_controller.hpp": "Qt moc/QML integration",
