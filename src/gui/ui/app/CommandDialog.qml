@@ -166,8 +166,11 @@ Popup {
             anchors.fill: parent
             active: root.peekMode
             sourceComponent: PeekPanel {
-                controller: telar
+                controller: telar.peek
+                colors: telar.colors
+                typography: telar.windowGeometry.typography
                 ratio: root.ratio
+                onCancelled: telar.execute(WindowActions.Action.cancel)
             }
         }
 

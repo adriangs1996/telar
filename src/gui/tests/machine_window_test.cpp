@@ -1358,7 +1358,7 @@ namespace {
       fixture.remote_runtime->send(PaneText{.request_id = read.request_id, .pane_id = inspected_pane, .text = "OWNED_REMOTE_PEEK", .exit_code = {}});
       QTRY_VERIFY_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("lines")).toStringList().contains(QStringLiteral("OWNED_REMOTE_PEEK")), wait_ms);
       const auto bounds = application.peek()->geometry().value(QStringLiteral("bounds")).toRectF();
-      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(application.peek())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
 
       panel->setParentItem(window.contentItem());
       window.show();
@@ -1733,7 +1733,7 @@ namespace {
 
       QTRY_COMPARE_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("lines")).toStringList().size(), line_count, wait_ms);
       const auto bounds = application.peek()->geometry().value(QStringLiteral("bounds")).toRectF();
-      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(application.peek())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
 
       panel->setParentItem(window.contentItem());
       const auto lines = [&] {
@@ -1752,7 +1752,12 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(lines().size(), line_count, wait_ms);
       window.resize(tiny);
       QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialog())).arg(application.peek()->geometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
+      // The panel asks to close; the window, here the test, runs the cancel.
+      const QSignalSpy cancelled{panel.get(), SIGNAL(cancelled())};
+
       QTest::keyClick(&window, Qt::Key_Escape);
+      QTRY_COMPARE_WITH_TIMEOUT(cancelled.count(), 1, wait_ms);
+      application.execute(window_actions::Action::cancel);
       QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
     }
 

@@ -7,12 +7,14 @@ Item {
     id: root
     objectName: "agentPeekPanel"
 
-    required property var controller
+    required property PeekController controller
+    required property var colors
+    required property var typography
     property real ratio: 1
-    readonly property var colors: controller.colors
-    readonly property var typography: controller.windowGeometry.typography
-    readonly property var state: controller.peek.state
-    readonly property var regions: controller.peek.geometry
+    readonly property var state: controller.state
+    readonly property var regions: controller.geometry
+    // Escape: the window closes the peek.
+    signal cancelled()
     property alias queryField: query
 
     clip: true
@@ -33,10 +35,10 @@ Item {
         }
     }
 
-    Keys.onEscapePressed: root.controller.execute(WindowActions.Action.cancel)
+    Keys.onEscapePressed: root.cancelled()
 
     Connections {
-        target: root.controller.peek
+        target: root.controller
         function onChanged() {
             root.synchronizeEditor();
         }
@@ -116,13 +118,13 @@ Item {
             color: root.colors.surface0
             z: -1
         }
-        onTextEdited: root.controller.peek.search(text)
-        onLimitReached: requested => root.controller.peek.reportLimit(requested)
-        Keys.onReturnPressed: root.controller.peek.submit(root.state.revision)
-        Keys.onEnterPressed: root.controller.peek.submit(root.state.revision)
+        onTextEdited: root.controller.search(text)
+        onLimitReached: requested => root.controller.reportLimit(requested)
+        Keys.onReturnPressed: root.controller.submit(root.state.revision)
+        Keys.onEnterPressed: root.controller.submit(root.state.revision)
         Keys.onEscapePressed: {
             if (!query.cancelComposition()) {
-                root.controller.execute(WindowActions.Action.cancel);
+                root.cancelled();
             }
         }
     }
