@@ -79,7 +79,7 @@ namespace telar::gui::qt {
   }
 
   void Application::openComponentPick(std::size_t index) {
-    if (attachment_modal_active_) {
+    if (attachments_.modalOpen()) {
       return;
     }
 

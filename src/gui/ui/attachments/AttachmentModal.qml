@@ -6,9 +6,9 @@ import QtQuick
 FocusScope {
     id: root
     required property GuiController application
-    readonly property var shelf: application.attachments
+    readonly property var shelf: application.attachments.shelf
     readonly property var state: shelf.modal
-    readonly property var regions: application.attachmentModalGeometry
+    readonly property var regions: application.attachments.modalGeometry
     readonly property var host: regions.host
     readonly property color background: application.colors.background
     readonly property var grid: application.windowGeometry.typography.grid

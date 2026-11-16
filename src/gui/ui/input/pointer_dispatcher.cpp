@@ -324,7 +324,7 @@ namespace telar::gui::qt {
 
   bool PointerDispatcher::move(QMouseEvent& event) {
     if (native_events_.moving()) {
-      application_.attachments_.observePointer(event.position());
+      application_.attachments_.shelf()->observePointer(event.position());
       application_.history_.observeHover(event.position(), event.buttons() == Qt::NoButton ? HistoryHover::Observation::point : HistoryHover::Observation::retained);
     }
 
@@ -458,7 +458,7 @@ namespace telar::gui::qt {
         }
 
         application_.history_.retireHover();
-        application_.attachments_.observePointer(std::nullopt);
+        application_.attachments_.shelf()->observePointer(std::nullopt);
         application_.activity_.observePointer(false);
         return false;
       case QEvent::MouseButtonRelease: {

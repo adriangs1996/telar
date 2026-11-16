@@ -8,9 +8,9 @@ Rectangle {
 
     required property GuiController application
     property real ratio: application.chromeRatio
-    readonly property var shelf: application.attachments
+    readonly property var shelf: application.attachments.shelf
     readonly property bool modalOpen: (shelf.modal.id ?? "").length > 0
-    readonly property var region: application.attachmentGeometry
+    readonly property var region: application.attachments.geometry
     readonly property real padding: 6 * ratio
     readonly property real gap: 6 * ratio
     readonly property real closeSide: 18 * ratio

@@ -541,13 +541,13 @@ namespace {
     }
 
     static void verifyAttachmentHoverReactivation(Application& application, QQuickWindow& window) {
-      QVERIFY(!application.attachments()->hoverReady());
+      QVERIFY(!application.attachments()->shelf()->hoverReady());
       QTest::mouseMove(&window, window.contentItem()->boundingRect().topLeft().toPoint());
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->hoverReady(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->hoverReady(), wait_ms);
     }
 
-    static void verifyAttachmentModalHost(const Application& application) {
-      const auto modal_geometry = application.attachmentModalGeometry();
+    static void verifyAttachmentModalHost(Application& application) {
+      const auto modal_geometry = application.attachments()->modalGeometry();
       const auto modal_host = modal_geometry.value(QStringLiteral("host")).toRectF();
       const auto terminal_region = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
 
@@ -558,19 +558,19 @@ namespace {
     }
 
     static void verifyAttachmentBackdropOwnership(Application& application, QQuickWindow& window, const QString& identity) {
-      const auto host = application.attachmentModalGeometry().value(QStringLiteral("host")).toRectF();
+      const auto host = application.attachments()->modalGeometry().value(QStringLiteral("host")).toRectF();
       const auto point = (host.topLeft() + QPointF{1, 1}).toPoint();
       const std::array buttons{Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
 
       for (const auto button : buttons) {
-        application.attachments()->open(identity);
+        application.attachments()->shelf()->open(identity);
         QTest::mousePress(&window, button, Qt::NoModifier, point);
-        const bool held = !application.attachments()->modal().isEmpty();
+        const bool held = !application.attachments()->shelf()->modal().isEmpty();
 
         QTest::mouseRelease(&window, button, Qt::NoModifier, point);
-        const bool closed = application.attachments()->modal().isEmpty();
+        const bool closed = application.attachments()->shelf()->modal().isEmpty();
 
-        application.attachments()->close();
+        application.attachments()->shelf()->close();
         QVERIFY2(held, "A held backdrop press must retain the preview's modal input ownership");
         QCOMPARE(closed, button == Qt::LeftButton);
       }
@@ -595,7 +595,7 @@ namespace {
       const std::array agents{agent};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->prompt().has_value(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->prompt().has_value(), wait_ms);
       const auto before = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
 
       QImage image{2, 3, QImage::Format_RGBA8888};
@@ -640,12 +640,12 @@ namespace {
       QKeyEvent paste{QEvent::KeyPress, Qt::Key_V, NativeKeyAdapter::control_modifier};
 
       QCoreApplication::sendEvent(&terminal, &paste);
-      QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->shelf()->items().size(), 1, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1, wait_ms);
       const auto delivered = fixture.local_runtime->last<PaneInput>();
 
       QCOMPARE(textView(delivered.bytes), std::string_view{"\x16"});
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachmentGeometry().value(QStringLiteral("height")).toReal() > 0, wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->geometry().value(QStringLiteral("height")).toReal() > 0, wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(shelf_view->isVisible(), wait_ms);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       const auto shelf_pixels = window.grabWindow();
@@ -668,10 +668,10 @@ namespace {
 
       QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
 
-      const auto identity = application.attachments()->items().front().toMap().value(QStringLiteral("id")).toString();
+      const auto identity = application.attachments()->shelf()->items().front().toMap().value(QStringLiteral("id")).toString();
 
-      application.attachments()->open(identity);
-      QVERIFY(!application.attachments()->modal().isEmpty());
+      application.attachments()->shelf()->open(identity);
+      QVERIFY(!application.attachments()->shelf()->modal().isEmpty());
       QTRY_VERIFY_WITH_TIMEOUT(modal_view->isVisible(), wait_ms);
       verifyAttachmentModalHost(application);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
@@ -685,25 +685,25 @@ namespace {
       QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
       QVERIFY(application.handleBindingKey(escape, terminal));
-      QVERIFY(application.attachments()->modal().isEmpty());
+      QVERIFY(application.attachments()->shelf()->modal().isEmpty());
       verifyAttachmentHoverReactivation(application, window);
       verifyAttachmentBackdropOwnership(application, window, identity);
       QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1);
 
       sendAttachmentFrame(*fixture.local_runtime);
       QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->screen.cursor().x, 10, wait_ms);
-      application.attachments()->dismiss(identity);
+      application.attachments()->shelf()->dismiss(identity);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 2, wait_ms);
       QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\x7f"});
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->items().isEmpty() && application.attachmentGeometry().isEmpty(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->items().isEmpty() && application.attachments()->geometry().isEmpty(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal(), before, wait_ms);
 
       QCoreApplication::sendEvent(&terminal, &paste);
-      QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->shelf()->items().size(), 1, wait_ms);
       QKeyEvent submit{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
 
       QCoreApplication::sendEvent(&terminal, &submit);
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->items().isEmpty() && application.attachmentGeometry().isEmpty(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->items().isEmpty() && application.attachments()->geometry().isEmpty(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 4, wait_ms);
       QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\r"});
     }

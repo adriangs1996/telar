@@ -220,7 +220,7 @@ namespace telar::gui::qt {
   }
 
   bool Application::handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures) {
-    if (interceptAttachmentKey(event)) {
+    if (attachments_.interceptKey(event)) {
       return true;
     }
 

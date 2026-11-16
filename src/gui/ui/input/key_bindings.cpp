@@ -415,7 +415,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    if (auto* key = dynamic_cast<QKeyEvent*>(event); key != nullptr && application_.interceptAttachmentKey(*key)) {
+    if (auto* key = dynamic_cast<QKeyEvent*>(event); key != nullptr && application_.attachments_.interceptKey(*key)) {
       event->accept();
 
       return true;

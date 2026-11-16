@@ -146,7 +146,7 @@ namespace telar::gui::qt {
         pick_controller_(*this, memory, configuration_source_),
         plugin_worker_(memory, *this),
         machine_profiles_(memory),
-        attachments_(memory),
+        attachments_(store_, memory),
         key_bindings_(*this),
         pointer_dispatcher_(*this),
         link_opener_(*this),
@@ -797,7 +797,7 @@ namespace telar::gui::qt {
       refresh();
       break;
     case Change::terminal:
-      reconcileAttachmentFrame(session().changedPane());
+      attachments_.reconcileFrame(session().changedPane());
       emit terminalChanged(session().changedPane());
       if (session().takeChromeChange() && !refresh_timer_.isActive()) {
         refresh_timer_.start();
@@ -972,13 +972,13 @@ namespace telar::gui::qt {
 
     scheduleGraphicsRecovery();
     publishStatus();
-    publishAttachmentGeometry();
+    attachments_.publishGeometry();
     emit refreshed();
     reconsiderFrame();
   }
 
   void Application::refreshPanes() {
-    synchronizeAttachments();
+    attachments_.synchronize();
     panes_.setScale(terminal_grid_.scale);
     panes_.synchronize();
   }
@@ -1355,6 +1355,30 @@ namespace telar::gui::qt {
   void Application::reportFailure(const QString& message) {
     error_ = message;
     publishStatus();
+  }
+
+  AttachmentsController* Application::attachments() noexcept {
+    return &attachments_;
+  }
+
+  void Application::initializeAttachments() {
+    connect(&attachments_, &AttachmentsController::changed, this, [this] {
+      refresh_timer_.start();
+    });
+    // The modal takes the keyboard and the pointer from the panes while it is open.
+    connect(&attachments_, &AttachmentsController::modalChanged, this, [this](bool open) {
+      if (open) {
+        closeComponentPick();
+        closeComponentPanel();
+        interruptBindings();
+        for (const auto& pane : session().panes()) {
+          emit inputReleasing(pane->id);
+        }
+      } else {
+        restoreTerminalFocus();
+      }
+    });
+    connect(&attachments_, &AttachmentsController::failed, this, &Application::reportFailure);
   }
 
   void Application::showPathPicker() {

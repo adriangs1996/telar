@@ -1069,7 +1069,7 @@ namespace telar::gui::qt {
 
     const bool delivered = send(bytes);
     if (delivered && semantic && application_ != nullptr) {
-      application_->attachmentKey(pane_id_, *semantic);
+      application_->attachments()->key(pane_id_, *semantic);
     }
 
     return delivered;

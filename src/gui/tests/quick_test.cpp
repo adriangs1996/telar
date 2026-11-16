@@ -3517,7 +3517,7 @@ return {api_version=2, client={keybindings={
       const QSignalSpy title{client_.get(), &Application::titleChanged};
       const QSignalSpy diagnostic{client_.get(), &Application::diagnosticChanged};
       const QSignalSpy copy_mode{client_->copy(), &CopyController::activeChanged};
-      const QSignalSpy attachments{client_.get(), &Application::attachmentGeometryChanged};
+      const QSignalSpy attachments{client_->attachments(), &AttachmentsController::geometryChanged};
       const QSignalSpy element_bars{client_.get(), &Application::elementBarsChanged};
 
       // Each selection commits and flushes before it returns; no runtime message runs in between.

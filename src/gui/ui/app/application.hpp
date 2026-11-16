@@ -21,7 +21,7 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
 #include "ui/activity/activity_controller.hpp"
-#include "ui/attachments/attachment_shelf.hpp"
+#include "ui/attachments/attachments_controller.hpp"
 #include "ui/chrome/tabs_controller.hpp"
 #include "ui/components/component_surface_state.hpp"
 #include "ui/components/element_slots.hpp"
@@ -148,9 +148,7 @@ namespace telar::gui::qt {
     QML_UNCREATABLE("Use the running GUI controller")
     // QML names every enum value with its enum, so Action::palette and Dialog::palette do not clash.
     Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
-    Q_PROPERTY(AttachmentShelf* attachments READ attachments CONSTANT)
-    Q_PROPERTY(QVariantMap attachmentGeometry READ attachmentGeometry NOTIFY attachmentGeometryChanged)
-    Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY attachmentGeometryChanged)
+    Q_PROPERTY(telar::gui::qt::AttachmentsController* attachments READ attachments CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -265,11 +263,7 @@ namespace telar::gui::qt {
     Application(Application&&) = delete;
     Application& operator=(Application&&) = delete;
 
-    [[nodiscard]] AttachmentShelf* attachments() noexcept;
-    [[nodiscard]] QVariantMap attachmentGeometry() const;
-    [[nodiscard]] QVariantMap attachmentModalGeometry() const;
-    void attachmentKey(std::uint64_t pane_id, const TerminalKey& key);
-    bool interceptAttachmentKey(QKeyEvent& event);
+    [[nodiscard]] AttachmentsController* attachments() noexcept;
     void open(const QString& endpoint);
     void openMachines(const QString& path);
     void loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path = {});
@@ -432,7 +426,6 @@ namespace telar::gui::qt {
     // The error, the TLS proxy badge or whether the runtime is connected moved.
     void diagnosticChanged();
     // The attachment shelf's region or the attachment modal's layout moved.
-    void attachmentGeometryChanged();
     void elementBarsChanged();
     // Each refresh() of what the window shows from the active session, for the C++ views that
     // compare what they read on their own. No property notifies with it.
@@ -623,8 +616,6 @@ namespace telar::gui::qt {
     // Notifies the title, diagnostic and copy mode properties whose value moved since they were
     // last published.
     void publishStatus();
-    // Notifies the attachment geometries when what they are measured from moved.
-    void publishAttachmentGeometry();
     void fitSidebarWhenReady();
     [[nodiscard]] float sidebarNaturalWidth() const;
     void selectActivity(const QString& identity, bool peek = false);
@@ -632,10 +623,6 @@ namespace telar::gui::qt {
     void openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
     void presentChange(Change change);
     void initializeAttachments();
-    void attachmentShelfChanged();
-    void reconcileAttachmentFrame(std::uint64_t pane_id);
-    void dismissAttachment(std::uint64_t identity);
-    void synchronizeAttachments();
     void refreshPanes();
     [[nodiscard]] HistoryModalMetrics historyMetrics() const;
     [[nodiscard]] TabDropSurface tabDropSurface() const;
@@ -735,8 +722,7 @@ namespace telar::gui::qt {
     std::optional<PluginOwner> plugin_owner_;
     std::uint64_t next_plugin_execution_ = 1;
     MachineProfilesSource machine_profiles_;
-    AttachmentShelf attachments_;
-    bool attachment_modal_active_ = false;
+    AttachmentsController attachments_;
     std::optional<RemoteLaunch> remote_launch_;
     QTimer machine_retry_;
     QString machine_control_endpoint_;
@@ -776,19 +762,7 @@ namespace telar::gui::qt {
       bool connected = false;
     };
 
-    // What the attachment geometries are measured from.
-    struct AttachmentInputs {
-      WorkbenchGeometry host;
-      Rect terminal;
-      CellRectangle reserved;
-      double density = 1;
-      bool shelf = false;
-
-      bool operator==(const AttachmentInputs&) const = default;
-    };
-
     PublishedStatus published_status_;
-    std::optional<AttachmentInputs> published_attachments_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     QMetaObject::Connection screen_refresh_connection_;
