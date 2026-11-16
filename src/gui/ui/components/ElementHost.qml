@@ -12,15 +12,17 @@ Item {
     required property var colors
     required property var typography
     property real ratio: 1
-    property var controller: null
     property var builtins: ({})
     readonly property var nodes: content?.nodes ?? []
+
+    // A click on an element of `content`; the window runs its callback, action or link.
+    signal elementActivated(string slot, string key, string revision, int element)
 
     implicitWidth: root.implicitWidth
     implicitHeight: root.implicitHeight
 
     function activate(element) {
-        if (controller && element) controller.activateElement(content.slot, content.key, content.revision, element.index);
+        if (element) elementActivated(content.slot, content.key, content.revision, element.index);
     }
 
     ElementNode {

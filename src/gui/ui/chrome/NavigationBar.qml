@@ -174,7 +174,7 @@ NativeRoundedRectangle {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        controller: root.controller
+        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
         builtins: ({sidebar_toggle: togglePiece, workspace_identity: identityPiece, project_switcher: projectsPiece, tabs: tabsPiece, palette_button: palettePiece, new_tab: newTabPiece})
     }
 

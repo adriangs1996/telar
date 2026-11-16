@@ -7,11 +7,15 @@ import QtQuick.Controls
 Popup {
     id: root
 
-    required property var controller
+    required property ComponentsController controller
+    // The host metrics, by name, that metric nodes read.
+    property var hostMetrics: ({})
+    // The machine chrome that `ui.builtin("machines")` shows.
+    property var machineChrome: null
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var state: controller.components.panel
+    readonly property var state: controller.panel
     readonly property var anchor: state.anchor ?? Qt.point(-1, -1)
     readonly property real margin: 12 * ratio
     readonly property real headerHeight: 32 * ratio
@@ -27,7 +31,7 @@ Popup {
         generation: root.state.identity ?? ""
     }
     visible: state.open ?? false
-    focus: !(controller.components.pick.open ?? false)
+    focus: !(controller.pick.open ?? false)
     modal: false
     padding: margin
     width: Math.max(0, Math.min((state.width ?? 420) * ratio, (parent?.width ?? 720) - 2 * margin))
@@ -36,9 +40,9 @@ Popup {
     y: settledY + entranceOffset * (1 - motion.reveal)
     opacity: motion.reveal
     objectName: "configuredPanel"
-    closePolicy: (controller.components.pick.open ?? false) ? Popup.NoAutoClose : Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    closePolicy: (controller.pick.open ?? false) ? Popup.NoAutoClose : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     background: DialogSurface { colors: root.colors; ratio: root.ratio }
-    onClosed: if (state.open) controller.components.closePanel()
+    onClosed: if (state.open) controller.closePanel()
 
     contentItem: Item {
         ChromeText {
@@ -68,7 +72,7 @@ Popup {
             pixelSize: root.typography.body
             cornerRadius: 5 * root.ratio
             Accessible.name: "Refresh panel"
-            onClicked: root.controller.components.refreshPanel()
+            onClicked: root.controller.refreshPanel()
         }
 
         ChromeButton {
@@ -80,7 +84,7 @@ Popup {
             pixelSize: root.typography.body
             cornerRadius: 5 * root.ratio
             Accessible.name: "Close panel"
-            onClicked: root.controller.components.closePanel()
+            onClicked: root.controller.closePanel()
         }
 
         Flickable {
@@ -95,6 +99,8 @@ Popup {
                 id: tree
                 width: parent.width
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.state
                 colors: root.colors
                 typography: root.typography

@@ -7,7 +7,11 @@ import Telar.Gui
 Item {
     id: root
 
-    required property var controller
+    required property ComponentsController controller
+    // The host metrics, by name, that metric nodes read.
+    property var hostMetrics: ({})
+    // The machine chrome that `ui.builtin("machines")` shows.
+    property var machineChrome: null
     required property var surface
     required property var colors
     required property var typography
@@ -61,6 +65,8 @@ Item {
                 id: tree
                 anchors.fill: parent
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 colors: root.colors
                 typography: root.typography

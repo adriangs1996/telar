@@ -83,7 +83,9 @@ NativeRoundedRectangle {
 
             ComponentSlot {
                 id: leftSlot
-                controller: root.controller
+                controller: root.controller?.components ?? null
+                hostMetrics: root.metrics
+                machineChrome: root.controller?.machineChrome ?? null
                 surface: components.slots.left ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
@@ -97,7 +99,9 @@ NativeRoundedRectangle {
             ComponentSlot {
                 id: centerSlot
                 x: Math.max(components.leftEnd, Math.min((components.width - width) / 2, components.rightStart - width))
-                controller: root.controller
+                controller: root.controller?.components ?? null
+                hostMetrics: root.metrics
+                machineChrome: root.controller?.machineChrome ?? null
                 surface: components.slots.center ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
@@ -111,7 +115,9 @@ NativeRoundedRectangle {
             ComponentSlot {
                 id: rightSlot
                 x: legacySlot.x - (legacySlot.width > 0 ? components.gap : 0) - width
-                controller: root.controller
+                controller: root.controller?.components ?? null
+                hostMetrics: root.metrics
+                machineChrome: root.controller?.machineChrome ?? null
                 surface: components.slots.right ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
@@ -125,7 +131,9 @@ NativeRoundedRectangle {
             ComponentSlot {
                 id: legacySlot
                 x: components.contentEnd - width
-                controller: root.controller
+                controller: root.controller?.components ?? null
+                hostMetrics: root.metrics
+                machineChrome: root.controller?.machineChrome ?? null
                 surface: components.slots.top ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
@@ -138,7 +146,9 @@ NativeRoundedRectangle {
 
             ComponentOverflow {
                 id: overflow
-                controller: root.controller
+                controller: root.controller?.components ?? null
+                hostMetrics: root.metrics
+                machineChrome: root.controller?.machineChrome ?? null
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
@@ -158,13 +168,15 @@ NativeRoundedRectangle {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            controller: root.controller
+            onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
             builtins: ({metrics: metricsPiece, bar_left: leftPiece, bar_center: centerPiece, bar_right: rightPiece})
         }
 
         component BarPiece: ComponentSlot {
             implicitHeight: root.capsuleHeight
-            controller: root.controller
+            controller: root.controller?.components ?? null
+            hostMetrics: root.metrics
+            machineChrome: root.controller?.machineChrome ?? null
             colors: root.colors
             typography: root.typography
             ratio: root.ratio

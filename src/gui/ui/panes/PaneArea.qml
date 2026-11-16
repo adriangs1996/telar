@@ -167,7 +167,7 @@ Item {
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
                 ratio: root.ratio
-                controller: root.application
+                onElementActivated: (slot, key, revision, element) => root.application.activateElement(slot, key, revision, element)
                 builtins: Object.assign({pane_actions: actionsPiece}, header.builtins)
             }
 
@@ -182,7 +182,7 @@ Item {
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
                 ratio: root.ratio
-                controller: root.application
+                onElementActivated: (slot, key, revision, element) => root.application.activateElement(slot, key, revision, element)
                 builtins: ({pane_actions: actionsPiece})
             }
 

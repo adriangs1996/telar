@@ -7,7 +7,11 @@ import Telar.Gui
 Item {
     id: root
 
-    required property var controller
+    required property ComponentsController controller
+    // The host metrics, by name, that metric nodes read.
+    property var hostMetrics: ({})
+    // The machine chrome that `ui.builtin("machines")` shows.
+    property var machineChrome: null
     required property var colors
     required property var typography
     property var entries: []
@@ -87,9 +91,9 @@ Item {
         background: DialogSurface { colors: root.colors; ratio: root.ratio }
 
         Connections {
-            target: overflowPopup.visible ? root.controller.components : null
+            target: overflowPopup.visible ? root.controller : null
             function onChanged() {
-                if (root.controller.components.panel.open ?? false) {
+                if (root.controller.panel.open ?? false) {
                     overflowPopup.close();
                 }
             }
@@ -134,6 +138,8 @@ Item {
                             height: root.rowHeight
                             rowHeight: root.rowHeight
                             controller: root.controller
+                            hostMetrics: root.hostMetrics
+                            machineChrome: root.machineChrome
                             surface: modelData.surface
                             roots: [modelData.index]
                             colors: root.colors

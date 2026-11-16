@@ -114,7 +114,9 @@ Window {
     ComponentPanel {
         id: componentPanelPopup
         parent: root.contentItem
-        controller: telar
+        controller: telar.components
+        hostMetrics: telar.hostMetrics
+        machineChrome: telar.machineChrome
         colors: telar.colors
         typography: root.geometry.typography
         ratio: root.ratio
@@ -123,7 +125,7 @@ Window {
     ComponentPick {
         id: componentPickPopup
         parent: root.contentItem
-        controller: telar
+        controller: telar.components
         colors: telar.colors
         typography: root.geometry.typography
         ratio: root.ratio

@@ -114,7 +114,7 @@ PaneHeaderLayout {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        controller: root.controller
+        onElementActivated: (slot, key, revision, element) => root.controller?.activateElement(slot, key, revision, element)
         builtins: root.builtins
     }
 

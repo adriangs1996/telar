@@ -8,7 +8,11 @@ import "ComponentFit.js" as ComponentFit
 Item {
     id: root
 
-    required property var controller
+    required property ComponentsController controller
+    // The host metrics, by name, that metric nodes read.
+    property var hostMetrics: ({})
+    // The machine chrome that `ui.builtin("machines")` shows.
+    property var machineChrome: null
     required property var surface
     required property var colors
     required property var typography
@@ -110,6 +114,8 @@ Item {
             delegate: ComponentNode {
                 required property var record
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 node: record
                 colors: root.colors
@@ -170,6 +176,8 @@ Item {
             delegate: ComponentNode {
                 required property var record
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 node: record
                 colors: root.colors
@@ -195,9 +203,9 @@ Item {
     Popup {
         id: overflowPopup
         Connections {
-            target: overflowPopup.visible ? root.controller.components : null
+            target: overflowPopup.visible ? root.controller : null
             function onChanged() {
-                if (root.controller.components.panel.open ?? false) {
+                if (root.controller.panel.open ?? false) {
                     overflowPopup.close();
                 }
             }
@@ -218,6 +226,8 @@ Item {
                 active: overflowPopup.visible
                 width: parent.width
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 colors: root.colors
                 typography: root.typography

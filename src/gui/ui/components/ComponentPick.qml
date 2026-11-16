@@ -7,11 +7,11 @@ import Telar.Gui
 Popup {
     id: root
 
-    required property var controller
+    required property ComponentsController controller
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var state: controller.components.pick
+    readonly property var state: controller.pick
     readonly property var rows: state.rows ?? []
     readonly property real margin: 16 * ratio
     readonly property real fieldHeight: 36 * ratio
@@ -29,7 +29,7 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     background: DialogSurface { colors: root.colors; ratio: root.ratio }
     Overlay.modal: Rectangle { color: "black"; opacity: 0.25 }
-    onClosed: if (state.open) controller.components.closePick()
+    onClosed: if (state.open) controller.closePick()
     onRowsChanged: selection = state.preferredRow ?? 0
     onVisibleChanged: {
         if (visible) {
@@ -45,7 +45,7 @@ Popup {
     }
 
     function choose() {
-        controller.components.choosePick(selection, state.identity);
+        controller.choosePick(selection, state.identity);
     }
 
     contentItem: Item {
@@ -65,7 +65,7 @@ Popup {
             text: "×"
             pixelSize: root.typography.body
             Accessible.name: "Close pick"
-            onClicked: root.controller.components.closePick()
+            onClicked: root.controller.closePick()
         }
         FormTextField {
             id: query
@@ -79,13 +79,13 @@ Popup {
             formControl: true
             maximumBytes: 512
             placeholderText: root.state.placeholder ?? "Filter choices…"
-            onTextEdited: root.controller.components.filterPick(text)
+            onTextEdited: root.controller.filterPick(text)
             onAccepted: root.choose()
             Keys.priority: Keys.BeforeItem
             Keys.onUpPressed: root.move(-1)
             Keys.onDownPressed: root.move(1)
             Keys.onEscapePressed: {
-                if (!query.cancelComposition()) root.controller.components.closePick();
+                if (!query.cancelComposition()) root.controller.closePick();
             }
         }
         ListView {

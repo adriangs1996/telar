@@ -5,7 +5,11 @@ import Telar.Gui
 
 Loader {
     id: root
-    required property var controller
+    required property ComponentsController controller
+    // The host metrics, by name, that metric nodes read.
+    property var hostMetrics: ({})
+    // The machine chrome that `ui.builtin("machines")` shows.
+    property var machineChrome: null
     required property var surface
     required property var colors
     required property var typography
@@ -24,6 +28,8 @@ Loader {
         if (!active || !initialized) return;
         setSource(Qt.resolvedUrl("ComponentTree.qml"), {
             controller: Qt.binding(() => root.controller),
+            hostMetrics: Qt.binding(() => root.hostMetrics),
+            machineChrome: Qt.binding(() => root.machineChrome),
             surface: Qt.binding(() => root.surface),
             colors: Qt.binding(() => root.colors),
             typography: Qt.binding(() => root.typography),

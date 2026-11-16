@@ -7,7 +7,11 @@ import Telar.Gui
 KeyboardAction {
     id: root
 
-    required property var controller
+    required property ComponentsController controller
+    // The host metrics, by name, that metric nodes read.
+    property var hostMetrics: ({})
+    // The machine chrome that `ui.builtin("machines")` shows.
+    property var machineChrome: null
     required property var surface
     required property var node
     required property var colors
@@ -53,7 +57,7 @@ KeyboardAction {
     // The worst alert in a node and its descendants: 0 none, 1 warning, 2 danger.
     function severityOf(index) {
         const nodes = surface.nodes ?? [];
-        const metrics = controller?.hostMetrics ?? ({});
+        const metrics = hostMetrics;
         let worst = 0;
         for (const candidate of nodes) {
             if (candidate.tooltip || worst === 2) {
@@ -76,17 +80,17 @@ KeyboardAction {
     }
 
     function activate() {
-        controller.components.activate(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
+        controller.activate(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
     }
 
     // A bar yields its tooltips to an open panel or pick; a panel's own nodes yield only to a pick.
     // Called from the hover-guarded binding so that only the hovered node tracks these projections.
     function tooltipCovered() {
-        if (controller.components.pick.open ?? false) {
+        if (controller.pick.open ?? false) {
             return true;
         }
 
-        return !(surface.open ?? false) && (controller.components.panel.open ?? false);
+        return !(surface.open ?? false) && (controller.panel.open ?? false);
     }
 
     Accessible.role: node.clickable ? Accessible.Button : Accessible.StaticText
@@ -151,6 +155,8 @@ KeyboardAction {
         contentItem: ComponentBranch {
             active: tooltipPopup.visible
             controller: root.controller
+            hostMetrics: root.hostMetrics
+            machineChrome: root.machineChrome
             surface: root.surface
             colors: root.colors
             typography: root.typography
@@ -248,7 +254,7 @@ KeyboardAction {
     Component {
         id: summaryView
         SystemSummary {
-            metrics: root.controller?.hostMetrics ?? ({})
+            metrics: root.hostMetrics
             surface: root.surface
             node: root.node
             colors: root.colors
@@ -300,6 +306,8 @@ KeyboardAction {
                 width: implicitWidth
                 height: parent.height
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 colors: root.colors
                 typography: root.typography
@@ -445,7 +453,7 @@ KeyboardAction {
     Component {
         id: metric
         BarMetric {
-            readonly property var metrics: root.controller.hostMetrics
+            readonly property var metrics: root.hostMetrics
             record: metrics[["cpu", "memory", "battery"][root.node.metric]]
             samples: root.node.metric === 0 ? metrics.history : []
             battery: root.node.metric === 2
@@ -460,7 +468,7 @@ KeyboardAction {
         id: machines
         MachineChrome {
             inlineFacts: true
-            controller: root.controller?.machineChrome ?? null
+            controller: root.machineChrome
             colors: root.colors
             implicitWidth: preferredWidth
             implicitHeight: root.rowHeight
@@ -504,6 +512,8 @@ KeyboardAction {
                 width: implicitWidth
                 height: root.rowHeight
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 colors: root.colors
                 typography: root.typography
@@ -596,6 +606,8 @@ KeyboardAction {
                 height: root.rowHeight
                 active: card.actionNode !== null
                 controller: root.controller
+                hostMetrics: root.hostMetrics
+                machineChrome: root.machineChrome
                 surface: root.surface
                 colors: root.colors
                 typography: root.typography
