@@ -325,7 +325,7 @@ if(TELAR_GUI_NATIVE)
   add_dependencies(gui-editor gui-editor-ui)
 
   target_sources(gui-quick PRIVATE ui/notifications/notification_layout.cpp ui/notifications/notification_layout.hpp)
-  target_sources(gui-quick PRIVATE ui/machines/machine_chrome_layout.cpp ui/machines/machine_chrome_layout.hpp)
+  target_sources(gui-quick PRIVATE ui/machines/machine_chrome_layout.cpp ui/machines/machine_chrome_layout.hpp ui/machines/machine_chrome_controller.cpp ui/machines/machine_chrome_controller.hpp)
   set_source_files_properties(ui/machines/machine_chrome_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   target_sources(gui-quick PRIVATE ui/scene/curve_scene.cpp ui/scene/curve_mask_node.cpp ui/scene/alpha_mask_material.cpp ui/fonts/chrome_fonts.cpp ui/scene/chrome_text_scene.cpp ui/scene/ancestor_geometry.cpp)
   target_sources(gui-quick PRIVATE ui/scene/rounded_rectangle_scene.cpp ui/scene/software_rounded_rectangle.cpp)

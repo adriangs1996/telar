@@ -460,7 +460,7 @@ KeyboardAction {
         id: machines
         MachineChrome {
             inlineFacts: true
-            controller: root.controller
+            controller: root.controller?.machineChrome ?? null
             colors: root.colors
             implicitWidth: preferredWidth
             implicitHeight: root.rowHeight

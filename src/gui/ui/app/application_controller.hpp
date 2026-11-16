@@ -39,6 +39,7 @@ static_assert(true);
 #include "ui/links/link_status_controller.hpp"
 #include "ui/links/links_controller.hpp"
 #include "ui/machines/machine_activity_target.hpp"
+#include "ui/machines/machine_chrome_controller.hpp"
 #include "ui/machines/machine_profiles_source.hpp"
 #include "ui/machines/machine_prompt_controller.hpp"
 #include "ui/notifications/notifications_controller.hpp"
@@ -137,7 +138,6 @@ namespace telar::gui::test {
 namespace telar::gui::qt {
 
   class TerminalItem;
-  class MachineChromeLayout;
 
   // The window and what runs it: the machines and their runtime connections, the store every
   // controller reads, the frames the terminals present, the dialog that is open, and the
@@ -146,7 +146,6 @@ namespace telar::gui::qt {
   // Each feature's state lives in its own controller, which reads the store and never calls
   // back here; this controller synchronizes them in order and runs what they ask of the window.
   class ApplicationController final : public QObject {
-    friend class MachineChromeLayout;
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 
@@ -190,6 +189,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
+    Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
     Q_PROPERTY(telar::gui::qt::PromptController* prompt READ prompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::DocumentsController* documents READ documents CONSTANT)
@@ -341,6 +341,10 @@ namespace telar::gui::qt {
 
     MachinePromptController* machinePrompt() noexcept {
       return &machine_prompt_;
+    }
+
+    MachineChromeController* machineChrome() noexcept {
+      return &machine_chrome_;
     }
 
     PeekController* peek() noexcept {
@@ -662,6 +666,7 @@ namespace telar::gui::qt {
     PaletteController palette_;
     PathPickerController paths_;
     MachinePromptController machine_prompt_;
+    MachineChromeController machine_chrome_;
     PeekController peek_;
     PromptController prompt_;
     DocumentsController documents_;

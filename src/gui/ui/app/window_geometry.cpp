@@ -50,6 +50,7 @@ namespace telar::gui::qt {
     link_status_.setDisplay(display);
     attachments_.setDisplay(display);
     notifications_.setDisplay(display, terminal_grid_);
+    machine_chrome_.setDisplay(display);
     sidebar_.setDisplay(display);
   }
 

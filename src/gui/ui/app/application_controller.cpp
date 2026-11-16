@@ -157,6 +157,7 @@ namespace telar::gui::qt {
         palette_(store_, PaletteAction{.value = static_cast<int>(Action::suggest_command)}),
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
+        machine_chrome_(store_),
         peek_(store_, activity_),
         prompt_(store_),
         documents_(store_),
@@ -229,6 +230,15 @@ namespace telar::gui::qt {
     connect(&paths_, &PathPickerController::failed, this, &ApplicationController::reportFailure);
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       showDialog(Dialog::none);
+    });
+    connect(this, &ApplicationController::machinesChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
+    connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
+      execute(Action::machine_picker);
+    });
+    connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](MachineToken token) {
+      applyInteraction([this, token] {
+        selectMachine(token);
+      });
     });
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       showDialog(Dialog::none);
@@ -416,6 +426,7 @@ namespace telar::gui::qt {
     history_.setWindow(&window);
     activity_.setWindow(&window);
     sidebar_.setWindow(window);
+    machine_chrome_.setWindow(window);
     tabs_.setWindow(window);
     pointer_dispatcher_.presentHistoryActions({});
     key_bindings_.setWindow(window);

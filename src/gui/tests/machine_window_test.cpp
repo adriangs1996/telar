@@ -1032,7 +1032,7 @@ namespace {
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       constexpr qreal row_width = 300;
       constexpr qreal row_height = 32;
-      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(fixture.application.machineChrome())}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
 
       chrome->setParentItem(window.contentItem());
       window.show();
@@ -1085,7 +1085,7 @@ namespace {
       QVERIFY(finishOpening(*fixture.local_runtime));
       constexpr qreal row_width = 600;
       constexpr qreal row_height = 26;
-      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(application.machineChrome())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
 
       chrome->setParentItem(window.contentItem());
       auto* layout = qobject_cast<MachineChromeLayout*>(chrome.get());
@@ -1184,7 +1184,7 @@ namespace {
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = blocked});
       constexpr qreal segment_width = 200;
       constexpr qreal segment_height = 26;
-      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), segment_width}, {QStringLiteral("height"), segment_height}});
+      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(fixture.application.machineChrome())}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), segment_width}, {QStringLiteral("height"), segment_height}});
 
       chrome->setParentItem(window.contentItem());
       auto* layout = qobject_cast<MachineChromeLayout*>(chrome.get());
@@ -1225,7 +1225,7 @@ namespace {
       QVERIFY(fixture.start());
       constexpr qreal row_width = 300;
       constexpr qreal row_height = 32;
-      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+      auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(fixture.application.machineChrome())}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
 
       chrome->setParentItem(window.contentItem());
       window.show();

@@ -10,8 +10,6 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/activity/agent_projection.hpp"
-#include "ui/app/application_controller.hpp"
 #include "ui/fonts/resident_fonts.hpp"
 #include "ui/fonts/window_font_catalog.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
@@ -87,7 +85,7 @@ namespace telar::gui::qt {
   MachineChromeLayout::MachineChromeLayout(QQuickItem* parent)
       : QQuickItem(parent) {}
 
-  ApplicationController* MachineChromeLayout::controller() const noexcept {
+  MachineChromeController* MachineChromeLayout::controller() const noexcept {
     return controller_;
   }
 
@@ -111,7 +109,7 @@ namespace telar::gui::qt {
     return style_;
   }
 
-  void MachineChromeLayout::setController(ApplicationController* controller) {
+  void MachineChromeLayout::setController(MachineChromeController* controller) {
     if (controller_ == controller) {
       return;
     }
@@ -122,9 +120,8 @@ namespace telar::gui::qt {
 
     controller_ = controller;
     if (controller_ != nullptr) {
-      connect(controller_, &ApplicationController::machinesChanged, this, &MachineChromeLayout::observeSources);
-      connect(controller_, &ApplicationController::configurationChanged, this, &MachineChromeLayout::invalidate);
-      connect(controller_, &ApplicationController::windowGeometryChanged, this, &MachineChromeLayout::invalidate);
+      connect(controller_, &MachineChromeController::machinesChanged, this, &MachineChromeLayout::observeSources);
+      connect(controller_, &MachineChromeController::changed, this, &MachineChromeLayout::invalidate);
       connect(controller_, &QObject::destroyed, this, [this] {
         controller_ = nullptr;
         observeSources();
@@ -171,16 +168,16 @@ namespace telar::gui::qt {
 
   void MachineChromeLayout::observeSources() {
     std::array<std::optional<Source>, MachineLimits::window_slots> incoming;
-    const bool shown = controller_ != nullptr && controller_->store_.machines().count() > 1;
-    const bool attention = controller_ != nullptr && controller_->store_.machines().attentionElsewhere();
+    const bool shown = controller_ != nullptr && controller_->store().machines().count() > 1;
+    const bool attention = controller_ != nullptr && controller_->store().machines().attentionElsewhere();
 
     if (controller_ != nullptr) {
       for (std::size_t index = 0; index < incoming.size(); ++index) {
         const auto slot = static_cast<Machines::Slot>(index);
-        if (controller_->store_.machines().shown(slot)) {
-          const auto& row = controller_->store_.machines().row(slot);
+        if (controller_->store().machines().shown(slot)) {
+          const auto& row = controller_->store().machines().row(slot);
 
-          incoming[index] = Source{.token = controller_->store_.machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store_.machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
+          incoming[index] = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
           if (mode_ == Mode::list && !incoming[index]->active) {
             collectCards(slot, *incoming[index]);
           }
@@ -286,7 +283,7 @@ namespace telar::gui::qt {
     }
 
     density_ = window()->effectiveDevicePixelRatio();
-    chrome_ = controller_->displayMetrics(density_).chrome;
+    chrome_ = controller_->display().chrome;
     fonts_ = ResidentFonts::shared(catalog_->collection());
     const auto& theme = controller_->configuration().theme;
     auto active_background = toQColor(theme.chromeColor(PaletteRole::text));
@@ -361,7 +358,7 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeLayout::collectCards(Machines::Slot slot, Source& source) const {
-    const auto& client = controller_->store_.clients()[slot];
+    const auto& client = controller_->store().clients()[slot];
     if (!client || (*client)->phase != MachinePhase::connected || !(*client)->session.ready()) {
       return;
     }
@@ -510,7 +507,7 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeLayout::activate(const QString& identity) {
-    if (inlineFacts() || controller_ == nullptr || window() == nullptr || window() != controller_->window_) {
+    if (inlineFacts() || controller_ == nullptr || window() == nullptr || window() != controller_->window()) {
       return;
     }
 
@@ -528,7 +525,7 @@ namespace telar::gui::qt {
     }
 
     if (identity == QLatin1StringView("machine:picker")) {
-      controller_->execute(ApplicationController::Action::machine_picker);
+      controller_->pick();
       return;
     }
 
@@ -536,9 +533,7 @@ namespace telar::gui::qt {
       if (source && machineKey(source->token) == identity) {
         const auto token = source->token;
 
-        controller_->applyInteraction([this, token] {
-          controller_->selectMachine(token);
-        });
+        controller_->select(token);
 
         return;
       }

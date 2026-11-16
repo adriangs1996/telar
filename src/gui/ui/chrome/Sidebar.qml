@@ -114,7 +114,7 @@ NativeRoundedRectangle {
 
     MachineChrome {
         objectName: "sidebarMachineList"
-        controller: root.controller
+        controller: root.controller?.machineChrome ?? null
         segment: false
         x: root.regions.machines?.x ?? 0
         y: root.regions.machines?.y ?? 0
