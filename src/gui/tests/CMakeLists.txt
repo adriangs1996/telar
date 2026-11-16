@@ -468,6 +468,8 @@ if(TELAR_GUI_NATIVE)
   target_compile_options(gui-pane-motion-test PRIVATE -ffp-contract=off)
   telar_add_test(gui-animation-cadence-tools COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/test_animation_cadence.py"
     LABELS gui.ui TIMEOUT 10)
+  telar_add_test(gui-startup-tools COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/test_measure_startup.py"
+    LABELS gui.ui TIMEOUT 30)
   if(APPLE)
     telar_add_test(gui-animation-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/animation_probe.cpp ${TELAR_PROCESS_SOURCE_DIR}/tools/animation_presentation.mm LIBRARIES gui-quick gui-quickplugin gui-test-window-activation "-framework Metal" "-framework QuartzCore"
       CHECKS lint lifetime blank_lines)

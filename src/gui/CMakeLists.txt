@@ -242,6 +242,10 @@ if(TELAR_GUI_NATIVE)
   endif()
   target_link_libraries(telar-gui PRIVATE gui-platform gui-machines gui-quick gui-quickplugin)
   add_dependencies(telar-gui telar-gui-command)
+  # Run by hand by tools/measure_startup.py, in Release too, so a tree configured
+  # without tests builds it.
+  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES gui-quick gui-quickplugin
+    CHECKS lint lifetime blank_lines)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts
