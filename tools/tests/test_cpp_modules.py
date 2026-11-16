@@ -319,5 +319,60 @@ auto letter = 'a';
             checker.check_unused_imports(units, provided, {'src/gui/view/view.cpp': ['telar.base.geometry']})
 
 
+LAYERS = {'runtime': ['platform', 'terminal', 'http', 'proxy', 'tests']}
+
+
+def domain_files(deps='', sources='', extra=None):
+    """A proxy domain over the terminal and platform domains: its interface imports terminal,
+    its implementation unit platform."""
+    files = {
+        'src/runtime/proxy/CMakeLists.txt': f'# The proxy.\ntelar_add_domain(runtime proxy\n  SOURCES {sources or "relay/relay.cpp"}\n  DEPS {deps} telar::config)\n',
+        'src/runtime/proxy/relay/relay.cppm': 'export module telar.runtime.proxy.relay;\nimport telar.runtime.terminal.grid;\nimport telar.config;\n',
+        'src/runtime/proxy/relay/relay.cpp': 'module telar.runtime.proxy.relay;\nimport telar.runtime.platform.socket;\n',
+        'src/runtime/proxy/tests/probe.cppm': 'export module probe;\nimport telar.runtime.http.message;\n',
+    }
+    files.update(extra or {})
+    return files
+
+
+def check_domains(files):
+    return checker.check_domain_targets(LAYERS, set(files), files.__getitem__)
+
+
+class DomainTargets(unittest.TestCase):
+    def test_accepts_deps_that_match_the_imports(self):
+        self.assertEqual(check_domains(domain_files('platform terminal')), 1)
+
+    def test_rejects_a_dependency_above_the_domain(self):
+        with self.assertRaisesRegex(RuntimeError, r'telar_add_domain\(runtime http\) depends on proxy, which is not below http'):
+            check_domains(domain_files('platform terminal', extra={
+                'src/runtime/http/CMakeLists.txt': 'telar_add_domain(runtime http DEPS proxy)\n',
+                'src/runtime/http/message/message.cppm': 'export module telar.runtime.http.message;\nimport telar.runtime.proxy.relay;\n',
+            }))
+
+    def test_rejects_an_imported_domain_missing_from_deps(self):
+        with self.assertRaisesRegex(RuntimeError, r'telar_add_domain\(runtime proxy\) does not depend on platform, but '
+                                    'src/runtime/proxy/relay/relay.cpp imports telar.runtime.platform.socket'):
+            check_domains(domain_files('terminal'))
+
+    def test_rejects_a_dependency_no_file_imports(self):
+        with self.assertRaisesRegex(RuntimeError, 'depends on http, which none of its files imports'):
+            check_domains(domain_files('platform terminal http'))
+
+    def test_reads_only_the_sources_the_domain_lists(self):
+        # Without relay.cpp in SOURCES, its import of platform is another target's concern.
+        files = domain_files('terminal', sources='MACOS_SOURCES relay/macos/relay.mm')
+        files['src/runtime/proxy/relay/macos/relay.mm'] = '#include <Foundation/Foundation.h>\n'
+        self.assertEqual(check_domains(files), 1)
+
+    def test_rejects_a_domain_outside_its_folder_or_the_layers(self):
+        with self.assertRaisesRegex(RuntimeError, 'belongs in src/runtime/proxy/CMakeLists.txt'):
+            check_domains({'src/runtime/CMakeLists.txt': 'telar_add_domain(runtime proxy)\n'})
+        with self.assertRaisesRegex(RuntimeError, 'names no domain of process_layers'):
+            check_domains({'src/runtime/tests/CMakeLists.txt': 'telar_add_domain(runtime tests)\n'})
+        with self.assertRaisesRegex(RuntimeError, 'depends on cache, which is no domain of runtime'):
+            check_domains(domain_files('platform terminal cache'))
+
+
 if __name__ == '__main__':
     unittest.main()

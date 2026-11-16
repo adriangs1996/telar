@@ -81,6 +81,13 @@ procesos, y `process_layers` ordena los componentes de cada proceso (`runtime/pl
 componentes, y la regla cuenta también los imports de las unidades de implementación.
 `upward_imports` está vacía: no queda ninguna arista hacia arriba, y una nueva hace
 fallar el checker.
+Cada dominio de `process_layers` es un target que declara su carpeta con
+`telar_add_domain(<proceso> <dominio> … DEPS …)` (regla 7). Los nombres simples de `DEPS`
+son dominios del mismo proceso y deben coincidir con los que importan sus ficheros: las
+interfaces bajo su carpeta y las fuentes que lista. El checker falla si una entrada no está
+por debajo del dominio en `process_layers`, si un dominio importado falta en `DEPS` y si
+sobra uno que ningún fichero importa. Las entradas que nombran un target (`telar::config`)
+no se comprueban.
 Fuera de las excepciones no hay `#include`. Pueden incluir `lib/sys`, los adaptadores
 Qt/moc (los ficheros que incluyen una cabecera `<Q…>`, directamente o a través de las
 cabeceras del proyecto que incluyen), las fuentes C y Objective-C(++)

@@ -75,6 +75,7 @@ def main():
     imports = unit_imports(owned, graph)
     check_library_layers(inventory['library_layers'], inventory['interfaces'], imports)
     upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
+    domains = check_domain_targets(inventory['process_layers'], owned, lambda path: (ROOT / path).read_text())
     check_cycles(imports)
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
@@ -86,6 +87,7 @@ def main():
     reexports = check_reexports(sources, allowed_reexports)
     unused = check_unused_imports(units, provided, json.loads((ROOT / UNUSED_IMPORTS).read_text()))
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
+          f'{domains} domain targets depending on what they import, '
           f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
           f'{owned} headers reached only through their owner module, '
           f'{reexports} re-exports left, {unused} unused imports left')
@@ -223,6 +225,83 @@ def check_process_layers(layers, allowed, imports):
         raise RuntimeError('Imports against the layer order:\n  ' + '\n  '.join(errors))
 
     return len(upward)
+
+
+DOMAIN_CALL_RE = re.compile(r'\btelar_add_domain\(([^()]*)\)')
+DOMAIN_KEYWORDS = {'SOURCES', 'MACOS_SOURCES', 'LINUX_SOURCES', 'INCLUDES', 'DEPS', 'CHECKS'}
+DOMAIN_FILES = ('SOURCES', 'MACOS_SOURCES', 'LINUX_SOURCES')
+# What telar_modules leaves out of a target's module interfaces.
+UNBUILT_FOLDER_RE = re.compile(r'/(tests|tools|vendor|out(-[^/]*)?|CMakeFiles)/')
+
+
+def domain_declarations(path, text):
+    """The telar_add_domain calls of a CMakeLists.txt: (process, domain, {keyword: [argument]})."""
+    text = re.sub(r'#[^\n]*', '', text)
+    declarations = []
+    for call in DOMAIN_CALL_RE.finditer(text):
+        process, domain, *rest = call[1].split()
+        arguments, keyword = {}, None
+        for token in rest:
+            if token in DOMAIN_KEYWORDS:
+                keyword = token
+                arguments.setdefault(keyword, [])
+            elif keyword is None:
+                raise RuntimeError(f'{path}: telar_add_domain({process} {domain}) has an argument before its first keyword')
+            else:
+                arguments[keyword].append(token)
+        declarations.append((process, domain, arguments))
+
+    return declarations
+
+
+def check_domain_targets(layers, files, read):
+    """Rule 7: a domain target (telar_add_domain) declares in DEPS exactly the domains of its
+    process that its files import: the module interfaces below its folder and its sources.
+    A DEPS entry names a lower domain of `process_layers`, since the target links it; a domain
+    imported but missing from DEPS builds only while another dependency happens to bring it,
+    and one declared but not imported relinks the target for nothing. DEPS entries that name
+    a target rather than a domain (telar::config) are not checked."""
+    errors, count = [], 0
+    for path in sorted(name for name in files if name.endswith('CMakeLists.txt')):
+        for process, domain, arguments in domain_declarations(path, read(path)):
+            count += 1
+            folder = f'src/{process}/{domain}'
+            where = f'{path}: telar_add_domain({process} {domain})'
+            if path != f'{folder}/CMakeLists.txt':
+                errors.append(f'{where} belongs in {folder}/CMakeLists.txt')
+                continue
+            order = [name for name in layers.get(process, []) if name != 'tests']
+            if domain not in order:
+                errors.append(f'{where} names no domain of process_layers')
+                continue
+
+            declared = [name for name in arguments.get('DEPS', []) if re.fullmatch(r'[a-z0-9_]+', name)]
+            for name in declared:
+                if name not in order:
+                    errors.append(f'{where} depends on {name}, which is no domain of {process}')
+                elif order.index(name) >= order.index(domain):
+                    errors.append(f'{where} depends on {name}, which is not below {domain} in process_layers')
+
+            compiled = [name for name in files if name.startswith(folder + '/') and name.endswith('.cppm')
+                        and not UNBUILT_FOLDER_RE.search(name[len(folder):])]
+            compiled += [f'{folder}/{name}' for keyword in DOMAIN_FILES for name in arguments.get(keyword, [])
+                         if '$' not in name]
+            imported = {}
+            for source in sorted(set(compiled)):
+                text = COMMENTS_RE.sub('', read(source))
+                declaration = DECLARATION_RE.search(text)
+                for name in imports_of(declaration[2] if declaration else '', text):
+                    owner = component(name)
+                    if owner.startswith(f'{process}/') and owner != f'{process}/{domain}':
+                        imported.setdefault(owner.split('/')[1], f'{source} imports {name}')
+            for name in sorted(imported.keys() - set(declared), key=order.index):
+                errors.append(f'{where} does not depend on {name}, but {imported[name]}')
+            for name in sorted(set(declared) - imported.keys()):
+                errors.append(f'{where} depends on {name}, which none of its files imports')
+    if errors:
+        raise RuntimeError('Domain targets against their imports:\n  ' + '\n  '.join(errors))
+
+    return count
 
 
 COMMENTS_RE = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
