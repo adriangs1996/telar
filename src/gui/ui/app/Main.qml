@@ -102,7 +102,9 @@ Window {
     }
 
     LinkStatus {
-        controller: telar
+        controller: telar.linkStatus
+        colors: telar.colors
+        typography: root.geometry.typography
     }
 
     CommandDialog {

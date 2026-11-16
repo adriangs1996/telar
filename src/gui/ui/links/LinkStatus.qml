@@ -7,11 +7,11 @@ Item {
     id: root
     objectName: "runtimeLinkStatus"
 
-    required property var controller
-    readonly property var state: controller.linkStatus.state
-    readonly property var regions: controller.linkStatus.geometry
-    readonly property var typography: controller.windowGeometry.typography
-    readonly property var colors: controller.colors
+    required property LinkStatusController controller
+    required property var colors
+    required property var typography
+    readonly property var state: controller.state
+    readonly property var regions: controller.geometry
 
     x: regions.bounds.x
     y: regions.bounds.y
