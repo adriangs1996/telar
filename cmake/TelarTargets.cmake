@@ -128,7 +128,7 @@ endfunction()
 # With SOURCES, a test program <name> (qt_add_executable with QT), or with STATIC or
 # SHARED a library for tests to link, whose .cppm sources are module interfaces. It
 # builds into the process's build directory, where tools and tests find it beside the
-# process. LIBRARIES are linked privately into a program and publicly into a library.
+# process, and a test runs there. LIBRARIES are linked privately into a program and publicly into a library.
 # CTest runs the program as TEST (default <name>) with ARGS, unless NO_TEST, or PROBE,
 # a program run by hand that only the <process>-probes target builds. Without SOURCES
 # it registers the test <test> that runs COMMAND. A test carries LABELS
@@ -183,7 +183,8 @@ function(telar_add_test name)
     endif()
     set_target_properties(${name} PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-      LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+      LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+      ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
     if(test_PROBE)
       set_target_properties(${name} PROPERTIES EXCLUDE_FROM_ALL ON)
       set_property(DIRECTORY "${PROJECT_SOURCE_DIR}" APPEND PROPERTY TELAR_PROBES ${name})
@@ -204,7 +205,7 @@ function(telar_add_test name)
   if(NOT test_TEST)
     set(test_TEST ${name})
   endif()
-  add_test(NAME ${test_TEST} COMMAND ${test_COMMAND} ${test_ARGS})
+  add_test(NAME ${test_TEST} COMMAND ${test_COMMAND} ${test_ARGS} WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
   set_tests_properties(${test_TEST} PROPERTIES LABELS "${test_LABELS}")
   if(test_TIMEOUT)
     set_tests_properties(${test_TEST} PROPERTIES TIMEOUT ${test_TIMEOUT})

@@ -269,5 +269,5 @@ if(TELAR_RUNTIME_DISTRIBUTABLE)
 endif()
 
 if(BUILD_TESTING)
-  include(cmake/tests.cmake)
+  add_subdirectory(tests)
 endif()
