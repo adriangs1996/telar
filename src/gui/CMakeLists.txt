@@ -1,4 +1,4 @@
-telar_process(gui)
+telar_process(gui OPTIONS -Wall -Wextra -Wpedantic -ffp-contract=off)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, lint and per-file incremental rebuilds need one compile command per source.
@@ -20,145 +20,47 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/li
 
 include(cmake/fonts.cmake)
 
-add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/wall_clock/wall_clock.cpp)
-# The session reads shared images, so their source links with it.
-target_sources(gui-core PRIVATE
-  application/host_effects/host_effects.cpp
-  application/session/agents.cpp
-  application/session/blocks.cpp
-  application/session/commands.cpp
-  application/session/copy_mode.cpp
-  application/session/graphics.cpp
-  application/session/history.cpp
-  application/session/layout.cpp
-  application/session/prompt.cpp
-  application/session/session.cpp
-  application/session/terminal.cpp
-  application/sound_playback/sound_playback.cpp
-  application/workspace_replica/workspace_replica.cpp
-  platform/shared_image_source/shared_image_source.cpp)
-telar_modules(gui-core
-  MACOS_SOURCES fonts/glyph_rasterizer/glyph_rasterizer.cppm
-  LINUX_SOURCES platform/background_effect/background_effect.cppm)
-# The implementation units of the terminal, fonts, graphics, presentation, layout and model
-# domain interfaces.
-target_sources(gui-core PRIVATE
-  fonts/text_runs/text_runs.cpp
-  graphics/pauses/pauses.cpp
-  graphics/placeholder/placeholder.cpp
-  graphics/texture_cache/texture_cache.cpp
-  layout/geometry/geometry.cpp
-  layout/snapshots/snapshots.cpp
-  model/records/records.cpp
-  model/replicas/replicas.cpp
-  presentation/activity_order/activity_order.cpp
-  presentation/application_mark/application_mark.cpp
-  presentation/display_metrics/display_metrics.cpp
-  presentation/form_field_geometry/form_field_geometry.cpp
-  presentation/frame_pacer/frame_pacer.cpp
-  presentation/history_filter_geometry/history_filter_geometry.cpp
-  presentation/history_inspection/history_inspection.cpp
-  presentation/history_inspection_geometry/history_inspection_geometry.cpp
-  presentation/history_meta_geometry/history_meta_geometry.cpp
-  presentation/history_pointer/history_pointer.cpp
-  presentation/notification_center/notification_center.cpp
-  presentation/notification_stack/notification_stack.cpp
-  presentation/suggestion_geometry/suggestion_geometry.cpp
-  presentation/suggestion_labels/suggestion_labels.cpp
-  presentation/tab_drop/tab_drop.cpp
-  terminal/font_grid/font_grid.cpp
-  terminal/glyphs/curve_cache/curve_cache.cpp
-  terminal/glyphs/glyphs.cpp
-  terminal/row_cache/row_cache.cpp
-  terminal/selection/selection.cpp)
+# What every domain of the GUI compiles and links with.
+target_link_libraries(gui-settings INTERFACE tbc::tbc telar::shell telar::render ebnf::ebnf)
+target_include_directories(gui-settings INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-harfbuzz deps::ghostty_vt)
 
-# The implementation units of the input, prompt, components, config, platform, machines,
-# attachments, history, text and remaining domain interfaces.
-target_sources(gui-core PRIVATE
-  attachments/catalog/catalog.cpp
-  attachments/marker_input/marker_input.cpp
-  components/builtin_content/builtin_content.cpp
-  components/configuration/configuration.cpp
-  config/generation/generation.cpp
-  config/gui_query/gui_query.cpp
-  config/plugin_effects/plugin_effects.cpp
-  config/plugin_query/plugin_query.cpp
-  core/json_writer/json_writer.cpp
-  core/metrics/metrics.cpp
-  core/unicode_scalar/unicode_scalar.cpp
-  history/browser/browser.cpp
-  input/child_mouse/child_mouse.cpp
-  input/configuration/configuration.cpp
-  input/copy_mode/copy_mode.cpp
-  input/copy_pointer/copy_pointer.cpp
-  input/key_encoder/key_encoder.cpp
-  links/cell_links/cell_links.cpp
-  links/link_hover/link_hover.cpp
-  links/path_expansion/path_expansion.cpp
-  machines/discovery/discovery.cpp
-  machines/picker/picker.cpp
-  machines/profile_store/profile_store.cpp
-  palette/navigation_label/navigation_label.cpp
-  paths/label/label.cpp
-  peek/screen/screen.cpp
-  platform/file_stamp/file_stamp.cpp
-  platform/notification_commands/notification_commands.cpp
-  platform/private_file_stamp/private_file_stamp.cpp
-  platform/progress_cosine/progress_cosine.cpp
-  platform/secure_random/secure_random.cpp
-  prompt/completion/completion.cpp
-  prompt/editor/editor.cpp
-  prompt/editor/editor-text.cpp
-  prompt/layout/layout.cpp
-  prompt/line/line.cpp
-  prompt/routing/routing.cpp
-  suggestions/state/state.cpp
-  text/bounded_editor/bounded_editor.cpp
-  text/json_unsigned_integer/json_unsigned_integer.cpp
-  text/notification_payload/notification_payload.cpp
-  transport/runtime_link/runtime_link.cpp
-)
-target_link_libraries(gui-core PUBLIC tbc::tbc telar::shell telar::render ebnf::ebnf)
-target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(gui-core PUBLIC telar::config telar::machines gui-harfbuzz)
-target_compile_options(gui-core PUBLIC -Wall -Wextra -Wpedantic -ffp-contract=off)
-set_source_files_properties(terminal/glyphs/curve_cache/box_curve.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
-# Compatibility target names for existing focused tests; their implementations
-# now share the domain module provider and its compilation configuration.
-add_library(gui-glyphs INTERFACE)
-target_link_libraries(gui-glyphs INTERFACE gui-core)
-add_library(gui-clock INTERFACE)
-target_link_libraries(gui-clock INTERFACE gui-core)
+# The module domains of docs/build/modules.json (process_layers), lowest first.
+foreach(domain IN ITEMS core history layout suggestions text palette peek prompt terminal fonts links
+    input attachments paths model platform machines presentation graphics application components
+    config transport)
+  add_subdirectory(${domain})
+endforeach()
 
 add_library(gui-posix STATIC platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp)
 target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
-target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
+target_link_libraries(gui-posix PUBLIC gui-core gui-text gui-attachments gui-platform Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
 target_compile_options(telar-gui-command PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(telar-gui-command PRIVATE telar::build_flags)
 
-add_library(gui-config INTERFACE)
-target_link_libraries(gui-core PUBLIC deps::ghostty_vt)
-target_link_libraries(gui-config INTERFACE gui-core deps::ghostty_vt)
-target_include_directories(gui-config INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+add_library(gui-editor-config INTERFACE)
+target_link_libraries(gui-editor-config INTERFACE gui-settings deps::ghostty_vt)
+target_include_directories(gui-editor-config INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 file(GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/clangd/config/compile_flags.txt"
-  CONTENT "-xc++\n-std=c++${CMAKE_CXX_STANDARD}\n-I$<JOIN:$<REMOVE_DUPLICATES:$<TARGET_PROPERTY:gui-config,INTERFACE_INCLUDE_DIRECTORIES>>,\n-I>\n-D$<JOIN:$<TARGET_PROPERTY:gui-config,INTERFACE_COMPILE_DEFINITIONS>,\n-D>\n")
+  CONTENT "-xc++\n-std=c++${CMAKE_CXX_STANDARD}\n-I$<JOIN:$<REMOVE_DUPLICATES:$<TARGET_PROPERTY:gui-editor-config,INTERFACE_INCLUDE_DIRECTORIES>>,\n-I>\n-D$<JOIN:$<TARGET_PROPERTY:gui-editor-config,INTERFACE_COMPILE_DEFINITIONS>,\n-D>\n")
 
 add_custom_target(gui-editor)
 add_library(gui-editor-context INTERFACE)
-target_link_libraries(gui-editor-context INTERFACE gui-config)
+target_link_libraries(gui-editor-context INTERFACE gui-editor-config)
 file(GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/clangd/domain/compile_flags.txt"
   CONTENT "-xc++\n-std=c++${CMAKE_CXX_STANDARD}\n-I$<JOIN:$<REMOVE_DUPLICATES:$<TARGET_PROPERTY:gui-editor-context,INTERFACE_INCLUDE_DIRECTORIES>>,\n-I>\n-D$<JOIN:$<TARGET_PROPERTY:gui-editor-context,INTERFACE_COMPILE_DEFINITIONS>,\n-D>\n")
 
 if(TELAR_GUI_NATIVE)
-  add_library(gui-fonts STATIC fonts/face/face.cpp fonts/face/ligature_coverage.cpp fonts/font_requests/font_requests.cpp fonts/row_text_layout/row_text_layout.cpp)
-  target_link_libraries(gui-fonts PUBLIC gui-core gui-harfbuzz)
-  target_link_libraries(gui-editor-context INTERFACE gui-fonts)
-  target_compile_options(gui-fonts PRIVATE -ffp-contract=off)
+  # The fonts domain's faces and shaping, which only the native window uses.
+  add_library(gui-fonts-native STATIC fonts/face/face.cpp fonts/face/ligature_coverage.cpp fonts/font_requests/font_requests.cpp fonts/row_text_layout/row_text_layout.cpp)
+  target_link_libraries(gui-fonts-native PUBLIC gui-core gui-terminal gui-fonts gui-harfbuzz)
+  target_link_libraries(gui-editor-context INTERFACE gui-fonts-native)
+  target_compile_options(gui-fonts-native PRIVATE -ffp-contract=off)
 
   include(cmake/qt.cmake)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Gui Qml Quick QuickControls2 Network Concurrent ShaderTools Svg
@@ -167,17 +69,18 @@ if(TELAR_GUI_NATIVE)
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
   add_library(gui-surface-command STATIC ui/components/surface_command.cpp)
-  target_link_libraries(gui-surface-command PUBLIC gui-posix Qt6::Core)
+  target_link_libraries(gui-surface-command PUBLIC gui-posix gui-platform Qt6::Core)
   add_dependencies(gui-surface-command telar-gui-command)
 
   add_library(gui-machine-profiles STATIC ui/machine_prompt/machine_profiles_source.cpp ui/machine_prompt/machine_profiles_source.hpp)
-  target_link_libraries(gui-machine-profiles PUBLIC gui-posix Qt6::Concurrent)
+  target_link_libraries(gui-machine-profiles PUBLIC gui-posix gui-platform gui-machines Qt6::Concurrent)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
   endif()
 
-  add_library(gui-platform STATIC platform/login_shell/host_name.cpp)
-  target_link_libraries(gui-platform PUBLIC gui-core gui-posix Qt6::Gui PRIVATE Qt6::Quick)
+  # The platform domain's native window, fonts and clipboard images, on Qt.
+  add_library(gui-platform-native STATIC platform/login_shell/host_name.cpp)
+  target_link_libraries(gui-platform-native PUBLIC gui-fonts gui-platform gui-posix Qt6::Gui PRIVATE Qt6::Quick)
   if(APPLE)
     if(NOT DEFINED CMAKE_OBJCXX_COMPILER AND "$ENV{OBJCXX}" STREQUAL "" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
@@ -193,16 +96,16 @@ if(TELAR_GUI_NATIVE)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
     include(CheckOBJCXXCompilerFlag)
     check_objcxx_compiler_flag(-fno-objc-msgsend-class-selector-stubs TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-    target_sources(gui-platform PRIVATE platform/macos/window.mm platform/macos/blur_symbols.m platform/macos/text_input.mm platform/macos/scroll_event.mm platform/macos/clipboard_image_source.mm)
-    target_sources(gui-platform PRIVATE platform/macos/font.mm platform/macos/glyph_rasterizer.mm fonts/glyph_rasterizer/glyph_rasterizer.cpp)
-    target_sources(gui-platform PRIVATE platform/macos/optical_text.mm)
-    target_link_libraries(gui-platform PRIVATE Qt6::GuiPrivate)
-    target_compile_options(gui-platform PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>")
+    target_sources(gui-platform-native PRIVATE platform/macos/window.mm platform/macos/blur_symbols.m platform/macos/text_input.mm platform/macos/scroll_event.mm platform/macos/clipboard_image_source.mm)
+    target_sources(gui-platform-native PRIVATE platform/macos/font.mm platform/macos/glyph_rasterizer.mm fonts/glyph_rasterizer/glyph_rasterizer.cpp)
+    target_sources(gui-platform-native PRIVATE platform/macos/optical_text.mm)
+    target_link_libraries(gui-platform-native PRIVATE Qt6::GuiPrivate)
+    target_compile_options(gui-platform-native PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>")
     if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-platform PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
+      target_compile_options(gui-platform-native PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
     endif()
 
-    target_link_libraries(gui-platform PRIVATE "-framework AppKit" "-framework CoreText" "-framework CoreGraphics" "-framework ImageIO")
+    target_link_libraries(gui-platform-native PRIVATE "-framework AppKit" "-framework CoreText" "-framework CoreGraphics" "-framework ImageIO")
     # The clipboard image source test checks this source under the sanitizers.
     if(BUILD_TESTING AND TELAR_SANITIZERS)
       set_property(SOURCE platform/macos/clipboard_image_source.mm APPEND PROPERTY COMPILE_OPTIONS -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -229,23 +132,24 @@ if(TELAR_GUI_NATIVE)
       COMMAND "${GUI_WAYLAND_SCANNER}" server-header "${GUI_BACKGROUND_EFFECT_XML}" "${GUI_BACKGROUND_EFFECT_SERVER_HEADER}"
       COMMAND "${GUI_WAYLAND_SCANNER}" private-code "${GUI_BACKGROUND_EFFECT_XML}" "${GUI_BACKGROUND_EFFECT_CODE}"
       DEPENDS "${GUI_BACKGROUND_EFFECT_XML}" VERBATIM)
-    target_sources(gui-platform PRIVATE platform/background_effect/background_effect.cpp
+    target_sources(gui-platform-native PRIVATE platform/background_effect/background_effect.cpp
       platform/linux/background_effect.c "${GUI_BACKGROUND_EFFECT_HEADER}" "${GUI_BACKGROUND_EFFECT_CODE}")
-    target_include_directories(gui-platform PRIVATE "${GUI_BACKGROUND_EFFECT_DIR}")
-    target_link_libraries(gui-platform PRIVATE Qt6::WaylandClientPrivate PkgConfig::GUI_WAYLAND_CLIENT PkgConfig::GUI_XCB)
-    target_link_libraries(gui-platform PRIVATE Fontconfig::Fontconfig)
-    target_sources(gui-platform PRIVATE platform/linux/font.c)
-    target_sources(gui-platform PRIVATE platform/linux/window.cpp platform/linux/clipboard_image_source.cpp platform/linux/clipboard_image_monitor.cpp platform/linux/xcb_clipboard_image_monitor.cpp platform/linux/wayland_clipboard_image_monitor.cpp)
-    target_sources(gui-platform PRIVATE ui/scene/optical_text_fallback.cpp)
+    target_include_directories(gui-platform-native PRIVATE "${GUI_BACKGROUND_EFFECT_DIR}")
+    target_link_libraries(gui-platform-native PRIVATE Qt6::WaylandClientPrivate PkgConfig::GUI_WAYLAND_CLIENT PkgConfig::GUI_XCB)
+    target_link_libraries(gui-platform-native PRIVATE Fontconfig::Fontconfig)
+    target_sources(gui-platform-native PRIVATE platform/linux/font.c)
+    target_sources(gui-platform-native PRIVATE platform/linux/window.cpp platform/linux/clipboard_image_source.cpp platform/linux/clipboard_image_monitor.cpp platform/linux/xcb_clipboard_image_monitor.cpp platform/linux/wayland_clipboard_image_monitor.cpp)
+    target_sources(gui-platform-native PRIVATE ui/scene/optical_text_fallback.cpp)
   else()
     message(FATAL_ERROR "The GUI supports macOS and Linux")
   endif()
 
   add_library(gui-keyboard STATIC ui/foundation/input/terminal_input.cpp)
+  # It imports no domain; the lowest, gui-core, gives it the GUI's settings.
   target_link_libraries(gui-keyboard PUBLIC gui-core Qt6::Gui)
 
   add_library(gui-clipboard-images STATIC ui/attachments/attachment_preview.cpp ui/attachments/attachment_preview.hpp ui/attachments/clipboard_images.cpp ui/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-platform Qt6::Concurrent)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-attachments gui-machines gui-graphics Qt6::Concurrent)
 
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
@@ -257,7 +161,11 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-quick PRIVATE ui/scene/text_scene.cpp)
   target_sources(gui-quick PRIVATE ui/fonts/font_source.cpp ui/fonts/font_resolver.cpp)
   target_sources(gui-quick PRIVATE ui/fonts/bundled_fonts.cpp ui/fonts/terminal_font.cpp platform/runtime_endpoint/runtime_endpoint.cpp platform/login_shell/login_shell.cpp)
-  target_link_libraries(gui-quick PUBLIC gui-core gui-config gui-platform gui-keyboard gui-fonts gui-machine-profiles Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
+  target_link_libraries(gui-quick PUBLIC gui-core gui-history gui-layout gui-suggestions gui-text gui-palette
+    gui-peek gui-prompt gui-terminal gui-fonts gui-links gui-input gui-attachments gui-paths gui-model
+    gui-platform gui-machines gui-presentation gui-graphics gui-application gui-components gui-config
+    gui-transport gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
+    Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Most of a gui-quick compilation parses the same Qt headers again; the ones
   # that at least two in five Qt adapters include are parsed once per build.
   option(TELAR_GUI_PRECOMPILED_HEADERS "Precompile the Qt headers shared by gui-quick sources" ON)
@@ -311,7 +219,8 @@ if(TELAR_GUI_NATIVE)
   # Run by hand by tools/check_notification_desktop.py, so a tree configured without
   # tests builds it too.
   telar_add_test(gui-host-effects-smoke QT PROBE SOURCES tools/host_effects_smoke.cpp
-    LIBRARIES gui-core deps::ghostty_vt Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
+    LIBRARIES gui-core gui-history gui-layout gui-text gui-model gui-platform gui-presentation gui-application
+      deps::ghostty_vt Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
 
   target_sources(gui-quick PRIVATE ui/notifications/notification_layout.cpp ui/notifications/notification_layout.hpp)
   target_sources(gui-quick PRIVATE ui/machine_chrome/machine_chrome_layout.cpp ui/machine_chrome/machine_chrome_layout.hpp ui/machine_chrome/machine_chrome_controller.cpp ui/machine_chrome/machine_chrome_controller.hpp)
@@ -379,13 +288,13 @@ if(TELAR_GUI_NATIVE)
   if(APPLE)
     target_link_options(telar-gui PRIVATE -Wl,-headerpad_max_install_names)
     add_executable(telar-gui-launcher tools/macos_launcher.cpp platform/login_shell/login_shell.cpp)
-    target_link_libraries(telar-gui-launcher PRIVATE gui-core)
+    target_link_libraries(telar-gui-launcher PRIVATE gui-platform)
     target_compile_options(telar-gui-launcher PRIVATE -Wall -Wextra -Werror)
     target_link_options(telar-gui-launcher PRIVATE -Wl,-headerpad_max_install_names)
     set_target_properties(telar-gui-launcher PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     add_dependencies(telar-gui telar-gui-launcher)
   endif()
-  target_link_libraries(telar-gui PRIVATE gui-quick gui-quickplugin)
+  target_link_libraries(telar-gui PRIVATE gui-platform gui-machines gui-quick gui-quickplugin)
   add_dependencies(telar-gui telar-gui-command)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
@@ -492,9 +401,9 @@ endif()
 telar_gui_scan_moc_imports()
 
 # The quality checks cover the GUI's libraries and programs; the tests register themselves.
-telar_register_checks(gui-core gui-posix CHECKS ${TELAR_CHECKS})
+telar_register_checks(gui-posix CHECKS ${TELAR_CHECKS})
 if(TELAR_GUI_NATIVE)
-  telar_register_checks(gui-fonts gui-surface-command gui-machine-profiles gui-platform gui-keyboard
+  telar_register_checks(gui-fonts-native gui-surface-command gui-machine-profiles gui-platform-native gui-keyboard
     gui-clipboard-images gui-quick telar-gui CHECKS ${TELAR_CHECKS})
   if(APPLE)
     telar_register_checks(telar-gui-launcher CHECKS ${TELAR_CHECKS})

@@ -12,9 +12,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/TelarChecks.cmake")
 # <name>. Its source and binary directories become TELAR_PROCESS_SOURCE_DIR and
 # TELAR_PROCESS_BINARY_DIR for the helpers called here and in the folders below, which
 # build tests and probes beside the process. It creates <name>-settings, the INTERFACE
-# target every domain of the process links: the process gives it the include directories,
-# definitions and libraries its domains compile and link with. OPTIONS are the compile
-# options of every domain and of everything that links one, or links <name>-settings.
+# target every domain of the process links: before declaring its domains, the process gives
+# it the include directories, definitions and libraries they compile and link with. OPTIONS
+# are the compile options of every domain and of everything that links one.
 function(telar_process name)
   cmake_parse_arguments(PARSE_ARGV 1 process "" "" "OPTIONS")
   if(process_UNPARSED_ARGUMENTS)
@@ -25,7 +25,6 @@ function(telar_process name)
   set(TELAR_PROCESS_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" PARENT_SCOPE)
   set(TELAR_PROCESS_OPTIONS "${process_OPTIONS}" PARENT_SCOPE)
   add_library(${name}-settings INTERFACE)
-  target_compile_options(${name}-settings INTERFACE ${process_OPTIONS})
 endfunction()
 
 # telar_modules(<target> [EXCLUDE <folder>...] [MACOS_SOURCES <file>...]
@@ -130,7 +129,15 @@ function(telar_add_domain process domain)
   if(NOT process STREQUAL TELAR_PROCESS)
     message(FATAL_ERROR "telar_add_domain(${process} ${domain}): declare it below the folder of telar_process(${process})")
   endif()
+  # CMake compiles the interfaces a target imports again with the target's flags when they
+  # differ (the GUI's -ffp-contract=off), but only those of the libraries the target links
+  # itself, not those an INTERFACE library brings. So the domain links the libraries of
+  # <process>-settings directly as well, and passes them on to its importers.
+  get_target_property(libraries ${process}-settings INTERFACE_LINK_LIBRARIES)
   set(dependencies ${process}-settings)
+  if(libraries)
+    list(APPEND dependencies ${libraries})
+  endif()
   foreach(dependency IN LISTS domain_DEPS)
     if(dependency MATCHES "^[a-z0-9_]+$")
       set(dependency "telar::${process}::${dependency}")

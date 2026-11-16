@@ -1,0 +1,17 @@
+telar_add_domain(gui application
+  SOURCES
+    host_effects/host_effects.cpp
+    session/agents.cpp
+    session/blocks.cpp
+    session/commands.cpp
+    session/copy_mode.cpp
+    session/graphics.cpp
+    session/history.cpp
+    session/layout.cpp
+    session/prompt.cpp
+    session/session.cpp
+    session/terminal.cpp
+    sound_playback/sound_playback.cpp
+    workspace_replica/workspace_replica.cpp
+  DEPS core history layout suggestions text peek prompt terminal links input paths model
+       platform presentation graphics)
