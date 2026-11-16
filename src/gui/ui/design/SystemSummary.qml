@@ -11,7 +11,8 @@ import Telar.Gui
 Item {
     id: root
 
-    required property var controller
+    // The host metrics, by name: cpu, memory, battery.
+    required property var metrics
     required property var surface
     required property var node
     required property var colors
@@ -21,7 +22,6 @@ Item {
     property bool pinned: false
 
     readonly property var metricNames: ["cpu", "memory", "battery"]
-    readonly property var metrics: controller?.hostMetrics ?? ({})
     // severity: -1 unknown, 0 normal, 1 warning, 2 danger.
     readonly property var entries: {
         const result = [];

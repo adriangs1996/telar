@@ -248,7 +248,7 @@ KeyboardAction {
     Component {
         id: summaryView
         SystemSummary {
-            controller: root.controller
+            metrics: root.controller?.hostMetrics ?? ({})
             surface: root.surface
             node: root.node
             colors: root.colors
