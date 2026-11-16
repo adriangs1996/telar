@@ -6,7 +6,9 @@ the graph keeps measuring as the tree nests. Files directly in ui/ belong to no 
 
 - C++ edges come from `#include "ui/<folder>/<header>.hpp"` in .cpp, .hpp, .h and .mm files.
 - QML edges come from a QML file that instantiates (`Type {`) a type whose file lives in
-  another folder. All QML shares one module, so the type name is the file name.
+  another folder, or that imports a relative path (`import "../components/Fit.js"`,
+  `import "../controls"`) that resolves into another folder of ui/. All QML shares one module,
+  so the type name is the file name.
 
 The report prints how many files outside app/ include the root header, how often the shared
 headers of app/ are used from outside it, and the edges and cycles of four graphs: C++ as it
@@ -25,6 +27,7 @@ The revision is read with git, so no checkout is needed. Run it from anywhere in
 import argparse
 import collections
 from pathlib import Path
+import posixpath
 import re
 import subprocess
 import sys
@@ -34,6 +37,8 @@ UI = 'src/gui/ui/'
 CPP_SUFFIXES = ('.cpp', '.hpp', '.h', '.mm')
 SOURCE_SUFFIXES = CPP_SUFFIXES + ('.qml',)
 INCLUDE_RE = re.compile(r'#include\s+"ui/((?:[a-z_0-9]+/)+)([a-z_0-9]+\.hpp)"')
+# A quoted QML import names a directory or a script file by its path.
+QML_IMPORT_RE = re.compile(r'^\s*import\s+"([^"]+)"', re.M)
 # Headers of app/ that make a file depend on ApplicationController.
 ROOT_HEADERS = {'application.hpp', 'application_controller.hpp'}
 # Headers of app/ that are utilities, not the root (U3). The second graph counts them as
@@ -106,8 +111,23 @@ def include_edges(sources):
     return edges
 
 
+def imported_folder(path, imported):
+    """The folder of ui/ that a quoted import in the QML file `path` resolves into, or None."""
+    if imported.startswith('/') or ':' in imported:
+        return None
+
+    target = posixpath.normpath(posixpath.join(posixpath.dirname(path), imported))
+    # A path with an extension names a file (a script or a QML document); any other a directory.
+    if '.' in posixpath.basename(target):
+        target = posixpath.dirname(target)
+    if not target.startswith(UI):
+        return None
+
+    return target[len(UI):]
+
+
 def qml_graph(sources):
-    """Return {folder: folders whose QML types it instantiates}."""
+    """Return {folder: folders whose QML types it instantiates or whose files it imports}."""
     qml = {path: text for path, text in sources.items() if path.endswith('.qml')}
     # A type name that appears in two folders resolves to the last one in git order.
     owners = {path.rsplit('/', 1)[1][:-len('.qml')]: folder(path) for path in qml}
@@ -118,6 +138,11 @@ def qml_graph(sources):
         for name, owner in owners.items():
             if owner != node and patterns[name].search(text):
                 graph[node].add(owner)
+
+        for imported in QML_IMPORT_RE.findall(text):
+            target = imported_folder(path, imported)
+            if target is not None and target != node:
+                graph[node].add(target)
 
     return graph
 

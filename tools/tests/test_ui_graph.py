@@ -98,6 +98,31 @@ class UiGraph(unittest.TestCase):
 
         self.assertEqual(lines[-1], "QML edges 3 cycles: []")
 
+    def test_qml_edges_follow_relative_imports(self):
+        rev = self.tree({
+            'app/chrome/StatusBar.qml': 'import QtQuick\nimport "../../components/Fit.js" as Fit\nItem {}\n',
+            'app/chrome/Sidebar.qml': 'import "Local.js" as Local\nimport "activity"\nItem {}\n',
+            'app/chrome/Local.js': '',
+            'components/Tree.qml': 'import "../../../assets/icons"\nimport "qrc:/telar/x"\nimport "/abs/path"\nItem {}\n',
+            'components/Fit.js': '',
+            'foundation/models/Row.qml': 'import "../../design/Pill.qml"\nItem {}\n',
+            'design/Pill.qml': 'Item {}\n',
+        })
+
+        qml = graph.qml_graph(graph.load_sources(rev, self.repository))
+        lines, code = self.run_report({}, rules=True)
+
+        self.assertEqual({node: sorted(targets) for node, targets in qml.items()}, {
+            'app/chrome': ['app/chrome/activity', 'components'],
+            'foundation/models': ['design'],
+        })
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[lines.index('rule violations: 2'):], [
+            'rule violations: 2',
+            '   QML app/chrome -> components',
+            '   QML foundation/models -> design',
+        ])
+
     def test_long_cycles_print_their_size_only(self):
         names = [f'f{index}' for index in range(9)]
         lines, _ = self.run_report({
