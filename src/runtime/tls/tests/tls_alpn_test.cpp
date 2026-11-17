@@ -133,6 +133,118 @@ namespace {
     }
   }
 
+  using Extension = std::pair<std::uint16_t, std::vector<std::uint8_t>>;
+
+  void appendWord(std::vector<std::uint8_t>& output, std::size_t value) {
+    output.push_back(static_cast<std::uint8_t>(value >> 8));
+    output.push_back(static_cast<std::uint8_t>(value));
+  }
+
+  // A TLS 1.3 ClientHello record with one cipher suite and the extensions given.
+  std::vector<std::uint8_t> helloRecord(std::span<const Extension> extensions) {
+    std::vector<std::uint8_t> listed;
+
+    for (const auto& [kind, body] : extensions) {
+      appendWord(listed, kind);
+      appendWord(listed, body.size());
+      listed.insert(listed.end(), body.begin(), body.end());
+    }
+
+    std::vector<std::uint8_t> body{3, 3};
+
+    body.resize(body.size() + 32, 0x5a);
+    body.insert(body.end(), {0, 0, 2, 0x13, 0x01, 1, 0});
+    appendWord(body, listed.size());
+    body.insert(body.end(), listed.begin(), listed.end());
+    std::vector<std::uint8_t> record{22, 3, 1};
+
+    appendWord(record, body.size() + 4);
+    record.insert(record.end(), {1, 0, static_cast<std::uint8_t>(body.size() >> 8), static_cast<std::uint8_t>(body.size())});
+    record.insert(record.end(), body.begin(), body.end());
+    return record;
+  }
+
+  std::vector<std::uint8_t> serverNames(std::span<const std::string_view> names) {
+    std::vector<std::uint8_t> entries;
+
+    for (const auto name : names) {
+      entries.push_back(0);
+      appendWord(entries, name.size());
+      entries.insert(entries.end(), name.begin(), name.end());
+    }
+
+    std::vector<std::uint8_t> extension;
+
+    appendWord(extension, entries.size());
+    extension.insert(extension.end(), entries.begin(), entries.end());
+    return extension;
+  }
+
+  Extension serverName(std::string_view name) {
+    const std::array names{name};
+
+    return {0, serverNames(names)};
+  }
+
+  Extension protocols() {
+    return {16, {0, 3, 2, 'h', '2'}};
+  }
+
+  // Peeks a whole hello from a socket, as the transparent proxy reads it before deciding whether to
+  // intercept.
+  void peekHello(AlpnOffer& offer, std::span<const std::uint8_t> record) {
+    int sockets[2];
+
+    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    FileDescriptor child{sockets[0]};
+    FileDescriptor proxy{sockets[1]};
+
+    configureProxySocket(proxy.get());
+    check(::send(child.get(), record.data(), record.size(), 0) == static_cast<ssize_t>(record.size()));
+    check(offer.peek(proxy.get()) == AlpnOffer::Read::complete && offer.tls());
+  }
+
+  // The hello's server name decides whether a connection is intercepted and for which name a
+  // certificate is minted, so a hello that names two hosts, or a host no resolver accepts, is invalid.
+  void testMalformedHellos() {
+    AlpnOffer offer;
+    const std::array accepted{serverName("origin.test"), protocols()};
+
+    peekHello(offer, helloRecord(accepted));
+    check(offer.valid() && offer.serverName() == "origin.test");
+
+    const std::array<std::string_view, 2> two_names{"origin.test", "other.test"};
+    // A second server_name extension is refused even when it lists no host_name entry.
+    const Extension unnamed{0, {0, 4, 1, 0, 1, 'x'}};
+    const std::array<std::vector<Extension>, 5> malformed{{
+        {serverName("origin.test"), serverName("other.test")},
+        {serverName("origin.test"), unnamed},
+        {{0, serverNames(two_names)}},
+        {serverName("origin test")},
+        {serverName("origin.test"), protocols(), protocols()},
+    }};
+
+    for (const auto& extensions : malformed) {
+      AlpnOffer rejected;
+
+      peekHello(rejected, helloRecord(extensions));
+      check(!rejected.valid());
+    }
+  }
+
+  // An ECH hello names a cover host in its outer server name: interception would act on the wrong
+  // host, so the offer says the hello is encrypted.
+  void testEncryptedClientHello() {
+    const std::array plain{serverName("cover.test"), protocols()};
+    const std::array encrypted{serverName("cover.test"), protocols(), Extension{0xfe0d, {0, 0, 1, 0, 1, 0x7f, 0, 0, 0, 0}}};
+    AlpnOffer offer;
+
+    peekHello(offer, helloRecord(plain));
+    check(offer.valid() && !offer.encrypted());
+    peekHello(offer, helloRecord(encrypted));
+    check(offer.valid() && offer.encrypted() && offer.serverName() == "cover.test");
+  }
+
   void testTlsAlpn() {
     constexpr std::array<std::uint8_t, 3> http2{2, 'h', '2'};
     constexpr std::array<std::uint8_t, 9> http11{8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
@@ -151,5 +263,7 @@ namespace {
 
   const telar::testing::Case case_tls_alpn{"tls_alpn.tls_alpn", testTlsAlpn};
   const telar::testing::Case case_check_fragments{"tls_alpn.check_fragments", checkFragments};
+  const telar::testing::Case case_malformed_hellos{"tls_alpn.malformed_hellos", testMalformedHellos};
+  const telar::testing::Case case_encrypted_client_hello{"tls_alpn.encrypted_client_hello", testEncryptedClientHello};
 
 }
