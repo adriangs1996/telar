@@ -214,6 +214,14 @@ def offline(f):
     linked_parent = f.root / "linked-parent"
     linked_parent.symlink_to(f.root, target_is_directory=True)
     f.invoke("file/parent-symlink", "file", "put", linked_parent / "no-file", "--bytes", "0", code=1)
+    # Another user could swap a file published into a directory they can write.
+    shared = f.root / "shared"
+    for mode in (0o777, 0o775):
+        shared.mkdir()
+        shared.chmod(mode)
+        result = f.invoke(f"file/unsafe-parent-{mode:o}", "file", "put", shared / "published", "--bytes", "1", data=b"x", code=1)
+        assert b"UnsafeTransferDirectory" in result.stderr and not list(shared.iterdir()), result.stderr
+        shared.rmdir()
     f.invoke("file/limit", "file", "put", f.root / "large", "--bytes", 128 * 1024 * 1024 + 1, code=1)
 
     for name, content in (("s.runtime-11.log", b"old\nsecond\nlast\x08\x0c\x7f\n"),
@@ -347,11 +355,30 @@ def history(f):
         connection.execute("UPDATE command_output SET truncated=1, observed_bytes=? WHERE command_id=?", (len(captured) + 100, int(entry)))
     result = f.invoke("history/show-truncated", "history", "show", entry, socket=True)
     assert result.stdout == captured and b"output truncated" in result.stderr
-    f.invoke("history/delete", "history", "delete", entry, socket=True)
-    f.invoke("history/dry-run", "history", "prune", "--dry-run", socket=True)
+
+    def entries(name):
+        lines = f.invoke(name, "history", "list", "--limit", "1000", socket=True).stdout.splitlines()
+        return {re.match(rb"#(\d+) ", line)[1].decode(): line for line in lines}
+
+    kept = entries("history/before-delete")
+    assert entry in kept and len(kept) > 1
+    del kept[entry]
+    result = f.invoke("history/delete", "history", "delete", entry, socket=True)
+    assert result.stdout == b"removed 1 entries\n"
+    assert entries("history/deleted") == kept
+    total = f.invoke("history/total", "history", "stats", socket=True).stdout
+    assert b"commands: %d\n" % len(kept) in total
+    result = f.invoke("history/dry-run", "history", "prune", "--dry-run", socket=True)
+    assert result.stdout == b"would remove %d entries (counting at most the newest 1000)\n" % len(kept)
     f.invoke("history/before-preview", "history", "prune", "--dry-run", "--before", "2026-01-01", socket=True)
-    f.invoke("history/abort", "history", "prune", socket=True, data=b"no\n")
+    for name, answer in (("history/abort", b"no\n"), ("history/abort-eof", b"")):
+        assert f.invoke(name, "history", "prune", socket=True, data=answer).stdout.endswith(b"aborted\n")
+    assert f.invoke("history/kept-total", "history", "stats", socket=True).stdout == total
+    assert entries("history/kept") == kept
+    duplicates = {key for key, line in kept.items() if b"duplicate" in line}
+    assert duplicates and len(duplicates) < len(kept)
     f.invoke("history/confirm", "history", "prune", "--match", "duplicate", socket=True, data=b" yes \r\n")
+    assert entries("history/matched") == {key: line for key, line in kept.items() if key not in duplicates}
     f.invoke("history/prune", "history", "prune", "--yes", socket=True)
     assert f.invoke("history/empty", "history", "list", socket=True).stdout == b""
     large = f.root / "large_history"
