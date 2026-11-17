@@ -31,6 +31,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
+import telar.platform.fs;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.plugins.service;
@@ -379,6 +380,57 @@ namespace {
 
   }
 
+  // Replaces trust.json at `path` in one rename, as `telar plugin trust` does, with one grant
+  // for the plugin.
+  void writeTrust(const std::string& path, std::string_view capabilities) {
+    const auto staged = path + ".staged";
+
+    {
+      std::ofstream output{staged, std::ios::binary};
+
+      output << R"({"version":1,"grants":[{"plugin":"tapper","digest":")" << std::string(64, '1') << R"(","capabilities":)" << capabilities << "}]}";
+      check(output.good());
+    }
+
+    check(::chmod(staged.c_str(), 0600) == 0);
+    std::filesystem::rename(staged, path);
+  }
+
+  // A running tap plugin keeps only the capabilities trust.json still grants it: narrowing its
+  // grant stops it, while keeping or widening the grant leaves it running.
+  void testTrustNarrowingStopsPlugin() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 8 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    const ExecutablePath executable;
+    TemporaryDirectory directory{"/tmp/telar-plugin-trust-XXXXXX"};
+    const auto path = std::string{directory.path()} + "/trust.json";
+
+    {
+      auto granted = specification("echo");
+
+      granted.name.assign("tapper");
+      granted.digest.fill(0x11);
+      writeTrust(path, R"(["proxy.tap","notifications"])");
+      tap::Service service{memory, std::span<const tap::ServiceSpec>{&granted, 1}, executable.c_str()};
+
+      service.watchTrust(path);
+      check(service.listening());
+      writeTrust(path, R"(["proxy.tap","notifications","history.read"])");
+      std::this_thread::sleep_for(tap::Limits::trust_check_interval * 4);
+      check(service.listening());
+      writeTrust(path, R"(["proxy.tap"])");
+      awaitCondition([&] {
+        return !service.listening();
+      });
+      service.stop();
+    }
+
+    check(budget.liveBytes() == 0);
+  }
+
   void testPluginService() {
     testQueuePolicy();
     testResultDeliveryBound();
@@ -388,5 +440,6 @@ namespace {
   }
 
   const telar::testing::Case case_plugin_service{"plugin_service.plugin_service", testPluginService};
+  const telar::testing::Case case_trust_narrowing{"plugin_service.trust_narrowing_stops_plugin", testTrustNarrowingStopsPlugin};
 
 }
