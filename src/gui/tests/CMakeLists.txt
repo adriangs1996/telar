@@ -26,11 +26,6 @@ target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-notification-text-test SOURCES notification_text_test.cpp LIBRARIES gui-foundation-text gui-foundation-system gui-features-notifications deps::ghostty_vt
   TEST gui-notification-text LABELS gui.features.notifications)
 
-telar_add_test(gui-graphics-retention-test SOURCES graphics_retention_test.cpp LIBRARIES gui-features-terminal-graphics
-  TEST gui-graphics-retention LABELS gui.features.terminal.graphics)
-telar_add_test(gui-image-residency-test SOURCES image_residency_test.cpp LIBRARIES gui-features-terminal-graphics
-  TEST gui-image-residency LABELS gui.features.terminal.graphics)
-
 telar_add_test(gui-notification-effects-test SOURCES notification_effects_test.cpp LIBRARIES gui-foundation-system gui-application
   TEST gui-notification-effects LABELS gui.application)
 
@@ -100,8 +95,6 @@ telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-f
   TEST gui-cell-glyphs LABELS gui.foundation.terminal)
 telar_add_test(gui-workbench-layout-test SOURCES layout_test.cpp LIBRARIES gui-features-workbench gui-foundation-model gui-foundation-core
   TEST LABELS gui.features.workbench TIMEOUT 30)
-telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-graphics gui-test-fixtures
-  TEST gui-features-terminal-graphics LABELS gui.features.terminal.graphics TIMEOUT 30)
 
 telar_add_test(gui-platform-test SOURCES platform_test.cpp LIBRARIES gui-foundation-system gui-posix gui-platform
   TEST gui-platform LABELS gui.platform TIMEOUT 30)

@@ -5,9 +5,9 @@ static_assert(true);
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 
 import std;
+import telar.testing;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
@@ -17,15 +17,10 @@ import telar.wire.vocabulary;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar;
   using namespace telar::gui;
   using namespace telar::gui::features::terminal::graphics;
-
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
 
   constexpr ImageDescription rgbaSquare(ImageKey key) noexcept {
     constexpr std::uint32_t side = 2;
@@ -50,21 +45,21 @@ namespace {
       const auto description = rgbaSquare({.image_id = 1, .generation = 1});
 
       store.image({.header = header, .image = description});
-      require(budget.used == description.byte_len && !store.findImage({.image_id = 1, .generation = 1})->ready(), "image storage must count incomplete pixels");
+      check(budget.used == description.byte_len && !store.findImage({.image_id = 1, .generation = 1})->ready(), "image storage must count incomplete pixels");
       constexpr auto pixels = std::to_array<Byte>({1, 2, 3, 4, 5, 6, 7, 8});
 
-      require(!store.chunk({.header = header, .key = {.image_id = 1, .generation = 1}, .offset = 0, .bytes = pixels}), "partial image must not be published");
-      require(store.chunk({.header = header, .key = {.image_id = 1, .generation = 1}, .offset = pixels.size(), .bytes = pixels}), "complete image must become drawable");
+      check(!store.chunk({.header = header, .key = {.image_id = 1, .generation = 1}, .offset = 0, .bytes = pixels}), "partial image must not be published");
+      check(store.chunk({.header = header, .key = {.image_id = 1, .generation = 1}, .offset = pixels.size(), .bytes = pixels}), "complete image must become drawable");
       store.snapshot({.header = header, .phase = SnapshotPhase::end});
 
       store.image({.header = {.pane_id = 1, .revision = 2}, .image = rgbaSquare({.image_id = 1, .generation = 2})});
-      require(store.findImage({.image_id = 1, .generation = 1}) == nullptr && store.readyImage({.image_id = 1, .generation = 2}) == nullptr, "replacement must release unreferenced CPU bytes while the renderer retains its own stand-in");
+      check(store.findImage({.image_id = 1, .generation = 1}) == nullptr && store.readyImage({.image_id = 1, .generation = 2}) == nullptr, "replacement must release unreferenced CPU bytes while the renderer retains its own stand-in");
       store.chunk({.header = {.pane_id = 1, .revision = 2}, .key = {.image_id = 1, .generation = 2}, .offset = 0, .bytes = pixels});
       store.chunk({.header = {.pane_id = 1, .revision = 2}, .key = {.image_id = 1, .generation = 2}, .offset = pixels.size(), .bytes = pixels});
-      require(store.findImage({.image_id = 1, .generation = 1}) == nullptr && store.takeCredit() == description.byte_len, "complete replacement must release the previous generation and its "
-                                                                                                                          "credit");
+      check(store.findImage({.image_id = 1, .generation = 1}) == nullptr && store.takeCredit() == description.byte_len, "complete replacement must release the previous generation and its "
+                                                                                                                        "credit");
       store.erase(GraphicsDeleteImage{.header = {.pane_id = 1, .revision = 3}, .key = {.image_id = 1, .generation = 2}});
-      require(budget.used == 0 && store.takeCredit() == description.byte_len, "deletion must release resource credits exactly once");
+      check(budget.used == 0 && store.takeCredit() == description.byte_len, "deletion must release resource credits exactly once");
 
       store.image({.header = {.pane_id = 1, .revision = 4}, .image = rgbaSquare({.image_id = 2, .generation = 1})});
       bool rejected = false;
@@ -75,10 +70,10 @@ namespace {
         rejected = true;
       }
 
-      require(rejected && !store.findImage({.image_id = 2, .generation = 1})->ready(), "misordered chunks must not expose partial bytes");
+      check(rejected && !store.findImage({.image_id = 2, .generation = 1})->ready(), "misordered chunks must not expose partial bytes");
     }
 
-    require(allocator.liveBytes() == 0 && budget.used == 0, "graphics ownership must release all allocations and budget");
+    check(allocator.liveBytes() == 0 && budget.used == 0, "graphics ownership must release all allocations and budget");
   }
 
   void placementGeometry() {
@@ -99,15 +94,15 @@ namespace {
     placement.columns = columns;
     const auto aspect = ImageGeometry::resolve(placement, image, cell, 1);
 
-    require(aspect.destination.width == proportional_size.width && aspect.destination.height == proportional_size.height, "one requested dimension must preserve aspect ratio");
+    check(aspect.destination.width == proportional_size.width && aspect.destination.height == proportional_size.height, "one requested dimension must preserve aspect ratio");
     placement.rows = rows;
     const auto stretched = ImageGeometry::resolve(placement, image, cell, 1);
 
-    require(stretched.destination.width == stretched_size.width && stretched.destination.height == stretched_size.height, "two requested dimensions must fill the requested cells");
+    check(stretched.destination.width == stretched_size.width && stretched.destination.height == stretched_size.height, "two requested dimensions must fill the requested cells");
     placement.offset_x = outside_cell_offset;
     const auto clamped = ImageGeometry::resolve(placement, image, cell, 1);
 
-    require(clamped.destination.x == clipped_placement.x && clamped.destination.width == clipped_placement.width, "placement offsets must remain inside the anchor cell");
+    check(clamped.destination.x == clipped_placement.x && clamped.destination.width == clipped_placement.width, "placement offsets must remain inside the anchor cell");
   }
 
   void unicodePlaceholders() {
@@ -123,14 +118,14 @@ namespace {
       throw std::runtime_error{"The reference placeholder must decode"};
     }
 
-    require(parsed->row == 0 && parsed->column == 1 && parsed->image_low == image_id, "placeholder diacritics and color ids must match the reference table");
+    check(parsed->row == 0 && parsed->column == 1 && parsed->image_low == image_id, "placeholder diacritics and color ids must match the reference table");
     auto run = PlaceholderRun::begin(*parsed, 3);
     PlaceholderCell next;
 
     next.image_low = image_id;
-    require(run.extend(next) && run.width == 2, "omitted marks must continue the previous fragment");
+    check(run.extend(next) && run.width == 2, "omitted marks must continue the previous fragment");
     next.row = 1;
-    require(!run.extend(next), "a different explicit row must end the run");
+    check(!run.extend(next), "a different explicit row must end the run");
 
     const ImageDescription image{.key = {.image_id = image_id, .generation = 1}, .format = ImageFormat::rgba, .width = 200, .height = 100, .byte_len = 80000};
     GraphicsPlacement placement;
@@ -144,20 +139,11 @@ namespace {
     constexpr float expected_top_margin = 50;
     const auto first = placeholderGeometry(beginning, placement, image, placeholder_cell, 1);
 
-    require(first.source.width == expected_source_width && first.source.height == expected_source_height && first.destination.y == expected_top_margin, "placeholder aspect fitting must center the image in its cell grid");
+    check(first.source.width == expected_source_width && first.source.height == expected_source_height && first.destination.y == expected_top_margin, "placeholder aspect fitting must center the image in its cell grid");
   }
 
-}
+  const telar::testing::Case case_resource_lifetime{"graphics.resource_lifetime", resourceLifetime};
+  const telar::testing::Case case_placement_geometry{"graphics.placement_geometry", placementGeometry};
+  const telar::testing::Case case_unicode_placeholders{"graphics.unicode_placeholders", unicodePlaceholders};
 
-int main() {
-  try {
-    resourceLifetime();
-    placementGeometry();
-    unicodePlaceholders();
-    std::puts("gui-graphics: passed");
-  } catch (const std::exception& error) {
-    std::cerr << "gui-graphics: " << error.what() << '\n';
-
-    return 1;
-  }
 }
