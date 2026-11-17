@@ -1,8 +1,10 @@
-module telar.gui.prompt.line;
+module telar.gui.features.prompt;
 
 import std;
 
-namespace telar::gui::prompt {
+import telar.shell.syntax;
+
+namespace telar::gui::features::prompt {
 
   Line::Line(Keymap keymap)
       : editor_(keymap) {}

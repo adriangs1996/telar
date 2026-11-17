@@ -8,6 +8,7 @@ import telar.gui.foundation.keys;
 import telar.tbc;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
+import telar.gui.features.prompt;
 import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
 import telar.gui.features.terminal.links;
@@ -16,9 +17,7 @@ import telar.gui.presentation.application_mark;
 import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.prompt.line;
 import telar.base.text;
-import telar.gui.prompt.layout;
 import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.editor;
@@ -28,10 +27,7 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.base.memory.allocators;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.editor;
 import telar.shell.syntax;
-import telar.gui.prompt.completion;
 
 namespace telar::gui::application {
 
@@ -1417,17 +1413,7 @@ namespace telar::gui::application {
     }
 
     features::paths::forget(paths_, pane_id);
-
-    const auto owned = [pane_id](const auto& entry) {
-      return entry.second.pane_id == pane_id;
-    };
-
-    std::erase_if(command_requests_, owned);
-    std::erase_if(spec_requests_, owned);
-    std::erase_if(path_completions_, owned);
-    command_checks_.erase(pane_id);
-    spec_completions_.erase(pane_id);
-    lines_.erase(pane_id);
+    features::prompt::forget(prompt_, pane_id);
   }
 
   void Session::cancelPaneRequests(std::uint64_t pane_id) noexcept {

@@ -11,6 +11,7 @@ import :workspace_replica;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
+import telar.gui.features.prompt;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.presentation.tab_drop;
 import :sound_playback;
@@ -27,10 +28,8 @@ import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
-import telar.gui.prompt.line;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.gui.prompt.layout;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.clipboard;
@@ -43,11 +42,8 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
-import telar.gui.prompt.completion;
 
 // Interface: application/session.cppm
 export {
@@ -70,15 +66,6 @@ export {
       suggestion,
       peek,
       document,
-    };
-
-    // Whether the shell runs a command word: asked of the runtime, pending until it answers,
-    // unknown where it cannot tell (a remote shell, names it never reported).
-    enum class CommandPresence : std::uint8_t {
-      unknown,
-      pending,
-      found,
-      missing,
     };
 
     // The clock a session reads, monotonic and in nanoseconds.
@@ -201,10 +188,6 @@ export {
 
       void notePaneInput(const Pane<Memory>& pane);
 
-      // ---- telar's command editor -----------------------------------------------------------
-
-      [[nodiscard]] prompt::Surface promptSurface(std::uint64_t pane_id) const noexcept;
-
       // ---- scrollback rows beyond the screen ----------------------------------------------------
 
       // Whether the runtime sends rows of a scrollback apart from its screen, for a view that
@@ -248,47 +231,17 @@ export {
       // instead of copy mode from the live end.
       bool enterBlocks();
 
-      // The pane whose editor took text from outside the keyboard (a paste, a history entry, a
-      // suggestion, a path) since the last call, for its view to show it.
-      [[nodiscard]] std::optional<std::uint64_t> takePromptWrite() noexcept;
-
       // Whether a block was selected or left, or copy mode began on one, since the last call.
       [[nodiscard]] bool takeBlockChange() noexcept;
 
       // Whether text was written to the clipboard since the last call, as copying a command does.
       [[nodiscard]] bool takeClipboardWrite() noexcept;
 
-      // Whether text meant for the pane belongs in telar's editor instead.
-      [[nodiscard]] bool editsPrompt(std::uint64_t pane_id) const noexcept;
-
-      // Whether the terminal's cursor marks a place no key reaches, so it is not drawn: at the
-      // prompt telar's editor has the keys; while a command runs, typing queues the next one unless
-      // the program seems to ask for input (its cursor past a line's start, as routing judges); and
-      // between a command's end and the next prompt the editor is about to take its row. Drawing it
-      // there flashes a block for a frame or two under every quick command's output.
-      [[nodiscard]] bool hidesTerminalCursor(std::uint64_t pane_id) const noexcept;
-
-      [[nodiscard]] std::span<const std::string> promptHistory() const noexcept;
-
-      [[nodiscard]] const prompt::Line* promptLine(std::uint64_t pane_id) const noexcept;
-
-      // A key for the pane's editor or queue. `terminal` hands it back to the terminal.
-      prompt::Outcome promptKey(std::uint64_t pane_id, const prompt::KeyPress& key);
-
-      // Whether the pane's shell runs `word`, for the editor to mark a command that does not
-      // exist. Asks the runtime the first time and answers pending until it replies; a remote
-      // shell's commands are unknown. Forgotten after each command and change of directory.
-      CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
-
       // Whether a pane's header changed with its shell's state since the last call.
       [[nodiscard]] bool takeChromeChange() noexcept;
 
       // Scrolls the pane so `row`, counted from the top of its scrollback, is the first shown.
       void scrollToRow(std::uint64_t pane_id, std::uint32_t row);
-
-      // Text an input method committed or a paste, into the editor. Controls other than newline
-      // and tab are dropped: they would act on the shell instead of being written.
-      void promptText(std::uint64_t pane_id, std::string_view text);
 
       void paste(std::uint64_t pane_id, std::string_view bytes);
 
@@ -379,10 +332,6 @@ export {
       [[nodiscard]] ClientViewState clientViewState() const noexcept;
 
       void configure(const Configuration& configuration);
-
-      // Tells the runtime whether telar's editor stands in for the shell's prompt: the shells of the
-      // panes it opens from now on print no prompt of their own. A cqp00002 runtime cannot hear it.
-      void configureShellPrompt();
 
       void setTheme(const Theme& theme);
 
@@ -721,21 +670,6 @@ export {
       Configuration configuration_;
       ViewVersion view_version_;
 
-      struct LineEntry {
-        prompt::Line line;
-        std::int64_t output = 0;
-        // The command block selected from the editor's normal mode, by its index among the pane's
-        // blocks, and the row the live prompt started on when the selection began.
-        std::optional<std::size_t> block;
-        std::optional<std::uint32_t> live_prompt;
-        // The first half of `[[`, `]]`, `[f`, `]f`, `gg`, `z.` or `yc`.
-        char pending = 0;
-        // Where jumps left from, by stable row at the view's top, oldest first, and which of them
-        // Ctrl-O went back to: the list's end while it has not.
-        std::vector<std::uint64_t> jumps;
-        std::size_t jump = 0;
-      };
-
       // The keys of the command blocks, ahead of the editor. From the normal mode: Ctrl-U and
       // Ctrl-D, or [[ and ]], step through the blocks, [f and ]f through the failed ones, Ctrl-O and
       // Ctrl-I back and forth through the jumps. On a selected block: j and k move the view a row,
@@ -743,7 +677,7 @@ export {
       // or bottom; za, zc and zo fold its output, zM and zR every block's; / searches its output;
       // v and V select its output, Y copies it and yc its command; Esc, q, i, a, I, A and any other
       // key go back to the prompt.
-      std::optional<prompt::Outcome> blockKey(std::uint64_t pane_id, LineEntry& entry, const prompt::KeyPress& key);
+      std::optional<features::prompt::Outcome> blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key);
 
       // The shown row at the view's top: as its view says, or as the runtime's view puts it.
       [[nodiscard]] static std::uint64_t shownTop(const Pane<Memory>& pane) noexcept;
@@ -751,11 +685,14 @@ export {
       // Scrolls the pane so that shown row `display`, folds counted, is the view's top.
       void scrollToShownRow(const Pane<Memory>& pane, std::uint64_t display);
 
+      // The view's top, by stable row, as a jump remembers it.
+      [[nodiscard]] static std::uint64_t jumpRow(const Pane<Memory>& pane) noexcept;
+
       // Remembers the view's top before a jump, dropping the jumps Ctrl-O had gone back past.
-      void recordJump(const Pane<Memory>& pane, LineEntry& entry);
+      static void recordJump(const Pane<Memory>& pane, features::prompt::PaneLine& line);
 
       // Back to where the last jump left from, or forward again; the view's top goes there.
-      void jumpBack(const Pane<Memory>& pane, LineEntry& entry, bool back);
+      void jumpBack(const Pane<Memory>& pane, features::prompt::PaneLine& line, bool back);
 
       // Copy mode on a block's output, at its first row, with the scrollback search asked for and
       // confined to that output.
@@ -775,105 +712,10 @@ export {
       // shows its live end.
       [[nodiscard]] static std::optional<std::uint32_t> livePromptRow(const Pane<Memory>& pane);
 
-      LineEntry& lineEntry(std::uint64_t pane_id);
-
-      // The commands people typed, most recent first and each once, for the editor's suggestions.
-      void requestPromptHistory();
-
-      static_assert(runtime::config::prompt_action_names.size() == static_cast<std::size_t>(prompt::Action::insert_mode) + 1);
-
-      // The action the user bound to this key in the editor's current mode, if any.
-      std::optional<prompt::Action> boundAction(const prompt::KeyPress& key, const prompt::Editor& editor) const;
-
-      // Sends what the editor decided: a command to run, a line for the running program, or raw
-      // bytes the shell reads as keys. Commands are validated like a pasted history entry.
-      void deliverPrompt(std::uint64_t pane_id, prompt::Outcome outcome, const prompt::Line& line);
-
-      // Tab: the spec's literal choices at once, and the runtime's files when the spec, or a
-      // command without one, expects a path there.
-      void beginCompletion(std::uint64_t pane_id, prompt::Line& line, shell::Syntax syntax);
-
-      struct PathCompletion {
-        std::uint64_t pane_id;
-        std::string base;
-        std::string query;
-      };
-
-      enum class SpecState : std::uint8_t {
-        pending,
-        available,
-        unavailable,
-      };
-
-      struct CommandRequest {
-        std::uint64_t pane_id;
-        std::string word;
-      };
-
-      struct StringHash {
-        using is_transparent = void;
-
-        std::size_t operator()(std::string_view text) const noexcept;
-      };
-
-      struct CommandChecks {
-        std::uint32_t commands = 0;
-        std::string directory;
-        std::unordered_map<std::string, CommandPresence, StringHash, std::equal_to<>> words;
-        // Every command that starts with a prefix, from an answer that listed them all: a longer
-        // word typed under it is found or missing at once, without asking again.
-        std::unordered_map<std::string, std::vector<std::string>, StringHash, std::equal_to<>> listed;
-        // Commands seen running, kept across commands.
-        std::unordered_set<std::string, StringHash, std::equal_to<>> learned;
-        // Whether the runtime has a spec for each command asked about, and what each alias
-        // among them stands for.
-        std::unordered_map<std::string, SpecState, StringHash, std::equal_to<>> specs;
-        std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> aliases;
-        // The command each alias last stood for, kept across commands for the digest it asks with.
-        std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> alias_targets;
-      };
-
-      // What the pane learned of its shell's commands, forgotten after each command and change of
-      // directory: either may change which commands run.
-      CommandChecks& commandChecks(const Pane<Memory>& pane);
-
-      // The first command `line` runs, as the editor colours it.
-      void learnCommand(std::uint64_t pane_id, std::string_view line, shell::Dialect dialect);
-
-      // Whether the runtime has a spec for `command` in this pane, asking it the first time: once
-      // per command until the shell's next command, with the digest of the spec already held.
-      SpecState specState(std::uint64_t pane_id, std::string_view command);
-
-      // Keeps every command an answer listed under the word it was asked for, while what the pane
-      // knows of its commands is still the one it asked from.
-      void listCommands(std::uint64_t pane_id, std::string_view prefix, std::span<const CompletionWord> words);
-
-      // A prompt request the runtime failed, or that a lost connection will never answer, settles
-      // as one that found nothing: its word stops waiting, its spec is unavailable and its menu
-      // stops expecting it. None of them is an error the user should read.
-      std::optional<Change> failPromptRequest(std::uint64_t request_id);
-
-      void failPromptRequests() noexcept;
-
-      Change settleCommand(typename std::unordered_map<std::uint64_t, CommandRequest>::iterator request, CommandPresence presence);
-
-      prompt::Specs prompt_specs_;
-      // The suggestions read the whole history on every refresh: commands run since it loaded
-      // replace the oldest instead of growing it for as long as the client lives.
-      static constexpr std::uint16_t prompt_history_limit = 1000;
-      std::vector<std::string> prompt_history_;
-      std::uint64_t prompt_history_request_ = 0;
-      std::unordered_map<std::uint64_t, PathCompletion> path_completions_;
-      std::unordered_map<std::uint64_t, CommandRequest> command_requests_;
-      std::unordered_map<std::uint64_t, CommandChecks> command_checks_;
-      std::unordered_map<std::uint64_t, CommandRequest> spec_requests_;
-      // Tab pressed while a pane waited for a spec: the line it completes, by pane.
-      std::unordered_map<std::uint64_t, std::string> spec_completions_;
       bool chrome_changed_ = false;
       bool clipboard_written_ = false;
       bool block_changed_ = false;
-      std::uint64_t prompt_written_ = 0;
-      std::unordered_map<std::uint64_t, LineEntry> lines_;
+      features::prompt::State prompt_;
       features::terminal::copy_mode::State copy_mode_;
       features::terminal::links::State links_;
       HostMetrics metrics_;

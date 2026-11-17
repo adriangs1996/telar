@@ -293,7 +293,7 @@ namespace {
       QVERIFY(finishOpening(runtime));
       sendPromptScreen(runtime, 1);
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), prompt::Surface::editor, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), application::prompt::Surface::editor, wait_ms);
 
       TerminalItem terminal{window.contentItem()};
 
@@ -356,7 +356,7 @@ namespace {
       QCOMPARE(textView(runtime.last<PaneCommand>().text), std::string_view{"git log --oneline -n 3 | grep fix"});
 
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 3});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), prompt::Surface::running, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), application::prompt::Surface::running, wait_ms);
       // Running, the line leaves and the terminal settles back under it.
       QCOMPARE(line->property("liftRows").toInt(), 0);
       type(terminal, "make test");
@@ -373,7 +373,7 @@ namespace {
 
       // Tab opens the spec's choices above the command.
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .commands = 1, .status = 2});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), prompt::Surface::editor, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), application::prompt::Surface::editor, wait_ms);
       QKeyEvent clear{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
 
       QCoreApplication::sendEvent(&terminal, &clear);
@@ -390,7 +390,7 @@ namespace {
 
       // The block ran git, so git exists. Any other command word, once typed, is asked of the
       // runtime; one it does not find is missing.
-      QCOMPARE(application.prompt()->commandPresence(pane_id, "git"), application::CommandPresence::found);
+      QCOMPARE(application.prompt()->commandPresence(pane_id, "git"), application::prompt::CommandPresence::found);
       const auto asked = runtime.count(ClientTag::complete_words);
 
       type(terminal, "gti s");
@@ -398,11 +398,11 @@ namespace {
       const auto presence = runtime.last<CompleteWords>();
 
       QCOMPARE(presence.prefix, std::string_view{"gti"});
-      QCOMPARE(application.prompt()->commandPresence(pane_id, "gti"), application::CommandPresence::pending);
+      QCOMPARE(application.prompt()->commandPresence(pane_id, "gti"), application::prompt::CommandPresence::pending);
       const QSignalSpy relaid{editor, &PromptEditorItem::layoutChanged};
 
       runtime.send(CompletionWords{.request_id = presence.request_id, .truncated = false, .words = {}});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::CommandPresence::missing, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::prompt::CommandPresence::missing, wait_ms);
       // The answer reaches the line as its pane's change and marks the word: it is laid out again.
       QTRY_VERIFY_WITH_TIMEOUT(relaid.count() > 0, wait_ms);
       // Output that changes nothing the line draws keeps its layout.
@@ -440,7 +440,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       const std::array ran{blocks[0], CommandBlock{.row = 2, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 20, .command = "gti status"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = ran});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::CommandPresence::found, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::prompt::CommandPresence::found, wait_ms);
 
       // Back at the prompt before the frame that draws it, the last prompt on screen is the
       // command's own: its output is not prompt, and the line waits under the cursor.
@@ -564,7 +564,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       sendPromptScreen(runtime, 1);
       runtime.send(PaneCwd{.pane_id = pane_id, .cwd = "/work"});
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), prompt::Surface::editor, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), application::prompt::Surface::editor, wait_ms);
 
       TerminalItem terminal{window.contentItem()};
 
@@ -625,7 +625,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       QCoreApplication::sendEvent(field, &escape);
       QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
-      QVERIFY(application.prompt()->line(pane_id)->editor().text().view() == "git s");
+      QVERIFY(application.prompt()->line(pane_id)->text() == "git s");
 
       // The path search starts from the word before the caret and writes the path over it.
       application.commands()->execute(window_actions::Action::path_picker);
@@ -651,7 +651,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       QCoreApplication::sendEvent(field, &enter);
       QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
-      const std::string written{application.prompt()->line(pane_id)->editor().text().view()};
+      const std::string written{application.prompt()->line(pane_id)->text()};
 
       QVERIFY2(written == "git src/main.cpp", written.c_str());
 
@@ -758,7 +758,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       runtime.send(PaneCwd{.pane_id = pane_id, .cwd = cwd});
       runtime.send(PaneGit{.pane_id = pane_id, .repository = true, .branch = "feat/shell-integration"});
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), prompt::Surface::editor, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane_id), application::prompt::Surface::editor, wait_ms);
 
       TerminalItem terminal{window.contentItem()};
 
@@ -863,7 +863,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       const auto record = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap();
       const auto pane = record.value(QStringLiteral("key")).toString().toULongLong();
 
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane), prompt::Surface::editor, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane), application::prompt::Surface::editor, runtime_wait_ms);
 
       TerminalItem terminal{window.contentItem()};
 
@@ -894,7 +894,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       QCoreApplication::sendEvent(&terminal, &enter);
       QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(marker), runtime_wait_ms);
-      QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->shell.commands == 1 && application.prompt()->surface(pane) == prompt::Surface::editor, qPrintable(QStringLiteral("commands=%1 phase=%2 surface=%3 foreground=%4").arg(application.pane(pane)->shell.commands).arg(static_cast<int>(application.pane(pane)->shell.phase)).arg(static_cast<int>(application.prompt()->surface(pane))).arg(application.pane(pane)->shell.shell_foreground)), 8000);
+      QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->shell.commands == 1 && application.prompt()->surface(pane) == application::prompt::Surface::editor, qPrintable(QStringLiteral("commands=%1 phase=%2 surface=%3 foreground=%4").arg(application.pane(pane)->shell.commands).arg(static_cast<int>(application.pane(pane)->shell.phase)).arg(static_cast<int>(application.prompt()->surface(pane))).arg(application.pane(pane)->shell.shell_foreground)), 8000);
       QCOMPARE(application.pane(pane)->shell.status, 0);
       // The runtime anchored the command's block where its prompt was, and the terminal draws
       // its separator there.
@@ -922,8 +922,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QCOMPARE(terminal.rail().size(), 2);
       // The runtime finds the commands the shell runs, and only those.
       type(terminal, "gti x && ls ./");
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "gti"), application::CommandPresence::missing, runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "ls"), application::CommandPresence::found, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "gti"), application::prompt::CommandPresence::missing, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "ls"), application::prompt::CommandPresence::found, runtime_wait_ms);
       const auto blocks = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_BLOCKS_SCREENSHOT");
       if (!blocks.isEmpty()) {
         QTest::qWait(900);
@@ -942,18 +942,18 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         type(terminal, "vim -u NONE");
         QCoreApplication::sendEvent(&terminal, &enter);
         QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->screen.modes().alternate_screen, runtime_wait_ms);
-        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane), prompt::Surface::none, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane), application::prompt::Surface::none, runtime_wait_ms);
         QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier, QStringLiteral("\x1b")};
 
         QCoreApplication::sendEvent(&terminal, &escape);
         type(terminal, ":q");
         QCoreApplication::sendEvent(&terminal, &enter);
-        QTRY_VERIFY_WITH_TIMEOUT(!application.pane(pane)->screen.modes().alternate_screen && application.prompt()->surface(pane) == prompt::Surface::editor, runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(!application.pane(pane)->screen.modes().alternate_screen && application.prompt()->surface(pane) == application::prompt::Surface::editor, runtime_wait_ms);
         QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->blocks.size() == before_vim + 1, qPrintable(QStringLiteral("blocks %1, before %2").arg(application.pane(pane)->blocks.size()).arg(before_vim)), runtime_wait_ms);
         const auto inputs = application.pane(pane)->shell.commands;
 
         type(terminal, "echo after-vim");
-        QVERIFY2(application.prompt()->line(pane)->editor().text().view() == "echo after-vim", "the line takes the keys again");
+        QVERIFY2(application.prompt()->line(pane)->text() == "echo after-vim", "the line takes the keys again");
         QCoreApplication::sendEvent(&terminal, &enter);
         QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == inputs + 1 && application.pane(pane)->blocks.size() == before_vim + 2, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(terminal.promptRow() >= 0, runtime_wait_ms);
@@ -973,7 +973,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
           type(terminal, command);
           QCoreApplication::sendEvent(&terminal, &enter);
-          QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == ran + 1 && application.prompt()->surface(pane) == prompt::Surface::editor, runtime_wait_ms);
+          QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == ran + 1 && application.prompt()->surface(pane) == application::prompt::Surface::editor, runtime_wait_ms);
         };
 
         run("seq 60");
@@ -1070,17 +1070,17 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         QKeyEvent complete{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, QStringLiteral("\t")};
 
         QCoreApplication::sendEvent(&terminal, &complete);
-        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->line(pane)->editor().text().view(), std::string_view{"git switch "}, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->line(pane)->text(), std::string_view{"git switch "}, runtime_wait_ms);
         // An alias the shell defines completes as the command it stands for.
         QCoreApplication::sendEvent(&terminal, &erase);
         const auto ran = application.pane(pane)->shell.commands;
 
         type(terminal, "alias gsw='git switch'");
         QCoreApplication::sendEvent(&terminal, &enter);
-        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == ran + 1 && application.prompt()->surface(pane) == prompt::Surface::editor, runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->shell.commands == ran + 1 && application.prompt()->surface(pane) == application::prompt::Surface::editor, runtime_wait_ms);
         type(terminal, "gsw --det");
         QCoreApplication::sendEvent(&terminal, &complete);
-        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->line(pane)->editor().text().view(), std::string_view{"gsw --detach "}, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->line(pane)->text(), std::string_view{"gsw --detach "}, runtime_wait_ms);
       }
 
       // A quick command: it flies to its separator while its output waits, then the output

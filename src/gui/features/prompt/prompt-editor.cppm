@@ -1,45 +1,14 @@
-export module telar.gui.prompt.editor;
+// The command editor's keyboard model, apart from Qt so it is testable: a key in, an edit and
+// maybe a request out. Two keymaps, readline's emacs bindings and vim's modal editing. Nothing
+// here is exported: only the feature's own units name it, through a pane's line.
+export module telar.gui.features.prompt:editor;
 
 import std;
 
-export import :text;
+import :keys;
+import :text;
 
-// The command editor's keyboard model, apart from Qt so it is testable: a key in, an edit and
-// maybe a request out. Two keymaps, readline's emacs bindings and vim's modal editing.
-export namespace telar::gui::prompt {
-
-  enum class Key : std::uint8_t {
-    character,
-    enter,
-    backspace,
-    delete_forward,
-    left,
-    right,
-    up,
-    down,
-    home,
-    end,
-    tab,
-    backtab,
-    escape,
-  };
-
-  struct Modifiers {
-    bool control = false;
-    bool alt = false;
-    bool shift = false;
-
-    bool operator==(const Modifiers&) const = default;
-  };
-
-  // One key press. `text` holds what a character key types, UTF-8; `character` the code point
-  // a binding matches, lower case for letters with control.
-  struct KeyPress {
-    Key key = Key::character;
-    char32_t character = 0;
-    Modifiers modifiers{};
-    std::string_view text{};
-  };
+namespace telar::gui::features::prompt {
 
   // What the editor asks of its owner after a key.
   enum class Request : std::uint8_t {
@@ -57,56 +26,6 @@ export namespace telar::gui::prompt {
     clear_screen,
     // Not a key this keymap uses; the owner may run telar's own binding for it.
     unhandled,
-  };
-
-  // What a key bound in `client.prompt.bindings` does. The names, in this order, are
-  // `prompt_action_names` in telar-config, which validates them.
-  enum class Action : std::uint8_t {
-    submit,
-    newline,
-    cancel,
-    complete,
-    accept_suggestion,
-    history_previous,
-    history_next,
-    history_search,
-    line_start,
-    line_end,
-    char_left,
-    char_right,
-    word_left,
-    word_right,
-    delete_char,
-    backspace,
-    kill_line,
-    kill_to_start,
-    kill_word,
-    kill_word_back,
-    yank,
-    undo,
-    redo,
-    transpose,
-    clear_screen,
-    normal_mode,
-    insert_mode,
-  };
-
-  enum class Keymap : std::uint8_t {
-    emacs,
-    vim,
-  };
-
-  enum class Mode : std::uint8_t {
-    insert,
-    normal,
-    visual,
-    visual_line,
-  };
-
-  // The system clipboard behind vim's "+ and "* registers.
-  struct Clipboard {
-    std::function<std::string()> read;
-    std::function<void(std::string_view)> write;
   };
 
   class Editor {

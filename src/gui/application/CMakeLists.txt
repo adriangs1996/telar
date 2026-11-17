@@ -6,6 +6,7 @@ telar_add_domain(gui application
     application-palette.cpp
     application-paths.cpp
     application-peek.cpp
+    application-prompt.cpp
     application-session-agents.cpp
     application-session-blocks.cpp
     application-session-commands.cpp
@@ -24,6 +25,6 @@ telar_add_domain(gui application
     application-workspace_replica.cpp
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
        foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history
-       features/terminal/input features/terminal/links features/terminal/copy_mode
+       features/prompt features/terminal/input features/terminal/links features/terminal/copy_mode
        features/terminal/graphics features/terminal/attachments core layout
-       text prompt presentation components config)
+       text presentation components config)

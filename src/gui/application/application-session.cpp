@@ -8,6 +8,7 @@ import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
+import telar.gui.features.prompt;
 import telar.gui.foundation.keys;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
@@ -15,10 +16,8 @@ import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
-import telar.gui.prompt.line;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.gui.prompt.layout;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.clipboard;
@@ -32,11 +31,8 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.base.memory.allocators;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
-import telar.gui.prompt.completion;
 
 namespace telar::gui::application {
 
@@ -130,7 +126,7 @@ namespace telar::gui::application {
     send(RequestRuntimeState{.client_identity = identity, .interactive = true});
     send(ConfigureGraphics{supportsSharedGraphics()});
     configureCadence();
-    configureShellPrompt();
+    prompt::configureShell(*this);
   }
 
   bool Session::requestsPending() const noexcept {
@@ -208,7 +204,7 @@ namespace telar::gui::application {
     features::palette::discard(palette_);
     pending_count_ = 0;
     features::terminal::links::suspend(links_);
-    failPromptRequests();
+    features::prompt::failAll(prompt_);
     for (auto& pane : panes_) {
       pane->attached = false;
       pane->attaching = false;
@@ -457,13 +453,7 @@ namespace telar::gui::application {
     sound_playback_.configure(configuration.sound);
     ++view_version_.configuration;
     if (prompt_changed) {
-      configureShellPrompt();
-    }
-  }
-
-  void Session::configureShellPrompt() {
-    if (ready_ && reads_rows_) {
-      send(ConfigureShellPrompt{.bare = configuration_.prompt.mode == PromptMode::telar});
+      prompt::configureShell(*this);
     }
   }
 
@@ -636,7 +626,7 @@ namespace telar::gui::application {
       return *change;
     }
 
-    if (const auto change = failPromptRequest(message.request_id)) {
+    if (const auto change = prompt::fail(*this, message.request_id)) {
       return *change;
     }
 
@@ -716,6 +706,7 @@ namespace telar::gui::application {
   template void Session::send<CompleteClientCommand>(const CompleteClientCommand& message);
   template void Session::send<CompletePaneFocus>(const CompletePaneFocus& message);
   template void Session::send<CompleteWords>(const CompleteWords& message);
+  template void Session::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
   template void Session::send<CopySelection>(const CopySelection& message);
   template void Session::send<CreatePane>(const CreatePane& message);
   template void Session::send<CreateTab>(const CreateTab& message);

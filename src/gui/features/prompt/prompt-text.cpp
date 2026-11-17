@@ -1,8 +1,8 @@
-module telar.gui.prompt.editor;
+module telar.gui.features.prompt;
 
 import std;
 
-namespace telar::gui::prompt {
+namespace telar::gui::features::prompt {
 
   std::string_view Text::view() const noexcept {
     return bytes_;

@@ -22,7 +22,7 @@ static_assert(true);
 #include <cstdint>
 #include <vector>
 
-import telar.gui.prompt.layout;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -183,8 +183,8 @@ namespace telar::gui::qt {
     void track(std::string_view text, bool animate);
     void tick();
     [[nodiscard]] bool animating(qint64 now) const noexcept;
-    [[nodiscard]] QColor styleColor(prompt::Style style) const;
-    [[nodiscard]] QColor roleColor(prompt::Style style) const;
+    [[nodiscard]] QColor styleColor(application::prompt::Style style) const;
+    [[nodiscard]] QColor roleColor(application::prompt::Style style) const;
     void cacheColors();
 
     // Glyphs snap to the scene's pixels, so moving any ancestor repaints them.
@@ -196,14 +196,14 @@ namespace telar::gui::qt {
     QVariantMap colors_;
     // What colors_ gives each style, the accent and the path underline, read once per change of
     // colors_ instead of once per run and frame.
-    std::array<QColor, static_cast<std::size_t>(prompt::Style::missing) + 1> style_colors_;
+    std::array<QColor, static_cast<std::size_t>(application::prompt::Style::missing) + 1> style_colors_;
     QColor accent_;
     QColor underline_;
     QString preedit_;
     std::string display_;
     std::string typed_;
     std::string ghost_;
-    std::vector<prompt::Style> styles_;
+    std::vector<application::prompt::Style> styles_;
     std::vector<std::uint8_t> groups_;
     std::vector<Fresh> fresh_;
     QVariantList glows_;
@@ -211,7 +211,7 @@ namespace telar::gui::qt {
     QElapsedTimer clock_;
     // Drives frames while text animates, in step with the window's animations.
     QVariantAnimation ticker_;
-    prompt::Layout layout_;
+    application::prompt::Layout layout_;
     std::uint64_t pane_id_ = 0;
     std::uint64_t revision_ = 0;
     qreal scale_ = 1;
@@ -227,7 +227,7 @@ namespace telar::gui::qt {
     // What the current layout was built from.
     struct Laid {
       std::string display;
-      std::vector<prompt::Style> styles;
+      std::vector<application::prompt::Style> styles;
       std::vector<std::uint8_t> groups;
       std::size_t caret = 0;
       std::size_t anchor = 0;

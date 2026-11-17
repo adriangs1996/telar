@@ -9,19 +9,14 @@ import telar.tbc;
 import telar.gui.presentation.application_mark;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.prompt.line;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.gui.prompt.layout;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
-import telar.gui.prompt.completion;
 
 namespace telar::gui::application {
 

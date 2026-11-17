@@ -1,11 +1,12 @@
-export module telar.gui.prompt.editor:text;
+// The text of the command being edited: UTF-8 bytes, a cursor and an anchor that are always on
+// code point boundaries, and grouped undo. Every edit goes through `replace`, so undo, the
+// revision and the bounds hold for all of them. Nothing here is exported: only the feature's own
+// units name it, through a pane's line.
+export module telar.gui.features.prompt:text;
 
 import std;
 
-// The text of the command being edited: UTF-8 bytes, a cursor and an anchor that are always on
-// code point boundaries, and grouped undo. Every edit goes through `replace`, so undo, the
-// revision and the bounds hold for all of them.
-export namespace telar::gui::prompt {
+namespace telar::gui::features::prompt {
 
   class Text {
   public:

@@ -1,8 +1,8 @@
-module telar.gui.prompt.editor;
+module telar.gui.features.prompt;
 
 import std;
 
-namespace telar::gui::prompt {
+namespace telar::gui::features::prompt {
 
   Editor::Editor(Keymap keymap)
       : keymap_(keymap) {}

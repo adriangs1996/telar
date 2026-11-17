@@ -9,13 +9,10 @@ import telar.gui.features.terminal.graphics;
 import telar.gui.layout.snapshots;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.prompt.layout;
 import telar.wire.clients;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
 

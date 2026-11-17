@@ -34,8 +34,8 @@ namespace telar::gui::application::palette {
         return false;
       }
 
-      if (session.editsPrompt(pane->id)) {
-        session.promptText(pane->id, submission.text);
+      if (prompt::edits(session, pane->id)) {
+        prompt::text(session, pane->id, submission.text);
         return true;
       }
 

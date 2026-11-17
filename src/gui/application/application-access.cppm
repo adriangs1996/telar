@@ -5,10 +5,10 @@ module telar.gui.application:access;
 import std;
 
 import :session;
-import telar.gui.prompt.line;
 import telar.gui.features.palette;
 import telar.gui.features.paths;
 import telar.gui.features.history;
+import telar.gui.features.prompt;
 import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.features.terminal.graphics;
@@ -64,6 +64,14 @@ namespace telar::gui::application {
       return session.history_;
     }
 
+    [[nodiscard]] static constexpr features::prompt::State& prompt(Session& session) noexcept {
+      return session.prompt_;
+    }
+
+    [[nodiscard]] static constexpr const features::prompt::State& prompt(const Session& session) noexcept {
+      return session.prompt_;
+    }
+
     [[nodiscard]] static constexpr features::terminal::copy_mode::State& copyMode(Session& session) noexcept {
       return session.copy_mode_;
     }
@@ -109,23 +117,12 @@ namespace telar::gui::application {
       return session.active_tab_;
     }
 
-    // ---- telar's command editor, until the prompt is a feature -----------------------------
+    // ---- the command blocks, which the session composes ------------------------------------
 
-    // The editor's line of pane `pane_id`, made on first use as the keys make it.
-    [[nodiscard]] static prompt::Line& editorLine(Session& session, std::uint64_t pane_id) {
-      return session.lineEntry(pane_id).line;
-    }
-
-    // The editor's line of pane `pane_id`, if it has one.
-    [[nodiscard]] static prompt::Line* promptLine(Session& session, std::uint64_t pane_id) noexcept {
-      const auto found = session.lines_.find(pane_id);
-
-      return found == session.lines_.end() ? nullptr : &found->second.line;
-    }
-
-    // The editor of pane `pane_id` took text from outside the keyboard, for its view to show it.
-    static void notePromptWrite(Session& session, std::uint64_t pane_id) noexcept {
-      session.prompt_written_ = pane_id;
+    // The keys of the command blocks, ahead of the editor's: what a key did to them, none when it
+    // goes on to the editor.
+    [[nodiscard]] static std::optional<features::prompt::Outcome> blockKey(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
+      return session.blockKey(pane_id, line, key);
     }
 
     // ---- the workbench, until it is a feature -----------------------------------------------

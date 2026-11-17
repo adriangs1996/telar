@@ -1,62 +1,22 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.prompt.line;
+// One pane's command editor: the line being written or queued, the commands sent from it, and
+// what the owner must do next. It knows nothing of Qt or the transport. Nothing here is exported:
+// only the feature's own units name it, through a pane's line.
+export module telar.gui.features.prompt:line;
 
 import std;
 
-import telar.gui.prompt.editor;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.completion;
+import :keys;
+import :text;
+import :editor;
+import :routing;
+import :completion;
+import :menu;
 import telar.shell.syntax;
 
-// One pane's command editor: the line being written or queued, the commands sent from it, and
-// what the owner must do next. It knows nothing of Qt or the transport, so tests drive it as the
-// session does.
-export namespace telar::gui::prompt {
-
-  // What the owner does after a key.
-  enum class Outcome : std::uint8_t {
-    // The line used the key; repaint it.
-    edited,
-    // Send `delivery` to the shell as a command and run it.
-    run,
-    // Send `delivery` to the running program as typed input followed by Enter.
-    answer,
-    // Send `delivery` to the shell as raw bytes (end of file, clear screen).
-    bytes,
-    // The key belongs to the terminal: encode and send it as usual.
-    terminal,
-    // Neither the line nor the terminal: telar's own binding may take it.
-    ignored,
-    // Tab: the owner works out the choices and offers them.
-    complete,
-    // Ctrl-R at the shell's prompt: the owner searches the history from the line.
-    search_history,
-  };
-
-  // The choices Tab offered, over the word they would replace.
-  struct Menu {
-    static constexpr std::size_t capacity = 256;
-
-    std::vector<Choice> choices;
-    std::size_t selected = 0;
-    std::size_t begin = 0;
-    std::size_t end = 0;
-    // Requests to the runtime whose answers join the choices.
-    std::vector<std::uint64_t> requests;
-    shell::Dialect dialect = shell::Dialect::posix;
-    // What the choices are, for the menu's heading: "commands", "branches · git".
-    std::string label;
-    // Every choice offered for the word, and the cursor it was offered at: typing narrows them
-    // down; erasing past that cursor asks for them again.
-    std::vector<Choice> all;
-    std::size_t floor = 0;
-    // Every choice for the word arrived: a cut list asks again as typing narrows it.
-    bool whole = true;
-    // Refined by typing: a single choice left is not written for the user.
-    bool refined = false;
-  };
+namespace telar::gui::features::prompt {
 
   // Whether the shell would read more of a command before running it, as Enter asks.
   class Continuation {

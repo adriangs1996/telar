@@ -1,10 +1,11 @@
-module telar.gui.prompt.routing;
+module telar.gui.features.prompt;
 
 import std;
 
+import telar.wire.pane_io;
 import telar.wire.vocabulary;
 
-namespace telar::gui::prompt {
+namespace telar::gui::features::prompt {
 
   Surface surface(const PaneShell& shell, bool alternate_screen, bool telar_mode) noexcept {
     if (!telar_mode || shell.shell == IntegratedShell::none || alternate_screen) {

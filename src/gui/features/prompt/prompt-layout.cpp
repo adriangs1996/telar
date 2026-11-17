@@ -1,10 +1,11 @@
-module telar.gui.prompt.layout;
+module telar.gui.features.prompt;
 
 import std;
 
 import telar.gui.foundation.text;
+import telar.shell.syntax;
 
-namespace telar::gui::prompt {
+namespace telar::gui::features::prompt {
 
   void classify(std::string_view text, std::span<Style> styles, shell::Syntax syntax) {
     std::ranges::fill(styles, Style::plain);

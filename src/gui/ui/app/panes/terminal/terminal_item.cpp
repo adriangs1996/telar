@@ -589,7 +589,7 @@ namespace telar::gui::qt {
       };
 
       hidden_rows_.assign(drawn, 0);
-      const bool editing = controller_->prompt().surface(pane_id_) == prompt::Surface::editor;
+      const bool editing = controller_->prompt().surface(pane_id_) == application::prompt::Surface::editor;
       const auto [first, count, cursor] = promptRows(screen, editing, liveFrom(current->blocks));
 
       for (auto row = first; row < first + count && row < rows; ++row) {
@@ -1013,7 +1013,7 @@ namespace telar::gui::qt {
       QByteArray text;
       const auto key = promptKey(event, text);
       const bool taken = key && controller_->prompt().key(pane_id_, *key);
-      if (!taken && (key || controller_->prompt().surface(pane_id_) != prompt::Surface::editor)) {
+      if (!taken && (key || controller_->prompt().surface(pane_id_) != application::prompt::Surface::editor)) {
         typed = sendKeyPress(event, current->screen.modes());
       }
     } else if (preedit_.isEmpty()) {

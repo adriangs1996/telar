@@ -4,8 +4,7 @@ import std;
 
 import :access;
 import telar.gui.features.paths;
-import telar.gui.prompt.editor;
-import telar.gui.prompt.routing;
+import telar.gui.features.prompt;
 import telar.wire.editor;
 import telar.wire.runtime;
 
@@ -16,13 +15,12 @@ namespace telar::gui::application::paths {
     // At the line's prompt, the word before the caret, which the search starts from when it is
     // a plain relative path; nothing elsewhere.
     features::paths::PathSeed caretWord(const Session& session, std::uint64_t pane_id) {
-      const auto* line = session.promptLine(pane_id);
-      if (session.promptSurface(pane_id) != prompt::Surface::editor || line == nullptr) {
+      const auto line = prompt::line(session, pane_id);
+      if (prompt::surface(session, pane_id) != prompt::Surface::editor || !line) {
         return {};
       }
 
-      const auto& text = line->editor().text();
-      const auto before = text.view().substr(0, text.cursor());
+      const auto before = line->text().substr(0, line->cursor());
       const auto space = before.find_last_of(" \t\n");
       const auto begin = space == std::string_view::npos ? 0 : space + 1;
 
@@ -32,19 +30,11 @@ namespace telar::gui::application::paths {
     // Writes `path` over the word the search started from, while the editor still holds it.
     bool replaceSeed(Session& session, std::uint64_t pane_id, std::string_view path) {
       const auto seed = features::paths::seed(Access::paths(session));
-      auto* line = Access::promptLine(session, pane_id);
-      if (seed.pane_id != pane_id || seed.text.empty() || line == nullptr) {
+      if (seed.pane_id != pane_id || seed.text.empty()) {
         return false;
       }
 
-      const auto& text = line->editor().text();
-      const auto end = seed.begin + seed.text.size();
-      if (text.cursor() != end || text.view().substr(seed.begin, seed.text.size()) != seed.text) {
-        return false;
-      }
-
-      line->replaceText(seed.begin, end, path);
-      return true;
+      return features::prompt::replace(Access::prompt(session), pane_id, seed.begin, seed.text, path);
     }
 
   }
@@ -125,19 +115,17 @@ namespace telar::gui::application::paths {
       return false;
     }
 
-    const bool editor = session.editsPrompt(pane->id);
+    const bool editor = prompt::edits(session, pane->id);
     const auto paste = features::paths::insertion(state, {.selection = selection, .absolute = absolute, .bracketed = !editor && pane->screen.modes().bracketed_paste});
     if (!paste) {
       return false;
     }
 
     try {
-      if (editor && replaceSeed(session, pane->id, paste->view())) {
-        Access::notePromptWrite(session, pane->id);
-      } else if (editor) {
-        session.promptText(pane->id, paste->view());
-      } else {
+      if (!editor) {
         session.input(pane->id, paste->view());
+      } else if (!replaceSeed(session, pane->id, paste->view())) {
+        prompt::text(session, pane->id, paste->view());
       }
     } catch (const std::length_error&) {
       features::paths::report(state, "Input is busy; retry");

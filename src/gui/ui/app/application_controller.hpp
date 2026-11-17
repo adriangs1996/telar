@@ -69,7 +69,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
-import telar.gui.prompt.line;
 
 namespace telar::gui::test {
   struct HistoryPresentation;

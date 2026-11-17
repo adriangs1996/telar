@@ -1,0 +1,103 @@
+// telar's command editor as ui drives it: who has a pane's keyboard, the keys and text its line
+// takes, what the line shows and suggests, and whether its shell runs the command being typed.
+export module telar.gui.application:prompt;
+
+import std;
+
+import :session;
+import telar.gui.features.prompt;
+import telar.wire.editor;
+import telar.wire.pane_io;
+
+export namespace telar::gui::application::prompt {
+
+  using features::prompt::Action;
+  using features::prompt::CellRange;
+  using features::prompt::Choice;
+  using features::prompt::classify;
+  using features::prompt::CommandPresence;
+  using features::prompt::Key;
+  using features::prompt::Keymap;
+  using features::prompt::KeyPress;
+  using features::prompt::Layout;
+  using features::prompt::layout;
+  using features::prompt::LineView;
+  using features::prompt::Menu;
+  using features::prompt::Mode;
+  using features::prompt::Modifiers;
+  using features::prompt::Outcome;
+  using features::prompt::Run;
+  using features::prompt::Style;
+  using features::prompt::Surface;
+
+  // Who has pane `pane_id`'s keyboard: the terminal, or telar's editor at the shell's prompt, the
+  // queue while a command runs, or the program behind a secret prompt.
+  [[nodiscard]] Surface surface(const Session& session, std::uint64_t pane_id) noexcept;
+
+  // Whether text meant for the pane belongs in telar's editor instead.
+  [[nodiscard]] bool edits(const Session& session, std::uint64_t pane_id) noexcept;
+
+  // Whether the terminal's cursor marks a place no key reaches, so it is not drawn: at the prompt
+  // telar's editor has the keys; while a command runs, typing queues the next one unless the
+  // program seems to ask for input (its cursor past a line's start, as routing judges); and
+  // between a command's end and the next prompt the editor is about to take its row. Drawing it
+  // there flashes a block for a frame or two under every quick command's output.
+  [[nodiscard]] bool hidesTerminalCursor(const Session& session, std::uint64_t pane_id) noexcept;
+
+  [[nodiscard]] std::optional<LineView> line(const Session& session, std::uint64_t pane_id) noexcept;
+
+  // The rest of a command the pane's line starts, from what it sent and the history.
+  [[nodiscard]] std::string_view suggestion(const Session& session, std::uint64_t pane_id) noexcept;
+
+  // The commands people typed, most recent first and each once, which the suggestions read.
+  [[nodiscard]] std::span<const std::string> history(const Session& session) noexcept;
+
+  // A key for the pane's editor or queue. `terminal` hands it back to the terminal.
+  Outcome key(Session& session, std::uint64_t pane_id, const KeyPress& key);
+
+  // Text an input method committed or a paste, into the editor. Controls other than newline and
+  // tab are dropped: they would act on the shell instead of being written.
+  void text(Session& session, std::uint64_t pane_id, std::string_view text);
+
+  // Whether the pane's shell runs `word`, for the editor to mark a command that does not exist.
+  // Asks the runtime the first time and answers pending until it replies; a remote shell's
+  // commands are unknown. Forgotten after each command and change of directory.
+  CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word);
+
+  // The pane whose editor took text from outside the keyboard (a paste, a history entry, a
+  // suggestion, a path) since the last call, for its view to show it.
+  [[nodiscard]] std::optional<std::uint64_t> takeWrite(Session& session) noexcept;
+
+}
+
+// What the session's routing and the other use cases reach of the prompt; ui never calls these.
+namespace telar::gui::application::prompt {
+
+  // Pane `pane_id`'s line, made on first use in the configured keymap; a line made before the
+  // history arrived asks for it, for the suggestions.
+  features::prompt::PaneLine& open(Session& session, std::uint64_t pane_id);
+
+  // `command` replaces the line of pane `pane_id`, the caret at its end, as a history entry
+  // pasted does.
+  void write(Session& session, std::uint64_t pane_id, std::string_view command);
+
+  // A key typed into the program behind a secret prompt, `byte` the first it sends.
+  void typeSecret(Session& session, std::uint64_t pane_id, char byte);
+
+  // The shell of pane `pane_id` went from `previous` to `current`.
+  void follow(Session& session, std::uint64_t pane_id, const PaneShell& previous, const PaneShell& current);
+
+  // Tells the runtime whether telar's editor stands in for the shell's prompt: the shells of the
+  // panes it opens from now on print no prompt of their own. A cqp00002 runtime cannot hear it.
+  void configureShell(Session& session);
+
+  Change receive(Session& session, const CommandSpec& message);
+
+  Change receive(Session& session, const CompletionWords& message);
+
+  // None when the paths are not the line's.
+  std::optional<Change> receive(Session& session, const PathResults& message);
+
+  std::optional<Change> fail(Session& session, std::uint64_t request_id);
+
+}

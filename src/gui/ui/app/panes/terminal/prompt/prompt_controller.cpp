@@ -17,34 +17,31 @@ namespace telar::gui::qt {
       : QObject(parent),
         store_(store) {}
 
-  prompt::Surface PromptController::surface(std::uint64_t pane_id) const noexcept {
-    return store_.session().promptSurface(pane_id);
+  application::prompt::Surface PromptController::surface(std::uint64_t pane_id) const noexcept {
+    return application::prompt::surface(store_.session(), pane_id);
   }
 
   bool PromptController::edits(std::uint64_t pane_id) const noexcept {
-    return store_.session().editsPrompt(pane_id);
+    return application::prompt::edits(store_.session(), pane_id);
   }
 
   bool PromptController::hidesTerminalCursor(std::uint64_t pane_id) const noexcept {
-    return store_.session().hidesTerminalCursor(pane_id);
+    return application::prompt::hidesTerminalCursor(store_.session(), pane_id);
   }
 
-  const prompt::Line* PromptController::line(std::uint64_t pane_id) const noexcept {
-    return store_.session().promptLine(pane_id);
+  std::optional<application::prompt::LineView> PromptController::line(std::uint64_t pane_id) const noexcept {
+    return application::prompt::line(store_.session(), pane_id);
   }
 
   std::string_view PromptController::suggestion(std::uint64_t pane_id) const noexcept {
-    const auto& session = store_.session();
-    const auto* line = session.promptLine(pane_id);
-
-    return line == nullptr ? std::string_view{} : line->suggestion(session.promptHistory());
+    return application::prompt::suggestion(store_.session(), pane_id);
   }
 
-  application::CommandPresence PromptController::commandPresence(std::uint64_t pane_id, std::string_view word) {
+  application::prompt::CommandPresence PromptController::commandPresence(std::uint64_t pane_id, std::string_view word) {
     try {
-      return store_.session().commandPresence(pane_id, word);
+      return application::prompt::commandPresence(store_.session(), pane_id, word);
     } catch (const std::exception&) {
-      return application::CommandPresence::unknown;
+      return application::prompt::CommandPresence::unknown;
     }
   }
 
@@ -64,16 +61,17 @@ namespace telar::gui::qt {
     return application::terminal::copy_mode::view(store_.session()).state();
   }
 
-  bool PromptController::key(std::uint64_t pane_id, const prompt::KeyPress& key) {
+  bool PromptController::key(std::uint64_t pane_id, const application::prompt::KeyPress& key) {
+    using application::prompt::Outcome;
     auto& session = store_.session();
 
     try {
-      const auto outcome = session.promptKey(pane_id, key);
-      if (outcome == prompt::Outcome::terminal) {
+      const auto outcome = application::prompt::key(session, pane_id, key);
+      if (outcome == Outcome::terminal) {
         return false;
       }
 
-      if (outcome == prompt::Outcome::search_history) {
+      if (outcome == Outcome::search_history) {
         emit historyRequested();
         return true;
       }
@@ -100,13 +98,13 @@ namespace telar::gui::qt {
 
   bool PromptController::text(std::uint64_t pane_id, const QString& text) {
     auto& session = store_.session();
-    if (!session.editsPrompt(pane_id)) {
+    if (!application::prompt::edits(session, pane_id)) {
       return false;
     }
 
     const auto bytes = text.toUtf8();
 
-    session.promptText(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    application::prompt::text(session, pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     publishWrite();
     return true;
   }
@@ -117,7 +115,7 @@ namespace telar::gui::qt {
   }
 
   void PromptController::publishWrite() {
-    if (const auto pane_id = store_.session().takePromptWrite()) {
+    if (const auto pane_id = application::prompt::takeWrite(store_.session())) {
       publish(*pane_id);
     }
   }

@@ -114,8 +114,8 @@ namespace telar::gui::qt {
     QString seed;
 
     const auto line_pane = store_.dialog().line_search_pane;
-    if (const auto* line = line_pane == 0 ? nullptr : session.promptLine(line_pane)) {
-      seed = toQString(line->editor().text().view());
+    if (const auto line = line_pane == 0 ? std::nullopt : application::prompt::line(session, line_pane)) {
+      seed = toQString(line->text());
       seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
     }
 

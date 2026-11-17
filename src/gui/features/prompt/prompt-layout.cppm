@@ -1,4 +1,4 @@
-export module telar.gui.prompt.layout;
+export module telar.gui.features.prompt:layout;
 
 import std;
 
@@ -7,7 +7,7 @@ import telar.shell.syntax;
 // Places the command on the line's cell grid: runs of one style per row, wrapping at the
 // line's width so nothing is ever cut, and where the caret and the selection fall. Pure, so
 // the view repaints from it and tests check it.
-export namespace telar::gui::prompt {
+export namespace telar::gui::features::prompt {
 
   enum class Style : std::uint8_t {
     plain,

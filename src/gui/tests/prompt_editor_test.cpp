@@ -7,24 +7,72 @@ static_assert(true);
 #include <cstdlib>
 
 import std;
-import telar.gui.prompt.editor;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.layout;
+import telar.gui.features.prompt;
+import telar.gui.foundation.core;
+import telar.shell.syntax;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
 
-using namespace telar::gui::prompt;
+using namespace telar::gui::features::prompt;
 
 namespace {
 
-  const telar::gui::prompt::Editor* current = nullptr;
+  namespace feature = telar::gui::features::prompt;
+
+  // The editor the assertions drive: one pane's line at the shell's prompt, through the feature's
+  // use cases, with no bindings of the user's; every read goes through its LineView.
+  class Editor {
+  public:
+    explicit Editor(Keymap keymap = Keymap::emacs) {
+      static_cast<void>(feature::open(state_, pane_id, keymap));
+    }
+
+    Outcome press(const KeyPress& key) {
+      return feature::press(state_, line(), Surface::editor, key, configuration_, telar::shell::Dialect::posix);
+    }
+
+    // `command` replaces the line, the caret at its end.
+    void write(std::string_view command) {
+      feature::write(state_, line(), command);
+    }
+
+    // Text pasted at the caret.
+    void insert(std::string_view text) {
+      feature::insert(state_, line(), text);
+    }
+
+    void setClipboard(Clipboard clipboard) {
+      feature::useClipboard(line(), std::move(clipboard));
+    }
+
+    [[nodiscard]] LineView view() const {
+      return *feature::line(state_, pane_id);
+    }
+
+    // What the line handed its owner with its last key.
+    [[nodiscard]] std::string_view delivery() {
+      return feature::delivery(line());
+    }
+
+  private:
+    static constexpr std::uint64_t pane_id = 1;
+
+    PaneLine& line() {
+      return *feature::find(state_, pane_id);
+    }
+
+    State state_;
+    telar::gui::PromptConfiguration configuration_;
+  };
+
+  const Editor* current = nullptr;
 
   void require(bool condition, std::string_view message, std::source_location location = std::source_location::current()) {
     if (!condition) {
       if (current != nullptr) {
-        const auto value = current->text().view();
+        const auto value = current->view().text();
 
-        std::fprintf(stderr, "text: [%.*s] cursor %zu\n", static_cast<int>(value.size()), value.data(), current->text().cursor());
+        std::fprintf(stderr, "text: [%.*s] cursor %zu\n", static_cast<int>(value.size()), value.data(), current->view().cursor());
       }
 
       std::fprintf(stderr, "%s:%u: %.*s\n", location.file_name(), location.line(), static_cast<int>(message.size()), message.data());
@@ -33,10 +81,10 @@ namespace {
   }
 
   // Types `keys` one by one: printable characters as themselves, `\x1b` as Escape and `\r` as
-  // Enter. Returns the last request.
-  Request type(Editor& editor, std::string_view keys) {
+  // Enter. Returns the last outcome.
+  Outcome type(Editor& editor, std::string_view keys) {
     current = &editor;
-    Request last = Request::none;
+    Outcome last = Outcome::edited;
 
     for (std::size_t index = 0; index < keys.size(); ++index) {
       const auto byte = keys[index];
@@ -52,48 +100,75 @@ namespace {
     return last;
   }
 
-  Request control(Editor& editor, char key) {
+  Outcome control(Editor& editor, char key) {
     return editor.press({Key::character, static_cast<char32_t>(key), {.control = true}});
   }
 
-  Request meta(Editor& editor, char key) {
+  Outcome meta(Editor& editor, char key) {
     return editor.press({Key::character, static_cast<char32_t>(key), {.alt = true}});
   }
 
   std::string_view text(const Editor& editor) {
-    return editor.text().view();
+    return editor.view().text();
+  }
+
+  std::size_t cursor(const Editor& editor) {
+    return editor.view().cursor();
   }
 
   void textModel() {
-    Text value;
+    Editor value{Keymap::vim};
 
-    value.insert("git ", true);
-    value.insert("status", true);
-    require(value.view() == "git status", "typing appends");
-    require(value.undo() && value.view().empty(), "one undo removes a run of typing");
-    require(value.redo() && value.view() == "git status", "redo restores it");
+    type(value, "git ");
+    type(value, "status");
+    require(text(value) == "git status", "typing appends");
+    require(type(value, "\x1bu") == Outcome::edited && text(value).empty(), "one undo removes a run of typing");
+    require(control(value, 'r') == Outcome::edited && text(value) == "git status", "redo restores it");
 
-    value.assign("café 🙂");
-    value.moveTo(value.size());
-    value.moveTo(value.previous(value.cursor()));
-    require(value.view().substr(value.cursor()) == "🙂", "moves by code point");
-    value.moveTo(4);
-    require(value.cursor() == 3, "a cursor never splits a code point");
+    Editor moving;
 
-    value.assign("one\ntwo\nthree");
-    require(value.lineCount() == 3 && value.lineOf(5) == 1, "counts lines");
-    require(value.lineStart(5) == 4 && value.lineEnd(5) == 7, "finds line bounds");
-    require(value.atColumn(8, 2) == 10, "keeps a column");
+    moving.write("café 🙂");
+    moving.press({Key::left});
+    require(text(moving).substr(cursor(moving)) == "🙂", "moves by code point");
+    moving.press({Key::left});
+    moving.press({Key::left});
+    require(cursor(moving) == 3, "a cursor never splits a code point");
 
-    const std::string huge(Text::capacity + 1, 'x');
-    Text bounded;
+    // Up and Down keep the column they started from until the next Up or Down, so the line's
+    // column is set by moving across it first.
+    Editor lines;
 
-    require(!bounded.replace(0, 0, huge) && bounded.empty(), "refuses text beyond the capacity");
+    lines.write("one\ntwo\nthree");
+    control(lines, 'a');
+    lines.press({Key::left});
+    lines.press({Key::left});
+    lines.press({Key::down});
+    require(cursor(lines) == 10, "keeps a column");
+    control(lines, 'a');
+    lines.press({Key::left});
+    control(lines, 'a');
+    const auto start = cursor(lines);
+
+    control(lines, 'e');
+    require(start == 4 && cursor(lines) == 7, "finds line bounds");
+    lines.press({Key::down});
+    lines.press({Key::up});
+    lines.press({Key::up});
+    require(cursor(lines) < 4, "counts lines");
+
+    // The text a line holds stops at 256 KiB, as Text::capacity says.
+    const std::string huge(std::size_t{256} * 1024 + 1, 'x');
+    Editor bounded;
+
+    bounded.insert(huge);
+    require(text(bounded).empty(), "refuses text beyond the capacity");
   }
 
   void emacs() {
     Editor editor;
 
+    type(editor, "echo first");
+    require(editor.press({Key::enter}) == Outcome::run && editor.delivery() == "echo first" && text(editor).empty(), "Enter asks to submit");
     type(editor, "git commit -m wip");
     require(text(editor) == "git commit -m wip", "types");
     control(editor, 'w');
@@ -101,9 +176,9 @@ namespace {
     control(editor, 'y');
     require(text(editor) == "git commit -m wip", "Ctrl-Y yanks it back");
     control(editor, 'a');
-    require(editor.text().cursor() == 0, "Ctrl-A goes to the line start");
+    require(cursor(editor) == 0, "Ctrl-A goes to the line start");
     meta(editor, 'f');
-    require(editor.text().cursor() == 3, "Alt-F moves past a word");
+    require(cursor(editor) == 3, "Alt-F moves past a word");
     control(editor, 'k');
     require(text(editor) == "git", "Ctrl-K kills to the end");
     control(editor, 'e');
@@ -112,27 +187,30 @@ namespace {
     require(text(editor) == "gist", "Ctrl-T transposes");
     control(editor, 'u');
     require(text(editor).empty(), "Ctrl-U kills to the line start");
-    require(control(editor, 'd') == Request::end_of_file, "Ctrl-D on an empty line is end of file");
+    require(control(editor, 'd') == Outcome::bytes && editor.delivery() == "\x04", "Ctrl-D on an empty line is end of file");
 
     type(editor, "for f in *; do");
-    require(editor.press({Key::enter}) == Request::submit, "Enter asks to submit");
-    editor.newline();
+    require(editor.press({Key::enter}) == Outcome::edited && text(editor) == "for f in *; do\n", "Enter continues a command the shell would read more of");
     type(editor, "  echo $f");
     editor.press({Key::enter, 0, {.alt = true}});
     require(text(editor) == "for f in *; do\n  echo $f\n", "Alt-Enter inserts a newline");
     type(editor, "done");
-    require(editor.press({Key::up}) == Request::none && editor.text().lineOf(editor.text().cursor()) == 1, "Up moves to the line above");
+    require(editor.press({Key::up}) == Outcome::edited && cursor(editor) == 19, "Up moves to the line above");
     editor.press({Key::up});
-    require(editor.press({Key::up}) == Request::history_previous, "Up on the first line reaches the history");
+    require(editor.press({Key::up}) == Outcome::edited && text(editor) == "echo first", "Up on the first line reaches the history");
+    editor.press({Key::down});
+    require(text(editor) == "for f in *; do\n  echo $f\ndone", "Down past the history comes back to the line");
+    editor.press({Key::up});
+    editor.press({Key::up});
     editor.press({Key::end});
     editor.press({Key::left, 0, {.shift = true}});
     editor.press({Key::left, 0, {.shift = true}});
-    require(editor.text().selecting(), "Shift extends a selection");
+    require(editor.view().anchor() != cursor(editor), "Shift extends a selection");
     type(editor, "XX");
     require(text(editor).starts_with("for f in *; XX\n"), "typing replaces the selection");
-    require(control(editor, 'c') == Request::cancel, "Ctrl-C cancels");
-    require(editor.press({Key::tab}) == Request::complete, "Tab completes");
-    require(control(editor, 'r') == Request::history_search, "Ctrl-R searches the history");
+    require(control(editor, 'c') == Outcome::edited && text(editor).empty(), "Ctrl-C cancels");
+    require(editor.press({Key::tab}) == Outcome::complete, "Tab completes");
+    require(control(editor, 'r') == Outcome::search_history, "Ctrl-R searches the history");
   }
 
   Editor vim(std::string_view initial) {
@@ -146,27 +224,27 @@ namespace {
   void vimBasics() {
     auto editor = vim("git switch main");
 
-    require(editor.mode() == Mode::normal && editor.text().cursor() == 14, "Escape enters normal mode on the last character");
+    require(editor.view().mode() == Mode::normal && cursor(editor) == 14, "Escape enters normal mode on the last character");
     type(editor, "0");
-    require(editor.text().cursor() == 0, "0 goes to the line start");
+    require(cursor(editor) == 0, "0 goes to the line start");
     type(editor, "w");
-    require(editor.text().cursor() == 4, "w moves to the next word");
+    require(cursor(editor) == 4, "w moves to the next word");
     type(editor, "e");
-    require(editor.text().cursor() == 9, "e moves to the end of the word");
+    require(cursor(editor) == 9, "e moves to the end of the word");
     type(editor, "b");
-    require(editor.text().cursor() == 4, "b moves back to the word start");
+    require(cursor(editor) == 4, "b moves back to the word start");
     type(editor, "$");
-    require(editor.text().cursor() == 14, "$ goes to the last character");
+    require(cursor(editor) == 14, "$ goes to the last character");
     type(editor, "^");
-    require(editor.text().cursor() == 0, "^ goes to the first non-blank");
+    require(cursor(editor) == 0, "^ goes to the first non-blank");
     type(editor, "fm");
-    require(editor.text().cursor() == 11, "f finds a character");
+    require(cursor(editor) == 11, "f finds a character");
     type(editor, "0tw");
-    require(editor.text().cursor() == 4, "t stops before a character");
+    require(cursor(editor) == 4, "t stops before a character");
     type(editor, "0ti;");
-    require(editor.text().cursor() == 5, "; repeats t past the character it stopped at");
-    require(type(editor, "\r") == Request::submit, "Enter in normal mode submits");
-    require(type(editor, "k") == Request::history_previous, "k on the first line reaches the history");
+    require(cursor(editor) == 5, "; repeats t past the character it stopped at");
+    require(type(editor, "\r") == Outcome::run && editor.delivery() == "git switch main", "Enter in normal mode submits");
+    require(type(editor, "\x1bk") == Outcome::edited && text(editor) == "git switch main", "k on the first line reaches the history");
   }
 
   void vimOperators() {
@@ -179,7 +257,7 @@ namespace {
     control(editor, 'r');
     require(text(editor) == "switch main", "Ctrl-R redoes");
     type(editor, "u0wcwrestore\x1b");
-    require(text(editor) == "git restore main" && editor.mode() == Mode::normal, "cw changes to the word end");
+    require(text(editor) == "git restore main" && editor.view().mode() == Mode::normal, "cw changes to the word end");
     type(editor, "0w.");
     require(text(editor) == "git restore main", "a repeated cw on the same word keeps it");
     type(editor, "$ciwdev\x1b");
@@ -216,13 +294,13 @@ namespace {
 
     type(editor, "one\ntwo\nthree");
     type(editor, "\x1bgg");
-    require(editor.text().cursor() == 0, "gg goes to the first line");
+    require(cursor(editor) == 0, "gg goes to the first line");
     type(editor, "yyjp");
     require(text(editor) == "one\ntwo\none\nthree", "yy and p copy a line below");
     type(editor, "dd");
     require(text(editor) == "one\ntwo\nthree", "dd deletes the line");
     type(editor, "G");
-    require(editor.text().lineOf(editor.text().cursor()) == 2, "G goes to the last line");
+    require(cursor(editor) >= 8, "G goes to the last line");
     type(editor, "ggJ");
     require(text(editor) == "one two\nthree", "J joins lines");
     type(editor, "ofour\x1b");

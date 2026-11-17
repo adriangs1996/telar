@@ -14,7 +14,7 @@ static_assert(true);
 #include <algorithm>
 #include <exception>
 
-import telar.gui.prompt.editor;
+import telar.gui.application;
 import telar.shell.syntax;
 
 namespace telar::gui::qt {
@@ -122,7 +122,7 @@ namespace telar::gui::qt {
   }
 
   void PromptEditorItem::setMaximumColumns(int columns) {
-    columns = std::max(columns, static_cast<int>(prompt::Layout::indent) + 4);
+    columns = std::max(columns, static_cast<int>(application::prompt::Layout::indent) + 4);
     if (maximum_columns_ != columns) {
       maximum_columns_ = columns;
       refresh();
@@ -143,14 +143,14 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::surface() const {
-    switch (static_cast<prompt::Surface>(surface_)) {
-    case prompt::Surface::editor:
+    switch (static_cast<application::prompt::Surface>(surface_)) {
+    case application::prompt::Surface::editor:
       return QStringLiteral("editor");
-    case prompt::Surface::running:
+    case application::prompt::Surface::running:
       return QStringLiteral("running");
-    case prompt::Surface::secret:
+    case application::prompt::Surface::secret:
       return QStringLiteral("secret");
-    case prompt::Surface::none:
+    case application::prompt::Surface::none:
       break;
     }
 
@@ -158,19 +158,19 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::mode() const {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
-    if (line == nullptr || line->editor().keymap() == prompt::Keymap::emacs) {
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    if (!line || line->keymap() == application::prompt::Keymap::emacs) {
       return QStringLiteral("emacs");
     }
 
-    switch (line->editor().mode()) {
-    case prompt::Mode::insert:
+    switch (line->mode()) {
+    case application::prompt::Mode::insert:
       return QStringLiteral("insert");
-    case prompt::Mode::normal:
+    case application::prompt::Mode::normal:
       return QStringLiteral("normal");
-    case prompt::Mode::visual:
+    case application::prompt::Mode::visual:
       return QStringLiteral("visual");
-    case prompt::Mode::visual_line:
+    case application::prompt::Mode::visual_line:
       return QStringLiteral("visual-line");
     }
 
@@ -207,9 +207,9 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::queued() const noexcept {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
 
-    return line != nullptr && line->queued();
+    return line.has_value() && line->queued();
   }
 
   bool PromptEditorItem::cursorHidden() const noexcept {
@@ -217,15 +217,15 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::answering() const noexcept {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
 
-    return line != nullptr && line->answering();
+    return line.has_value() && line->answering();
   }
 
   int PromptEditorItem::secretKeys() const noexcept {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
 
-    return line == nullptr ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), 64));
+    return !line ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), 64));
   }
 
   bool PromptEditorItem::failed() const noexcept {
@@ -239,7 +239,7 @@ namespace telar::gui::qt {
   static constexpr int menu_page = 8;
 
   // The page of the menu that holds the selected choice.
-  static std::pair<std::size_t, std::size_t> menuPage(const prompt::Menu& menu) {
+  static std::pair<std::size_t, std::size_t> menuPage(const application::prompt::Menu& menu) {
     const auto first = menu.selected / menu_page * menu_page;
 
     return {first, std::min(menu.choices.size(), first + menu_page)};
@@ -248,23 +248,23 @@ namespace telar::gui::qt {
   // QML reads the choices on every state change, which a pane's output sends with each frame: the
   // list is rebuilt only when the line's menu or text moved on.
   QVariantList PromptEditorItem::choices() const {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
-    if (line == nullptr || !line->menu()) {
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    if (!line || !line->menu()) {
       choices_line_ = nullptr;
       return {};
     }
 
-    if (choices_line_ == line && choices_revision_ == line->revision()) {
+    if (choices_line_ == line->identity() && choices_revision_ == line->revision()) {
       return choices_;
     }
 
-    choices_line_ = line;
+    choices_line_ = line->identity();
     choices_revision_ = line->revision();
     QVariantList result;
     const auto& menu = *line->menu();
     const auto [first, last] = menuPage(menu);
     // The letters of each choice that what was typed matches, in order, for the menu to mark.
-    const auto text = line->editor().text().view();
+    const auto text = line->text();
     const auto typed = menu.begin < menu.end && menu.end <= text.size() ? text.substr(menu.begin, menu.end - menu.begin) : std::string_view{};
     const auto fold = [](char byte) {
       return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte + ('a' - 'A')) : byte;
@@ -309,8 +309,8 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::choice() const noexcept {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
-    if (line == nullptr || !line->menu()) {
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    if (!line || !line->menu()) {
       return -1;
     }
 
@@ -318,8 +318,8 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::menuLabel() const {
-    const auto* line = controller_ == nullptr ? nullptr : controller_->line(pane_id_);
-    if (line == nullptr || !line->menu()) {
+    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    if (!line || !line->menu()) {
       return {};
     }
 
@@ -522,14 +522,14 @@ namespace telar::gui::qt {
     failed_ = pane != nullptr && pane->shell.commands != 0 && pane->shell.status != 0;
     maximum_rows_ = std::max<int>(1, controller_->configuration().prompt.max_lines);
 
-    const auto* line = controller_->line(pane_id_);
-    const auto text = line == nullptr ? std::string_view{} : line->editor().text().view();
-    const auto cursor = line == nullptr ? 0 : line->editor().text().cursor();
-    const auto anchor = line == nullptr ? 0 : line->editor().text().anchor();
+    const auto line = controller_->line(pane_id_);
+    const auto text = !line ? std::string_view{} : line->text();
+    const auto cursor = !line ? 0 : line->cursor();
+    const auto anchor = !line ? 0 : line->anchor();
     const auto composing = preedit_.toUtf8();
     const bool moving = controller_->configuration().prompt.motion != PromptMotion::none;
 
-    track(text, moving && composing.isEmpty() && static_cast<prompt::Surface>(surface_) == prompt::Surface::editor);
+    track(text, moving && composing.isEmpty() && static_cast<application::prompt::Surface>(surface_) == application::prompt::Surface::editor);
     display_.assign(text.substr(0, cursor));
     display_.append(composing.constData(), static_cast<std::size_t>(composing.size()));
     display_.append(text.substr(cursor));
@@ -546,28 +546,28 @@ namespace telar::gui::qt {
     }
 
     display_.append(ghost);
-    styles_.assign(display_.size(), prompt::Style::plain);
+    styles_.assign(display_.size(), application::prompt::Style::plain);
     // What was typed alone: the word at its end is still being typed, whatever the suggestion
     // after it would make of it.
-    prompt::classify(std::string_view{display_}.substr(0, typed), std::span{styles_}.first(typed), shell::Syntax{.dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
-    std::fill_n(styles_.begin() + static_cast<std::ptrdiff_t>(cursor), composing.size(), prompt::Style::pending);
-    std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(typed), styles_.end(), prompt::Style::ghost);
+    application::prompt::classify(std::string_view{display_}.substr(0, typed), std::span{styles_}.first(typed), shell::Syntax{.dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
+    std::fill_n(styles_.begin() + static_cast<std::ptrdiff_t>(cursor), composing.size(), application::prompt::Style::pending);
+    std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(typed), styles_.end(), application::prompt::Style::ghost);
     // A command the shell does not run is marked; one the runtime is still looking for waits.
     for (std::size_t start = 0; start < typed;) {
-      if (styles_[start] != prompt::Style::command) {
+      if (styles_[start] != application::prompt::Style::command) {
         ++start;
         continue;
       }
 
       auto end = start;
 
-      while (end < typed && styles_[end] == prompt::Style::command) {
+      while (end < typed && styles_[end] == application::prompt::Style::command) {
         ++end;
       }
 
       const auto presence = controller_->commandPresence(pane_id_, std::string_view{display_}.substr(start, end - start));
-      if (presence == application::CommandPresence::missing || presence == application::CommandPresence::pending) {
-        std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(start), styles_.begin() + static_cast<std::ptrdiff_t>(end), presence == application::CommandPresence::missing ? prompt::Style::missing : prompt::Style::pending);
+      if (presence == application::prompt::CommandPresence::missing || presence == application::prompt::CommandPresence::pending) {
+        std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(start), styles_.begin() + static_cast<std::ptrdiff_t>(end), presence == application::prompt::CommandPresence::missing ? application::prompt::Style::missing : application::prompt::Style::pending);
       }
 
       start = end;
@@ -590,14 +590,14 @@ namespace telar::gui::qt {
     const auto mark = shifted(anchor);
     const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_ == laid_.display && styles_ == laid_.styles && groups_ == laid_.groups && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
     if (unchanged) {
-      if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line != nullptr) {
+      if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.has_value()) {
         emit stateChanged();
       }
 
       return;
     }
 
-    layout_ = prompt::layout(display_, styles_, caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_);
+    layout_ = application::prompt::layout(display_, styles_, caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_);
     laid_.display.assign(display_);
     laid_.styles.assign(styles_.begin(), styles_.end());
     laid_.groups.assign(groups_.begin(), groups_.end());
@@ -622,7 +622,7 @@ namespace telar::gui::qt {
 
     ++revision_;
     emit layoutChanged();
-    if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line != nullptr) {
+    if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.has_value()) {
       emit stateChanged();
     }
 
@@ -687,7 +687,7 @@ namespace telar::gui::qt {
               glows.push_back(QVariantMap{{QStringLiteral("x"), run.column * width}, {QStringLiteral("y"), (static_cast<int>(run.row) - first_row_) * height}, {QStringLiteral("width"), run.columns * width}, {QStringLiteral("height"), height}, {QStringLiteral("strength"), 1 - progress}});
             }
           }
-        } else if (run.style == prompt::Style::ghost && ghost_started_ms_ >= 0) {
+        } else if (run.style == application::prompt::Style::ghost && ghost_started_ms_ >= 0) {
           opacity = std::clamp(static_cast<qreal>(now - ghost_started_ms_) / ghost_ms, 0.0, 1.0);
         }
 
@@ -705,20 +705,20 @@ namespace telar::gui::qt {
     }
   }
 
-  QColor PromptEditorItem::styleColor(prompt::Style style) const {
+  QColor PromptEditorItem::styleColor(application::prompt::Style style) const {
     return style_colors_[static_cast<std::size_t>(style)];
   }
 
   void PromptEditorItem::cacheColors() {
     for (std::size_t index = 0; index < style_colors_.size(); ++index) {
-      style_colors_[index] = roleColor(static_cast<prompt::Style>(index));
+      style_colors_[index] = roleColor(static_cast<application::prompt::Style>(index));
     }
 
     accent_ = colors_.value(QStringLiteral("accent")).value<QColor>();
     underline_ = colors_.value(QStringLiteral("overlay1")).value<QColor>();
   }
 
-  QColor PromptEditorItem::roleColor(prompt::Style style) const {
+  QColor PromptEditorItem::roleColor(application::prompt::Style style) const {
     const auto role = [&](const char* name, const char* fallback) {
       const auto value = colors_.value(QString::fromLatin1(name));
 
@@ -728,32 +728,32 @@ namespace telar::gui::qt {
     // Shell syntax takes the theme's syntax roles, so the prompt reads like the shell in the
     // editor; pending, error, missing and ghost text are editor states in chrome colors.
     switch (style) {
-    case prompt::Style::command:
+    case application::prompt::Style::command:
       return role("syntax_func", "foreground");
-    case prompt::Style::option:
-    case prompt::Style::variable:
+    case application::prompt::Style::option:
+    case application::prompt::Style::variable:
       return role("syntax_parameter", "foreground");
-    case prompt::Style::string:
+    case application::prompt::Style::string:
       return role("syntax_string", "foreground");
-    case prompt::Style::operator_:
+    case application::prompt::Style::operator_:
       return role("syntax_operator", "muted");
-    case prompt::Style::keyword:
+    case application::prompt::Style::keyword:
       return role("syntax_keyword", "accent");
-    case prompt::Style::comment:
+    case application::prompt::Style::comment:
       return role("syntax_comment", "muted");
-    case prompt::Style::pending:
+    case application::prompt::Style::pending:
       return role("subtext0", "muted");
-    case prompt::Style::error:
-    case prompt::Style::missing:
+    case application::prompt::Style::error:
+    case application::prompt::Style::missing:
       return role("red", "failure");
-    case prompt::Style::ghost: {
+    case application::prompt::Style::ghost: {
       auto color = role("overlay1", "muted");
 
       color.setAlphaF(color.alphaF() * 0.7F);
       return color;
     }
-    case prompt::Style::path:
-    case prompt::Style::plain:
+    case application::prompt::Style::path:
+    case application::prompt::Style::plain:
       break;
     }
 
@@ -968,11 +968,11 @@ namespace telar::gui::qt {
     const auto pixel = 1.0 / scale_;
 
     for (const auto& run : layout_.runs) {
-      if ((run.style != prompt::Style::missing && run.style != prompt::Style::path) || !visible(run.row)) {
+      if ((run.style != application::prompt::Style::missing && run.style != application::prompt::Style::path) || !visible(run.row)) {
         continue;
       }
 
-      const bool wavy = run.style == prompt::Style::missing;
+      const bool wavy = run.style == application::prompt::Style::missing;
       const auto left = run.column * width;
       const auto right = (run.column + run.columns) * width;
       const auto baseline = (static_cast<int>(run.row) - first_row_ + 1) * height - 2 * pixel;

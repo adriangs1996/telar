@@ -25,7 +25,6 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.layout.snapshots;
 import telar.gui.application;
-import telar.gui.prompt.layout;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.gui.foundation.model;

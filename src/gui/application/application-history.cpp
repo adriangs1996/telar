@@ -5,7 +5,6 @@ import std;
 import :access;
 import telar.base.memory.allocators;
 import telar.gui.features.history;
-import telar.gui.prompt.editor;
 import telar.wire.history;
 import telar.wire.vocabulary;
 
@@ -124,14 +123,10 @@ namespace telar::gui::application::history {
 
     const auto runs = session.configuration().history.enter_runs != alternate;
 
-    if (session.editsPrompt(pane->id)) {
-      auto& text = Access::editorLine(session, pane->id).editor().text();
-
-      text.assign(command);
-      text.moveTo(text.size());
-      Access::notePromptWrite(session, pane->id);
+    if (prompt::edits(session, pane->id)) {
+      prompt::write(session, pane->id, command);
       if (runs) {
-        session.promptKey(pane->id, prompt::KeyPress{prompt::Key::enter});
+        prompt::key(session, pane->id, prompt::KeyPress{prompt::Key::enter});
       }
 
       return;

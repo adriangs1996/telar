@@ -1,4 +1,4 @@
-export module telar.gui.prompt.routing;
+export module telar.gui.features.prompt:routing;
 
 import std;
 
@@ -7,7 +7,7 @@ import telar.wire.pane_io;
 // Who gets the keyboard of a pane in telar's prompt mode, from what the runtime reports about
 // its shell. Anything uncertain falls back to the terminal as it is today: telar's editor only
 // takes keys when the integrated shell is provably reading a command.
-export namespace telar::gui::prompt {
+export namespace telar::gui::features::prompt {
 
   enum class Surface : std::uint8_t {
     // The terminal as usual: classic mode, no integrated shell, or a full-screen or raw program.

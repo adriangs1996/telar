@@ -17,7 +17,6 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
-import telar.gui.prompt.routing;
 
 namespace telar::gui::qt {
 
@@ -69,7 +68,7 @@ namespace telar::gui::qt {
     if (kind == Dialog::copy_search && copy) {
       line_search_pane = copy->pane_id;
     } else {
-      line_search_pane = searching && focused != nullptr && store_.session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
+      line_search_pane = searching && focused != nullptr && application::prompt::surface(store_.session(), focused->id) == application::prompt::Surface::editor ? focused->id : 0;
     }
 
     store_.setDialog(kind, line_search_pane);

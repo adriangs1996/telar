@@ -133,7 +133,7 @@ target_compile_options(gui-palette-test PRIVATE -ffp-contract=off)
 
 telar_add_test(gui-worktree-actions-test SOURCES worktree_actions_test.cpp LIBRARIES gui-application gui-test-fixtures
   TEST gui-worktree-actions LABELS gui.application)
-telar_add_test(gui-workspace-navigation-test SOURCES workspace_navigation_test.cpp LIBRARIES gui-foundation-model gui-layout gui-prompt gui-application gui-test-fixtures
+telar_add_test(gui-workspace-navigation-test SOURCES workspace_navigation_test.cpp LIBRARIES gui-foundation-model gui-layout gui-application gui-test-fixtures
   TEST gui-workspace-navigation LABELS gui.application)
 
 telar_add_test(gui-agent-peek-test SOURCES agent_peek_test.cpp LIBRARIES gui-foundation-core gui-core gui-features-peek gui-presentation gui-application gui-test-fixtures
@@ -152,10 +152,10 @@ telar_add_test(gui-path-picker-test SOURCES path_picker_test.cpp LIBRARIES gui-f
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-core gui-features-palette gui-input gui-presentation deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.suggestions)
 
-telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES gui-prompt
+telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES gui-features-prompt
   TEST gui-prompt-editor LABELS gui.prompt)
 
-telar_add_test(gui-prompt-session-test SOURCES prompt_session_test.cpp LIBRARIES gui-foundation-core gui-core gui-prompt gui-application gui-test-fixtures
+telar_add_test(gui-prompt-session-test SOURCES prompt_session_test.cpp LIBRARIES gui-foundation-core gui-core gui-application gui-test-fixtures
   TEST gui-prompt-session LABELS gui.prompt)
 
 telar_add_test(gui-suggestion-session-test SOURCES suggestion_session_test.cpp LIBRARIES gui-features-palette gui-application gui-test-fixtures

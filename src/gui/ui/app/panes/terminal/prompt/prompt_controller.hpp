@@ -17,9 +17,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.prompt.editor;
-import telar.gui.prompt.line;
-import telar.gui.prompt.routing;
 
 namespace telar::gui::qt {
 
@@ -45,13 +42,13 @@ namespace telar::gui::qt {
     PromptController(PromptController&&) = delete;
     PromptController& operator=(PromptController&&) = delete;
 
-    [[nodiscard]] prompt::Surface surface(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] application::prompt::Surface surface(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] bool edits(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] bool hidesTerminalCursor(std::uint64_t pane_id) const noexcept;
-    [[nodiscard]] const prompt::Line* line(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] std::optional<application::prompt::LineView> line(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] std::string_view suggestion(std::uint64_t pane_id) const noexcept;
     // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
-    [[nodiscard]] application::CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
+    [[nodiscard]] application::prompt::CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
     // The command block selected in the pane, by index among its blocks.
     [[nodiscard]] std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
@@ -62,7 +59,7 @@ namespace telar::gui::qt {
 
     // The keys and text telar's command editor takes. False hands the key or the text back to the
     // terminal.
-    bool key(std::uint64_t pane_id, const prompt::KeyPress& key);
+    bool key(std::uint64_t pane_id, const application::prompt::KeyPress& key);
     bool text(std::uint64_t pane_id, const QString& text);
     // The pane's line moved: its editors refresh, then lineChanged tells the terminal.
     void publish(qulonglong pane_id);

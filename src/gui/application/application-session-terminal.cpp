@@ -4,20 +4,17 @@ import std;
 import telar.gui.foundation.terminal;
 import telar.render.document;
 import telar.gui.foundation.core;
+import telar.gui.features.prompt;
 import telar.gui.features.terminal.graphics;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.prompt.line;
 import telar.base.text;
-import telar.gui.prompt.layout;
 import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.gui.prompt.routing;
-import telar.gui.prompt.editor;
 import telar.shell.syntax;
 
 namespace telar::gui::application {
@@ -28,15 +25,9 @@ namespace telar::gui::application {
       return;
     }
 
-    if (source == PaneInputSource::keyboard && promptSurface(pane_id) == prompt::Surface::secret) {
-      const auto byte = static_cast<unsigned char>(bytes.front());
-      auto& line = lineEntry(pane_id).line;
-
-      if (byte == 0x7f || byte == 0x08 || byte == 0x15) {
-        line.clearSecret();
-      } else if (byte >= 0x20) {
-        line.countSecretKey();
-      }
+    // A key typed into a secret prompt shows as one more dot in the prompt's line.
+    if (source == PaneInputSource::keyboard && prompt::surface(*this, pane_id) == features::prompt::Surface::secret) {
+      prompt::typeSecret(*this, pane_id, bytes.front());
     }
 
     if (source == PaneInputSource::keyboard || source == PaneInputSource::key_release) {
@@ -213,9 +204,9 @@ namespace telar::gui::application {
         features::terminal::copy_mode::follow(copy_mode_, previous_offset, copyGrid(pane->screen));
       }
 
-      if (const auto line = lines_.find(pane->id); line != lines_.end()) {
-        line->second.output = now_();
-      }
+      features::prompt::output(prompt_, pane->id, [this] {
+        return now_();
+      });
 
       pane->snapshot_requested = false;
       if (const auto prompt = livePromptRow(*pane)) {
@@ -317,17 +308,7 @@ namespace telar::gui::application {
     if (chrome_changed_) {
       ++chrome_revision_;
     }
-    if (const auto found = lines_.find(pane->id); found != lines_.end()) {
-      auto& line = found->second.line;
-
-      if (message.phase != ShellPhase::running || message.echo) {
-        line.clearSecret();
-      }
-
-      if (previous.phase == ShellPhase::running && message.phase == ShellPhase::prompt) {
-        deliverPrompt(pane->id, line.promptReturned(message.commands != previous.commands && message.status == 0), line);
-      }
-    }
+    prompt::follow(*this, pane->id, previous, message);
 
     changed_pane_ = pane->id;
     return Change::terminal;
@@ -494,6 +475,34 @@ namespace telar::gui::application {
 
   Change Session::apply(const PaneMatches& message) {
     return terminal::copy_mode::receive(*this, message);
+  }
+
+  bool Session::takeChromeChange() noexcept {
+    return std::exchange(chrome_changed_, false);
+  }
+
+  void Session::paste(std::uint64_t pane_id, std::string_view bytes) {
+    if (features::terminal::copy_mode::view(copy_mode_).active()) {
+      return;
+    }
+
+    if (prompt::edits(*this, pane_id)) {
+      prompt::text(*this, pane_id, bytes);
+      return;
+    }
+
+    pasteBytes(pane_id, bytes);
+  }
+
+  void Session::pasteBytes(std::uint64_t pane_id, std::string_view bytes) {
+    const auto* pane = findPane(pane_id);
+    if (pane == nullptr) {
+      return;
+    }
+
+    BracketedPaste::encode(bytes, pane->screen.modes().bracketed_paste, [&](std::string_view piece) {
+      input(pane_id, piece);
+    });
   }
 
 }
