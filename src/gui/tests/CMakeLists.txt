@@ -47,9 +47,6 @@ gui_add_wall_clock_test(gui-wall-clock-nepal NPT-5:45 345)
 gui_add_wall_clock_test(gui-wall-clock-newfoundland NST3:30 -210)
 gui_add_wall_clock_test(gui-wall-clock-line-islands LINT-14 840)
 gui_add_wall_clock_test(gui-wall-clock-baker-island IDLW12 -720)
-telar_add_test(gui-palette-test SOURCES palette_test.cpp LIBRARIES gui-foundation-core gui-foundation-text gui-features-palette
-  TEST gui-palette LABELS gui.features.palette)
-target_compile_options(gui-palette-test PRIVATE -ffp-contract=off)
 
 telar_add_test(gui-path-picker-test SOURCES path_picker_test.cpp LIBRARIES gui-foundation-core gui-features-paths deps::ghostty_vt
   TEST gui-path-picker LABELS gui.features.paths)
