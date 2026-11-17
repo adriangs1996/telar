@@ -7,7 +7,6 @@ static_assert(true);
 #include "plugin_worker.hpp"
 #include "tbc/view.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QObject>
 #include <QString>
@@ -17,6 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.config.plugin_effects;
+import telar.gui.machines.picker;
 
 namespace telar::gui::test {
   struct MachineWindow;

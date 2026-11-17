@@ -11,7 +11,6 @@ static_assert(true);
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/models/projection.hpp"

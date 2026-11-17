@@ -7,7 +7,6 @@ static_assert(true);
 #include "pane_projection.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/models/tab_leaves.hpp"
 #include <QList>
 #include <QString>
 #include <algorithm>
@@ -20,6 +19,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.layout.geometry;
+import telar.gui.model.records;
 
 namespace telar::gui::qt {
 

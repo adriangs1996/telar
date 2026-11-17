@@ -80,7 +80,6 @@ static_assert(true);
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
@@ -160,7 +159,7 @@ namespace telar::gui::test {
       return application.links_;
     }
 
-    static void armPlugin(qt::ApplicationController& application, qt::MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
+    static void armPlugin(qt::ApplicationController& application, MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
       application.plugins_.owner_ = qt::PluginRunner::Owner{.source = source, .runtime_generation = runtime_generation, .execution = execution};
     }
 
@@ -178,7 +177,7 @@ namespace telar::gui::test {
       application.plugins_.pluginWorkerFinished(execution, invocation, result);
     }
 
-    static qt::MachineClientKey add(qt::ApplicationController& application, const QString& endpoint) {
+    static MachineClientKey add(qt::ApplicationController& application, const QString& endpoint) {
       const auto slot = application.store_.machines().add({.label = "Build", .destination = "dev@build"});
       auto& client = application.machines_.createClient(slot);
 
@@ -230,7 +229,7 @@ namespace telar::gui::test {
       application.machines_.publishList();
     }
 
-    static qt::MachineClientKey reuse(qt::ApplicationController& application, Machines::Slot slot) {
+    static MachineClientKey reuse(qt::ApplicationController& application, Machines::Slot slot) {
       application.roster_.retire(slot, qt::MachineRoster::Retirement::removed);
       application.store_.clients()[slot].reset();
       application.store_.machines().remove(slot);
@@ -259,11 +258,11 @@ namespace telar::gui::test {
       application.frames_.present(frame);
     }
 
-    static qt::MachineClientKey replace(qt::ApplicationController& application, Machines::Slot slot) {
+    static MachineClientKey replace(qt::ApplicationController& application, Machines::Slot slot) {
       return application.machines_.createClient(slot).key;
     }
 
-    static bool contains(const qt::ApplicationController& application, qt::MachineClientKey key) {
+    static bool contains(const qt::ApplicationController& application, MachineClientKey key) {
       return application.machines_.findClient(key) != nullptr;
     }
   };

@@ -3,11 +3,12 @@
 static_assert(true);
 #endif
 
-#include "machine_activity_target.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <algorithm>
 #include <variant>
+
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

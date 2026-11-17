@@ -155,3 +155,16 @@ export {
 
   }
 }
+
+// Interface: links/presented_link.cppm
+export {
+  namespace telar::gui {
+
+    struct PresentedLink {
+      TerminalSurface surface;
+      std::shared_ptr<const LinkHit> link;
+      std::optional<Rect> cover;
+    };
+
+  }
+}

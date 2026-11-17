@@ -75,7 +75,6 @@ static_assert(true);
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
@@ -141,6 +140,7 @@ import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.history;
 import telar.wire.layout;
+import telar.gui.machines.picker;
 
 namespace {
 

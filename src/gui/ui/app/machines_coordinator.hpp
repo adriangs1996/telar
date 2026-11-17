@@ -6,7 +6,6 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/process/command_process.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QByteArray>

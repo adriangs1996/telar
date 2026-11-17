@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QPointF>
 #include <QString>
 #include <QVariantList>
@@ -21,6 +20,7 @@ static_assert(true);
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

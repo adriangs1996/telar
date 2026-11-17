@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 #include <concepts>

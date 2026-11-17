@@ -8,7 +8,6 @@ static_assert(true);
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
-#include "ui/foundation/models/tab_leaves.hpp"
 #include <QCoreApplication>
 #include <QtCore/qtypes.h>
 #include <algorithm>
@@ -17,6 +16,7 @@ static_assert(true);
 
 import telar.gui.input.configuration;
 import telar.gui.layout.geometry;
+import telar.gui.model.records;
 
 namespace telar::gui::qt {
 

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/foundation/models/machine_activity_target.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QObject>
 #include <QString>
@@ -15,6 +14,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.presentation.display_metrics;
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

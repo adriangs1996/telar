@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "machine_client_key.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <array>

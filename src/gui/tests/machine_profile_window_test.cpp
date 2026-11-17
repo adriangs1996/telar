@@ -13,7 +13,6 @@ static_assert(true);
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>

@@ -7,9 +7,7 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "ui/design/elements/element_slots.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/machine_activity_target.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QAbstractItemModel>
 #include <QObject>

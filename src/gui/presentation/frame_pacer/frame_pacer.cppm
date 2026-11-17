@@ -5,6 +5,7 @@ import std;
 import telar.gui.layout.geometry;
 
 import telar.gui.core.metrics;
+import telar.gui.links.link_hover;
 import telar.wire.vocabulary;
 
 // Interface: presentation/attention_fades.cppm
@@ -387,6 +388,19 @@ export {
       std::array<TabMotion, TabStripGeometry::maximum_tabs> entries_{};
       std::size_t count_ = 0;
       std::optional<WorkspaceLocation> workspace_;
+    };
+
+  }
+}
+
+// Interface: presentation/terminal_preparation.cppm
+export {
+  namespace telar::gui {
+
+    struct TerminalPreparation {
+      FramePacer::Pane pane;
+      std::optional<PresentedLink> links;
+      std::uint64_t revision = 0;
     };
 
   }

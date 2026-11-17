@@ -7,7 +7,6 @@ static_assert(true);
 #include "surface_command.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QByteArray>
 #include <QString>
 #include <QStringLiteral>
@@ -30,6 +29,7 @@ static_assert(true);
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

@@ -9,6 +9,7 @@ import telar.gui.machines.profile_store;
 
 import telar.gui.palette.navigation_label;
 import telar.base.memory.containers;
+import telar.wire.vocabulary;
 
 // Interface: machines/machine_row.cppm
 export {
@@ -200,6 +201,49 @@ export {
 
     struct MachinePickerTarget {
       std::optional<MachineToken> machine;
+    };
+
+  }
+}
+
+// Interface: machines/machine_client_key.cppm
+export {
+  namespace telar::gui {
+
+    struct MachineClientKey {
+      MachineToken machine;
+      std::uint64_t generation = 0;
+
+      bool operator==(const MachineClientKey&) const noexcept = default;
+    };
+
+  }
+}
+
+// Interface: machines/machine_activity_target.cppm
+export {
+  namespace telar::gui {
+
+    struct MachineActivityTarget {
+      struct Agent {
+        AgentNavigationTarget key;
+        decltype(AgentSnapshotEntry::session_id) session;
+      };
+
+      struct Command {
+        std::uint64_t worktree;
+        std::uint64_t workspace;
+      };
+
+      // A pane no agent holds, listed by the process in its foreground.
+      struct Process {
+        std::uint64_t pane_id;
+        std::uint64_t pane_generation;
+      };
+
+      MachineClientKey source;
+      std::uint64_t runtime_generation;
+      std::variant<Agent, Command, Process> owner;
     };
 
   }

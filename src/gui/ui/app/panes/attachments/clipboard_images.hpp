@@ -7,13 +7,14 @@
 #include "platform/clipboard_image_monitor.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "tbc/view.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 #include <QThreadPool>
 #include <cstdint>
 #include <optional>
+
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

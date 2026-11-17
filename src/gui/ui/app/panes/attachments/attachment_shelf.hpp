@@ -9,7 +9,6 @@ static_assert(true);
 #include "clipboard_images.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "tbc/view.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include <QImage>
 #include <QObject>
 #include <QPointF>
@@ -26,6 +25,7 @@ static_assert(true);
 import telar.gui.attachments.catalog;
 import telar.gui.attachments.marker_input;
 import telar.gui.input.key_encoder;
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

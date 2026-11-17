@@ -13,8 +13,6 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/fold_map.hpp"
 #include "terminal_controller.hpp"
-#include "terminal_preparation.hpp"
-#include "ui/app/panes/terminal/links/link_presentation.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
@@ -51,6 +49,7 @@ import telar.gui.input.key_encoder;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
 import telar.gui.terminal.font_grid;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::test {
   class TerminalCursor;

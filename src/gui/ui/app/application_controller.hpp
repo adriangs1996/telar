@@ -41,7 +41,6 @@ static_assert(true);
 #include "ui/foundation/links/links_controller.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
-#include "ui/foundation/models/machine_activity_target.hpp"
 #include "ui/foundation/plugins/plugin_runner.hpp"
 #include "ui/foundation/store/store.hpp"
 #include "window_commands.hpp"

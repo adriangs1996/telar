@@ -7,8 +7,6 @@ static_assert(true);
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
-#include "terminal_preparation.hpp"
-#include "ui/app/panes/terminal/links/link_presentation.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/models/projection.hpp"
@@ -40,6 +38,7 @@ import telar.gui.core.metrics;
 import telar.gui.links.cell_links;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
+import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 

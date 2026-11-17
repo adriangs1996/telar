@@ -10,7 +10,6 @@ static_assert(true);
 #include "ui/design/elements/component_projection.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QByteArray>
 #include <QDateTime>
@@ -46,6 +45,7 @@ static_assert(true);
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
 import telar.gui.input.copy_pointer;
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

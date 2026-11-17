@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/app/panes/terminal/terminal_preparation.hpp"
 #include "ui/foundation/store/store.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <QObject>
