@@ -40,6 +40,7 @@ namespace telar::testing {
       // One write per report, so reports from several threads do not interleave.
       void write(int descriptor) const noexcept {
         std::size_t written = 0;
+
         while (written < size_) {
           const auto count = ::write(descriptor, bytes_.data() + written, size_ - written);
           if (count <= 0) {
@@ -114,6 +115,7 @@ namespace telar::testing {
     // ending in '.', each of its cases indented by two spaces. A name without '.' fails.
     int list() {
       std::string_view suite;
+
       for (const auto* test = cases; test != nullptr; test = test->next()) {
         const auto name = test->name();
         const auto dot = name.find('.');
@@ -166,6 +168,7 @@ namespace telar::testing {
 
     int runAll() {
       int failures = 0;
+
       for (const auto* test = cases; test != nullptr; test = test->next()) {
         if (!execute(*test)) {
           ++failures;
@@ -181,6 +184,7 @@ namespace telar::testing {
       : name_(name),
         run_(run) {
     Case** link = &cases;
+
     while (*link != nullptr && (*link)->name_ < name_) {
       link = &(*link)->next_;
     }
@@ -247,6 +251,7 @@ namespace telar::testing {
   int run(int argc, char** argv) {
     if (argc >= 2) {
       const std::string_view first{argv[1]};
+
       for (const auto* mode = modes; mode != nullptr; mode = mode->next()) {
         if (mode->flag() == first) {
           return mode->run(argc, argv);
@@ -257,6 +262,7 @@ namespace telar::testing {
     // CMake's gtest_discover_tests lists with --gtest_list_tests and runs one case with
     // --gtest_filter=<name>; the flags it adds next to them change nothing here.
     constexpr std::string_view filter = "--gtest_filter=";
+
     for (int index = 1; index < argc; ++index) {
       const std::string_view argument{argv[index]};
       if (argument == "--gtest_list_tests") {
