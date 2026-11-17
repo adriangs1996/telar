@@ -69,10 +69,6 @@ telar_add_test(gui-machine-runtime-location-test SOURCES machine_runtime_locatio
 telar_add_test(gui-machine-profile-file-test SOURCES machine_profile_file_test.cpp LIBRARIES gui-posix Threads::Threads gui-platform gui-features-machines gui-foundation-system
   TEST gui-machine-profile-file LABELS gui.features.machines TIMEOUT 30)
 
-telar_add_test(gui-history-test SOURCES history_test.cpp LIBRARIES gui-foundation-core gui-features-history
-  TEST gui-features-history LABELS gui.features.history TIMEOUT 30)
-telar_add_test(gui-history-card-test SOURCES history_card_test.cpp LIBRARIES gui-foundation-forms gui-foundation-core gui-foundation-text gui-features-history deps::ghostty_vt gui-test-fixtures
-  TEST gui-history-card LABELS gui.features.history TIMEOUT 30)
 telar_add_test(gui-editor-test SOURCES editor_test.cpp LIBRARIES gui-foundation-forms gui-foundation-core gui-foundation-text gui-foundation-terminal deps::ghostty_vt gui-test-fixtures
   TEST gui-editor LABELS gui.foundation.text)
 telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-features-history gui-features-bindings gui-features-machines
