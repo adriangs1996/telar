@@ -16,13 +16,13 @@ telar_add_test(gui-session-effects-test SOURCES session_effects_test.cpp LIBRARI
 telar_add_test(gui-clipboard-image-pipe-test SOURCES clipboard_image_pipe_test.cpp platform/clipboard_pipe_status.c LIBRARIES gui-posix gui-test-fixtures gui-platform
   TEST gui-clipboard-image-pipe LABELS gui.platform TIMEOUT 20)
 
-telar_add_test(gui-attachment-capture-test SOURCES attachment_capture_test.cpp LIBRARIES gui-attachments
+telar_add_test(gui-attachment-capture-test SOURCES attachment_capture_test.cpp LIBRARIES gui-features-terminal-attachments
   TEST gui-attachment-capture LABELS gui.attachments)
 
-telar_add_test(gui-attachment-catalog-test SOURCES attachment_catalog_test.cpp LIBRARIES gui-attachments gui-test-fixtures
+telar_add_test(gui-attachment-catalog-test SOURCES attachment_catalog_test.cpp LIBRARIES gui-features-terminal-attachments gui-test-fixtures
   TEST gui-attachment-catalog LABELS gui.attachments)
 
-telar_add_test(gui-attachment-marker-test SOURCES attachment_marker_test.cpp LIBRARIES gui-attachments
+telar_add_test(gui-attachment-marker-test SOURCES attachment_marker_test.cpp LIBRARIES gui-features-terminal-attachments
   TEST gui-attachment-marker LABELS gui.attachments)
 
 telar_add_test(gui-attachment-layout-test SOURCES attachment_layout_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-core gui-layout
@@ -299,7 +299,7 @@ if(TELAR_GUI_NATIVE)
     target_include_directories(gui-clipboard-wayland-probe PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     set_target_properties(gui-clipboard-wayland-provider gui-clipboard-wayland-probe PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
   endif()
-  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-attachments gui-features-terminal-graphics gui-application Qt6::Gui
+  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-features-terminal-attachments gui-features-terminal-graphics gui-application Qt6::Gui
     TEST gui-attachment-preview LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-attachment-preview-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
 

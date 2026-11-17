@@ -27,7 +27,6 @@ static_assert(true);
 #include <stdexcept>
 #include <utility>
 
-import telar.gui.attachments.marker_input;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -81,11 +80,11 @@ namespace telar::gui::qt {
       QImage image_;
     };
 
-    QImage resampled(ApplicationAllocator& memory, const QImage& source, AttachmentPreviewSize size) {
+    QImage resampled(ApplicationAllocator& memory, const QImage& source, application::terminal::attachments::AttachmentPreviewSize size) {
       const auto byte_count = static_cast<std::size_t>(size.width) * size.height * application::terminal::graphics::RgbaImageView::channels;
       auto pixels = makeOwned<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
 
-      pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
+      pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(application::terminal::attachments::AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
       const auto view = pixels->bytes.unsignedBytes();
       auto* const rgba = view.data();
       const application::terminal::graphics::RgbaImageView input{
@@ -139,8 +138,8 @@ namespace telar::gui::qt {
 
     return {
         .sequence = capture.request.capture.id,
-        .thumbnail = resampled(memory, decoded.image(), AttachmentPreviewSize::fit(capture.width, capture.height, {.side = AttachmentPreviewSize::thumbnail_side, .pixels = AttachmentPreviewSize::thumbnail_side * AttachmentPreviewSize::thumbnail_side})),
-        .full = resampled(memory, decoded.image(), AttachmentPreviewSize::fit(capture.width, capture.height, {.side = AttachmentPreviewSize::full_side, .pixels = AttachmentPreviewSize::full_pixels})),
+        .thumbnail = resampled(memory, decoded.image(), application::terminal::attachments::AttachmentPreviewSize::fit(capture.width, capture.height, {.side = application::terminal::attachments::AttachmentPreviewSize::thumbnail_side, .pixels = application::terminal::attachments::AttachmentPreviewSize::thumbnail_side * application::terminal::attachments::AttachmentPreviewSize::thumbnail_side})),
+        .full = resampled(memory, decoded.image(), application::terminal::attachments::AttachmentPreviewSize::fit(capture.width, capture.height, {.side = application::terminal::attachments::AttachmentPreviewSize::full_side, .pixels = application::terminal::attachments::AttachmentPreviewSize::full_pixels})),
     };
   }
 

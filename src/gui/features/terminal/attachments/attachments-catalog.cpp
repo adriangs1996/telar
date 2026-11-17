@@ -1,9 +1,11 @@
-module telar.gui.attachments.catalog;
+module telar.gui.features.terminal.attachments;
+
+import std;
 
 import telar.base.memory.allocators;
 import telar.gui.foundation.terminal;
 
-namespace telar::gui {
+namespace telar::gui::features::terminal::attachments {
 
   template <Allocator Memory>
   AttachmentMarkerScreen AttachmentMarkerScreen::from(const Screen<Memory>& screen) noexcept {

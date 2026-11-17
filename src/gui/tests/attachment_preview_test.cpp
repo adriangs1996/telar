@@ -23,11 +23,13 @@ static_assert(true);
 #include <iostream>
 #include <span>
 
-import telar.gui.attachments.marker_input;
+import telar.gui.features.terminal.attachments;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::terminal::attachments;
   using telar::gui::test::require;
 
   constexpr std::size_t channels = 4;

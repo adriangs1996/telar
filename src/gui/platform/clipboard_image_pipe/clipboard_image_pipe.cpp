@@ -2,7 +2,6 @@ module telar.gui.platform.clipboard_image_pipe;
 
 import std;
 import telar.base.memory.allocators;
-import telar.gui.attachments.catalog;
 import telar.sys.posix;
 
 namespace telar::gui::platform {

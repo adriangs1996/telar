@@ -14,10 +14,8 @@ static_assert(true);
 #include <exception>
 #include <string_view>
 
-import telar.gui.attachments.catalog;
-import telar.gui.attachments.marker_input;
+import telar.gui.application;
 import telar.gui.machines.picker;
-import telar.gui.presentation.suggestion_labels;
 import telar.gui.foundation.actions;
 
 namespace telar::gui::qt {
@@ -79,8 +77,8 @@ namespace telar::gui::qt {
       store_.client(Machines::local_slot).session.reportLimit({.name = name, .noun = noun, .value = value});
     });
 
-    connect(&shelf_, &AttachmentShelf::evicted, this, [this](AttachmentEviction reason, qulonglong requested) {
-      const bool items = reason == AttachmentEviction::items;
+    connect(&shelf_, &AttachmentShelf::evicted, this, [this](application::terminal::attachments::AttachmentEviction reason, qulonglong requested) {
+      const bool items = reason == application::terminal::attachments::AttachmentEviction::items;
 
       store_.client(Machines::local_slot).session.reportLimit({.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
     });
@@ -122,7 +120,7 @@ namespace telar::gui::qt {
       return toQRectF(area, density);
     };
 
-    const auto geometry = AttachmentModalGeometry::measure(host.cellArea());
+    const auto geometry = application::terminal::attachments::AttachmentModalGeometry::measure(host.cellArea());
     const auto bounds = host.pixels(geometry.bounds);
     const auto local = [&](CellRectangle cells) {
       auto area = host.pixels(cells);
@@ -206,7 +204,7 @@ namespace telar::gui::qt {
     const auto& prompt = shelf_.capturePrompt();
     const auto* const pane = store_.client(Machines::local_slot).session.findPane(pane_id);
     if (prompt && prompt->target.pane_id == pane_id && pane != nullptr && prompt->policy != AttachmentMarkerPolicy::ordered) {
-      shelf_.reconcile(AttachmentMarkerScreen::from(pane->screen));
+      shelf_.reconcile(application::terminal::attachments::AttachmentMarkerScreen::from(pane->screen));
     }
   }
 
@@ -218,22 +216,22 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto plan = shelf_.removalPlan(identity, AttachmentMarkerScreen::from(pane->screen));
+    const auto plan = shelf_.removalPlan(identity, application::terminal::attachments::AttachmentMarkerScreen::from(pane->screen));
     if (plan.limit) {
       std::string_view name;
       std::string_view noun = "editor steps";
       std::uint64_t value = 0;
 
       switch (*plan.limit) {
-      case AttachmentMarkerReach::navigation:
+      case application::terminal::attachments::AttachmentMarkerReach::navigation:
         name = "attachments.max_marker_navigation_steps";
         value = AttachmentLimits::maximum_marker_navigation_steps;
         break;
-      case AttachmentMarkerReach::path_cells:
+      case application::terminal::attachments::AttachmentMarkerReach::path_cells:
         name = "attachments.path_marker.max_cells";
-        value = PathAttachmentMarkers::maximum_cells;
+        value = application::terminal::attachments::PathAttachmentMarkers::maximum_cells;
         break;
-      case AttachmentMarkerReach::keys:
+      case application::terminal::attachments::AttachmentMarkerReach::keys:
         name = "attachments.max_removal_keys";
         noun = "keys";
         value = AttachmentLimits::maximum_removal_keys;
@@ -246,7 +244,7 @@ namespace telar::gui::qt {
     }
 
     if (plan.removal) {
-      const AttachmentMarkerInput input{*plan.removal, pane->screen.modes()};
+      const application::terminal::attachments::AttachmentMarkerInput input{*plan.removal, pane->screen.modes()};
 
       store_.session().input(pane->id, input.view());
       static_cast<void>(shelf_.remove(identity));
@@ -274,7 +272,7 @@ namespace telar::gui::qt {
     }
 
     if (const auto* pane = store_.session().findPane(pane_id)) {
-      shelf_.observeKey(key, AttachmentMarkerScreen::from(pane->screen));
+      shelf_.observeKey(key, application::terminal::attachments::AttachmentMarkerScreen::from(pane->screen));
     }
   } catch (const std::exception& error) {
     emit failed(QString::fromUtf8(error.what()));

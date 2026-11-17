@@ -13,12 +13,14 @@
 #include <string_view>
 #include <utility>
 
-import telar.gui.attachments.catalog;
+import telar.gui.features.terminal.attachments;
 import telar.gui.tests.erasure_allocator;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::terminal::attachments;
   using telar::gui::test::require;
   using telar::gui::test::requireValue;
 

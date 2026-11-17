@@ -29,7 +29,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.attachments.catalog;
+import telar.gui.application;
 import telar.gui.foundation.actions;
 
 namespace telar::gui::qt {
@@ -185,7 +185,7 @@ namespace telar::gui::qt {
     const auto requested = catalog_.retainedBytes() + result.capture->png.size();
     const auto evicted = catalog_.adopt(*result.capture);
     if (evicted) {
-      emit this->evicted(*evicted, *evicted == AttachmentEviction::items ? AttachmentLimits::maximum_items + 1 : requested);
+      emit this->evicted(*evicted, *evicted == application::terminal::attachments::AttachmentEviction::items ? AttachmentLimits::maximum_items + 1 : requested);
     }
 
     emit adopted(result.job.request.capture.target.pane_id);
@@ -213,11 +213,11 @@ namespace telar::gui::qt {
     return removed;
   }
 
-  AttachmentMarkerPlan AttachmentShelf::removalPlan(std::uint64_t id, AttachmentMarkerScreen screen) const noexcept {
+  application::terminal::attachments::AttachmentMarkerPlan AttachmentShelf::removalPlan(std::uint64_t id, application::terminal::attachments::AttachmentMarkerScreen screen) const noexcept {
     return catalog_.planMarkerRemoval(id, screen);
   }
 
-  void AttachmentShelf::reconcile(AttachmentMarkerScreen screen) {
+  void AttachmentShelf::reconcile(application::terminal::attachments::AttachmentMarkerScreen screen) {
     if (!capture_prompt_) {
       return;
     }
@@ -230,7 +230,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void AttachmentShelf::observeKey(const TerminalKey& key, AttachmentMarkerScreen screen) {
+  void AttachmentShelf::observeKey(const TerminalKey& key, application::terminal::attachments::AttachmentMarkerScreen screen) {
     if (!prompt_) {
       return;
     }
@@ -250,7 +250,7 @@ namespace telar::gui::qt {
         clearPrompt(target);
       }
     } else if (key.code == KeyChord::Key::backspace || key.code == KeyChord::Key::erase) {
-      const auto deletion = key.code == KeyChord::Key::backspace ? AttachmentMarkerDeletion::backward : AttachmentMarkerDeletion::forward;
+      const auto deletion = key.code == KeyChord::Key::backspace ? application::terminal::attachments::AttachmentMarkerDeletion::backward : application::terminal::attachments::AttachmentMarkerDeletion::forward;
       if (const auto id = catalog_.markerAtDeletion(screen, deletion)) {
         static_cast<void>(remove(*id));
       } else if (catalog_.pendingMarkerAtDeletion(screen, policy, deletion)) {

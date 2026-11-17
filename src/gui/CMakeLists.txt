@@ -27,14 +27,14 @@ target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-h
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS foundation features core layout text prompt
-    input attachments platform machines presentation components config transport
+    input platform machines presentation components config transport
     application)
   add_subdirectory(${domain})
 endforeach()
 
 add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/system-peer_identity.cpp foundation/system/system-window_lease.cpp platform/profile_file/profile_file.cpp foundation/system/system-stdio_socket.cpp foundation/system/system-managed_directory.cpp foundation/system/system-process_group.cpp)
 target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
-target_link_libraries(gui-posix PUBLIC gui-foundation-core gui-foundation-system gui-attachments gui-platform Threads::Threads)
+target_link_libraries(gui-posix PUBLIC gui-foundation-core gui-foundation-system gui-platform Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
 target_compile_options(telar-gui-command PRIVATE ${TELAR_WARNINGS})
@@ -149,7 +149,7 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-keyboard PUBLIC gui-foundation-core Qt6::Gui)
 
   add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-attachments gui-machines gui-application Qt6::Concurrent)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-machines gui-application Qt6::Concurrent)
 
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
@@ -162,7 +162,7 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-core gui-layout
-    gui-text gui-prompt gui-input gui-attachments
+    gui-text gui-prompt gui-input
     gui-platform gui-machines gui-presentation gui-components gui-config gui-transport
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)

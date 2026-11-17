@@ -3,17 +3,19 @@ module;
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
-export module telar.gui.attachments.catalog;
+// The images attached to a pane's prompt: the shelf's catalog of them, and the markers the
+// prompt shows for each and how deleting one plans the keys.
+export module telar.gui.features.terminal.attachments:catalog;
 
 import std;
 import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
 
 // The capture types stay textual because the Objective-C++ clipboard source
-// shares them; importers reach their names through these declarations instead
-// of including them. Markers and the catalog are module code: they read the
-// terminal screen and cells through their owner modules.
-export namespace telar::gui {
+// shares them, in telar::gui; importers reach their names through these
+// declarations instead of including them. Markers and the catalog are module
+// code: they read the terminal screen and cells through their owner modules.
+export namespace telar::gui::features::terminal::attachments {
   using telar::gui::AttachmentCapture;
   using telar::gui::AttachmentLimits;
   using telar::gui::AttachmentMarkerPolicy;
@@ -24,7 +26,7 @@ export namespace telar::gui {
   using telar::gui::SensitiveBytes;
 }
 
-export namespace telar::gui {
+export namespace telar::gui::features::terminal::attachments {
 
   struct AttachmentMarkerScreen {
     std::span<const CellValue> cells;

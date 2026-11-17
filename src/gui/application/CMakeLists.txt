@@ -25,5 +25,5 @@ telar_add_domain(gui application
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
        foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history
        features/terminal/input features/terminal/links features/terminal/copy_mode
-       features/terminal/graphics core layout
+       features/terminal/graphics features/terminal/attachments core layout
        text prompt presentation components config)

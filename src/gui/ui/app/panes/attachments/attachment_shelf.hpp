@@ -22,8 +22,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.attachments.catalog;
-import telar.gui.attachments.marker_input;
+import telar.gui.application;
 import telar.gui.foundation.keys;
 import telar.gui.machines.picker;
 
@@ -72,9 +71,9 @@ namespace telar::gui::qt {
     void requestCapture();
     void clearPrompt(AttachmentTarget target);
     bool remove(std::uint64_t id);
-    void observeKey(const TerminalKey& key, AttachmentMarkerScreen screen);
-    void reconcile(AttachmentMarkerScreen screen);
-    [[nodiscard]] AttachmentMarkerPlan removalPlan(std::uint64_t id, AttachmentMarkerScreen screen) const noexcept;
+    void observeKey(const TerminalKey& key, application::terminal::attachments::AttachmentMarkerScreen screen);
+    void reconcile(application::terminal::attachments::AttachmentMarkerScreen screen);
+    [[nodiscard]] application::terminal::attachments::AttachmentMarkerPlan removalPlan(std::uint64_t id, application::terminal::attachments::AttachmentMarkerScreen screen) const noexcept;
     [[nodiscard]] QVariantList items() const;
     [[nodiscard]] QString paneId() const;
     [[nodiscard]] QVariantMap modal() const;
@@ -92,7 +91,7 @@ namespace telar::gui::qt {
     void hoverRecoveryChanged();
     void failed(const QString& message);
     void quotaReached(platform::ClipboardImageError error);
-    void evicted(AttachmentEviction reason, qulonglong requested);
+    void evicted(application::terminal::attachments::AttachmentEviction reason, qulonglong requested);
     void dismissRequested(qulonglong identity);
     void adopted(qulonglong pane_id);
 
@@ -116,13 +115,13 @@ namespace telar::gui::qt {
     std::optional<QPointF> hover_pointer_;
     std::optional<QPointF> hover_recovery_;
     bool hover_ready_ = true;
-    ClipboardCaptureState captures_;
+    application::terminal::attachments::ClipboardCaptureState captures_;
     std::optional<AttachmentPrompt> prompt_;
     std::optional<AttachmentPrompt> capture_prompt_;
     std::optional<AttachmentSource> source_;
     Delivery delivery_;
     // The catalog delivers through the delivery stored beside it.
-    tbc::view<AttachmentCatalog<ApplicationAllocator, Delivery>, tbc::lt::self> catalog_;
+    tbc::view<application::terminal::attachments::AttachmentCatalog<ApplicationAllocator, Delivery>, tbc::lt::self> catalog_;
     ClipboardImages worker_;
   };
 

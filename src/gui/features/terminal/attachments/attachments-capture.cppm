@@ -1,14 +1,16 @@
-export module telar.gui.attachments.marker_input;
+// A clipboard image on its way into the shelf, the keys that delete an image's marker from the
+// prompt, and the size an image's preview is drawn at.
+export module telar.gui.features.terminal.attachments:capture;
 
 import std;
 
+import :catalog;
 import telar.gui.foundation.actions;
-import telar.gui.attachments.catalog;
 import telar.wire.vocabulary;
 
 // Interface: attachments/capture_state.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::attachments {
 
     class ClipboardCaptureState {
     public:
@@ -34,7 +36,7 @@ export {
 
 // Interface: attachments/marker_input.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::attachments {
 
     class AttachmentMarkerInput {
     public:
@@ -54,7 +56,7 @@ export {
 
 // Interface: attachments/preview_size.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::attachments {
 
     struct AttachmentPreviewBounds {
       std::uint32_t side;

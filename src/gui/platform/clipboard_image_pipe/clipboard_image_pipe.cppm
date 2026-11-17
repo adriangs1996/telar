@@ -51,4 +51,6 @@ export {
 export namespace telar::gui::platform {
   using platform::ClipboardImageError;
   using platform::ClipboardImageFailure;
+  using telar::gui::eraseSensitiveBytes;
+  using telar::gui::SensitiveBytes;
 }

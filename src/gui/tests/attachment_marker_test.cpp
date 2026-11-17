@@ -10,11 +10,13 @@
 #include <span>
 #include <string_view>
 
-import telar.gui.attachments.catalog;
+import telar.gui.features.terminal.attachments;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::terminal::attachments;
   using telar::gui::test::require;
   using telar::gui::test::requireValue;
   constexpr CellPosition origin{};
