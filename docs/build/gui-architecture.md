@@ -185,10 +185,9 @@ privado; las órdenes con las que el sistema publica una notificación o suena) 
 decide qué hacer sí es de la feature: `notifications` decide qué sonido empieza o espera y
 `application` lo hace sonar.
 
-Lo que una feature compone con otra aún no migrada (el workbench para `links`) lo hace
-`application`, con accesores temporales en `Access` (`launchTab`, `launchSplit`, `findTab`) que
-desaparecen cuando esa otra feature exista; lo que compone con una ya migrada lo hace con sus casos
-de uso (`paths` escribe en la línea con `features::prompt::replace`). Los límites que la sesión
+Lo que una feature compone con otra lo hace `application` con los casos de uso de ambas: `links`
+abre un editor con `application::workbench::launchTab` y `launchSplit`, `paths` escribe en la línea
+con `features::prompt::replace`. Los límites que la sesión
 informa son de `notifications`; otra parte de `application` los cuenta y los describe con
 `notifications::countLimitReach` y `describeLimit`, que la partición no exporta. La conexión se
 alcanza por `Access` (`sharesImages`, `sharedImage`, `recoverRuntime`, `report`).
@@ -246,6 +245,25 @@ cuando el método al que sustituye lo leía.
 
 **En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
 nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
+
+**El modelo de la sesión.** Los tabs y panes (`Tab<Memory>` en `foundation/model`, `Pane<Memory>`
+en `application`) y las réplicas de agentes, panes y workspaces son estado de `Session`, no de una
+feature. `workbench` y `activity` deciden sobre ellos con casos de uso que los reciben como
+vocabulario (`features::workbench::tabBeside(tabs, …)`, `features::activity::find(agents, …)`) y
+`application` ejecuta lo decidido. `Session` sigue aplicando los mensajes del runtime que añaden,
+cambian o quitan tabs y panes (`PaneOpened`, `TabCreated`, `TabSnapshot`, `TabClosed`…), porque
+cruzan todas las features que guardan algo por pane, y en ellos llama a las decisiones del
+`workbench` (`tabAfterClose`, `stage`, `restore`, `adopt`). Los casos de uso de
+`application::workbench` llegan a ese mantenimiento (`ensureTab`, `synchronizeAttachments`,
+`handoffWorkspace`, `sendTabOperation`) por reenvíos de `Access`; cada plantilla que reenvían tiene
+su instanciación en `application-session-layout.cpp`. Elegir un agente compone las dos:
+`application::activity::chooseAgent` pregunta a `activity` si el runtime aún lo informa y
+`application::workbench::visit` muestra su pane, aquí o abriendo el workspace que `activity` le da.
+
+**Tablas acotadas que los tests prueban.** `NavigationHistory` y `SavedLayouts` son estado de
+`features::workbench::State`, pero la partición `:layouts` las exporta: son tablas de capacidad fija,
+sin I/O, cuyos límites prueba `workspace_navigation_test` directamente. `application::workbench` no
+las reexporta, así que `ui` no las nombra.
 
 **Namespaces de application.** `application::<feature>` usa el nombre de la carpeta; una feature
 anidada usa namespaces anidados, `features/terminal/links` es `application::terminal::links`, en
