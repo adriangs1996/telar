@@ -445,6 +445,178 @@ return {}
     check(budget.liveBytes() == 0);
   }
 
+  // A stream interception event for `ticket`, encoded into `buffer`.
+  app::TrafficEvent interception(std::span<Byte> buffer, std::uint32_t registration, std::uint64_t ticket) {
+    constexpr std::string_view bytes{"payload"};
+    const auto flow = traffic::FlowCodec::encode(buffer, {.id = ticket, .ticket = ticket, .host = "example.test", .bytes = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}});
+
+    return {.event_id = ticket, .registration = registration, .dropped = 0, .event = {.kind = traffic::Kind::intercept_request, .bytes = flow}};
+  }
+
+  // A callback may answer the flows it held back, but no more of them at once than a reply
+  // carries, and no replacement past a stream chunk: past either it gets an error frame, never
+  // a reply with part of its decisions.
+  void decisionsBounded() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-decisions.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+
+    write(entry, R"lua(
+local traffic = require('telar.traffic')
+local held = {}
+traffic.intercept({stage='stream', host='example.test'}, function(err, event)
+  assert(not err, err)
+  local ticket = tonumber(event.ticket)
+  if ticket == 1000 then
+    return {action='replace', bytes=string.rep('x', )lua" +
+                     std::to_string(traffic::FlowControl::chunk_bytes) + R"lua()}
+  elseif ticket == 1001 then
+    return {action='replace', bytes=string.rep('x', )lua" +
+                     std::to_string(traffic::FlowControl::chunk_bytes + 1) + R"lua()}
+  elseif ticket % 100 == 0 then
+    for _, respond in ipairs(held) do respond({action='allow'}) end
+    held = {}
+  else
+    held[#held + 1] = event.respond
+  end
+end)
+return {}
+)lua");
+    const auto identity = specification(true);
+    app::Host host{memory, entry.c_str(), &identity};
+    SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
+    std::vector<Byte> buffer(traffic::Limits::metadata_bytes + 1024);
+    auto setup = makeOwned<app::TrafficReply>(memory);
+
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    check(setup->registration_count == 1);
+    const auto registration = setup->registrations[0].id;
+    const auto invoke = [&](std::uint64_t ticket) {
+      return host.invokeTraffic(interception(buffer, registration, ticket), output.bytes());
+    };
+
+    for (std::uint64_t ticket = 1; ticket <= app::TrafficLimits::decisions; ++ticket) {
+      check(app::TrafficProtocol::readReply(invoke(ticket), *setup).decision_count == 0);
+    }
+
+    check(app::TrafficProtocol::readReply(invoke(100), *setup).decision_count == app::TrafficLimits::decisions);
+
+    for (std::uint64_t ticket = 101; ticket <= 101 + app::TrafficLimits::decisions; ++ticket) {
+      check(app::TrafficProtocol::readReply(invoke(ticket), *setup).decision_count == 0);
+    }
+
+    check(app::Protocol::decodeError(invoke(200)).event_id == 200);
+    check(app::TrafficProtocol::readReply(invoke(1000), *setup).decision_count == 1);
+    check(app::Protocol::decodeError(invoke(1001)).event_id == 1001);
+  }
+
+  // An HTTP replacement holds as many header and trailer fields as a message carries: more is
+  // an error frame, never a message with some of them.
+  void httpReplaceBounded() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-replace.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+
+    write(entry, R"lua(
+local traffic = require('telar.traffic')
+traffic.intercept({stage='http', host='example.test'}, function(err, event)
+  assert(not err, err)
+  local id = tonumber(event.flow_id)
+  local fields = {}
+  for index = 1, id // 2 do fields[index] = {name='x-field', value=tostring(index)} end
+  if id % 2 == 0 then
+    return {action='replace', headers=fields}
+  end
+  return {action='replace', trailers=fields}
+end)
+return {}
+)lua");
+    const auto identity = specification(true);
+    app::Host host{memory, entry.c_str(), &identity};
+    SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
+    SensitiveAllocation encoded_message{memory, HttpMessageLimits::message_bytes};
+    SensitiveAllocation encoded_flow{memory, HttpMessageLimits::message_bytes + traffic::Limits::metadata_bytes};
+    auto setup = makeOwned<app::TrafficReply>(memory);
+
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    const auto payload = HttpMessageCodec::encode(encoded_message.bytes(), HttpMessageView{.method = "GET", .target = "/"});
+    const HttpMessageView capacity{};
+    std::uint64_t ticket = 0;
+    const auto invoke = [&](std::size_t fields, bool headers) {
+      ++ticket;
+      const auto flow = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = fields * 2 + (headers ? 0 : 1), .ticket = ticket, .host = "example.test", .bytes = payload});
+
+      return host.invokeTraffic({.event_id = ticket, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::http_intercept_request, .bytes = flow}}, output.bytes());
+    };
+
+    for (const bool headers : {true, false}) {
+      const auto limit = headers ? capacity.headers.size() : capacity.trailers.size();
+      const auto decided = app::TrafficProtocol::readReply(invoke(limit, headers), *setup);
+
+      check(decided.decision_count == 1);
+      app::FrameReader decision{decided.decisions[0].payload};
+
+      decision.require(traffic::InterceptionCodec::Command::decision);
+      decision.integer<std::uint64_t>();
+      check(decision.tag(traffic::Verdict::reject) == traffic::Verdict::replace);
+      const auto message = HttpMessageCodec::decode(decision.bytes());
+
+      check((headers ? message.header_count : message.trailer_count) == limit);
+      check(app::Protocol::decodeError(invoke(limit + 1, headers)).event_id == ticket);
+      check(app::Protocol::decodeError(invoke(64 * limit, headers)).event_id == ticket);
+    }
+  }
+
+  // A plugin's redirect request names at most as many targets and processes as the control
+  // protocol carries, and a process list it gives is not empty: past that the call raises.
+  void redirectBounds() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-redirect.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+    const auto targets = std::to_string(traffic::control::Limits::targets);
+    const auto processes = std::to_string(traffic::control::Limits::processes);
+
+    write(entry, R"lua(
+local traffic = require('telar.traffic')
+local function list(count, value)
+  local result = {}
+  for index = 1, count do result[index] = value(index) end
+  return result
+end
+local function target() return 'example.test:443' end
+local function process(index) return 1000 + index end
+local function start(options) return pcall(traffic.redirect.start, options, function() end) end
+assert(start({targets=list()lua" +
+                     targets + R"lua(, target), processes=list()lua" + processes + R"lua(, process)}))
+assert(not start({targets=list()lua" +
+                     targets + R"lua( + 1, target)}))
+assert(not start({targets=list(1000, target)}))
+assert(not start({targets={'example.test:443'}, processes={}}))
+assert(not start({targets={'example.test:443'}, processes=list()lua" +
+                     processes + R"lua( + 1, process)}))
+return {}
+)lua");
+    auto identity = specification(false);
+
+    identity.declared = {};
+    identity.granted = {};
+    identity.declared.insert(app::Capability::traffic_control);
+    identity.granted.insert(app::Capability::traffic_control);
+    app::Host host{memory, entry.c_str(), &identity};
+    SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
+    auto setup = makeOwned<app::TrafficReply>(memory);
+
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    check(setup->registration_count == 1);
+    check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).process_count == traffic::control::Limits::processes);
+  }
+
   // A registration as a traffic worker writes it into a reply, valid unless a field is changed.
   struct ForgedRegistration {
     std::uint32_t id = 1;
@@ -587,5 +759,8 @@ return {}
       },
   };
   const telar::testing::Case case_reply_rejects_out_of_bounds{"plugin_traffic.reply_rejects_out_of_bounds", replyRejectsOutOfBounds};
+  const telar::testing::Case case_decisions_bounded{"plugin_traffic.decisions_bounded", decisionsBounded};
+  const telar::testing::Case case_http_replace_bounded{"plugin_traffic.http_replace_bounded", httpReplaceBounded};
+  const telar::testing::Case case_redirect_bounds{"plugin_traffic.redirect_bounds", redirectBounds};
 
 }
