@@ -111,6 +111,21 @@ namespace {
 
     check(!repeated.created && repeated.worktree == added.worktree);
     check(worktrees.find(added.worktree)->title.view() == "Updated");
+
+    // A dispatch that registers the path again links it to its new brief and coordinator, and a
+    // request without a title keeps the one it has.
+    request.title = {};
+    request.brief = "Fix the parser";
+    request.coordinator = CoordinatorReference{.session_id = {9}, .pane_id = 4, .pane_generation = 2};
+    const auto dispatched = worktrees.registerEntry(request);
+    const auto* entry = worktrees.find(added.worktree);
+
+    check(!dispatched.created && dispatched.worktree == added.worktree);
+    check(entry->title.view() == "Updated" && entry->brief.view() == "Fix the parser");
+    check(entry->coordinator && entry->coordinator->pane_id == 4 && entry->coordinator->pane_generation == 2);
+    request.title = "Updated";
+    request.brief = {};
+    request.coordinator.reset();
     check(worktrees.containing("/tmp/worktree/src") != nullptr);
     check(worktrees.containing("/tmp/worktree-other") == nullptr);
     worktrees.remove(added.worktree);
