@@ -177,10 +177,10 @@ y a la vista (`Browser` en `history_test.cpp`), sin tocar lo que afirman.
 
 **Fuera de las features.** Una sección que hace I/O no es pura: va a `foundation/system`
 (`DirectoryCompletion` lista el sistema de archivos) o se queda en `application` (la reproducción
-de sonido). Lo que una feature compone con otra aún no migrada (el editor de la línea para
-`paths`, el workbench para `links`) lo hace `application`, con accesores temporales en `Access`
-(`promptLine`, `notePromptWrite`, `launchTab`, `launchSplit`, `findTab`) que desaparecen cuando esa
-otra feature exista. Lo que la sesión guarda para varias features se alcanza igual: los límites que
+de sonido). Lo que una feature compone con otra aún no migrada (el workbench para `links`) lo hace
+`application`, con accesores temporales en `Access` (`launchTab`, `launchSplit`, `findTab`) que
+desaparecen cuando esa otra feature exista; lo que compone con una ya migrada lo hace con sus casos
+de uso (`paths` escribe en la línea con `features::prompt::replace`). Lo que la sesión guarda para varias features se alcanza igual: los límites que
 informa (`countLimitReach`, `limitReports`) y la conexión (`sharesImages`, `sharedImage`,
 `recoverRuntime`).
 
@@ -214,6 +214,24 @@ llamador (`graphics::pause`, `resume`) es una plantilla de la interfaz que reenv
 global reexporta sus nombres con `using` en el namespace de la feature, y ui, que lo incluye, los
 nombra como antes. Una sección que hace I/O de la plataforma (`ClipboardImagePipe` lee un
 descriptor) se queda en `platform`, que reexporta lo que entrega en vez de importar la feature.
+
+**Estado por pane en un camino caliente.** `prompt` guarda una línea por pane, y una tecla compone
+varios casos de uso sobre ella: los bloques de comandos (que siguen en `application`), la cola, la
+edición y el completado. `features::prompt::open` y `find` dan un `PaneLine&` opaco, amigo de
+`Access` como `State`, que los casos de uso de esa tecla reciben: la tecla busca la línea una vez,
+como el método al que sustituye.
+
+**Varias peticiones de un caso de uso.** Tab pregunta al runtime hasta once cosas. `plan` devuelve
+un `CompletionPlan` opaco; `application` pide un id por pregunta, la envía (`request`), anota las que
+salieron (`sent`) y devuelve el plan a la feature (`offer`), en el orden en que el método pedía los
+ids. Una pregunta que solo a veces hace falta se parte en lo que ya se sabe (`presence`, `spec`), la
+petición con el id que da `application` (`ask`, `askSpec`) y lo que pasó al enviarla (`asked`,
+`askedSpec`). Una respuesta que puede no ser de la feature devuelve `std::optional<std::uint64_t>`:
+ninguno si no es suya, 0 si no cambió nada que se vea, el pane cuya vista cambió.
+
+**El reloj en un camino caliente.** Un caso de uso que solo a veces lee el reloj de la sesión recibe
+un llamable (`prompt::output` por frame, `prompt::toProgram` por tecla), así el reloj se lee solo
+cuando el método al que sustituye lo leía.
 
 **En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
 nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
