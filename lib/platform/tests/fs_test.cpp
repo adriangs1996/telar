@@ -3,7 +3,10 @@
 static_assert(true);
 #endif
 
+#include <cerrno>
 #include <cstring>
+#include <fcntl.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -12,6 +15,7 @@ import std;
 import telar.testing;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.primitives;
 
 namespace {
 
@@ -51,6 +55,87 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // Calls `open` and returns the SystemError's code, or 0 when it returned a descriptor.
+  template <typename Open>
+  int openFailure(Open&& open) {
+    try {
+      const FileDescriptor file = open();
+
+      check(static_cast<bool>(file));
+      return 0;
+    } catch (const SystemError& error) {
+      return error.code();
+    }
+  }
+
+  void write(const std::string& path, std::string_view bytes) {
+    std::ofstream output{path, std::ios::binary};
+
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    check(output.good());
+  }
+
+  // Package files are opened component by component beneath the package root: a path that
+  // names anything outside it, or reaches it through a link, is refused.
+  void testOpenBeneathRefusesEscape() {
+    TemporaryDirectory temporary{"/tmp/telar-open-beneath-XXXXXX"};
+    const std::string base{temporary.path()};
+    const auto root = base + "/package";
+
+    std::filesystem::create_directories(root + "/a");
+    write(root + "/a/b", "inside");
+    write(base + "/outside", "outside");
+    check(::symlink((base + "/outside").c_str(), (root + "/link").c_str()) == 0);
+    check(::symlink(base.c_str(), (root + "/up").c_str()) == 0);
+    const FileDescriptor directory{::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+
+    check(static_cast<bool>(directory));
+    for (const std::string_view path : {"../outside", "a/../b", "./a/b", "a//b", "/etc/hosts", "", "a/."}) {
+      check(openFailure([&] {
+        return openBeneath(directory.get(), path, O_RDONLY);
+      }) == EINVAL);
+    }
+
+    for (const std::string_view path : {"link", "up/outside"}) {
+      const auto failure = openFailure([&] {
+        return openBeneath(directory.get(), path, O_RDONLY);
+      });
+
+      check(failure == ELOOP || failure == ENOTDIR);
+    }
+
+    const auto file = openBeneath(directory.get(), "a/b", O_RDONLY);
+    struct stat opened{};
+    struct stat expected{};
+
+    check(::fstat(file.get(), &opened) == 0 && ::stat((root + "/a/b").c_str(), &expected) == 0);
+    check(opened.st_ino == expected.st_ino && opened.st_dev == expected.st_dev);
+  }
+
+  // A private file's name is one entry of the directory it is written to.
+  void testWritePrivateFileRejectsPathNames() {
+    TemporaryDirectory temporary{"/tmp/telar-private-file-XXXXXX"};
+    const std::string base{temporary.path()};
+    const auto inner = base + "/inner";
+
+    std::filesystem::create_directories(inner);
+    const FileDescriptor directory{::open(inner.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    const std::array<std::uint8_t, 3> bytes{'k', 'e', 'y'};
+    const std::string too_long(NAME_MAX + 1, 'a');
+
+    check(static_cast<bool>(directory));
+    for (const std::string_view name : {std::string_view{"../x"}, std::string_view{"a/b"}, std::string_view{"."}, std::string_view{".."}, std::string_view{}, std::string_view{too_long}}) {
+      check(writePrivateFile(directory.get(), name, bytes, PrivateFileMode::replace) == EINVAL);
+    }
+
+    check(std::filesystem::is_empty(inner));
+    check(std::distance(std::filesystem::directory_iterator{base}, std::filesystem::directory_iterator{}) == 1);
+    check(writePrivateFile(directory.get(), std::string(NAME_MAX, 'a'), bytes, PrivateFileMode::replace) == 0);
+    check(std::filesystem::file_size(inner + "/" + std::string(NAME_MAX, 'a')) == bytes.size());
+  }
+
   const telar::testing::Case case_private_directory{"fs.private_directory", testPrivateDirectory};
+  const telar::testing::Case case_open_beneath{"fs.open_beneath_refuses_escape", testOpenBeneathRefusesEscape};
+  const telar::testing::Case case_write_private_file{"fs.write_private_file_rejects_path_names", testWritePrivateFileRejectsPathNames};
 
 }
