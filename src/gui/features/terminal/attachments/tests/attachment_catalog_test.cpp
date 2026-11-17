@@ -1,28 +1,25 @@
-#include "assertions.hpp"
 #include "features/terminal/attachments/sensitive_bytes.hpp"
 #include "features/terminal/attachments/types.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <iostream>
 #include <new>
 #include <span>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
 
+import telar.testing;
 import telar.gui.features.terminal.attachments;
 import telar.gui.tests.erasure_allocator;
 import telar.gui.foundation.terminal;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar::gui;
 
   using namespace telar::gui::features::terminal::attachments;
-  using telar::gui::test::require;
-  using telar::gui::test::requireValue;
 
   constexpr AttachmentTarget prompt{.pane_id = 1, .pane_generation = 2};
   constexpr AttachmentTarget other_prompt{.pane_id = 1, .pane_generation = 3};
@@ -85,24 +82,24 @@ namespace {
         const std::array<std::byte, 256> more{};
 
         bytes.append(more, AttachmentLimits::maximum_png_bytes);
-        require(false, "allocation failure must be visible");
+        check(false, "allocation failure must be visible");
       } catch (const std::bad_alloc&) {
-        require(bytes.view().front() == sensitive && bytes.size() == first.size() + growth.size(), "failed growth must preserve the original bytes");
+        check(bytes.view().front() == sensitive && bytes.size() == first.size() + growth.size(), "failed growth must preserve the original bytes");
       }
 
       try {
         bytes.append(first, bytes.size());
-        require(false, "quota failure must precede allocation");
+        check(false, "quota failure must precede allocation");
       } catch (const std::length_error&) {
-        require(bytes.view().front() == sensitive, "quota rejection must preserve storage");
+        check(bytes.view().front() == sensitive, "quota rejection must preserve storage");
       }
 
       const auto moved = std::move(bytes);
 
-      require(moved.view().front() == sensitive, "moving must transfer one owner");
+      check(moved.view().front() == sensitive, "moving must transfer one owner");
     }
 
-    require(memory.live == 0 && !memory.dirty_release, "all old and final allocations must be erased and released");
+    check(memory.live == 0 && !memory.dirty_release, "all old and final allocations must be erased and released");
   }
 
   void slotReuseKeepsIdentityOrderAndExactTargets() {
@@ -112,34 +109,34 @@ namespace {
     {
       AttachmentCatalog<CheckedMemory, Delivery> catalog{delivery};
 
-      require(catalog.setTarget(prompt), "the first target must change");
+      check(catalog.setTarget(prompt), "the first target must change");
       for (std::uint64_t id = 1; id <= AttachmentLimits::maximum_items; ++id) {
         auto incoming = capture(memory, id);
 
-        require(!catalog.adopt(incoming), "the first four previews must fit");
-        require(incoming.png.size() == 0, "adoption must take the PNG owner");
+        check(!catalog.adopt(incoming), "the first four previews must fit");
+        check(incoming.png.size() == 0, "adoption must take the PNG owner");
       }
 
-      require(catalog.openModal(2), "a visible preview must open");
-      require(catalog.remove(2) && !catalog.snapshot().modal, "retirement must close its modal");
-      require(catalog.retainedBytes() == AttachmentLimits::maximum_items, "retired storage remains charged before reaping");
+      check(catalog.openModal(2), "a visible preview must open");
+      check(catalog.remove(2) && !catalog.snapshot().modal, "retirement must close its modal");
+      check(catalog.retainedBytes() == AttachmentLimits::maximum_items, "retired storage remains charged before reaping");
       catalog.reapRetired();
       auto fifth = capture(memory, fifth_id);
 
-      require(!catalog.adopt(fifth), "a dismissed free slot does not report eviction");
+      check(!catalog.adopt(fifth), "a dismissed free slot does not report eviction");
       const auto reordered = catalog.snapshot();
 
-      require(reordered.count == AttachmentLimits::maximum_items && reordered.items[0].id == 1 && reordered.items[1].id == 3 && reordered.items[3].id == fifth_id, "slot reuse must preserve chronological order");
+      check(reordered.count == AttachmentLimits::maximum_items && reordered.items[0].id == 1 && reordered.items[1].id == 3 && reordered.items[3].id == fifth_id, "slot reuse must preserve chronological order");
       auto sixth = capture(memory, sixth_id);
 
-      require(catalog.adopt(sixth) == AttachmentEviction::items && catalog.find(1) == nullptr, "the fifth retained preview must evict the oldest releasable identity");
-      require(catalog.ingressVersion() == sixth_id, "only successful adoptions advance ingress");
-      require(catalog.setTarget(other_prompt) && catalog.snapshot().count == 0 && !catalog.openModal(3), "another generation must neither expose nor open old previews");
-      require(catalog.removeVisible(other_prompt) == 0, "another generation cannot clear these previews");
-      require(catalog.setTarget(prompt) && catalog.snapshot().count == AttachmentLimits::maximum_items, "returning to the same prompt restores its previews");
+      check(catalog.adopt(sixth) == AttachmentEviction::items && catalog.find(1) == nullptr, "the fifth retained preview must evict the oldest releasable identity");
+      check(catalog.ingressVersion() == sixth_id, "only successful adoptions advance ingress");
+      check(catalog.setTarget(other_prompt) && catalog.snapshot().count == 0 && !catalog.openModal(3), "another generation must neither expose nor open old previews");
+      check(catalog.removeVisible(other_prompt) == 0, "another generation cannot clear these previews");
+      check(catalog.setTarget(prompt) && catalog.snapshot().count == AttachmentLimits::maximum_items, "returning to the same prompt restores its previews");
     }
 
-    require(memory.live == 0 && !memory.dirty_release, "catalog destruction must erase PNG storage");
+    check(memory.live == 0 && !memory.dirty_release, "catalog destruction must erase PNG storage");
   }
 
   void renderLeasesBlockReuseAndFailuresRetainCaptureOwnership() {
@@ -154,29 +151,29 @@ namespace {
       delivery.leased[id - 1] = true;
     }
 
-    require(catalog.remove(1), "leased previews may be dismissed");
+    check(catalog.remove(1), "leased previews may be dismissed");
     catalog.reapRetired();
-    require(catalog.retainedBytes() == AttachmentLimits::maximum_items, "a live render lease must retain its PNG");
+    check(catalog.retainedBytes() == AttachmentLimits::maximum_items, "a live render lease must retain its PNG");
     auto fifth = capture(memory, fifth_id);
 
     try {
       static_cast<void>(catalog.adopt(fifth));
-      require(false, "all leased slots must reject reuse");
+      check(false, "all leased slots must reject reuse");
     } catch (const std::runtime_error& error) {
-      require(std::string_view{error.what()} == "AttachmentSelfFull" && fifth.png.size() == 1, "failed adoption must retain the caller's capture");
+      check(std::string_view{error.what()} == "AttachmentSelfFull" && fifth.png.size() == 1, "failed adoption must retain the caller's capture");
     }
 
     delivery.leased[0] = false;
-    require(!catalog.adopt(fifth), "releasing a dismissed slot must not report eviction");
+    check(!catalog.adopt(fifth), "releasing a dismissed slot must not report eviction");
     delivery.fail = true;
     delivery.leased[1] = false;
     auto sixth = capture(memory, sixth_id);
 
     try {
       static_cast<void>(catalog.adopt(sixth));
-      require(false, "resource creation failure must propagate");
+      check(false, "resource creation failure must propagate");
     } catch (const std::runtime_error& error) {
-      require(std::string_view{error.what()} == "DeliveryFailed" && sixth.png.size() == 1, "failed presentation creation must retain the new PNG owner");
+      check(std::string_view{error.what()} == "DeliveryFailed" && sixth.png.size() == 1, "failed presentation creation must retain the new PNG owner");
     }
 
     delivery.leased.fill(false);
@@ -210,55 +207,53 @@ namespace {
     constexpr std::uint16_t second_end = 23;
     const AttachmentMarkerScreen screen{.cells = cells, .columns = columns, .rows = 1, .cursor = {.visible = true, .x = second_end}};
 
-    require(catalog.reconcileMarkers(prompt, screen) == 0, "first reconciliation must learn without retiring previews");
+    check(catalog.reconcileMarkers(prompt, screen) == 0, "first reconciliation must learn without retiring previews");
     const auto* const first = catalog.find(1);
     const auto* const second = catalog.find(2);
 
-    require(first != nullptr && second != nullptr, "both previews must be retained");
+    check(first != nullptr && second != nullptr, "both previews must be retained");
     if (first == nullptr || second == nullptr) {
       throw std::runtime_error{"MissingAttachment"};
     }
 
-    const auto first_marker = requireValue(first->marker, "the first preview must learn a marker");
-    const auto second_marker = requireValue(second->marker, "the second preview must learn a marker");
+    const auto first_marker_value = first->marker;
+
+    check(first_marker_value.has_value(), "the first preview must learn a marker");
+    const auto first_marker = *first_marker_value;
+    const auto second_marker_value = second->marker;
+
+    check(second_marker_value.has_value(), "the second preview must learn a marker");
+    const auto second_marker = *second_marker_value;
     constexpr std::uint16_t first_number = 11;
     constexpr std::uint16_t second_number = 12;
 
-    require(std::get<std::uint16_t>(first_marker) == first_number && std::get<std::uint16_t>(second_marker) == second_number, "oldest previews must pair with the oldest of the newest unclaimed numbers");
+    check(std::get<std::uint16_t>(first_marker) == first_number && std::get<std::uint16_t>(second_marker) == second_number, "oldest previews must pair with the oldest of the newest unclaimed numbers");
     const auto removal = catalog.planMarkerRemoval(1, screen);
 
-    require(removal.removal && removal.removal->steps == 2 && removal.removal->deletions == 1, "navigation must count another placeholder atomically");
-    require(catalog.markerAtDeletion(screen, AttachmentMarkerDeletion::backward) == 2, "backspace at the marker boundary must select its exact preview");
-    require(catalog.openModal(2), "the learned second preview must open");
+    check(removal.removal && removal.removal->steps == 2 && removal.removal->deletions == 1, "navigation must count another placeholder atomically");
+    check(catalog.markerAtDeletion(screen, AttachmentMarkerDeletion::backward) == 2, "backspace at the marker boundary must select its exact preview");
+    check(catalog.openModal(2), "the learned second preview must open");
 
     catalog.expectMarkerDeletion(prompt);
-    require(catalog.reconcileMarkers(prompt, screen) == 0, "an unrelated committed frame must retain the pending watch");
+    check(catalog.reconcileMarkers(prompt, screen) == 0, "an unrelated committed frame must retain the pending watch");
     put("[Image #11]");
-    require(catalog.reconcileMarkers(prompt, screen) == 1 && !catalog.snapshot().modal, "the next committed deletion must retire only the missing learned marker and close its modal");
+    check(catalog.reconcileMarkers(prompt, screen) == 1 && !catalog.snapshot().modal, "the next committed deletion must retire only the missing learned marker and close its modal");
     catalog.reapRetired();
     catalog.expectMarkerDeletion(prompt);
     for (std::uint8_t frame = 0; frame < AttachmentLimits::deletion_watch_frames; ++frame) {
-      require(catalog.reconcileMarkers(prompt, screen) == 0, "three unchanged frames must expire the watch without deleting anything");
+      check(catalog.reconcileMarkers(prompt, screen) == 0, "three unchanged frames must expire the watch without deleting anything");
     }
 
     put("");
-    require(catalog.reconcileMarkers(prompt, screen) == 0 && catalog.snapshot().count == 1, "later unrelated screen changes must not retire a preview after its watch expired");
+    check(catalog.reconcileMarkers(prompt, screen) == 0 && catalog.snapshot().count == 1, "later unrelated screen changes must not retire a preview after its watch expired");
     catalog.expectMarkerDeletion(prompt);
-    require(catalog.reconcileMarkers(prompt, screen) == 1 && catalog.snapshot().count == 0, "a new accepted deletion must rearm the learned-marker watch");
+    check(catalog.reconcileMarkers(prompt, screen) == 1 && catalog.snapshot().count == 0, "a new accepted deletion must rearm the learned-marker watch");
     catalog.reapRetired();
   }
 
-}
+  const telar::testing::Case case_sensitive_storage_preserves_its_owner_and_erases_every_allocation{"attachment_catalog.sensitive_storage_preserves_its_owner_and_erases_every_allocation", sensitiveStoragePreservesItsOwnerAndErasesEveryAllocation};
+  const telar::testing::Case case_slot_reuse_keeps_identity_order_and_exact_targets{"attachment_catalog.slot_reuse_keeps_identity_order_and_exact_targets", slotReuseKeepsIdentityOrderAndExactTargets};
+  const telar::testing::Case case_render_leases_block_reuse_and_failures_retain_capture_ownership{"attachment_catalog.render_leases_block_reuse_and_failures_retain_capture_ownership", renderLeasesBlockReuseAndFailuresRetainCaptureOwnership};
+  const telar::testing::Case case_learned_numbers_and_deletion_frames_follow_the_original_prompt{"attachment_catalog.learned_numbers_and_deletion_frames_follow_the_original_prompt", learnedNumbersAndDeletionFramesFollowTheOriginalPrompt};
 
-int main() try {
-  sensitiveStoragePreservesItsOwnerAndErasesEveryAllocation();
-  slotReuseKeepsIdentityOrderAndExactTargets();
-  renderLeasesBlockReuseAndFailuresRetainCaptureOwnership();
-  learnedNumbersAndDeletionFramesFollowTheOriginalPrompt();
-
-  return 0;
-} catch (const std::exception& error) {
-  std::cerr << error.what() << '\n';
-
-  return 1;
 }

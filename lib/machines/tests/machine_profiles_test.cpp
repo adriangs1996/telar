@@ -3,35 +3,31 @@
 static_assert(true);
 #endif
 
-#include "assertions.hpp"
-#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <exception>
-#include <iostream>
 #include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
-import telar.gui.features.machines;
+import telar.testing;
+import telar.machines;
 
 namespace {
 
-  using namespace telar::gui;
-
-  using namespace telar::gui::features::machines;
-  using telar::gui::test::require;
+  using telar::testing::check;
+  using namespace telar;
+  using namespace telar::runtime::machines;
 
   template <typename Operation>
   void rejects(MachineError expected, Operation operation) {
     try {
       operation();
     } catch (const MachineFailure& failure) {
-      require(failure.code() == expected, "machine operation must retain the original error category");
+      check(failure.code() == expected, "machine operation must retain the original error category");
 
       return;
     }
@@ -42,7 +38,7 @@ namespace {
   void identitiesKeepTheirStableRepresentation() {
     const auto identity = MachineId::parse("m-0123456789ab");
 
-    require(identity.format().view() == "m-0123456789ab", "machine identities must retain all twelve lowercase hexadecimal digits");
+    check(identity.format().view() == "m-0123456789ab", "machine identities must retain all twelve lowercase hexadecimal digits");
     rejects(MachineError::invalid_id, [] {
       static_cast<void>(MachineId::parse("m-000000000000"));
     });
@@ -62,7 +58,7 @@ namespace {
     profiles.add(MachineProfile::create(first, {.label = "one", .destination = "user@one"}));
     profiles.add(MachineProfile::create(second, {.label = "two", .destination = "user@two"}));
     profiles.rename("one", "renamed");
-    require(profiles.rows().front().identity() == first && profiles.find("renamed") == 0, "renaming must preserve the connection identity and row position");
+    check(profiles.rows().front().identity() == first && profiles.find("renamed") == 0, "renaming must preserve the connection identity and row position");
     rejects(MachineError::duplicate_label, [&] {
       profiles.rename("renamed", "two");
     });
@@ -75,11 +71,11 @@ namespace {
       profiles.rename("renamed", "bad name");
     });
 
-    require(profiles.rows().front().label() == "renamed", "a rejected rename must retain the original profile");
+    check(profiles.rows().front().label() == "renamed", "a rejected rename must retain the original profile");
     profiles.enable("renamed", false);
-    require(!profiles.rows().front().enabled(), "disabling must retain the saved row");
+    check(!profiles.rows().front().enabled(), "disabling must retain the saved row");
     profiles.remove("renamed");
-    require(profiles.rows().size() == 1 && profiles.rows().front().identity() == second, "removal must retain the relative order of surviving profiles");
+    check(profiles.rows().size() == 1 && profiles.rows().front().identity() == second, "removal must retain the relative order of surviving profiles");
     rejects(MachineError::unknown_machine, [&] {
       profiles.remove("missing");
     });
@@ -93,20 +89,20 @@ namespace {
     auto const* source = R"({"version":1,"local_label":"local","machines":[{"id":"m-000000000001","label":"box","destination":"dev@é'box","color":"#a0B1c2","enabled":false}]})";
     auto profiles = MachineProfileCodec::parse(memory, source);
 
-    require(profiles.version() == MachineProfiles::plain_format_version, "profiles without setup metadata must stay readable by version-one clients");
+    check(profiles.version() == MachineProfiles::plain_format_version, "profiles without setup metadata must stay readable by version-one clients");
     profiles.placeProgram("box", "/home/dev/.local/bin/telar");
     profiles.recordLogin("box", MachineAgent::codex, MachineLogin::done);
-    require(profiles.version() == MachineProfiles::extended_format_version, "setup metadata must select version two");
+    check(profiles.version() == MachineProfiles::extended_format_version, "setup metadata must select version two");
     {
       const auto encoded = MachineProfileCodec::format(memory, profiles);
       const auto decoded = MachineProfileCodec::parse(memory, encoded);
       const auto& profile = decoded.rows().front();
 
-      require(decoded.localLabel() == "local" && profile.label() == "box" && profile.destination() == "dev@é'box" && profile.color() == "#a0B1c2" && !profile.enabled(), "JSON round trips must retain local and remote identity fields");
-      require(profile.program() == "/home/dev/.local/bin/telar" && profile.login(MachineAgent::codex) == MachineLogin::done, "JSON round trips must retain installed program paths and agent login metadata");
+      check(decoded.localLabel() == "local" && profile.label() == "box" && profile.destination() == "dev@é'box" && profile.color() == "#a0B1c2" && !profile.enabled(), "JSON round trips must retain local and remote identity fields");
+      check(profile.program() == "/home/dev/.local/bin/telar" && profile.login(MachineAgent::codex) == MachineLogin::done, "JSON round trips must retain installed program paths and agent login metadata");
     }
 
-    require(budget.liveBytes() == 0, "parsed profiles must own inline text and release every temporary allocation");
+    check(budget.liveBytes() == 0, "parsed profiles must own inline text and release every temporary allocation");
   }
 
   void strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields() {
@@ -158,7 +154,7 @@ namespace {
       profiles.add(MachineProfile::create(MachineId::fromRaw(1), {.label = "different", .destination = "box1"}));
     });
 
-    require(profiles.rows().size() == MachineLimits::profiles - 1, "rejected profile admissions must not consume capacity");
+    check(profiles.rows().size() == MachineLimits::profiles - 1, "rejected profile admissions must not consume capacity");
   }
 
   void remoteArgumentsRetainTheirValidationBoundaries() {
@@ -204,23 +200,15 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && budget.liveBytes() == 0 && budget.failures() != 0, "allocation rejection must stay observable and release every parser temporary");
+    check(rejected && budget.liveBytes() == 0 && budget.failures() != 0, "allocation rejection must stay observable and release every parser temporary");
   }
 
-}
+  const telar::testing::Case case_identities_keep_their_stable_representation{"machine_profiles.identities_keep_their_stable_representation", identitiesKeepTheirStableRepresentation};
+  const telar::testing::Case case_profiles_preserve_identity_order_and_rejected_edits{"machine_profiles.profiles_preserve_identity_order_and_rejected_edits", profilesPreserveIdentityOrderAndRejectedEdits};
+  const telar::testing::Case case_versions_and_json_round_trips_preserve_every_field{"machine_profiles.versions_and_json_round_trips_preserve_every_field", versionsAndJsonRoundTripsPreserveEveryField};
+  const telar::testing::Case case_strict_json_rejects_unknown_duplicated_and_wrongly_typed_fields{"machine_profiles.strict_json_rejects_unknown_duplicated_and_wrongly_typed_fields", strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields};
+  const telar::testing::Case case_capacity_and_uniqueness_have_the_original_admission_order{"machine_profiles.capacity_and_uniqueness_have_the_original_admission_order", capacityAndUniquenessHaveTheOriginalAdmissionOrder};
+  const telar::testing::Case case_remote_arguments_retain_their_validation_boundaries{"machine_profiles.remote_arguments_retain_their_validation_boundaries", remoteArgumentsRetainTheirValidationBoundaries};
+  const telar::testing::Case case_allocation_rejection_releases_every_temporary{"machine_profiles.allocation_rejection_releases_every_temporary", allocationRejectionReleasesEveryTemporary};
 
-int main() {
-  try {
-    identitiesKeepTheirStableRepresentation();
-    profilesPreserveIdentityOrderAndRejectedEdits();
-    versionsAndJsonRoundTripsPreserveEveryField();
-    strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields();
-    capacityAndUniquenessHaveTheOriginalAdmissionOrder();
-    remoteArgumentsRetainTheirValidationBoundaries();
-    allocationRejectionReleasesEveryTemporary();
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-
-    return 1;
-  }
 }

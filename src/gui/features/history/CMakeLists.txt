@@ -9,3 +9,7 @@ telar_add_domain(gui features/history
     history-motion.cpp
     history-pointer.cpp
   DEPS foundation/core foundation/text foundation/drawing foundation/forms)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(features/history TIMEOUT 30)
+endif()

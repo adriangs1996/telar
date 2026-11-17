@@ -5,9 +5,9 @@ static_assert(true);
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 
 import std;
+import telar.testing;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.links;
@@ -15,15 +15,10 @@ import telar.wire.vocabulary;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar;
   using namespace telar::gui;
   using namespace telar::gui::features::terminal::links;
-
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
 
   LinkHit hit(std::string_view text = "https://first.test") {
     const auto target = LinkTarget::fromUri(text);
@@ -61,15 +56,15 @@ namespace {
 
       ++(changed.*field);
       gesture.validate(hit(), changed);
-      require(!gesture.finish(hit(), original), "a restored context must not revive an intervening cancellation");
+      check(!gesture.finish(hit(), original), "a restored context must not revive an intervening cancellation");
     }
 
     gesture.begin(hit(), original);
-    require(gesture.finish(hit(), original).has_value() && !gesture.active(), "an unchanged press and release must open exactly once");
-    require(!gesture.finish(hit(), original), "a second release must not reopen a completed click");
+    check(gesture.finish(hit(), original).has_value() && !gesture.active(), "an unchanged press and release must open exactly once");
+    check(!gesture.finish(hit(), original), "a second release must not reopen a completed click");
     gesture.begin(hit(), original);
     gesture.cancel();
-    require(!gesture.finish(hit(), original), "a drag or lost grab must not open a target");
+    check(!gesture.finish(hit(), original), "a drag or lost grab must not open a target");
   }
 
   void completeHitIdentity() {
@@ -130,7 +125,7 @@ namespace {
 
       gesture.begin(hit(), {});
       gesture.validate(changed, {});
-      require(!gesture.finish(hit(), {}), "every part of a link hit must retain its identity throughout the click");
+      check(!gesture.finish(hit(), {}), "every part of a link hit must retain its identity throughout the click");
     }
   }
 
@@ -138,25 +133,25 @@ namespace {
     LinkHover hover;
 
     static_cast<void>(hover.assign(hit(), surface(), true));
-    require(!hover.openable(surface()), "unpresented geometry must not authorize a link");
+    check(!hover.openable(surface()), "unpresented geometry must not authorize a link");
     const auto prepared = hover.prepare(surface(), {});
 
     static_cast<void>(hover.assign(hit("https://second.test"), surface(), false));
     hover.present(prepared);
-    require(!hover.openable(surface()), "a frame must publish its captured target rather than a later pointer resolution");
+    check(!hover.openable(surface()), "a frame must publish its captured target rather than a later pointer resolution");
     const auto next = hover.prepare(surface(), {});
 
     hover.present(next, false);
-    require(!hover.openable(surface()), "a discarded frame must not authorize its target");
+    check(!hover.openable(surface()), "a discarded frame must not authorize its target");
     hover.present(next);
-    require(hover.openable(surface()), "a delivered matching target must become openable");
+    check(hover.openable(surface()), "a delivered matching target must become openable");
 
     static_cast<void>(hover.assign(hit("https://third.test"), surface(), true));
-    require(hover.openable(surface()), "a new hover over an already displayed terminal frame needs no extra frame");
+    check(hover.openable(surface()), "a new hover over an already displayed terminal frame needs no extra frame");
     auto moved = surface();
 
     ++moved.content.x;
-    require(!hover.openable(moved), "pointer input must wait for matching displayed geometry");
+    check(!hover.openable(moved), "pointer input must wait for matching displayed geometry");
   }
 
   void deliveredCover() {
@@ -166,24 +161,24 @@ namespace {
     const Rect cover{.x = 2, .y = 3, .width = 10, .height = 2};
 
     hover.present(hover.prepare(surface(), cover));
-    require(hover.covers({.x = 3, .y = 4}) && !hover.covers({.x = cover.x + cover.width, .y = 4}), "tooltip coverage must use its delivered rectangle with an exclusive right edge");
+    check(hover.covers({.x = 3, .y = 4}) && !hover.covers({.x = cover.x + cover.width, .y = 4}), "tooltip coverage must use its delivered rectangle with an exclusive right edge");
     hover.clear();
-    require(hover.covers({.x = 3, .y = 4}) && !hover.current(), "hiding a tooltip must preserve its input coverage until the replacement frame is delivered");
+    check(hover.covers({.x = 3, .y = 4}) && !hover.current(), "hiding a tooltip must preserve its input coverage until the replacement frame is delivered");
     hover.present(hover.prepare(surface(), {}));
-    require(!hover.covers({.x = 3, .y = 4}), "a delivered clearing frame must release the covered cells");
+    check(!hover.covers({.x = 3, .y = 4}), "a delivered clearing frame must release the covered cells");
   }
 
   void pointerPolicy() {
-    require(LinkPointerPolicy::hover(LinkScheme::https, {}) == LinkAffordance::link, "plain URIs must expose link affordances");
-    require(LinkPointerPolicy::hover(LinkScheme::path, {}) == LinkAffordance::text && LinkPointerPolicy::hover(LinkScheme::path, {.native = true}) == LinkAffordance::link, "guessed paths must require the native link modifier");
-    require(LinkPointerPolicy::hover(LinkScheme::https, {.alt = true}) == LinkAffordance::pointer && LinkPointerPolicy::hover(LinkScheme::path, {.alt = true}) == LinkAffordance::pointer, "Alt must preserve the pointer shape while removing the link target");
-    require(LinkPointerPolicy::press({.has_link = true, .openable = true}) == LinkPress::arm_shared, "a plain URI click must share its press with selection");
-    require(LinkPointerPolicy::press({.modifiers = {.native = true}, .has_link = true, .openable = true}) == LinkPress::arm_exclusive, "the native modifier must retain an openable link press");
-    require(LinkPointerPolicy::press({.modifiers = {.native = true}, .has_link = true}) == LinkPress::discard, "an unpresented modified link must swallow its complete click");
-    require(LinkPointerPolicy::press({.modifiers = {.native = true}, .child_tracking = true, .has_link = true, .openable = true}) == LinkPress::passthrough, "child mouse tracking must retain its ordinary modified presses");
-    require(LinkPointerPolicy::press({.modifiers = {.native = true, .shift = true}, .child_tracking = true, .has_link = true, .openable = true}) == LinkPress::arm_exclusive, "Shift must allow a link press to override child mouse tracking");
-    require(LinkPointerPolicy::press({.button = LinkButton::right, .modifiers = {.alt = true}, .child_tracking = true, .has_link = true, .frame_presented = true}) == LinkPress::copy, "right click must copy a displayed target independently of child mouse tracking and Alt");
-    require(LinkPointerPolicy::press({.button = LinkButton::right, .has_link = true}) == LinkPress::discard, "right click must swallow an unpresented target without copying it");
+    check(LinkPointerPolicy::hover(LinkScheme::https, {}) == LinkAffordance::link, "plain URIs must expose link affordances");
+    check(LinkPointerPolicy::hover(LinkScheme::path, {}) == LinkAffordance::text && LinkPointerPolicy::hover(LinkScheme::path, {.native = true}) == LinkAffordance::link, "guessed paths must require the native link modifier");
+    check(LinkPointerPolicy::hover(LinkScheme::https, {.alt = true}) == LinkAffordance::pointer && LinkPointerPolicy::hover(LinkScheme::path, {.alt = true}) == LinkAffordance::pointer, "Alt must preserve the pointer shape while removing the link target");
+    check(LinkPointerPolicy::press({.has_link = true, .openable = true}) == LinkPress::arm_shared, "a plain URI click must share its press with selection");
+    check(LinkPointerPolicy::press({.modifiers = {.native = true}, .has_link = true, .openable = true}) == LinkPress::arm_exclusive, "the native modifier must retain an openable link press");
+    check(LinkPointerPolicy::press({.modifiers = {.native = true}, .has_link = true}) == LinkPress::discard, "an unpresented modified link must swallow its complete click");
+    check(LinkPointerPolicy::press({.modifiers = {.native = true}, .child_tracking = true, .has_link = true, .openable = true}) == LinkPress::passthrough, "child mouse tracking must retain its ordinary modified presses");
+    check(LinkPointerPolicy::press({.modifiers = {.native = true, .shift = true}, .child_tracking = true, .has_link = true, .openable = true}) == LinkPress::arm_exclusive, "Shift must allow a link press to override child mouse tracking");
+    check(LinkPointerPolicy::press({.button = LinkButton::right, .modifiers = {.alt = true}, .child_tracking = true, .has_link = true, .frame_presented = true}) == LinkPress::copy, "right click must copy a displayed target independently of child mouse tracking and Alt");
+    check(LinkPointerPolicy::press({.button = LinkButton::right, .has_link = true}) == LinkPress::discard, "right click must swallow an unpresented target without copying it");
   }
 
   void regionTraversal() {
@@ -201,35 +196,26 @@ namespace {
     match.end = {.x = last_column, .y = offset + 2};
     LinkRegions plain{match, grid, {}};
 
-    require(plain.next() == LinkRegion{.x = 2, .y = 0, .width = last_column}, "plain underlines must skip wide-glyph padding");
-    require(plain.next() == LinkRegion{.x = 0, .y = 1, .width = columns}, "plain underlines must continue across logical rows");
-    require(plain.next() == LinkRegion{.x = 0, .y = 2, .width = last_column} && !plain.next(), "plain underlines must stop at the exclusive link end");
+    check(plain.next() == LinkRegion{.x = 2, .y = 0, .width = last_column}, "plain underlines must skip wide-glyph padding");
+    check(plain.next() == LinkRegion{.x = 0, .y = 1, .width = columns}, "plain underlines must continue across logical rows");
+    check(plain.next() == LinkRegion{.x = 0, .y = 2, .width = last_column} && !plain.next(), "plain underlines must stop at the exclusive link end");
 
     match.metadata_index = 1;
     const std::array runs{MetadataRun{.start = 1, .len = 2, .link_index = 1}, MetadataRun{.start = last_column, .len = 2, .link_index = 0}, MetadataRun{.start = columns + 1, .len = 3, .link_index = 1}};
     LinkRegions osc8{match, grid, runs};
 
-    require(osc8.next() == LinkRegion{.x = 1, .y = 0, .width = 2}, "OSC 8 underlines must use metadata run bounds");
-    require(osc8.next() == LinkRegion{.x = 1, .y = 1, .width = 3} && !osc8.next(), "every run of an OSC 8 identity must be underlined without including neighboring identities");
+    check(osc8.next() == LinkRegion{.x = 1, .y = 0, .width = 2}, "OSC 8 underlines must use metadata run bounds");
+    check(osc8.next() == LinkRegion{.x = 1, .y = 1, .width = 3} && !osc8.next(), "every run of an OSC 8 identity must be underlined without including neighboring identities");
     LinkRegions clipped{match, grid, runs, {.columns = 2, .rows = 1}};
 
-    require(clipped.next() == LinkRegion{.x = 1, .y = 0, .width = 1} && !clipped.next(), "the iterator must clip to the visible pane before producing render geometry");
+    check(clipped.next() == LinkRegion{.x = 1, .y = 0, .width = 1} && !clipped.next(), "the iterator must clip to the visible pane before producing render geometry");
   }
 
-}
+  const telar::testing::Case case_gesture_contexts{"link_interaction.gesture_contexts", gestureContexts};
+  const telar::testing::Case case_complete_hit_identity{"link_interaction.complete_hit_identity", completeHitIdentity};
+  const telar::testing::Case case_prepared_presentation{"link_interaction.prepared_presentation", preparedPresentation};
+  const telar::testing::Case case_delivered_cover{"link_interaction.delivered_cover", deliveredCover};
+  const telar::testing::Case case_pointer_policy{"link_interaction.pointer_policy", pointerPolicy};
+  const telar::testing::Case case_region_traversal{"link_interaction.region_traversal", regionTraversal};
 
-int main() {
-  try {
-    gestureContexts();
-    completeHitIdentity();
-    preparedPresentation();
-    deliveredCover();
-    pointerPolicy();
-    regionTraversal();
-    std::puts("gui-link-interaction: passed");
-  } catch (const std::exception& error) {
-    std::cerr << "gui-link-interaction: " << error.what() << '\n';
-
-    return 1;
-  }
 }
