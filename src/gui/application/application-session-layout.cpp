@@ -15,7 +15,7 @@ import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 import telar.gui.paths.label;
 import telar.gui.presentation.application_mark;
-import telar.gui.suggestions.state;
+import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -885,7 +885,7 @@ namespace telar::gui::application {
     copy_search_request_ = 0;
     history_.suspend();
     path_picker_.close();
-    suggestion_.invalidate();
+    features::palette::discard(palette_);
     graphics_pauses_.reset();
     editor_opening_.reset();
     ++view_version_.workspace;

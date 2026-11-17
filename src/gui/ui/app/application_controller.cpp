@@ -53,11 +53,9 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.config.gui_query;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_pointer;
 import telar.gui.machines.picker;
-import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
 import telar.gui.presentation.history_inspection;
 import telar.wire.vocabulary;

@@ -3,4 +3,4 @@ telar_add_domain(gui machines
     discovery/discovery.cpp
     picker/picker.cpp
     profile_store/profile_store.cpp
-  DEPS foundation/core foundation/text foundation/model palette)
+  DEPS foundation/core foundation/text foundation/model)

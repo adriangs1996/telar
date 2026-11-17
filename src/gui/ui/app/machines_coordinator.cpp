@@ -243,7 +243,7 @@ namespace telar::gui::qt {
     emit selecting();
     host_.releaseInput();
     dialogs_.show(Store::Dialog::none);
-    store_.session().invalidateSuggestion();
+    application::palette::discard(store_.session());
     store_.session().setPresented(false);
     store_.advanceMachineView();
     host_.forgetView();

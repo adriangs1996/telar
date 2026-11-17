@@ -33,7 +33,6 @@ static_assert(true);
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.generation;
-import telar.gui.presentation.suggestion_geometry;
 
 import telar.gui.config.gui_query;
 import telar.gui.application;

@@ -22,10 +22,9 @@ static_assert(true);
 
 import telar.gui.machines.picker;
 import telar.gui.foundation.model;
-import telar.gui.palette.navigation_label;
+import telar.gui.application;
 import telar.gui.foundation.text;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.suggestion_geometry;
 
 namespace telar::gui::qt {
 
@@ -98,7 +97,7 @@ namespace telar::gui::qt {
     Q_INVOKABLE void submitSuggestion(const QString& revision);
 
     // Starts the palette in a mode, with an empty query; the window shows its dialog.
-    void open(PaletteMode mode);
+    void open(application::palette::PaletteMode mode);
     // Matches the query again while the palette is open, and notifies when the rows moved.
     void synchronize();
     // The machines moved: a machine query, which starts with ':', matches them again.
@@ -111,7 +110,7 @@ namespace telar::gui::qt {
     void setDisplay(const DisplayMetrics& display);
     void setCommands(QVariantList commands);
 
-    [[nodiscard]] PaletteMode mode() const;
+    [[nodiscard]] application::palette::PaletteMode mode() const;
     [[nodiscard]] const QString& query() const noexcept;
     [[nodiscard]] std::optional<MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
     // Returns to the actions palette the suggestion was opened from; false when the palette is
@@ -167,7 +166,7 @@ namespace telar::gui::qt {
     QVariantList rows_;
     QVariantList commands_;
     std::array<PaletteTarget, capacity> targets_{};
-    std::array<PaletteRowKind, capacity> kinds_{};
+    std::array<application::palette::PaletteRowKind, capacity> kinds_{};
     std::size_t selection_ = 0;
     std::uint64_t revision_ = 0;
     std::uint64_t rebuilds_ = 0;

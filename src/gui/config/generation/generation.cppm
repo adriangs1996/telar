@@ -14,7 +14,6 @@ import telar.gui.foundation.core;
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
-import telar.gui.presentation.suggestion_geometry;
 import telar.wire.vocabulary;
 import telar.config.gui;
 import telar.config.client;

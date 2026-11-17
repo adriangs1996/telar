@@ -53,7 +53,6 @@ import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
 import telar.gui.input.copy_pointer;
-import telar.gui.presentation.suggestion_geometry;
 import telar.config.client;
 import telar.plugins;
 

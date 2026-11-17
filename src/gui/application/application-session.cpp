@@ -12,7 +12,7 @@ import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
 import telar.gui.paths.label;
 import telar.gui.features.peek;
-import telar.gui.suggestions.state;
+import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -207,7 +207,7 @@ namespace telar::gui::application {
     history_.suspend();
     path_picker_.close();
     features::peek::close(peek_);
-    suggestion_.invalidate();
+    features::palette::discard(palette_);
     pending_count_ = 0;
     editor_opening_.reset();
     failPromptRequests();

@@ -12,3 +12,4 @@ export import :workspace_replica;
 export import :configuration;
 export import :session;
 export import :peek;
+export import :palette;

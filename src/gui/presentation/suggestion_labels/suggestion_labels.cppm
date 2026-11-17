@@ -4,7 +4,6 @@ import std;
 
 import telar.gui.foundation.core;
 
-import telar.gui.suggestions.state;
 import telar.wire.vocabulary;
 
 // Interface: presentation/agent_animation.cppm
@@ -37,21 +36,6 @@ export {
       CellRectangle footer{};
 
       [[nodiscard]] static AttachmentModalGeometry measure(CellRectangle host) noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/suggestion_labels.cppm
-export {
-  namespace telar::gui {
-
-    struct SuggestionLabels {
-      [[nodiscard]] static std::string_view heading(SuggestionPhase phase) noexcept;
-      [[nodiscard]] static std::string_view message(SuggestionPhase phase, SuggestionStatus status) noexcept;
-      [[nodiscard]] static std::string_view button(SuggestionPhase phase) noexcept;
-      [[nodiscard]] static std::string_view footer(SuggestionPhase phase) noexcept;
-      [[nodiscard]] static bool canSubmit(SuggestionPhase phase, std::string_view query) noexcept;
     };
 
   }

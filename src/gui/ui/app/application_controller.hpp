@@ -69,7 +69,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.suggestion_geometry;
 import telar.gui.application;
 import telar.gui.prompt.line;
 import telar.gui.presentation.history_filter_geometry;

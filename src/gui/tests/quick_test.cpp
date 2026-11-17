@@ -145,7 +145,6 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
-import telar.gui.palette.navigation_label;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection;
@@ -5042,7 +5041,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
       QCOMPARE(peer.result().text, QString{});
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
-      QCOMPARE(client_->palette()->state().value(QStringLiteral("mode")).toInt(), static_cast<int>(PaletteMode::navigate));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("mode")).toInt(), static_cast<int>(application::palette::PaletteMode::navigate));
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("@"));
       QCOMPARE(client_->palette()->state().value(QStringLiteral("query")).toString(), QString{});
       QVERIFY(client_->palette()->state().value(QStringLiteral("count")).toInt() > 0);

@@ -7,7 +7,6 @@ import telar.gui.machines.discovery;
 
 import telar.gui.machines.profile_store;
 
-import telar.gui.palette.navigation_label;
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
 import telar.base.memory.containers;

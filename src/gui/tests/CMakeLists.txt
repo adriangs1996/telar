@@ -127,7 +127,7 @@ telar_add_test(gui-scroll-test SOURCES scroll_test.cpp LIBRARIES gui-foundation-
   TEST gui-scroll LABELS gui.application)
 telar_add_test(gui-host-metrics-test SOURCES host_metrics_test.cpp LIBRARIES gui-foundation-core gui-core gui-presentation gui-application gui-test-fixtures
   TEST gui-host-metrics LABELS gui.application)
-telar_add_test(gui-palette-test SOURCES palette_test.cpp LIBRARIES gui-foundation-core gui-foundation-text gui-core gui-palette gui-presentation
+telar_add_test(gui-palette-test SOURCES palette_test.cpp LIBRARIES gui-foundation-core gui-foundation-text gui-core gui-features-palette gui-presentation
   TEST gui-palette LABELS gui.palette)
 target_compile_options(gui-palette-test PRIVATE -ffp-contract=off)
 
@@ -149,7 +149,7 @@ telar_add_test(gui-path-picker-session-test SOURCES path_picker_session_test.cpp
 telar_add_test(gui-path-picker-test SOURCES path_picker_test.cpp LIBRARIES gui-foundation-core gui-core gui-paths gui-presentation deps::ghostty_vt
   TEST gui-path-picker LABELS gui.paths)
 
-telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-core gui-suggestions gui-input gui-presentation deps::ghostty_vt
+telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-core gui-features-palette gui-input gui-presentation deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.suggestions)
 
 telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES gui-prompt
@@ -158,7 +158,7 @@ telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES g
 telar_add_test(gui-prompt-session-test SOURCES prompt_session_test.cpp LIBRARIES gui-foundation-core gui-core gui-prompt gui-application gui-test-fixtures
   TEST gui-prompt-session LABELS gui.prompt)
 
-telar_add_test(gui-suggestion-session-test SOURCES suggestion_session_test.cpp LIBRARIES gui-suggestions gui-application gui-test-fixtures
+telar_add_test(gui-suggestion-session-test SOURCES suggestion_session_test.cpp LIBRARIES gui-features-palette gui-application gui-test-fixtures
   TEST gui-suggestion-session LABELS gui.suggestions)
 
 telar_add_test(gui-machine-profiles-test SOURCES machine_profiles_test.cpp LIBRARIES gui-machines

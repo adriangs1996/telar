@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.gui.presentation.activity_order;
 import telar.gui.machines.picker;
+import telar.gui.presentation.suggestion_geometry;
 
 namespace telar::gui::qt {
 

@@ -73,7 +73,6 @@ import telar.gui.config.plugin_effects;
 import telar.gui.links.cell_links;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
-import telar.gui.palette.navigation_label;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -239,8 +238,8 @@ namespace telar::gui::qt {
   QVariantList WindowCommands::list() const {
     QVariantList commands;
 
-    commands.reserve(static_cast<qsizetype>(palette_actions.size()));
-    for (const auto& entry : palette_actions) {
+    commands.reserve(static_cast<qsizetype>(application::palette::palette_actions.size()));
+    for (const auto& entry : application::palette::palette_actions) {
       const auto action = nativeAction(entry.action);
       if (!action) {
         continue;
@@ -717,11 +716,11 @@ namespace telar::gui::qt {
       dialogs_.show(Dialog::history);
       history_.open();
     } else if (action == window_actions::Action::palette || action == window_actions::Action::goto_picker) {
-      dialogs_.showPalette(action == window_actions::Action::palette ? PaletteMode::actions : PaletteMode::navigate);
+      dialogs_.showPalette(action == window_actions::Action::palette ? application::palette::PaletteMode::actions : application::palette::PaletteMode::navigate);
     } else if (action == window_actions::Action::path_picker) {
       dialogs_.showPaths();
     } else if (action == window_actions::Action::suggest_command) {
-      dialogs_.showPalette(PaletteMode::suggest);
+      dialogs_.showPalette(application::palette::PaletteMode::suggest);
     } else if (action == window_actions::Action::new_workspace || action == window_actions::Action::rename_tab || action == window_actions::Action::rename_workspace) {
       dialogs_.show(dialogFor(action));
     } else if (action == window_actions::Action::copy_mode) {
@@ -741,7 +740,7 @@ namespace telar::gui::qt {
   }
 
   void WindowCommands::cancelCurrentInteraction() {
-    store_.session().invalidateSuggestion();
+    application::palette::discard(store_.session());
     if (palette_.restoreParent()) {
       return;
     }
@@ -761,7 +760,7 @@ namespace telar::gui::qt {
   bool WindowCommands::executeMachineAction(window_actions::Action action) {
     switch (action) {
     case window_actions::Action::machine_picker:
-      dialogs_.showPalette(PaletteMode::machines);
+      dialogs_.showPalette(application::palette::PaletteMode::machines);
       break;
     case window_actions::Action::next_machine:
       machines_.move(1);

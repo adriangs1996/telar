@@ -95,7 +95,7 @@ namespace telar::gui::qt {
     return store_.dialog().line_search_pane == 0 ? QString{} : QString::number(store_.dialog().line_search_pane);
   }
 
-  void Dialogs::showPalette(PaletteMode mode) {
+  void Dialogs::showPalette(application::palette::PaletteMode mode) {
     palette_.open(mode);
     show(Dialog::palette);
   }

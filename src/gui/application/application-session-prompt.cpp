@@ -6,8 +6,6 @@ import telar.ebnf.matcher;
 import telar.gui.input.configuration;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.core;
-import telar.gui.foundation.model;
-import telar.gui.suggestions.state;
 import telar.gui.foundation.actions;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
@@ -294,62 +292,6 @@ namespace telar::gui::application {
 
   void Session::copyHistory(std::uint64_t entry_id) {
     clipboard_ = history_.command(entry_id);
-  }
-
-  void Session::beginSuggestion() noexcept {
-    suggestion_.begin();
-  }
-
-  void Session::invalidateSuggestion() noexcept {
-    suggestion_.invalidate();
-  }
-
-  const SuggestionState& Session::suggestion() const noexcept {
-    return suggestion_;
-  }
-
-  bool Session::submitSuggestion(std::string_view text) {
-    const auto* pane = focusedPane();
-
-    if (suggestion_.phase() == SuggestionPhase::ready) {
-      if (!ready_ || pane == nullptr || !pane->attached || pane->exited || copy_mode_.active()) {
-        return false;
-      }
-
-      if (editsPrompt(pane->id)) {
-        promptText(pane->id, suggestion_.text());
-        return true;
-      }
-
-      const auto bracketed = pane->screen.modes().bracketed_paste;
-
-      HistoryText::validate(suggestion_.text(), bracketed);
-      const auto encoded = PasteEncoding::encode<SuggestionLimits::text_bytes>(suggestion_.text(), bracketed);
-
-      input(pane->id, encoded.view());
-
-      return true;
-    }
-
-    if (text.empty() || suggestion_.phase() == SuggestionPhase::waiting) {
-      return false;
-    }
-
-    if (!ready_ || pane == nullptr || !pane->attached || pane->exited) {
-      constexpr std::uint64_t failed_request = 1;
-
-      suggestion_.expect(failed_request);
-      static_cast<void>(suggestion_.receive({.request_id = failed_request, .status = SuggestionStatus::failed}));
-
-      return false;
-    }
-
-    const SuggestCommand request{.request_id = nextRequest(), .pane_id = pane->id, .text = text};
-
-    send(request);
-    suggestion_.expect(request.request_id);
-
-    return false;
   }
 
   bool Session::beginPathPicker() {
@@ -659,7 +601,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const CommandSuggestion& message) {
-    return suggestion_.receive(message) ? Change::suggestion : Change::none;
+    return palette::receive(*this, message);
   }
 
   std::optional<std::uint32_t> Session::livePromptRow(const Pane<Memory>& pane) {

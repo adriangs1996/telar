@@ -10,13 +10,13 @@ static_assert(true);
 
 import std;
 import telar.gui.foundation.core;
-import telar.gui.palette.navigation_label;
+import telar.gui.features.palette;
 import telar.gui.foundation.text;
-import telar.gui.presentation.suggestion_geometry;
 
 namespace {
 
   using namespace telar::gui;
+  using namespace telar::gui::features::palette;
 
   void require(bool condition, const char* message) {
     if (!condition) {

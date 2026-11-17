@@ -32,11 +32,9 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
-import telar.gui.presentation.suggestion_geometry;
-import telar.gui.presentation.suggestion_labels;
 import telar.gui.foundation.forms;
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.suggestions.state;
+import telar.gui.features.palette;
 import telar.gui.foundation.model;
 import telar.gui.foundation.terminal;
 
@@ -44,48 +42,52 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using features::palette::PaletteGeometry;
+  using features::palette::SuggestionGeometry;
+  using features::palette::SuggestionLabels;
+  using features::palette::SuggestionPhase;
   using telar::gui::test::require;
 
   void repliesBelongToOnlyTheCurrentRequest() {
-    SuggestionState state;
+    features::palette::State state;
 
-    state.begin();
-    require(state.phase() == SuggestionPhase::idle && state.revision() == 1, "opening must start an empty suggestion generation");
-    state.expect(1);
-    state.expect(2);
-    require(!state.receive({.request_id = 0, .text = "zero"}) && !state.receive({.request_id = 1, .text = "stale"}), "zero and superseded replies must not replace the current generation");
+    features::palette::suggest(state);
+    require(features::palette::suggestion(state).phase == SuggestionPhase::idle && features::palette::suggestion(state).revision == 1, "opening must start an empty suggestion generation");
+    features::palette::wait(state, 1);
+    features::palette::wait(state, 2);
+    require(!features::palette::receive(state, {.request_id = 0, .text = "zero"}) && !features::palette::receive(state, {.request_id = 1, .text = "stale"}), "zero and superseded replies must not replace the current generation");
     std::string command = "printf 'review first'";
 
-    require(state.receive({.request_id = 2, .text = command}), "the awaited reply must land");
+    require(features::palette::receive(state, {.request_id = 2, .text = command}), "the awaited reply must land");
     command.assign("destroyed");
-    require(state.phase() == SuggestionPhase::ready && state.pendingRequest() == 0 && state.text() == "printf 'review first'", "a ready suggestion must own its text after the decoder buffer changes");
-    require(!state.receive({.request_id = 2, .text = "duplicate"}), "a duplicate response must not replace a landed command");
-    state.invalidate();
-    const auto revision = state.revision();
+    require(features::palette::suggestion(state).phase == SuggestionPhase::ready && features::palette::suggestion(state).pending_request == 0 && features::palette::suggestion(state).text == "printf 'review first'", "a ready suggestion must own its text after the decoder buffer changes");
+    require(!features::palette::receive(state, {.request_id = 2, .text = "duplicate"}), "a duplicate response must not replace a landed command");
+    features::palette::discard(state);
+    const auto revision = features::palette::suggestion(state).revision;
 
-    state.invalidate();
-    require(state.revision() == revision && state.text().empty(), "editing an already idle request must not publish another state revision");
-    state.expect(3);
-    state.invalidate();
-    require(!state.receive({.request_id = 3, .text = "cancelled"}) && state.phase() == SuggestionPhase::idle, "editing or cancelling must retire an in-flight response");
+    features::palette::discard(state);
+    require(features::palette::suggestion(state).revision == revision && features::palette::suggestion(state).text.empty(), "editing an already idle request must not publish another state revision");
+    features::palette::wait(state, 3);
+    features::palette::discard(state);
+    require(!features::palette::receive(state, {.request_id = 3, .text = "cancelled"}) && features::palette::suggestion(state).phase == SuggestionPhase::idle, "editing or cancelling must retire an in-flight response");
   }
 
   void emptyAndFailedRepliesRemainRetryable() {
-    SuggestionState state;
+    features::palette::State state;
 
-    state.expect(1);
-    require(state.receive({.request_id = 1}), "an empty ready response must still consume its request");
-    require(state.phase() == SuggestionPhase::failed && SuggestionLabels::message(state.phase(), state.status()) == "The engine returned no command. Try again.", "an empty response must show the original retry message");
-    state.expect(2);
-    require(state.receive({.request_id = 2, .status = SuggestionStatus::unavailable}), "an unavailable provider must settle the request");
-    require(SuggestionLabels::message(state.phase(), state.status()) == "Configure runtime.engine to enable suggestions.", "an unavailable provider must point to its actual runtime configuration");
-    state.begin();
-    require(state.status() == SuggestionStatus::unavailable && state.phase() == SuggestionPhase::idle, "opening must preserve the original last-status semantics while resetting the phase");
+    features::palette::wait(state, 1);
+    require(features::palette::receive(state, {.request_id = 1}), "an empty ready response must still consume its request");
+    require(features::palette::suggestion(state).phase == SuggestionPhase::failed && SuggestionLabels::message(features::palette::suggestion(state).phase, features::palette::suggestion(state).status) == "The engine returned no command. Try again.", "an empty response must show the original retry message");
+    features::palette::wait(state, 2);
+    require(features::palette::receive(state, {.request_id = 2, .status = SuggestionStatus::unavailable}), "an unavailable provider must settle the request");
+    require(SuggestionLabels::message(features::palette::suggestion(state).phase, features::palette::suggestion(state).status) == "Configure runtime.engine to enable suggestions.", "an unavailable provider must point to its actual runtime configuration");
+    features::palette::suggest(state);
+    require(features::palette::suggestion(state).status == SuggestionStatus::unavailable && features::palette::suggestion(state).phase == SuggestionPhase::idle, "opening must preserve the original last-status semantics while resetting the phase");
     require(!SuggestionLabels::canSubmit(SuggestionPhase::idle, {}) && !SuggestionLabels::canSubmit(SuggestionPhase::waiting, "task") && SuggestionLabels::canSubmit(SuggestionPhase::ready, {}), "only a nonempty idle query or a ready command may submit");
-    state.expect(3);
+    features::palette::wait(state, 3);
     const std::string command(SuggestionLimits::text_bytes, 'x');
 
-    require(state.receive({.request_id = 3, .text = command}) && state.text().size() == SuggestionLimits::text_bytes, "the full wire-sized command must fit without truncation");
+    require(features::palette::receive(state, {.request_id = 3, .text = command}) && features::palette::suggestion(state).text.size() == SuggestionLimits::text_bytes, "the full wire-sized command must fit without truncation");
   }
 
   void previewShorteningDoesNotAlterTheCommand() {

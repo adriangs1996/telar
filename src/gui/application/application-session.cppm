@@ -26,7 +26,7 @@ import telar.gui.foundation.system;
 import :client_view_state;
 import :sidebar;
 import telar.gui.presentation.application_mark;
-import telar.gui.suggestions.state;
+import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -315,14 +315,6 @@ export {
       void pasteHistory(std::uint64_t entry_id, bool alternate = false);
 
       void copyHistory(std::uint64_t entry_id);
-
-      void beginSuggestion() noexcept;
-
-      void invalidateSuggestion() noexcept;
-
-      [[nodiscard]] const SuggestionState& suggestion() const noexcept;
-
-      bool submitSuggestion(std::string_view text);
 
       bool beginPathPicker();
 
@@ -1096,7 +1088,7 @@ export {
       };
 
       PathSeed path_seed_;
-      SuggestionState suggestion_;
+      features::palette::State palette_;
       tbc::view<Vector<Byte, Memory>, tbc::lt::a> decode_;
       tbc::view<String<Memory>, tbc::lt::a> clipboard_;
       tbc::view<String<Memory>, tbc::lt::a> error_;

@@ -5,6 +5,7 @@ module telar.gui.application:access;
 import std;
 
 import :session;
+import telar.gui.features.palette;
 import telar.gui.features.peek;
 
 namespace telar::gui::application {
@@ -33,7 +34,19 @@ namespace telar::gui::application {
       return session.peek_;
     }
 
+    [[nodiscard]] static constexpr features::palette::State& palette(Session& session) noexcept {
+      return session.palette_;
+    }
+
+    [[nodiscard]] static constexpr const features::palette::State& palette(const Session& session) noexcept {
+      return session.palette_;
+    }
+
     // ---- the connection with the runtime ----------------------------------------------------
+
+    [[nodiscard]] static std::uint64_t nextRequest(Session& session) noexcept {
+      return session.nextRequest();
+    }
 
     template <typename Message>
     static void send(Session& session, const Message& message) {

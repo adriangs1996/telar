@@ -1,8 +1,10 @@
-module telar.gui.palette.navigation_label;
+module telar.gui.features.palette;
+
+import std;
 
 import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::features::palette {
 
   void NavigationLabel::append(std::string_view text) {
     const auto available = capacity - text_.view().size();

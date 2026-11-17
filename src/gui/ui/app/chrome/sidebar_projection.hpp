@@ -15,7 +15,6 @@ static_assert(true);
 
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.suggestion_geometry;
 import telar.gui.application;
 import telar.gui.foundation.core;
 
