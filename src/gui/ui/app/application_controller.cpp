@@ -169,7 +169,8 @@ namespace telar::gui::qt {
         frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_),
         dialogs_(store_, peek_, machine_prompt_, palette_, paths_, history_, workspace_form_, key_bindings_, pointer_dispatcher_),
         machines_(memory, store_, configuration_source_, effects_, frames_, display_, status_, dialogs_, *this, platform::hostName()),
-        roster_(store_, machines_, machine_profiles_, display_, dialogs_, notifications_, platform::hostName()) {
+        roster_(store_, machines_, machine_profiles_, display_, dialogs_, notifications_, platform::hostName()),
+        activity_selection_(store_, activity_, peek_, dialogs_, machines_) {
     composeWindowAnimation();
     machines_.initialize();
     connect(&machines_, &MachinesCoordinator::listChanged, &palette_, &PaletteController::refreshMachines);
@@ -208,9 +209,6 @@ namespace telar::gui::qt {
     });
     connect(&store_, &Store::interacted, this, &ApplicationController::interacted);
     connect(&store_, &Store::changed, this, &ApplicationController::synchronize);
-    connect(&store_, &Store::interacting, this, [this] {
-      pending_activity_.reset();
-    });
     // After the workbench geometry, which the dialogs measured from the display are placed in.
     connect(&display_, &WindowDisplay::changed, this, &ApplicationController::measureDisplay);
     connect(&display_, &WindowDisplay::changed, this, [this] {
@@ -246,10 +244,6 @@ namespace telar::gui::qt {
     connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
     connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
     connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
-    connect(&machines_, &MachinesCoordinator::selecting, this, [this] {
-      pending_activity_.reset();
-      activity_.clearHover();
-    });
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
     connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
@@ -312,9 +306,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::runtimeDisconnected(MachineClient& client) {
-    if (pending_activity_ && pending_activity_->target.source == client.key) {
-      pending_activity_.reset();
-    }
+    activity_selection_.drop(client.key);
 
     machines_.markDisconnected(client);
     if (client.key.machine.slot != store_.machines().active()) {
@@ -417,6 +409,12 @@ namespace telar::gui::qt {
     machines_.soundFinished(failure);
   }
 
+  void ApplicationController::peekActivity(const QString& identity) {
+    applyInteraction([&] {
+      activity_selection_.select(identity, true);
+    });
+  }
+
   void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
     configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path});
   }
@@ -453,6 +451,7 @@ namespace telar::gui::qt {
     display_.setWindow(window);
     ++window_generation_;
     peek_.setWindowGeneration(window_generation_);
+    activity_selection_.setWindowGeneration(window_generation_);
     notifications_.setWindow(window, window_generation_);
     components_.setWindow(window);
     frames_.setWindow(window, window_generation_);
@@ -581,7 +580,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      settleActivity();
+      activity_selection_.settle();
       if (!active) {
         if (change == Change::model || change == Change::stopped) {
           refresh_timer_.start();
@@ -917,7 +916,7 @@ namespace telar::gui::qt {
     } else if (action == window_actions::Action::forget_gone_worktrees) {
       session().forgetGoneWorktrees();
     } else if (action == window_actions::Action::select_agent) {
-      selectActivity(target);
+      activity_selection_.select(target);
     } else {
       return false;
     }

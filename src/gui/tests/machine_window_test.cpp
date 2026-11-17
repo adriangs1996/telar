@@ -215,7 +215,7 @@ namespace telar::gui::test {
     }
 
     static bool pendingActivity(const qt::ApplicationController& application) {
-      return application.pending_activity_.has_value();
+      return application.activity_selection_.pending_.has_value();
     }
 
     static void pointerMoved(qt::ApplicationController& application) {

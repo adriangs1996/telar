@@ -1,6 +1,7 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     activity_selection.cpp
+    activity_selection.hpp
     application_controller.cpp
     application_controller.hpp
     application_effects.cpp

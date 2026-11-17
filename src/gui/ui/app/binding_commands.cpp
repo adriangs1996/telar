@@ -291,7 +291,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
-    pending_activity_.reset();
+    activity_selection_.cancel();
     if (action.kind != BindingActionKind::copy_mode) {
       copy_.leaveKeyboard();
     }

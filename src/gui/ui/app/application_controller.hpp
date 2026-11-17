@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "activity_selection.hpp"
 #include "application/dependencies.hpp"
 #include "application_effects.hpp"
 #include "core/memory.hpp"
@@ -381,9 +382,6 @@ namespace telar::gui::qt {
     void refresh();
     // Drops the theme and font QML reads and notifies a new configuration.
     void publishConfiguration();
-    void selectActivity(const QString& identity, bool peek = false);
-    void settleActivity();
-    void openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
     void presentChange(Change change);
     void initializeAttachments();
     void refreshPanes();
@@ -429,14 +427,6 @@ namespace telar::gui::qt {
     Store store_;
     tbc::view<HistoryController, tbc::lt::self> history_;
 
-    struct PendingActivity {
-      MachineActivityTarget target;
-      std::uint64_t window;
-      bool peek = false;
-      std::uint64_t pointer_revision = 0;
-    };
-
-    std::optional<PendingActivity> pending_activity_;
     ConfigurationSource configuration_source_;
     tbc::view<WindowDisplay, tbc::lt::self> display_;
     // The theme and font QML reads, built on first read after each configurationChanged.
@@ -486,6 +476,7 @@ namespace telar::gui::qt {
     tbc::view<Dialogs, tbc::lt::self> dialogs_;
     tbc::view<MachinesCoordinator, tbc::lt::self> machines_;
     tbc::view<MachineRoster, tbc::lt::self> roster_;
+    tbc::view<ActivitySelection, tbc::lt::self> activity_selection_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
 
