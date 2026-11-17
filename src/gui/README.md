@@ -13,48 +13,31 @@ interfaces and preprocessor contracts retain documented textual boundaries.
 
 ## Source layout
 
-| Directory | Responsibility |
-| --- | --- |
-| `application` | Sessions, workspace/tab state, layout and runtime requests |
-| `attachments`, `graphics`, `terminal` | Capture lifecycle, image budgets, cells, damage and placement |
-| `input`, `history`, `links` | Keymaps, input ownership, search, selection and navigation |
-| `machines`, `transport` | Profiles, SSH discovery, connection state and bounded framing |
-| `components`, `config` | Lua configuration, plugins and configured surfaces |
-| `fonts`, `presentation`, `core` | Shaping, physical geometry and reusable value types |
-| `ui` | The Qt Quick interface: QML, controllers, scene nodes and asynchronous adapters |
-| `platform` | Native window effects, clocks, clipboard, process and socket facilities |
-| `tests`, `tools` | Regression fixtures, probes, generators and packaging |
-
-Application policies use explicit allocators and compile-time dependency selection.
-Domain components can be used without constructing a window. Native APIs stay in
-platform adapters; reusable font and layout code does not depend on QML. Outside
-tests and tools, only `ui`, the native adapters in `platform` and `main.cpp` include Qt.
-
-`ui` has one folder per feature, holding its QML, its controller and its layouts.
-Everything is one QML module, `Telar.Gui`, so a QML file imports it to use a type
-from another folder.
-
-A feature's state lives in its `*_controller` class, which reads the store and
-never calls `ApplicationController`. What acts on the session or the window stays
-in `ApplicationController`; its methods for a feature live in that folder's
-`*_commands.cpp`.
+`src/gui` is cut by use case into four layers, lowest first. [gui-architecture.md](../../docs/build/gui-architecture.md)
+states what each may import, and `tools/check-cpp-modules.py` checks it.
 
 | Folder | What lives there |
 | --- | --- |
-| `app` | `ApplicationController`, which owns the window, the machines and the commands and hands each feature to its controller; `Main.qml`, the runtime connection and window plumbing |
-| `scene`, `controls`, `fonts` | Scene-graph primitives and shaders, reusable chrome and form controls, font loading |
-| `input`, `config` | Key bindings and pointer routing; Lua configuration loading |
-| `chrome`, `panes`, `terminal` | Sidebar, tabs and bars; pane headers and motion; the terminal item and its scene |
-| `activity`, `workspaces` | Agent, task and command cards; workspace and project lists |
-| `history`, `palette`, `prompt`, `paths`, `suggestions`, `peek` | One overlay each |
-| `links`, `documents`, `attachments`, `notifications` | Link previews, inline documents, image attachments, notifications |
-| `machines`, `components`, `plugins` | Remote machines; Lua elements, panels and picks; plugin workers |
+| `foundation/<x>` | Vocabulary without use cases: core types and memory, text, system services, the terminal screen, fonts, keys, actions, the runtime's model, agents, drawing and forms |
+| `features/<x>`, `features/terminal/<x>` | One module per group of related use cases (history, prompt, workbench, notifications, terminal links…): value types and use cases over an opaque state |
+| `application` | The session with one runtime: it routes the runtime's messages to the features, runs what they ask for and composes them |
+| `ui` | The Qt Quick layer: the window, chrome, panes and overlays in `app`, reusable controls and elements in `design`, scene nodes, fonts, input and the store in `foundation` |
+| `platform` | The native boundary: C, Objective-C and Objective-C++ sources, their headers and the Linux Qt adapters |
+| `tests`, `tools` | Integration tests, fixtures, probes and generators |
+
+Application policies use explicit allocators and compile-time dependency selection.
+Features and foundation can be used without constructing a window. Native APIs stay in
+platform adapters; reusable font and layout code does not depend on QML. Outside
+tests and tools, only `ui`, the native adapters in `platform` and `main.cpp` include Qt.
+
+Everything in `ui` is one QML module, `Telar.Gui`, so a QML file imports it to use a type
+from another folder.
 
 Native font discovery is owned by `platform/font.h`, `platform/macos/font.m` and
 `platform/linux/font.c`. macOS optical terminal text uses the CoreText glyph
 rasterizer under `platform/macos`, borrowed font bytes and caller-owned scratch
 storage. Qt caches the resulting masks and retains glyph meshes between damaged
-frames. Font shaping and cell placement remain in `fonts` and `qt`.
+frames. Font shaping and cell placement remain in `foundation/fonts` and `ui`.
 
 `gui.font.thicken` applies to terminal text, cursor text and preedit on both
 platforms. macOS uses CoreText optical smoothing. Linux uses a centered FreeType
