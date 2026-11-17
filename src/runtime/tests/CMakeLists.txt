@@ -20,6 +20,8 @@ telar_add_test(server-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT
 if(APPLE)
   telar_add_test(redirect-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/redirect_check_test.py"
     LABELS runtime.e2e)
+  telar_add_test(redirect-arguments-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/redirect_arguments_test.py" --runtime "$<TARGET_FILE:telar-runtime>"
+    LABELS runtime.e2e TIMEOUT 60)
 endif()
 telar_add_test(plugin-action-worker COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/compare_action_workers.py" --cpp "$<TARGET_FILE:telar-runtime>"
   LABELS runtime.e2e TIMEOUT 90)
