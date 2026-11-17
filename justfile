@@ -37,11 +37,6 @@ gui-build preset="dev": (configure preset)
 auth-build preset="dev": (configure preset)
     "{{ cpp }}" build {{ preset }} -- --target telar-auth-daemon
 
-# Build and run the auth daemon tests. Extra arguments are passed to CTest.
-auth-test *args: (configure "dev")
-    "{{ cpp }}" build dev -- --target src/auth-daemon/all
-    "{{ cpp }}" test dev -- -L '^auth' {{ args }}
-
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:
     cargo build --release --locked --manifest-path "{{ renderer_dir }}/Cargo.toml" --target-dir "{{ renderer_dir }}/target"
@@ -134,20 +129,6 @@ install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".l
     rm -rf "{{ apps }}/$app"
     cp -R "$stage/$app" "{{ apps }}/$app"
     ln -sf "{{ apps }}/$app/Contents/Resources/bin/telar" "{{ bin }}/telar"
-
-# Run the Go proxy service. Extra arguments are passed to the service.
-[working-directory: "src/proxy"]
-proxy *args:
-    go run ./cmd/telar-proxy {{ args }}
-
-# Test the Go proxy module. Extra arguments are passed to `go test`.
-[working-directory: "src/proxy"]
-proxy-test *args:
-    go test {{ args }} ./...
-
-# Validate Linux TUN forwarding and NAT in an isolated Docker network.
-proxy-test-linux:
-    python3 src/proxy/tests/linux/run.py
 
 # Build EBNF and run its GoogleTest suite with color in the ci tree. Extra arguments are forwarded to CTest.
 [positional-arguments]

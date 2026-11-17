@@ -337,8 +337,9 @@ so a retry does not release the same reference twice.
 From the repository root:
 
 ```sh
-cmake --build out/dev --target telar-runtime redirect-tests tls-tests
-ctest --test-dir out/dev -R '^(redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime runtime-proxy-tests runtime-tls-tests telar-tls-tests
+ctest --test-dir out/dev -L '^(runtime\.(proxy|tls)|lib\.tls)$' --output-on-failure
+ctest --test-dir out/dev -R '^redirect-check-tests$' --output-on-failure
 python3 src/runtime/tools/check_redirect.py --runtime out/dev/src/runtime/telar-runtime
 ```
 
@@ -365,11 +366,8 @@ and verifies direct connections and loopback flag restoration after cleanup.
 It does not require Internet
 traffic or trust-store changes. VPN, interface-bound application traffic and
 multiple-account native acceptance remain additional checks.
-`check_network.py` combines native capture/Lua, optional controlled SSH echo
-destinations and `check_redirect_lifecycle.py` for simultaneous helpers and
-recovery after their own process crashes. See [verification](traffic-flows.md#verification).
-The user reported that combined check passing with a controlled LAN origin on
-2026-10-27; VPN was explicitly skipped.
+`check_redirect_lifecycle.py` checks simultaneous helpers and recovery after
+their own process crashes.
 
 The separate process-selection acceptance check is:
 

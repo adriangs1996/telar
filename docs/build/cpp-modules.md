@@ -207,9 +207,10 @@ El inventario contiene 229 headers vivos, cada uno con su motivo concreto:
   AST usan directamente el SDK de Clang con el que se construye la herramienta.
 - Fixtures y utilidades de tests: includes locales, macros de aserción y fixtures
   de compilación deliberadamente válida o inválida. No son APIs de aplicación.
-  Los fixtures compartidos sin macros son interfaces de módulo
-  (`runtime-test-fixtures`, `runtime-test-client-peer`, `runtime-test-http2`,
-  `cli-test-check`, `gui-test-fixtures`, `gui-test-font-fixture`); sus importadores ya no reciben la biblioteca estándar
+  Los fixtures compartidos sin macros son interfaces de módulo: los de
+  `lib/testing` (`telar.testing.*`), los del soporte de tests de cada dominio o
+  biblioteca (`<target>-support`, `telar.<…>.tests.*`), `runtime-tools-support`,
+  `gui-test-fixtures` y `gui-test-font-fixture`; sus importadores ya no reciben la biblioteca estándar
   textual. `assertions.hpp` sigue textual porque también la usan unidades `.mm`. Ningún importador llama a los
   `static inline` de libghostty-vt: no cruzan un import, así que `telar.ghostty.vt`
   captura los modos que construye `ghostty_mode_new` y `telar.ghostty.wuffs` llama a
@@ -351,7 +352,8 @@ tools/cpp test sanitize
 # Linux without graphical integration.
 tools/cpp configure release -B .dev/runtime-headless --headless -- -DTELAR_BUILD_GUI=OFF
 
-# One process, its libraries and tests; a library's tests carry LABELS lib.<library>.
+# One process, its libraries and tests. Every case is a test of its own: a domain's carry
+# LABELS <process>.<domain>, a library's lib.<library>, end-to-end checks <process>.e2e.
 tools/cpp build dev -- --target src/cli/all
 tools/cpp test dev -- -L '^cli\.'
 tools/cpp build dev -- --target telar-base telar-base-tests

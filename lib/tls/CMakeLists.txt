@@ -4,3 +4,7 @@ telar_add_library(telar-tls
   SOURCES tls.cpp
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar::platform OpenSSL::SSL OpenSSL::Crypto)
+
+if(BUILD_TESTING)
+  telar_add_tests(telar-tls-tests LABEL lib.tls LINK telar::tls telar::platform telar::base)
+endif()

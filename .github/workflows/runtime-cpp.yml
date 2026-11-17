@@ -56,15 +56,18 @@ jobs:
           python3 tools/check-cpp-modules.py
           python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
           tools/cpp build ci -- --target lib/all src/auth-daemon/all --parallel 3
-          tools/cpp test ci -- -L '^(lib\.|auth)'
+          tools/cpp test ci -- -L '^lib\.'
           python3 tools/check-cpp-package.py --build out/ci
           python3 tools/check-cpp-editor.py --build out/ci --file lib/base/tests/base_test.cpp
 
       - name: Build and test
         run: |
           ulimit -n 8192
-          tools/cpp build ci -- --target telar-runtime telar runtime-tests tls-tests hook-tests event-loop-tests checkpoint-probe --parallel 3
-          tools/cpp test ci -- -R '^(runtime-tests|tls-tests|hook-tests|event-loop-tests|server-cli-tests)$'
+          tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel 3
+          # Every case of the runtime and CLI domains, and their integration tests; of the
+          # end-to-end checks, the server's.
+          tools/cpp test ci -- -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel 3
+          tools/cpp test ci -- -R '^server-cli-tests$'
 
       - name: Check distributable linkage
         if: matrix.distributable == 'ON'
@@ -128,14 +131,15 @@ jobs:
           python3 tools/check-cpp-modules.py
           python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
           tools/cpp build ci -- --target lib/all src/auth-daemon/all --parallel 3
-          tools/cpp test ci -- -L '^(lib\.|auth)'
+          tools/cpp test ci -- -L '^lib\.'
           python3 tools/check-cpp-package.py --build out/ci
           python3 tools/check-cpp-editor.py --build out/ci --file lib/base/tests/base_test.cpp
 
       - name: Build and test
         run: |
           ulimit -n 8192
-          tools/cpp build ci -- --parallel 3 --target telar-runtime telar runtime-tests tls-tests \
-            hook-tests event-loop-tests linux-platform-tests checkpoint-probe diagnostics-tests
-          tools/cpp test ci -- \
-            -R '^(runtime-tests|tls-tests|hook-tests|event-loop-tests|linux-platform-tests|server-cli-tests|diagnostics-tests)$'
+          tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel 3
+          # Every case of the runtime and CLI domains, and their integration tests; of the
+          # end-to-end checks, the server's.
+          tools/cpp test ci -- -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel 3
+          tools/cpp test ci -- -R '^server-cli-tests$'

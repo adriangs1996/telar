@@ -5,3 +5,7 @@ telar_add_domain(runtime plugins
     tap_configuration/tap_configuration.cpp
     worker/worker.cpp
   DEPS platform vocabulary http redirect traffic)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(plugins LINK telar::base telar::config telar::platform telar::plugins telar::wire)
+endif()

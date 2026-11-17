@@ -32,22 +32,6 @@ namespace {
     throw std::runtime_error{"Unrepresentable integer text was accepted"};
   }
 
-  void binaryFractionsKeepExactDecimalAndHexadecimalDigits() {
-    const BinaryFraction<JsonUnsignedInteger::ordinary_half_exponent> fraction{4};
-    constexpr std::string_view expected = "0625";
-    constexpr std::string_view complement = "9375";
-
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-      require(fraction.digit(index) == static_cast<unsigned>(expected[index] - '0'), "binary half intervals must retain exact terminating decimal digits");
-      require(fraction.complementDigit(index, NumberRadix::decimal) == static_cast<unsigned>(complement[index] - '0'), "the lower interval must subtract the full fraction from one");
-    }
-
-    const BinaryFraction<JsonUnsignedInteger::ordinary_half_exponent> hexadecimal{5, NumberRadix::hexadecimal};
-    constexpr unsigned partial_digit = 8;
-
-    require(hexadecimal.size() == 2 && hexadecimal.digit(0) == 0 && hexadecimal.digit(1) == partial_digit, "a binary fraction must retain the partial final hexadecimal digit");
-  }
-
   void conversionsRetainOriginalNumericSyntaxAndRejectFractionalValues() {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
@@ -106,7 +90,6 @@ namespace {
 
 int main() {
   try {
-    binaryFractionsKeepExactDecimalAndHexadecimalDigits();
     conversionsRetainOriginalNumericSyntaxAndRejectFractionalValues();
     binary128TiesRoundToTheIntegerWithoutPlatformFloatingPoint();
     subnormalBoundariesRoundToZeroAndReleaseTemporaryStorage();

@@ -5,33 +5,16 @@ opaque target. Cases include square fills, chips, rounded cards, transparent
 rings, fractional bounds/borders, clamped radii, narrow shapes, item opacity
 and overlapping translucent layers.
 
-`rounded-rectangles.png` comes from the unchanged
-`lib/window/shaders/quad.metal` vertex and fragment functions. The reference
-tool applies the original canvas radius clamp and straight-alpha blend
-factors, uses a one-pixel opaque alpha atlas and reads the BGRA8-unorm target.
-It compiles MSL 4.0 and submits through the classic Metal command encoder;
-it does not reproduce the original Metal 4 submission code. Separate live
-captures compare against the actual original application.
+`rounded-rectangles.png` was rendered from the original Metal quad shader,
+with its canvas radius clamp and straight-alpha blend factors, a one-pixel
+opaque alpha atlas and a BGRA8-unorm target. That shader and the reference
+tool are gone, so the fixture is frozen: change it only with a new reference.
 
-On a Mac with the required Metal SDK, regenerate the fixture from the repository
-root:
-
-```sh
-clang++ -std=c++23 -fobjc-arc -Wall -Wextra -Werror \
-  -framework Foundation -framework Metal -framework ImageIO -framework CoreGraphics \
-  src/gui/tools/rounded_rectangle_reference.mm \
-  -o /tmp/telar-rounded-rectangle-reference
-/tmp/telar-rounded-rectangle-reference \
-  lib/window/shaders/quad.metal \
-  src/gui/tests/fixtures/shapes/cases.json \
-  src/gui/tests/fixtures/shapes/rounded-rectangles.png
-```
-
-The committed fixture supports tests on both platforms without compiling this
-Mac-only tool. `gui-rounded-rectangle-test` keeps physical shapes constant
-while adapting logical coordinates to each device scale. It checks the atlas,
-parent clipping/reparenting, invalid properties, empty geometry and restoration
-after style changes. The capture window has fixed size hints so a compositor
+The committed fixture supports tests on both platforms.
+`gui-rounded-rectangle-test` keeps physical shapes constant while adapting
+logical coordinates to each device scale. It checks the atlas, parent
+clipping/reparenting, invalid properties, empty geometry and restoration after
+style changes. The capture window has fixed size hints so a compositor
 can preserve the reference dimensions.
 
 Metal comparisons require exact pixels. Software and OpenGL allow one channel

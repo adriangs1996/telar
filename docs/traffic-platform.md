@@ -176,22 +176,16 @@ decoded before delivery. Replacements regenerate Content-Length or chunking
 and re-encode gzip, deflate, Brotli and Zstd. See the implemented API and limits
 in [traffic-flows.md](traffic-flows.md#http-message-hooks).
 
-`http-message-tests` exercises transport partial writes, unsent message holds,
+The `runtime.proxy.http_message.*` cases exercise transport partial writes, unsent message holds,
 compression, trailers, Expect/100-continue, HEAD metadata, strict chunk framing
-and fail-open/fail-closed limits. `check_traffic_hooks.py --http-edit` exercises
-the actual runtime, Desktop Lua, two ordered handlers and a TCP origin with
-512 KiB/384 KiB decoded request/response bodies, gzip and trailers.
+and fail-open/fail-closed limits.
 
-`http2-endpoint-tests` exercises two nghttp2 endpoints with separate stream and
+The `runtime.proxy.http2_endpoint.*` cases exercise two nghttp2 endpoints with separate stream and
 connection credits, independent interception decisions, ID mapping, partial
 writes, PING, reset isolation, cancellation, fail-open/fail-closed deadlines,
 streaming pass-through, HEAD method changes, GOAWAY and origin EOF while a
-response is waiting. `check_traffic_hooks.py --http2-edit` uses independent
-Python h2 peers, the actual runtime and two Desktop Lua hooks. It verifies that
-a held stream stays unsent while another stream completes large gzip edits
-and trailers, then releases it through a third request. The transparent TLS
-fixture additionally verifies message edits through authenticated CA chains
-with ALPN h2.
+response is waiting. The transparent TLS fixture additionally verifies message
+edits through authenticated CA chains with ALPN h2.
 
 The client application owns rewrite policy, matching rules and any editing UI.
 The runtime provides interception points before delivery, bounded pending data
@@ -305,65 +299,5 @@ limited to the exercised paths; a prepared verifier is not a passing native run.
 | 4. Interception decisions | Actual Desktop Lua binary replacements, changed lengths, half-close, HTTP messages and independent HTTP/2 client; C++ framing/compression, stream isolation, ordered owners, deadlines, stale replies and cancellation; persistent workers with crash recovery and live capability revocation | The network paths in rows 1 and 2 remain necessary to extend this evidence beyond the exercised connections |
 | 5. Recording and example app | Bounded recording/filter/cursor/loss/export C++ tests; actual recording/query/reconnect and persistent-app namespaces; Lua inspector retention/filter and exact scoped-loss checks; Qt rendering, selection, filtering and loss-footer probe | Broad interface capture acceptance from row 1; durable archives remain outside the implemented in-memory recording contract |
 
-The native acceptance reported on 2026-10-27 predates PID/domain selection,
-incoming modes and the routed/interface-lifecycle capture stages. The native Lua
-control result reported on 2026-10-29 does not cover those later additions.
-On 2026-10-30, the user reported the focused Lua control check with domain
-selection passing after the driver-continuation correction: privileged capture
-start/stop, a real packet, `localhost` DNS snapshot activation, binary forwarding,
-acknowledged cleanup and restored direct connections. The combined verifier
-initially stopped at this stage. The next combined run passed actual Lua apps,
-recordings, binary/HTTP edits and routed `en0` capture, then stopped at a Lua
-verifier assertion rejecting reused interface indices. The corrected lifecycle
-verifier then passed in the user-reported focused native check: two virtual
-interface creation/packet/removal cycles through Desktop Lua with identity
-checks and cancellation. The next focused run passed PID-selected IPv4/IPv6
-loopback and IPv4 LAN with process exclusion and cleanup, then timed out during
-incoming-only forwarding. After the address-preserving listener/NAT correction,
-the user reported incoming-only IPv4 passing: authenticated binary relay,
-half-closes, destination exclusion, direct local-client paths and restored direct
-connections/PF loopback state after shutdown. The separate `both` run then
-passed incoming, selected outgoing and redirected local-client paths, binary
-relay, half-closes, destination exclusion and direct/PF loopback restoration.
 Current binaries and test adapters target macOS ARM64. Linux forwarding/capture
 and Linux cleanup are not implemented or claimed by these results.
-
-On 2026-10-29, the separately authorized browser/keychain check passed for
-installation and removal. It verified the retired CA's native trust rejection
-and certificate absence before deleting its private fixture. This does not
-establish native installed-CA rotation or any additional network-interface path.
-
-On 2026-10-30, the user reported both bound IPv4 LAN stages passing on `en0`:
-capture in both directions through Desktop Lua, runtime forwarding with the
-original destination, binary relay, exclusion and restored direct bound
-connections/PF loopback state after cleanup. The separate
-[CA rotation/recovery verifier](traffic-control.md#rotation-and-publication-failure-recovery)
-passed its unprivileged preparation and explicitly authorized installed phase
-on the same date. Actual Chrome HTTPS rewriting continued after installed-CA
-rotation, failed while a second rotation's public certificate publication was
-blocked, and resumed after retrying installation of the persisted replacement.
-Uninstall rejected and removed all three authorities, restored browser
-certificate rejection and the pre-operation keychain certificate baseline, and
-removed the private fixture. An independent read-only check confirmed the
-baseline and fixture cleanup. This fault occurs after store replacement;
-partial OS trust-command rollback is tested with injected commands rather than
-native fault injection. A configured VPN peer accepted SSH over its tunnel
-route, but refused the temporary echo port; this establishes neither VPN capture
-nor forwarding acceptance.
-
-The consolidated native verifier can include the prepared optional stages:
-
-```sh
-cmake --build out/dev --target telar-runtime traffic-interface-probe
-sudo -v && /usr/bin/python3 src/runtime/tools/check_network.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --ssh-origin YOUR_CONTROLLED_LAN_HOST --selection --incoming \
-  --interface-probe out/dev/src/runtime/traffic-interface-probe
-```
-
-Supply the documented VPN host, address and interface options separately when a
-controlled VPN destination is available. Omission explicitly leaves VPN coverage
-unverified. Browser/keychain acceptance is also separate from this command.
-Its [two-phase verifier](traffic-control.md#browser-and-user-keychain-acceptance)
-prepares a reviewable certificate before requiring an explicit trust change.

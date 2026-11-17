@@ -124,4 +124,5 @@ install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREF
 
 if(BUILD_TESTING)
   add_subdirectory(tests)
+  add_subdirectory(tools)
 endif()

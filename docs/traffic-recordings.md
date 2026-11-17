@@ -140,16 +140,7 @@ export format through their ordinary filesystem API.
 ```sh
 cmake --build out/dev --target traffic-recording-tests
 ctest --test-dir out/dev -R '^traffic-recording-tests$' --output-on-failure
-python3 src/runtime/tools/check_traffic_recordings.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 
 Unit checks cover count/byte/age retention, gaps, pagination, binary payloads,
-host scopes, stop/delete and reading exported PCAPNG through libpcap. The actual
-runtime/Desktop check verifies recording without a connected client, reconnect
-and listing, BPF selection, eviction, binary pages, stale IDs, a PCAPNG
-export/import round trip and correlated HTTP/flow retention through real TCP.
-It also starts a datagram-only recording, closes Desktop, imports UDP/ICMP/ICMPv6
-traffic with fragmented IPv6 messages, then reconnects and verifies the retained
-structured messages. No live datagram subscriber is present during that import.
+host scopes, stop/delete and reading exported PCAPNG through libpcap.
