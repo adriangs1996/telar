@@ -10,7 +10,6 @@ import std;
 import telar.testing;
 import telar.platform.daemon;
 import telar.platform.fs;
-import telar.platform.primitives;
 
 namespace {
 

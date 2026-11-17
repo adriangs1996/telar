@@ -7,7 +7,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.testing;
 import telar.platform.fs;
 import telar.platform.paths;

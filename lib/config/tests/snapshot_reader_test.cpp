@@ -9,7 +9,6 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.lua;
-import telar.config.core;
 import telar.config.runtime;
 import telar.config.snapshot;
 

@@ -8,7 +8,6 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.base.text.json;
 import telar.base.text.utf8;
 
