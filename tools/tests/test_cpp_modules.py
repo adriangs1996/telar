@@ -446,6 +446,14 @@ class ImportRules(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, r'ui/app/history.hpp imports telar.gui.features.history'):
             import_rules({'src/gui/ui/app/history.hpp': '#pragma once\nimport telar.gui.features.history;\n'})
 
+    def test_a_test_imports_the_domain_it_checks_and_the_shared_support(self):
+        self.assertEqual(import_rules({
+            'src/gui/features/history/tests/cards_test.cpp': 'import telar.gui.features.history.cards;\n'
+                                                             'import telar.gui.tests.json_fixture;\nimport telar.gui.foundation.core;\n',
+        }), 1)
+        with self.assertRaisesRegex(RuntimeError, r'cards_test.cpp imports telar.gui.features.palette'):
+            import_rules({'src/gui/features/history/tests/cards_test.cpp': 'import telar.gui.features.palette;\n'})
+
     def test_ignores_files_outside_the_ruled_folders(self):
         self.assertEqual(import_rules({'src/gui/tests/history_test.cpp': 'import telar.gui.features.history;\n'}), 0)
 
