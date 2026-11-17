@@ -164,7 +164,9 @@ recibe el id de la petición, no lo inventa. `application` pide el id (`Access::
 **Lo que ui lee.** Una consulta devuelve un valor: `palette::suggestion(session)` da una
 `Suggestion` con vistas al estado. Cuando ui lee mucho de una clase con estado, la feature exporta
 una vista de solo lectura con los métodos `const` de la clase (`PathPickerPage` sobre el
-`PathPicker` oculto), válida hasta el siguiente caso de uso.
+`PathPicker` oculto), válida hasta el siguiente caso de uso. Si la clase no tiene más métodos
+`const` que los que ui lee, la vista es la propia clase por referencia constante:
+`notifications::center(session)` da el `NotificationCenter` que ui pinta cada frame.
 
 Una vista que se lee en un camino caliente (el puntero sobre el panel de historial lee
 `HistoryView`) define sus métodos `inline` en la interfaz, y `view(state)` también, para costar lo
@@ -176,13 +178,20 @@ si sus aserciones usan los nombres de los métodos, un adaptador local los reenv
 y a la vista (`Browser` en `history_test.cpp`), sin tocar lo que afirman.
 
 **Fuera de las features.** Una sección que hace I/O no es pura: va a `foundation/system`
-(`DirectoryCompletion` lista el sistema de archivos) o se queda en `application` (la reproducción
-de sonido). Lo que una feature compone con otra aún no migrada (el workbench para `links`) lo hace
+(`DirectoryCompletion` lista el sistema de archivos; `ProfileFile` lee y reemplaza un archivo
+privado; las órdenes con las que el sistema publica una notificación o suena) o se queda en
+`application` (los efectos en el escritorio, por `HostEffects`; el enlace con el runtime,
+`application:transport`, que no es una feature y exporta en `telar::gui::application`). Lo que
+decide qué hacer sí es de la feature: `notifications` decide qué sonido empieza o espera y
+`application` lo hace sonar.
+
+Lo que una feature compone con otra aún no migrada (el workbench para `links`) lo hace
 `application`, con accesores temporales en `Access` (`launchTab`, `launchSplit`, `findTab`) que
 desaparecen cuando esa otra feature exista; lo que compone con una ya migrada lo hace con sus casos
-de uso (`paths` escribe en la línea con `features::prompt::replace`). Lo que la sesión guarda para varias features se alcanza igual: los límites que
-informa (`countLimitReach`, `limitReports`) y la conexión (`sharesImages`, `sharedImage`,
-`recoverRuntime`).
+de uso (`paths` escribe en la línea con `features::prompt::replace`). Los límites que la sesión
+informa son de `notifications`; otra parte de `application` los cuenta y los describe con
+`notifications::countLimitReach` y `describeLimit`, que la partición no exporta. La conexión se
+alcanza por `Access` (`sharesImages`, `sharedImage`, `recoverRuntime`, `report`).
 
 Un encabezado textual que Objective-C++ o Qt incluyen (`core/wheel_accumulator.hpp`) declara sus
 nombres en el namespace inline del módulo de `foundation` que lo posee
@@ -194,14 +203,16 @@ encabezado declara en `telar::gui` los deja ambiguos en ese mismo fuente.
 **Estado que ui sostiene.** Una clase con estado que no guarda la sesión sino cada ítem o ventana
 de ui, y que se lee en un camino caliente, sigue exportada con sus métodos: el gesto del ratón de
 un terminal (`ChildMouseGesture`), el enlace bajo el puntero (`LinkHover`), las texturas
-residentes de una ventana (`ImageResidency`), el `GraphicsStore` de cada pane y el catálogo de la
-estantería de adjuntos. Esconderla tras un `State` de la sesión añadiría una indirección por evento
-o por frame; `application::<feature>` la reexporta con `using` como un tipo de valor más.
+residentes de una ventana (`ImageResidency`), el `GraphicsStore` de cada pane, el catálogo de la
+estantería de adjuntos, el `FramePacer` de cada ventana, la pila de notificaciones y el
+`Machines` que el `Store` de la ventana guarda entre las sesiones de sus máquinas. Esconderla tras
+un `State` de la sesión añadiría una indirección por evento o por frame; `application::<feature>`
+la reexporta con `using` como un tipo de valor más.
 
-**Una feature sin estado de la sesión.** `terminal/input` y `terminal/attachments` no tienen
-`State`: su interfaz primaria solo reexporta sus particiones, y su partición de `application`
-reexporta sus tipos y, si hace falta, compone un caso de uso con la API pública de `Session`
-(`application::terminal::input::scroll`).
+**Una feature sin estado de la sesión.** `terminal/input`, `terminal/attachments`, `window` y
+`machines` no tienen `State`: su interfaz primaria solo reexporta sus particiones, y su partición
+de `application` reexporta sus tipos y, si hace falta, compone un caso de uso con la API pública de
+`Session` (`application::terminal::input::scroll`, `application::window::title`).
 
 **Casos de uso en un camino caliente.** Un caso de uso que reenvía a la clase oculta y corre por
 tecla, por evento del puntero o por frame se define `inline` y `TBC_HOT_PATH` en la interfaz
