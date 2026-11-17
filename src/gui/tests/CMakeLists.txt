@@ -64,9 +64,6 @@ gui_add_wall_clock_test(gui-wall-clock-nepal NPT-5:45 345)
 gui_add_wall_clock_test(gui-wall-clock-newfoundland NST3:30 -210)
 gui_add_wall_clock_test(gui-wall-clock-line-islands LINT-14 840)
 gui_add_wall_clock_test(gui-wall-clock-baker-island IDLW12 -720)
-telar_add_test(gui-machine-chrome-test SOURCES machine_chrome_test.cpp LIBRARIES gui-foundation-core gui-features-machines
-  TEST gui-machine-chrome LABELS gui.features.machines)
-target_compile_options(gui-machine-chrome-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-palette-test SOURCES palette_test.cpp LIBRARIES gui-foundation-core gui-foundation-text gui-features-palette
   TEST gui-palette LABELS gui.features.palette)
 target_compile_options(gui-palette-test PRIVATE -ffp-contract=off)
@@ -83,19 +80,8 @@ telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES g
 telar_add_test(gui-machine-profiles-test SOURCES machine_profiles_test.cpp LIBRARIES gui-features-machines
   TEST gui-machine-profiles LABELS gui.features.machines)
 
-telar_add_test(gui-machine-opening-test SOURCES machine_opening_test.cpp LIBRARIES gui-features-machines
-  TEST gui-machine-opening LABELS gui.features.machines)
-
 telar_add_test(gui-machine-runtime-location-test SOURCES machine_runtime_location_test.cpp LIBRARIES gui-platform gui-features-machines gui-foundation-system
   TEST gui-machine-runtime-location LABELS gui.features.machines)
-
-telar_add_test(gui-machines-test SOURCES machines_test.cpp LIBRARIES gui-features-machines
-  TEST gui-features-machines LABELS gui.features.machines)
-telar_add_test(gui-machine-remote-test SOURCES machine_remote_test.cpp LIBRARIES gui-features-machines
-  TEST gui-machine-remote LABELS gui.features.machines)
-
-telar_add_test(gui-machine-profile-store-test SOURCES machine_profile_store_test.cpp LIBRARIES gui-features-machines
-  TEST gui-machine-profile-store LABELS gui.features.machines)
 
 telar_add_test(gui-machine-profile-file-test SOURCES machine_profile_file_test.cpp LIBRARIES gui-posix Threads::Threads gui-platform gui-features-machines gui-foundation-system
   TEST gui-machine-profile-file LABELS gui.features.machines TIMEOUT 30)

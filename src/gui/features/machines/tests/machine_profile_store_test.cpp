@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "assertions.hpp"
 #include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -13,22 +12,21 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
-#include <iostream>
 #include <new>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
 
+import telar.testing;
 import telar.gui.features.machines;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar::gui;
 
   using namespace telar::gui::features::machines;
-  using telar::gui::test::require;
 
   struct Random {
     std::uint8_t next = 1;
@@ -61,7 +59,7 @@ namespace {
     public:
       explicit Transaction(MemoryFile& file)
           : file_(file) {
-        require(!file_.locked, "a profile transaction must not overlap another transaction");
+        check(!file_.locked, "a profile transaction must not overlap another transaction");
         file_.locked = true;
       }
 
@@ -76,13 +74,13 @@ namespace {
 
       template <Allocator Memory>
       std::optional<Vector<telar::Byte, Memory>> read(Memory& memory) const {
-        require(file_.locked, "transaction reads must hold the file lock");
+        check(file_.locked, "transaction reads must hold the file lock");
 
         return file_.read(memory);
       }
 
       void replace(std::string_view source) {
-        require(file_.locked, "replacement must remain inside the read-change-write lock");
+        check(file_.locked, "replacement must remain inside the read-change-write lock");
         if (file_.fail_replace) {
           throw std::runtime_error{"Injected profile replacement failure"};
         }
@@ -108,7 +106,7 @@ namespace {
     telar::MemoryAdapter erased{memory};
     MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
 
-    require(store.load().rows().empty(), "a missing profile file must load as an empty list");
+    check(store.load().rows().empty(), "a missing profile file must load as an empty list");
     Random random;
     const std::array edits{
         MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build", .color = "accent"},
@@ -120,15 +118,15 @@ namespace {
 
     const auto result = store.change(edits, random, "local");
 
-    require(result.rows().size() == 1 && result.rows().front().label() == "gpu", "a committed batch must include the renamed machine");
-    require(result.rows().front().destination() == "dev@build" && result.rows().front().program() == "/opt/bin/telar", "a batch must preserve the destination while setting its program path");
-    require(result.rows().front().login(MachineAgent::codex) == MachineLogin::done && !result.rows().front().enabled(), "a batch must retain login and enablement edits");
-    require(result.rows().front().identity().format().view() == "m-010000000000", "saved identities must come from the injected random source");
-    require(file.replacements == 1 && !file.locked, "all edits must reach disk in one replacement before releasing the lock");
+    check(result.rows().size() == 1 && result.rows().front().label() == "gpu", "a committed batch must include the renamed machine");
+    check(result.rows().front().destination() == "dev@build" && result.rows().front().program() == "/opt/bin/telar", "a batch must preserve the destination while setting its program path");
+    check(result.rows().front().login(MachineAgent::codex) == MachineLogin::done && !result.rows().front().enabled(), "a batch must retain login and enablement edits");
+    check(result.rows().front().identity().format().view() == "m-010000000000", "saved identities must come from the injected random source");
+    check(file.replacements == 1 && !file.locked, "all edits must reach disk in one replacement before releasing the lock");
     const auto loaded = store.load();
 
-    require(loaded.rows().front().label() == "gpu" && loaded.version() == 2, "committed setup metadata must reload through the original JSON format");
-    require(memory.liveBytes() == 0, "profile operations must release every temporary byte");
+    check(loaded.rows().front().label() == "gpu" && loaded.version() == 2, "committed setup metadata must reload through the original JSON format");
+    check(memory.liveBytes() == 0, "profile operations must release every temporary byte");
   }
 
   void rejectedBatchesAndWriteFailuresPreserveTheSavedFile() {
@@ -150,11 +148,11 @@ namespace {
     try {
       static_cast<void>(store.change(invalid, random, "local"));
     } catch (const MachineFailure& failure) {
-      require(failure.code() == MachineError::invalid_destination, "the rejected edit must retain its original validation failure");
+      check(failure.code() == MachineError::invalid_destination, "the rejected edit must retain its original validation failure");
       rejected = true;
     }
 
-    require(rejected && file.source.view() == original.view() && file.replacements == 0 && !file.locked, "a rejected later edit must leave the complete saved file untouched and unlock");
+    check(rejected && file.source.view() == original.view() && file.replacements == 0 && !file.locked, "a rejected later edit must leave the complete saved file untouched and unlock");
     file.fail_replace = true;
     const std::array valid{invalid.front()};
     bool failed = false;
@@ -165,7 +163,7 @@ namespace {
       failed = true;
     }
 
-    require(failed && !file.locked && file.source.view() == original.view(), "a failed replacement must release the transaction without publishing its staged profiles");
+    check(failed && !file.locked && file.source.view() == original.view(), "a failed replacement must release the transaction without publishing its staged profiles");
   }
 
   void everyTransactionReloadsExternalChangesAndRespectsTheLocalAlias() {
@@ -181,18 +179,18 @@ namespace {
     const std::array second{MachineEdit{.kind = MachineEditKind::add, .label = "hostname", .value = "dev@other"}};
     const auto profiles = store.change(second, random, "hostname");
 
-    require(profiles.rows().size() == 1 && profiles.rows().front().label() == "hostname", "an external local alias must replace the hostname and external file changes must be reloaded under lock");
+    check(profiles.rows().size() == 1 && profiles.rows().front().label() == "hostname", "an external local alias must replace the hostname and external file changes must be reloaded under lock");
     const std::array rename{MachineEdit{.kind = MachineEditKind::rename, .label = "hostname", .value = "local-alias"}};
     bool rejected = false;
 
     try {
       static_cast<void>(store.change(rename, random, "hostname"));
     } catch (const MachineFailure& failure) {
-      require(failure.code() == MachineError::duplicate_label, "renaming to the local alias must retain the original duplicate-label error");
+      check(failure.code() == MachineError::duplicate_label, "renaming to the local alias must retain the original duplicate-label error");
       rejected = true;
     }
 
-    require(rejected && !file.locked && store.load().rows().front().label() == "hostname", "a rejected local-label collision must preserve the saved remote label");
+    check(rejected && !file.locked && store.load().rows().front().label() == "hostname", "a rejected local-label collision must preserve the saved remote label");
   }
 
   void allocationFailureReleasesTheLockBeforeReturning() {
@@ -212,20 +210,12 @@ namespace {
       failed = true;
     }
 
-    require(failed && !file.locked && file.replacements == 0 && memory.liveBytes() == 0, "allocation failure must release the lock and every temporary allocation before returning");
+    check(failed && !file.locked && file.replacements == 0 && memory.liveBytes() == 0, "allocation failure must release the lock and every temporary allocation before returning");
   }
 
-}
+  const telar::testing::Case case_batches_commit_every_edit_with_original_metadata{"machine_profile_store.batches_commit_every_edit_with_original_metadata", batchesCommitEveryEditWithOriginalMetadata};
+  const telar::testing::Case case_rejected_batches_and_write_failures_preserve_the_saved_file{"machine_profile_store.rejected_batches_and_write_failures_preserve_the_saved_file", rejectedBatchesAndWriteFailuresPreserveTheSavedFile};
+  const telar::testing::Case case_every_transaction_reloads_external_changes_and_respects_the_local_alias{"machine_profile_store.every_transaction_reloads_external_changes_and_respects_the_local_alias", everyTransactionReloadsExternalChangesAndRespectsTheLocalAlias};
+  const telar::testing::Case case_allocation_failure_releases_the_lock_before_returning{"machine_profile_store.allocation_failure_releases_the_lock_before_returning", allocationFailureReleasesTheLockBeforeReturning};
 
-int main() {
-  try {
-    batchesCommitEveryEditWithOriginalMetadata();
-    rejectedBatchesAndWriteFailuresPreserveTheSavedFile();
-    everyTransactionReloadsExternalChangesAndRespectsTheLocalAlias();
-    allocationFailureReleasesTheLockBeforeReturning();
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-
-    return 1;
-  }
 }
