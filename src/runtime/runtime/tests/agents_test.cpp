@@ -537,7 +537,64 @@ namespace {
     testDescriptionQueue(memory);
   }
 
+  template <typename Operation>
+  void expectCode(FailureCode code, Operation operation) {
+    bool refused = false;
+
+    try {
+      operation();
+    } catch (const RequestError& error) {
+      refused = error.code() == code;
+    }
+
+    check(refused);
+  }
+
+  void testDescentVerifyRefusals() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-agent-test.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    TestProcessInspector inspector;
+    AgentService<decltype(poller)> agents{memory};
+    DescentService<decltype(inspector)> verification{inspector};
+    ClientPeer reporter{memory, model, clients, ClientRole::control};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+
+    workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+    const auto opened = reporter.receive<PaneOpened>();
+    auto& pane = panes.require(model.panes, opened.pane_id);
+    const ReportAgent report{.request_id = 4, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude, .state = AgentReportState::working};
+
+    reporter.session().peer_identity = inspector.current;
+    verifyAndWait(verification, model, clients, reporter, VerifyPaneDescent{2, pane.id, pane.generation});
+    check(reporter.receive<RequestCompleted>().request_id == 2);
+
+    // A client whose process cannot be named is refused, and loses what it verified before.
+    reporter.session().peer_identity.reset();
+    expectCode(FailureCode::foreign_process, [&] {
+      verification.verify(model.panes, reporter.session(), VerifyPaneDescent{3, pane.id, pane.generation});
+    });
+    expectCode(FailureCode::foreign_process, [&] {
+      agents.report(model, reporter.session(), report);
+    });
+
+    expectCode(FailureCode::pane_not_found, [&] {
+      verification.verify(model.panes, reporter.session(), VerifyPaneDescent{5, pane.id + 100, 1});
+    });
+    pane.exit_status = 0;
+    expectCode(FailureCode::pane_not_found, [&] {
+      verification.verify(model.panes, reporter.session(), VerifyPaneDescent{6, pane.id, pane.generation});
+    });
+  }
+
   const telar::testing::Case case_agents{"agents.agents", testAgents};
+  const telar::testing::Case case_descent_verify_refusals{"agents.descent_verify_refusals", testDescentVerifyRefusals};
   const telar::testing::Case case_progress_and_prompt_budget{"agents.progress_and_prompt_budget", testProgressAndPromptBudget};
   const telar::testing::Case case_evidence_precedence{"agents.evidence_precedence", testEvidencePrecedence};
 
