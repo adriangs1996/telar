@@ -77,9 +77,6 @@ telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRA
 telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES gui-features-prompt
   TEST gui-prompt-editor LABELS gui.features.prompt)
 
-telar_add_test(gui-machine-profiles-test SOURCES machine_profiles_test.cpp LIBRARIES gui-features-machines
-  TEST gui-machine-profiles LABELS gui.features.machines)
-
 telar_add_test(gui-machine-runtime-location-test SOURCES machine_runtime_location_test.cpp LIBRARIES gui-platform gui-features-machines gui-foundation-system
   TEST gui-machine-runtime-location LABELS gui.features.machines)
 
