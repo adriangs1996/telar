@@ -206,6 +206,27 @@ namespace {
 
     check(budget.used() == 0);
 
+    // A reservation charges the media budget for the image it stands for: while one holds
+    // most of it, a second is refused, and releasing the first makes room for it.
+    {
+      ImageAllocation first{allocator, 6000};
+
+      check(static_cast<bool>(first) && budget.used() >= 6000);
+
+      {
+        ImageAllocation second{allocator, 6000};
+
+        check(!second);
+      }
+
+      first.reset();
+      ImageAllocation second{allocator, 6000};
+
+      check(static_cast<bool>(second));
+    }
+
+    check(budget.used() == 0);
+
     std::array<const Byte*, 64> placeholders;
 
     for (auto& placeholder : placeholders) {
