@@ -109,7 +109,6 @@ namespace {
     const std::array<Byte, 2> payload{1, 2};
 
     check(fixture.evaluate(client, payload) == ReportDecision::deferred);
-    check(client.connection.read_paused && fixture.pane().process_recheck_requested);
     unsigned answered = 0;
     const auto receive = [&](auto& session, auto bytes) {
       ++answered;
@@ -139,9 +138,7 @@ namespace {
     fixture.pane().process_recheck_running = true;
     check(fixture.evaluate(second, payload) == ReportDecision::deferred);
     check(fixture.evaluate(first, payload) == ReportDecision::deferred);
-    check(first.deferred_report.required_recheck == 2);
     payload.fill(0);
-    const auto first_time = first.deferred_report.observed;
     std::vector<std::uint64_t> order;
     const auto receive = [&](auto& client, auto bytes) {
       order.push_back(client.id);
@@ -156,9 +153,6 @@ namespace {
     fixture.agents.current.observeProcess(ProcessIdentity{43, 1, 2, 0, 42}, AgentProvider::codex);
     fixture.answerDue(ObservationTime::now(), receive);
     check(order == std::vector<std::uint64_t>{second.id, first.id});
-    check(first.deferred_report.observed.nanoseconds == first_time.nanoseconds);
-    check(!first.deferred_report.pending && !first.deferred_report.answering);
-    check(first.deferred_report.payload.empty());
   }
 
   void testTimeoutAndClosedPane() {

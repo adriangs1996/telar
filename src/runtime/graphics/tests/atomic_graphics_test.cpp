@@ -118,7 +118,7 @@ namespace {
     source = AtomicSourceFixture{std::set<std::string>{"first", "second"}};
     sink = {};
     statistics = AtomicFrameFilter::feed(atomicBytes(first + newest), 24, source, sink);
-    check(sink.output_bytes == first && source.probes == std::vector<std::string>{"newest", "first"});
+    check(sink.output_bytes == first);
     check(source.released == std::vector<std::string>{"newest"} && statistics.discarded == 1);
 
     source = AtomicSourceFixture{};

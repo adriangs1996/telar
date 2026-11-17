@@ -121,9 +121,6 @@ def check_runtime(binary, checkpoint_probe):
 
             for arguments in (("--socket",), ("stop", "endpoint"), ("stop", "--fresh"), ("--background", "--daemonized")):
                 assert invoke(*arguments, success=False).returncode == 1
-            return {"endpoint_and_autostart": True, "stop": True, "bridge": True, "private_paths": True,
-                    "history_default": True, "fresh_preserves_previous": True, "active_fresh_rejected": True,
-                    "socket_precedence": True, "invalid_arguments_rejected": True}
         finally:
             if socket.exists():
                 stop(socket)

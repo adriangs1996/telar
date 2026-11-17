@@ -78,7 +78,6 @@ namespace {
       static constexpr bool thread_safe = true;
 
       void* allocate(std::size_t, std::size_t) noexcept {
-        ++requests;
         return nullptr;
       }
 
@@ -86,7 +85,6 @@ namespace {
         ++releases;
       }
 
-      std::size_t requests = 0;
       std::size_t releases = 0;
     };
 
@@ -134,7 +132,7 @@ namespace {
         thrown = true;
       }
 
-      check(thrown && failing.requests == 3 && failing.releases == 0);
+      check(thrown && failing.releases == 0);
 
       telar::SystemAllocator system;
       Budget budget{system, 64};

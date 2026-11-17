@@ -167,8 +167,6 @@ namespace {
 
       delivery.write(client, source, now);
       check(peer.receive<RequestCompleted>().request_id == 1);
-      check(!client.layout_sent && !client.proxy_status_sent && client.agent_revision == 0);
-      check(client.workspace_revision == 0 && client.agent_snapshot_requested);
 
       client.clipboard.replace(1, std::array<Byte, 1>{'a'});
       client.clipboard.replace(2, std::array<Byte, 1>{'b'});

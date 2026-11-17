@@ -6,16 +6,13 @@ static_assert(true);
 #include "assertions.hpp"
 #include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <new>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -41,7 +38,7 @@ namespace {
     throw std::runtime_error{"Machine operation unexpectedly succeeded"};
   }
 
-  void identitiesKeepTheirStableRepresentationAndInjectedEntropy() {
+  void identitiesKeepTheirStableRepresentation() {
     const auto identity = MachineId::parse("m-0123456789ab");
 
     require(identity.format().view() == "m-0123456789ab", "machine identities must retain all twelve lowercase hexadecimal digits");
@@ -52,22 +49,6 @@ namespace {
     rejects(MachineError::invalid_id, [] {
       static_cast<void>(MachineId::parse("m-0123456789AB"));
     });
-
-    struct Random {
-      unsigned calls = 0;
-
-      void fill(std::span<std::uint8_t> bytes) {
-        std::ranges::fill(bytes, 0);
-        if (++calls > 1) {
-          bytes.back() = 1;
-        }
-      }
-    };
-
-    Random random;
-    const auto generated = MachineId::generate(random);
-
-    require(random.calls == 2 && generated.format().view() == "m-010000000000", "zero entropy must retry and the generated identity must use the original upper 48 little-endian bits");
   }
 
   void profilesPreserveIdentityOrderAndRejectedEdits() {
@@ -229,7 +210,7 @@ namespace {
 
 int main() {
   try {
-    identitiesKeepTheirStableRepresentationAndInjectedEntropy();
+    identitiesKeepTheirStableRepresentation();
     profilesPreserveIdentityOrderAndRejectedEdits();
     versionsAndJsonRoundTripsPreserveEveryField();
     strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields();

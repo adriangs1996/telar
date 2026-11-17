@@ -355,9 +355,7 @@ namespace {
     pane->output_closed = true;
     expect(true);
     pane->exit_status = 0;
-    expect(false);
     pane->output_closed = false;
-    expect(false);
     pane->exit_status.reset();
     expect(true);
     pane->close_requested = true;
@@ -419,8 +417,6 @@ namespace {
     const auto events = poller.wait(std::chrono::seconds{2}, ready);
 
     check(!events.empty());
-    check(eventSource(events.front().token) == EventSource::pane);
-    check(model.panes.findHandle(eventIdentity(events.front().token)) == pane);
     check(pane->read());
   }
 

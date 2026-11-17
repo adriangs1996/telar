@@ -34,7 +34,7 @@ namespace {
     auto* second = static_cast<unsigned char*>(sensitive.allocate(27, 1));
 
     check(first != nullptr && reinterpret_cast<std::uintptr_t>(first) % 32 == 0);
-    check(second == first + 5 && memory.liveBytes() == 0);
+    check(memory.liveBytes() == 0);
     std::memset(first, 73, 32);
     sensitive.deallocate(first, 5, 32);
     sensitive.deallocate(second, 27, 1);

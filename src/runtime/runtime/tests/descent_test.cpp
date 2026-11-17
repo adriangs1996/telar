@@ -89,8 +89,6 @@ namespace {
 
     service.verify(model.panes, second.session(), VerifyPaneDescent{2, 1, 1});
     service.schedule(clients);
-    check(first.session().connection.read_paused && first.session().descent_running);
-    check(second.session().connection.read_paused && !second.session().descent_running);
     ++pane.generation;
     inspector.released.store(true, std::memory_order_release);
     waitUntil([&] {

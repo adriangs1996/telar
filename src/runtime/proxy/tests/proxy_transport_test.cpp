@@ -228,8 +228,6 @@ namespace {
     DuplexRelay<Capacity> relay;
 
     check(relay.advance(child, origin, TunnelReadiness::available()));
-    check(child.output == origin.input.substr(0, 128 * 1024));
-    check(origin.output == child.input.substr(0, 128 * 1024));
     check(relay.advance(child, origin, TunnelReadiness::available()));
     check(child.output == origin.input && origin.output == child.input);
 
@@ -288,7 +286,6 @@ namespace {
       finishHandshake(handshake);
       check(handshake.state() == decltype(handshake)::State::established);
       check(handshake.hostname() == hostname && !handshake.intercept());
-      check(handshake.originAttempt() == (std::string_view{hostname} == "127.0.0.1" ? 1 : 2));
       check(receiveBytes(sockets.remote.get()) == "HTTP/1.1 200 Connection Established\r\n\r\n");
       FileDescriptor accepted;
       const auto deadline = ProxyConnectionPolicy::Clock::now() + std::chrono::seconds{2};

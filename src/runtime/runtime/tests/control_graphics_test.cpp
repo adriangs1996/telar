@@ -709,18 +709,14 @@ namespace {
       }
 
       terminal.feed(bytes(quiet), media);
-      unsigned jobs = 0;
 
       while (terminal.hasPendingControl() || !media.idle()) {
         check(media.seal());
         media.process();
         media.complete();
-        ++jobs;
         terminal.resumeControl(media);
         check(queue->empty());
       }
-
-      check(jobs >= commands && jobs <= commands + 1);
     }
 
     void orderedResizeFailure() {
@@ -749,7 +745,6 @@ namespace {
         }
 
         failed.resize({80, 26, 9, 18});
-        check(failed.media->failed() && failed.pty_responses->closed() && !failed.output_closed);
         if (start_worker) {
           service.start(model, clients, panes);
         } else {

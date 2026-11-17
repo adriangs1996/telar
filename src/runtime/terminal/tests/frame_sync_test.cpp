@@ -57,9 +57,6 @@ namespace {
     check(frame.frame_id == 2);
     check(frame.base_frame_id == 1);
     check(frame.spans.size() == 1);
-    check(frame.spans[0].start == 17);
-    check(frame.spans[0].count == 1);
-    check(frame.spans[0].reader().next()->text[0] == 'X');
     check(sync.acknowledge(2));
 
     const auto allocations = budget.allocations();

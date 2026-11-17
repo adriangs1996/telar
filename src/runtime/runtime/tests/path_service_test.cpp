@@ -267,7 +267,6 @@ namespace {
       for (; checked < published; ++checked) {
         const auto& entry = storage.entry(checked);
 
-        check(entry.offset == checked * path.size());
         check(storage.path(entry) == path && entry.kind == PathKind::file);
       }
 

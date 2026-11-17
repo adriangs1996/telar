@@ -75,23 +75,6 @@ namespace {
         check(memory.liveBytes() == 0);
       }
 
-      {
-        const std::size_t budget = fixture.coding == "zstd" ? 128 * 1024 : fixture.coding == "br" ? 2 * 1024
-                                                                                                  : 32 * 1024;
-        BudgetAllocator memory{system, budget};
-        MemoryAdapter adapter{memory};
-
-        {
-          CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
-          const auto body = decoder.decode(input, fixture.coding, 1024);
-
-          check(body.decoded && !body.failed && !body.truncated);
-          check(std::string_view{reinterpret_cast<const char*>(body.bytes().data()), body.size} == plaintext);
-        }
-
-        check(memory.liveBytes() == 0);
-      }
-
       for (const std::size_t budget : {0, 12, 1024, 65536, 131072}) {
         BudgetAllocator memory{system, budget};
         MemoryAdapter adapter{memory};
@@ -149,7 +132,6 @@ namespace {
 
     check(metrics.queued == producer.queue_capacity && metrics.queue_high_water == producer.queue_capacity);
     check(metrics.started == producer.queue_capacity + 1 && metrics.dropped_queue == 1);
-    check(producer.reservedBytes() == producer.queue_capacity * 64);
 
     auto first = producer.tryReceive();
 

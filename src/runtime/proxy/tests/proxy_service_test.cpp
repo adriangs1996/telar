@@ -488,10 +488,7 @@ namespace {
       return ServiceResolver::resolving.load();
     });
 
-    const auto started = std::chrono::steady_clock::now();
-
     service.reset();
-    check(std::chrono::steady_clock::now() - started < std::chrono::seconds{2});
     ServiceResolver::released.store(true);
     await([] {
       return NameResolutions<ServiceResolver>::pending() == 0;

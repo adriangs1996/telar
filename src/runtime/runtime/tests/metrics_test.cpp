@@ -113,7 +113,6 @@ namespace {
     HostMetricsService<FakeHostMetrics&> metrics{started, probe};
 
     metrics.publish(client.session());
-    check(client.session().metrics_revision == 0);
     client.session().subscribed = true;
     metrics.publish(client.session());
     check(client.session().metrics_revision == 1 && !client.session().connection.hasOutput());

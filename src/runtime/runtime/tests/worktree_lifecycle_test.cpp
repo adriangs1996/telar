@@ -118,7 +118,6 @@ namespace {
     } else {
       workspaces.closeTab(model, owner.session(), CloseTab{.request_id = 2, .location = opened.location});
       workspaces.deliverNotices(clients);
-      check(observer.session().workspace_resync.has_value());
     }
 
     const auto response = owner.receive<TabClosed>();

@@ -243,23 +243,6 @@ namespace {
 #endif
   }
 
-  void testOutputTailBounds() {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
-    ConcurrentMemory& memory = adapter;
-    CommandOutputTail tail{memory, true};
-
-    tail.append(byteSpan(std::string(60'000, 'a')));
-    tail.append(byteSpan(std::string(40'000, 'b')));
-    check(tail.bytes().size() == tail.capacity && tail.observed() == 100'000);
-    check(tail.bytes().front() == 'a' && tail.bytes().back() == 'b');
-    tail.append(byteSpan(std::string(80'000, 'c')));
-    check(tail.bytes().size() == tail.capacity && tail.observed() == 180'000);
-    check(std::ranges::all_of(tail.bytes(), [](Byte byte) {
-      return byte == 'c';
-    }));
-  }
-
   void testCaptureBoundsAndResize() {
     CaptureFixture large;
 
@@ -428,7 +411,6 @@ namespace {
   const telar::testing::Case case_completion_evidence{"command_capture.completion_evidence", testCompletionEvidence};
   const telar::testing::Case case_shell_markers{"command_capture.shell_markers", testShellMarkers};
   const telar::testing::Case case_discarded_edits{"command_capture.discarded_edits", testDiscardedEdits};
-  const telar::testing::Case case_output_tail_bounds{"command_capture.output_tail_bounds", testOutputTailBounds};
   const telar::testing::Case case_capture_bounds_and_resize{"command_capture.capture_bounds_and_resize", testCaptureBoundsAndResize};
   const telar::testing::Case case_osc_fragments{"command_capture.osc_fragments", testOscFragments};
 

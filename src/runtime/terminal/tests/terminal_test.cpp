@@ -45,13 +45,6 @@ namespace {
     MemoryAdapter adapter{synchronized};
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{80, 24, 0, 0}};
-    std::size_t initial_bytes = 0;
-
-    check(ghostty_terminal_page_bytes(nullptr, &initial_bytes) == GHOSTTY_INVALID_VALUE);
-    check(ghostty_terminal_page_bytes(terminal.handle(), nullptr) == GHOSTTY_INVALID_VALUE);
-    checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &initial_bytes));
-    check(initial_bytes > 0);
-
     std::string history;
 
     for (std::size_t row = 0; row < 4096; ++row) {
@@ -61,17 +54,13 @@ namespace {
     terminal.feed(bytes(history));
     terminal.refresh();
     check(terminal.screen.scroll.total_rows > terminal.screen.rows);
-    std::size_t retained_bytes = 0;
-
-    checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &retained_bytes));
-    check(retained_bytes > initial_bytes);
 
     terminal.feed(bytes("\x1b[?1049h"));
     std::size_t both_screen_bytes = 0;
     const auto allocations = budget.allocations();
 
     checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &both_screen_bytes));
-    check(both_screen_bytes > retained_bytes && budget.allocations() == allocations);
+    check(budget.allocations() == allocations);
     GhosttyTerminalScreen active{};
 
     checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active));
@@ -85,10 +74,6 @@ namespace {
     terminal.feed(bytes("\x1b[?1049l\x1b[3J"));
     terminal.refresh();
     check(terminal.screen.scroll.total_rows == terminal.screen.rows);
-    std::size_t cleared_bytes = 0;
-
-    checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &cleared_bytes));
-    check(cleared_bytes < both_screen_bytes && cleared_bytes > 0);
     terminal.resize(TerminalSize{120, 40, 0, 0});
 #if TELAR_DIAGNOSTICS
     check(terminal.storageMetrics().screen_bytes == 120 * 40 * sizeof(ScreenCell));

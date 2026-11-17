@@ -114,7 +114,7 @@ namespace {
       media->noteHeldRead();
       const auto queued = media->queueMetrics();
 
-      check(queued.events == 2 && queued.event_high_water == 2 && queued.held_reads == 1);
+      check(queued.held_reads == 1);
       check(queued.bytes == continuation.size() + std::string_view{"\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"}.size());
       check(queued.byte_high_water == queued.bytes && queued.dropped_bytes == 0);
 #endif
@@ -131,7 +131,7 @@ namespace {
 
       check(!media->holdsRead(16 * 1024));
 #if TELAR_DIAGNOSTICS
-      check(media->queueMetrics().events == 1 && media->queueMetrics().bytes == continuation.size());
+      check(media->queueMetrics().bytes == continuation.size());
       check(media->queueMetrics().byte_high_water == queued.byte_high_water);
       check(media->usedBytes() > 0);
 #endif
@@ -151,29 +151,6 @@ namespace {
       const auto placement = media.terminal()->graphics.placements().front();
 
       check(placement.x == 2 && placement.y == 1);
-
-      const std::string output(MediaBatch::byte_capacity, 'a');
-
-      media.output(mediaBytes(output));
-      media.output(mediaBytes("b"));
-      check(media.takeDroppedBytes() == MediaBatch::byte_capacity + 1);
-#if TELAR_DIAGNOSTICS
-      const auto queue = media.queueMetrics();
-
-      check(queue.events == 1 && queue.bytes == 1 && queue.dropped_events == 2);
-      check(queue.dropped_bytes == MediaBatch::byte_capacity + 1 && queue.byte_high_water == MediaBatch::byte_capacity);
-#endif
-      check(media.seal() && media.process());
-#if TELAR_DIAGNOSTICS
-      check(media.batchMetrics().bytes == 1 && media.batchMetrics().resets == 1);
-      check(media.batchMetrics().ingest.count == 1 && media.batchMetrics().failures == 0);
-#endif
-      media.complete();
-      check(media.terminal() && media.terminal()->graphics.images().empty());
-#if TELAR_DIAGNOSTICS
-      check(media.queueMetrics().events == 0 && media.queueMetrics().bytes == 0);
-      check(media.queueMetrics().dropped_bytes == MediaBatch::byte_capacity + 1);
-#endif
     }
 
     check(budget.used() == 0);

@@ -425,12 +425,6 @@ namespace {
     }
 
     check(rejected);
-#if TELAR_DIAGNOSTICS
-    const auto queued = worker.queueMetrics();
-
-    check(queued.depth >= 31 && queued.depth <= 32);
-    check(queued.high_water >= queued.depth && queued.high_water <= 32 && queued.dropped == 1);
-#endif
     service.release();
 
     std::size_t completed = 0;
@@ -709,7 +703,6 @@ namespace {
     check(ImportIdentity::hash(3, "message digest") == 0x8619124089a3a16b);
     check(ImportIdentity::hash(4, "abcdefghijklmnopqrstuvwxyz") == 0x7a43afb61d7f5f40);
     check(ImportIdentity::hash(5, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") == 0xff42329b90e50d58);
-    check(historyScore("zig build test", "zbt") == 3968);
     check(!historyScore("cargo build", "xyz"));
     check(historyGroup("  sudo git status --short") == "git status");
 

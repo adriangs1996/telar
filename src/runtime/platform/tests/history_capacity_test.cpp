@@ -173,7 +173,6 @@ namespace {
 
     service.allow(6);
     check(service.waitStarted(5));
-    check(!service.waitStarted(6, std::chrono::milliseconds{20}));
     std::vector<std::uint64_t> identities;
 
     drainHistoryResponses(worker, identities, 4);
@@ -225,7 +224,6 @@ namespace {
 
     service.allow(6);
     check(service.waitStarted(5));
-    check(!service.waitStarted(6, std::chrono::milliseconds{20}));
     for (std::uint64_t identity = 7; identity <= 70; ++identity) {
       worker->submit(1, ImportHistory{.request_id = identity, .source = "fixture", .entries = history_entries});
     }

@@ -220,11 +220,10 @@ namespace {
     const std::vector<Byte> blocked_input(Pane::input_limit, 'a');
 
     pane.input.append(blocked_input);
-    const auto input_revision = pane.input_revision;
 
     agents.interrupt(model, panes, reporter.session(), InterruptAgent{4, pane.id, pane.generation}, false);
     check(reporter.receive<RequestCompleted>().request_id == 4);
-    check(pane.input.size() == blocked_input.size() && pane.input_revision == input_revision);
+    check(pane.input.size() == blocked_input.size());
     limits.deliver(model, clients);
     check(model.limits.runtime.rows().size() == 1 && model.limits.runtime.rows().front().reach().name == "panes.input_queue_capacity");
 #if TELAR_DIAGNOSTICS

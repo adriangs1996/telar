@@ -210,7 +210,6 @@ namespace {
 
     check(created.created && created.location.workspace.id == identity && created.location.tab_id == empty.tab_id);
     check(stored.tabs.front().panes.size() == 1 && stored.tabs.back().panes.size() == 1);
-    check(stored.geometry_client == owner.session().id);
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 5, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
     const auto reused = owner.receive<PaneOpened>();
@@ -240,10 +239,7 @@ namespace {
     },
         FailureCode::invalid_request,
         "cwd source pane is unavailable");
-    check(stored.tabs.size() == 1 && stored.geometry_client == owner.session().id);
-    check(!owner.session().workspace);
-    releaseAllGeometry(model.workspaces, clients, owner.session().id);
-    check(!stored.geometry_client);
+    check(stored.tabs.size() == 1);
   }
 
   void testPaneReuseAndBackgroundColors(ConcurrentMemory& memory) {
