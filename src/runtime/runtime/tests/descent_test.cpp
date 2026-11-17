@@ -119,6 +119,60 @@ namespace {
     check(second.session().verified_lineage.ancestors().front() == pane.process->processId());
   }
 
+  // Blocks the inspection of the first process it sees until released; any other answers at once.
+  struct FirstGatedInspector {
+    mutable std::atomic<unsigned> calls{0};
+    mutable std::atomic<bool> released{false};
+
+    ProcessLineage lineage(const ProcessIdentity& identity, pid_t root) const noexcept {
+      calls.fetch_add(1, std::memory_order_release);
+      while (identity.pid == 41 && !released.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+      }
+
+      return {.processes = {root}, .count = 1, .descends = true};
+    }
+  };
+
+  void testOneInspectionAtATime() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
+
+    model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    const auto generation = model.panes.find(1)->generation;
+    FirstGatedInspector inspector;
+    DescentService<decltype(inspector)> service{inspector};
+    ClientPeer first{memory, model, clients, ClientRole::control};
+    ClientPeer second{memory, model, clients, ClientRole::control};
+
+    first.session().peer_identity = ProcessIdentity{41};
+    second.session().peer_identity = ProcessIdentity{42};
+    service.verify(model.panes, first.session(), VerifyPaneDescent{1, 1, generation});
+    service.schedule(clients);
+    waitUntil([&] {
+      return inspector.calls.load(std::memory_order_acquire) == 1;
+    });
+
+    // The second check is asked for while the first runs; both must be answered, each its own.
+    service.verify(model.panes, second.session(), VerifyPaneDescent{2, 1, generation});
+    service.schedule(clients);
+    inspector.released.store(true, std::memory_order_release);
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    waitUntil([&] {
+      service.collect(clients, model.panes);
+      return !first.session().pending_descent && !second.session().pending_descent;
+    });
+
+    check(first.receive<RequestCompleted>().request_id == 1);
+    check(second.receive<RequestCompleted>().request_id == 2);
+  }
+
   const telar::testing::Case case_descent{"descent.descent", testDescent};
+  const telar::testing::Case case_one_inspection_at_a_time{"descent.one_inspection_at_a_time", testOneInspectionAtATime};
 
 }

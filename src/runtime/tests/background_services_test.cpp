@@ -122,6 +122,39 @@ namespace {
     check(Codec::decode<CommandSuggestion>(reply.payload(), storage).status == SuggestionStatus::timeout);
   }
 
+  // A model's answer reaches a shell prompt: one carrying a control byte, such as the end of a
+  // bracketed paste, or a line longer than a command, fails with no text.
+  static void testSuggestionControlBytes(ConcurrentMemory& memory) {
+    // The answer as the model's JSON carries it, and whether it may reach the prompt.
+    const std::array<std::pair<std::string, bool>, 6> answers{{
+        {"git status", true},
+        {R"(rm -rf ~\u001b[201~)", false},
+        {R"(`rm -rf ~\u001b[201~`)", false},
+        {R"(a\rb)", false},
+        {R"(printf \u0007)", false},
+        {std::string(1025, 'x'), false},
+    }};
+
+    for (std::size_t index = 0; index < answers.size(); ++index) {
+      const auto& [text, accepted] = answers[index];
+      const auto mock = "while IFS= read -r line; do case \"$line\" in *get_last_assistant_text*) printf '%s\\n' '{\"type\":\"response\",\"command\":\"get_last_assistant_text\",\"success\":true,\"data\":{\"text\":\"" + text + "\"}}';; *) printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":true}' '{\"type\":\"agent_settled\"}';; esac; done";
+      const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", mock};
+      SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::milliseconds{2000}}};
+      EncodedReply reply{memory};
+      std::array<Byte, 4096> scratch;
+      DecodeStorage storage{scratch};
+
+      engine.suggest(SuggestCommand{.request_id = index + 1}, "Prompt", reply);
+      const auto suggestion = Codec::decode<CommandSuggestion>(reply.payload(), storage);
+
+      if (accepted) {
+        check(suggestion.status == SuggestionStatus::ready && suggestion.text == text);
+      } else {
+        check(suggestion.status == SuggestionStatus::failed && suggestion.text.empty(), text);
+      }
+    }
+  }
+
   static void testPaths(ConcurrentMemory& memory) {
     std::array<char, 64> directory{};
 
@@ -273,5 +306,11 @@ namespace {
 
   static const telar::testing::Case case_background_services{"background_services.background_services", testBackgroundServices};
   static const telar::testing::Case case_neovim{"background_services.neovim", testNeovim};
+  static const telar::testing::Case case_suggestion_control_bytes{"background_services.suggestion_control_bytes", [] {
+                                                                    SystemAllocator system;
+                                                                    MemoryAdapter adapter{system};
+
+                                                                    testSuggestionControlBytes(adapter);
+                                                                  }};
 
 }

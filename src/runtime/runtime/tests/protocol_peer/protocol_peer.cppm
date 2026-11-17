@@ -9,7 +9,7 @@ module;
 #include <sys/un.h>
 #include <unistd.h>
 
-export module telar.runtime.tools.protocol_peer;
+export module telar.runtime.runtime.tests.protocol_peer;
 
 import std;
 import telar.client;
@@ -91,9 +91,19 @@ export {
       return std::get<Reply>(receiveAny<Reply>());
     }
 
+    // Bounds every later wait for a reply: past it, receiving throws instead of skipping the
+    // messages a runtime keeps sending, such as frames and metrics.
+    void deadline(std::chrono::steady_clock::duration limit) {
+      deadline_ = std::chrono::steady_clock::now() + limit;
+    }
+
     template <typename... Replies>
     std::variant<Replies...> receiveAny() {
       for (;;) {
+        if (deadline_ && std::chrono::steady_clock::now() > *deadline_) {
+          throw std::runtime_error{"No expected reply before the deadline"};
+        }
+
         const auto payload = client_.receiveFrame(incoming_);
         telar::DecodeStorage storage{scratch_};
         std::optional<std::variant<Replies...>> reply;
@@ -135,5 +145,6 @@ export {
     std::vector<telar::Byte> outgoing_;
     std::vector<telar::Byte> scratch_;
     bool acknowledge_frames_;
+    std::optional<std::chrono::steady_clock::time_point> deadline_;
   };
 }

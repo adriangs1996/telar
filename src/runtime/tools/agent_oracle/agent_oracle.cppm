@@ -2,7 +2,7 @@ export module telar.runtime.tools.agent_oracle;
 
 import std;
 import telar.wire.agents;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.vocabulary;
 
 using namespace telar;

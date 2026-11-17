@@ -58,6 +58,7 @@ import telar.runtime.persistence.session_store;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.execution_service;
 import telar.wire.vocabulary;
+import telar.wire.worktrees;
 import telar.platform.error;
 import telar.runtime.agents.snapshot;
 import telar.runtime.model.slot_store;
@@ -416,6 +417,92 @@ namespace {
     check(pane->read());
   }
 
+  void testWorktreeRestore() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer, checkpoint::Counters{10, 10, 10, 10}};
+    constexpr char arguments[] = "/bin/cat\0";
+    CoordinatorReference coordinator{.pane_id = 3, .pane_generation = 4};
+
+    coordinator.session_id.fill(7);
+    writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Worktree workspace", 6, "Shell"});
+    writer.append(checkpoint::PaneRecord{1, 5, 6, "/tmp", 80, 24, 1, {arguments, sizeof(arguments) - 1}});
+    writer.append(checkpoint::WorktreeRecord{9, 5, RegisterWorktree{.source = 2, .created_by = 1, .origin = WorktreeOrigin::external, .path = "/tmp/worktree", .branch = "feature", .base = "main", .title = "A title", .brief = "A brief", .dispatched_from = "dispatcher", .coordinator = coordinator}});
+    RuntimeModel model{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+    ClientLayouts layouts{memory};
+    checkpoint::Restore restore{memory, model, panes, layouts, false};
+
+    restore.apply(writer.finish());
+    const auto* worktree = model.worktrees.find(9);
+
+    check(worktree != nullptr, "the worktree was not restored under its identity");
+    const auto entry = worktree->entry();
+
+    check(entry.workspace == 5 && entry.source == 2 && entry.created_by == 1 && entry.origin == WorktreeOrigin::external);
+    check(entry.path == "/tmp/worktree" && entry.branch == "feature" && entry.base == "main");
+    check(entry.title == "A title" && entry.brief == "A brief" && entry.dispatched_from == "dispatcher");
+    check(entry.coordinator && entry.coordinator->session_id == coordinator.session_id && entry.coordinator->pane_id == 3 && entry.coordinator->pane_generation == 4);
+  }
+
+  // A session file the runtime cannot read: it starts empty, keeps the file aside as evidence, and
+  // saves the new session where the old one was.
+  void testCorruptSessionQuarantined() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<Byte, 4096> fixture_buffer;
+    const auto fixture = checkpointFixture(fixture_buffer);
+    std::vector<std::vector<Byte>> corrupt;
+
+    corrupt.emplace_back(fixture.begin(), fixture.end());
+    corrupt.back()[0] = 'X';
+    corrupt.emplace_back(fixture.begin(), fixture.end());
+    corrupt.back()[checkpoint::magic.size()] = 11;
+    corrupt.emplace_back(fixture.begin(), fixture.end() - 7);
+
+    for (const auto& bytes : corrupt) {
+      std::array<char, 64> directory{};
+
+      std::strcpy(directory.data(), "/tmp/telar-quarantine-test-XXXXXX");
+      check(::mkdtemp(directory.data()) != nullptr);
+      const std::filesystem::path root{directory.data()};
+      const auto path = (root / "session.ckpt").string();
+
+      std::ofstream{path, std::ios::binary}.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+      std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+      RuntimeModel model{memory};
+      LimitService limits;
+      NativeEventLoop<ConcurrentMemory> poller{memory};
+      PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+      ClientLayouts layouts{memory};
+      SnapshotAgents agents;
+
+      {
+        checkpoint::SessionStore<SnapshotAgents> store{memory};
+
+        store.configure(model, panes, layouts, checkpoint::Options{.path = path});
+        check(model.panes.size() == 0 && model.workspaces.size() == 0);
+        store.finish(model, layouts, agents);
+      }
+
+      std::ifstream kept{(root / "session.ckpt.corrupt").string(), std::ios::binary};
+      const std::vector<Byte> evidence{std::istreambuf_iterator<char>{kept}, {}};
+
+      check(evidence == bytes, "the unreadable session was not kept aside");
+      std::ifstream saved{path, std::ios::binary};
+      const std::vector<Byte> written{std::istreambuf_iterator<char>{saved}, {}};
+      checkpoint::Reader reader{written};
+
+      reader.read([](const auto&) {});
+      std::filesystem::remove_all(root);
+    }
+  }
+
   void testPersistence() {
     SystemAllocator system;
     MemoryAdapter adapter{system};
@@ -432,5 +519,7 @@ namespace {
 
   const telar::testing::Case case_persistence{"persistence.persistence", testPersistence};
   const telar::testing::Case case_checkpoint_validation{"persistence.checkpoint_validation", testCheckpointValidation};
+  const telar::testing::Case case_worktree_restore{"persistence.worktree_restore", testWorktreeRestore};
+  const telar::testing::Case case_corrupt_session_quarantined{"persistence.corrupt_session_quarantined", testCorruptSessionQuarantined};
 
 }

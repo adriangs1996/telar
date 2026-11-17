@@ -17,7 +17,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.runtime.terminal.control;
 import telar.testing;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.runtime.terminal.text_reader;
 
 using telar::testing::check;

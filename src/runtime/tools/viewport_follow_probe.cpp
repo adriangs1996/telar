@@ -6,7 +6,7 @@
 import std;
 import telar.gui.terminal.screen;
 import telar.testing;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.pane_io;
 
 using telar::testing::check;

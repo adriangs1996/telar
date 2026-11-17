@@ -210,6 +210,81 @@ namespace {
     testExecutions(memory);
   }
 
+  // The code a request was refused with, and its message, or nothing when it was accepted.
+  template <typename Service, typename Model>
+  std::optional<std::pair<FailureCode, std::string>> refusal(Service& executions, Model& model, ClientPeer& owner, const ExecutionRequest& request) {
+    try {
+      executions.request(model, owner.session(), request);
+      owner.receive<ExecutionReply>();
+      return std::nullopt;
+    } catch (const RequestError& error) {
+      return std::pair{error.code(), std::string{error.what()}};
+    }
+  }
+
+  void testExecutionInputRefusals() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    ExecutionService executions{memory, poller, limits};
+    ClientPeer owner{memory, model, clients, ClientRole::control};
+    const std::array<std::string_view, 1> echo{"/bin/cat"};
+
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 81, .stdin_open = true, .cwd = "/tmp", .arguments = echo});
+    owner.receive<ExecutionReply>();
+    const auto input = [&](std::uint64_t request, std::uint64_t offset, std::string_view text) {
+      return refusal(executions, model, owner, ExecutionRequest{.request_id = request, .action = ExecutionAction::input, .execution_id = 81, .input_offset = offset, .bytes = {reinterpret_cast<const Byte*>(text.data()), text.size()}});
+    };
+
+    check(!input(2, 0, "ab"));
+    // Past what was written, overlapping and longer, and after the end of input: refused.
+    check(input(3, 5, "gap")->first == FailureCode::invalid_request);
+    check(input(4, 1, "xyz")->first == FailureCode::invalid_request);
+    check(!input(5, 2, "cd\n"));
+    check(!refusal(executions, model, owner, ExecutionRequest{.request_id = 6, .action = ExecutionAction::eof, .execution_id = 81}));
+    check(input(7, 5, "late")->first == FailureCode::invalid_request);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+    std::array<Event, decltype(poller)::event_capacity> ready{};
+
+    while (executions.refresh(model)) {
+      check(std::chrono::steady_clock::now() < deadline);
+      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+        executions.event(event);
+      }
+    }
+
+    // The child read exactly what was accepted, in order.
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 8, .action = ExecutionAction::status, .execution_id = 81});
+    const auto status = owner.receive<ExecutionReply>();
+
+    check(std::string_view{reinterpret_cast<const char*>(status.stdout_bytes.data()), status.stdout_bytes.size()} == "abcd\n");
+
+    // A child that does not read fills its queue; the CLI retries on exactly this refusal.
+    const std::array<std::string_view, 3> stalled{"/bin/sh", "-c", "exec sleep 30"};
+
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 9, .action = ExecutionAction::start, .execution_id = 82, .stdin_open = true, .cwd = "/tmp", .arguments = stalled});
+    owner.receive<ExecutionReply>();
+    const std::string chunk(4096, 'x');
+    std::uint64_t offset = 0;
+    std::optional<std::pair<FailureCode, std::string>> busy;
+
+    for (std::uint64_t request = 10; !busy && request < 10'000; ++request) {
+      busy = refusal(executions, model, owner, ExecutionRequest{.request_id = request, .action = ExecutionAction::input, .execution_id = 82, .input_offset = offset, .bytes = {reinterpret_cast<const Byte*>(chunk.data()), chunk.size()}});
+      if (!busy) {
+        offset += chunk.size();
+      }
+    }
+
+    check(busy && busy->second == "ExecutionBusy");
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 10'001, .action = ExecutionAction::cancel, .execution_id = 82});
+  }
+
   const telar::testing::Case case_control_services{"control_services.control_services", testControlServices};
+  const telar::testing::Case case_execution_input_refusals{"control_services.execution_input_refusals", testExecutionInputRefusals};
 
 }

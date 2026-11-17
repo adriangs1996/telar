@@ -4,7 +4,7 @@
 #include <unistd.h>
 import std;
 import telar.runtime.tools.agent_oracle;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.agents;
 import telar.wire.editor;
 import telar.wire.execution;
