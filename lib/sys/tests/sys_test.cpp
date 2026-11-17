@@ -2,6 +2,7 @@
 import telar.sys.posix;
 import telar.sys.process;
 import telar.sys.socket;
+import telar.testing;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #else
@@ -10,14 +11,8 @@ import telar.sys.linux_api;
 
 namespace {
 
-  int failures = 0;
-
   void expect(bool condition, const char* what) {
-    if (!condition) {
-      ++failures;
-      ::write(STDERR_FILENO, what, ::strnlen(what, 128));
-      ::write(STDERR_FILENO, "\n", 1);
-    }
+    telar::testing::expect(condition, what);
   }
 
   bool same(const char* left, const char* right) {
@@ -33,7 +28,7 @@ namespace {
 
 }
 
-int main() {
+static void names() {
   int descriptors[2];
 
   expect(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) == 0, "socketpair");
@@ -132,6 +127,6 @@ int main() {
   expect(same(telar::sys::errorName(ENOSPC), "NoSpaceLeft") && same(telar::sys::errorName(EINVAL), "InvalidArgument"), "errorName space");
   expect(same(telar::sys::errorName(ENOMEM), "SystemResources") && same(telar::sys::errorName(EBADF), "InvalidDescriptor"), "errorName resources");
   expect(same(telar::sys::errorName(EISDIR), "Unexpected") && same(telar::sys::errorName(EISDIR, "Spawn"), "Spawn"), "errorName fallback");
-
-  return failures == 0 ? 0 : 1;
 }
+
+static const telar::testing::Case case_names{"sys.names", names};

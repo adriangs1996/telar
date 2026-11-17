@@ -16,24 +16,19 @@
 import std;
 import telar.git;
 import telar.base.memory.allocators;
+import telar.testing;
 
 namespace {
 
   namespace git = telar::git;
   using Reader = git::StatusReader;
 
-  int failures = 0;
-  int checks = 0;
   std::string root;
   telar::SystemAllocator system_allocator;
   telar::MemoryAdapter system_memory{system_allocator};
 
   void check(bool condition, std::string_view what, std::source_location location = std::source_location::current()) {
-    ++checks;
-    if (!condition) {
-      ++failures;
-      std::fprintf(stderr, "FAIL line %u: %.*s\n", location.line(), static_cast<int>(what.size()), what.data());
-    }
+    telar::testing::expect(condition, what, location);
   }
 
   std::string quote(std::string_view text) {
@@ -571,8 +566,7 @@ namespace {
   void testSha256(Reader& reader) {
     const auto directory = fresh("sha256");
     if (!shell("cd " + quote(directory) + " && git init -q -b main --object-format=sha256 . && echo ok", false).contains("ok")) {
-      std::fprintf(stderr, "skip: git cannot create SHA-256 repositories\n");
-      return;
+      telar::testing::skip("git cannot create SHA-256 repositories");
     }
 
     configure(directory);
@@ -928,14 +922,12 @@ namespace {
 
 } // namespace
 
-int main(int argc, char** argv) {
-  if (argc == 3 && std::string_view{argv[1]} == "--time") {
-    return timeReads(argv[2]);
-  }
-
+// Each case reads repositories it creates with an isolated git: no user or system config, no
+// hooks, no index rewrites by git status, below a folder of its own.
+template <auto body>
+void withGit() {
   if (std::system("git --version >/dev/null 2>&1") != 0) {
-    std::fprintf(stderr, "skip: git is not installed\n");
-    return 77;
+    telar::testing::skip("git is not installed");
   }
 
   const char* temporary = std::getenv("TMPDIR");
@@ -945,13 +937,8 @@ int main(int argc, char** argv) {
   std::vector<char> name(base.begin(), base.end());
 
   name.push_back('\0');
-  if (::mkdtemp(name.data()) == nullptr) {
-    std::fprintf(stderr, "cannot create a temporary directory\n");
-    return 1;
-  }
-
+  check(::mkdtemp(name.data()) != nullptr, "temporary directory");
   root = name.data();
-  // An isolated git: no user or system config, no hooks, no index rewrites by git status.
   ::setenv("HOME", root.c_str(), 1);
   ::setenv("GIT_CONFIG_NOSYSTEM", "1", 1);
   ::setenv("GIT_OPTIONAL_LOCKS", "0", 1);
@@ -962,31 +949,44 @@ int main(int argc, char** argv) {
   }
 
   write(root + "/.gitconfig", "[init]\n\tdefaultBranch = main\n[advice]\n\tdetachedHead = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n");
-
-  Reader reader{system_memory};
-
-  testPlainBranch(reader);
-  testDetachedAndPackedRefs(reader);
-  testUnborn(reader);
-  testUpstream(reader);
-  testWorktree(reader);
-  testRacyEntries(reader);
-  testSymlinkedDirectory(reader);
-  testSha256(reader);
-  testConflict(reader);
-  testIndexVersions(reader);
-  testSubmoduleAndBare(reader);
-  testLocalUpstream(reader);
-  testLongHistory(reader);
-  testCorruption();
-  testHostile(reader);
-
-  shell("rm -rf " + quote(root));
-  if (failures != 0) {
-    std::fprintf(stderr, "%d of %d checks failed\n", failures, checks);
-    return 1;
+  // A skipped or failed expectation still leaves no repository behind.
+  try {
+    body();
+  } catch (...) {
+    shell("rm -rf " + quote(root));
+    throw;
   }
 
-  std::printf("all %d telar.git checks passed\n", checks);
-  return 0;
+  shell("rm -rf " + quote(root));
 }
+
+template <auto body>
+void readsWithGit() {
+  withGit<[] {
+    Reader reader{system_memory};
+
+    body(reader);
+  }>();
+}
+
+static const telar::testing::Mode time_reads{
+    "--time",
+    [](int argc, char** argv) {
+      return argc == 3 ? timeReads(argv[2]) : 2;
+    },
+};
+static const telar::testing::Case case_plain_branch{"git.plain_branch", readsWithGit<testPlainBranch>};
+static const telar::testing::Case case_detached_and_packed_refs{"git.detached_and_packed_refs", readsWithGit<testDetachedAndPackedRefs>};
+static const telar::testing::Case case_unborn{"git.unborn", readsWithGit<testUnborn>};
+static const telar::testing::Case case_upstream{"git.upstream", readsWithGit<testUpstream>};
+static const telar::testing::Case case_worktree{"git.worktree", readsWithGit<testWorktree>};
+static const telar::testing::Case case_racy_entries{"git.racy_entries", readsWithGit<testRacyEntries>};
+static const telar::testing::Case case_symlinked_directory{"git.symlinked_directory", readsWithGit<testSymlinkedDirectory>};
+static const telar::testing::Case case_sha256{"git.sha256", readsWithGit<testSha256>};
+static const telar::testing::Case case_conflict{"git.conflict", readsWithGit<testConflict>};
+static const telar::testing::Case case_index_versions{"git.index_versions", readsWithGit<testIndexVersions>};
+static const telar::testing::Case case_submodule_and_bare{"git.submodule_and_bare", readsWithGit<testSubmoduleAndBare>};
+static const telar::testing::Case case_local_upstream{"git.local_upstream", readsWithGit<testLocalUpstream>};
+static const telar::testing::Case case_long_history{"git.long_history", readsWithGit<testLongHistory>};
+static const telar::testing::Case case_corruption{"git.corruption", withGit<testCorruption>};
+static const telar::testing::Case case_hostile{"git.hostile", readsWithGit<testHostile>};

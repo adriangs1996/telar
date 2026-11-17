@@ -5,6 +5,7 @@ import telar.base.text.utf8;
 import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;
+import telar.testing;
 
 namespace {
 
@@ -13,13 +14,8 @@ namespace {
   using Memory = telar::Memory;
   using Doc = Document<Memory>;
 
-  int failures = 0;
-
   void check(bool condition, std::string_view what, std::source_location where = std::source_location::current()) {
-    if (!condition) {
-      ++failures;
-      std::println(std::cerr, "FAIL line {}: {}", where.line(), what);
-    }
+    telar::testing::expect(condition, what, where);
   }
 
   SystemAllocator system;
@@ -397,19 +393,10 @@ Footnote[^1].
 
 }
 
-int main() {
-  structure();
-  roundTrip();
-  rejection();
-  repair();
-  limits();
-  sequence();
-  terminalText();
-  if (failures != 0) {
-    std::println(std::cerr, "{} failures", failures);
-    return 1;
-  }
-
-  std::println("telar-render: all tests passed");
-  return 0;
-}
+static const telar::testing::Case case_structure{"render.structure", structure};
+static const telar::testing::Case case_round_trip{"render.round_trip", roundTrip};
+static const telar::testing::Case case_rejection{"render.rejection", rejection};
+static const telar::testing::Case case_repair{"render.repair", repair};
+static const telar::testing::Case case_limits{"render.limits", limits};
+static const telar::testing::Case case_sequence{"render.sequence", sequence};
+static const telar::testing::Case case_terminal_text{"render.terminal_text", terminalText};

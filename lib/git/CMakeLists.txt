@@ -10,10 +10,6 @@ telar_add_library(telar-git
 target_compile_options(telar-git PRIVATE ${TELAR_WARNINGS})
 
 if(BUILD_TESTING)
-  add_executable(telar-git-tests tests/git_test.cpp)
-  target_link_libraries(telar-git-tests PRIVATE telar::git)
+  telar_add_tests(telar-git-tests LABEL lib.git LINK telar::git)
   target_compile_options(telar-git-tests PRIVATE ${TELAR_WARNINGS})
-  add_test(NAME telar-git-tests COMMAND telar-git-tests)
-  # The tests build repositories with the git CLI and skip without it.
-  set_tests_properties(telar-git-tests PROPERTIES SKIP_RETURN_CODE 77 LABELS lib.git)
 endif()

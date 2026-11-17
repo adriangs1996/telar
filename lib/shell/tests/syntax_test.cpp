@@ -1,5 +1,6 @@
 import std;
 import telar.shell.syntax;
+import telar.testing;
 
 namespace {
 
@@ -10,13 +11,12 @@ namespace {
   // Marks the cursor in cursor cases; removed before lexing.
   constexpr std::string_view mark = "\xc2\xa6";
 
-  int failures = 0;
-
   void check(bool condition, std::string_view what, std::string_view line, std::string_view got = {}) {
     if (!condition) {
-      ++failures;
       std::println(std::cerr, "FAIL {}: {:?}{}{}", what, line, got.empty() ? "" : " -> ", got);
     }
+
+    telar::testing::expect(condition, what);
   }
 
   std::string_view name(TokenKind kind) {
@@ -698,21 +698,12 @@ namespace {
 
 }
 
-int main() {
-  testTokens();
-  testFlags();
-  testCompleteness();
-  testLimits();
-  testOverflow();
-  testSegments();
-  testCursor();
-  testFuzz();
-  testUtf8Boundaries();
-  if (failures > 0) {
-    std::println(std::cerr, "{} failures", failures);
-    return 1;
-  }
-
-  std::println("telar-shell: all checks passed");
-  return 0;
-}
+static const telar::testing::Case case_tokens{"syntax.tokens", testTokens};
+static const telar::testing::Case case_flags{"syntax.flags", testFlags};
+static const telar::testing::Case case_completeness{"syntax.completeness", testCompleteness};
+static const telar::testing::Case case_limits{"syntax.limits", testLimits};
+static const telar::testing::Case case_overflow{"syntax.overflow", testOverflow};
+static const telar::testing::Case case_segments{"syntax.segments", testSegments};
+static const telar::testing::Case case_cursor{"syntax.cursor", testCursor};
+static const telar::testing::Case case_fuzz{"syntax.fuzz", testFuzz};
+static const telar::testing::Case case_utf8_boundaries{"syntax.utf8_boundaries", testUtf8Boundaries};
