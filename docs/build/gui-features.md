@@ -1,36 +1,58 @@
-# Reparto de `src/gui` por casos de uso (propuesta)
+# Reparto de `src/gui` por casos de uso
 
-Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `ui/`), con la carpeta a la que va. Una carpeta de `features/` es un módulo (`telar.gui.features.<ruta>`) y su namespace (`telar::gui::features::<ruta>`).
+Las reglas están en `gui-architecture.md`. Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `ui/`), con la carpeta a la que va. Una carpeta de `features/` es un módulo (`telar.gui.features.<ruta>`) y su namespace (`telar::gui::features::<ruta>`).
 
 | destino | secciones | líneas |
 |---|---:|---:|
-| `foundation/core` | 19 | 829 |
-| `foundation/drawing` | 7 | 197 |
+| `foundation/actions` | 5 | 327 |
+| `foundation/agents` | 2 | 50 |
+| `foundation/core` | 20 | 890 |
+| `foundation/drawing` | 7 | 224 |
 | `foundation/fonts` | 33 | 1621 |
-| `foundation/model` | 10 | 478 |
+| `foundation/forms` | 5 | 141 |
+| `foundation/keys` | 6 | 194 |
+| `foundation/model` | 12 | 504 |
 | `foundation/system` | 18 | 318 |
 | `foundation/terminal` | 7 | 283 |
-| `foundation/text` | 11 | 307 |
-| `application` | 7 | 1356 |
-| `features/activity` | 13 | 473 |
-| `features/bindings` | 8 | 773 |
+| `foundation/text` | 13 | 395 |
+| `application` | 13 | 1663 |
+| `features/activity` | 9 | 378 |
+| `features/bindings` | 6 | 524 |
 | `features/components` | 18 | 1042 |
-| `features/configuration` | 24 | 1447 |
-| `features/history` | 32 | 1476 |
+| `features/configuration` | 10 | 928 |
+| `features/history` | 30 | 1388 |
 | `features/machines` | 30 | 855 |
 | `features/notifications` | 14 | 765 |
-| `features/palette` | 7 | 278 |
+| `features/palette` | 8 | 284 |
 | `features/paths` | 9 | 375 |
 | `features/peek` | 6 | 124 |
-| `features/prompt` | 8 | 880 |
-| `features/suggestions` | 5 | 121 |
+| `features/plugins` | 7 | 161 |
+| `features/prompt` | 6 | 829 |
+| `features/status_bar` | 7 | 214 |
 | `features/terminal/attachments` | 7 | 931 |
 | `features/terminal/copy_mode` | 5 | 294 |
 | `features/terminal/graphics` | 14 | 722 |
-| `features/terminal/input` | 8 | 292 |
+| `features/terminal/input` | 3 | 118 |
 | `features/terminal/links` | 21 | 743 |
-| `features/window` | 14 | 429 |
-| `features/workbench` | 18 | 726 |
+| `features/window` | 5 | 152 |
+| `features/workbench` | 17 | 698 |
+
+## `foundation/actions`
+
+| sección | módulo actual | exporta | usada por |
+|---|---|---|---|
+| action_descriptions | config.plugin_query | ActionDescriptions, registerCallback, replaceBindings, replaceDefinition, retain | config.generation, config.plugin_query |
+| action_descriptions | input.binding_effects | DefinitionActionDescription, ExtendedActionDescription, Kind, NamedActionDescription, NotificationActionDescription, PluginActionDescription | test, application.session, ui:app/chrome, ui:app/panes, ui:foundation/config |
+| callback | input.binding_effects | BindingContext, BindingEffects, InputExpression, Kind | test, application.session, ui:app/chrome, ui:app/panes, components.builtin_content |
+| action | input.copy_pointer | BindingAction, BindingActionKind, builtinBindingAction | test, components.builtin_content, components.configuration, config.generation, config.plugin_effects |
+| binding | input.key_encoder | BindingLimits, BindingMap, KeyBinding, Range, compareChords | components.builtin_content, components.configuration, config.generation, config.plugin_query, input.configuration |
+
+## `foundation/agents`
+
+| sección | módulo actual | exporta | usada por |
+|---|---|---|---|
+| agent_status | presentation.activity_order | Age, AgentStatusPresentation, Text | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, ui:app/overlays |
+| agent_card_labels | presentation.notification_stack | AgentCardLabels, Project | ui:app/chrome, application.session, presentation.notification_stack |
 
 ## `foundation/core`
 
@@ -38,6 +60,7 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 |---|---|---|---|
 | cosine | core.json_writer | Cosine, StandardCosine | core.json_writer, presentation.display_metrics |
 | json_writer | core.json_writer | Container, JsonWriter, append, array, bytes, close … | config.gui_query, config.plugin_effects, config.plugin_query, core.json_writer, test |
+| metric_levels | core.json_writer | BarMetric, MetricAlerts, MetricLevels, MetricSeverity, State, update | test, ui:app/chrome, ui:foundation/config, application.host_effects, application.sound_playback |
 | background_opacity | core.metrics | BackgroundOpacity, Surface | test, application.session, ui:app/panes, components.configuration, presentation.display_metrics |
 | color | core.metrics | Color, DefaultTheme, Theme, hasAttribute, rgb | ui:foundation/scene, test, ui:app/panes, ui:design/controls, ui:design/elements |
 | color_name | core.metrics | ColorName, Value | test, ui:foundation/config, application.session, components.builtin_content, components.configuration |
@@ -65,7 +88,7 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | rounded_rectangle | graphics.placeholder | PaintSink, RoundedRectangle, RoundedRectanglePaint, RoundedRectangleStyle, of | ui:foundation/scene, ui:app/panes, ui:design/controls, graphics.placeholder, test |
 | progress_geometry | presentation.activity_order | ProgressGeometry | graphics.placeholder, presentation.activity_order, test, ui:app/chrome, ui:app/panes |
 | chrome_style | presentation.history_inspection_geometry | ChromeStyle | ui:app/chrome, ui:design/controls, ui:app/panes, ui:app/overlays, test |
-| form_button_style | presentation.history_inspection_geometry | FormButtonStyle | ui:app/panes |
+| history_hint_geometry | presentation.history_meta_geometry | HistoryHintGeometry, HistoryHintMeasurements | presentation.history_meta_geometry, ui:design/history_hint_projection.hpp |
 | modal_motion | presentation.suggestion_labels | ModalMotion | presentation.suggestion_labels, ui:design/controls |
 
 ## `foundation/fonts`
@@ -106,6 +129,27 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | curve_cache | terminal.glyphs.curve_cache | CurveCache, Entry, Key, reset | presentation.activity_order, prompt.completion, test, config.plugin_query, presentation.frame_pacer |
 | ink | terminal.glyphs.curve_cache | Ink, appendMerged, push, translate, validateCell |  |
 
+## `foundation/forms`
+
+| sección | módulo actual | exporta | usada por |
+|---|---|---|---|
+| form_field_geometry | presentation.form_field_geometry | FormFieldGeometry | ui:design/controls, presentation.form_field_geometry, test |
+| history_match_highlight | presentation.form_field_geometry | HistoryMatchHighlight, HistoryMatchSink, paint | ui:app/panes, presentation.form_field_geometry, test |
+| suggestion_preview | presentation.form_field_geometry | SuggestionPreview, SuggestionPreviewLine | presentation.form_field_geometry, test, ui:app/overlays |
+| form_button_style | presentation.history_inspection_geometry | FormButtonStyle | ui:app/panes |
+| name_prompt_geometry | presentation.suggestion_labels | NamePromptGeometry | presentation.suggestion_labels, ui:app/overlays |
+
+## `foundation/keys`
+
+| sección | módulo actual | exporta | usada por |
+|---|---|---|---|
+| configuration | input.configuration | Binding, InputConfiguration, setPrefix | test, config.generation, config.plugin_query, ui:foundation/config, input.configuration |
+| key_character | input.key_encoder | KeyCharacter | application.session, input.key_encoder, presentation.history_inspection, test, ui:foundation/input |
+| key_encoder | input.key_encoder | Code, Encoding, KeyEncoder, Modifier, SequenceCode, altText … | test, ui:app/panes, application.session, ui:foundation/input, attachments.marker_input |
+| key_event | input.key_encoder | BindingEvent, BindingRepeat, KeyPhase | test, ui:app/panes, input.key_encoder, ui:app/key_bindings.cpp, ui:app/key_bindings.hpp |
+| paste_encoding | input.key_encoder | PasteEncoding | application.session, paths.label, test |
+| terminal_key | input.key_encoder | KittyCodepoints, KittyKeyboardFlag, TerminalKey | ui:app/panes, application.session, input.copy_mode, test, ui:foundation/input |
+
 ## `foundation/model`
 
 | sección | módulo actual | exporta | usada por |
@@ -120,6 +164,8 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | agent_replica | model.replicas | AgentReplica, apply, assign, prepareStaging, resetSource, validate | test, application.session, model.replicas, ui:app/overlays |
 | pane_list_replica | model.replicas | ListedPane, PaneListReplica, apply, resetSource | application.session, ui:app/chrome, model.replicas |
 | workspace_replica | model.replicas | WorkspaceReplica, apply, assign, holdsWorktree, prepare, resetSource … | test, application.session, presentation.activity_order, model.replicas, ui:app/chrome |
+| navigation_target | palette.navigation_label | AgentNavigationTarget, NavigationTarget | ui:app/overlays, machines.picker, peek.screen |
+| limits | suggestions.state | SuggestionLimits | application.session, peek.screen, suggestions.state, test |
 
 ## `foundation/system`
 
@@ -161,6 +207,8 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | sección | módulo actual | exporta | usada por |
 |---|---|---|---|
 | placeholder_prefix | core.json_writer |  |  |
+| ranked_matches | palette.navigation_label | Match, RankedMatches, add, addScored, clear | components.builtin_content, machines.picker, test, ui:app/overlays |
+| tab_caption | presentation.history_inspection | Buffer, Content, TabCaption | components.configuration, config.generation, presentation.notification_stack, test, ui:app/overlays |
 | bounded_editor | text.bounded_editor | BoundedEditor, backspace, clearSelection, deleteForward, deleteSelection, end … | ui:design/controls, test, text.bounded_editor |
 | caption_runs | text.bounded_editor | CaptionRuns | fonts.row_text_layout, text.bounded_editor |
 | cell_text_measure | text.bounded_editor | cellTextColumns |  |
@@ -179,10 +227,16 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | agent_acknowledgement | application.host_effects | AgentAcknowledgement, FocusedAgent | application.session, application.host_effects, test |
 | command_handler | application.host_effects | ClientCommandHandler, UnsupportedClientCommand | application.session, application.host_effects, test, ui:app/window_commands.cpp, ui:app/window_commands.hpp |
 | host_effects | application.host_effects | DiscardHostEffects, HostEffectLimits, HostEffects, RuntimeTransport, buffer, notePaneInput … | test, application.session, ui:foundation/machines, application.host_effects, ui:app/application_effects.hpp |
-| host_metrics | application.host_effects | HostMetrics | application.session, test, application.host_effects, ui:app/chrome |
 | session | application.session | Change, CommandChecks, CommandPresence, CommandRequest, CopySearchRows, CopySearchState … | test, application.session, ui:app/panes, prompt.editor, terminal.row_cache |
 | records | application.workspace_replica | InlineDocument, Pane, PaneInputSource, PaneScrollDelta, ScrollDirection, TabCreationOutcome … | ui:app/panes, test, application.session, application.host_effects, presentation.frame_pacer |
 | application.workspace_replica:fold_map (whole) | application.workspace_replica:fold_map |  |  |
+| generation | config.generation | ConfigurationGeneration, ConfigurationSourceText, ElementHandlers, closePanel, effects, elementAction … | test, ui:foundation/config, config.generation |
+| reader | config.generation | ClientSettings, ConfigurationReader, client, cursorShape, font, gui … | config.generation, test |
+| client_query | config.gui_query | ClientQuery, ClientQueryContext, writeOptionalBytes, writeSections, writeSound | config.gui_query, test, ui:foundation/config |
+| client_view_state | presentation.client_view_state | ClientViewState | application.session, ui:foundation/config, config.gui_query, test |
+| sidebar_columns | presentation.display_metrics | SidebarColumns | application.session, test, presentation.client_view_state, presentation.display_metrics |
+| terminal_preparation | presentation.frame_pacer | TerminalPreparation | ui:app/panes, ui:app/frame_presenter.hpp |
+| sidebar_geometry | presentation.suggestion_geometry | SidebarGeometry, SidebarMachines | ui:app/chrome, presentation.suggestion_geometry, test |
 
 ## `features/activity`
 
@@ -190,28 +244,22 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 |---|---|---|---|
 | activity_order | presentation.activity_order | ActivityOrder, Children, Entry, Plan, Source, Visit … | ui:app/chrome, test, application.session, components.configuration, config.generation |
 | agent_order | presentation.activity_order | AgentOrder, Attention, Entry, Plan, Priority | test, ui:app/chrome, presentation.frame_pacer, prompt.completion, application.session |
-| agent_status | presentation.activity_order | Age, AgentStatusPresentation, Text | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, ui:app/overlays |
 | project_activity | presentation.activity_order | Attention, ProjectActivity, Text | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, test |
 | tab_activity | presentation.activity_order | Kind, TabActivity | test, application.session, ui:app/chrome, ui:app/panes, components.configuration |
 | task_card_labels | presentation.activity_order | Activity, Facts, TaskCardLabels, Text, append, decimal | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, test |
 | activity_card | presentation.application_mark | ActivityCard | presentation.activity_order, test |
 | application_mark | presentation.application_mark | ApplicationMark | ui:design/controls, ui:app/chrome, ui:design/elements, presentation.application_mark, test |
-| sidebar_columns | presentation.display_metrics | SidebarColumns | application.session, test, presentation.client_view_state, presentation.display_metrics |
 | agent_card_geometry | presentation.history_inspection_geometry | AgentCardGeometry, Row | ui:app/chrome, presentation.history_inspection_geometry, test |
-| agent_card_labels | presentation.notification_stack | AgentCardLabels, Project | ui:app/chrome, application.session, presentation.notification_stack |
-| sidebar_geometry | presentation.suggestion_geometry | SidebarGeometry, SidebarMachines | ui:app/chrome, presentation.suggestion_geometry, test |
 | agent_animation | presentation.suggestion_labels | AgentAnimation | test, presentation.suggestion_labels, ui:design/controls |
 
 ## `features/bindings`
 
 | sección | módulo actual | exporta | usada por |
 |---|---|---|---|
-| action_descriptions | input.binding_effects | DefinitionActionDescription, ExtendedActionDescription, Kind, NamedActionDescription, NotificationActionDescription, PluginActionDescription | test, application.session, ui:app/chrome, ui:app/panes, ui:foundation/config |
-| callback | input.binding_effects | BindingContext, BindingEffects, InputExpression, Kind | test, application.session, ui:app/chrome, ui:app/panes, components.builtin_content |
+| action_description_reader | config.generation | ActionDescriptionReader, description, read | config.generation |
+| action_reader | config.generation | BindingActionReader, builtin | config.generation |
+| binding_reader | config.generation | BindingActionSource, BindingReader, Reader, apply | test, components.configuration, config.generation |
 | default_bindings | input.configuration | DefaultBinding |  |
-| configuration | input.configuration | Binding, InputConfiguration, setPrefix | test, config.generation, config.plugin_query, ui:foundation/config, input.configuration |
-| action | input.copy_pointer | BindingAction, BindingActionKind, builtinBindingAction | test, components.builtin_content, components.configuration, config.generation, config.plugin_effects |
-| binding | input.key_encoder | BindingLimits, BindingMap, KeyBinding, Range, compareChords | components.builtin_content, components.configuration, config.generation, config.plugin_query, input.configuration |
 | key_label | input.key_encoder | KeyLabel, KeyLabelStyle, KeyName, ModifierLabel, Text, append | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, ui:app/overlays |
 | key_router | input.key_encoder | BindingInput, Context, Decision, KeyLeases, KeyRouter, Lease … | test, application.session, components.builtin_content, config.generation, input.copy_pointer |
 
@@ -242,30 +290,16 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 
 | sección | módulo actual | exporta | usada por |
 |---|---|---|---|
-| action_description_reader | config.generation | ActionDescriptionReader, description, read | config.generation |
-| action_reader | config.generation | BindingActionReader, builtin | config.generation |
-| binding_reader | config.generation | BindingActionSource, BindingReader, Reader, apply | test, components.configuration, config.generation |
-| generation | config.generation | ConfigurationGeneration, ConfigurationSourceText, ElementHandlers, closePanel, effects, elementAction … | test, ui:foundation/config, config.generation |
-| reader | config.generation | ClientSettings, ConfigurationReader, client, cursorShape, font, gui … | config.generation, test |
 | theme_reader | config.generation | Settings, ThemeReader, apply, applySyntax, applyTerminal, applyTheme … | config.generation |
 | themes | config.generation | canonicalThemeName, themeByName, themeValuesByName |  |
-| client_query | config.gui_query | ClientQuery, ClientQueryContext, writeOptionalBytes, writeSections, writeSound | config.gui_query, test, ui:foundation/config |
 | gui_query | config.gui_query | GuiQuery, cursorStyle, writeFont, writeWindow | config.gui_query, test, ui:foundation/config |
 | query | config.gui_query | ConfigurationQuery, Section | test, ui:foundation/config, config.gui_query, ui:app/window_commands.cpp |
 | theme_presets | config.gui_query | ThemePreset |  |
 | theme_query | config.gui_query | ThemeQuery, byteValue, writeColor, writeOptionalRgb, writeOptionalTheme, writePalette … | config.gui_query, test, ui:foundation/config |
-| callback_invocation | config.plugin_effects | CallbackInvocation | config.generation |
-| plugin_effects | config.plugin_effects | Effect, PluginEffects, Tag, authorize, capability, decodeEffect … | test, ui:foundation/config, ui:foundation/plugins, config.plugin_effects, ui:app/application_wiring.cpp |
-| plugin_invocation | config.plugin_effects | PluginInvocation | ui:foundation/plugins, test, ui:foundation/config |
-| runtime_query | config.plugin_effects | RuntimeQuery, nullablePath, writeProxy | config.plugin_effects, test, ui:foundation/config |
-| action_descriptions | config.plugin_query | ActionDescriptions, registerCallback, replaceBindings, replaceDefinition, retain | config.generation, config.plugin_query |
 | action_query | config.plugin_query | ActionQuery, NamedAction, emptyObject, write, writeArguments, writeCommand … | config.plugin_query |
 | binding_query | config.plugin_query | BindingQuery, writeKeys | config.plugin_query, test, ui:foundation/config |
 | command_tab_action | config.plugin_query | commandTabAction, commandTabReference |  |
 | input_query | config.plugin_query | InputQuery, keyName, writeCharacter, writeCode, writeEmptyObject, writeKey | config.plugin_query, test, ui:foundation/config |
-| plugin_catalog | config.plugin_query | PluginCatalog, validateGeneration | ui:foundation/config, config.plugin_query, test |
-| plugin_overrides | config.plugin_query | Entry, PluginOverrides, apply, set | config.generation, presentation.activity_order, prompt.completion, ui:foundation/config, config.plugin_query |
-| plugin_query | config.plugin_query | PluginPage, PluginQuery, digest, listEntry, metadata, writeCapabilities … | ui:foundation/config, config.plugin_query, test |
 
 ## `features/history`
 
@@ -282,7 +316,6 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | history_command_line | presentation.display_metrics | HistoryCommandLine, HistoryCommandMetrics | presentation.display_metrics, ui:app/panes |
 | history_loading | presentation.display_metrics | HistoryLoading | presentation.display_metrics, test, ui:app/panes |
 | history_selection_motion | presentation.display_metrics | HistoryExpansion, HistoryPosition, HistorySelectionMotion | ui:app/panes, presentation.display_metrics |
-| history_match_highlight | presentation.form_field_geometry | HistoryMatchHighlight, HistoryMatchSink, paint | ui:app/panes, presentation.form_field_geometry, test |
 | history_actions | presentation.history_filter_geometry | HistoryActionLabel, HistoryActions, HistoryCardAction, HistoryInspectionAction, HistoryKeyStyle | ui:app/panes, test, presentation.history_meta_geometry, presentation.history_pointer |
 | history_empty | presentation.history_filter_geometry | Action, HistoryEmpty, HistoryEmptyOptions | ui:app/panes, test, application.session, prompt.editor, prompt.line |
 | history_empty_geometry | presentation.history_filter_geometry | HistoryEmptyGeometry, HistoryEmptyMeasurements | ui:app/panes, presentation.history_filter_geometry |
@@ -298,7 +331,6 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | history_facts | presentation.history_meta_geometry | ErasedSink, HistoryFactData, HistoryFactSink, HistoryFacts, notice, sink … | presentation.history_meta_geometry, ui:app/panes |
 | history_footer | presentation.history_meta_geometry | HistoryFooter, HistoryFooterAction, HistoryFooterHint, HistoryFooterOptions, Range | ui:app/panes, components.builtin_content, components.configuration, presentation.history_pointer, input.key_encoder |
 | history_footer_geometry | presentation.history_meta_geometry | HistoryFooterGeometry, HistoryFooterMeasurements | ui:app/panes, presentation.history_meta_geometry |
-| history_hint_geometry | presentation.history_meta_geometry | HistoryHintGeometry, HistoryHintMeasurements | presentation.history_meta_geometry, ui:design/history_hint_projection.hpp |
 | history_meta_geometry | presentation.history_meta_geometry | HistoryMetaGeometry, HistoryMetaMeasurements | ui:app/panes, presentation.history_meta_geometry |
 | history_row_geometry | presentation.history_meta_geometry | Facts, HistoryRowGeometry, HistoryRowMeasurements, Kind, Token, append … | test, application.session, ui:app/chrome, ui:app/panes, components.configuration |
 | history_action_capture | presentation.history_pointer | HistoryActionCapture, HistoryActionPosition, HistoryActionSurface, HistoryActionTarget, cancel, present | ui:app/panes, presentation.history_pointer, test, ui:app/pointer_dispatcher.cpp, ui:app/pointer_dispatcher.hpp |
@@ -364,11 +396,12 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 |---|---|---|---|
 | palette_actions | config.gui_query | PaletteAction | ui:app/overlays, ui:app/application_controller.cpp, ui:app/application_wiring.cpp |
 | navigation_label | palette.navigation_label | NavigationLabel, append, appendDetail | palette.navigation_label, test, ui:app/overlays |
-| navigation_target | palette.navigation_label | AgentNavigationTarget, NavigationTarget | ui:app/overlays, machines.picker, peek.screen |
 | query | palette.navigation_label | PaletteMode, PaletteQuery | test, ui:app/overlays, ui:app/dialogs.cpp, ui:app/dialogs.hpp, ui:app/window_commands.cpp |
-| ranked_matches | palette.navigation_label | Match, RankedMatches, add, addScored, clear | components.builtin_content, machines.picker, test, ui:app/overlays |
 | palette_geometry | presentation.suggestion_geometry | Options, PaletteGeometry, takeTop | test, presentation.suggestion_geometry, ui:app/overlays |
 | palette_row_window | presentation.suggestion_geometry | PaletteRowKind, PaletteRowWindow, Row | ui:app/overlays, presentation.suggestion_geometry, test |
+| suggestion_geometry | presentation.suggestion_geometry | SuggestionGeometry | presentation.suggestion_geometry, test, ui:app/overlays |
+| suggestion_labels | presentation.suggestion_labels | SuggestionLabels | presentation.suggestion_labels, test, ui:app/overlays |
+| state | suggestions.state | SuggestionPhase, SuggestionState, begin, expect, invalidate, receive | application.session, presentation.suggestion_labels, test, suggestions.state, ui:app/overlays |
 
 ## `features/paths`
 
@@ -395,12 +428,22 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | peek_labels | presentation.notification_stack | Facts, PeekLabels, append, decimal | presentation.activity_order, presentation.history_meta_geometry, presentation.notification_stack, ui:app/overlays |
 | peek_geometry | presentation.suggestion_labels | PeekGeometry | presentation.suggestion_labels, test, ui:app/overlays |
 
+## `features/plugins`
+
+| sección | módulo actual | exporta | usada por |
+|---|---|---|---|
+| callback_invocation | config.plugin_effects | CallbackInvocation | config.generation |
+| plugin_effects | config.plugin_effects | Effect, PluginEffects, Tag, authorize, capability, decodeEffect … | test, ui:foundation/config, ui:foundation/plugins, config.plugin_effects, ui:app/application_wiring.cpp |
+| plugin_invocation | config.plugin_effects | PluginInvocation | ui:foundation/plugins, test, ui:foundation/config |
+| runtime_query | config.plugin_effects | RuntimeQuery, nullablePath, writeProxy | config.plugin_effects, test, ui:foundation/config |
+| plugin_catalog | config.plugin_query | PluginCatalog, validateGeneration | ui:foundation/config, config.plugin_query, test |
+| plugin_overrides | config.plugin_query | Entry, PluginOverrides, apply, set | config.generation, presentation.activity_order, prompt.completion, ui:foundation/config, config.plugin_query |
+| plugin_query | config.plugin_query | PluginPage, PluginQuery, digest, listEntry, metadata, writeCapabilities … | ui:foundation/config, config.plugin_query, test |
+
 ## `features/prompt`
 
 | sección | módulo actual | exporta | usada por |
 |---|---|---|---|
-| form_field_geometry | presentation.form_field_geometry | FormFieldGeometry | ui:design/controls, presentation.form_field_geometry, test |
-| name_prompt_geometry | presentation.suggestion_labels | NamePromptGeometry | presentation.suggestion_labels, ui:app/overlays |
 | prompt.completion (whole) | prompt.completion | Choice, Completion, CompletionContext, Entry, Hash, Specs … | ui:app/chrome, application.session, paths.label, presentation.activity_order, prompt.line |
 | prompt.editor (whole) | prompt.editor | Action, Clipboard, Editor, Key, KeyPress, Keymap … | ui:app/panes, test, application.session, ui:app/overlays, ui:app/chrome |
 | prompt.editor:text (whole) | prompt.editor:text | CharacterClass, Group, Snapshot, Text, anchor, assign … | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, test |
@@ -408,15 +451,17 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | prompt.line (whole) | prompt.line | Continuation, ContinuationOf, Line, Menu, Outcome, accept … | application.session, ui:app/panes, input.copy_pointer, test, input.key_encoder |
 | prompt.routing (whole) | prompt.routing | PendingPrompt, Surface, likely | test, application.session, ui:app/panes, components.configuration, core.metrics |
 
-## `features/suggestions`
+## `features/status_bar`
 
 | sección | módulo actual | exporta | usada por |
 |---|---|---|---|
-| suggestion_preview | presentation.form_field_geometry | SuggestionPreview, SuggestionPreviewLine | presentation.form_field_geometry, test, ui:app/overlays |
-| suggestion_geometry | presentation.suggestion_geometry | SuggestionGeometry | presentation.suggestion_geometry, test, ui:app/overlays |
-| suggestion_labels | presentation.suggestion_labels | SuggestionLabels | presentation.suggestion_labels, test, ui:app/overlays |
-| limits | suggestions.state | SuggestionLimits | application.session, peek.screen, suggestions.state, test |
-| state | suggestions.state | SuggestionPhase, SuggestionState, begin, expect, invalidate, receive | application.session, presentation.suggestion_labels, test, suggestions.state, ui:app/overlays |
+| host_metrics | application.host_effects | HostMetrics | application.session, test, application.host_effects, ui:app/chrome |
+| cpu_history | core.json_writer | CpuHistory, Samples, push | application.host_effects, test, core.json_writer, ui:app/chrome |
+| bar_metrics | presentation.history_filter_geometry | BarMetrics, Value | test, ui:foundation/config, application.session, components.builtin_content, components.configuration |
+| mode_bar_labels | presentation.history_inspection | ModeBarHint, ModeBarLabels, append | presentation.history_inspection, test, ui:app/chrome |
+| mode_hints | presentation.history_inspection | ModeHint, ModeHints, PrefixHintRouter, StatusMode, append | test, ui:app/chrome, presentation.history_inspection, ui:app/key_bindings.cpp, ui:app/key_bindings.hpp |
+| mode_key_label | presentation.history_inspection | ModeKeyLabel, Text | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, test |
+| mode_bar_geometry | presentation.history_meta_geometry | ModeBarGeometry, ModeBarMeasurements | presentation.history_meta_geometry, ui:app/chrome |
 
 ## `features/terminal/attachments`
 
@@ -465,11 +510,6 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 |---|---|---|---|
 | child_mouse | input.child_mouse | ChildMouseGesture, ChildMouseProjection, ChildMouseReport, ChildMouseSample, ChildMouseView, MouseButton … | ui:app/panes, test, input.child_mouse, ui:app/pointer_dispatcher.cpp, ui:app/pointer_dispatcher.hpp |
 | mouse_encoder | input.configuration | MouseEncoder, append, character, encode, number | ui:app/panes, application.session, input.configuration, test |
-| key_character | input.key_encoder | KeyCharacter | application.session, input.key_encoder, presentation.history_inspection, test, ui:foundation/input |
-| key_encoder | input.key_encoder | Code, Encoding, KeyEncoder, Modifier, SequenceCode, altText … | test, ui:app/panes, application.session, ui:foundation/input, attachments.marker_input |
-| key_event | input.key_encoder | BindingEvent, BindingRepeat, KeyPhase | test, ui:app/panes, input.key_encoder, ui:app/key_bindings.cpp, ui:app/key_bindings.hpp |
-| paste_encoding | input.key_encoder | PasteEncoding | application.session, paths.label, test |
-| terminal_key | input.key_encoder | KittyCodepoints, KittyKeyboardFlag, TerminalKey | ui:app/panes, application.session, input.copy_mode, test, ui:foundation/input |
 | input.wheel_accumulator (whole) | input.wheel_accumulator |  |  |
 
 ## `features/terminal/links`
@@ -502,20 +542,11 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 
 | sección | módulo actual | exporta | usada por |
 |---|---|---|---|
-| cpu_history | core.json_writer | CpuHistory, Samples, push | application.host_effects, test, core.json_writer, ui:app/chrome |
-| metric_levels | core.json_writer | BarMetric, MetricAlerts, MetricLevels, MetricSeverity, State, update | test, ui:app/chrome, ui:foundation/config, application.host_effects, application.sound_playback |
 | loading_cue | presentation.application_mark | LoadingCue | presentation.application_mark, test, ui:app/panes |
 | window_title | presentation.application_mark | Tokens, WindowTitle, append, appendSuffix, expand, filter … | application.session, presentation.application_mark, test, ui:app/panes |
-| client_view_state | presentation.client_view_state | ClientViewState | application.session, ui:foundation/config, config.gui_query, test |
 | chrome_surfaces | presentation.display_metrics | ChromeSurfaces | presentation.display_metrics, test, ui:foundation/models |
 | display_metrics | presentation.display_metrics | DisplayMetrics | ui:app/overlays, ui:app/chrome, ui:app/panes, test, presentation.display_metrics |
 | frame_pacer | presentation.frame_pacer | FramePacer, InputGrace, Pane, configure, noteInput, record | ui:app/panes, test, application.session, application.host_effects, application.workspace_replica |
-| terminal_preparation | presentation.frame_pacer | TerminalPreparation | ui:app/panes, ui:app/frame_presenter.hpp |
-| bar_metrics | presentation.history_filter_geometry | BarMetrics, Value | test, ui:foundation/config, application.session, components.builtin_content, components.configuration |
-| mode_bar_labels | presentation.history_inspection | ModeBarHint, ModeBarLabels, append | presentation.history_inspection, test, ui:app/chrome |
-| mode_hints | presentation.history_inspection | ModeHint, ModeHints, PrefixHintRouter, StatusMode, append | test, ui:app/chrome, presentation.history_inspection, ui:app/key_bindings.cpp, ui:app/key_bindings.hpp |
-| mode_key_label | presentation.history_inspection | ModeKeyLabel, Text | ui:app/chrome, ui:app/panes, ui:design/controls, prompt.editor, test |
-| mode_bar_geometry | presentation.history_meta_geometry | ModeBarGeometry, ModeBarMeasurements | presentation.history_meta_geometry, ui:app/chrome |
 
 ## `features/workbench`
 
@@ -532,7 +563,6 @@ Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `u
 | tab_motion_frame | presentation.frame_pacer | TabMotionFrame, add, begin, request | test, ui:app/chrome, presentation.frame_pacer, ui:app/panes |
 | tab_motions | presentation.frame_pacer | TabMotion, TabMotionSlot, TabMotions, begin, finish | ui:app/chrome, presentation.frame_pacer, test |
 | tab_strip_geometry | presentation.frame_pacer | Captioned, Fit, Measure, Metrics, Plan, Room … | test, ui:app/chrome, layout.geometry, presentation.activity_order, presentation.form_field_geometry |
-| tab_caption | presentation.history_inspection | Buffer, Content, TabCaption | components.configuration, config.generation, presentation.notification_stack, test, ui:app/overlays |
 | workspace_mark | presentation.history_inspection | WorkspaceMark | test, presentation.history_inspection, ui:foundation/models |
 | pane_attention_geometry | presentation.history_inspection_geometry | PaneAttentionGeometry | presentation.history_inspection_geometry, ui:app/panes |
 | pane_decoration_geometry | presentation.history_inspection_geometry | PaneDecorationGeometry | test, ui:app/panes, presentation.history_inspection_geometry, ui:foundation/models |

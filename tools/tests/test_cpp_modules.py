@@ -445,5 +445,41 @@ class ModuleNamespaces(unittest.TestCase):
         }), 1)
 
 
+RULES = {
+    'src/gui/features': ['telar.gui.foundation'],
+    'src/gui/foundation': ['telar.gui.foundation'],
+    'src/gui/application': ['telar.gui.foundation', 'telar.gui.features'],
+    'src/gui/ui': ['telar.gui.foundation', 'telar.gui.application'],
+}
+
+
+def import_rules(files):
+    return checker.check_import_rules(set(files), RULES, files.__getitem__)
+
+
+class ImportRules(unittest.TestCase):
+    def test_a_feature_imports_foundation_its_partitions_and_libraries(self):
+        self.assertEqual(import_rules({
+            'src/gui/features/history/history.cppm': 'export module telar.gui.features.history;\nimport std;\n'
+                                                     'export import :browser;\nimport telar.gui.foundation.core;\nimport telar.base.memory;\n',
+            'src/gui/features/history/history.cpp': 'module telar.gui.features.history;\nimport telar.gui.foundation.text;\n',
+        }), 2)
+
+    def test_rejects_a_feature_importing_another_feature_or_application(self):
+        with self.assertRaisesRegex(RuntimeError, r'features/peek/peek.cppm imports telar.gui.features.activity; '
+                                                  r'below src/gui/features a file imports only telar.gui.foundation'):
+            import_rules({'src/gui/features/peek/peek.cppm': 'export module telar.gui.features.peek;\nimport telar.gui.features.activity;\n'})
+        with self.assertRaisesRegex(RuntimeError, 'imports telar.gui.application'):
+            import_rules({'src/gui/features/peek/peek.cpp': 'module telar.gui.features.peek;\nimport telar.gui.application;\n'})
+
+    def test_ui_reaches_application_and_foundation_but_no_feature(self):
+        self.assertEqual(import_rules({'src/gui/ui/app/history.cpp': '#include "x.hpp"\nimport telar.gui.application;\nimport telar.gui.foundation.core;\n'}), 1)
+        with self.assertRaisesRegex(RuntimeError, r'ui/app/history.hpp imports telar.gui.features.history'):
+            import_rules({'src/gui/ui/app/history.hpp': '#pragma once\nimport telar.gui.features.history;\n'})
+
+    def test_ignores_files_outside_the_ruled_folders(self):
+        self.assertEqual(import_rules({'src/gui/tests/history_test.cpp': 'import telar.gui.features.history;\n'}), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

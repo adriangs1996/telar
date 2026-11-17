@@ -62,7 +62,7 @@
   }
  },
  {
-  "target": "application",
+  "target": "features/status_bar",
   "module": "application.host_effects",
   "section": "application/host_metrics",
   "lines": 22,
@@ -1076,7 +1076,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/bindings",
   "module": "config.generation",
   "section": "config/action_description_reader",
   "lines": 17,
@@ -1090,7 +1090,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/bindings",
   "module": "config.generation",
   "section": "config/action_reader",
   "lines": 26,
@@ -1103,7 +1103,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/bindings",
   "module": "config.generation",
   "section": "config/binding_reader",
   "lines": 23,
@@ -1151,7 +1151,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "application",
   "module": "config.generation",
   "section": "config/reader",
   "lines": 52,
@@ -1175,7 +1175,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "application",
   "module": "config.generation",
   "section": "config/generation",
   "lines": 184,
@@ -1230,7 +1230,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "application",
   "module": "config.gui_query",
   "section": "config/client_query",
   "lines": 24,
@@ -1314,7 +1314,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_effects",
   "section": "config/callback_invocation",
   "lines": 8,
@@ -1326,7 +1326,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_effects",
   "section": "config/plugin_effects",
   "lines": 31,
@@ -1351,7 +1351,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_effects",
   "section": "config/plugin_invocation",
   "lines": 14,
@@ -1365,7 +1365,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_effects",
   "section": "config/runtime_query",
   "lines": 21,
@@ -1381,7 +1381,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "foundation/actions",
   "module": "config.plugin_query",
   "section": "config/action_descriptions",
   "lines": 32,
@@ -1467,7 +1467,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_query",
   "section": "config/plugin_overrides",
   "lines": 26,
@@ -1491,7 +1491,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_query",
   "section": "config/plugin_catalog",
   "lines": 33,
@@ -1506,7 +1506,7 @@
   }
  },
  {
-  "target": "features/configuration",
+  "target": "features/plugins",
   "module": "config.plugin_query",
   "section": "config/plugin_query",
   "lines": 28,
@@ -1540,7 +1540,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "features/status_bar",
   "module": "core.json_writer",
   "section": "core/cpu_history",
   "lines": 22,
@@ -1557,7 +1557,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "foundation/core",
   "module": "core.json_writer",
   "section": "core/metric_levels",
   "lines": 61,
@@ -2823,7 +2823,7 @@
   }
  },
  {
-  "target": "features/bindings",
+  "target": "foundation/actions",
   "module": "input.binding_effects",
   "section": "config/callback",
   "lines": 31,
@@ -2866,7 +2866,7 @@
   }
  },
  {
-  "target": "features/bindings",
+  "target": "foundation/actions",
   "module": "input.binding_effects",
   "section": "config/action_descriptions",
   "lines": 30,
@@ -2960,7 +2960,7 @@
   "users": {}
  },
  {
-  "target": "features/bindings",
+  "target": "foundation/keys",
   "module": "input.configuration",
   "section": "input/configuration",
   "lines": 20,
@@ -3100,7 +3100,7 @@
   }
  },
  {
-  "target": "features/bindings",
+  "target": "foundation/actions",
   "module": "input.copy_pointer",
   "section": "input/action",
   "lines": 122,
@@ -3198,7 +3198,7 @@
   }
  },
  {
-  "target": "features/bindings",
+  "target": "foundation/actions",
   "module": "input.key_encoder",
   "section": "input/binding",
   "lines": 112,
@@ -3223,7 +3223,7 @@
   }
  },
  {
-  "target": "features/terminal/input",
+  "target": "foundation/keys",
   "module": "input.key_encoder",
   "section": "input/key_character",
   "lines": 14,
@@ -3239,7 +3239,7 @@
   }
  },
  {
-  "target": "features/terminal/input",
+  "target": "foundation/keys",
   "module": "input.key_encoder",
   "section": "input/key_event",
   "lines": 25,
@@ -3258,7 +3258,7 @@
   }
  },
  {
-  "target": "features/terminal/input",
+  "target": "foundation/keys",
   "module": "input.key_encoder",
   "section": "input/terminal_key",
   "lines": 30,
@@ -3278,7 +3278,7 @@
   }
  },
  {
-  "target": "features/terminal/input",
+  "target": "foundation/keys",
   "module": "input.key_encoder",
   "section": "input/key_encoder",
   "lines": 82,
@@ -3405,7 +3405,7 @@
   }
  },
  {
-  "target": "features/terminal/input",
+  "target": "foundation/keys",
   "module": "input.key_encoder",
   "section": "input/paste_encoding",
   "lines": 23,
@@ -4423,7 +4423,7 @@
   }
  },
  {
-  "target": "features/palette",
+  "target": "foundation/model",
   "module": "palette.navigation_label",
   "section": "palette/navigation_target",
   "lines": 15,
@@ -4455,7 +4455,7 @@
   }
  },
  {
-  "target": "features/palette",
+  "target": "foundation/text",
   "module": "palette.navigation_label",
   "section": "palette/ranked_matches",
   "lines": 60,
@@ -5161,7 +5161,7 @@
   }
  },
  {
-  "target": "features/activity",
+  "target": "foundation/agents",
   "module": "presentation.activity_order",
   "section": "presentation/agent_status",
   "lines": 29,
@@ -5423,7 +5423,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "application",
   "module": "presentation.client_view_state",
   "section": "application/client_view_state",
   "lines": 13,
@@ -5547,7 +5547,7 @@
   }
  },
  {
-  "target": "features/activity",
+  "target": "application",
   "module": "presentation.display_metrics",
   "section": "presentation/sidebar_columns",
   "lines": 12,
@@ -5562,7 +5562,7 @@
   }
  },
  {
-  "target": "features/prompt",
+  "target": "foundation/forms",
   "module": "presentation.form_field_geometry",
   "section": "presentation/form_field_geometry",
   "lines": 26,
@@ -5576,7 +5576,7 @@
   }
  },
  {
-  "target": "features/history",
+  "target": "foundation/forms",
   "module": "presentation.form_field_geometry",
   "section": "presentation/history_match_highlight",
   "lines": 49,
@@ -5638,7 +5638,7 @@
   }
  },
  {
-  "target": "features/suggestions",
+  "target": "foundation/forms",
   "module": "presentation.form_field_geometry",
   "section": "presentation/suggestion_preview",
   "lines": 29,
@@ -5803,7 +5803,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "application",
   "module": "presentation.frame_pacer",
   "section": "presentation/terminal_preparation",
   "lines": 11,
@@ -5816,7 +5816,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "features/status_bar",
   "module": "presentation.history_filter_geometry",
   "section": "presentation/bar_metrics",
   "lines": 26,
@@ -6001,7 +6001,7 @@
   }
  },
  {
-  "target": "features/workbench",
+  "target": "foundation/text",
   "module": "presentation.history_inspection",
   "section": "presentation/tab_caption",
   "lines": 28,
@@ -6113,7 +6113,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "features/status_bar",
   "module": "presentation.history_inspection",
   "section": "presentation/mode_hints",
   "lines": 61,
@@ -6134,7 +6134,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "features/status_bar",
   "module": "presentation.history_inspection",
   "section": "presentation/mode_key_label",
   "lines": 16,
@@ -6165,7 +6165,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "features/status_bar",
   "module": "presentation.history_inspection",
   "section": "presentation/mode_bar_labels",
   "lines": 42,
@@ -6230,7 +6230,7 @@
   }
  },
  {
-  "target": "foundation/drawing",
+  "target": "foundation/forms",
   "module": "presentation.history_inspection_geometry",
   "section": "presentation/form_button_style",
   "lines": 12,
@@ -6408,7 +6408,7 @@
   }
  },
  {
-  "target": "features/history",
+  "target": "foundation/drawing",
   "module": "presentation.history_meta_geometry",
   "section": "presentation/history_hint_geometry",
   "lines": 39,
@@ -6436,7 +6436,7 @@
   }
  },
  {
-  "target": "features/window",
+  "target": "features/status_bar",
   "module": "presentation.history_meta_geometry",
   "section": "presentation/mode_bar_geometry",
   "lines": 25,
@@ -6598,7 +6598,7 @@
   }
  },
  {
-  "target": "features/activity",
+  "target": "foundation/agents",
   "module": "presentation.notification_stack",
   "section": "presentation/agent_card_labels",
   "lines": 21,
@@ -6778,7 +6778,7 @@
   }
  },
  {
-  "target": "features/activity",
+  "target": "application",
   "module": "presentation.suggestion_geometry",
   "section": "presentation/sidebar_geometry",
   "lines": 33,
@@ -6793,7 +6793,7 @@
   }
  },
  {
-  "target": "features/suggestions",
+  "target": "features/palette",
   "module": "presentation.suggestion_geometry",
   "section": "presentation/suggestion_geometry",
   "lines": 35,
@@ -6832,7 +6832,7 @@
   }
  },
  {
-  "target": "features/prompt",
+  "target": "foundation/forms",
   "module": "presentation.suggestion_labels",
   "section": "presentation/name_prompt_geometry",
   "lines": 25,
@@ -6885,7 +6885,7 @@
   }
  },
  {
-  "target": "features/suggestions",
+  "target": "features/palette",
   "module": "presentation.suggestion_labels",
   "section": "presentation/suggestion_labels",
   "lines": 13,
@@ -7262,7 +7262,7 @@
   }
  },
  {
-  "target": "features/suggestions",
+  "target": "foundation/model",
   "module": "suggestions.state",
   "section": "suggestions/limits",
   "lines": 11,
@@ -7277,7 +7277,7 @@
   }
  },
  {
-  "target": "features/suggestions",
+  "target": "features/palette",
   "module": "suggestions.state",
   "section": "suggestions/state",
   "lines": 33,

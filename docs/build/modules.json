@@ -83,6 +83,10 @@
     "src/gui/foundation",
     "src/gui/features"
   ],
+  "import_rules": {
+    "src/gui/foundation": ["telar.gui.foundation"],
+    "src/gui/features": ["telar.gui.foundation"]
+  },
   "process_layers": {
     "runtime": [
       "diagnostics",

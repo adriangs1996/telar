@@ -72,6 +72,8 @@ def main():
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
     check_module_paths(owned)
+    check_import_rules(owned, inventory.get('import_rules', {}),
+                       lambda path: (ROOT / path).read_text(errors='replace'))
     namespaced = check_module_namespaces(owned, inventory.get('namespaced_folders', []),
                                          lambda path: (ROOT / path).read_text(errors='replace'))
     imports = unit_imports(owned, graph)
@@ -1006,7 +1008,7 @@ def exported_namespaces(found):
                 end += 1
 
             if found[end] == '{':
-                scopes.append((exporting, '::'.join(name for name in found[index + 1:end] if name != '::')))
+                scopes.append((exporting, '::'.join(name for name in found[index + 1:end] if name not in ('::', 'inline'))))
                 index = end + 1
             else:
                 index = statement_end(found, end, closing)
@@ -1053,6 +1055,38 @@ def check_module_namespaces(files, roots, read):
                 errors.append(f'{path} exports into {used or "the global namespace"}; {match[2]} exports into {expected}')
     if errors:
         raise RuntimeError('Modules exporting outside the namespace of their name:\n  ' + '\n  '.join(errors))
+
+    return count
+
+
+def check_import_rules(files, rules, read):
+    """Rule 9: below a folder of `import_rules`, a file imports, of its process's modules, only its
+    own module and the ones whose names start with a listed prefix. In src/gui a feature imports
+    only foundation, application imports features and foundation, and ui imports application and
+    foundation, so a feature never reaches another one and ui never reaches a feature."""
+    errors, count = [], 0
+    for path in sorted(files):
+        if not path.endswith(('.cppm', '.cpp', '.hpp', '.h', '.mm')):
+            continue
+        folders = [folder for folder in rules if path.startswith(folder + '/')]
+        if not folders:
+            continue
+        allowed = rules[max(folders, key=len)]
+        text = COMMENTS_RE.sub('', read(path))
+        declaration = DECLARATION_RE.search(text)
+        own = declaration[2] if declaration else None
+        process = next((name for name, root in PROCESSES.items() if path.startswith(root + '/')), None)
+        count += 1
+        for name in imports_of(own or '', text):
+            parts = name.split('.')
+            if process is None or len(parts) < 2 or parts[0] != 'telar' or parts[1] != process:
+                continue
+            module = name.split(':')[0]
+            if own and module == own.split(':')[0] or any(module == prefix or module.startswith(prefix + '.') for prefix in allowed):
+                continue
+            errors.append(f'{path} imports {name}; below {max(folders, key=len)} a file imports only ' + ', '.join(allowed))
+    if errors:
+        raise RuntimeError('Imports against the import rules:\n  ' + '\n  '.join(errors))
 
     return count
 
