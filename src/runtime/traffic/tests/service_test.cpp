@@ -101,7 +101,9 @@ namespace {
     }
 
     ~Socket() {
-      ::rmdir(directory.data());
+      std::error_code ignored;
+
+      std::filesystem::remove_all(directory.data(), ignored);
     }
 
     std::array<char, 64> directory{};
