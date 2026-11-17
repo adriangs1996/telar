@@ -348,6 +348,7 @@
     "src/runtime/http2/tests/http2_fixture/http2_fixture.cppm": "telar.runtime.http2.tests.http2_fixture",
     "src/runtime/traffic/tests/packet_fixture/packet_fixture.cppm": "telar.runtime.traffic.tests.packet_fixture",
     "src/runtime/runtime/tests/protocol_peer/protocol_peer.cppm": "telar.runtime.runtime.tests.protocol_peer",
+    "src/runtime/tls/tests/hello_fixture/hello_fixture.cppm": "telar.runtime.tls.tests.hello_fixture",
     "lib/tls/tests/tls_fixture/tls_fixture.cppm": "telar.tls.tests.tls_fixture",
     "src/gui/tests/activity_fixture/activity_fixture.cppm": "telar.gui.tests.activity_fixture",
     "src/gui/tests/agent_fixture/agent_fixture.cppm": "telar.gui.tests.agent_fixture",

@@ -15,6 +15,7 @@ import telar.platform.primitives;
 import telar.testing;
 import telar.tls;
 import telar.runtime.tls.interception;
+import telar.runtime.tls.tests.hello_fixture;
 import telar.platform.net;
 
 namespace {
@@ -23,6 +24,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::runtime;
+  using namespace telar::runtime::tls_test;
 
   std::vector<std::uint8_t> clientHello(std::span<const std::uint8_t> protocols) {
     TlsContext context{SSL_CTX_new(TLS_client_method())};
@@ -133,6 +135,61 @@ namespace {
     }
   }
 
+  // Peeks a whole hello from a socket, as the transparent proxy reads it before deciding whether to
+  // intercept.
+  void peekHello(AlpnOffer& offer, std::span<const std::uint8_t> record) {
+    int sockets[2];
+
+    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    FileDescriptor child{sockets[0]};
+    FileDescriptor proxy{sockets[1]};
+
+    configureProxySocket(proxy.get());
+    check(::send(child.get(), record.data(), record.size(), 0) == static_cast<ssize_t>(record.size()));
+    check(offer.peek(proxy.get()) == AlpnOffer::Read::complete && offer.tls());
+  }
+
+  // The hello's server name decides whether a connection is intercepted and for which name a
+  // certificate is minted, so a hello that names two hosts, or a host no resolver accepts, is invalid.
+  void testMalformedHellos() {
+    AlpnOffer offer;
+    const std::array accepted{serverName("origin.test"), protocols()};
+
+    peekHello(offer, helloRecord(accepted));
+    check(offer.valid() && offer.serverName() == "origin.test");
+
+    const std::array<std::string_view, 2> two_names{"origin.test", "other.test"};
+    // A second server_name extension is refused even when it lists no host_name entry.
+    const Extension unnamed{0, {0, 4, 1, 0, 1, 'x'}};
+    const std::array<std::vector<Extension>, 5> malformed{{
+        {serverName("origin.test"), serverName("other.test")},
+        {serverName("origin.test"), unnamed},
+        {{0, serverNames(two_names)}},
+        {serverName("origin test")},
+        {serverName("origin.test"), protocols(), protocols()},
+    }};
+
+    for (const auto& extensions : malformed) {
+      AlpnOffer rejected;
+
+      peekHello(rejected, helloRecord(extensions));
+      check(!rejected.valid());
+    }
+  }
+
+  // An ECH hello names a cover host in its outer server name: interception would act on the wrong
+  // host, so the offer says the hello is encrypted.
+  void testEncryptedClientHello() {
+    const std::array plain{serverName("cover.test"), protocols()};
+    const std::array encrypted{serverName("cover.test"), protocols(), encryptedHello()};
+    AlpnOffer offer;
+
+    peekHello(offer, helloRecord(plain));
+    check(offer.valid() && !offer.encrypted());
+    peekHello(offer, helloRecord(encrypted));
+    check(offer.valid() && offer.encrypted() && offer.serverName() == "cover.test");
+  }
+
   void testTlsAlpn() {
     constexpr std::array<std::uint8_t, 3> http2{2, 'h', '2'};
     constexpr std::array<std::uint8_t, 9> http11{8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
@@ -151,5 +208,7 @@ namespace {
 
   const telar::testing::Case case_tls_alpn{"tls_alpn.tls_alpn", testTlsAlpn};
   const telar::testing::Case case_check_fragments{"tls_alpn.check_fragments", checkFragments};
+  const telar::testing::Case case_malformed_hellos{"tls_alpn.malformed_hellos", testMalformedHellos};
+  const telar::testing::Case case_encrypted_client_hello{"tls_alpn.encrypted_client_hello", testEncryptedClientHello};
 
 }

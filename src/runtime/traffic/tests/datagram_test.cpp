@@ -286,6 +286,116 @@ namespace {
     });
   }
 
+  struct Received {
+    bool ipv6;
+    std::uint16_t source_port;
+    std::uint16_t destination_port;
+    std::vector<Byte> bytes;
+    bool operator==(const Received&) const = default;
+  };
+
+  std::vector<Received> datagrams(TlsTestMemory& memory, std::span<const Byte> frame, std::uint32_t link_type) {
+    CaptureAnalysis analysis{memory};
+    auto captured = event(frame);
+    std::vector<Received> received;
+
+    captured.link_type = link_type;
+    analysis.packet(captured, Selection::datagrams, [&](const traffic::Event& item) {
+      check(item.kind == Kind::datagram);
+      const auto parsed = DatagramCodec::decode(item.bytes);
+
+      received.push_back({parsed.ipv6, parsed.source_port, parsed.destination_port, {parsed.bytes.begin(), parsed.bytes.end()}});
+    });
+
+    return received;
+  }
+
+  // Live capture on Ethernet and loopback interfaces, and imported pcaps, deliver link layers other
+  // than raw IP: each framing of the same datagram yields the same event.
+  void linkLayerFraming(TlsTestMemory& memory) {
+    for (const bool ipv6 : {false, true}) {
+      const auto datagram = packet(ipv6, false, "link-layer");
+      const Byte high = ipv6 ? 0x86 : 0x08;
+      const Byte low = ipv6 ? 0xdd : 0x00;
+      const auto expected = datagrams(memory, datagram, DLT_RAW);
+
+      check(expected.size() == 1 && expected.front().source_port == 53535 && expected.front().destination_port == 53);
+      auto framed = [&](std::initializer_list<Byte> header) {
+        std::vector<Byte> frame{header};
+
+        frame.insert(frame.end(), datagram.begin(), datagram.end());
+        return frame;
+      };
+
+      const std::vector<Byte> addresses(12, 0x02);
+      auto ethernet = [&](std::initializer_list<Byte> tags) {
+        std::vector<Byte> frame{addresses};
+
+        frame.insert(frame.end(), tags);
+        frame.insert(frame.end(), {high, low});
+        frame.insert(frame.end(), datagram.begin(), datagram.end());
+        return frame;
+      };
+
+      const Byte family = ipv6 ? 30 : 2;
+      const std::array<std::pair<std::vector<Byte>, std::uint32_t>, 7> framings{{
+          {ethernet({}), DLT_EN10MB},
+          {ethernet({0x81, 0x00, 0x00, 0x07}), DLT_EN10MB},
+          {ethernet({0x88, 0xa8, 0x00, 0x05, 0x81, 0x00, 0x00, 0x07}), DLT_EN10MB},
+          {framed({family, 0, 0, 0}), DLT_NULL},
+          {framed({0, 0, 0, family}), DLT_LOOP},
+          {framed({0, 0, 0, 1, 0, 6, 2, 2, 2, 2, 2, 2, 0, 0, high, low}), DLT_LINUX_SLL},
+          {framed({high, low, 0, 0, 0, 0, 0, 2, 0, 1, 0, 6, 2, 2, 2, 2, 2, 2, 0, 0}), DLT_LINUX_SLL2},
+      }};
+
+      for (const auto& [frame, link_type] : framings) {
+        check(datagrams(memory, frame, link_type) == expected);
+      }
+
+      const auto plain = ethernet({});
+
+      check(datagrams(memory, std::span{plain}.first(13), DLT_EN10MB).empty());
+      auto arp = ethernet({});
+
+      arp[12] = 0x08;
+      arp[13] = 0x06;
+      check(datagrams(memory, arp, DLT_EN10MB).empty());
+      check(datagrams(memory, datagram, DLT_PPP).empty());
+    }
+  }
+
+  // Routing, destination options and AH headers may precede a remote packet's UDP header; AH counts
+  // its length in 4-byte words where the others count 8-byte units.
+  void ipv6ExtensionChain(TlsTestMemory& memory) {
+    const auto datagram = packet(true, false, "extensions");
+    std::vector<Byte> extended{datagram.begin(), datagram.begin() + 40};
+    const std::array<Byte, 8> routing{60, 0, 0, 0, 0, 0, 0, 0};
+    const std::array<Byte, 8> options{51, 0, 1, 4, 0, 0, 0, 0};
+    std::array<Byte, 24> authentication{17, 4};
+
+    std::fill(authentication.begin() + 2, authentication.end(), 0xa5);
+    extended[6] = 43;
+    extended.insert(extended.end(), routing.begin(), routing.end());
+    extended.insert(extended.end(), options.begin(), options.end());
+    extended.insert(extended.end(), authentication.begin(), authentication.end());
+    extended.insert(extended.end(), datagram.begin() + 40, datagram.end());
+    word(extended, 4, static_cast<std::uint16_t>(extended.size() - 40));
+    const auto expected = datagrams(memory, datagram, DLT_RAW);
+
+    check(expected.size() == 1 && datagrams(memory, extended, DLT_RAW) == expected);
+
+    // The destination options run 16 bytes into a packet whose payload declares 8; the frame goes on
+    // with a datagram after the packet, as an Ethernet trailer or the next capture bytes would.
+    std::vector<Byte> overrun{datagram.begin(), datagram.begin() + 40};
+    const std::array<Byte, 16> long_options{17, 1};
+
+    overrun[6] = 60;
+    word(overrun, 4, 8);
+    overrun.insert(overrun.end(), long_options.begin(), long_options.end());
+    overrun.insert(overrun.end(), datagram.begin() + 40, datagram.end());
+    check(datagrams(memory, overrun, DLT_RAW).empty());
+  }
+
   // Each case owns the budget its calls share and leaves nothing allocated there.
   template <auto body>
   void budgeted() {
@@ -303,5 +413,7 @@ namespace {
   const telar::testing::Case case_fragmented_and_selected{"datagram.fragmented_and_selected", budgeted<fragmentedAndSelected>};
   const telar::testing::Case case_recorded_datagrams{"datagram.recorded_datagrams", budgeted<recordedDatagrams>};
   const telar::testing::Case case_malformed_and_extensions{"datagram.malformed_and_extensions", budgeted<malformedAndExtensions>};
+  const telar::testing::Case case_link_layer_framing{"datagram.link_layer_framing", budgeted<linkLayerFraming>};
+  const telar::testing::Case case_ipv6_extension_chain{"datagram.ipv6_extension_chain", budgeted<ipv6ExtensionChain>};
 
 }

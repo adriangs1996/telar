@@ -7,6 +7,7 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <zlib.h>
 #include <zstd.h>
 
 import std;
@@ -130,6 +131,233 @@ namespace {
     check(memory.liveBytes() == 0);
   }
 
+  // Text that compresses like a real body: words drawn by a fixed generator, so Huffman coding,
+  // literals and matches all take part.
+  std::vector<std::uint8_t> bodyText(std::size_t size) {
+    constexpr std::array<std::string_view, 12> words{"capture ", "header ", "stream ", "origin ", "proxy ", "agent ", "terminal ", "pane\n", "{\"id\":", "42,", "\"value\"", "}\n"};
+    std::vector<std::uint8_t> text;
+    std::uint32_t state = 0x2545f491;
+
+    while (text.size() < size) {
+      state = state * 1664525 + 1013904223;
+      const auto word = words[(state >> 16) % words.size()];
+
+      text.insert(text.end(), word.begin(), word.end());
+    }
+
+    text.resize(size);
+    return text;
+  }
+
+  struct Chunk {
+    std::size_t bytes;
+    int level;
+    int strategy;
+  };
+
+  // Deflates `input` in chunks, each flushed to its own blocks with the level and strategy given: a
+  // level of 0 writes stored blocks, Z_FIXED fixed-Huffman ones, the others dynamic ones.
+  std::vector<std::uint8_t> deflateChunks(std::span<const std::uint8_t> input, int window_bits, std::span<const Chunk> chunks) {
+    z_stream stream{};
+
+    check(deflateInit2(&stream, chunks.front().level, Z_DEFLATED, window_bits, 8, chunks.front().strategy) == Z_OK);
+    std::vector<std::uint8_t> output(deflateBound(&stream, input.size()) + 1024 * chunks.size());
+    std::size_t offset = 0;
+
+    stream.next_out = output.data();
+    stream.avail_out = static_cast<uInt>(output.size());
+    for (std::size_t index = 0; index < chunks.size(); ++index) {
+      const auto& chunk = chunks[index];
+      const bool last = index + 1 == chunks.size();
+      const auto bytes = last ? input.size() - offset : std::min(chunk.bytes, input.size() - offset);
+
+      check(deflateParams(&stream, chunk.level, chunk.strategy) == Z_OK);
+      stream.next_in = const_cast<Bytef*>(input.data() + offset);
+      stream.avail_in = static_cast<uInt>(bytes);
+      check(deflate(&stream, last ? Z_FINISH : Z_FULL_FLUSH) == (last ? Z_STREAM_END : Z_OK) && stream.avail_in == 0);
+      offset += bytes;
+    }
+
+    output.resize(stream.total_out);
+    deflateEnd(&stream);
+    return output;
+  }
+
+  // The decoded prefix a capture keeps: the plaintext's first bytes, truncated exactly when the
+  // plaintext runs past the limit.
+  void checkPrefix(std::span<const std::uint8_t> plaintext, std::span<const std::uint8_t> input, std::string_view coding, std::size_t limit) {
+    ErasureCheckingAllocator system;
+    BudgetAllocator memory{system, 4 * limit + 4 * 1024 * 1024};
+    MemoryAdapter adapter{memory};
+
+    {
+      CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
+      const auto body = decoder.decode(input, coding, limit);
+
+      check(body.decoded && !body.failed && body.size <= limit);
+      check(std::ranges::equal(body.bytes(), plaintext.first(body.size)));
+      check(body.truncated == (plaintext.size() > limit));
+      check(body.truncated || body.size == plaintext.size());
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
+  // Every real zstd body carries compressed blocks, with literals and sequences, not the raw block of
+  // the fixture above.
+  void testZstdCompressedBlocks() {
+    auto compress = [](std::span<const std::uint8_t> plaintext, int minimum_match) {
+      const auto context = std::unique_ptr<ZSTD_CCtx, decltype(&ZSTD_freeCCtx)>{ZSTD_createCCtx(), &ZSTD_freeCCtx};
+
+      check(context != nullptr);
+      check(!ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_compressionLevel, 3)));
+      check(!ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_minMatch, minimum_match)));
+      std::vector<std::uint8_t> compressed(ZSTD_compressBound(plaintext.size()));
+      const auto size = ZSTD_compress2(context.get(), compressed.data(), compressed.size(), plaintext.data(), plaintext.size());
+
+      check(!ZSTD_isError(size) && size < plaintext.size());
+      compressed.resize(size);
+      return compressed;
+    };
+
+    // Text compresses to literals and sequences; bytes drawn from 64 values with matches of 7 bytes
+    // or more only compress to Huffman-coded literals, blocks without sequences.
+    const auto text = bodyText(300 * 1024);
+    std::vector<std::uint8_t> symbols(300 * 1024);
+    std::uint32_t state = 0x9e3779b9;
+
+    for (auto& symbol : symbols) {
+      state = state * 1664525 + 1013904223;
+      symbol = static_cast<std::uint8_t>('0' + (state >> 26));
+    }
+
+    for (const auto& [plaintext, compressed] : {std::pair{text, compress(text, 3)}, std::pair{symbols, compress(symbols, 7)}}) {
+      // 200 KiB stops inside the second block, which a compressed block cannot fill in part.
+      for (const std::size_t limit : {std::size_t{1}, std::size_t{4096}, std::size_t{131071}, std::size_t{200 * 1024}, std::size_t{1024 * 1024}}) {
+        checkPrefix(plaintext, compressed, "zstd", limit);
+      }
+    }
+  }
+
+  // A body of stored, fixed and dynamic blocks, as servers that flush per chunk send it, decoded with
+  // limits over the small-output path, the production default among them.
+  void testFlateMultiblockLargeLimit() {
+    const auto plaintext = bodyText(300 * 1024);
+    const std::array chunks{
+        Chunk{64 * 1024, 6, Z_DEFAULT_STRATEGY},
+        Chunk{64 * 1024, 0, Z_DEFAULT_STRATEGY},
+        Chunk{64 * 1024, 6, Z_FIXED},
+        Chunk{0, 9, Z_DEFAULT_STRATEGY},
+    };
+
+    for (const auto& [coding, window_bits] : {std::pair{std::string_view{"gzip"}, 31}, std::pair{std::string_view{"deflate"}, 15}}) {
+      const auto compressed = deflateChunks(plaintext, window_bits, chunks);
+
+      for (const std::size_t limit : {std::size_t{65536}, std::size_t{200 * 1024}, std::size_t{1024 * 1024}}) {
+        checkPrefix(plaintext, compressed, coding, limit);
+      }
+    }
+  }
+
+  // A small gzip that expands to 64 MiB: the decoder stops at the limit and its storage grows with
+  // the limit, not with the stream.
+  void testFlateBombIsBounded() {
+    constexpr std::size_t expanded = 64 * 1024 * 1024;
+    constexpr std::size_t limit = 1024 * 1024;
+    const std::vector<std::uint8_t> zeros(limit);
+    z_stream stream{};
+
+    check(deflateInit2(&stream, 9, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY) == Z_OK);
+    std::vector<std::uint8_t> bomb(256 * 1024);
+
+    stream.next_out = bomb.data();
+    stream.avail_out = static_cast<uInt>(bomb.size());
+    for (std::size_t offset = 0; offset < expanded; offset += zeros.size()) {
+      const bool last = offset + zeros.size() == expanded;
+
+      stream.next_in = const_cast<Bytef*>(zeros.data());
+      stream.avail_in = static_cast<uInt>(zeros.size());
+      check(deflate(&stream, last ? Z_FINISH : Z_NO_FLUSH) == (last ? Z_STREAM_END : Z_OK) && stream.avail_out != 0);
+    }
+
+    bomb.resize(stream.total_out);
+    deflateEnd(&stream);
+    ErasureCheckingAllocator system;
+    BudgetAllocator memory{system, 2 * limit};
+    MemoryAdapter adapter{memory};
+
+    {
+      CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
+      const auto body = decoder.decode(bomb, "gzip", limit);
+
+      check(body.decoded && !body.failed && body.truncated && body.size == limit);
+      check(std::ranges::all_of(body.bytes(), [](std::uint8_t byte) {
+        return byte == 0;
+      }));
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
+  // `gzip file` and nginx's gzip_static write FNAME, and a server may set any of the optional header
+  // fields: the decoder skips them all, and a field cut short leaves the body raw.
+  void testGzipEnvelopeFields() {
+    const auto plaintext = bodyText(512);
+    const auto plain = deflateChunks(plaintext, 31, std::array{Chunk{0, 6, Z_DEFAULT_STRATEGY}});
+    constexpr std::uint8_t extra = 0x04, name = 0x08, comment = 0x10, header_checksum = 0x02;
+    std::vector<std::uint8_t> header{plain.begin(), plain.begin() + 10};
+
+    header[3] = extra | name | comment | header_checksum;
+    header.insert(header.end(), {6, 0, 'A', 'P', 2, 0, 'x', 'y'});
+    for (const std::string_view text : {std::string_view{"body.json"}, std::string_view{"fixture comment"}}) {
+      header.insert(header.end(), text.begin(), text.end());
+      header.push_back(0);
+    }
+
+    const auto checksum = crc32(0, header.data(), static_cast<uInt>(header.size()));
+
+    header.insert(header.end(), {static_cast<std::uint8_t>(checksum), static_cast<std::uint8_t>(checksum >> 8)});
+    std::vector<std::uint8_t> full = header;
+
+    full.insert(full.end(), plain.begin() + 10, plain.end());
+    checkPrefix(plaintext, full, "gzip", 1024);
+
+    // Each body is cut inside a header field, and the bytes after the cut are the rest of a valid
+    // gzip: a decoder that read past the cut would find a stream to decode there.
+    struct Cut {
+      std::uint8_t flags;
+      std::vector<std::uint8_t> fields;
+      std::size_t kept;
+    };
+
+    const std::array cuts{
+        Cut{extra, {4, 0, 'A', 'P', 0, 0}, 4},
+        Cut{name, {'b', 'o', 'd', 'y', 0}, 4},
+        Cut{header_checksum, {0x12, 0x34}, 1},
+    };
+
+    for (const auto& cut : cuts) {
+      std::vector<std::uint8_t> buffer{plain.begin(), plain.begin() + 10};
+
+      buffer[3] = cut.flags;
+      buffer.insert(buffer.end(), cut.fields.begin(), cut.fields.end());
+      buffer.insert(buffer.end(), plain.begin() + 10, plain.end());
+      const auto input = std::span{buffer}.first(10 + cut.kept);
+      ErasureCheckingAllocator system;
+      BudgetAllocator memory{system, 1024 * 1024};
+      MemoryAdapter adapter{memory};
+
+      {
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
+        const auto body = decoder.decode(input, "gzip", 1024);
+
+        check(body.failed && !body.decoded && std::ranges::equal(body.bytes(), input));
+      }
+
+      check(memory.liveBytes() == 0);
+    }
+  }
+
   void testCapturePublication() {
     SystemAllocator system;
     BudgetAllocator budget{system, 8 * 1024 * 1024};
@@ -239,6 +467,10 @@ namespace {
   const telar::testing::Case case_decoded_capture_counters{"capture_decode.decoded_capture_counters", testDecodedCaptureCounters};
   const telar::testing::Case case_concurrent_capture_delivery{"capture_decode.concurrent_capture_delivery", testConcurrentCaptureDelivery};
   const telar::testing::Case case_capture_decoding{"capture_decode.capture_decoding", testCaptureDecoding};
+  const telar::testing::Case case_zstd_compressed_blocks{"capture_decode.zstd_compressed_blocks", testZstdCompressedBlocks};
+  const telar::testing::Case case_flate_multiblock_large_limit{"capture_decode.flate_multiblock_large_limit", testFlateMultiblockLargeLimit};
+  const telar::testing::Case case_flate_bomb_is_bounded{"capture_decode.flate_bomb_is_bounded", testFlateBombIsBounded};
+  const telar::testing::Case case_gzip_envelope_fields{"capture_decode.gzip_envelope_fields", testGzipEnvelopeFields};
   const telar::testing::Case case_zstd_declared_size_below_blocks{"capture_decode.zstd_declared_size_below_blocks", testZstdDeclaredSizeBelowBlocks};
 
 }

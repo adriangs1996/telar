@@ -204,8 +204,37 @@ namespace {
     });
   }
 
+  // Whether a plugin keeps running after the user's grants change: it holds only what it both
+  // declared and was granted, so only losing one of those revokes it.
+  void testServiceSpecStillAuthorized() {
+    auto capabilities = [](std::initializer_list<tap::Capability> list) {
+      tap::Capabilities result;
+
+      for (const auto capability : list) {
+        result.insert(capability);
+      }
+
+      return result;
+    };
+
+    using enum tap::Capability;
+    tap::ServiceSpec both{.declared = capabilities({proxy_tap, notifications}), .granted = capabilities({proxy_tap, notifications})};
+
+    check(both.stillAuthorized(capabilities({proxy_tap, notifications})));
+    check(!both.stillAuthorized(capabilities({proxy_tap})));
+
+    tap::ServiceSpec ungranted{.declared = capabilities({proxy_tap, notifications}), .granted = capabilities({proxy_tap})};
+
+    check(ungranted.stillAuthorized(capabilities({proxy_tap})));
+
+    tap::ServiceSpec undeclared{.declared = capabilities({proxy_tap}), .granted = capabilities({proxy_tap, notifications})};
+
+    check(undeclared.stillAuthorized(capabilities({proxy_tap})));
+  }
+
   const telar::testing::Case case_exchange_protocol{"plugin.exchange_protocol", testExchangeProtocol};
   const telar::testing::Case case_effect_protocol{"plugin.effect_protocol", testEffectProtocol};
   const telar::testing::Case case_error_protocol{"plugin.error_protocol", testErrorProtocol};
+  const telar::testing::Case case_service_spec_still_authorized{"plugin.service_spec_still_authorized", testServiceSpecStillAuthorized};
 
 }
