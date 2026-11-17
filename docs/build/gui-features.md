@@ -1,5 +1,43 @@
 # Reparto de `src/gui` por casos de uso
 
+> **Registro histórico.** Este reparto (y `gui-features.json`, los mismos datos) fue el encargo con
+> el que se cortó `src/gui` en `foundation`, `features`, `application` y `ui`; las tablas reflejan
+> los módulos de antes del corte y no se regeneran. La arquitectura vigente está en
+> `gui-architecture.md`. Los pasos se desviaron del reparto en esto:
+>
+> - `config/default_bindings` fue a `foundation/keys`, no a `bindings`: lo añade
+>   `InputConfiguration::compile`, y `foundation` no importa una feature.
+> - Lo que hace I/O salió de las features. A `foundation/system`: `DirectoryCompletion` (de `paths`),
+>   `ProfileFile` (de `machines`), las órdenes que publican una notificación o suenan y
+>   `NotificationPayload` (de `notifications`). A `application`: el enlace con el runtime
+>   (`transport.runtime_link`, de `machines`) como `application:transport`, y los efectos en el
+>   escritorio por `HostEffects`.
+> - La reproducción de sonidos y los informes de límites entraron en `notifications` como estado
+>   puro: la feature decide qué sonido empieza o espera y cuenta y describe los límites;
+>   `application` hace sonar y envía.
+> - Los lectores del intérprete Lua que el reparto daba a `bindings` y `components`
+>   (`action_reader`, `binding_reader`, `configuration`, `content_reader`, `snapshot`,
+>   `action_references`, `pick_items_reader`, `invocation`) fueron a `application:configuration_readers`;
+>   ninguna feature importa `telar.lua`. `callback_invocation` desapareció: solo renombraba un tipo
+>   de la biblioteca de configuración.
+> - `RuntimeQuery` fue a `configuration`, no a `plugins`: escribe la sección del runtime y no nombra
+>   nada de los plugins.
+> - El tubo y la transferencia de imágenes del portapapeles no entraron en `terminal/attachments`:
+>   leen un descriptor y completan una declaración de Objective-C++, así que quedaron en
+>   `platform`, ahora el módulo `telar.gui.platform`.
+> - El acumulador de la rueda (`input.wheel_accumulator`) no fue a `terminal/input`: es un
+>   encabezado que Objective-C++ incluye y vive en `foundation/core`, que lo reexporta
+>   (`core:wheel`).
+> - Los bloques de comandos y el modelo de tabs y panes siguen en `application::Session`:
+>   `prompt`, `copy_mode`, `workbench` y `activity` deciden sobre ellos con casos de uso y
+>   `application` compone y ejecuta.
+> - Las clases con estado que ui sostiene por ítem o ventana (`KeyRouter`, `FramePacer`,
+>   `GraphicsStore`, `LinkHover`, `Machines`…) siguen exportadas, sin `State` de la sesión.
+> - De los encabezados textuales, los que solo leía Qt pasaron a particiones
+>   (`core:terminal_size`, `terminal:screen`, `application:fold_map`, la partición de los
+>   diacríticos de `terminal/graphics`), y los que Objective-C++ incluye viven junto al módulo que
+>   los posee. `application/dependencies.hpp` es `foundation/core/application_memory.hpp`.
+
 Las reglas están en `gui-architecture.md`. Cada sección `// Interface:` de los módulos actuales de `src/gui` (fuera de `ui/`), con la carpeta a la que va. Una carpeta de `features/` es un módulo (`telar.gui.features.<ruta>`) y su namespace (`telar::gui::features::<ruta>`).
 
 | destino | secciones | líneas |
