@@ -3,8 +3,6 @@ telar_add_qml_sources(gui-quick
     workspaces_controller.cpp
     workspaces_controller.hpp
   QML_FILES
-    ProjectRow.qml
     ProjectSwitcher.qml
     WorkspaceIdentity.qml
-    WorkspaceList.qml
   REGISTERS)

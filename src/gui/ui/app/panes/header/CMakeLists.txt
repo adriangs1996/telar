@@ -1,15 +1,11 @@
 telar_add_qml_sources(gui-quick
   SOURCES
-    fullscreen_strip_layout.cpp
-    fullscreen_strip_layout.hpp
     pane_header_layout.cpp
     pane_header_layout.hpp
   QML_FILES
-    FullscreenStrip.qml
     PaneHeader.qml
     PaneProgress.qml
     PaneStatusChip.qml
   FP_CONTRACT_OFF
-    fullscreen_strip_layout.cpp
     pane_header_layout.cpp
   REGISTERS)

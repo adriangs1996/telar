@@ -412,14 +412,10 @@ if(TELAR_GUI_NATIVE)
   target_compile_options(gui-pane-attention-test PRIVATE -ffp-contract=off)
   telar_add_test(gui-notification-overlay-test QT SOURCES notification_overlay_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
     TEST gui-notification-overlay LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-project-row-test QT SOURCES project_row_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
-    TEST gui-project-row LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-chrome-test QT SOURCES chrome_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-chrome LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-pane-header-test QT SOURCES pane_header_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-pane-header LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-fullscreen-strip-test QT SOURCES fullscreen_strip_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
-    TEST gui-fullscreen-strip LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-agent-timeline-test QT SOURCES agent_timeline_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-agent-timeline LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-agent-card-test QT SOURCES agent_card_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test

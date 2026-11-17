@@ -116,67 +116,6 @@ export {
   }
 }
 
-// Interface: presentation/fullscreen_strip_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct FullscreenEntryMeasure {
-      float index = 0;
-      float name = 0;
-      bool focused = false;
-      bool attention = false;
-    };
-
-    struct FullscreenStripMetrics {
-      float ratio = 1;
-      float maximum_band_height = 0;
-      float mark_side = 0;
-    };
-
-    struct FullscreenStripMeasurements {
-      float chip = 0;
-      float progress = 0;
-      float compact_progress = 0;
-    };
-
-    struct FullscreenStripGeometry {
-      static constexpr float entry_gap = 16;
-      static constexpr float part_gap = 6;
-      static constexpr float chip_gap = 8;
-      static constexpr float leave_width = 22;
-      static constexpr float margin = 8;
-      static constexpr float minimum_entry_room = 48;
-      static constexpr float attention_gap = 6;
-      static constexpr float attention_diameter = 6;
-
-      struct Entry {
-        std::size_t source = 0;
-        Rect bounds;
-        Rect mark;
-        Rect index;
-        Rect name;
-        Rect attention;
-      };
-
-      std::array<Entry, PaneLayout::maximum_panes> entries{};
-      std::size_t count = 0;
-      Rect leave;
-      Rect progress;
-      Rect chip;
-      bool named = true;
-      bool compact_progress = false;
-
-      [[nodiscard]] static FullscreenStripGeometry derive(Rect row, const FullscreenStripMetrics& metrics, std::span<const FullscreenEntryMeasure> sizes, const FullscreenStripMeasurements& measurements) noexcept;
-
-    private:
-      [[nodiscard]] static float entryWidth(const FullscreenEntryMeasure& size, const FullscreenStripMetrics& metrics, float chip_width, bool named) noexcept;
-
-      [[nodiscard]] static float placeEntry(Entry& entry, const FullscreenEntryMeasure& size, const FullscreenStripMetrics& metrics, bool named) noexcept;
-    };
-
-  }
-}
-
 // Interface: presentation/tab_motion_frame.cppm
 export {
   namespace telar::gui {
