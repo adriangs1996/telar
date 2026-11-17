@@ -9,7 +9,7 @@
 
 import std;
 import telar.base.text;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.graphics;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;

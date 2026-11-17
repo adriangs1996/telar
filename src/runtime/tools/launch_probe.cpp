@@ -3,7 +3,7 @@
 
 import std;
 import telar.testing;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.pane_io;

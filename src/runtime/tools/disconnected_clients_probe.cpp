@@ -1,7 +1,7 @@
 #include <sys/un.h>
 
 import std;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 
 using namespace telar;
 using Clock = std::chrono::steady_clock;

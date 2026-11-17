@@ -7,7 +7,7 @@
 import std;
 import telar.testing;
 import telar.runtime.runtime.tests.clipboard_task;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.pane_io;

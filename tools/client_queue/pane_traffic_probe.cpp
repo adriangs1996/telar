@@ -14,7 +14,7 @@ import std;
 import telar.runtime.tools.protocol_peer;
 #else
 import std;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;

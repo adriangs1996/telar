@@ -31,7 +31,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text;
 import telar.platform.primitives;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.runtime.proxy.authenticate;
 import telar.platform.net;
 import telar.wire.content;

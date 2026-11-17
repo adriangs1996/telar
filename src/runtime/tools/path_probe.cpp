@@ -4,7 +4,7 @@
 #include <unistd.h>
 import std;
 import telar.testing;
-import telar.runtime.tools.protocol_peer;
+import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;

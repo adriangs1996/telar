@@ -9,7 +9,7 @@ module;
 #include <sys/un.h>
 #include <unistd.h>
 
-export module telar.runtime.tools.protocol_peer;
+export module telar.runtime.runtime.tests.protocol_peer;
 
 import std;
 import telar.client;
