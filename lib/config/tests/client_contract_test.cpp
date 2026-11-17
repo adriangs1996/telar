@@ -34,6 +34,7 @@ namespace {
               .focused_pane_id = std::numeric_limits<std::uint64_t>::max(),
           },
       };
+
       std::array<std::string, config::PluginWorkerOptions::argument_count + 1> words;
       std::size_t count = 0;
 

@@ -41,6 +41,7 @@ namespace {
     check(!jsonRefused([] {
       static_cast<void>(JsonValue::parse(nested(maximum_depth), maximum_depth));
     }));
+
     check(jsonRefused([] {
       static_cast<void>(JsonValue::parse(nested(maximum_depth + 1), maximum_depth));
     }));
@@ -51,6 +52,7 @@ namespace {
     check(jsonRefused([&] {
       static_cast<void>(JsonValue::parse(deep));
     }));
+
     check(jsonRefused([&] {
       static_cast<void>(JsonNode<SystemAllocator>::parse(memory, deep));
     }));

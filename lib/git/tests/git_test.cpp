@@ -767,6 +767,7 @@ namespace {
       const auto entry = [&](std::string_view mode, std::string_view name) {
         return std::string{mode} + " " + std::string{name} + '\0' + blob;
       };
+
       const auto valid = literalObject(directory, "tree", entry("100644", "a.txt") + entry("100644", "b.txt"));
 
       commitTree(directory, valid);
@@ -865,6 +866,7 @@ namespace {
       const auto entry_crc = [&](std::size_t begin, std::size_t end) {
         return static_cast<std::uint32_t>(crc32(0, reinterpret_cast<const Bytef*>(pack.data() + begin), static_cast<uInt>(end - begin)));
       };
+
       std::vector<std::tuple<std::string, std::uint32_t, std::uint32_t>> objects{
           {base_id, entry_crc(base_offset, delta_offset), static_cast<std::uint32_t>(base_offset)},
           {target, entry_crc(delta_offset, pack.size() - checksum.size()), static_cast<std::uint32_t>(delta_offset)},

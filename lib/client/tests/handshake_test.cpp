@@ -129,6 +129,7 @@ namespace {
     const auto reject = [](HandshakeRejectReason reason) {
       return frame(HandshakeCodec::encode(ServerReject{.reason = reason, .expected_schema = handshake::schema_id}));
     };
+
     const auto accepted = HandshakeCodec::encode(ServerAccept{.schema = handshake::schema_id});
     SchemaId other = handshake::schema_id;
 

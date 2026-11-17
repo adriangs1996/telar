@@ -425,6 +425,7 @@ namespace {
       awaitCondition([&] {
         return !service.listening();
       });
+
       service.stop();
     }
 

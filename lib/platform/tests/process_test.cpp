@@ -34,6 +34,7 @@ namespace {
         {"TELAR_TAB_ID", "4"},
         {"PATH", "/usr/bin:/bin"},
     }};
+
     const Launch launch{.cwd = "/", .arguments = arguments, .environment_mode = EnvironmentMode::replace, .environment = environment};
 
     const Command administration{memory, launch, CommandPurpose::administration};

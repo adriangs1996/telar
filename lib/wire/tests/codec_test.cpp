@@ -156,6 +156,7 @@ namespace {
         .size = {.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16},
         .launch = Launch{.cwd = "/tmp", .cwd_source = 3, .arguments = arguments, .environment_mode = EnvironmentMode::replace, .environment = environment},
     };
+
     const auto bytes = encoded(message);
     Storage storage{4096};
 
@@ -163,6 +164,7 @@ namespace {
       check(decoded.launch && decoded.launch->cwd == "/tmp" && decoded.launch->arguments.size() == 3 && decoded.launch->arguments[2] == "echo hi");
       check(decoded.launch->environment.size() == 2 && decoded.launch->environment[1].value == "/bin");
     }));
+
     for (std::size_t length = 0; length < bytes.size(); ++length) {
       check(refused<OpenPane>(std::span{bytes}.first(length)), "a truncated message was accepted");
     }
@@ -176,6 +178,7 @@ namespace {
         {.reach = {.name = "a.two", .noun = "things", .value = 2}, .hits = 2},
         {.reach = {.name = "a.three", .noun = "things", .value = 3}, .hits = 3},
     }};
+
     const auto bytes = encoded(LimitList{.request_id = 1, .entries = entries});
 
     check(refused<LimitList>(bytes, (entries.size() * sizeof(LimitListEntry)) - 1));
@@ -338,23 +341,29 @@ namespace {
     check(refusedWith([](TextMetadata&, auto& links, auto&, auto&, auto&) {
       links[0] = {.offset = 1, .len = 4};
     }));
+
     check(refusedWith([](TextMetadata&, auto& links, auto&, auto&, auto&) {
       links[1] = {.offset = 5, .len = 8};
     }));
+
     // Lengths that add up to the URI bytes, but the second link starts past the first's end, so
     // its bytes run off the end of the URIs.
     check(refusedWith([](TextMetadata&, auto& links, auto&, auto&, auto&) {
       links[1] = {.offset = 6, .len = 7};
     }));
+
     check(refusedWith([](TextMetadata& metadata, auto&, auto&, auto&, auto& longer_uris) {
       metadata.uris = longer_uris;
     }));
+
     check(refusedWith([](TextMetadata&, auto&, auto& runs, auto&, auto&) {
       runs[2].link_index = 2;
     }));
+
     check(refusedWith([](TextMetadata&, auto&, auto& runs, auto&, auto&) {
       runs[2] = {.start = 3, .len = 2, .link_index = 1};
     }));
+
     check(refusedWith([](TextMetadata&, auto&, auto&, auto& row_flags, auto&) {
       row_flags[1] = 0x40;
     }));
@@ -374,6 +383,7 @@ namespace {
       frame.spans = spans;
       return frame;
     };
+
     const std::array<FrameSpan, 1> first_row{{{.start = 0, .count = 4, .cells = fixture.half}}};
     const std::array<FrameSpan, 2> overlapping{{{.start = 0, .count = 4, .cells = fixture.half}, {.start = 2, .count = 4, .cells = fixture.half}}};
     const std::array<FrameSpan, 1> past_grid{{{.start = 6, .count = 4, .cells = fixture.half}}};
@@ -408,6 +418,7 @@ namespace {
     const auto run = [&](Byte header, bool styled, Bytes tail) {
       return concatenated({Bytes{static_cast<Byte>(header | (styled ? 0x80 : 0))}, styled ? style : Bytes{}, std::move(tail)});
     };
+
     // Reads every cell of `bytes`, held in an exactly sized heap block, and each cell's text, as
     // a client copies it into its grid; nullopt when the reader refused the run.
     const auto cells = [](const Bytes& bytes, std::uint32_t count) {
@@ -433,6 +444,7 @@ namespace {
       static_cast<void>(sum);
       return std::optional<std::size_t>{read};
     };
+
     constexpr Byte single = 1 << 5;
 
     check(cells(run(single | 1, true, {'a'}), 1) == 1);
@@ -466,6 +478,7 @@ namespace {
 
       return encoded(UpdateClientLayout{.sidebar_visible = true, .sidebar_width = 30, .active_tab = location, .tabs = tabs});
     };
+
     const auto bytes = layout(1);
     const auto tree = concatenated({node(split), node(pane(1)), node(pane(2))});
 
@@ -487,6 +500,7 @@ namespace {
       changed[at - 1] = static_cast<Byte>(nodes_count >> 8);
       return changed;
     };
+
     auto missing = count(bytes, 2);
 
     missing.erase(missing.begin() + static_cast<std::ptrdiff_t>(at + node(split).size() + node(pane(1)).size()), missing.begin() + static_cast<std::ptrdiff_t>(at + tree.size()));

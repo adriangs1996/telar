@@ -100,6 +100,7 @@ namespace {
     git.inspect(execute, [] {
       throw Rejected{};
     });
+
     const auto [status, output] = git.with({"status", "--porcelain"}, execute);
 
     check(status == 0 && output.contains("a.txt"));
