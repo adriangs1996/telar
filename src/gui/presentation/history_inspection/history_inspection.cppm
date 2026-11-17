@@ -4,19 +4,14 @@ module;
 export module telar.gui.presentation.history_inspection;
 
 import std;
+
 import telar.tbc;
-
-import telar.gui.core.unicode_scalar;
-import telar.gui.core.metrics;
-import telar.gui.text.json_unsigned_integer;
-
+import telar.wire.vocabulary;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 import telar.gui.history.browser;
-
-import telar.gui.text.bounded_editor;
-
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
-import telar.wire.vocabulary;
 
 // Interface: presentation/history_labels.cppm
 export {
@@ -89,35 +84,6 @@ export {
       [[nodiscard]] static std::optional<std::chrono::year_month_day> calendar(std::int64_t day) noexcept;
 
       static void appendClockPart(Text& text, std::uint64_t value);
-    };
-
-  }
-}
-
-// Interface: presentation/tab_caption.cppm
-export {
-  namespace telar::gui {
-
-    struct TabCaption {
-      static constexpr std::size_t capacity = 128;
-      static constexpr std::size_t directory_capacity = 48;
-      static constexpr std::string_view separator = " · ";
-      static constexpr std::string_view fallback_application = "shell";
-      static constexpr std::string_view fullscreen_suffix = " ⛶";
-      static constexpr std::string_view path_separators = "/\\";
-      using Buffer = std::array<char, capacity>;
-
-      struct Content {
-        std::string_view manual;
-        std::string_view application;
-        std::string_view directory;
-        std::string_view session_title;
-      };
-
-      [[nodiscard]] static std::string_view directoryName(std::string_view path) noexcept;
-
-      // The caption is one of the content's texts or is written into the storage, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> resolve(tbc::view<Content, tbc::lt::a> content, tbc::view<Buffer&, tbc::lt::a> storage) noexcept;
     };
 
   }

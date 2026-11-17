@@ -30,10 +30,8 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
-import telar.gui.platform.awake_clock;
-import telar.gui.platform.progress_cosine;
+import telar.gui.foundation.system;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.activity_order;
 
@@ -182,7 +180,7 @@ namespace telar::gui::qt {
     } else if (kind_ == TabActivity::Kind::progress) {
       fraction = motion_.sample(progress_, now_ns);
       if (progress_.state == PaneProgressState::indeterminate) {
-        const auto frame = ProgressAnimation::indeterminate<platform::ProgressCosine>(now_ns);
+        const auto frame = ProgressAnimation::indeterminate<core::ProgressCosine>(now_ns);
 
         fraction = frame.fraction;
         turns = frame.turns;
@@ -209,7 +207,7 @@ namespace telar::gui::qt {
       clock_->requestSynchronization();
     }
 
-    sample(clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds());
+    sample(clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds());
   }
 
   void NativeTabActivity::bindClock() {

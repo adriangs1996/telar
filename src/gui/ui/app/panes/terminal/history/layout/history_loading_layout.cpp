@@ -16,8 +16,7 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
@@ -109,7 +108,7 @@ namespace telar::gui::qt {
       clock_->requestSynchronization();
     }
 
-    sample(clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds());
+    sample(clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds());
   }
 
   void HistoryLoadingLayout::bindClock() {

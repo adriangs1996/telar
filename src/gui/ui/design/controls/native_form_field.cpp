@@ -35,9 +35,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.metrics;
-import telar.gui.text.bounded_editor;
-
 namespace telar::gui::qt {
 
   namespace {

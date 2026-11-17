@@ -4,7 +4,7 @@ module;
 export module telar.gui.tests.allocation_gate;
 
 import std;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 
 export {
   namespace telar::gui::test {

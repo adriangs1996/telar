@@ -17,7 +17,7 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.paths.label;
 import telar.gui.presentation.form_field_geometry;
 

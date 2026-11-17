@@ -16,8 +16,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.core.metrics;
-
 namespace telar::gui::qt {
 
   TabsController::TabsController(Store& store, ElementSlots& elements, QObject* parent)

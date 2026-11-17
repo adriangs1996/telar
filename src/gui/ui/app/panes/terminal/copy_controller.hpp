@@ -18,7 +18,7 @@ static_assert(true);
 
 import telar.gui.input.copy_mode;
 import telar.gui.input.copy_pointer;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
 

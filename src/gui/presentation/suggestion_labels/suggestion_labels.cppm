@@ -2,7 +2,7 @@ export module telar.gui.presentation.suggestion_labels;
 
 import std;
 
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 
 import telar.gui.suggestions.state;
 import telar.wire.vocabulary;

@@ -1,7 +1,9 @@
 module telar.gui.presentation.form_field_geometry;
 
 import std;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.terminal;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 
 namespace telar::gui {
 

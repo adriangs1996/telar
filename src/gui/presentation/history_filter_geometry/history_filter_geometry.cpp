@@ -4,6 +4,7 @@ import std;
 import telar.tbc;
 
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

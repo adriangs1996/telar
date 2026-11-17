@@ -6,4 +6,4 @@ telar_add_domain(gui prompt
     layout/layout.cpp
     line/line.cpp
     routing/routing.cpp
-  DEPS text)
+  DEPS foundation/text)

@@ -48,8 +48,8 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.core;
+import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection_geometry;
 
@@ -132,7 +132,7 @@ namespace {
   private:
     Q_SLOT static void init() {
       ControlledAwakeClock::set(0);
-      QCOMPARE(telar::gui::platform::AwakeClock::nowNanoseconds(), 0);
+      QCOMPARE(telar::gui::system::AwakeClock::nowNanoseconds(), 0);
     }
 
     Q_SLOT static void sharedFadePreservesIdentityAndParksItsClock() {

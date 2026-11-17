@@ -1,6 +1,9 @@
 module telar.gui.links.cell_links;
 
 import telar.wire.vocabulary;
+import telar.gui.foundation.terminal;
+import telar.gui.foundation.text;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

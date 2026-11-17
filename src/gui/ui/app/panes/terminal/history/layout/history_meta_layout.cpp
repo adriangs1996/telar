@@ -28,7 +28,6 @@ static_assert(true);
 
 import telar.gui.presentation.history_pointer;
 import telar.gui.history.browser;
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_meta_geometry;
 

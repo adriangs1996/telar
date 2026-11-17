@@ -6,7 +6,7 @@ import telar.tbc;
 
 import telar.gui.text.notification_payload;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 import telar.wire.vocabulary;
 
 // Interface: platform/command_line.cppm

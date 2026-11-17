@@ -7,7 +7,6 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.core.metrics;
 import telar.gui.input.child_mouse;
 import telar.wire.vocabulary;
 

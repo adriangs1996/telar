@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "machine_chrome_controller.hpp"
 
-import telar.gui.core.metrics;
 import telar.gui.machines.picker;
 import telar.gui.presentation.display_metrics;
 

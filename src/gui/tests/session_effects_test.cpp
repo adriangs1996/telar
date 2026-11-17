@@ -27,8 +27,8 @@ import telar.gui.tests.session_fixture;
 import telar.gui.application.host_effects;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.core;
+import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.notification_center;
 import telar.wire.agents;
@@ -82,7 +82,7 @@ namespace {
   // A session that keeps its effects.
   template <typename Host>
   struct EffectsClient : private HostedEffects<Host>, TestSession<SystemAllocator> {
-    EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, MonotonicNow now = &platform::AwakeClock::nowNanoseconds)
+    EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, MonotonicNow now = &system::AwakeClock::nowNanoseconds)
         : HostedEffects<Host>{effects},
           TestSession(memory, transport, this->effects, now) {}
   };

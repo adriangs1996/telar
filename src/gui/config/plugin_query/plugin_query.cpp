@@ -1,6 +1,6 @@
 module telar.gui.config.plugin_query;
 
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

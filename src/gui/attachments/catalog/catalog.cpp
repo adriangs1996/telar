@@ -1,6 +1,7 @@
 module telar.gui.attachments.catalog;
 
 import telar.base.memory.allocators;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui {
 

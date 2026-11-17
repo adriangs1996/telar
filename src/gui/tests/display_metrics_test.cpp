@@ -12,7 +12,7 @@ static_assert(true);
 #include <stdexcept>
 #include <type_traits>
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.display_metrics;
 

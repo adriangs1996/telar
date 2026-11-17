@@ -58,11 +58,6 @@ static_assert(true);
 #include "optical_text.hpp"
 #endif
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.terminal.font_grid;
-
 namespace telar::gui::qt {
 
   TextScene::TextScene(tbc::view<QQuickWindow&, tbc::lt::a> window)

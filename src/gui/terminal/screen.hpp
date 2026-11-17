@@ -9,7 +9,7 @@
 #include <cstring>
 #include <string_view>
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline terminal {
 
   struct CellValue {
     static constexpr std::size_t text_capacity = 16;

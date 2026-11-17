@@ -4,7 +4,7 @@ import std;
 import telar.tbc;
 
 import telar.base.text.utf8;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
 namespace telar::gui {

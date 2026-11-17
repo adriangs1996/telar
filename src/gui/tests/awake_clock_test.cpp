@@ -8,7 +8,7 @@ static_assert(true);
 #include <ctime>
 
 import std;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 
 namespace {
 
@@ -35,7 +35,7 @@ int main() try {
 
   for (std::size_t index = 0; index < samples; ++index) {
     const auto before = nativeAwakeNanoseconds();
-    const auto sample = telar::gui::platform::AwakeClock::nowNanoseconds();
+    const auto sample = telar::gui::system::AwakeClock::nowNanoseconds();
     const auto after = nativeAwakeNanoseconds();
     if (sample < before || sample > after) {
       throw std::runtime_error{"Awake clock differs from the original platform timebase"};

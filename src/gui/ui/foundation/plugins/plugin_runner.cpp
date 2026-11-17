@@ -8,8 +8,6 @@ static_assert(true);
 #include <exception>
 #include <stdexcept>
 
-import telar.gui.platform.runtime_endpoint;
-
 namespace telar::gui::qt {
 
   PluginRunner::PluginRunner(Store& store, ConfigurationSource& configuration, ApplicationAllocator& memory, QObject* parent)
@@ -36,7 +34,7 @@ namespace telar::gui::qt {
 
     owner_ = Owner{.source = client.key, .runtime_generation = client.runtime_generation, .execution = execution};
     try {
-      worker_.start(invocation, execution, QString::fromStdString(platform::runtime_endpoint::program()));
+      worker_.start(invocation, execution, QString::fromStdString(system::runtime_endpoint::program()));
     } catch (...) {
       owner_.reset();
       throw;

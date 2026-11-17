@@ -48,12 +48,12 @@ static_assert(true);
 
 import telar.gui.application.workspace_replica;
 import telar.gui.layout.geometry;
-import telar.gui.core.unicode_scalar;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection;
+import telar.gui.foundation.text;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.activity_order;
 import telar.config.gui;

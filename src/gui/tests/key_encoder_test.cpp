@@ -8,7 +8,7 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
 import telar.wire.vocabulary;
 

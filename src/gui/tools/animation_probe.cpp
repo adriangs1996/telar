@@ -29,9 +29,6 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
-
 namespace {
 
   using namespace telar::gui;
@@ -195,7 +192,7 @@ int main(int argc, char** argv) {
   continuous.setInterval(1);
   QObject::connect(&continuous, &QTimer::timeout, &window, [&] {
     constexpr std::uint64_t period_ns = 1'000'000'000;
-    const auto now = platform::AwakeClock::nowNanoseconds();
+    const auto now = system::AwakeClock::nowNanoseconds();
 
     boxes[0]->setX(travel * static_cast<double>(now % period_ns) / period_ns);
   });

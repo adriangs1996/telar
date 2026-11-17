@@ -39,7 +39,7 @@ import telar.gui.tests.session_fixture;
 import telar.gui.layout.snapshots;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;

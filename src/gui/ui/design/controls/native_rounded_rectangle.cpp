@@ -18,7 +18,7 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.graphics.placeholder;
 
 namespace telar::gui::qt {

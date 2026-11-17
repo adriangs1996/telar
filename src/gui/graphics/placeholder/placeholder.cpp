@@ -5,9 +5,10 @@ module telar.gui.graphics.placeholder;
 
 import std;
 
-import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 import telar.gui.presentation.activity_order;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
 
 namespace telar::gui {

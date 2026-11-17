@@ -35,7 +35,6 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.links.cell_links;
-import telar.gui.platform.login_shell;
 
 namespace {
 
@@ -250,8 +249,8 @@ printf '%s' "$1"
       QVERIFY(!observer.results.back());
       QVERIFY_THROWS_EXCEPTION(std::invalid_argument, opener.request(target("file:///tmp/a")));
       QVERIFY(!opener.active());
-      QCOMPARE(platform::AppleExternalLinks::executable, std::string_view{"/usr/bin/open"});
-      QCOMPARE(platform::LinuxExternalLinks::executable, std::string_view{"xdg-open"});
+      QCOMPARE(system::AppleExternalLinks::executable, std::string_view{"/usr/bin/open"});
+      QCOMPARE(system::LinuxExternalLinks::executable, std::string_view{"xdg-open"});
     }
 
     Q_SLOT static void environmentAuthority() {

@@ -7,8 +7,7 @@ import std;
 
 import telar.base.memory.allocators;
 import telar.config.core;
-import telar.gui.core.metrics;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
 

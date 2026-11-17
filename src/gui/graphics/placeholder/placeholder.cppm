@@ -5,9 +5,9 @@ export module telar.gui.graphics.placeholder;
 
 import std;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
-import telar.gui.terminal.screen;
+import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
 
 // Interface: graphics/source_rect.cppm

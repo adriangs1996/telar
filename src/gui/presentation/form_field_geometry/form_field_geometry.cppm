@@ -6,13 +6,11 @@ export module telar.gui.presentation.form_field_geometry;
 import std;
 import telar.tbc;
 
-import telar.gui.core.metrics;
-import telar.gui.terminal.font_grid;
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
+import telar.gui.foundation.text;
 
-import telar.gui.core.unicode_scalar;
 import telar.base.text;
-import telar.gui.terminal.screen;
 
 // Interface: presentation/form_field_geometry.cppm
 export {

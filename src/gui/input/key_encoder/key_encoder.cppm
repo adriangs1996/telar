@@ -7,9 +7,9 @@ import std;
 
 import telar.config.client;
 
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 import telar.base.text;
 import telar.wire.vocabulary;
 

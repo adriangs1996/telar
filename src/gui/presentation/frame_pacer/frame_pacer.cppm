@@ -4,7 +4,7 @@ import std;
 
 import telar.gui.layout.geometry;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.links.link_hover;
 import telar.wire.vocabulary;
 

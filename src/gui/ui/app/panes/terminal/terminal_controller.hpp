@@ -28,8 +28,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.input.child_mouse;
 import telar.gui.links.link_hover;
 

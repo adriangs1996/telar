@@ -9,7 +9,7 @@ import telar.gui.machines.discovery;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.machines;
 

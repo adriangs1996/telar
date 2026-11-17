@@ -1,6 +1,8 @@
 module telar.gui.application.session;
 
 import std;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui {
 

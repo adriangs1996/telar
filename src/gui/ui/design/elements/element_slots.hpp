@@ -24,7 +24,7 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

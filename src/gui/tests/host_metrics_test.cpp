@@ -22,6 +22,7 @@ import telar.gui.tests.session_fixture;
 import telar.gui.application.host_effects;
 import telar.gui.application.session;
 import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace {

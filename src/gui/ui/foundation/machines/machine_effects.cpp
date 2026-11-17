@@ -8,7 +8,6 @@ static_assert(true);
 
 import std;
 import telar.gui.text.notification_payload;
-import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
@@ -33,7 +32,7 @@ namespace telar::gui::qt {
 
   void MachineEffects::notePaneInput(FramePacer::Pane pane) noexcept {
     if (presented() && sinks_.frame_pacer) {
-      sinks_.frame_pacer->noteInput(pane, platform::AwakeClock::nowNanoseconds());
+      sinks_.frame_pacer->noteInput(pane, system::AwakeClock::nowNanoseconds());
     }
   }
 

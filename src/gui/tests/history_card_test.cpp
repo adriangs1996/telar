@@ -8,12 +8,10 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.core.primitives;
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.text;
 
 namespace {
 

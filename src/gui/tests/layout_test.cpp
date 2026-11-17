@@ -8,9 +8,8 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.gui.layout.snapshots;
-import telar.gui.core.unicode_scalar;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.layout.geometry;

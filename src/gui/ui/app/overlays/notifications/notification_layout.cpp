@@ -39,10 +39,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.platform.awake_clock;
 import telar.gui.presentation.notification_stack;
 
 namespace telar::gui::qt {
@@ -360,7 +356,7 @@ namespace telar::gui::qt {
       emit layoutChanged();
     }
 
-    now_ns_ = std::max(now_ns_, clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds());
+    now_ns_ = std::max(now_ns_, clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds());
     const auto placements = stack_.prepare({.items = controller_->center().items(), .host = physical_host, .ratio = metrics_.ratio, .now_ns = now_ns_}, [&](const NotificationItem& item) {
       return controller_->targetVisible(item.target);
     },

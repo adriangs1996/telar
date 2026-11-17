@@ -3,16 +3,17 @@ export module telar.gui.application.host_effects;
 import std;
 import telar.tbc;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 
 import telar.gui.presentation.frame_pacer;
 
 import telar.gui.text.notification_payload;
 
 import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
-import telar.gui.platform.shared_image_source;
+import telar.gui.foundation.system;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.vocabulary;
@@ -107,7 +108,7 @@ export {
       // Whether the runtime shares images through named memory, which only a local one can.
       [[nodiscard]] virtual bool supportsSharedMemory() const noexcept;
 
-      [[nodiscard]] virtual platform::SharedImageSource sharedImage(std::string_view name) const;
+      [[nodiscard]] virtual system::SharedImageSource sharedImage(std::string_view name) const;
 
     protected:
       ~RuntimeTransport() = default;

@@ -13,7 +13,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.notification_stack;
 import telar.gui.presentation.notification_center;
 

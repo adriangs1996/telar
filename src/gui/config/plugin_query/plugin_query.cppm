@@ -8,13 +8,12 @@ import telar.gui.input.key_encoder;
 import telar.gui.input.copy_pointer;
 import telar.config.client;
 
-import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 
 import telar.gui.input.binding_effects;
 import telar.gui.input.configuration;
 
 import telar.plugins;
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 

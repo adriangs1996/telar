@@ -6,10 +6,10 @@ export module telar.gui.links.path_expansion;
 import std;
 import telar.tbc;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 import telar.base.editors;
 import telar.base.memory.containers;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.terminal;
 import telar.wire.editor;
 import telar.wire.vocabulary;
 

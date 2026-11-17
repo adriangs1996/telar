@@ -16,7 +16,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
 

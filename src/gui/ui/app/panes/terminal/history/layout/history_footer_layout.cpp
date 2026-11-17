@@ -24,7 +24,6 @@ static_assert(true);
 #include <span>
 #include <string_view>
 
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_meta_geometry;

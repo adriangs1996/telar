@@ -3,6 +3,7 @@ module telar.gui.application.session;
 import std;
 import telar.gui.presentation.frame_pacer;
 import telar.platform.events;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

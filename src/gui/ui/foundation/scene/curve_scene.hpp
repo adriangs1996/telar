@@ -26,8 +26,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
-import telar.gui.terminal.glyphs.curve_cache;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
 

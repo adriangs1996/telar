@@ -18,7 +18,6 @@ static_assert(true);
 #include <optional>
 #include <utility>
 
-import telar.gui.core.metrics;
 import telar.gui.links.link_hover;
 
 namespace telar::gui::qt {

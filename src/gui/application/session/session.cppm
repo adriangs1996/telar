@@ -8,8 +8,7 @@ import telar.tbc;
 
 import telar.gui.application.host_effects;
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
 import telar.gui.graphics.pauses;
 import telar.gui.history.browser;
@@ -23,19 +22,18 @@ import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 import telar.gui.paths.label;
 import telar.gui.peek.screen;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 import telar.gui.presentation.client_view_state;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.application_mark;
 import telar.gui.suggestions.state;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.terminal;
 import telar.gui.input.copy_mode;
 import telar.gui.prompt.line;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.gui.core.primitives;
 import telar.gui.prompt.layout;
 import telar.wire.agents;
 import telar.wire.clients;
@@ -56,7 +54,7 @@ import telar.gui.prompt.editor;
 import telar.gui.model.records;
 import telar.gui.model.replicas;
 import telar.gui.presentation.notification_center;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 import telar.shell.syntax;
 import telar.gui.prompt.completion;
 
@@ -112,10 +110,10 @@ export {
 
       // The session keeps the allocator and the transport, region `a`, which also holds what its replies and
       // requests view of the session's own panes, workspaces and responses.
-      Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<MonotonicNow, tbc::lt::static_storage> now = &platform::AwakeClock::nowNanoseconds);
+      Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<MonotonicNow, tbc::lt::static_storage> now = &system::AwakeClock::nowNanoseconds);
 
       // The session also keeps `effects`, region `a`.
-      Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now = &platform::AwakeClock::nowNanoseconds);
+      Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now = &system::AwakeClock::nowNanoseconds);
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;

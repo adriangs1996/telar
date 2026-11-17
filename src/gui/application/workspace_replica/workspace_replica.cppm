@@ -5,9 +5,8 @@ import telar.tbc;
 
 import telar.gui.graphics.texture_cache;
 import telar.render.document;
-import telar.gui.core.primitives;
-import telar.gui.terminal.row_cache;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 export import :fold_map;

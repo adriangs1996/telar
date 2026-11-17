@@ -12,8 +12,6 @@ static_assert(true);
 #include <cstdint>
 #include <string_view>
 
-import telar.gui.text.bounded_editor;
-
 namespace telar::gui::qt {
 
   PathPickerController::PathPickerController(Store& store, QObject* parent)

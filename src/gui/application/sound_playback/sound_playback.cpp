@@ -1,6 +1,7 @@
 module telar.gui.application.sound_playback;
 
 import std;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

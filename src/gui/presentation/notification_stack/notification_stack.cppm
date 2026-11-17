@@ -6,13 +6,12 @@ export module telar.gui.presentation.notification_stack;
 import std;
 import telar.tbc;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 
 import telar.gui.presentation.notification_center;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.base.memory.allocators;
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 import telar.gui.model.records;
 

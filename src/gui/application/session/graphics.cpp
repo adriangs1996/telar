@@ -2,6 +2,7 @@ module telar.gui.application.session;
 
 import std;
 import telar.base.text.utf8;
+import telar.gui.foundation.text;
 
 namespace telar::gui {
 

@@ -1,4 +1,4 @@
 telar_add_domain(gui paths
   SOURCES
     label/label.cpp
-  DEPS core text input)
+  DEPS foundation/core foundation/text input)

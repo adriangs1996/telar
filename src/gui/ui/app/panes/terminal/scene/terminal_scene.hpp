@@ -39,11 +39,10 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.unicode_scalar;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
 import telar.gui.links.cell_links;
-import telar.gui.terminal.selection;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
 

@@ -13,7 +13,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.fonts.face;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
 

@@ -24,8 +24,8 @@ static_assert(true);
 #pragma once
 
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.text.bounded_editor;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.text;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
 

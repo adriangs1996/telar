@@ -19,9 +19,9 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
 

@@ -25,9 +25,7 @@ static_assert(true);
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.font_fixture;
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.fonts.text_runs;
+import telar.gui.foundation.fonts;
 
 namespace {
 

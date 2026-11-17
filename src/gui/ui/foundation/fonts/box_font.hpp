@@ -17,7 +17,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.terminal.glyphs;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
 

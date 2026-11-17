@@ -20,7 +20,7 @@ static_assert(true);
 
 import telar.gui.config.plugin_effects;
 import telar.gui.config.generation;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.lua;

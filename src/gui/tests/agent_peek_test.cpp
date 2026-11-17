@@ -33,7 +33,7 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.application.workspace_replica;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.peek.screen;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.notification_center;

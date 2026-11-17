@@ -4,8 +4,7 @@ import std;
 import telar.tbc;
 
 import telar.gui.presentation.client_view_state;
-import telar.gui.core.metrics;
-import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 
 import telar.config.gui;
 import telar.gui.input.copy_pointer;

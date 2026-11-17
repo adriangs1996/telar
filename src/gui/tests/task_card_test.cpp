@@ -51,8 +51,7 @@ static_assert(true);
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;
 
@@ -326,7 +325,7 @@ namespace {
 
       reports.back().pane_id = 2;
       reports.back().work_tree = task_worktree_id;
-      QVERIFY(agents.apply({.revision = 1, .entries = reports}, platform::AwakeClock::nowNanoseconds()));
+      QVERIFY(agents.apply({.revision = 1, .entries = reports}, system::AwakeClock::nowNanoseconds()));
       using Order = ActivityOrder<telar::ConcurrentMemory>;
       const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
       Order::Plan plan;

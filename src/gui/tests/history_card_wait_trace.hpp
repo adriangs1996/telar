@@ -28,7 +28,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 
 namespace telar::gui::test {
 
@@ -47,11 +47,11 @@ namespace telar::gui::test {
       });
 
       connections_[1] = connect(&window_, &QQuickWindow::afterSynchronizing, this, [samples = samples_] {
-        samples->record({.phase = Phase::synchronized, .timestamp = platform::AwakeClock::nowNanoseconds()});
+        samples->record({.phase = Phase::synchronized, .timestamp = system::AwakeClock::nowNanoseconds()});
       },
           Qt::DirectConnection);
       connections_[2] = connect(&window_, &QQuickWindow::frameSwapped, this, [samples = samples_] {
-        samples->record({.phase = Phase::swapped, .timestamp = platform::AwakeClock::nowNanoseconds()});
+        samples->record({.phase = Phase::swapped, .timestamp = system::AwakeClock::nowNanoseconds()});
       },
           Qt::DirectConnection);
       if (!timer_.isNull()) {
@@ -139,11 +139,11 @@ namespace telar::gui::test {
       std::mutex mutex;
       std::array<Sample, capacity> values{};
       std::size_t count = 0;
-      std::uint64_t start = platform::AwakeClock::nowNanoseconds();
+      std::uint64_t start = system::AwakeClock::nowNanoseconds();
     };
 
     void record(Phase phase) {
-      samples_->record({.phase = phase, .timestamp = platform::AwakeClock::nowNanoseconds(), .open = selection_.isNull() ? -1 : selection_->selectedOpen(), .leaving = selection_.isNull() ? -1 : selection_->leavingOpen(), .timer_ms = timer_.isNull() ? -1 : timer_->remainingTime()});
+      samples_->record({.phase = phase, .timestamp = system::AwakeClock::nowNanoseconds(), .open = selection_.isNull() ? -1 : selection_->selectedOpen(), .leaving = selection_.isNull() ? -1 : selection_->leavingOpen(), .timer_ms = timer_.isNull() ? -1 : timer_->remainingTime()});
     }
 
     QQuickWindow& window_;

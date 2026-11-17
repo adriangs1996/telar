@@ -22,7 +22,7 @@ static_assert(true);
 #include <cstdint>
 #include <memory>
 
-import telar.gui.platform.background_effect;
+import telar.gui.foundation.system;
 
 namespace telar::gui::platform {
 

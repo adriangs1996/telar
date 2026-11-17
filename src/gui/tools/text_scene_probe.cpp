@@ -47,10 +47,6 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.terminal.font_grid;
-
 namespace {
 
   using namespace telar::gui;

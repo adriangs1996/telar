@@ -9,11 +9,9 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
-import telar.gui.terminal.font_grid;
-import telar.gui.terminal.glyphs.curve_cache;
-import telar.gui.terminal.glyphs;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
+import telar.gui.foundation.fonts;
 
 namespace {
 

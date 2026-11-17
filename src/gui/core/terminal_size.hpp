@@ -8,7 +8,7 @@
 #include <limits>
 #include <optional>
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline core {
 
   inline constexpr TerminalSize default_terminal_size{
       .cols = 80,

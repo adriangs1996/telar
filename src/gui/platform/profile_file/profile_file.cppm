@@ -3,8 +3,8 @@ export module telar.gui.platform.profile_file;
 import std;
 import telar.tbc;
 
-import telar.gui.core.primitives;
-import telar.gui.platform.path_limits;
+import telar.gui.foundation.core;
+import telar.gui.foundation.system;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.vocabulary;

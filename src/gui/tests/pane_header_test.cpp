@@ -38,7 +38,6 @@ static_assert(true);
 #include <span>
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;

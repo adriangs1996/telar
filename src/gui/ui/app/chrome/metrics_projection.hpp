@@ -16,7 +16,7 @@ static_assert(true);
 
 import telar.gui.application.host_effects;
 import telar.gui.core.json_writer;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {

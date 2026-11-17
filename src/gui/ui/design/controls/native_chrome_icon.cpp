@@ -26,9 +26,6 @@ static_assert(true);
 #include <memory>
 #include <string_view>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.row_text_layout;
-
 namespace telar::gui::qt {
 
   NativeChromeIcon::NativeChromeIcon(QQuickItem* parent)

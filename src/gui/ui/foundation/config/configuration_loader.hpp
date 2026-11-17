@@ -24,9 +24,8 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;
-import telar.gui.core.metrics;
-import telar.gui.platform.file_stamp;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.foundation.core;
+import telar.gui.foundation.system;
 import telar.plugins;
 import telar.gui.components.configuration;
 import telar.config.client;
@@ -49,7 +48,7 @@ namespace telar::gui::qt {
 
   struct ConfigurationDependency {
     QString path;
-    std::optional<platform::FileStamp> stamp;
+    std::optional<system::FileStamp> stamp;
 
     bool operator==(const ConfigurationDependency&) const = default;
   };
@@ -58,8 +57,8 @@ namespace telar::gui::qt {
     using Modules = QMap<QString, ConfigurationDependency>;
 
     Modules modules;
-    std::optional<platform::FileStamp> root;
-    std::optional<platform::PrivateFileStamp> trust;
+    std::optional<system::FileStamp> root;
+    std::optional<system::PrivateFileStamp> trust;
 
     bool operator==(const ConfigurationWatch&) const = default;
   };

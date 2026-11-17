@@ -34,7 +34,7 @@ import telar.wire.history;
 import telar.wire.runtime;
 import telar.gui.prompt.editor;
 import telar.gui.prompt.routing;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.prompt.completion;
 import telar.config.client;
 

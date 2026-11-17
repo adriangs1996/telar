@@ -13,12 +13,10 @@ static_assert(true);
 #include <QStringView>
 #include <variant>
 
-import telar.gui.core.metrics;
 import telar.gui.peek.screen;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.notification_stack;
 import telar.gui.presentation.suggestion_labels;
-import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

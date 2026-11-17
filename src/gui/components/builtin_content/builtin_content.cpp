@@ -6,7 +6,7 @@ import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.history;
 import telar.base.text.utf8;
-import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
 namespace telar::gui::components {

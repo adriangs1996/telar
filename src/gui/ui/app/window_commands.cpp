@@ -70,15 +70,11 @@ import telar.gui.config.gui_query;
 import telar.gui.presentation.notification_center;
 import telar.config.client;
 import telar.gui.application.session;
-import telar.gui.application.workspace_replica;
-import telar.gui.components.configuration;
-import telar.gui.config.gui_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.links.cell_links;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.gui.palette.navigation_label;
-import telar.gui.presentation.notification_center;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {

@@ -1,6 +1,7 @@
 module telar.gui.input.child_mouse;
 
 import std;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

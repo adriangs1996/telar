@@ -9,11 +9,11 @@ import telar.client;
 
 import telar.gui.machines.discovery;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 
 import telar.gui.machines.picker;
 import telar.base.memory.allocators;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
 // Interface: transport/frame_stream.cppm

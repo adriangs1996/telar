@@ -2,7 +2,7 @@ export module telar.gui.presentation.tab_drop;
 
 import std;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.frame_pacer;
 import telar.wire.vocabulary;
 

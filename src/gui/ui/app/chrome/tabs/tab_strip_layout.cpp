@@ -36,7 +36,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.frame_pacer;

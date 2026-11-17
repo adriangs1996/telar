@@ -2,6 +2,7 @@ module telar.gui.presentation.display_metrics;
 
 import std;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

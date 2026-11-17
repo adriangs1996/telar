@@ -37,7 +37,6 @@ import telar.gui.presentation.history_pointer;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_meta_geometry;
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {

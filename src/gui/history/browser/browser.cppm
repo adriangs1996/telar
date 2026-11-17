@@ -5,7 +5,7 @@ import telar.tbc;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.wire.history;
 import telar.wire.vocabulary;
 

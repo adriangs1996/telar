@@ -18,10 +18,7 @@ static_assert(true);
 #include <cstddef>
 #include <string_view>
 
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
 import telar.gui.presentation.activity_order;
-import telar.gui.core.metrics;
 import telar.gui.machines.picker;
 
 namespace telar::gui::qt {

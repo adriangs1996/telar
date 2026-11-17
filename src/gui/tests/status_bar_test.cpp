@@ -36,7 +36,6 @@ static_assert(true);
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application.host_effects;
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
 

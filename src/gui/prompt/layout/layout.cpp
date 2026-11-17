@@ -2,7 +2,7 @@ module telar.gui.prompt.layout;
 
 import std;
 
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.text;
 
 namespace telar::gui::prompt {
 

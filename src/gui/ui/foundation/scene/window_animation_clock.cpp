@@ -24,8 +24,8 @@ static_assert(true);
 #include <optional>
 #include <span>
 
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.core;
+import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
@@ -92,7 +92,7 @@ namespace telar::gui::qt {
   }
 
   std::uint64_t WindowAnimationClock::now() noexcept {
-    now_ns_ = std::max(now_ns_, platform::AwakeClock::nowNanoseconds());
+    now_ns_ = std::max(now_ns_, system::AwakeClock::nowNanoseconds());
 
     return now_ns_;
   }

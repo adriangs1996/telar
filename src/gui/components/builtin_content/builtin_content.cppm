@@ -7,18 +7,17 @@ import telar.gui.components.configuration;
 
 import telar.gui.input.binding_effects;
 
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 
 import telar.config.client;
 
 import telar.lua;
 
-import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.config.core;
 import telar.gui.input.copy_pointer;
-import telar.gui.core.metrics;
 
 // Interface: components/builtin_content.cppm
 export {

@@ -52,12 +52,6 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-import telar.gui.terminal.font_grid;
-
 namespace {
 
   using namespace telar::gui;

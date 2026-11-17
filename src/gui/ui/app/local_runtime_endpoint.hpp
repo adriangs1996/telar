@@ -14,14 +14,14 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.platform.runtime_endpoint;
+import telar.gui.foundation.system;
 import telar.platform.paths;
 
 namespace telar::gui::qt {
 
   struct NativeRuntimeStartup {
     [[nodiscard]] static QString resolve() {
-      return QString::fromStdString(platform::runtime_endpoint::resolve());
+      return QString::fromStdString(system::runtime_endpoint::resolve());
     }
   };
 

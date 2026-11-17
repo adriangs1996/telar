@@ -37,12 +37,8 @@ static_assert(true);
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
-import telar.gui.platform.peer_identity;
 import telar.config.client;
 import telar.gui.application.session;
-import telar.gui.platform.login_shell;
-import telar.gui.platform.runtime_endpoint;
-import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
 
@@ -96,7 +92,7 @@ namespace telar::gui::qt {
     const platform::ProcessEnvironment environment;
 
     try {
-      const auto runtime = MachineRuntimeLocation::resolve(environment, platform::currentUserId());
+      const auto runtime = MachineRuntimeLocation::resolve(environment, system::currentUserId());
 
       control_endpoint_ = toQString(runtime.endpoint());
       prepare_directory_ = runtime.managedDirectory().has_value();
@@ -289,7 +285,7 @@ namespace telar::gui::qt {
     }
 
     const auto& row = store_.machines().row(target.slot);
-    const auto program = platform::runtime_endpoint::program();
+    const auto program = system::runtime_endpoint::program();
     constexpr std::string_view title_prefix = "Set up ";
     BoundedText<title_prefix.size() + MachineLimits::label_bytes> title;
 
@@ -354,7 +350,7 @@ namespace telar::gui::qt {
 
   void MachineRoster::configureLaunch(const QString& directory, const QStringList& arguments, bool restore) {
     const auto cwd = QDir{directory.isEmpty() ? QDir::currentPath() : directory}.absolutePath().toUtf8();
-    const platform::login_shell::Command shell;
+    const system::login_shell::Command shell;
     const LaunchArguments prepared{arguments};
     const auto command = arguments.isEmpty() ? shell.arguments() : prepared.argv();
 

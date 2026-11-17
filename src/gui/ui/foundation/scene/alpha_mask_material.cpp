@@ -20,8 +20,6 @@ static_assert(true);
 #include <memory>
 #include <tuple>
 
-import telar.gui.core.metrics;
-
 namespace telar::gui::qt {
   namespace {
     struct MaskUniforms {

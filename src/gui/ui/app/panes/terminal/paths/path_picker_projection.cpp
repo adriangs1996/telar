@@ -19,12 +19,8 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.unicode_scalar;
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
 import telar.gui.paths.label;
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
   namespace {

@@ -10,10 +10,8 @@ static_assert(true);
 #include <QStringView>
 #include <string_view>
 
-import telar.gui.core.metrics;
 import telar.gui.machines.profile_store;
 import telar.gui.presentation.suggestion_labels;
-import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 

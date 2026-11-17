@@ -2,7 +2,7 @@
 #include <atomic>
 #include <cstdint>
 
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 
 namespace {
 
@@ -20,6 +20,6 @@ void telar::gui::test::ControlledAwakeClock::set(std::uint64_t now_ns) noexcept 
 
 // AwakeClock belongs to the global module, so this test double replaces its definition
 // without being a unit of telar.gui.platform.awake_clock.
-std::uint64_t telar::gui::platform::AwakeClock::nowNanoseconds() noexcept {
+std::uint64_t telar::gui::system::AwakeClock::nowNanoseconds() noexcept {
   return timestamp().load(std::memory_order_relaxed);
 }

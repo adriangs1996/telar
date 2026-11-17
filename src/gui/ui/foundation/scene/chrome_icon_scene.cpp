@@ -31,9 +31,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.row_text_layout;
-
 namespace telar::gui::qt {
   namespace {
 

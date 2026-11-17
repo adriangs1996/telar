@@ -3,9 +3,8 @@ export module telar.gui.presentation.history_filter_geometry;
 import std;
 import telar.tbc;
 
-import telar.gui.core.metrics;
-import telar.gui.core.json_writer;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 
 import telar.gui.history.browser;
 

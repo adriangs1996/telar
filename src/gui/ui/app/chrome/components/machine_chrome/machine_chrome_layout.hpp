@@ -28,7 +28,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.presentation.suggestion_geometry;

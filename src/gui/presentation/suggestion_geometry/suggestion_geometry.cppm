@@ -2,7 +2,7 @@ export module telar.gui.presentation.suggestion_geometry;
 
 import std;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
 // Interface: presentation/link_status_geometry.cppm
 export {
@@ -256,16 +256,6 @@ export {
 
       [[nodiscard]] static SuggestionGeometry measure(const PaletteGeometry& palette, const ChromeMetrics& chrome, bool has_parent) noexcept;
     };
-
-  }
-}
-
-// Interface: presentation/theme.cppm
-export {
-  namespace telar::gui {
-
-    Color themeRgb(ThemeRgb bytes) noexcept;
-    Theme projectTheme(const ThemeValues& values) noexcept;
 
   }
 }

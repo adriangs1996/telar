@@ -50,11 +50,9 @@ static_assert(true);
 #include "optical_text.hpp"
 #endif
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
 

@@ -45,7 +45,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
 import telar.gui.presentation.notification_center;
 
 namespace {

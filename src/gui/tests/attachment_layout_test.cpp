@@ -14,7 +14,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.layout.geometry;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 
 namespace {
 

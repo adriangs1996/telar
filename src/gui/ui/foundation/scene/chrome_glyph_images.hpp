@@ -62,10 +62,8 @@ static_assert(true);
 #if (defined(Q_OS_MACOS))
 #endif
 
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
+import telar.gui.foundation.fonts;
 #if (defined(Q_OS_MACOS))
-import telar.gui.fonts.glyph_rasterizer;
 #endif
 
 namespace telar::gui::qt {
@@ -94,7 +92,7 @@ namespace telar::gui::qt {
     static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
     SystemAllocator memory;
     Vector<std::uint8_t, SystemAllocator> pixels{AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
-    std::array<std::unique_ptr<platform::GlyphRasterizer>, font_roles> fonts{};
+    std::array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles> fonts{};
 #endif
   };
 
@@ -268,12 +266,12 @@ namespace telar::gui::qt {
       auto& rasterizer = rasterization_.fonts.at(static_cast<std::size_t>(role));
       if (!rasterizer) {
         if (rasterization_.pixels.empty()) {
-          rasterization_.pixels.resize(platform::GlyphRasterizer::requiredBytes());
+          rasterization_.pixels.resize(fonts::GlyphRasterizer::requiredBytes());
         }
 
         const auto& asset = fonts_->asset(role);
 
-        rasterizer = std::make_unique<platform::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.settings.strength);
+        rasterizer = std::make_unique<fonts::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.settings.strength);
       }
 
       return rasterizer->rasterize(request);

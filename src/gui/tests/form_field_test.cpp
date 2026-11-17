@@ -48,8 +48,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.text.bounded_editor;
-
 namespace {
 
   using namespace telar::gui::qt;

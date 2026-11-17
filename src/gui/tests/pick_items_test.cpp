@@ -9,7 +9,7 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.gui.components.builtin_content;
 import telar.config.core;
 import telar.lua;

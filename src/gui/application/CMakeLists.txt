@@ -13,5 +13,5 @@ telar_add_domain(gui application
     session/terminal.cpp
     sound_playback/sound_playback.cpp
     workspace_replica/workspace_replica.cpp
-  DEPS core history layout suggestions text peek prompt terminal links input paths model
-       platform presentation graphics)
+  DEPS foundation/core foundation/system foundation/text foundation/terminal core history layout
+       suggestions text peek prompt links input paths model presentation graphics)

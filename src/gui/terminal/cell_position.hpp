@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <tuple>
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline terminal {
 
   struct CellPosition {
     std::uint16_t x = 0;

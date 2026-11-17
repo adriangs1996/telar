@@ -53,7 +53,6 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
-import telar.gui.core.metrics;
 import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.display_metrics;

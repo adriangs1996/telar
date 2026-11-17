@@ -7,7 +7,7 @@ static_assert(true);
 #include <ctime>
 
 import std;
-import telar.gui.platform.wall_clock;
+import telar.gui.foundation.system;
 
 namespace {
 
@@ -31,7 +31,7 @@ int main(int count, char* const* arguments) try {
 
   tzset();
   const auto before = epochMilliseconds();
-  const auto sampled = telar::gui::platform::WallClock::sample();
+  const auto sampled = telar::gui::system::WallClock::sample();
   const auto after = epochMilliseconds();
   if (sampled.now_ms < before || sampled.now_ms > after || sampled.utc_offset_min != offset) {
     throw std::runtime_error{"Wall clock must sample epoch milliseconds and the native UTC offset"};

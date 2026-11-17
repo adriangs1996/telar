@@ -18,9 +18,8 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
-import telar.gui.platform.keyboard;
 
 namespace {
 
@@ -35,7 +34,7 @@ namespace {
     }
   }
 
-  template <platform::KeyboardConvention Convention>
+  template <system::KeyboardConvention Convention>
   void platformConventions() {
     using Adapter = KeyAdapter<Convention>;
     const QKeyEvent control{QEvent::KeyPress, Qt::Key_A, Adapter::control_modifier | Qt::ShiftModifier, QStringLiteral("\x01")};
@@ -60,7 +59,7 @@ namespace {
     require(alt_tab && encoder.encode(*alt_tab, {}) == "\x1b\x1b[Z", "Alt+Shift+Tab must preserve both semantic modifiers");
   }
 
-  template <platform::KeyboardConvention Convention>
+  template <system::KeyboardConvention Convention>
   void altShortcutsUseTheKeyWithoutChangingTerminalText() {
     using Adapter = KeyAdapter<Convention>;
 
@@ -157,10 +156,10 @@ int main(int argc, char* argv[]) {
   const QCoreApplication application{argc, argv};
 
   try {
-    platformConventions<platform::KeyboardConvention::standard>();
-    platformConventions<platform::KeyboardConvention::apple>();
-    altShortcutsUseTheKeyWithoutChangingTerminalText<platform::KeyboardConvention::standard>();
-    altShortcutsUseTheKeyWithoutChangingTerminalText<platform::KeyboardConvention::apple>();
+    platformConventions<system::KeyboardConvention::standard>();
+    platformConventions<system::KeyboardConvention::apple>();
+    altShortcutsUseTheKeyWithoutChangingTerminalText<system::KeyboardConvention::standard>();
+    altShortcutsUseTheKeyWithoutChangingTerminalText<system::KeyboardConvention::apple>();
     unicodeAndSyntheticInput();
     fallbackInput();
     std::puts("gui-key-adapter: passed");

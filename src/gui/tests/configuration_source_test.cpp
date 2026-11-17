@@ -53,7 +53,6 @@ import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
 import telar.gui.config.generation;
-import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
 import telar.base.text.json;

@@ -22,11 +22,10 @@ static_assert(true);
 #include <limits>
 #include <string_view>
 
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
 

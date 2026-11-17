@@ -2,7 +2,7 @@ export module telar.gui.input.copy_pointer;
 
 import std;
 
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.terminal;
 
 // Interface: input/action.cppm
 export {

@@ -34,7 +34,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.metrics;
 import telar.gui.links.cell_links;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;

@@ -21,16 +21,16 @@ static_assert(true);
 #pragma once
 
 import telar.gui.input.key_encoder;
-import telar.gui.platform.keyboard;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
-  template <platform::KeyboardConvention Convention>
+  template <system::KeyboardConvention Convention>
   class KeyAdapter {
   public:
-    static constexpr auto control_modifier = Convention == platform::KeyboardConvention::apple ? Qt::MetaModifier : Qt::ControlModifier;
-    static constexpr auto super_modifier = Convention == platform::KeyboardConvention::apple ? Qt::ControlModifier : Qt::MetaModifier;
-    static constexpr auto link_modifier = Convention == platform::KeyboardConvention::apple ? super_modifier : control_modifier;
+    static constexpr auto control_modifier = Convention == system::KeyboardConvention::apple ? Qt::MetaModifier : Qt::ControlModifier;
+    static constexpr auto super_modifier = Convention == system::KeyboardConvention::apple ? Qt::ControlModifier : Qt::MetaModifier;
+    static constexpr auto link_modifier = Convention == system::KeyboardConvention::apple ? super_modifier : control_modifier;
 
     [[nodiscard]] static unsigned modifiers(Qt::KeyboardModifiers native) noexcept {
       unsigned result = 0;
@@ -175,6 +175,6 @@ namespace telar::gui::qt {
     }
   };
 
-  using NativeKeyAdapter = KeyAdapter<platform::keyboard_convention>;
+  using NativeKeyAdapter = KeyAdapter<system::keyboard_convention>;
 
 }

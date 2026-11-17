@@ -8,8 +8,7 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.gui.text.bounded_editor;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 
 namespace {
 

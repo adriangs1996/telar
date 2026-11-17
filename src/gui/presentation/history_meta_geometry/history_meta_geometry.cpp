@@ -3,7 +3,8 @@ module telar.gui.presentation.history_meta_geometry;
 import std;
 import telar.tbc;
 import telar.base.text.utf8;
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.text;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

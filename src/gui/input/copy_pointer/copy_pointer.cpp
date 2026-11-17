@@ -2,6 +2,7 @@ module telar.gui.input.copy_pointer;
 
 import std;
 import telar.base.text;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui {
 

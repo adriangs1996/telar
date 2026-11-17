@@ -57,12 +57,6 @@ static_assert(true);
 #include <type_traits>
 #include <utility>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.terminal.font_grid;
-
 namespace telar::gui::qt {
   namespace {
 

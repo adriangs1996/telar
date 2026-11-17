@@ -33,10 +33,9 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
 import telar.gui.graphics.texture_cache;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
@@ -274,7 +273,7 @@ namespace telar::gui::qt {
   }
 
   void WindowImages::prepare() {
-    now_ns_ = std::max(now_ns_, platform::AwakeClock::nowNanoseconds());
+    now_ns_ = std::max(now_ns_, system::AwakeClock::nowNanoseconds());
     observeVisibleTextures([this](ImageTextureHandle handle) noexcept {
       residency_.keepWarm({.handle = handle, .now_ns = now_ns_});
     });
@@ -454,7 +453,7 @@ namespace telar::gui::qt {
     QTimer::singleShot(0, this, [this, deadline] {
       if (timer_deadline_ns_.load(std::memory_order_relaxed) == deadline) {
         active_timer_deadline_ns_ = deadline;
-        scheduleDeadline(timer_, deadline, platform::AwakeClock::nowNanoseconds());
+        scheduleDeadline(timer_, deadline, system::AwakeClock::nowNanoseconds());
       }
     });
   }

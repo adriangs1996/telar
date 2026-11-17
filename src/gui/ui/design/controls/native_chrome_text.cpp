@@ -29,11 +29,6 @@ static_assert(true);
 #include <memory>
 #include <string_view>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
-import telar.gui.text.json_unsigned_integer;
-
 namespace telar::gui::qt {
 
   NativeChromeText::NativeChromeText(QQuickItem* parent)

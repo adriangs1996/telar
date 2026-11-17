@@ -31,7 +31,6 @@ import telar.gui.input.child_mouse;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
 import telar.gui.input.key_encoder;
-import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 

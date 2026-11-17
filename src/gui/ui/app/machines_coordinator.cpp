@@ -35,11 +35,9 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.machines.picker;
-import telar.gui.platform.awake_clock;
 import telar.gui.presentation.activity_order;
 import telar.platform.process;
 import telar.gui.application.session;
-import telar.gui.platform.login_shell;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -106,7 +104,7 @@ namespace telar::gui::qt {
     const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
 
     static_cast<void>(createClient(slot));
-    const platform::login_shell::Command shell;
+    const system::login_shell::Command shell;
     const auto directory = QDir::currentPath().toUtf8();
 
     store_.session().setLaunch(Launch{
@@ -283,7 +281,7 @@ namespace telar::gui::qt {
     if (sample.revision != 0) {
       observation.metrics = MachineMetrics{.cpu_percent = sample.cpu_percent, .cpu_count = sample.cpu_count, .memory_used_decigib = sample.memory_used_decigib, .memory_total_decigib = sample.memory_total_decigib};
       if (summary.metrics_revision != sample.revision) {
-        observation.now_ns = platform::AwakeClock::nowNanoseconds();
+        observation.now_ns = system::AwakeClock::nowNanoseconds();
       }
     }
 

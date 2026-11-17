@@ -15,7 +15,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection_geometry;
 

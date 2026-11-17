@@ -14,9 +14,7 @@ static_assert(true);
 
 import std;
 import telar.platform.primitives;
-import telar.gui.platform.managed_directory;
-import telar.gui.platform.peer_identity;
-import telar.gui.platform.window_lease;
+import telar.gui.foundation.system;
 import telar.platform.net;
 import telar.platform.fs;
 
@@ -29,7 +27,7 @@ namespace {
   }
 
   void windowLease() {
-    using telar::gui::platform::WindowLease;
+    using telar::gui::system::WindowLease;
     const telar::runtime::TemporaryDirectory directory{(std::filesystem::temp_directory_path() / "telar-gui-lease-XXXXXX").string()};
     const std::filesystem::path directory_path{directory.path()};
     const auto endpoint = (directory_path / "runtime.sock").string();
@@ -92,11 +90,11 @@ namespace {
     const std::filesystem::path base{directory.path()};
     const auto managed = (base / "telar").string();
 
-    telar::gui::platform::prepareManagedDirectory(managed);
+    telar::gui::system::prepareManagedDirectory(managed);
     constexpr mode_t shared_mode = 0777;
 
     require(::chmod(managed.c_str(), shared_mode) == 0, "prepare owned permissive directory");
-    telar::gui::platform::prepareManagedDirectory(managed);
+    telar::gui::system::prepareManagedDirectory(managed);
     struct stat state{};
     constexpr mode_t permissions = 0777;
     constexpr mode_t owner_only = 0700;
@@ -108,7 +106,7 @@ namespace {
     bool rejected = false;
 
     try {
-      telar::gui::platform::prepareManagedDirectory(link.string());
+      telar::gui::system::prepareManagedDirectory(link.string());
     } catch (const std::exception&) {
       rejected = true;
     }
@@ -118,7 +116,7 @@ namespace {
     const auto missing = base / "absent";
 
     try {
-      telar::gui::platform::prepareManagedDirectory((missing / "telar").string());
+      telar::gui::system::prepareManagedDirectory((missing / "telar").string());
     } catch (const std::exception&) {
       rejected = true;
     }
@@ -130,12 +128,12 @@ namespace {
     std::array<int, 2> descriptors{};
 
     require(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) == 0, "create peer credential fixture");
-    const auto valid = telar::gui::platform::isCurrentUser(descriptors[0]);
+    const auto valid = telar::gui::system::isCurrentUser(descriptors[0]);
 
     ::close(descriptors[0]);
     ::close(descriptors[1]);
     require(valid, "local peers must authenticate through kernel credentials");
-    require(!telar::gui::platform::isCurrentUser(-1), "invalid descriptors must fail authentication");
+    require(!telar::gui::system::isCurrentUser(-1), "invalid descriptors must fail authentication");
   }
 
   void temporaryDirectoryCleanup() {

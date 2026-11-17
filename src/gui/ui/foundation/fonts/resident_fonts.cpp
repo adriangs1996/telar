@@ -20,10 +20,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-
 namespace telar::gui::qt {
   namespace {
 

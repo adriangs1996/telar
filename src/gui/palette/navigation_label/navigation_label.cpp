@@ -1,6 +1,6 @@
 module telar.gui.palette.navigation_label;
 
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

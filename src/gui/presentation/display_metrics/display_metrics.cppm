@@ -5,9 +5,8 @@ export module telar.gui.presentation.display_metrics;
 
 import std;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
-import telar.gui.core.json_writer;
 import telar.wire.vocabulary;
 
 // Interface: presentation/chrome_surfaces.cppm

@@ -2,6 +2,7 @@ module telar.gui.input.key_encoder;
 
 import std;
 import telar.base.text;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

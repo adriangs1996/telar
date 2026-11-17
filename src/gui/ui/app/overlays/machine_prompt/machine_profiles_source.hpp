@@ -18,7 +18,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.machines.profile_store;
-import telar.gui.platform.file_stamp;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
@@ -58,7 +58,7 @@ namespace telar::gui::qt {
     struct Request {
       QByteArray path;
       QByteArray local_label;
-      std::optional<platform::FileStamp> known;
+      std::optional<system::FileStamp> known;
       std::optional<OwnedMachineEdit> edit;
       std::stop_token stop;
       std::uint64_t generation = 0;
@@ -67,7 +67,7 @@ namespace telar::gui::qt {
 
     struct Result {
       std::optional<MachineProfiles> profiles;
-      std::optional<platform::FileStamp> observed;
+      std::optional<system::FileStamp> observed;
       QString error;
       std::uint64_t generation = 0;
       bool cancelled = false;
@@ -84,7 +84,7 @@ namespace telar::gui::qt {
     std::stop_source cancellation_;
     QByteArray path_;
     QByteArray local_label_;
-    std::optional<platform::FileStamp> known_;
+    std::optional<system::FileStamp> known_;
     std::optional<OwnedMachineEdit> pending_edit_;
     MachineProfiles profiles_;
     QString error_;

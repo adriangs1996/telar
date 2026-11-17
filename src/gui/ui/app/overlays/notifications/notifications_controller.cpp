@@ -11,8 +11,6 @@ static_assert(true);
 #include <exception>
 #include <limits>
 
-import telar.gui.platform.awake_clock;
-
 namespace telar::gui::qt {
 
   namespace {
@@ -41,7 +39,7 @@ namespace telar::gui::qt {
     timer_.setSingleShot(true);
     timer_.setTimerType(Qt::PreciseTimer);
     connect(&timer_, &QTimer::timeout, this, [this] {
-      store_.session().advanceNotifications(platform::AwakeClock::nowNanoseconds());
+      store_.session().advanceNotifications(system::AwakeClock::nowNanoseconds());
       refresh();
     });
   }
@@ -118,7 +116,7 @@ namespace telar::gui::qt {
   }
 
   void NotificationsController::schedule() {
-    const auto now_ns = platform::AwakeClock::nowNanoseconds();
+    const auto now_ns = system::AwakeClock::nowNanoseconds();
 
     scheduleDeadline(timer_, center().nextDeadline(now_ns, std::numeric_limits<std::uint64_t>::max()), now_ns);
   }

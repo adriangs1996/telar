@@ -19,7 +19,6 @@ static_assert(true);
 #include <span>
 #include <stdexcept>
 
-import telar.gui.core.metrics;
 import telar.gui.presentation.frame_pacer;
 
 namespace {

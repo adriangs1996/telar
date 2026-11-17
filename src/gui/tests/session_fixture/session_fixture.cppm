@@ -18,7 +18,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.wire.vocabulary;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 
 export {
   namespace telar::gui::test {
@@ -152,11 +152,11 @@ export {
     template <Allocator Upstream>
     class TestSession : private AdaptedMemory<Upstream>, public Session {
     public:
-      TestSession(Upstream& memory, RuntimeTransport& transport, MonotonicNow now = &platform::AwakeClock::nowNanoseconds)
+      TestSession(Upstream& memory, RuntimeTransport& transport, MonotonicNow now = &system::AwakeClock::nowNanoseconds)
           : AdaptedMemory<Upstream>{MemoryAdapter<Upstream>{memory}},
             Session(this->adapter, transport, now) {}
 
-      TestSession(Upstream& memory, RuntimeTransport& transport, HostEffects& effects, MonotonicNow now = &platform::AwakeClock::nowNanoseconds)
+      TestSession(Upstream& memory, RuntimeTransport& transport, HostEffects& effects, MonotonicNow now = &system::AwakeClock::nowNanoseconds)
           : AdaptedMemory<Upstream>{MemoryAdapter<Upstream>{memory}},
             Session(this->adapter, transport, effects, now) {}
     };

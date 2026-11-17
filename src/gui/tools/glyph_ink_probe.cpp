@@ -4,9 +4,8 @@
 // instead, over a range of cell sizes, as the oracle of a change to the glyph geometry.
 import std;
 
-import telar.gui.core.metrics;
-import telar.gui.terminal.glyphs;
-import telar.gui.terminal.glyphs.curve_cache;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
 
 namespace {
 

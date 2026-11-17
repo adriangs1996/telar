@@ -4,6 +4,7 @@ import std;
 import telar.gui.presentation.activity_order;
 import telar.wire.vocabulary;
 import telar.gui.model.records;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

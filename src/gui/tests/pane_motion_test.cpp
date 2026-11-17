@@ -19,7 +19,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.presentation.frame_pacer;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
 namespace {
 

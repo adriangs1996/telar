@@ -4,6 +4,7 @@ import std;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.notification_stack;
 import telar.gui.text.notification_payload;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

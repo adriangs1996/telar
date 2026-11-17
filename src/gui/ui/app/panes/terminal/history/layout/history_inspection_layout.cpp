@@ -30,7 +30,6 @@ static_assert(true);
 
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_filter_geometry;
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.history_inspection_geometry;
 

@@ -23,8 +23,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.unicode_scalar;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.core;
+import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
@@ -36,7 +36,7 @@ namespace telar::gui::qt {
     { window.visibility() } -> std::same_as<QWindow::Visibility>;
   };
 
-  template <MonotonicClock Clock = platform::AwakeClock, FramePacingWindow Window = QQuickWindow>
+  template <MonotonicClock Clock = system::AwakeClock, FramePacingWindow Window = QQuickWindow>
   class WindowFramePacer final {
   public:
     explicit WindowFramePacer(Window& window)

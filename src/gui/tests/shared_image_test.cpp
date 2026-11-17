@@ -56,7 +56,7 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.graphics.texture_cache;
-import telar.gui.platform.shared_image_source;
+import telar.gui.foundation.system;
 import telar.platform.graphics;
 import telar.wire.graphics;
 
@@ -110,9 +110,9 @@ namespace {
       return local;
     }
 
-    platform::SharedImageSource sharedImage(std::string_view name) const override {
+    system::SharedImageSource sharedImage(std::string_view name) const override {
       ++opened;
-      return platform::SharedImageSource{name};
+      return system::SharedImageSource{name};
     }
 
     void recover(std::string_view reason) override {
@@ -126,7 +126,7 @@ namespace {
 
   void ownedReadPreservesPixelsAndUnlinksTheName() {
     PublishedImage published;
-    platform::SharedImageSource source{published.name()};
+    system::SharedImageSource source{published.name()};
 
     require(!published.open() && errno == ENOENT, "adoption must unlink the runtime-owned name immediately");
     std::array<Byte, pixels.size()> output{};
@@ -141,7 +141,7 @@ namespace {
     auto writer = published.open();
 
     require(static_cast<bool>(writer), "the fixture must retain a writer before adoption");
-    platform::SharedImageSource source{published.name()};
+    system::SharedImageSource source{published.name()};
     struct stat status{};
 
     require(::fstat(writer.get(), &status) == 0 && status.st_size > 0, "the fixture must report its actual backing extent");
@@ -156,7 +156,7 @@ namespace {
     require(::ftruncate(writer.get(), 0) == 0, "the fixture must truncate the adopted object");
     require(!source.read(output), "truncated storage must fail instead of faulting or returning partial pixels");
 #endif
-    platform::SharedImageSource missing{published.name()};
+    system::SharedImageSource missing{published.name()};
 
     require(!missing.read(output), "a missing shared object must fail without allocating source pixels");
   }
@@ -170,7 +170,7 @@ namespace {
 
     ::umask(previous_mask);
     require(static_cast<bool>(writer) && ::ftruncate(writer.get(), pixels.size()) == 0, "the fixture must expose an unsafe permission mode");
-    platform::SharedImageSource source{published.name()};
+    system::SharedImageSource source{published.name()};
     std::array<Byte, pixels.size()> output{};
 
     require(!source.read(output), "public shared storage must not be accepted as private image delivery");
@@ -180,7 +180,7 @@ namespace {
       bool rejected = false;
 
       try {
-        platform::SharedImageSource invalid{name};
+        system::SharedImageSource invalid{name};
       } catch (const EncodingError&) {
         rejected = true;
       }
@@ -215,7 +215,7 @@ namespace {
       inline_store.image({.header = header, .image = image});
       inline_store.chunk({.header = header, .key = image.key, .bytes = source_pixels});
       PublishedImage published;
-      platform::SharedImageSource source{published.name()};
+      system::SharedImageSource source{published.name()};
 
       require(shared_store.sharedImage(GraphicsSharedImage{.header = header, .image = image, .name = published.name()}, source), "a complete shared image must invalidate presentation");
       const auto* before = inline_store.readyImage(image.key);

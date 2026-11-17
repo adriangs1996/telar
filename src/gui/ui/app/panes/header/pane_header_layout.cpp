@@ -16,7 +16,6 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <cmath>
 
-import telar.gui.core.metrics;
 import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {

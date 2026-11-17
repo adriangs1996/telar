@@ -18,8 +18,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.core.metrics;
-
 namespace telar::gui::qt {
   namespace {
     class CurveQuad final : public QSGGeometryNode {

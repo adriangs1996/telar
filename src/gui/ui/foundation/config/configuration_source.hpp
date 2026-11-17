@@ -67,7 +67,7 @@ import telar.gui.presentation.client_view_state;
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
 import telar.config.client;

@@ -1,6 +1,7 @@
 module telar.gui.input.copy_mode;
 
 import std;
+import telar.gui.foundation.terminal;
 
 namespace telar::gui {
 

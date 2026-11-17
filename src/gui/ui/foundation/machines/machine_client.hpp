@@ -50,7 +50,7 @@ static_assert(true);
 import telar.gui.application.session;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
-import telar.gui.platform.window_lease;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
@@ -61,7 +61,7 @@ namespace telar::gui::qt {
     RuntimeConnection connection;
     MachineEffects effects;
     GuiSession session;
-    std::optional<platform::WindowLease> identity_lease;
+    std::optional<system::WindowLease> identity_lease;
     std::uint64_t identity = 0;
     std::uint64_t runtime_generation = 0;
     MachinePhase phase = MachinePhase::connecting;

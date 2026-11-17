@@ -3,10 +3,9 @@ export module telar.gui.input.copy_mode;
 import std;
 import telar.tbc;
 
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.terminal;
 import telar.gui.input.key_encoder;
 import telar.gui.input.copy_pointer;
-import telar.gui.terminal.selection;
 import telar.wire.clipboard;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;

@@ -32,8 +32,6 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.fonts.face;
-
 namespace telar::gui::qt {
 
   NativeCellText::NativeCellText(QQuickItem* parent)

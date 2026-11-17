@@ -18,12 +18,9 @@ static_assert(true);
 
 import telar.base.text.utf8;
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
 import telar.gui.history.browser;
-import telar.gui.platform.wall_clock;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
-import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {
 
@@ -213,7 +210,7 @@ namespace telar::gui::qt {
 
   void HistoryController::buildRows() {
     const auto& rows = store_.session().historyBrowser().rows();
-    const auto sampled = platform::WallClock::sample();
+    const auto sampled = system::WallClock::sample();
 
     calendar_ = sampled;
     QList<QVariantMap> records;

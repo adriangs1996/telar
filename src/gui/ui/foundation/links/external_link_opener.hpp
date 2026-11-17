@@ -29,7 +29,7 @@ static_assert(true);
 
 import telar.gui.links.link_hover;
 import telar.gui.links.cell_links;
-import telar.gui.platform.login_shell;
+import telar.gui.foundation.system;
 import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
@@ -40,7 +40,7 @@ namespace telar::gui::qt {
     static constexpr auto timeout = std::chrono::seconds{5};
 
     static void start(QProcess& process, const LinkTarget& target) {
-      process.start(toQString(platform::NativeExternalLinks::executable), {toQString(target.text())}, QIODevice::ReadOnly);
+      process.start(toQString(system::NativeExternalLinks::executable), {toQString(target.text())}, QIODevice::ReadOnly);
     }
   };
 

@@ -32,15 +32,15 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
+import telar.gui.foundation.text;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_pointer;
-import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::test {
   struct HistoryPresentation;

@@ -30,9 +30,7 @@ static_assert(true);
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;
-import telar.gui.platform.file_stamp;
 import telar.gui.platform.profile_file;
-import telar.gui.platform.secure_random;
 
 namespace telar::gui::qt {
 
@@ -163,7 +161,7 @@ namespace telar::gui::qt {
   }
 
   MachineProfilesSource::Result MachineProfilesSource::prepare(ApplicationAllocator& memory, const Request& request) {
-    Result result{.profiles = std::nullopt, .observed = platform::FileStamp::read(request.path.constData(), platform::FileSymlinks::inspect), .error = {}, .generation = request.generation};
+    Result result{.profiles = std::nullopt, .observed = system::FileStamp::read(request.path.constData(), system::FileSymlinks::inspect), .error = {}, .generation = request.generation};
     if (!request.edit && !request.force && result.observed == request.known) {
       return result;
     }
@@ -177,7 +175,7 @@ namespace telar::gui::qt {
       MachineProfileStore store{memory, file};
 
       if (request.edit) {
-        platform::SecureRandom random;
+        system::SecureRandom random;
         const std::array edits{request.edit->view()};
 
         result.profiles = store.change(edits, random, textView(request.local_label));

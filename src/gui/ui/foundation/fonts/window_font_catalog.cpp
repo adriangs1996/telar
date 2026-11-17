@@ -28,10 +28,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
 

@@ -9,11 +9,10 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.gui.core.primitives;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.form_field_geometry;
-import telar.gui.terminal.font_grid;
-import telar.gui.text.bounded_editor;
+import telar.gui.foundation.terminal;
+import telar.gui.foundation.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
 

@@ -3,4 +3,4 @@ telar_add_domain(gui graphics
     pauses/pauses.cpp
     placeholder/placeholder.cpp
     texture_cache/texture_cache.cpp
-  DEPS core layout terminal presentation)
+  DEPS foundation/core foundation/text foundation/terminal layout presentation)

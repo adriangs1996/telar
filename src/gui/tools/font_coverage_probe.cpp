@@ -20,8 +20,8 @@ static_assert(true);
 #include <string_view>
 #include <vector>
 
-import telar.gui.core.unicode_scalar;
-import telar.gui.fonts.face;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
 import telar.platform.fs;
 
 namespace {

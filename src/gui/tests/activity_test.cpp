@@ -11,8 +11,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 
-import telar.gui.core.primitives;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.core;
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.allocation_gate;

@@ -42,8 +42,6 @@ static_assert(true);
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
-import telar.gui.platform.awake_clock;
-import telar.gui.platform.peer_identity;
 import telar.client;
 import telar.gui.transport.runtime_link;
 
@@ -329,7 +327,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (!remote_target_ && !platform::isCurrentUser(socket_.socketDescriptor())) {
+    if (!remote_target_ && !system::isCurrentUser(socket_.socketDescriptor())) {
       fail(QStringLiteral("Runtime socket belongs to another user"));
 
       return;
@@ -477,7 +475,7 @@ namespace telar::gui::qt {
       stream_.setMaximum(max_payload_size);
       socket_.setReadBufferSize(max_payload_size + frame_prefix_size);
       connecting_ = false;
-      link_.adopt(platform::AwakeClock::nowNanoseconds());
+      link_.adopt(system::AwakeClock::nowNanoseconds());
       deadline_.stop();
       error_.clear();
       emit errorChanged();
@@ -535,7 +533,7 @@ namespace telar::gui::qt {
     }
 
     if (link_.phase == MachinePhase::connected) {
-      link_.lose(message, platform::AwakeClock::nowNanoseconds());
+      link_.lose(message, system::AwakeClock::nowNanoseconds());
     } else {
       link_.connectionFailed(remote_error_.value_or(MachineError::endpoint_unavailable), message);
     }

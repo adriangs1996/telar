@@ -1,6 +1,10 @@
 module telar.gui.application.host_effects;
 
 import std;
+import telar.gui.foundation.text;
+import telar.gui.foundation.system;
+import telar.gui.core.json_writer;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 
@@ -57,7 +61,7 @@ namespace telar::gui {
     return false;
   }
 
-  platform::SharedImageSource RuntimeTransport::sharedImage([[maybe_unused]] std::string_view name) const {
+  system::SharedImageSource RuntimeTransport::sharedImage([[maybe_unused]] std::string_view name) const {
     throw EncodingError{"Shared graphics was not negotiated"};
   }
 

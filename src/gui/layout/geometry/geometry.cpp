@@ -3,7 +3,7 @@ module telar.gui.layout.geometry;
 import std;
 
 import telar.wire.vocabulary;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

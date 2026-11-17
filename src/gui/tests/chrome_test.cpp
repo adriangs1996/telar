@@ -62,7 +62,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;

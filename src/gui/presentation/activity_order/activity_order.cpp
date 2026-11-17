@@ -2,6 +2,8 @@ module telar.gui.presentation.activity_order;
 
 import std;
 import telar.tbc;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 
 namespace telar::gui {
 

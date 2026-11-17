@@ -22,7 +22,6 @@ static_assert(true);
 #include <span>
 #include <stdexcept>
 
-import telar.gui.core.metrics;
 import telar.gui.graphics.texture_cache;
 import telar.gui.graphics.placeholder;
 

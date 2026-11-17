@@ -43,9 +43,6 @@ static_assert(true);
 #include <future>
 #include <thread>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-
 namespace {
 
   using namespace telar::gui;

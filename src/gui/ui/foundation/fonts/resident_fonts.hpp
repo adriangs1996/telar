@@ -35,7 +35,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-import telar.gui.fonts.face;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
 

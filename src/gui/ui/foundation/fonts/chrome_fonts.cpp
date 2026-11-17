@@ -13,9 +13,6 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
-import telar.gui.fonts.face;
-import telar.gui.fonts.font_requests;
-
 namespace telar::gui::qt {
   namespace {
 

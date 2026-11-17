@@ -42,14 +42,12 @@ static_assert(true);
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.profile_store;
-import telar.gui.platform.managed_directory;
-import telar.gui.platform.path_limits;
-import telar.gui.platform.stdio_socket;
+import telar.gui.foundation.system;
 import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 
-  using RemoteDiscovery = MachineDiscovery<platform::PathLimits::path_bytes>;
+  using RemoteDiscovery = MachineDiscovery<system::PathLimits::path_bytes>;
 
   struct RemoteTarget {
     QString destination;
@@ -210,7 +208,7 @@ namespace telar::gui::qt {
             const auto endpoint = request.local_endpoint.toUtf8();
             const auto directory = view(endpoint).substr(0, view(endpoint).rfind('/'));
 
-            platform::prepareManagedDirectory(directory);
+            system::prepareManagedDirectory(directory);
           }
 
           result.arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
@@ -355,7 +353,7 @@ namespace telar::gui::qt {
 
     void startBridge() {
       try {
-        sockets_ = platform::openStdioSocket();
+        sockets_ = system::openStdioSocket();
         phase_ = Phase::bridge;
         errors_.clear();
         process_.setStandardInputFile({});
@@ -364,7 +362,7 @@ namespace telar::gui::qt {
         const auto descriptor = sockets_.child.get();
 
         process_.setChildProcessModifier([this, descriptor] {
-          const auto error = platform::bindStandardIo(descriptor);
+          const auto error = system::bindStandardIo(descriptor);
           if (error != 0) {
             process_.failChildProcessModifier("Bind SSH bridge standard input/output", error);
           }
@@ -403,7 +401,7 @@ namespace telar::gui::qt {
     QByteArray errors_;
     QByteArray program_bytes_;
     std::optional<RemoteDiscovery> discovery_;
-    platform::StdioSocket sockets_;
+    system::StdioSocket sockets_;
     std::uint64_t generation_ = 0;
     Phase phase_ = Phase::discovery;
     bool running_ = false;

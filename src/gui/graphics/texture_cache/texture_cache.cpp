@@ -5,6 +5,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

@@ -9,9 +9,9 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.gui.core.primitives;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.palette.navigation_label;
+import telar.gui.foundation.text;
 import telar.gui.presentation.suggestion_geometry;
 
 namespace {

@@ -16,7 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.layout.geometry;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::test {
@@ -47,7 +47,7 @@ namespace telar::gui::test {
     }
 
     static void release(qt::ApplicationController& application) {
-      anchor(application, platform::AwakeClock::nowNanoseconds() - FramePacer::maximum_interval_ns);
+      anchor(application, system::AwakeClock::nowNanoseconds() - FramePacer::maximum_interval_ns);
       application.frames_.reconsider();
     }
   };

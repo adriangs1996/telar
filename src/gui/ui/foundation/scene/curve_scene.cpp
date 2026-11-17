@@ -28,8 +28,6 @@ static_assert(true);
 #include <stdexcept>
 #include <utility>
 
-import telar.gui.terminal.glyphs.curve_cache;
-
 namespace telar::gui::qt {
 
   namespace {

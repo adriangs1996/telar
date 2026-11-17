@@ -30,9 +30,7 @@ import std;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
-import telar.gui.platform.login_shell;
 import telar.gui.platform.profile_file;
-import telar.gui.platform.runtime_endpoint;
 import telar.platform.paths;
 
 namespace {
@@ -148,7 +146,7 @@ namespace {
     const auto source = file.read(memory);
     const auto profiles = source ? telar::gui::MachineProfileCodec::parse(memory, telar::textView(*source)) : telar::gui::MachineProfiles{};
     const auto label = parser.value(QStringLiteral("machine")).toUtf8();
-    const auto hostname = telar::gui::platform::hostName();
+    const auto hostname = telar::gui::system::hostName();
     const auto destination = telar::gui::MachineOpening::saved(
         profiles,
         {

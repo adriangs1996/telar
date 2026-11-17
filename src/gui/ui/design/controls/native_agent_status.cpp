@@ -21,7 +21,7 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.display_metrics;
@@ -77,7 +77,7 @@ namespace telar::gui::qt {
     }
 
     record_ = record;
-    const auto timestamp = clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds();
+    const auto timestamp = clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds();
 
     interval_ = statusAgeInterval(record.value(QStringLiteral("statusClock"))).value_or(StatusAgeInterval{.age_ns = static_cast<std::uint64_t>(record.value(QStringLiteral("age")).toUInt()) * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = timestamp});
     const auto state = record.value(QStringLiteral("statusCode")).toInt();
@@ -162,7 +162,7 @@ namespace telar::gui::qt {
       clock_->requestSynchronization();
     }
 
-    sample(clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds());
+    sample(clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds());
   }
 
   void NativeAgentStatus::bindClock() {

@@ -55,10 +55,8 @@ static_assert(true);
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.config.gui_query;
-import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_pointer;
-import telar.gui.platform.login_shell;
 import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
@@ -100,11 +98,11 @@ namespace telar::gui::qt {
         workspace_form_(store_),
         key_bindings_(commands_, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
-        status_(store_, copy_, key_bindings_, platform::hostName()),
+        status_(store_, copy_, key_bindings_, system::hostName()),
         frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_),
         dialogs_(store_, peek_, machine_prompt_, palette_, paths_, history_, workspace_form_, key_bindings_, pointer_dispatcher_),
-        machines_(memory, store_, configuration_source_, effects_, frames_, display_, status_, dialogs_, *this, platform::hostName()),
-        roster_(store_, machines_, machine_profiles_, display_, dialogs_, notifications_, platform::hostName()),
+        machines_(memory, store_, configuration_source_, effects_, frames_, display_, status_, dialogs_, *this, system::hostName()),
+        roster_(store_, machines_, machine_profiles_, display_, dialogs_, notifications_, system::hostName()),
         activity_selection_(store_, activity_, peek_, dialogs_, machines_),
         commands_({
             .store = store_,
@@ -674,7 +672,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::scheduleGraphicsRecovery() {
-    scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, platform::AwakeClock::nowNanoseconds());
+    scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, system::AwakeClock::nowNanoseconds());
   }
 
   void ApplicationController::refresh() {

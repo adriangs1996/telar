@@ -6,7 +6,7 @@ module;
 export module telar.gui.attachments.catalog;
 
 import std;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
 
 // The capture types stay textual because the Objective-C++ clipboard source

@@ -34,7 +34,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.presentation.notification_stack;
 import telar.gui.presentation.activity_order;
 

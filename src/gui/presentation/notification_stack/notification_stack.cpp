@@ -3,7 +3,7 @@ module telar.gui.presentation.notification_stack;
 import std;
 import telar.tbc;
 
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
 namespace telar::gui {

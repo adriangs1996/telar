@@ -49,7 +49,6 @@ import telar.gui.tests.plugin_effect_cases;
 import telar.platform.fs;
 import telar.plugins;
 #if (defined(__APPLE__))
-import telar.plugins;
 #endif
 
 namespace {

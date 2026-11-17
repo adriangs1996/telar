@@ -14,11 +14,10 @@ import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.input.configuration;
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
-import telar.gui.core.primitives;
 import telar.gui.presentation.suggestion_geometry;
 import telar.plugins;
 import telar.wire.vocabulary;

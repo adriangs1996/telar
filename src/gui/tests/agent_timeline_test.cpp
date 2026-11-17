@@ -53,8 +53,7 @@ static_assert(true);
 
 import telar.gui.tests.agent_fixture;
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
-import telar.gui.platform.awake_clock;
+import telar.gui.foundation.system;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.application_mark;
 import telar.gui.model.records;
@@ -140,7 +139,7 @@ namespace {
       first.setSize({window_width, window_height});
       second_status.setSize({window_width, window_height});
       auto record = workingRecord();
-      const auto started = platform::AwakeClock::nowNanoseconds();
+      const auto started = system::AwakeClock::nowNanoseconds();
 
       record.insert(QStringLiteral("statusClock"), statusAgeValue({.age_ns = 0, .sampled_ns = started}));
       first.setRecord(record);
@@ -183,7 +182,7 @@ namespace {
       record.insert(QStringLiteral("working"), false);
       constexpr auto near_minute = (59 * second) + (second / 2);
 
-      record.insert(QStringLiteral("statusClock"), statusAgeValue({.age_ns = near_minute, .sampled_ns = platform::AwakeClock::nowNanoseconds()}));
+      record.insert(QStringLiteral("statusClock"), statusAgeValue({.age_ns = near_minute, .sampled_ns = system::AwakeClock::nowNanoseconds()}));
       status.setRecord(record);
       QCOMPARE(status.statusText(), QStringLiteral("now"));
       show(window);
@@ -306,10 +305,10 @@ namespace {
       constexpr auto elapsed_before_mount = 3 * second;
       constexpr std::uint32_t reported_age = 58;
 
-      QTRY_VERIFY_WITH_TIMEOUT(platform::AwakeClock::nowNanoseconds() >= elapsed_before_mount, wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(system::AwakeClock::nowNanoseconds() >= elapsed_before_mount, wait_ms);
       std::array entries{agentSnapshotEntry(reported_age)};
 
-      QVERIFY(replica.apply({.revision = 1, .entries = entries}, platform::AwakeClock::nowNanoseconds() - elapsed_before_mount));
+      QVERIFY(replica.apply({.revision = 1, .entries = entries}, system::AwakeClock::nowNanoseconds() - elapsed_before_mount));
       ListModel model;
       const auto publish = [&] {
         model.reconcile(QList<QVariantMap>{agentRecord(replica.entries().front(), {})});
@@ -337,7 +336,7 @@ namespace {
 
       QVERIFY(status != nullptr);
       QTRY_COMPARE_WITH_TIMEOUT(status->statusText(), QStringLiteral("Working 1m"), wait_ms);
-      QVERIFY(replica.apply({.revision = 2, .entries = entries}, platform::AwakeClock::nowNanoseconds()));
+      QVERIFY(replica.apply({.revision = 2, .entries = entries}, system::AwakeClock::nowNanoseconds()));
       const auto expected_interval = replica.entries().front().status_clock.interval();
       QStringList published_text;
       const QObject monitor;
@@ -353,7 +352,7 @@ namespace {
       QVERIFY(!published_text.contains(QStringLiteral("Working 59s")));
       entries.front().status = AgentStatus::ready;
       entries.front().status_age_s = 0;
-      QVERIFY(replica.apply({.revision = 3, .entries = entries}, platform::AwakeClock::nowNanoseconds()));
+      QVERIFY(replica.apply({.revision = 3, .entries = entries}, system::AwakeClock::nowNanoseconds()));
       publish();
       QTRY_COMPARE_WITH_TIMEOUT(status->statusText(), QStringLiteral("now"), wait_ms);
       QCOMPARE(status->animatedAlpha(), 1);
@@ -375,7 +374,7 @@ namespace {
       constexpr unsigned maximum_steps = 6;
       const std::chrono::nanoseconds step{static_cast<std::int64_t>(AgentAnimation::pulse_interval_ns)};
 
-      for (unsigned index = 0; index < maximum_steps && AgentAnimation::alpha(platform::AwakeClock::nowNanoseconds()) == previous_alpha; ++index) {
+      for (unsigned index = 0; index < maximum_steps && AgentAnimation::alpha(system::AwakeClock::nowNanoseconds()) == previous_alpha; ++index) {
         std::this_thread::sleep_for(step);
       }
 

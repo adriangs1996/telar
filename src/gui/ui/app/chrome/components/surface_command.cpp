@@ -26,7 +26,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.platform.process_group;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
@@ -42,7 +42,7 @@ namespace telar::gui::qt {
     });
 
     QObject::connect(&grace_, &QTimer::timeout, &context_, [this] {
-      platform::signalProcessGroup(group_, true);
+      system::signalProcessGroup(group_, true);
       if (exited_) {
         drain();
       } else {
@@ -53,7 +53,7 @@ namespace telar::gui::qt {
     QObject::connect(&process_, &QProcess::started, &context_, [this] {
       group_ = process_.processId();
       if (result_.failure) {
-        platform::signalProcessGroup(group_, false);
+        system::signalProcessGroup(group_, false);
       } else {
         process_.write(payload_);
         process_.closeWriteChannel();
@@ -89,7 +89,7 @@ namespace telar::gui::qt {
     deadline_.stop();
     grace_.stop();
     if (running_) {
-      platform::signalProcessGroup(group_, true);
+      system::signalProcessGroup(group_, true);
     }
 
     if (process_.state() != QProcess::NotRunning) {
@@ -172,7 +172,7 @@ namespace telar::gui::qt {
     }
 
     deadline_.stop();
-    platform::signalProcessGroup(group_, false);
+    system::signalProcessGroup(group_, false);
     grace_.start();
   }
 

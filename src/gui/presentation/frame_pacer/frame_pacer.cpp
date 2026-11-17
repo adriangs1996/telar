@@ -1,6 +1,7 @@
 module telar.gui.presentation.frame_pacer;
 
 import std;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 

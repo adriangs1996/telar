@@ -9,8 +9,8 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.gui.core.primitives;
-import telar.gui.terminal.screen;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 import telar.gui.links.cell_links;
 import telar.gui.links.path_expansion;
 import telar.wire.pane_io;

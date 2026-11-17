@@ -9,7 +9,7 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 
 namespace {
 

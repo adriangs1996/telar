@@ -32,9 +32,6 @@ static_assert(true);
 
 import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
-import telar.gui.core.metrics;
-import telar.gui.platform.file_stamp;
-import telar.gui.platform.private_file_stamp;
 import telar.gui.presentation.suggestion_geometry;
 
 import telar.gui.config.gui_query;
@@ -44,10 +41,10 @@ namespace telar::gui::qt {
 
   namespace {
 
-    std::optional<platform::FileStamp> fileStamp(const QString& path) {
+    std::optional<system::FileStamp> fileStamp(const QString& path) {
       const auto encoded = QFile::encodeName(path);
 
-      return platform::FileStamp::read(encoded.constData());
+      return system::FileStamp::read(encoded.constData());
     }
 
   }
@@ -65,7 +62,7 @@ namespace telar::gui::qt {
     observed.root = request.selection.path.isEmpty() ? std::nullopt : fileStamp(request.selection.path);
     const auto trust_path = QFile::encodeName(request.selection.trust_path);
 
-    observed.trust = trust_path.isEmpty() ? std::nullopt : platform::PrivateFileStamp::read(trust_path.constData());
+    observed.trust = trust_path.isEmpty() ? std::nullopt : system::PrivateFileStamp::read(trust_path.constData());
     for (auto iterator = request.watch.modules.cbegin(); iterator != request.watch.modules.cend(); ++iterator) {
       const auto stamp = fileStamp(iterator->path);
       if (stamp != iterator->stamp) {

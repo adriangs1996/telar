@@ -2,10 +2,8 @@ export module telar.gui.layout.geometry;
 
 import std;
 
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
-import telar.gui.core.primitives;
 
 // Interface: application/pane_bottom_reservation.cppm
 export {

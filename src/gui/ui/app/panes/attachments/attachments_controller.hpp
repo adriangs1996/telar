@@ -16,8 +16,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
-import telar.gui.core.unicode_scalar;
+import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
 import telar.gui.layout.geometry;
 import telar.gui.presentation.display_metrics;

@@ -40,8 +40,7 @@ static_assert(true);
 #include <stdexcept>
 #include <vector>
 
-import telar.gui.fonts.face;
-import telar.gui.fonts.glyph_rasterizer;
+import telar.gui.foundation.fonts;
 
 extern "C" {
 }
@@ -70,7 +69,7 @@ namespace {
   public:
     explicit OriginalRasterizer(const QByteArray& font, std::uint8_t strength)
         : font_(font.cbegin(), font.cend()),
-          native_pixels_(telar::gui::platform::GlyphRasterizer::requiredBytes(), std::uint8_t{}, telar::gui::AllocatorRef<std::uint8_t, telar::gui::SystemAllocator>{memory_}),
+          native_pixels_(telar::gui::fonts::GlyphRasterizer::requiredBytes(), std::uint8_t{}, telar::gui::AllocatorRef<std::uint8_t, telar::gui::SystemAllocator>{memory_}),
           native_(native_pixels_, font_, native_match_, strength),
           native_reference_(native_pixels_.size(), 0) {
       const telar_glyph_rasterizer_options options{
@@ -139,7 +138,7 @@ namespace {
     telar::gui::SystemAllocator memory_;
     telar::gui::Vector<std::uint8_t, telar::gui::SystemAllocator> native_pixels_;
     telar::gui::fonts::FontMatch native_match_{};
-    telar::gui::platform::GlyphRasterizer native_;
+    telar::gui::fonts::GlyphRasterizer native_;
     std::vector<std::uint8_t> native_reference_;
     std::unique_ptr<telar_glyph_rasterizer, decltype(&telarGlyphRasterizerDestroy)> native_handle_{nullptr, telarGlyphRasterizerDestroy};
     std::uint16_t pixel_height_ = 0;

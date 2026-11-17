@@ -41,9 +41,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.core.metrics;
-import telar.gui.fonts.face;
-import telar.gui.fonts.row_text_layout;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.presentation.activity_order;
@@ -52,7 +49,6 @@ import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.history_filter_geometry;
-import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
   namespace {

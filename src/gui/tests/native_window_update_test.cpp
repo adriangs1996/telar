@@ -16,7 +16,6 @@ static_assert(true);
 #include <qpa/qplatformwindow.h>
 #include <utility>
 
-import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace {
@@ -60,14 +59,14 @@ int main(int argc, char** argv) try {
   },
               wait_ms),
       "window must be exposed");
-  telar::gui::qt::WindowFramePacer<telar::gui::platform::AwakeClock, QWindow> pacing{window};
+  telar::gui::qt::WindowFramePacer<telar::gui::system::AwakeClock, QWindow> pacing{window};
   telar::gui::FramePacer::Pane pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1};
 
   const auto before = window.received;
 
   window.requestUpdate();
   require(window.handle()->hasPendingUpdateRequest(), "Qt must own the pending update");
-  pacing.noteInput(pane, telar::gui::platform::AwakeClock::nowNanoseconds());
+  pacing.noteInput(pane, telar::gui::system::AwakeClock::nowNanoseconds());
   ++pane.frame_id;
   pacing.requestInputFrame(pane);
   pacing.requestInputFrame(pane);
@@ -85,7 +84,7 @@ int main(int argc, char** argv) try {
       "display link must not deliver a duplicate");
 
   window.requestUpdate();
-  pacing.noteInput(pane, telar::gui::platform::AwakeClock::nowNanoseconds());
+  pacing.noteInput(pane, telar::gui::system::AwakeClock::nowNanoseconds());
   ++pane.frame_id;
   pacing.requestInputFrame(pane);
   telar::gui::platform::deliverPendingWindowUpdate(window);

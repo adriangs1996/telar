@@ -21,7 +21,7 @@ static_assert(true);
 #include <iterator>
 #include <span>
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.graphics.pauses;
 import telar.gui.presentation.application_mark;
 

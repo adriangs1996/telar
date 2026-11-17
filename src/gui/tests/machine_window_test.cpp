@@ -141,7 +141,6 @@ import telar.gui.tests.activity_fixture;
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.config.plugin_effects;
-import telar.gui.core.unicode_scalar;
 import telar.gui.machines.picker;
 #if (defined(__APPLE__))
 import telar.gui.layout.geometry;

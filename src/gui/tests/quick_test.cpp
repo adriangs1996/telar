@@ -146,15 +146,12 @@ import telar.gui.input.copy_pointer;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 import telar.gui.palette.navigation_label;
-import telar.gui.platform.awake_clock;
-import telar.gui.platform.runtime_endpoint;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.plugins;
-import telar.gui.text.bounded_editor;
 import telar.gui.presentation.notification_center;
 import telar.wire.history;
 
@@ -3697,7 +3694,7 @@ return {api_version=2, client={keybindings={
 
         QTest::mousePress(window_, button, Qt::NoModifier, position);
         const auto next = 1 - client_->history()->state().value(QStringLiteral("selection")).toInt();
-        const auto started = platform::AwakeClock::nowNanoseconds();
+        const auto started = system::AwakeClock::nowNanoseconds();
 
         client_->history()->select(next);
         const auto ready = [&] {
@@ -3710,7 +3707,7 @@ return {api_version=2, client={keybindings={
           QTRY_VERIFY_WITH_TIMEOUT(ready(), runtime_wait_ms);
         }
 
-        qInfo() << "History selection progress: native loop" << native_loop << "button" << button << "elapsed ns" << platform::AwakeClock::nowNanoseconds() - started;
+        qInfo() << "History selection progress: native loop" << native_loop << "button" << button << "elapsed ns" << system::AwakeClock::nowNanoseconds() - started;
         QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), next);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         const auto* current = selected_copy();
@@ -5667,7 +5664,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void routedPluginWorker() {
-      const auto program = QStandardPaths::findExecutable(QString::fromStdString(platform::runtime_endpoint::program()));
+      const auto program = QStandardPaths::findExecutable(QString::fromStdString(system::runtime_endpoint::program()));
 
       QVERIFY(!program.isEmpty());
       QCOMPARE(QFileInfo{program}.canonicalFilePath(), QFileInfo{qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME")}.canonicalFilePath());
@@ -7775,13 +7772,13 @@ return {api_version=2, client={keybindings={
       QTest::qWait(grace_expiry_ms);
       constexpr auto hold_ns = telar::gui::FramePacer::nanoseconds_per_second * 2;
 
-      telar::gui::test::FramePacing::anchor(*client_, telar::gui::platform::AwakeClock::nowNanoseconds() + hold_ns);
+      telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() + hold_ns);
       window_->update();
       QVERIFY(telar::gui::test::waitForGuiCondition([&] {
         return telar::gui::test::FramePacing::pending(*client_);
       },
           runtime_wait_ms));
-      telar::gui::test::FramePacing::anchor(*client_, telar::gui::platform::AwakeClock::nowNanoseconds() - telar::gui::FramePacer::maximum_interval_ns);
+      telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() - telar::gui::FramePacer::maximum_interval_ns);
       const auto previous = pane->screen.frameId();
 
       writeTestFile(release_path, "");
@@ -7809,7 +7806,7 @@ return {api_version=2, client={keybindings={
 
       constexpr auto hold_ns = telar::gui::FramePacer::nanoseconds_per_second * 2;
 
-      telar::gui::test::FramePacing::anchor(*client_, telar::gui::platform::AwakeClock::nowNanoseconds() + hold_ns);
+      telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() + hold_ns);
       window_->update();
       QVERIFY(telar::gui::test::waitForGuiCondition([&] {
         return telar::gui::test::FramePacing::pending(*client_);

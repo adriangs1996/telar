@@ -3,13 +3,13 @@ module telar.gui.platform.profile_file;
 import std;
 import telar.sys.posix;
 
-import telar.gui.platform.secure_random;
+import telar.gui.foundation.system;
 import telar.platform.error;
 import telar.machines;
 import telar.platform.fs;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 import telar.wire.vocabulary;
-import telar.gui.core.primitives;
+import telar.gui.foundation.core;
 import telar.platform.primitives;
 
 namespace telar::gui::platform {

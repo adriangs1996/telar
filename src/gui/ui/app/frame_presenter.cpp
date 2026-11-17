@@ -30,9 +30,7 @@ static_assert(true);
 import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_pointer;
-import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.wire.vocabulary;
 import telar.gui.model.records;
@@ -127,7 +125,7 @@ namespace telar::gui::qt {
   void FramePresenter::prepareFrame(PresentedFrame& frame) {
     frame = {};
     frame.machine_view = store_.machineView();
-    frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
+    frame.preparation_ns = system::AwakeClock::nowNanoseconds();
     frame.tabs = tabs_.dropSurface(display_.chromeRatio());
     if (window_ == nullptr) {
       return;

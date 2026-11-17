@@ -27,7 +27,6 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
-import telar.gui.core.metrics;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.history_meta_geometry;

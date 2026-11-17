@@ -34,7 +34,7 @@ static_assert(true);
 import telar.gui.tests.allocation_gate;
 import telar.gui.application.workspace_replica;
 import telar.gui.presentation.activity_order;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.text;
 import telar.gui.model.replicas;
 import telar.gui.model.records;
 

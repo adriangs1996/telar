@@ -38,7 +38,7 @@ static_assert(true);
 
 import telar.gui.application.host_effects;
 import telar.gui.machines.discovery;
-import telar.gui.platform.shared_image_source;
+import telar.gui.foundation.system;
 import telar.client;
 import telar.gui.transport.runtime_link;
 
@@ -75,12 +75,12 @@ namespace telar::gui::qt {
       return accepted_ && !remote_target_;
     }
 
-    [[nodiscard]] platform::SharedImageSource sharedImage(std::string_view name) const override {
+    [[nodiscard]] system::SharedImageSource sharedImage(std::string_view name) const override {
       if (!supportsSharedMemory()) {
         throw EncodingError{"Shared graphics requires a local runtime"};
       }
 
-      return platform::SharedImageSource{name};
+      return system::SharedImageSource{name};
     }
 
     [[nodiscard]] const SchemaId& schema() const noexcept {

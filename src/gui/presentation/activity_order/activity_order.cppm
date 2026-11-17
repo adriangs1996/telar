@@ -6,10 +6,9 @@ import telar.tbc;
 import telar.gui.presentation.application_mark;
 import telar.gui.model.replicas;
 
-import telar.gui.core.metrics;
-import telar.gui.text.json_unsigned_integer;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 import telar.base.memory.allocators;
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 import telar.gui.model.records;
 

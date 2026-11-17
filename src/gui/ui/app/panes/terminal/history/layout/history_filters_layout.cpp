@@ -23,7 +23,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.presentation.history_pointer;
-import telar.gui.core.metrics;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {

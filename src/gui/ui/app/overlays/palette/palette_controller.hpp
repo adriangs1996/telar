@@ -23,6 +23,7 @@ static_assert(true);
 import telar.gui.machines.picker;
 import telar.gui.model.replicas;
 import telar.gui.palette.navigation_label;
+import telar.gui.foundation.text;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.suggestion_geometry;
 

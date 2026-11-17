@@ -1,0 +1,14 @@
+// The vocabulary every part of the GUI shares: memory, geometry, colors and themes, the
+// configuration, UTF-8 scalars, clocks and JSON output.
+export module telar.gui.foundation.core;
+
+export import :primitives;
+export import :unicode_scalar;
+export import :time;
+export import :view_version;
+export import :motion;
+export import :theme;
+export import :configuration;
+export import :geometry;
+export import :metric_levels;
+export import :json_writer;

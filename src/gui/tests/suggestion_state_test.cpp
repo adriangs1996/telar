@@ -29,13 +29,13 @@ static_assert(true);
 #include <string_view>
 #include <system_error>
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.form_field_geometry;
 import telar.gui.suggestions.state;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.terminal;
 
 namespace {
 

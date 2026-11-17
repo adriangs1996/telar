@@ -16,7 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application.workspace_replica;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.input.copy_mode;
 import telar.gui.prompt.editor;
 import telar.gui.prompt.line;

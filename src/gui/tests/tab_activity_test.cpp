@@ -21,7 +21,7 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.graphics.placeholder;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.display_metrics;

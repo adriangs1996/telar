@@ -43,12 +43,12 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.core.metrics;
+import telar.gui.foundation.core;
 import telar.gui.input.child_mouse;
 import telar.gui.input.key_encoder;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
-import telar.gui.terminal.font_grid;
+import telar.gui.foundation.terminal;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::test {

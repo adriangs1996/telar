@@ -2,6 +2,7 @@ module telar.gui.presentation.tab_drop;
 
 import std;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
 
 namespace telar::gui {
 
