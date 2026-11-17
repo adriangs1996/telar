@@ -710,6 +710,260 @@ namespace {
       }
     }
 
+    std::string rawId(const std::string& hex_id) {
+      std::string bytes;
+
+      for (std::size_t index = 0; index + 1 < hex_id.size(); index += 2) {
+        bytes += static_cast<char>(std::stoi(hex_id.substr(index, 2), nullptr, 16));
+      }
+
+      return bytes;
+    }
+
+    std::string sha1(std::string_view bytes) {
+      std::array<unsigned char, SHA_DIGEST_LENGTH> digest{};
+
+      SHA1(reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size(), digest.data());
+      return {reinterpret_cast<const char*>(digest.data()), digest.size()};
+    }
+
+    std::string hexBytes(std::string_view bytes) {
+      std::string text;
+
+      for (const auto byte : bytes) {
+        text += std::format("{:02x}", static_cast<unsigned char>(byte));
+      }
+
+      return text;
+    }
+
+    // Writes `bytes` as a loose object of `kind` without git's checks of its contents.
+    std::string literalObject(const std::string& directory, std::string_view kind, std::string_view bytes) {
+      const auto path = directory + "/.git/literal";
+
+      write(path, bytes);
+      const auto id = trimmed(run(directory, "git hash-object -t " + std::string{kind} + " --literally -w " + quote(path)));
+
+      run(directory, "rm -f " + quote(path));
+      return id;
+    }
+
+    // Points main at a new commit of `tree`, so the staged comparison reads that tree.
+    void commitTree(const std::string& directory, const std::string& tree) {
+      const auto commit = literalObject(directory, "commit", "tree " + tree + "\nauthor T <t@example.com> 0 +0000\ncommitter T <t@example.com> 0 +0000\n\nhostile\n");
+
+      run(directory, "git update-ref refs/heads/main " + commit);
+    }
+
+    // A cloned repository can hold a tree that git itself would refuse: its entries are never a
+    // path outside the tree, never out of order, with an unknown mode or with a short object id.
+    // The staged comparison against such a HEAD is unknown, never a count.
+    void testHostileTreeEntries(Reader&) {
+      const auto directory = initialize("hostile-trees");
+
+      write(directory + "/a.txt", "alpha\n");
+      commitAll(directory, "base");
+      const auto blob = rawId(trimmed(run(directory, "git rev-parse HEAD:a.txt")));
+      const auto entry = [&](std::string_view mode, std::string_view name) {
+        return std::string{mode} + " " + std::string{name} + '\0' + blob;
+      };
+      const auto valid = literalObject(directory, "tree", entry("100644", "a.txt") + entry("100644", "b.txt"));
+
+      commitTree(directory, valid);
+      Reader control{system_memory};
+
+      check(control.read(directory).staged == git::Accuracy::exact, "a well-formed tree is compared");
+      for (const auto& [label, tree] : std::initializer_list<std::pair<std::string_view, std::string>>{
+               {"dot-dot entry", entry("100644", "..") + entry("100644", "a.txt")},
+               {"dot entry", entry("100644", ".") + entry("100644", "a.txt")},
+               {"slash in a name", entry("100644", "a.txt") + entry("100644", "a/b")},
+               {"unsorted entries", entry("100644", "b.txt") + entry("100644", "a.txt")},
+               {"unknown mode", entry("100600", "a.txt")},
+               {"truncated object id", "100644 a.txt" + std::string(1, '\0') + blob.substr(0, 10)},
+           }) {
+        commitTree(directory, literalObject(directory, "tree", tree));
+        Reader fresh_reader{system_memory};
+        const auto& status = fresh_reader.read(directory);
+
+        check(status.repository == git::RepositoryState::ready && status.staged == git::Accuracy::unknown, std::string{label} + " makes the staged comparison unknown");
+      }
+    }
+
+    std::string deflated(std::string_view bytes) {
+      auto length = compressBound(static_cast<uLong>(bytes.size()));
+      std::string output(length, '\0');
+
+      compress(reinterpret_cast<Bytef*>(output.data()), &length, reinterpret_cast<const Bytef*>(bytes.data()), static_cast<uLong>(bytes.size()));
+      output.resize(length);
+      return output;
+    }
+
+    // The type and size header of a pack entry.
+    std::string entryHeader(unsigned kind, std::size_t size) {
+      std::string header;
+      auto byte = static_cast<unsigned char>((kind << 4) | (size & 0x0f));
+
+      size >>= 4;
+      while (size != 0) {
+        header += static_cast<char>(byte | 0x80);
+        byte = static_cast<unsigned char>(size & 0x7f);
+        size >>= 7;
+      }
+
+      return header + static_cast<char>(byte);
+    }
+
+    std::string deltaSize(std::size_t size) {
+      std::string bytes;
+
+      do {
+        auto byte = static_cast<unsigned char>(size & 0x7f);
+
+        size >>= 7;
+        bytes += static_cast<char>(size != 0 ? byte | 0x80 : byte);
+      } while (size != 0);
+
+      return bytes;
+    }
+
+    // Writes a pack of a tree `base` and an OFS or REF delta against it whose result claims the
+    // id `target`, with its .idx, so the object database resolves `target` through `delta`. A
+    // delta's result has its base's type, so the result is a tree too.
+    void writeDeltaPack(const std::string& directory, std::string_view base, const std::string& target, std::string_view delta, bool reference) {
+      const auto base_id = sha1("tree " + std::to_string(base.size()) + '\0' + std::string{base});
+      std::string pack = "PACK";
+
+      for (const std::uint32_t word : {2u, 2u}) {
+        for (int shift = 24; shift >= 0; shift -= 8) {
+          pack += static_cast<char>(word >> shift);
+        }
+      }
+
+      const auto base_offset = pack.size();
+
+      pack += entryHeader(2, base.size()) + deflated(base);
+      const auto delta_offset = pack.size();
+
+      if (reference) {
+        pack += entryHeader(7, delta.size()) + base_id;
+      } else {
+        auto distance = delta_offset - base_offset;
+        std::string encoded(1, static_cast<char>(distance & 0x7f));
+
+        while ((distance >>= 7) != 0) {
+          --distance;
+          encoded.insert(encoded.begin(), static_cast<char>(0x80 | (distance & 0x7f)));
+        }
+
+        pack += entryHeader(6, delta.size()) + encoded;
+      }
+
+      pack += deflated(delta);
+      const auto checksum = sha1(pack);
+
+      pack += checksum;
+      const auto entry_crc = [&](std::size_t begin, std::size_t end) {
+        return static_cast<std::uint32_t>(crc32(0, reinterpret_cast<const Bytef*>(pack.data() + begin), static_cast<uInt>(end - begin)));
+      };
+      std::vector<std::tuple<std::string, std::uint32_t, std::uint32_t>> objects{
+          {base_id, entry_crc(base_offset, delta_offset), static_cast<std::uint32_t>(base_offset)},
+          {target, entry_crc(delta_offset, pack.size() - checksum.size()), static_cast<std::uint32_t>(delta_offset)},
+      };
+
+      std::ranges::sort(objects);
+      std::string index = "\xfftOc";
+      const auto word = [&](std::uint32_t value) {
+        for (int shift = 24; shift >= 0; shift -= 8) {
+          index += static_cast<char>(value >> shift);
+        }
+      };
+
+      word(2);
+      for (unsigned first = 0; first < 256; ++first) {
+        word(static_cast<std::uint32_t>(std::ranges::count_if(objects, [&](const auto& object) {
+          return static_cast<unsigned char>(std::get<0>(object)[0]) <= first;
+        })));
+      }
+
+      for (const auto& object : objects) {
+        index += std::get<0>(object);
+      }
+
+      for (const auto& object : objects) {
+        word(std::get<1>(object));
+      }
+
+      for (const auto& object : objects) {
+        word(std::get<2>(object));
+      }
+
+      index += checksum;
+      index += sha1(index);
+      const auto name = directory + "/.git/objects/pack/pack-" + hexBytes(checksum);
+
+      shell("mkdir -p " + quote(directory + "/.git/objects/pack"));
+      write(name + ".pack", pack);
+      write(name + ".idx", index);
+    }
+
+    // A pack from a cloned repository can hold a delta whose zlib stream is valid but whose
+    // instructions are not: a copy outside the base, an insert past the result, opcode 0 or
+    // a source size other than the base's. Resolving it makes the staged comparison unknown and
+    // never writes or reads outside either buffer.
+    void testHostilePackDelta(Reader&) {
+      for (const bool reference : {false, true}) {
+        for (const auto& [label, delta, accepted] : std::initializer_list<std::tuple<std::string_view, std::string, bool>>{
+                 {"a delta within both buffers", "copy", true},
+                 {"a copy just past the base", "outside", false},
+                 {"a copy far outside the base", "far", false},
+                 {"an insert past the result", "insert", false},
+                 {"opcode 0", "zero", false},
+                 {"another source size", "source", false},
+             }) {
+          const auto directory = initialize(reference ? "hostile-delta-ref" : "hostile-delta-ofs");
+
+          write(directory + "/a.txt", "alpha\n");
+          commitAll(directory, "base");
+          // The base and the tree a correct delta makes of it: a.txt with blobs other than the
+          // committed one, so the comparison counts it. The delta copies the entry's mode and
+          // name from the base and inserts the new id.
+          const std::string prefix = "100644 a.txt" + std::string(1, '\0');
+          const auto base = prefix + sha1("zero");
+          const auto id = sha1("other");
+          const auto tree = prefix + id;
+          const auto tree_id = sha1("tree " + std::to_string(tree.size()) + '\0' + tree);
+          const std::string copy = "\x90" + std::string(1, static_cast<char>(prefix.size()));
+          const auto insert = std::string(1, static_cast<char>(id.size())) + id;
+          std::string instructions;
+
+          if (delta == "copy") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + copy + insert;
+          } else if (delta == "outside") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + "\x91" + static_cast<char>(base.size() - 3) + static_cast<char>(prefix.size()) + insert;
+          } else if (delta == "far") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + "\x9f" + std::string(3, '\0') + "\x40" + static_cast<char>(prefix.size()) + insert;
+          } else if (delta == "insert") {
+            instructions = deltaSize(base.size()) + deltaSize(prefix.size()) + copy + insert;
+          } else if (delta == "zero") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + copy + std::string(1, '\0') + insert;
+          } else {
+            instructions = deltaSize(base.size() + 1) + deltaSize(tree.size()) + copy + insert;
+          }
+
+          writeDeltaPack(directory, base, tree_id, instructions, reference);
+          commitTree(directory, hexBytes(tree_id));
+          Reader fresh_reader{system_memory};
+          const auto& status = fresh_reader.read(directory);
+          const auto expected = accepted ? git::Accuracy::exact : git::Accuracy::unknown;
+
+          check(status.repository == git::RepositoryState::ready && status.staged == expected, std::string{label} + (reference ? " (REF_DELTA)" : " (OFS_DELTA)"));
+          if (accepted) {
+            check(status.changes.staged_modified == 1, "the resolved tree is compared");
+          }
+        }
+      }
+    }
+
     void testConflict(Reader& reader) {
       const auto directory = initialize("conflict");
 
@@ -992,5 +1246,7 @@ namespace {
   const telar::testing::Case case_long_history{"git.long_history", readsWithGit<testLongHistory>};
   const telar::testing::Case case_corruption{"git.corruption", withGit<testCorruption>};
   const telar::testing::Case case_hostile{"git.hostile", readsWithGit<testHostile>};
+  const telar::testing::Case case_hostile_tree_entries{"git.hostile_tree_entries", readsWithGit<testHostileTreeEntries>};
+  const telar::testing::Case case_hostile_pack_delta{"git.hostile_pack_delta", readsWithGit<testHostilePackDelta>};
 
 }
