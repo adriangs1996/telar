@@ -1,6 +1,8 @@
 #include <cerrno>
+#include <cstring>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -77,6 +79,7 @@ namespace {
 
   // Waits for the pane's PaneExited, which the client that opened the pane receives.
   void waitExited(ProtocolPeer& peer, std::uint64_t pane) {
+    peer.deadline(std::chrono::seconds{30});
     while (peer.receive<PaneExited>().pane_id != pane) {
     }
   }
@@ -115,6 +118,32 @@ namespace {
 
     // The runtime keeps serving the other client.
     check(bystander.exchange<ClientList>(QueryClients{.request_id = 2}).request_id == 2);
+  }
+
+  void testIdleHandshakesExpire() {
+    RuntimeHost host;
+    std::vector<int> idle;
+
+    // Connections that never say hello, as half-open bridges leave, take every handshake slot.
+    for (std::size_t index = 0; index < 16; ++index) {
+      const int descriptor = ::socket(AF_UNIX, SOCK_STREAM, 0);
+      sockaddr_un address{};
+
+      address.sun_family = AF_UNIX;
+      std::strncpy(address.sun_path, host.socket(), sizeof(address.sun_path) - 1);
+      check(::connect(descriptor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+      idle.push_back(descriptor);
+    }
+
+    // The runtime closes them once their handshake time runs out, and a client is served again.
+    for (const int descriptor : idle) {
+      check(closedByRuntime(descriptor, std::chrono::seconds{10}), "an idle handshake kept its slot");
+      ::close(descriptor);
+    }
+
+    ProtocolPeer peer{host.socket()};
+
+    check(peer.exchange<ClientList>(QueryClients{.request_id = 1}).request_id == 1);
   }
 
   void testPaneIdentityEnvironment() {
@@ -229,6 +258,101 @@ namespace {
     check(outcome == "completed", outcome);
   }
 
+  void testOversizedLaunchKeepsSession() {
+    RuntimeHost host{RuntimeHostOptions{.session = true}};
+    WorkspaceLocation workspace;
+
+    {
+      ProtocolPeer control{host.socket()};
+      const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
+
+      workspace = opened.location.workspace;
+      // A restorable launch the wire admits, whose arguments with their separators exceed the
+      // 128 KiB a checkpoint records.
+      const std::string argument((128 * 1024 - 9) / 3, 'x');
+      const std::array<std::string_view, 5> arguments{"/bin/echo", argument, argument, argument, std::string_view{"xx"}.substr(0, (128 * 1024 - 9) % 3)};
+
+      try {
+        control.exchange<PaneOpened>(CreatePane{.request_id = 2, .location = opened.location, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+        check(false, "the oversized launch opened a pane");
+      } catch (const std::exception&) {
+        // Refused or dropped: how the client learns of it is not the contract.
+      }
+    }
+
+    ProtocolPeer control{host.socket()};
+    const auto snapshot = control.exchange<WorkspaceSnapshot>(RequestWorkspaceSnapshot{.request_id = 3, .workspace = workspace});
+
+    check(snapshot.tabs.size() == 1 && snapshot.tabs.front().pane_count == 1, "the refused launch registered a pane");
+    control.exchange<WorkspaceSnapshot>(RenameWorkspace{.request_id = 4, .workspace = workspace, .name = "Kept after refusal"});
+    const int status = host.stop();
+
+    check(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+
+    // The session written after the refusal still restores the other pane and the later rename.
+    host.start();
+    ProtocolPeer restored{host.socket()};
+
+    restored.send(RequestRuntimeState{.client_identity = 5, .interactive = false});
+    const auto list = restored.receive<WorkspaceList>();
+
+    check(list.entries.size() == 1 && list.entries.front().workspace == workspace.id);
+    check(list.entries.front().name == "Kept after refusal", "the session stopped being saved");
+    const auto restored_snapshot = restored.exchange<WorkspaceSnapshot>(RequestWorkspaceSnapshot{.request_id = 6, .workspace = workspace});
+
+    check(restored_snapshot.tabs.size() == 1 && restored_snapshot.tabs.front().pane_count == 1);
+  }
+
+  void testAttachmentSlotLimit() {
+    RuntimeHost host;
+    ProtocolPeer window{host.socket()};
+
+    window.send(RequestRuntimeState{.client_identity = 61, .interactive = true});
+    const auto first = window.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
+
+    // A window attaches every pane it opens: 64 fill one tab, and a second tab needs a 65th.
+    for (std::uint64_t request = 2; request <= 64; ++request) {
+      window.exchange<PaneOpened>(CreatePane{.request_id = request, .location = first.location, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
+    }
+
+    check(refusal(window, CreateTab{.request_id = 65, .workspace = first.location.workspace, .label = "Past the limit", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}}) == FailureCode::resource_limit);
+
+    // The window still sees its first pane change.
+    constexpr std::string_view typed = "after-limit\r";
+
+    window.send(PaneInput{first.pane_id, {reinterpret_cast<const Byte*>(typed.data()), typed.size()}});
+    window.deadline(std::chrono::seconds{5});
+    for (;;) {
+      const auto frame = window.receive<PaneFrame>();
+
+      window.send(FrameAck{frame.pane_id, frame.frame_id});
+      if (frame.pane_id == first.pane_id) {
+        break;
+      }
+    }
+
+    screenShowing(window, first.pane_id, "after-limit");
+  }
+
+  void testClosedTabResyncsObserver() {
+    RuntimeHost host;
+    ProtocolPeer owner{host.socket()};
+    ProtocolPeer observer{host.socket()};
+
+    owner.send(RequestRuntimeState{.client_identity = 81, .interactive = true});
+    observer.send(RequestRuntimeState{.client_identity = 82, .interactive = true});
+    const auto opened = owner.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
+    const auto tab = owner.exchange<TabCreated>(CreateTab{.request_id = 2, .workspace = opened.location.workspace, .label = "Closed", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
+
+    // The observer shows the workspace's first pane.
+    observer.exchange<PaneOpened>(OpenPane{.request_id = 3, .target = {.kind = PaneTarget::Kind::pane, .id = opened.pane_id}, .size = size});
+    owner.exchange<TabClosed>(CloseTab{.request_id = 4, .location = tab.location});
+    observer.deadline(std::chrono::seconds{5});
+    const auto resync = observer.receive<ResyncRequired>();
+
+    check(resync.workspace.id == opened.location.workspace.id && !resync.workspace_closed);
+  }
+
   // The fixture side runs in a pane, so the runtime names its agent by the executable.
   void waitProvider(ProtocolPeer& peer, std::uint64_t pane, AgentProvider provider) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
@@ -329,10 +453,14 @@ namespace {
   const telar::testing::Mode pane_agent{"--pane-agent", paneAgent};
 
   const telar::testing::Case case_unknown_tag_drops_only_sender{"runtime_wire.unknown_tag_drops_only_sender", testUnknownTagDropsOnlySender};
+  const telar::testing::Case case_idle_handshakes_expire{"runtime_wire.idle_handshakes_expire", testIdleHandshakesExpire};
   const telar::testing::Case case_pane_identity_environment{"runtime_wire.pane_identity_environment", testPaneIdentityEnvironment};
   const telar::testing::Case case_send_text_refusals{"runtime_wire.send_text_refusals", testSendTextRefusals};
   const telar::testing::Case case_blocked_agent_refuses_prompt{"runtime_wire.blocked_agent_refuses_prompt", testBlockedAgentRefusesPrompt};
   const telar::testing::Case case_foreign_report_rejected{"runtime_wire.foreign_report_rejected", testForeignReportRejected};
   const telar::testing::Case case_deferred_report_answered{"runtime_wire.deferred_report_answered", testDeferredReportAnswered};
+  const telar::testing::Case case_oversized_launch_keeps_session{"runtime_wire.oversized_launch_keeps_session", testOversizedLaunchKeepsSession};
+  const telar::testing::Case case_attachment_slot_limit{"runtime_wire.attachment_slot_limit", testAttachmentSlotLimit};
+  const telar::testing::Case case_closed_tab_resyncs_observer{"runtime_wire.closed_tab_resyncs_observer", testClosedTabResyncsObserver};
 
 }
