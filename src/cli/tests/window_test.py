@@ -59,8 +59,10 @@ def peer(listener, fixture, frames):
             frames.append(frame.hex())
             request = frame[1:9]
             if frame[0] == 0x33:
-                entries = b'' if fixture.get('empty') else struct.pack('<QQQHQQ', 7, 11, 19, 2, 23, 29)
-                send(connection, b'\xad' + request + bytes([bool(entries)]) + entries)
+                entries = [] if fixture.get('empty') else [struct.pack('<QQQHQQ', 7, 11, 19, 2, 23, 29)]
+                if fixture.get('second'):
+                    entries.append(struct.pack('<QQQHQQ', 8, 13, 20, 0, 24, 31))
+                send(connection, b'\xad' + request + bytes([len(entries)]) + b''.join(entries))
             elif frame[0] == 0x34:
                 assert struct.unpack('<QQ', frame[9:]) == (7, 11)
                 send(connection, b'\xa1' + request)
@@ -108,6 +110,7 @@ def cases():
         yield words + ['--json'], {}, 0, None
     yield ['client', 'get', '8'], {}, 2, ''
     yield ['client', 'list', '--json'], {'empty': True}, 0, '[]\n'
+    yield ['client', 'list', '--json'], {'second': True}, 0, None
     actions = [(['sidebar', 'get'], 12), (['sidebar', 'show'], 13), (['sidebar', 'hide'], 14), (['sidebar', 'resize', '48'], 15), (['workspace-list', 'expand'], 16), (['workspace-list', 'collapse'], 17), (['client', 'open', 'goto'], 18), (['client', 'open', 'history'], 19), (['client', 'copy-mode'], 20), (['notification', 'dismiss', '9'], 21), (['client', 'open-link', 'https://example.invalid'], 22), (['client', 'clipboard', 'copy', 'fixture'], 23), (['layout', 'get'], 25), (['layout', 'apply', 'token'], 26), (['config', 'reload'], 27), (['config', 'show'], 28), (['plugin', 'list'], 29), (['plugin', 'get', 'test'], 30), (['plugin', 'enable', 'test'], 31), (['plugin', 'disable', 'test'], 32), (['plugin', 'run', 'test', 'run'], 33)]
     for words, action in actions:
         fixture = {'text': 'visible', 'value': 48} if action == 12 else {'text': '{"escaped":"a\\b\\f\\u007f","list":[1,true,null]}'} if action == 28 else {}
@@ -142,6 +145,8 @@ def check(binary, root):
                 assert parsed['actions'] == ['run']
             if words[:2] == ['plugin', 'list']:
                 assert len(parsed) == 2
+            if words[:2] == ['client', 'list'] and fixture.get('second'):
+                assert [entry['id'] for entry in parsed] == [7, 8], parsed
         count += 1
     return count
 

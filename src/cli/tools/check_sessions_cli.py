@@ -156,6 +156,25 @@ class Stack:
         self.results[name] = result
         return json.loads(result['stdout']) if '--json' in words and result['stdout'] else result['stdout']
 
+    def answer(self, name, reply, *words, status=0):
+        """Runs telar with a terminal as stdin, where a person types `reply` at its prompt."""
+        args = [str(self.binary), *map(str, words), '--socket', str(self.socket)]
+        primary, secondary = os.openpty()
+        try:
+            process = subprocess.Popen(args, env=self.env, cwd=self.repo, stdin=secondary, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            os.close(secondary)
+            secondary = None
+            os.write(primary, reply + b'\n')
+            stdout, stderr = process.communicate(timeout=45)
+        finally:
+            if secondary is not None:
+                os.close(secondary)
+            os.close(primary)
+        result = {'status': process.returncode, 'stdout': stdout.decode('utf-8', 'backslashreplace'), 'stderr': stderr.decode('utf-8', 'backslashreplace')}
+        assert result['status'] == status, (name, words, result)
+        self.results[name] = result
+        return result
+
     def start(self):
         self.git('init', '-b', 'main')
         (self.repo / 'file.txt').write_text('base\n')
@@ -214,6 +233,11 @@ class Stack:
             assert time.monotonic() < deadline, ('workspace Git probe did not settle', observed)
             time.sleep(.05)
         self.call('workspace-list', 'workspace', 'list', '--json')
+        extra = self.call('workspace-create-second', 'workspace', 'create', '--directory', str(self.repo), '--name', 'Second', '--json')
+        listed = self.call('workspace-list-many', 'workspace', 'list', '--json')
+        assert sorted(entry['workspace_id'] for entry in listed) == sorted([created['workspace_id'], extra['workspace_id']]), listed
+        assert all(set(entry) >= {'workspace_id', 'name', 'path', 'tab_count', 'branch', 'dirty'} for entry in listed), listed
+        self.call('workspace-close-second', 'tab', 'close', str(extra['tab_id']), '--workspace', str(extra['workspace_id']), '--json')
         self.call('workspace-get', 'workspace', 'get', wid, '--json')
         self.call('workspace-get-text', 'workspace', 'get', wid)
         self.call('workspace-rename', 'workspace', 'rename', wid, 'Quoted "name" ñ', '--json')
@@ -266,9 +290,14 @@ class Stack:
         self.call('worktree-diff-stat', 'worktree', 'diff', 'fix/test', '--stat')
         self.call('worktree-remove-dirty', 'worktree', 'remove', 'fix/test', status=1)
         self.call('worktree-remove-force-no-tty', 'worktree', 'remove', 'fix/test', '--force', status=1)
+        for index, reply in enumerate((b'n', b'', b'nope')):
+            self.answer(f'worktree-remove-force-declined-{index}', reply, 'worktree', 'remove', 'fix/test', '--force', status=1)
+            assert (checkout / 'file.txt').read_text() == 'base\nchanged\n'
         self.git('checkout', '--', 'file.txt', cwd=checkout)
-        self.call('worktree-resolve', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--json')
-        self.call('worktree-resolve-selected', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--workspace', wid)
+        resolved = self.call('worktree-resolve', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--json')
+        assert resolved == {'repository': 'example.invalid/team/repo', 'path': str(self.repo)}, resolved
+        selected = self.call('worktree-resolve-selected', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--workspace', wid)
+        assert selected == str(self.repo) + '\n', selected
         self.call('worktree-resolve-wrong', 'worktree', 'resolve', '--repository', 'other/repo', '--workspace', wid, status=1)
         self.call('worktree-resolve-missing', 'worktree', 'resolve', '--repository', 'other/repo', status=1)
         self.call('worktree-remove', 'worktree', 'remove', 'Fix task', '--delete-branch', '--json')
@@ -281,11 +310,29 @@ class Stack:
         self.git('commit', '-qm', 'Unmerged work', cwd=other_path)
         self.call('worktree-delete-unmerged-no-tty', 'worktree', 'remove', 'unmerged', '--delete-branch', status=1)
         assert other_path.is_dir()
+        self.answer('worktree-delete-unmerged-declined', b'N', 'worktree', 'remove', 'unmerged', '--delete-branch', status=1)
+        assert other_path.is_dir() and self.git('branch', '--list', 'unmerged').strip()
         self.call('worktree-remove-keep-branch', 'worktree', 'remove', 'unmerged', '--json')
         assert self.git('branch', '--list', 'unmerged').strip()
         self.call('worktree-list-empty', 'worktree', 'list', '--json')
         self.call('worktree-list-empty-text', 'worktree', 'list')
         self.git('worktree', 'add', '-qb', 'manual', str(self.root / 'manual'))
+        # Two tracked worktrees whose titles differ only in case, beside the untracked one.
+        titled = [self.call(f'worktree-create-titled-{branch}', 'worktree', 'create', branch, '--title', title, '--json') for branch, title in (('titled-a', 'Fix'), ('titled-b', 'fix'))]
+        listed = self.call('worktree-list-many', 'worktree', 'list', '--json')
+        assert sorted((entry['branch'], entry['origin']) for entry in listed if entry['worktree_id'] is not None) == [('titled-a', 'telar'), ('titled-b', 'telar')], listed
+        assert [(entry['branch'], entry['origin']) for entry in listed if entry['worktree_id'] is None] == [('manual', 'untracked')], listed
+        self.call('worktree-remove-ambiguous-title', 'worktree', 'remove', 'fix', status=1)
+        assert all(Path(entry['path']).is_dir() for entry in titled)
+        self.call('worktree-remove-titled-a', 'worktree', 'remove', 'titled-a')
+        self.call('worktree-remove-titled-b', 'worktree', 'remove', 'titled-b')
+        # A person who confirms at the terminal discards the changes and the unmerged commits.
+        doomed = Path(self.call('worktree-create-confirmed', 'worktree', 'create', 'confirmed', '--json')['path'])
+        (doomed / 'file.txt').write_text('discarded\n')
+        self.git('commit', '-qam', 'Unmerged and discarded', cwd=doomed)
+        (doomed / 'file.txt').write_text('uncommitted\n')
+        self.answer('worktree-remove-confirmed', b'y\nyes', 'worktree', 'remove', 'confirmed', '--force', '--delete-branch', '--json')
+        assert not doomed.exists() and not self.git('branch', '--list', 'confirmed').strip()
         self.call('worktree-list-untracked', 'worktree', 'list', '--json')
         self.call('worktree-list-untracked-text', 'worktree', 'list')
         self.call('worktree-adopt-diff', 'worktree', 'diff', 'manual')
