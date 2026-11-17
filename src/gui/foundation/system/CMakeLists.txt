@@ -12,3 +12,8 @@ telar_add_domain(gui foundation/system
   LINUX_SOURCES
     system-background_effect.cppm
   DEPS foundation/core foundation/text)
+
+if(BUILD_TESTING)
+  # The window lease, managed directories and peer credentials compile into gui-posix.
+  telar_add_domain_tests(foundation/system LINK gui-posix TIMEOUT 30)
+endif()

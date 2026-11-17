@@ -25,9 +25,6 @@ telar_add_test(gui-attachment-marker-test SOURCES attachment_marker_test.cpp LIB
 telar_add_test(gui-attachment-layout-test SOURCES attachment_layout_test.cpp LIBRARIES gui-foundation-model gui-foundation-core
   TEST gui-attachment-layout LABELS gui.foundation.model)
 
-telar_add_test(gui-host-commands-test SOURCES host_commands_test.cpp LIBRARIES gui-foundation-system gui-platform
-  TEST gui-host-commands LABELS gui.platform)
-
 telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-features-activity gui-features-workbench gui-features-window
   TEST gui-display-metrics LABELS gui.features.window)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
@@ -52,18 +49,6 @@ telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/
   CHECKS lint lifetime blank_lines)
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
   CHECKS lint lifetime blank_lines)
-telar_add_test(gui-awake-clock-test SOURCES awake_clock_test.cpp LIBRARIES gui-foundation-system gui-platform
-  TEST gui-awake-clock LABELS gui.platform TIMEOUT 30)
-telar_add_test(gui-wall-clock-test NO_TEST SOURCES wall_clock_test.cpp LIBRARIES gui-foundation-system gui-platform)
-function(gui_add_wall_clock_test name zone offset)
-  telar_add_test(${name} COMMAND "${CMAKE_COMMAND}" -E env "TZ=${zone}" $<TARGET_FILE:gui-wall-clock-test> "${offset}"
-    LABELS gui.platform TIMEOUT 30)
-endfunction()
-gui_add_wall_clock_test(gui-wall-clock UTC0 0)
-gui_add_wall_clock_test(gui-wall-clock-nepal NPT-5:45 345)
-gui_add_wall_clock_test(gui-wall-clock-newfoundland NST3:30 -210)
-gui_add_wall_clock_test(gui-wall-clock-line-islands LINT-14 840)
-gui_add_wall_clock_test(gui-wall-clock-baker-island IDLW12 -720)
 telar_add_test(gui-machine-chrome-test SOURCES machine_chrome_test.cpp LIBRARIES gui-foundation-core gui-features-machines
   TEST gui-machine-chrome LABELS gui.features.machines)
 target_compile_options(gui-machine-chrome-test PRIVATE -ffp-contract=off)
@@ -112,8 +97,6 @@ telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-f
   TEST gui-key-encoder LABELS gui.foundation.keys TIMEOUT 30)
 telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-features-terminal-copy_mode gui-test-fixtures
   TEST gui-copy-mode LABELS gui.features.terminal.copy_mode TIMEOUT 30)
-telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
-  TEST gui-directory-completion LABELS gui.foundation.system TIMEOUT 30)
 telar_add_test(gui-links-test SOURCES links_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-links gui-test-fixtures
   TEST gui-features-terminal-links LABELS gui.features.terminal.links TIMEOUT 30)
 telar_add_test(gui-file-links-test SOURCES file_links_test.cpp LIBRARIES gui-features-terminal-links
@@ -128,9 +111,6 @@ telar_add_test(gui-workbench-layout-test SOURCES layout_test.cpp LIBRARIES gui-f
   TEST LABELS gui.features.workbench TIMEOUT 30)
 telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-graphics gui-test-fixtures
   TEST gui-features-terminal-graphics LABELS gui.features.terminal.graphics TIMEOUT 30)
-
-telar_add_test(gui-platform-test SOURCES platform_test.cpp LIBRARIES gui-foundation-system gui-posix gui-platform
-  TEST gui-platform LABELS gui.platform TIMEOUT 30)
 
 if(TELAR_GUI_NATIVE)
   telar_add_test(gui-test-font-fixture STATIC SOURCES font_fixture/font_fixture.cppm LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native gui-test-fixtures)

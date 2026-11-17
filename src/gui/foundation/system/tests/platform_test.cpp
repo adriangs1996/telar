@@ -13,6 +13,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
+import telar.testing;
 import telar.platform.primitives;
 import telar.gui.foundation.system;
 import telar.platform.net;
@@ -20,11 +21,7 @@ import telar.platform.fs;
 
 namespace {
 
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
+  using telar::testing::check;
 
   void windowLease() {
     using telar::gui::system::WindowLease;
@@ -36,19 +33,19 @@ namespace {
       WindowLease first{endpoint};
       WindowLease second{endpoint};
 
-      require(first.slot() == 0 && second.slot() == 1, "live windows must hold separate kernel leases");
+      check(first.slot() == 0 && second.slot() == 1, "live windows must hold separate kernel leases");
     }
 
     {
       WindowLease reopened{endpoint};
 
-      require(reopened.slot() == 0, "closing a window must make its stable identity available for restoration");
+      check(reopened.slot() == 0, "closing a window must make its stable identity available for restoration");
     }
 
     const auto lock = directory_path / "runtime.sock.gui-0.lock";
     constexpr mode_t world_writable_file = 0666;
 
-    require(::chmod(lock.c_str(), world_writable_file) == 0, "prepare unsafe lock fixture");
+    check(::chmod(lock.c_str(), world_writable_file) == 0, "prepare unsafe lock fixture");
     bool rejected = false;
 
     try {
@@ -57,7 +54,7 @@ namespace {
       rejected = true;
     }
 
-    require(rejected, "world-writable lock files must be rejected");
+    check(rejected, "world-writable lock files must be rejected");
     std::filesystem::remove(lock);
     std::filesystem::create_symlink(directory_path / "runtime.sock.gui-1.lock", lock);
     rejected = false;
@@ -67,11 +64,11 @@ namespace {
       rejected = true;
     }
 
-    require(rejected, "window leases must never follow lock file symlinks");
+    check(rejected, "window leases must never follow lock file symlinks");
     std::filesystem::remove(lock);
     constexpr mode_t world_writable_directory = 0777;
 
-    require(::chmod(directory_path.c_str(), world_writable_directory) == 0, "prepare unsafe endpoint fixture");
+    check(::chmod(directory_path.c_str(), world_writable_directory) == 0, "prepare unsafe endpoint fixture");
     rejected = false;
     try {
       WindowLease unsafe{endpoint};
@@ -79,10 +76,10 @@ namespace {
       rejected = true;
     }
 
-    require(rejected, "untrusted endpoint directories must be rejected");
+    check(rejected, "untrusted endpoint directories must be rejected");
     constexpr mode_t owner_only_directory = 0700;
 
-    require(::chmod(directory_path.c_str(), owner_only_directory) == 0, "restore endpoint directory permissions");
+    check(::chmod(directory_path.c_str(), owner_only_directory) == 0, "restore endpoint directory permissions");
   }
 
   void managedDirectorySafety() {
@@ -93,13 +90,13 @@ namespace {
     telar::gui::system::prepareManagedDirectory(managed);
     constexpr mode_t shared_mode = 0777;
 
-    require(::chmod(managed.c_str(), shared_mode) == 0, "prepare owned permissive directory");
+    check(::chmod(managed.c_str(), shared_mode) == 0, "prepare owned permissive directory");
     telar::gui::system::prepareManagedDirectory(managed);
     struct stat state{};
     constexpr mode_t permissions = 0777;
     constexpr mode_t owner_only = 0700;
 
-    require(::stat(managed.c_str(), &state) == 0 && (state.st_mode & permissions) == owner_only, "managed runtime directories must be restricted owner-only");
+    check(::stat(managed.c_str(), &state) == 0 && (state.st_mode & permissions) == owner_only, "managed runtime directories must be restricted owner-only");
     const auto link = base / "link";
 
     std::filesystem::create_directory_symlink(managed, link);
@@ -111,7 +108,7 @@ namespace {
       rejected = true;
     }
 
-    require(rejected, "managed directory preparation must never follow a final symlink");
+    check(rejected, "managed directory preparation must never follow a final symlink");
     rejected = false;
     const auto missing = base / "absent";
 
@@ -121,19 +118,19 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && !std::filesystem::exists(missing), "a missing environment base must fail without creating ancestors");
+    check(rejected && !std::filesystem::exists(missing), "a missing environment base must fail without creating ancestors");
   }
 
   void peerCredentials() {
     std::array<int, 2> descriptors{};
 
-    require(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) == 0, "create peer credential fixture");
+    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) == 0, "create peer credential fixture");
     const auto valid = telar::gui::system::isCurrentUser(descriptors[0]);
 
     ::close(descriptors[0]);
     ::close(descriptors[1]);
-    require(valid, "local peers must authenticate through kernel credentials");
-    require(!telar::gui::system::isCurrentUser(-1), "invalid descriptors must fail authentication");
+    check(valid, "local peers must authenticate through kernel credentials");
+    check(!telar::gui::system::isCurrentUser(-1), "invalid descriptors must fail authentication");
   }
 
   void temporaryDirectoryCleanup() {
@@ -147,21 +144,12 @@ namespace {
       std::filesystem::create_directories(path / "visible" / "nested");
     }
 
-    require(!std::filesystem::exists(path), "shared temporary directories must remove hidden and nested entries on both platforms");
+    check(!std::filesystem::exists(path), "shared temporary directories must remove hidden and nested entries on both platforms");
   }
 
-}
+  const telar::testing::Case case_window_lease{"platform.window_lease", windowLease};
+  const telar::testing::Case case_peer_credentials{"platform.peer_credentials", peerCredentials};
+  const telar::testing::Case case_managed_directory_safety{"platform.managed_directory_safety", managedDirectorySafety};
+  const telar::testing::Case case_temporary_directory_cleanup{"platform.temporary_directory_cleanup", temporaryDirectoryCleanup};
 
-int main() {
-  try {
-    windowLease();
-    peerCredentials();
-    managedDirectorySafety();
-    temporaryDirectoryCleanup();
-    std::puts("gui-platform: passed");
-  } catch (const std::exception& error) {
-    std::cerr << "gui-platform: " << error.what() << '\n';
-
-    return 1;
-  }
 }
