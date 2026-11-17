@@ -65,11 +65,11 @@ import telar.runtime.transport.connection;
 import telar.runtime.vocabulary.traffic;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.runtime.runtime_telemetry;
+#endif
 
 namespace {
 
   using telar::testing::check;
-#endif
 
   using namespace telar;
   using namespace telar::runtime;

@@ -59,11 +59,11 @@ import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.runtime.runtime_telemetry;
+#endif
 
 namespace {
 
   using telar::testing::check;
-#endif
 
   using namespace telar;
   using namespace telar::runtime;
