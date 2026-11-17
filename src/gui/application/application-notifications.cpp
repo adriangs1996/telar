@@ -78,7 +78,7 @@ namespace telar::gui::application::notifications {
 
     switch (target->kind) {
     case NotificationTarget::Kind::pane:
-      session.focusPane(target->id);
+      workbench::focusPane(session, target->id);
       break;
     case NotificationTarget::Kind::tab: {
       const auto& tabs = session.tabs();
@@ -86,11 +86,11 @@ namespace telar::gui::application::notifications {
         return candidate->location.tab_id == target->id;
       });
       if (tab != tabs.end()) {
-        session.selectTab((*tab)->location);
+        workbench::selectTab(session, (*tab)->location);
       }
     } break;
     case NotificationTarget::Kind::workspace:
-      session.selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = target->id});
+      workbench::selectWorkspace(session, {.kind = WorkspaceLocation::Kind::workspace, .id = target->id});
       break;
     case NotificationTarget::Kind::none:
       break;

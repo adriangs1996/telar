@@ -102,7 +102,7 @@ namespace telar::gui::qt {
       return {};
     }
 
-    const auto area = session.workbenchGeometry().pixels(tab->layout.reservedArea());
+    const auto area = application::workbench::geometry(session).pixels(tab->layout.reservedArea());
     const auto density = display_.density;
 
     return {{QStringLiteral("x"), area.x / density}, {QStringLiteral("y"), area.y / density}, {QStringLiteral("width"), area.width / density}, {QStringLiteral("height"), area.height / density}};
@@ -110,7 +110,7 @@ namespace telar::gui::qt {
 
   QVariantMap AttachmentsController::modalGeometry() const {
     const auto density = display_.density;
-    const auto& host = store_.session().workbenchGeometry();
+    const auto& host = application::workbench::geometry(store_.session());
     const auto terminal = display_.geometry.terminal;
     const auto global = [&](Rect area) {
       area.x += terminal.x;
@@ -138,7 +138,7 @@ namespace telar::gui::qt {
     const auto* const tab = session.activeTab();
     const auto shelf = tab != nullptr && shelf_.hasVisibleItems();
     const Inputs inputs{
-        .host = session.workbenchGeometry(),
+        .host = application::workbench::geometry(session),
         .terminal = display_.geometry.terminal,
         .reserved = shelf ? tab->layout.reservedArea() : CellRectangle{},
         .density = display_.density,
@@ -184,7 +184,7 @@ namespace telar::gui::qt {
       reservation = PaneBottomReservation{.pane_id = prompt->target.pane_id};
     }
 
-    store_.client(application::machines::Machines::local_slot).session.setAttachmentReservation(reservation);
+    application::workbench::reserveBottom(store_.client(application::machines::Machines::local_slot).session, reservation);
   }
 
   bool AttachmentsController::interceptKey(QKeyEvent& event) {

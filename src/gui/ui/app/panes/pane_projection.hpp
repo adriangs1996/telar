@@ -24,7 +24,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 
@@ -84,7 +83,7 @@ namespace telar::gui::qt {
         agent_record = {
             {QStringLiteral("statusCode"), static_cast<int>(agent.status)},
             {QStringLiteral("blockedReason"), static_cast<int>(agent.blocked_reason)},
-            {QStringLiteral("statusColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(PaneStatusChip::color(agent.status))])},
+            {QStringLiteral("statusColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(application::workbench::PaneStatusChip::color(agent.status))])},
             {QStringLiteral("statusClock"), agent.status_clock.observed() ? statusAgeValue(agent.status_clock.interval()) : QVariant{}},
             {QStringLiteral("age"), agent.status_age_s},
         };
@@ -101,7 +100,7 @@ namespace telar::gui::qt {
     const std::string_view application = pane.foreground.empty() ? std::string_view{"shell"} : std::string_view{pane.foreground};
     const auto mark = application::activity::ApplicationMark::forApplication(application);
     const auto safe_context = application::window::WindowTitle::render("{pane_title}", {.workspace = {}, .tab = {}, .pane_title = context, .hostname = {}});
-    const auto progress_color = PaneProgressPresentation::color(pane.progress_state);
+    const auto progress_color = application::workbench::PaneProgressPresentation::color(pane.progress_state);
 
     return {
         {QStringLiteral("index"), QString::number(index)},
@@ -119,7 +118,7 @@ namespace telar::gui::qt {
         {QStringLiteral("activityKind"), static_cast<int>(pane.progress_state == PaneProgressState::remove ? application::activity::TabActivity::Kind::none : application::activity::TabActivity::Kind::progress)},
         {QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(progress_color)])},
         {QStringLiteral("progressSample"), progressValue({.pane_id = pane.id, .attachment = pane.attachment_generation, .state = pane.progress_state, .percent = pane.progress_percent})},
-        {QStringLiteral("progressText"), toQString(PaneProgressPresentation::text(pane.progress_state, pane.progress_percent.value_or(0)).view())},
+        {QStringLiteral("progressText"), toQString(application::workbench::PaneProgressPresentation::text(pane.progress_state, pane.progress_percent.value_or(0)).view())},
     };
   }
 

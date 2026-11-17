@@ -132,7 +132,7 @@ namespace telar::gui::qt {
 
     for (auto& client : store_.clients()) {
       if (client) {
-        (*client)->session.setWorkbenchGeometry(workbench);
+        application::workbench::setGeometry((*client)->session, workbench);
         (*client)->session.setHostColumns(static_cast<std::uint16_t>(columns));
       }
     }

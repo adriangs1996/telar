@@ -36,12 +36,11 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.layout.snapshots;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
-import telar.gui.presentation.display_metrics;
+import telar.gui.features.workbench;
 import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.history;
@@ -53,6 +52,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::workbench;
   using namespace telar::gui::test;
 
   void sessionLifecycle() {
@@ -76,7 +76,7 @@ namespace {
 
       require(input.bytes.size() == input_text.size() && input.bytes[0] == 'h', "input must preserve bytes");
 
-      client.split(ClientLayoutAxis::vertical);
+      application::workbench::split(client, ClientLayoutAxis::vertical);
       const auto split = transport.last<CreatePane>();
 
       require(split.launch.cwd_source == 1, "split must inherit source pane cwd");
@@ -84,12 +84,12 @@ namespace {
       require(client.activeTab()->layout.nodes().size() == 3, "split must retain a binary layout");
       require(std::get<ClientLayoutSplit>(client.activeTab()->layout.nodes().front()).axis == ClientLayoutAxis::vertical, "split axis must survive the response");
 
-      client.closePane(2);
+      application::workbench::closePane(client, 2);
       deliver(client, PaneExited{.pane_id = 2, .kind = ExitKind::exited, .value = 0});
       require(client.activeTab()->layout.nodes().size() == 1 && client.focusedPane()->id == 1, "closing a pane must collapse its split and restore focus");
       require(client.findPane(2) == nullptr, "exited panes must release retained screens and graphics");
 
-      client.createTab();
+      application::workbench::createTab(client);
       const auto created = transport.last<CreateTab>();
       const TabLocation second{.workspace = created.workspace, .tab_id = 2};
 
@@ -97,20 +97,20 @@ namespace {
       require(client.focusedPane()->id == 3 && !client.findPane(1)->attached, "switching tabs must detach hidden panes");
       require(!transport.detaching.empty() && transport.detaching.back() == 1, "input owners must release physical keys before a pane detaches");
 
-      client.selectTab({.workspace = created.workspace, .tab_id = 1});
+      application::workbench::selectTab(client, {.workspace = created.workspace, .tab_id = 1});
       const auto attach = transport.last<OpenPane>();
 
       require(attach.target.kind == PaneTarget::Kind::pane && attach.target.id == 1 && !attach.launch, "reattachment must not spawn a process");
       deliver(client, PaneOpened{.request_id = attach.request_id, .pane_id = 1, .location = {.workspace = created.workspace, .tab_id = 1}, .created = false, .pane_generation = 1});
 
-      client.selectTabOffset(-1);
+      application::workbench::selectTabBeside(client, -1);
       require(client.activeTab()->location.tab_id == 2, "previous-tab must wrap in runtime tab order");
       const auto second_attach = transport.last<OpenPane>();
 
       deliver(client, PaneOpened{.request_id = second_attach.request_id, .pane_id = 3, .location = second, .created = false, .pane_generation = 1});
-      client.selectTabOffset(1);
+      application::workbench::selectTabBeside(client, 1);
       require(client.activeTab()->location.tab_id == 1, "next-tab must wrap in runtime tab order");
-      client.selectTabIndex(0);
+      application::workbench::selectTabAt(client, 0);
       require(client.activeTab()->location.tab_id == 1, "indexed tab selection must use runtime tab positions");
 
       client.disconnected();
@@ -218,7 +218,7 @@ namespace {
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "renamed", .tabs = tabs});
       require(application::window::title(client, "host").view() == "renamed/manual/compiler@host", "manual tab labels and renamed workspaces must replace automatic title tokens");
-      client.split(ClientLayoutAxis::horizontal);
+      application::workbench::split(client, ClientLayoutAxis::horizontal);
       const auto request = transport.last<CreatePane>();
 
       deliver(client, PaneOpened{.request_id = request.request_id, .pane_id = 2, .location = location, .created = true, .pane_generation = 1});
@@ -273,12 +273,12 @@ namespace {
     openFirstPane(client, transport);
     const auto original = client.activeTab()->location;
 
-    client.createTab();
+    application::workbench::createTab(client);
     const auto create = transport.last<CreateTab>();
     const TabLocation second{.workspace = create.workspace, .tab_id = 2};
 
     deliver(client, TabCreated{.request_id = create.request_id, .location = second, .position = 1, .root_pane_id = 2, .pane_generation = 1});
-    client.selectTab(original);
+    application::workbench::selectTab(client, original);
     const auto attach = transport.last<OpenPane>();
     const auto before = transport.count(ClientTag::pane_resize);
     auto latest = attach.size;
@@ -355,7 +355,7 @@ namespace {
     const auto split = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
-    client.focusPane(1);
+    application::workbench::focusPane(client, 1);
     deliver(client, PaneFocusCommand{.requester = {.id = 1, .generation = 1}, .request_id = 3, .pane_id = 1, .pane_generation = 1, .direction = PaneDirection::down});
     require(client.focusedPane()->id == 2 && transport.last<CompletePaneFocus>().outcome == PaneFocusOutcome::focused, "directional focus must choose the neighboring split");
 
@@ -440,7 +440,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::vertical);
+    application::workbench::split(client, ClientLayoutAxis::vertical);
     const auto split = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
@@ -525,14 +525,14 @@ namespace {
     Transport transport;
     TestSession client{memory, transport};
 
-    client.navigateDirection(PaneDirection::left);
+    application::workbench::navigate(client, PaneDirection::left);
     require(transport.sent.empty(), "navigation without a focused pane must have no effects");
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto split = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
-    client.navigateDirection(PaneDirection::left);
+    application::workbench::navigate(client, PaneDirection::left);
     require(client.focusedPane()->id == 1, "shell navigation must move to the neighboring split");
     deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
     FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = 1}};
@@ -555,7 +555,7 @@ namespace {
     for (const auto& key : expected) {
       const auto first_message = transport.sent.size();
 
-      client.navigateDirection(key.direction);
+      application::workbench::navigate(client, key.direction);
       require(client.focusedPane()->id == 1 && transport.inputSince(first_message) == key.legacy, "Neovim navigation must forward the matching control key without changing panes");
     }
 
@@ -565,15 +565,15 @@ namespace {
     for (const auto& key : expected) {
       const auto first_message = transport.sent.size();
 
-      client.navigateDirection(key.direction);
+      application::workbench::navigate(client, key.direction);
       require(client.focusedPane()->id == 1 && transport.inputSince(first_message) == key.kitty, "Neovim navigation must use the pane's current Kitty protocol");
     }
 
-    client.focusDirection(PaneDirection::right);
+    application::workbench::focusToward(client, PaneDirection::right);
     require(client.focusedPane()->id == 2, "explicit focus must remain available while Neovim is foreground");
-    client.focusPane(1);
+    application::workbench::focusPane(client, 1);
     deliver(client, PaneForeground{.pane_id = 1, .name = "Nvim"});
-    client.navigateDirection(PaneDirection::right);
+    application::workbench::navigate(client, PaneDirection::right);
     require(client.focusedPane()->id == 2, "editor detection must preserve the original case-sensitive executable name");
   }
 
@@ -661,7 +661,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::vertical);
+    application::workbench::split(client, ClientLayoutAxis::vertical);
     const auto split = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
@@ -682,8 +682,8 @@ namespace {
     require(preset.focused_pane == 2 && !preset.fullscreen, "export must capture the tab's focus and fullscreen state");
 
     client.activeTab()->layout.setSplitRatio({.node_index = 0, .ratio = PaneLayout::ratio_half});
-    client.focusPane(1);
-    client.toggleFullscreen();
+    application::workbench::focusPane(client, 1);
+    application::workbench::toggleFullscreen(client);
     client.setSidebarVisible(false);
     command.request_id = 2;
     command.action = ClientAction::layout_apply;
@@ -715,7 +715,7 @@ namespace {
     deliver(client, command);
     const std::string token{transport.last<CompleteClientCommand>().text};
 
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto split = transport.last<CreatePane>();
 
     command.request_id = 2;
@@ -1130,12 +1130,12 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.createTab();
+    application::workbench::createTab(client);
     const auto created = transport.last<CreateTab>();
     const TabLocation second{.workspace = created.workspace, .tab_id = 2};
 
     deliver(client, TabCreated{.request_id = created.request_id, .location = second, .position = 1, .label = "Second", .root_pane_id = 2, .pane_generation = 1});
-    client.selectTab({.workspace = created.workspace, .tab_id = 1});
+    application::workbench::selectTab(client, {.workspace = created.workspace, .tab_id = 1});
     const auto late_attach = transport.last<OpenPane>();
     const std::array<TabDescriptor, 1> tabs{{{.tab_id = 2, .position = 0, .pane_count = 1, .label = "Second"}}};
 
@@ -1156,8 +1156,8 @@ namespace {
     const auto original = client.viewVersion();
     const auto original_chrome = client.chromeRevision();
 
-    client.focusPane(1);
-    client.selectTab(client.activeTab()->location);
+    application::workbench::focusPane(client, 1);
+    application::workbench::selectTab(client, client.activeTab()->location);
     deliverSingleCell(client, {.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = 1}});
     deliverSingleCell(client, {.pane_id = 1, .frame_id = 2, .scroll = {.total_rows = 1}});
     deliver(client, PaneTitle{.pane_id = 1, .title = "Changed title"});
@@ -1193,15 +1193,15 @@ namespace {
     client.configure(configuration);
     require(client.viewVersion().configuration > before_configuration.configuration, "adopting a configuration must invalidate links even when its geometry matches");
 
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto split = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
     const auto before_focus = client.viewVersion();
 
-    client.focusPane(1);
+    application::workbench::focusPane(client, 1);
     require(client.viewVersion().panes > before_focus.panes, "changing pane focus must invalidate armed links");
-    client.focusPane(2);
+    application::workbench::focusPane(client, 2);
     require(client.viewVersion().panes > before_focus.panes + 1, "restoring focus must not restore its former gesture revision");
   }
 

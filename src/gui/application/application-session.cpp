@@ -107,9 +107,7 @@ namespace telar::gui::application {
     active_tab_.reset();
     left_machine_.reset();
     deferred_tab_.reset();
-    pending_layout_restore_.reset();
-    navigation_history_.clear();
-    saved_layouts_.clear();
+    features::workbench::clear(workbench_);
     initial_open_pending_ = false;
     workspaces_.resetSource();
     ++view_version_.workspace;
@@ -165,7 +163,7 @@ namespace telar::gui::application {
     const auto bookmark = machineBookmark();
 
     if (ready_) {
-      retainLayout();
+      workbench::retainLayout(*this);
       for (auto& pane : panes_) {
         if (pane->attached || pane->attaching) {
           prepareDetach(pane->id);
@@ -457,7 +455,7 @@ namespace telar::gui::application {
     }
 
     configuration_.sidebar_visible = visible;
-    retainLayout();
+    workbench::retainLayout(*this);
   }
 
   void Session::setSidebarWidth(float width) {
@@ -482,7 +480,7 @@ namespace telar::gui::application {
     }
 
     workspace_list_collapsed_ = collapsed;
-    retainLayout();
+    workbench::retainLayout(*this);
   }
 
   const ProxyStatus& Session::proxyStatus() const noexcept {
@@ -609,7 +607,7 @@ namespace telar::gui::application {
           tab->loading = false;
         }
       } else if (request->kind == RequestKind::split) {
-        recoverSplit(*request);
+        workbench::recoverSplit(*this, request->location, request->pane_id);
       }
     }
 
@@ -634,7 +632,7 @@ namespace telar::gui::application {
       }
 
       synchronizeAttachments();
-      retainLayout();
+      workbench::retainLayout(*this);
     }
 
     return Change::model;

@@ -141,7 +141,7 @@ import telar.gui.tests.json_fixture;
 import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.features.terminal.graphics;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.workbench;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.plugins;
@@ -2276,7 +2276,7 @@ return {api_version = 2, client = {
         QCOMPARE(surface->size(), frame->size());
         // A pane surface and its frame share one radius, the pane decoration's.
         QCOMPARE(surface->property("radius").toReal(), frame->property("radius").toReal());
-        QCOMPARE(frame->property("radius").toReal(), telar::gui::PaneDecorationGeometry::frame_radius * client_->display()->chromeRatio());
+        QCOMPARE(frame->property("radius").toReal(), telar::gui::features::workbench::PaneDecorationGeometry::frame_radius * client_->display()->chromeRatio());
       }
 
       // Focus is a full accent frame on one pane; the others keep a faint hairline.
@@ -5400,7 +5400,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
       const auto source_id = firstPane()->id;
-      const telar::gui::PaneAttentionKey attachment{.pane_id = source_id, .attachment_generation = firstPane()->attachment_generation};
+      const telar::gui::features::workbench::PaneAttentionKey attachment{.pane_id = source_id, .attachment_generation = firstPane()->attachment_generation};
       const QPointer<TerminalItem> source_terminal{terminalIn(window_->contentItem())};
 
       QVERIFY(source_terminal != nullptr);
@@ -5432,7 +5432,7 @@ return {api_version=2, client={keybindings={
       };
 
       QTRY_VERIFY2_WITH_TIMEOUT(rings().size() == 1, qPrintable(screenText(client_->pane(source_id)->screen)), runtime_wait_ms);
-      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::PaneAttentionKey{}), attachment);
+      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::features::workbench::PaneAttentionKey{}), attachment);
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("chrome-attention"));
       const QPointer<QQuickItem> retired{rings().front()};
@@ -5444,7 +5444,7 @@ return {api_version=2, client={keybindings={
       captureArtifact(QStringLiteral("question-focused"));
       client_->commands()->execute(window_actions::Action::focus_pane, QString::number(other_id));
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
-      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::PaneAttentionKey{}), attachment);
+      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::features::workbench::PaneAttentionKey{}), attachment);
 
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("question-unfocused"));

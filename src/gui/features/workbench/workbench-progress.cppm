@@ -1,17 +1,17 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.presentation.display_metrics;
+// The progress a pane reports, as its bar moves to each report and turns while it is unknown.
+export module telar.gui.features.workbench:progress;
 
 import std;
 
 import telar.gui.foundation.core;
-
 import telar.wire.vocabulary;
 
 // Interface: presentation/progress_animation.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     struct ProgressAnimation {
       static constexpr std::uint64_t period_ns = 1'400'000'000;
@@ -41,7 +41,7 @@ export {
 
 // Interface: presentation/progress_motion.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     struct ProgressSample {
       static constexpr Byte maximum_percent = 100;

@@ -255,7 +255,7 @@ namespace {
 
     require(application::terminal::graphics::resumeDeadline(client) == 3 * window, "the next exhausted window must double its delay");
     Clock::now_ns = 2 * window;
-    client.focusPane(1);
+    application::workbench::focusPane(client, 1);
     require(transport.count(ClientTag::request_graphics_snapshot) == last_retry_revision && !application::terminal::graphics::resumeDeadline(client), "focusing a pane must accelerate a doubled wait after one healthy window");
   }
 

@@ -31,7 +31,6 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.foundation.system;
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -96,7 +95,7 @@ namespace telar::gui::qt {
     kind_ = kind >= static_cast<int>(application::activity::TabActivity::Kind::none) && kind <= static_cast<int>(application::activity::TabActivity::Kind::progress) ? static_cast<application::activity::TabActivity::Kind>(kind) : application::activity::TabActivity::Kind::none;
     const auto value = record.value(QStringLiteral("progressSample"));
 
-    progress_ = progressSample(value).value_or(ProgressSample{});
+    progress_ = progressSample(value).value_or(application::workbench::ProgressSample{});
     if (kind_ != application::activity::TabActivity::Kind::progress) {
       motion_ = {};
     }
@@ -145,7 +144,7 @@ namespace telar::gui::qt {
 
   std::optional<std::uint64_t> NativeTabActivity::deadline(std::uint64_t now_ns) const noexcept {
     if (kind_ == application::activity::TabActivity::Kind::spinner) {
-      return ProgressAnimation::nextStep(now_ns, application::activity::TabActivity::spinner_interval_ns);
+      return application::workbench::ProgressAnimation::nextStep(now_ns, application::activity::TabActivity::spinner_interval_ns);
     }
 
     if (kind_ != application::activity::TabActivity::Kind::progress) {
@@ -179,7 +178,7 @@ namespace telar::gui::qt {
     } else if (kind_ == application::activity::TabActivity::Kind::progress) {
       fraction = motion_.sample(progress_, now_ns);
       if (progress_.state == PaneProgressState::indeterminate) {
-        const auto frame = ProgressAnimation::indeterminate<core::ProgressCosine>(now_ns);
+        const auto frame = application::workbench::ProgressAnimation::indeterminate<core::ProgressCosine>(now_ns);
 
         fraction = frame.fraction;
         turns = frame.turns;

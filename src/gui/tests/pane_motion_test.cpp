@@ -18,12 +18,14 @@ static_assert(true);
 #include <optional>
 #include <span>
 
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.workbench;
 import telar.gui.foundation.core;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::workbench;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

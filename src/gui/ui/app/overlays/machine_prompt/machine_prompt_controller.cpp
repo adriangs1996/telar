@@ -139,7 +139,7 @@ namespace telar::gui::qt {
   QVariantMap MachinePromptController::geometry() const {
     const auto& display = display_;
     const auto density = display.density;
-    const auto& workbench = store_.session().workbenchGeometry();
+    const auto& workbench = application::workbench::geometry(store_.session());
     const auto geometry = NamePromptGeometry::measure(workbench.cellArea());
     auto bounds = workbench.pixels(geometry.bounds);
 

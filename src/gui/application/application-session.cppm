@@ -13,10 +13,9 @@ import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
 import telar.gui.features.prompt;
 import telar.gui.features.terminal.copy_mode;
-import telar.gui.presentation.tab_drop;
+import telar.gui.features.workbench;
 import telar.gui.features.notifications;
 import telar.gui.foundation.model;
-import telar.gui.layout.snapshots;
 import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
@@ -75,7 +74,7 @@ export {
 
     public:
       static constexpr std::size_t decode_capacity = std::size_t{2} * 1024 * 1024;
-      static constexpr std::size_t maximum_tabs = 256;
+      static constexpr std::size_t maximum_tabs = features::workbench::maximum_tabs;
       static constexpr std::size_t maximum_workspace_tabs = 64;
       static constexpr std::size_t maximum_panes = maximum_tabs * PaneLayout::maximum_panes;
       static constexpr std::size_t maximum_pending = 256;
@@ -120,59 +119,6 @@ export {
       Change consume(std::span<const Byte> payload);
 
       Change consume(std::span<const Byte> payload, const ClientCommandHandler& handler);
-
-      void selectTab(TabLocation location);
-
-      bool selectWorkspace(WorkspaceLocation location);
-
-      void selectWorkspaceIndex(std::size_t index);
-
-      void focusPane(std::uint64_t pane_id);
-
-      bool openWorktree(std::uint64_t identity);
-
-      bool leaveWorktree();
-
-      std::size_t forgetGoneWorktrees();
-
-      TabCreationOutcome createTab(std::string_view label = {});
-
-      TabCreationOutcome createCommandTab(const runtime::config::CommandTabView& command);
-
-      // Without a directory the workspace starts where the focused pane is.
-      void createWorkspace(WorkspaceDraft draft);
-
-      void setWorkbenchGeometry(WorkbenchGeometry geometry) noexcept;
-
-      void setAttachmentReservation(std::optional<PaneBottomReservation> reservation);
-
-      [[nodiscard]] const WorkbenchGeometry& workbenchGeometry() const noexcept;
-
-      bool split(ClientLayoutAxis axis);
-
-      bool closePane(std::uint64_t pane_id);
-
-      void closeTab(TabLocation location);
-
-      void renameTab(std::string_view label);
-
-      void selectTabIndex(std::size_t index);
-
-      void selectTabOffset(std::int32_t offset);
-
-      void moveTab(TabMoveDirection direction, std::optional<std::uint64_t> relative_to = {});
-
-      [[nodiscard]] bool tabOperationPending() const noexcept;
-
-      [[nodiscard]] bool requestTabMove(const TabDragMove& move);
-
-      void focusDirection(PaneDirection direction);
-
-      void navigateDirection(PaneDirection direction);
-
-      bool resizeDirection(PaneDirection direction);
-
-      void renameWorkspace(std::string_view name);
 
       void input(std::uint64_t pane_id, std::string_view bytes, PaneInputSource source = PaneInputSource::keyboard);
 
@@ -246,17 +192,11 @@ export {
       // A paste straight to the terminal, framed when the program asked for bracketed paste.
       void pasteBytes(std::uint64_t pane_id, std::string_view bytes);
 
-      void visitPane(std::uint64_t pane_id, std::optional<std::uint64_t> generation = {});
-
       void resize(std::uint64_t pane_id, TerminalSize size);
 
       void presented(std::uint64_t pane_id, std::uint64_t frame_id);
 
       void scroll(PaneScrollDelta delta);
-
-      void toggleFullscreen();
-
-      void retainLayout();
 
       [[nodiscard]] Pane<Memory>* findPane(std::uint64_t pane_id) const noexcept;
 
@@ -366,13 +306,6 @@ export {
         std::optional<std::uint64_t> fallback_workspace;
       };
 
-      struct SplitSizes {
-        TerminalSize existing;
-        TerminalSize added;
-      };
-
-      [[nodiscard]] TerminalSize launchSize() const;
-
       template <typename Request>
         requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
       void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), std::optional<std::uint64_t> fallback_workspace = std::nullopt);
@@ -383,21 +316,9 @@ export {
 
       bool completeRequest(RequestKind kind, std::uint64_t request_id) noexcept;
 
-      [[nodiscard]] bool hasPaneOperation() const noexcept;
-
-      [[nodiscard]] std::optional<SplitSizes> splitSizes(Tab<Memory>& tab, std::uint64_t pane_id, ClientLayoutAxis axis) noexcept;
-
-      bool requestPaneSplit(std::uint64_t pane_id, ClientLayoutAxis axis, Launch launch);
-
-      void recoverSplit(const Pending& request);
-
-      void resizeVisiblePanes(Tab<Memory>& tab);
-
       Pane<Memory>& allocateSplitPane(const Pending& request, const PaneOpened& message);
 
       Change adoptSplit(const Pending& request, const PaneOpened& message);
-
-      [[nodiscard]] bool hasTabOperation() const noexcept;
 
       template <typename Request>
       void sendTabOperation(RequestKind kind, Request request);
@@ -413,8 +334,6 @@ export {
       template <typename Value>
       static void reserveAppend(Vector<Value, Memory>& values, std::size_t maximum);
 
-      TabCreationOutcome requestTabCreation(std::string_view label, std::span<const std::string_view> arguments);
-
       std::uint64_t nextRequest() noexcept;
 
       std::uint64_t pending(RequestKind kind, std::uint64_t pane_id = 0, ClientLayoutAxis axis = ClientLayoutAxis::horizontal);
@@ -426,8 +345,6 @@ export {
       Tab<Memory>& ensureTab(TabLocation location);
 
       Pane<Memory>& ensurePane(std::uint64_t pane_id, TabLocation location);
-
-      void setPaneFocus(Tab<Memory>& tab, std::uint64_t pane_id);
 
       void openDefault();
 
@@ -444,16 +361,6 @@ export {
       void restoreMachinePresentation();
 
       void openRestoredWorkspace(TabLocation location);
-
-      void stageWorkspaceLayout(Tab<Memory>& tab);
-
-      void restoreCanonicalLayout(Tab<Memory>& tab);
-
-      // Opens a tab, or the first pane, running `arguments` from the default launch's directory.
-      void launchTab(std::span<const std::string_view> arguments);
-
-      // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
-      void launchSplit(std::uint64_t pane_id, std::span<const std::string_view> arguments);
 
       void confirmAttachment(Pane<Memory>& pane);
 
@@ -505,8 +412,6 @@ export {
       Change apply(const ClientLayoutSnapshot& message);
 
       Change apply(const TabClosed& message);
-
-      [[nodiscard]] std::optional<TabLocation> tabAfterRemoval(TabLocation closing, std::uint16_t position) const noexcept;
 
       void discardTab(TabLocation location);
 
@@ -612,16 +517,6 @@ export {
 
       void focusCommandPane(std::uint64_t identity);
 
-      tbc::view<std::string_view, tbc::lt::a> exportLayout();
-
-      void importLayout(std::string_view token);
-
-      void validateLayoutMembership(const TabLayoutPreset& preset) const;
-
-      std::size_t orderedTabs(tbc::view<std::array<Tab<Memory>*, maximum_tabs>&, tbc::lt::a> ordered) const noexcept;
-
-      std::uint64_t neighboringPane(PaneDirection direction);
-
       Change apply(const PaneFocusCommand& message);
 
       Configuration configuration_;
@@ -708,17 +603,12 @@ export {
       std::array<Pending, maximum_pending> pending_;
       std::size_t pending_count_ = 0;
       std::optional<TabLocation> active_tab_;
-      NavigationHistory navigation_history_;
-      SavedLayouts saved_layouts_;
-      std::optional<NavigationHistory::Bookmark> pending_layout_restore_;
+      features::workbench::State workbench_;
       std::optional<TabLocation> deferred_tab_;
       std::optional<MachineBookmark> left_machine_;
       std::uint64_t request_id_ = 0;
       std::uint64_t attachment_generation_ = 0;
       std::uint64_t changed_pane_ = 0;
-      WorkbenchGeometry workbench_geometry_;
-      std::optional<PaneBottomReservation> attachment_reservation_;
-      bool attachment_resize_pending_ = false;
       bool ready_ = false;
       bool reads_rows_ = false;
       bool presented_ = true;

@@ -208,7 +208,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    store_.session().createWorkspace({.name = view(label), .path = view(folder), .create_directory = create});
+    application::workbench::createWorkspace(store_.session(), {.name = view(label), .path = view(folder), .create_directory = create});
 
     return true;
   }

@@ -49,10 +49,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.foundation.core;
-import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
-import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.foundation.agents;
 import telar.config.gui;
 import telar.config.core;
@@ -87,7 +84,7 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("branch"), toQString(workspace.branch));
     record.insert(QStringLiteral("dirty"), workspace.dirty);
     record.insert(QStringLiteral("selected"), selected);
-    const auto mark = WorkspaceMark::resolve(workspace.name);
+    const auto mark = application::workbench::WorkspaceMark::resolve(workspace.name);
 
     record.insert(QStringLiteral("initial"), toQString(mark.initial.view()));
     record.insert(QStringLiteral("markHue"), QString::fromLatin1(palette_names[static_cast<std::size_t>(mark.hue)]));
@@ -219,7 +216,7 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("statusWidth"), activity.width());
     record.insert(QStringLiteral("attentionColor"), activity.attention ? QString::fromLatin1(palette_names[static_cast<std::size_t>(*activity.attention)]) : QString{});
     if (activity.kind == application::activity::TabActivity::Kind::progress && pane != nullptr) {
-      record.insert(QStringLiteral("progressSample"), progressValue(ProgressSample{.pane_id = pane->id, .attachment = pane->attachment_generation, .state = pane->progress_state, .percent = pane->progress_percent}));
+      record.insert(QStringLiteral("progressSample"), progressValue(application::workbench::ProgressSample{.pane_id = pane->id, .attachment = pane->attachment_generation, .state = pane->progress_state, .percent = pane->progress_percent}));
     }
 
     return record;
@@ -268,7 +265,7 @@ namespace telar::gui::qt {
 
   template <Allocator Memory>
   QVariantMap paneRecord(const application::Pane<Memory>& pane, const PaneLayout::Placement& placement, const WorkbenchGeometry& workbench, bool focused, qreal density) {
-    const auto geometry = PaneDecorationGeometry::derive(placement, workbench);
+    const auto geometry = application::workbench::PaneDecorationGeometry::derive(placement, workbench);
     const auto local = [&](Rect area) {
       area.x -= geometry.outer.x;
       area.y -= geometry.outer.y;
@@ -299,9 +296,9 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("content"), local(geometry.content));
     record.insert(QStringLiteral("frame"), local(geometry.frame));
     record.insert(QStringLiteral("panels"), panels);
-    record.insert(QStringLiteral("frameRadius"), PaneDecorationGeometry::frame_radius);
-    record.insert(QStringLiteral("frameLineWidth"), PaneDecorationGeometry::frame_line_width / density);
-    record.insert(QStringLiteral("dimAlpha"), PaneDecorationGeometry::dim_alpha);
+    record.insert(QStringLiteral("frameRadius"), application::workbench::PaneDecorationGeometry::frame_radius);
+    record.insert(QStringLiteral("frameLineWidth"), application::workbench::PaneDecorationGeometry::frame_line_width / density);
+    record.insert(QStringLiteral("dimAlpha"), application::workbench::PaneDecorationGeometry::dim_alpha);
     record.insert(QStringLiteral("focused"), focused);
     record.insert(QStringLiteral("framed"), placement.framed);
     record.insert(QStringLiteral("exited"), pane.exited);

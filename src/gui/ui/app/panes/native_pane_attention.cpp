@@ -23,7 +23,7 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
   }
 
   void NativePaneAttention::setRatio(qreal ratio) {
-    constexpr auto maximum = std::numeric_limits<float>::max() / PaneDecorationGeometry::frame_radius;
+    constexpr auto maximum = std::numeric_limits<float>::max() / application::workbench::PaneDecorationGeometry::frame_radius;
     if (std::isfinite(ratio) && ratio > 0 && ratio <= maximum && ratio_ != ratio) {
       ratio_ = ratio;
       update();
@@ -137,7 +137,7 @@ namespace telar::gui::qt {
     return deadline_ns_;
   }
 
-  void NativePaneAttention::sample(std::uint64_t now_ns, AttentionFades& fades) {
+  void NativePaneAttention::sample(std::uint64_t now_ns, application::workbench::AttentionFades& fades) {
     if (!clock_ || !key_ || !eligible()) {
       return;
     }
@@ -215,7 +215,7 @@ namespace telar::gui::qt {
     const Color color{.r = color_.redF(), .g = color_.greenF(), .b = color_.blueF(), .a = color_.alphaF() * alpha_};
 
     return paintRoundedShapes<1>(*this, previous, [&](auto append, Rect area) {
-      const auto ring = PaneAttentionGeometry::derive(area, physical_ratio, static_cast<float>(radius_));
+      const auto ring = application::workbench::PaneAttentionGeometry::derive(area, physical_ratio, static_cast<float>(radius_));
       if (!ring.bounds.empty()) {
         append(RoundedRectanglePaint{.origin = {.x = ring.bounds.x, .y = ring.bounds.y}, .shape = RoundedRectangle::resolve({.x = ring.bounds.width, .y = ring.bounds.height}, {.border = color, .radius = ring.radius, .border_width = ring.width})});
       }

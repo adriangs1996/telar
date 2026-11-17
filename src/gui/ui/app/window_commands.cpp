@@ -383,19 +383,19 @@ namespace telar::gui::qt {
     }
 
     if (const auto direction = navigationDirection(action.kind)) {
-      store_.session().navigateDirection(*direction);
+      application::workbench::navigate(store_.session(), *direction);
       return;
     }
 
     switch (action.kind) {
     case BindingActionKind::select_tab:
-      store_.session().selectTabIndex(static_cast<std::size_t>(action.parameter));
+      application::workbench::selectTabAt(store_.session(), static_cast<std::size_t>(action.parameter));
       break;
     case BindingActionKind::select_tab_offset:
-      store_.session().selectTabOffset(action.parameter);
+      application::workbench::selectTabBeside(store_.session(), action.parameter);
       break;
     case BindingActionKind::select_workspace:
-      store_.session().selectWorkspaceIndex(static_cast<std::size_t>(action.parameter));
+      application::workbench::selectWorkspaceAt(store_.session(), static_cast<std::size_t>(action.parameter));
       break;
     case BindingActionKind::scroll_pane_up:
     case BindingActionKind::scroll_pane_down:
@@ -455,7 +455,7 @@ namespace telar::gui::qt {
     const auto command = configuration_source_.commandTab(action, resolved);
     if (!command) {
       emit notified(QStringLiteral("That command tab expired"));
-    } else if (store_.session().createCommandTab(*command) == application::TabCreationOutcome::busy) {
+    } else if (application::workbench::createCommandTab(store_.session(), *command) == application::TabCreationOutcome::busy) {
       emit notified(QStringLiteral("tabs.one_operation_in_flight: limit 1 tab operation reached"));
     }
   }
@@ -617,9 +617,9 @@ namespace telar::gui::qt {
           return;
         }
       } else if (store_.dialog().kind == Dialog::rename_tab) {
-        store_.session().renameTab(text);
+        application::workbench::renameTab(store_.session(), text);
       } else if (store_.dialog().kind == Dialog::rename_workspace) {
-        store_.session().renameWorkspace(text);
+        application::workbench::renameWorkspace(store_.session(), text);
       } else if (store_.dialog().kind == Dialog::copy_search) {
         application::terminal::copy_mode::search(store_.session(), text);
       }
@@ -640,27 +640,27 @@ namespace telar::gui::qt {
     const auto identity = target.toULongLong();
 
     if (action == window_actions::Action::new_tab) {
-      store_.session().createTab();
+      application::workbench::createTab(store_.session());
     } else if (action == window_actions::Action::select_tab) {
       if (const auto* active = store_.session().activeTab()) {
-        store_.session().selectTab({.workspace = active->location.workspace, .tab_id = identity});
+        application::workbench::selectTab(store_.session(), {.workspace = active->location.workspace, .tab_id = identity});
       }
     } else if (action == window_actions::Action::select_tab_index) {
-      store_.session().selectTabIndex(static_cast<std::size_t>(identity));
+      application::workbench::selectTabAt(store_.session(), static_cast<std::size_t>(identity));
     } else if (action == window_actions::Action::next_tab || action == window_actions::Action::previous_tab) {
-      store_.session().selectTabOffset(action == window_actions::Action::next_tab ? 1 : -1);
+      application::workbench::selectTabBeside(store_.session(), action == window_actions::Action::next_tab ? 1 : -1);
     } else if (action == window_actions::Action::move_tab_next || action == window_actions::Action::move_tab_previous) {
-      store_.session().moveTab(action == window_actions::Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
+      application::workbench::moveTab(store_.session(), action == window_actions::Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
     } else if (action == window_actions::Action::close_tab) {
       if (const auto* active = store_.session().activeTab()) {
-        store_.session().closeTab({.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
+        application::workbench::closeTab(store_.session(), {.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
       }
     } else if (action == window_actions::Action::select_workspace) {
-      store_.session().selectWorkspace(parseLocation(target));
+      application::workbench::selectWorkspace(store_.session(), parseLocation(target));
     } else if (action == window_actions::Action::leave_worktree) {
-      store_.session().leaveWorktree();
+      application::workbench::leaveWorktree(store_.session());
     } else if (action == window_actions::Action::forget_gone_worktrees) {
-      store_.session().forgetGoneWorktrees();
+      application::workbench::forgetGoneWorktrees(store_.session());
     } else if (action == window_actions::Action::select_agent) {
       activity_selection_.select(target);
     } else {
@@ -672,21 +672,21 @@ namespace telar::gui::qt {
 
   bool WindowCommands::executePane(window_actions::Action action, std::uint64_t identity) {
     if (action == window_actions::Action::focus_left || action == window_actions::Action::focus_right || action == window_actions::Action::focus_up || action == window_actions::Action::focus_down) {
-      store_.session().focusDirection(paneDirection(action));
+      application::workbench::focusToward(store_.session(), paneDirection(action));
     } else if (action == window_actions::Action::resize_left || action == window_actions::Action::resize_right || action == window_actions::Action::resize_up || action == window_actions::Action::resize_down) {
-      store_.session().resizeDirection(paneDirection(action));
+      application::workbench::resizeToward(store_.session(), paneDirection(action));
     } else if (action == window_actions::Action::focus_pane) {
-      store_.session().focusPane(identity);
+      application::workbench::focusPane(store_.session(), identity);
     } else if (action == window_actions::Action::split_horizontal) {
-      store_.session().split(ClientLayoutAxis::horizontal);
+      application::workbench::split(store_.session(), ClientLayoutAxis::horizontal);
     } else if (action == window_actions::Action::split_vertical) {
-      store_.session().split(ClientLayoutAxis::vertical);
+      application::workbench::split(store_.session(), ClientLayoutAxis::vertical);
     } else if (action == window_actions::Action::close_pane) {
       if (const auto* pane = store_.session().focusedPane()) {
-        store_.session().closePane(identity == 0 ? pane->id : identity);
+        application::workbench::closePane(store_.session(), identity == 0 ? pane->id : identity);
       }
     } else if (action == window_actions::Action::fullscreen) {
-      store_.session().toggleFullscreen();
+      application::workbench::toggleFullscreen(store_.session());
     } else {
       return false;
     }

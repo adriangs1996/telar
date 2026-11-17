@@ -21,7 +21,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.tab_drop;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -65,9 +65,9 @@ namespace telar::gui::qt {
     void setWindow(QQuickWindow& window);
     // Where the strip's tabs and its new tab button sit in the window, in physical pixels, for
     // the frame being prepared. `ratio` is the window's chrome ratio.
-    [[nodiscard]] TabDropSurface dropSurface(qreal ratio) const;
+    [[nodiscard]] application::workbench::TabDropSurface dropSurface(qreal ratio) const;
     // The tab surface of the frame the window presented: pointer hits test against it.
-    void present(const TabDropSurface& surface);
+    void present(const application::workbench::TabDropSurface& surface);
     // A press on a tab selects it, when the tab the pointer captured still shows where the
     // window presented it.
     Q_INVOKABLE void selectCaptured();
@@ -117,11 +117,11 @@ namespace telar::gui::qt {
     std::uint64_t rebuilds_ = 0;
     QPointer<TabStripLayout> strip_;
     QPointer<QQuickWindow> window_;
-    TabDropSurface presented_;
-    TabDrag drag_;
-    TabDropSlots drop_slots_;
-    std::optional<TabDragMove> pending_move_;
-    TabDropSurface capture_surface_;
+    application::workbench::TabDropSurface presented_;
+    application::workbench::TabDrag drag_;
+    application::workbench::TabDropSlots drop_slots_;
+    std::optional<application::workbench::TabDragMove> pending_move_;
+    application::workbench::TabDropSurface capture_surface_;
     QPointF pointer_;
     qreal grab_offset_ = 0;
     bool escape_held_ = false;

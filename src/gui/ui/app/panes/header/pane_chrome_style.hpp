@@ -9,16 +9,16 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
   inline QVariantMap paneChromeStyle(qreal ratio, qreal density) {
     return {
-        {QStringLiteral("chipInset"), PaneStatusChip::inset * ratio},
-        {QStringLiteral("chipHeight"), PaneStatusChip::height * ratio},
-        {QStringLiteral("chipRadius"), PaneStatusChip::radius * ratio},
+        {QStringLiteral("chipInset"), application::workbench::PaneStatusChip::inset * ratio},
+        {QStringLiteral("chipHeight"), application::workbench::PaneStatusChip::height * ratio},
+        {QStringLiteral("chipRadius"), application::workbench::PaneStatusChip::radius * ratio},
         {QStringLiteral("progressPadding"), ProgressGeometry::padding * ratio},
         {QStringLiteral("progressSide"), ProgressGeometry::ring_side * ratio},
         {QStringLiteral("progressHeight"), ProgressGeometry::height * ratio},

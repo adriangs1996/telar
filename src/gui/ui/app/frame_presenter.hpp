@@ -20,7 +20,6 @@ static_assert(true);
 
 import telar.gui.foundation.model;
 import telar.gui.application;
-import telar.gui.presentation.tab_drop;
 
 namespace telar::gui::test {
   struct FramePacing;
@@ -91,7 +90,7 @@ namespace telar::gui::qt {
       std::array<PresentedPane, PaneLayout::maximum_panes> panes;
       std::size_t pane_count = 0;
       std::uint64_t preparation_ns = 0;
-      TabDropSurface tabs;
+      application::workbench::TabDropSurface tabs;
       HistoryController::Frame history;
     };
 

@@ -26,8 +26,8 @@ target_include_directories(gui-settings INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" 
 target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-harfbuzz deps::ghostty_vt)
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
-foreach(domain IN ITEMS foundation features layout
-    input platform presentation components config
+foreach(domain IN ITEMS foundation features
+    input platform components config
     application)
   add_subdirectory(${domain})
 endforeach()
@@ -161,9 +161,9 @@ if(TELAR_GUI_NATIVE)
 
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
-    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-layout
+    gui-foundation-agents gui-foundation-drawing gui-foundation-forms
     gui-input
-    gui-platform gui-presentation gui-components gui-config
+    gui-platform gui-components gui-config
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Most of a gui-quick compilation parses the same Qt headers again; the ones
@@ -200,7 +200,7 @@ if(TELAR_GUI_NATIVE)
   # tests builds it too.
   telar_add_test(gui-host-effects-smoke QT PROBE SOURCES tools/host_effects_smoke.cpp
     LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-text
-      gui-features-history gui-layout gui-platform gui-presentation gui-application deps::ghostty_vt
+      gui-features-history gui-platform gui-application deps::ghostty_vt
       Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
 
   qt_add_shaders(gui-quick gui-curve-shaders

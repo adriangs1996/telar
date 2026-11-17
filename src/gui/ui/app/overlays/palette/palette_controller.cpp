@@ -651,7 +651,7 @@ namespace telar::gui::qt {
         return false;
       }
 
-      session.selectWorkspace(*workspace);
+      application::workbench::selectWorkspace(session, *workspace);
 
       return true;
     }
@@ -664,7 +664,7 @@ namespace telar::gui::qt {
         return false;
       }
 
-      session.selectTab(*tab);
+      application::workbench::selectTab(session, *tab);
 
       return true;
     }

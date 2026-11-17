@@ -18,7 +18,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -84,8 +83,8 @@ namespace telar::gui::qt {
     QColor color_ = Qt::white;
     qreal ratio_ = 1;
     application::activity::TabActivity::Kind kind_ = application::activity::TabActivity::Kind::none;
-    ProgressSample progress_;
-    ProgressMotion motion_;
+    application::workbench::ProgressSample progress_;
+    application::workbench::ProgressMotion motion_;
     float fraction_ = 0;
     float turns_ = 0;
     bool running_ = true;

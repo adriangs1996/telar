@@ -37,7 +37,7 @@ import telar.gui.config.plugin_effects;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.generation;
-import telar.gui.presentation.tab_drop;
+import telar.gui.features.workbench;
 import telar.config.client;
 
 import telar.gui.config.gui_query;
@@ -49,6 +49,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::workbench;
   using namespace telar::gui::test;
 
   template <typename Value>
@@ -233,29 +234,29 @@ namespace {
     TestSession client{memory, transport};
     const auto command = sampleCommand();
 
-    require(client.createCommandTab(command) == application::TabCreationOutcome::unavailable, "a command requires an attached focused launch source");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::unavailable, "a command requires an attached focused launch source");
     openFirstPane(client, transport);
     transport.reject_create_tab = true;
     bool rejected = false;
 
     try {
-      static_cast<void>(client.createCommandTab(command));
+      static_cast<void>(application::workbench::createCommandTab(client, command));
     } catch (const EncodingError&) {
       rejected = true;
     }
 
     transport.reject_create_tab = false;
-    require(rejected && client.createCommandTab(command) == application::TabCreationOutcome::requested, "failed delivery must release tab-operation ownership for retry");
+    require(rejected && application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "failed delivery must release tab-operation ownership for retry");
     const auto request = transport.last<CreateTab>();
 
     require(request.launch.cwd_source == 1 && request.label == "echo", "a command tab must inherit its focused pane's cwd and resolve its label");
     require(request.launch.arguments.size() == command.count && request.launch.arguments[1] == command.arguments[1] && request.launch.arguments[2] == command.arguments[2], "tab requests must preserve argv boundaries without shell interpretation");
-    require(client.createCommandTab(command) == application::TabCreationOutcome::busy && transport.count(ClientTag::create_tab) == 1, "a pending tab operation must refuse a second command");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy && transport.count(ClientTag::create_tab) == 1, "a pending tab operation must refuse a second command");
     const TabLocation created{.workspace = request.workspace, .tab_id = 2};
 
     deliver(client, TabCreated{.request_id = request.request_id, .location = created, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
     require(sameTab(client.activeTab()->location, created) && client.focusedPane()->id == 2, "a confirmed command tab must become active");
-    require(client.createCommandTab(command) == application::TabCreationOutcome::requested, "confirmation must release tab-operation ownership");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "confirmation must release tab-operation ownership");
   }
 
   std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, bool discover_before_confirmation) {
@@ -271,7 +272,7 @@ namespace {
       TestSession client{memory, transport};
 
       openFirstPane(client, transport);
-      client.createTab();
+      application::workbench::createTab(client);
       const auto request = transport.last<CreateTab>();
       constexpr std::string_view discovered_application = "foreground_process_requiring_heap_storage";
 
@@ -337,7 +338,7 @@ namespace {
     openFirstPane(client, transport);
     const auto command = sampleCommand();
 
-    require(client.createCommandTab(command) == application::TabCreationOutcome::requested, "a command must start its correlated tab operation");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "a command must start its correlated tab operation");
     const auto request = transport.last<CreateTab>();
     const std::array descriptors{
         TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1, .label = "source"},
@@ -346,7 +347,7 @@ namespace {
 
     deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
     require(client.tabs().size() == 2 && client.focusedPane()->id == 1, "discovery may expose a tab's metadata without adopting its pane or focus");
-    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "discovery must not complete the creation request");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "discovery must not complete the creation request");
     deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = 2}, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
     require(client.tabs().size() == 2 && client.focusedPane()->id == 2, "confirmation must adopt an unloaded discovered tab without duplication");
   }
@@ -359,7 +360,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.createTab();
+    application::workbench::createTab(client);
     const auto request = transport.last<CreateTab>();
     bool rejected = false;
 
@@ -375,7 +376,7 @@ namespace {
   void openThreeTabs(application::Session& client, Transport& transport) {
     openFirstPane(client, transport);
     for (std::uint16_t position = 1; position <= 2; ++position) {
-      client.createTab();
+      application::workbench::createTab(client);
       const auto request = transport.last<CreateTab>();
       const auto identity = static_cast<std::uint64_t>(position) + 1;
 
@@ -393,15 +394,15 @@ namespace {
     openThreeTabs(client, transport);
     const auto command = sampleCommand();
 
-    client.renameTab("renamed");
+    application::workbench::renameTab(client, "renamed");
     const auto rename = transport.last<RenameTab>();
 
-    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "rename and command creation must share tab-operation ownership");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "rename and command creation must share tab-operation ownership");
     deliver(client, TabRenamed{.request_id = rename.request_id, .location = rename.location, .label = "renamed"});
-    client.moveTab(TabMoveDirection::previous);
+    application::workbench::moveTab(client, TabMoveDirection::previous);
     const auto move = transport.last<MoveTab>();
 
-    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "moving a tab must retain ownership until its confirmation");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "moving a tab must retain ownership until its confirmation");
     deliver(client, TabMoved{.request_id = move.request_id, .location = move.location, .position = 1});
     require(client.activeTab()->position == 1, "the runtime's confirmed position must be adopted");
     for (const auto& tab : client.tabs()) {
@@ -410,12 +411,12 @@ namespace {
       }
     }
 
-    client.closeTab(client.activeTab()->location);
+    application::workbench::closeTab(client, client.activeTab()->location);
     const auto close = transport.last<CloseTab>();
 
-    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "closing a tab must retain the same operation owner");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "closing a tab must retain the same operation owner");
     deliver(client, RequestFailed{.request_id = close.request_id, .code = FailureCode::invalid_request, .message = "close failed"});
-    require(client.createCommandTab(command) == application::TabCreationOutcome::requested, "a rejected operation must allow the next command tab");
+    require(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "a rejected operation must allow the next command tab");
   }
 
   void draggingRetainsTheExplicitSourceAndCanonicalOperationOwner() {
@@ -433,28 +434,28 @@ namespace {
     });
 
     require(source != client.tabs().end(), "the captured source must be present");
-    require(client.requestTabMove(move), "a drag must move its captured source even when another tab has focus");
+    require(application::workbench::dropTab(client, move), "a drag must move its captured source even when another tab has focus");
     const auto request = transport.last<MoveTab>();
 
     require(request.location.tab_id == 1 && request.relative_to == 3 && request.direction == TabMoveDirection::next, "the request must preserve the source and anchor identities");
     require(client.activeTab()->location.tab_id == 3 && (*source)->position == 0, "a move request must preserve focus and wait for canonical order");
-    require(!client.requestTabMove(move), "a pending drag must retain the shared tab-operation owner");
+    require(!application::workbench::dropTab(client, move), "a pending drag must retain the shared tab-operation owner");
     deliver(client, TabMoved{.request_id = request.request_id, .location = request.location, .position = 2});
     require((*source)->position == 2 && client.activeTab()->location.tab_id == 3, "confirmation must reorder the captured source without stealing focus");
 
     auto invalid = move;
 
     invalid.location.workspace.id += 1;
-    require(!client.requestTabMove(invalid), "a drag must never move a source from a replaced workspace");
+    require(!application::workbench::dropTab(client, invalid), "a drag must never move a source from a replaced workspace");
     invalid = move;
     invalid.location.tab_id = 4;
-    require(!client.requestTabMove(invalid), "a retired source must not create a request");
+    require(!application::workbench::dropTab(client, invalid), "a retired source must not create a request");
     invalid = move;
     invalid.relative_to = move.location.tab_id;
-    require(!client.requestTabMove(invalid), "a source cannot anchor its own move");
+    require(!application::workbench::dropTab(client, invalid), "a source cannot anchor its own move");
     invalid.relative_to = 4;
-    require(!client.requestTabMove(invalid), "a retired destination must not create a request");
-    require(client.requestTabMove(move), "rejected gestures must leave tab-operation admission available");
+    require(!application::workbench::dropTab(client, invalid), "a retired destination must not create a request");
+    require(application::workbench::dropTab(client, move), "rejected gestures must leave tab-operation admission available");
   }
 
   void closingACommandReturnsToTheAdjacentTab() {
@@ -481,7 +482,7 @@ namespace {
       openThreeTabs(client, transport);
       const auto workspace = client.activeTab()->location.workspace;
 
-      client.selectTab({.workspace = workspace, .tab_id = entry.active});
+      application::workbench::selectTab(client, {.workspace = workspace, .tab_id = entry.active});
       deliver(client, PaneExited{.pane_id = entry.closing, .kind = ExitKind::exited});
       deliver(client, TabClosed{.location = {.workspace = workspace, .tab_id = entry.closing}});
       require(client.activeTab()->location.tab_id == entry.selected, "closing a command must preserve surviving focus or select its next neighbor before its previous neighbor");

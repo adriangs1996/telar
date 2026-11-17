@@ -16,7 +16,7 @@ namespace telar::gui::application::activity {
       return false;
     }
 
-    session.visitPane(pane_id, generation);
+    workbench::visit(session, pane_id, generation);
 
     return true;
   }
@@ -26,7 +26,7 @@ namespace telar::gui::application::activity {
       return false;
     }
 
-    session.visitPane(pane_id, generation);
+    workbench::visit(session, pane_id, generation);
 
     return true;
   }

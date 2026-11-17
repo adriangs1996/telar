@@ -1533,18 +1533,18 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(application.display()->geometry().value(QStringLiteral("navigation")).toRectF().width(), latest_size.width(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(application.display()->geometry().value(QStringLiteral("status")).toRectF().bottom(), latest_size.height(), wait_ms);
       const auto geometry_changed = [&] {
-        const auto size = session.workbenchGeometry().launchSize();
+        const auto size = application::workbench::geometry(session).launchSize();
 
         return size && (size->cols != opening.size.cols || size->rows != opening.size.rows);
       };
 
-      QTRY_VERIFY2_WITH_TIMEOUT(geometry_changed(), qPrintable(QStringLiteral("window=%1x%2 open=%3x%4 area=%5x%6").arg(window->width()).arg(window->height()).arg(opening.size.cols).arg(opening.size.rows).arg(session.workbenchGeometry().area.width).arg(session.workbenchGeometry().area.height)), wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(geometry_changed(), qPrintable(QStringLiteral("window=%1x%2 open=%3x%4 area=%5x%6").arg(window->width()).arg(window->height()).arg(opening.size.cols).arg(opening.size.rows).arg(application::workbench::geometry(session).area.width).arg(application::workbench::geometry(session).area.height)), wait_ms);
       QVERIFY(application.display()->sidebarVisible());
       const auto terminal = application.display()->geometry().value(QStringLiteral("terminal")).toRectF();
 
-      QCOMPARE(session.workbenchGeometry().area.width, terminal.width() * window->effectiveDevicePixelRatio());
-      QCOMPARE(session.workbenchGeometry().area.height, terminal.height() * window->effectiveDevicePixelRatio());
-      const auto expected = session.workbenchGeometry().launchSize();
+      QCOMPARE(application::workbench::geometry(session).area.width, terminal.width() * window->effectiveDevicePixelRatio());
+      QCOMPARE(application::workbench::geometry(session).area.height, terminal.height() * window->effectiveDevicePixelRatio());
+      const auto expected = application::workbench::geometry(session).launchSize();
 
       QVERIFY(expected.has_value());
       QVERIFY(expected->cols != opening.size.cols || expected->rows != opening.size.rows);

@@ -42,7 +42,6 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.foundation.drawing;
-import telar.gui.presentation.frame_pacer;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -279,9 +278,9 @@ namespace telar::gui::qt {
         {QStringLiteral("smallSize"), chrome_.small / density_},
         {QStringLiteral("rowRadius"), length(mode_ == Mode::list ? gui::ChromeStyle::surface_radius : gui::ChromeStyle::control_radius)},
         {QStringLiteral("avatarRadius"), length(gui::ChromeStyle::control_radius)},
-        {QStringLiteral("tileWidth"), length(TabStripGeometry::tile_width)},
-        {QStringLiteral("tileHeight"), length(TabStripGeometry::tile_height)},
-        {QStringLiteral("tileRadius"), length(TabStripGeometry::tile_radius)},
+        {QStringLiteral("tileWidth"), length(application::workbench::TabStripGeometry::tile_width)},
+        {QStringLiteral("tileHeight"), length(application::workbench::TabStripGeometry::tile_height)},
+        {QStringLiteral("tileRadius"), length(application::workbench::TabStripGeometry::tile_radius)},
     };
 
     QList<QVariantMap> records;
@@ -369,7 +368,7 @@ namespace telar::gui::qt {
     for (std::size_t rank = 0; rank < source.card_count; ++rank) {
       const auto card = source.cards[rank];
       const auto status = static_cast<AgentStatus>(card.status);
-      const auto& pose = TabCardMotion::rest[rank];
+      const auto& pose = application::workbench::TabCardMotion::rest[rank];
       auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
 
       record.insert(QStringLiteral("x"), chrome_.textPx(pose.x) / density_);

@@ -93,7 +93,7 @@ namespace telar::gui::qt {
     } else if (const auto* process = std::get_if<application::machines::MachineActivityTarget::Process>(&pending.target.owner)) {
       static_cast<void>(application::activity::choosePane(store_.session(), process->pane_id, process->pane_generation));
     } else {
-      static_cast<void>(store_.session().openWorktree(std::get<application::machines::MachineActivityTarget::Command>(pending.target.owner).worktree));
+      static_cast<void>(application::workbench::openWorktree(store_.session(), std::get<application::machines::MachineActivityTarget::Command>(pending.target.owner).worktree));
     }
   }
 

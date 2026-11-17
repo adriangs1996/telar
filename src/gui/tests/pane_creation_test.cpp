@@ -55,7 +55,7 @@ namespace {
     openFirstPane(client, transport);
     const auto workbench = client.focusedPane()->size;
 
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto split = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
@@ -64,7 +64,7 @@ namespace {
     child.cols /= 2;
     client.resize(1, child);
     client.resize(2, child);
-    client.createTab();
+    application::workbench::createTab(client);
     const auto request = transport.last<CreateTab>();
 
     require(request.size.cols == workbench.cols && request.size.rows == workbench.rows, "a new tab must use the whole workbench rather than the last resized child");
@@ -78,7 +78,7 @@ namespace {
     openFirstPane(client, transport);
     const auto parent = client.focusedPane()->size;
 
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto request = transport.last<CreatePane>();
 
     require(request.size.cols < parent.cols && request.size.rows == parent.rows, "a horizontal split must launch with its child width rather than the parent's width");
@@ -91,7 +91,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto request = transport.last<CreatePane>();
     const auto snapshots = transport.count(ClientTag::request_tab_snapshot);
 
@@ -143,11 +143,11 @@ namespace {
     Transport transport;
     TestSession client{memory, transport};
 
-    client.setWorkbenchGeometry(framed_geometry);
+    application::workbench::setGeometry(client, framed_geometry);
     openFirstPane(client, transport);
     const auto initial = transport.last<OpenPane>().size;
 
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto request = transport.last<CreatePane>();
 
     deliver(client, RequestFailed{.request_id = request.request_id, .code = FailureCode::invalid_request, .message = "creation rejected"});
@@ -173,7 +173,7 @@ namespace {
       Transport transport;
       TestSession client{memory, transport};
 
-      client.setWorkbenchGeometry(framed_geometry);
+      application::workbench::setGeometry(client, framed_geometry);
       openFirstPane(client, transport);
       const auto opened = transport.last<OpenPane>();
       constexpr TerminalSize initial_size{.cols = 99, .rows = 40, .cell_width_px = framed_geometry.grid.cell_width_px, .cell_height_px = framed_geometry.grid.cell_height_px};
@@ -182,7 +182,7 @@ namespace {
       const auto original_nodes = client.activeTab()->layout.nodes().size();
       const auto before = transport.sent.size();
 
-      client.split(entry.axis);
+      application::workbench::split(client, entry.axis);
       const auto request = transport.last<CreatePane>();
 
       require(request.size.cols == entry.columns && request.size.rows == entry.rows, "the child request must account for its split, gap, border and header");
@@ -208,7 +208,7 @@ namespace {
       bool rejected = false;
 
       try {
-        client.split(ClientLayoutAxis::horizontal);
+        application::workbench::split(client, ClientLayoutAxis::horizontal);
       } catch (const std::exception&) {
         rejected = true;
       }
@@ -218,7 +218,7 @@ namespace {
       require(rejected && restored.pane_id == 1 && restored.size.cols == original.cols, "failed provisional resizing or creation must restore the original source size");
       require(client.activeTab()->layout.nodes().size() == 1 && client.focusedPane()->id == 1, "delivery failure must leave membership and focus unchanged");
       transport.reject_create_pane = false;
-      client.split(ClientLayoutAxis::vertical);
+      application::workbench::split(client, ClientLayoutAxis::vertical);
       require(transport.count(ClientTag::create_pane) == 1, "a failed send must release the pending pane operation");
     }
   }
@@ -229,25 +229,25 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto request = transport.last<CreatePane>();
     const auto sent = transport.sent.size();
 
-    client.split(ClientLayoutAxis::vertical);
-    client.closePane(1);
+    application::workbench::split(client, ClientLayoutAxis::vertical);
+    application::workbench::closePane(client, 1);
     require(transport.sent.size() == sent, "a split must share one pending owner with other pane operations");
-    auto enlarged = client.workbenchGeometry();
+    auto enlarged = application::workbench::geometry(client);
 
     enlarged.area.width *= 2;
-    client.setWorkbenchGeometry(enlarged);
+    application::workbench::setGeometry(client, enlarged);
     deliver(client, RequestFailed{.request_id = request.request_id, .code = FailureCode::invalid_request, .message = "creation rejected"});
     require(transport.last<PaneResize>().size.cols == enlarged.launchSize()->cols, "runtime rejection must restore the current workbench rather than a stale captured size");
-    client.split(ClientLayoutAxis::vertical);
+    application::workbench::split(client, ClientLayoutAxis::vertical);
     require(transport.count(ClientTag::create_pane) == 2, "runtime rejection must release the pane operation");
   }
 
   TabLocation openAnotherTab(application::Session& client, const Transport& transport) {
-    client.createTab();
+    application::workbench::createTab(client);
     const auto request = transport.last<CreateTab>();
     const TabLocation location{.workspace = request.workspace, .tab_id = 2};
 
@@ -262,7 +262,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto request = transport.last<CreatePane>();
     const auto other = openAnotherTab(client, transport);
     const PaneOpened confirmation{.request_id = request.request_id, .pane_id = 2, .location = request.location, .created = true, .pane_generation = 1};
@@ -284,7 +284,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto request = transport.last<CreatePane>();
     const auto other = openAnotherTab(client, transport);
 
@@ -300,12 +300,12 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     const auto first = transport.last<CreatePane>();
 
     deliver(client, PaneOpened{.request_id = first.request_id, .pane_id = 2, .location = first.location, .created = true, .pane_generation = 1});
-    client.focusPane(1);
-    client.split(ClientLayoutAxis::vertical);
+    application::workbench::focusPane(client, 1);
+    application::workbench::split(client, ClientLayoutAxis::vertical);
     const auto next = transport.last<CreatePane>();
 
     deliver(client, PaneExited{.pane_id = 1, .kind = ExitKind::exited});
@@ -319,18 +319,18 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    auto geometry = client.workbenchGeometry();
+    auto geometry = application::workbench::geometry(client);
 
     geometry.area.width = 0;
-    client.setWorkbenchGeometry(geometry);
+    application::workbench::setGeometry(client, geometry);
     const auto before = transport.sent.size();
 
-    client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(client, ClientLayoutAxis::horizontal);
     require(transport.sent.size() == before, "an unavailable split must not send provisional resize or creation requests");
     bool rejected = false;
 
     try {
-      client.createTab();
+      application::workbench::createTab(client);
     } catch (const std::exception&) {
       rejected = true;
     }
@@ -351,7 +351,7 @@ namespace {
       TestSession client{memory, transport};
 
       openFirstPane(client, transport);
-      client.split(ClientLayoutAxis::horizontal);
+      application::workbench::split(client, ClientLayoutAxis::horizontal);
       const auto request = transport.last<CreatePane>();
       const auto before = counted.allocations();
 
@@ -368,7 +368,7 @@ namespace {
       gate.permit(std::nullopt);
       if (budget) {
         require(rejected && client.findPane(2) == nullptr && client.focusedPane()->id == 1 && client.activeTab()->layout.nodes().size() == 1, "a failed allocation must preserve the source and the semantic layout");
-        require(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == client.workbenchGeometry().launchSize()->cols, "a failed adoption must release the new attachment and restore the source PTY");
+        require(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == application::workbench::geometry(client).launchSize()->cols, "a failed adoption must release the new attachment and restore the source PTY");
       } else {
         require(!rejected && client.focusedPane()->id == 2, "a complete allocation budget must adopt and focus the new pane");
       }
@@ -410,10 +410,10 @@ namespace {
     deliver(client, command);
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::failed, "closure must report failure while a split owns the pane operation");
     deliver(client, RequestFailed{.request_id = split.request_id, .code = FailureCode::invalid_request, .message = "rejected"});
-    auto unavailable = client.workbenchGeometry();
+    auto unavailable = application::workbench::geometry(client);
 
     unavailable.area.width = 0;
-    client.setWorkbenchGeometry(unavailable);
+    application::workbench::setGeometry(client, unavailable);
     command.action = ClientAction::pane_split;
     command.text = "horizontal";
     ++command.request_id;
@@ -427,7 +427,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.createTab();
+    application::workbench::createTab(client);
     const ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::tab_create};
 
     deliver(client, command);

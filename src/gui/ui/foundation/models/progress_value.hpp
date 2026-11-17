@@ -13,19 +13,19 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
-Q_DECLARE_METATYPE(telar::gui::ProgressSample)
-Q_DECLARE_TYPEINFO(telar::gui::ProgressSample, Q_RELOCATABLE_TYPE);
+Q_DECLARE_METATYPE(telar::gui::application::workbench::ProgressSample)
+Q_DECLARE_TYPEINFO(telar::gui::application::workbench::ProgressSample, Q_RELOCATABLE_TYPE);
 
 namespace telar::gui::qt {
 
-  inline QVariant progressValue(ProgressSample sample) {
+  inline QVariant progressValue(application::workbench::ProgressSample sample) {
     return QVariant::fromValue(sample);
   }
 
-  inline std::optional<ProgressSample> progressSample(const QVariant& value) {
-    return value.canConvert<ProgressSample>() ? std::optional{value.value<ProgressSample>()} : std::nullopt;
+  inline std::optional<application::workbench::ProgressSample> progressSample(const QVariant& value) {
+    return value.canConvert<application::workbench::ProgressSample>() ? std::optional{value.value<application::workbench::ProgressSample>()} : std::nullopt;
   }
 
 }

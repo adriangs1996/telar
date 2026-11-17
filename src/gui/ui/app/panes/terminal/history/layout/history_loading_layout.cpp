@@ -17,7 +17,6 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.foundation.system;
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -82,7 +81,7 @@ namespace telar::gui::qt {
   }
 
   std::optional<std::uint64_t> HistoryLoadingLayout::deadline(std::uint64_t now_ns) const noexcept {
-    return cue_visible_ ? std::optional{ProgressAnimation::nextStep(now_ns, application::history::HistoryLoading::step_ns)} : cue_.deadline();
+    return cue_visible_ ? std::optional{application::workbench::ProgressAnimation::nextStep(now_ns, application::history::HistoryLoading::step_ns)} : cue_.deadline();
   }
 
   void HistoryLoadingLayout::sample(std::uint64_t now_ns) {

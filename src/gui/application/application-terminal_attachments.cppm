@@ -1,7 +1,7 @@
 // Images attached to a pane's prompt as ui shows them: the types the shelf, its catalog, the
 // clipboard capture and the preview hold. The shelf belongs to the window, so this partition has
 // no use case of the session's; the rows the shelf takes from the panes are the workbench's
-// (Session::setAttachmentReservation).
+// (application::workbench::reserveBottom).
 export module telar.gui.application:terminal_attachments;
 
 import telar.gui.features.terminal.attachments;

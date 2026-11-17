@@ -26,7 +26,7 @@ namespace telar::gui::qt {
 
   QVariantMap LinkStatusController::geometry() const {
     const auto density = display_.density;
-    const auto& workbench = store_.session().workbenchGeometry();
+    const auto& workbench = application::workbench::geometry(store_.session());
     auto area = workbench.pixels(workbench.cellArea());
 
     area.x += display_.geometry.terminal.x;

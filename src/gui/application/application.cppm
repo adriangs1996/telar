@@ -26,3 +26,4 @@ export import :notifications;
 export import :status_bar;
 export import :window;
 export import :activity;
+export import :workbench;

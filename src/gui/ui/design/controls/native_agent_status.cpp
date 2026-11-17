@@ -22,9 +22,7 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.foundation.system;
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.agents;
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -115,7 +113,7 @@ namespace telar::gui::qt {
   std::optional<std::uint64_t> NativeAgentStatus::deadline(std::uint64_t now_ns) const noexcept {
     if (display_mode_ == DisplayMode::pane_chip) {
       if (connected_ && status_ == AgentStatus::working) {
-        return ProgressAnimation::nextStep(now_ns, StatusAgeInterval::nanoseconds_per_second);
+        return application::workbench::ProgressAnimation::nextStep(now_ns, StatusAgeInterval::nanoseconds_per_second);
       }
 
       return std::nullopt;
@@ -129,7 +127,7 @@ namespace telar::gui::qt {
     AgentStatusPresentation::Text text;
 
     if (display_mode_ == DisplayMode::pane_chip) {
-      text = PaneStatusChip::text(status_, reason_, seconds);
+      text = application::workbench::PaneStatusChip::text(status_, reason_, seconds);
     } else {
       text = AgentStatusPresentation::text(status_, reason_, seconds, connected_);
     }

@@ -1,15 +1,17 @@
-export module telar.gui.presentation.frame_pacer;
+// How panes, tabs and the cards of a tab's panes move between frames, and how a pane's call
+// for attention fades. Each window holds its own motions and reads them every frame.
+export module telar.gui.features.workbench:motions;
 
 import std;
 
-import telar.gui.foundation.model;
-
+import :tabs;
 import telar.gui.foundation.core;
+import telar.gui.foundation.model;
 import telar.wire.vocabulary;
 
 // Interface: presentation/attention_fades.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     struct PaneAttentionKey {
       std::uint64_t pane_id = 0;
@@ -56,7 +58,7 @@ export {
 
 // Interface: presentation/tab_motion_frame.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
     struct TabMotionFrame {
       static constexpr std::uint64_t default_interval_ns = 16'666'667;
       std::uint64_t now_ns = 0;
@@ -75,7 +77,7 @@ export {
 
 // Interface: presentation/pane_motions.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     struct TabCardPose {
       float x = 0;
@@ -186,108 +188,9 @@ export {
   }
 }
 
-// Interface: presentation/tab_strip_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct TabStripGeometry {
-      static constexpr std::size_t maximum_tabs = 64;
-      static constexpr std::size_t cap_iterations = 24;
-      static constexpr float pill_height = 30;
-      static constexpr float pill_radius = pill_height / 2;
-      static constexpr float leading = 14;
-      static constexpr float trailing = 14;
-      static constexpr float spacing = 12;
-      static constexpr float tile_width = 26;
-      static constexpr float tile_height = 20;
-      static constexpr float tile_radius = 6;
-      static constexpr float mark_side = 14;
-      static constexpr float path_gap = 6;
-      static constexpr float gap = 0;
-      // One card, then each card behind it adds a visible sliver.
-      static constexpr std::array<float, 3> chip_widths{28, 35, 42};
-      static constexpr float inactive_maximum = 320;
-      static constexpr float selected_maximum = 420;
-      static constexpr float selected_share = 0.55F;
-      static constexpr float caption_minimum = 56;
-      static constexpr float counter_width = 36;
-      static constexpr float fade_width = 20;
-
-      enum class Fit : std::uint8_t {
-        full,
-        truncated,
-        compact,
-      };
-
-      struct Metrics {
-        float leading;
-        float trailing;
-        float spacing;
-        float gap;
-        float inactive_maximum;
-        float selected_maximum;
-        float caption_minimum;
-        float counter;
-
-        [[nodiscard]] static Metrics scaled(float ratio) noexcept;
-      };
-
-      struct Measure {
-        float caption = 0;
-        float chip = 0;
-        float status = 0;
-
-        [[nodiscard]] float statusSpace(const Metrics& metrics) const noexcept;
-
-        [[nodiscard]] float whole(const Metrics& metrics) const noexcept;
-
-        [[nodiscard]] float truncated(const Metrics& metrics) const noexcept;
-
-        [[nodiscard]] float compact(const Metrics& metrics) const noexcept;
-      };
-
-      struct Room {
-        float width;
-        Metrics metrics;
-      };
-
-      struct Plan {
-        std::array<float, maximum_tabs> widths{};
-        std::array<Fit, maximum_tabs> fits{};
-        std::size_t first = 0;
-        std::size_t end = 0;
-        std::size_t focus = 0;
-        std::size_t count = 0;
-
-        [[nodiscard]] std::size_t hidden() const noexcept;
-
-        [[nodiscard]] bool shows(std::size_t index) const noexcept;
-
-        [[nodiscard]] std::optional<std::size_t> nearestHidden() const noexcept;
-
-        [[nodiscard]] float footprint(const Metrics& metrics) const noexcept;
-      };
-
-      [[nodiscard]] static Plan arrange(std::span<const Measure> sizes, std::size_t focus, const Room& room) noexcept;
-
-    private:
-      using Captioned = std::array<bool, maximum_tabs>;
-
-      static void naturalWidths(Plan& plan, std::span<const Measure> sizes, const Metrics& metrics) noexcept;
-
-      [[nodiscard]] static Captioned captionedTabs(std::span<const Measure> sizes, std::size_t focus, const Metrics& metrics, float budget, bool all_fit) noexcept;
-
-      [[nodiscard]] static float largestCap(std::span<const Measure> sizes, const Captioned& captioned, const Metrics& metrics, float budget) noexcept;
-
-      static void distribute(Plan& plan, std::span<const Measure> sizes, const Captioned& captioned, const Metrics& metrics, float budget) noexcept;
-    };
-
-  }
-}
-
 // Interface: presentation/tab_motions.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     struct TabMotionSlot {
       std::uint64_t id = 0;

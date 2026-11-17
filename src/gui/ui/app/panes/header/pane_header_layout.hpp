@@ -12,7 +12,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.activity_order;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -62,7 +62,7 @@ namespace telar::gui::qt {
     void refreshLayout();
 
     QVariantMap measurements_;
-    PaneHeaderGeometry layout_;
+    application::workbench::PaneHeaderGeometry layout_;
     qreal ratio_ = 1;
     qreal band_height_ = ChromeMetrics::logical_pane_header;
     qreal density_ = 1;

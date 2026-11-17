@@ -64,9 +64,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.activity;
-import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.history_inspection;
+import telar.gui.features.workbench;
 import telar.gui.features.notifications;
 import telar.gui.features.window;
 import telar.gui.features.status_bar;
@@ -74,6 +72,8 @@ import telar.gui.features.status_bar;
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::workbench;
 
   using namespace telar::gui::features::activity;
 

@@ -1,16 +1,18 @@
-export module telar.gui.layout.snapshots;
+// The layouts the workbench keeps: the token a tab's layout travels in, the pane and layout the
+// user left each workspace on, and the layouts saved for tabs the session restores.
+export module telar.gui.features.workbench:layouts;
 
 import std;
 import telar.tbc;
 
-import telar.gui.foundation.model;
 import telar.base.memory.allocators;
+import telar.gui.foundation.model;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 
 // Interface: application/layout_token.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     struct TabLayoutPreset {
       TabLocation location;
@@ -43,7 +45,7 @@ export {
 
 // Interface: application/navigation_history.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     class NavigationHistory {
     public:
@@ -81,7 +83,7 @@ export {
 
 // Interface: application/saved_layouts.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::workbench {
 
     class SavedLayouts {
     public:

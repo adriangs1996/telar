@@ -9,7 +9,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
-import telar.gui.layout.snapshots;
+import telar.gui.features.workbench;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.foundation.model;
@@ -18,6 +18,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::workbench;
 
   constexpr TabLocation fixture_location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 4}, .tab_id = 7};
   constexpr std::uint64_t first_pane = 11;

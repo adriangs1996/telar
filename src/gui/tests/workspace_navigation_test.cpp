@@ -23,7 +23,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.layout.snapshots;
+import telar.gui.features.workbench;
 import telar.gui.application;
 import telar.wire.layout;
 import telar.wire.runtime;
@@ -33,6 +33,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::workbench;
   using namespace telar::gui::test;
 
   constexpr WorkspaceLocation first_workspace{.kind = WorkspaceLocation::Kind::workspace, .id = 1};
@@ -74,15 +75,15 @@ namespace {
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
     const auto source = client.activeTab()->location;
 
-    require(client.split(ClientLayoutAxis::vertical), "The fixture must own a non-default split tree");
+    require(application::workbench::split(client, ClientLayoutAxis::vertical), "The fixture must own a non-default split tree");
     const auto split = transport.last<CreatePane>();
     constexpr std::uint64_t remembered_pane = 3;
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = remembered_pane, .location = source, .created = true, .pane_generation = 1});
-    client.toggleFullscreen();
-    client.selectWorkspace(second_workspace);
+    application::workbench::toggleFullscreen(client);
+    application::workbench::selectWorkspace(client, second_workspace);
     finishWorkspaceArrival(client, transport, {.workspace = second_workspace, .tab_id = second_workspace.id}, second_workspace.id);
-    client.selectWorkspace(first_workspace);
+    application::workbench::selectWorkspace(client, first_workspace);
     const auto returning = transport.last<OpenPane>();
 
     require(returning.target.kind == PaneTarget::Kind::pane && returning.target.id == remembered_pane && !returning.launch, "Returning must reopen the remembered focus instead of selecting the runtime's default tab");
@@ -103,9 +104,9 @@ namespace {
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
-    client.selectWorkspace(second_workspace);
+    application::workbench::selectWorkspace(client, second_workspace);
     finishWorkspaceArrival(client, transport, {.workspace = second_workspace, .tab_id = second_workspace.id}, second_workspace.id);
-    client.selectWorkspace(first_workspace);
+    application::workbench::selectWorkspace(client, first_workspace);
     const auto returning = transport.last<OpenPane>();
 
     require(returning.target.kind == PaneTarget::Kind::pane && returning.target.id == 1, "The first return must use its remembered pane");
@@ -158,19 +159,19 @@ namespace {
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
-    require(client.split(ClientLayoutAxis::vertical), "The previous connection must own a non-default remembered tree");
+    require(application::workbench::split(client, ClientLayoutAxis::vertical), "The previous connection must own a non-default remembered tree");
     const auto split = transport.last<CreatePane>();
     constexpr std::uint64_t old_focus = 3;
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = old_focus, .location = client.activeTab()->location, .created = true, .pane_generation = 1});
-    client.toggleFullscreen();
-    client.selectWorkspace(second_workspace);
+    application::workbench::toggleFullscreen(client);
+    application::workbench::selectWorkspace(client, second_workspace);
     finishWorkspaceArrival(client, transport, {.workspace = second_workspace, .tab_id = second_workspace.id}, second_workspace.id);
     client.disconnected();
     client.connected(2);
     const auto messages = transport.sent.size();
 
-    require(!client.selectWorkspace(first_workspace) && transport.sent.size() == messages, "A new connection must wait for a fresh workspace replica");
+    require(!application::workbench::selectWorkspace(client, first_workspace) && transport.sent.size() == messages, "A new connection must wait for a fresh workspace replica");
     const TabLocation current{.workspace = second_workspace, .tab_id = second_workspace.id};
     const std::array<ClientLayoutNode, 1> current_nodes{ClientLayoutPane{second_workspace.id}};
     const std::array current_layouts{ClientTabLayout{.location = current, .focused_pane = second_workspace.id, .workspace_active = true, .nodes = current_nodes}};
@@ -178,7 +179,7 @@ namespace {
     deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_width = decltype(client)::default_sidebar_columns, .active_tab = current, .tabs = current_layouts});
     finishWorkspaceArrival(client, transport, current, second_workspace.id);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
-    require(client.selectWorkspace(first_workspace), "Fresh canonical metadata must admit navigation again");
+    require(application::workbench::selectWorkspace(client, first_workspace), "Fresh canonical metadata must admit navigation again");
     const auto opening = transport.last<OpenPane>();
 
     require(opening.target.kind == PaneTarget::Kind::workspace && opening.target.id == first_workspace.id, "A new connection must not reopen the previous connection's remembered pane");
@@ -202,7 +203,7 @@ namespace {
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
     const auto source = client.activeTab()->location;
 
-    client.selectWorkspace(second_workspace);
+    application::workbench::selectWorkspace(client, second_workspace);
     const auto openings = transport.count(ClientTag::open_pane);
     const std::array tabs{TabDescriptor{.tab_id = source.tab_id, .pane_count = 1}};
 
@@ -220,7 +221,7 @@ namespace {
     const auto messages = transport.sent.size();
     constexpr std::size_t checkout_position = 2;
 
-    client.selectWorkspaceIndex(checkout_position);
+    application::workbench::selectWorkspaceAt(client, checkout_position);
     require(transport.sent.size() == messages, "Project-position shortcuts must exclude linked checkout workspaces");
   }
 
@@ -343,7 +344,7 @@ namespace {
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
     const auto messages = transport.sent.size();
 
-    client.selectWorkspace(unknown_workspace);
+    application::workbench::selectWorkspace(client, unknown_workspace);
     require(transport.sent.size() == messages && client.focusedPane()->id == 1, "An unknown workspace must not request metadata or leave the current pane");
   }
 
@@ -356,7 +357,7 @@ namespace {
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
     const auto messages = transport.sent.size();
 
-    client.selectWorkspace(first_workspace);
+    application::workbench::selectWorkspace(client, first_workspace);
     require(transport.sent.size() == messages && !client.requestsPending(), "Selecting the active workspace must preserve the idle request tracker");
   }
 
@@ -370,7 +371,7 @@ namespace {
     const auto first = transport.sent.size();
     const auto openings = transport.count(ClientTag::open_pane);
 
-    client.selectWorkspace(second_workspace);
+    application::workbench::selectWorkspace(client, second_workspace);
     require(transport.count(ClientTag::open_pane) == openings + 1, "An uncached known workspace must open through the runtime instead of requesting metadata alone");
     const auto request = transport.last<OpenPane>();
 
@@ -395,10 +396,10 @@ namespace {
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
-    require(client.createTab("Pending") == application::TabCreationOutcome::requested, "The fixture must own an outstanding tab request");
+    require(application::workbench::createTab(client, "Pending") == application::TabCreationOutcome::requested, "The fixture must own an outstanding tab request");
     const auto messages = transport.sent.size();
 
-    client.selectWorkspace(second_workspace);
+    application::workbench::selectWorkspace(client, second_workspace);
     require(transport.sent.size() == messages && client.focusedPane()->id == 1 && client.focusedPane()->attached, "Pending requests must fence workspace selection before any departure or metadata query");
   }
 
@@ -412,7 +413,7 @@ namespace {
     client.disconnected();
     const auto messages = transport.sent.size();
 
-    client.selectWorkspace(second_workspace);
+    application::workbench::selectWorkspace(client, second_workspace);
     require(transport.sent.size() == messages, "A disconnected client must not navigate using its retained workspace list");
   }
 
@@ -425,7 +426,7 @@ namespace {
     deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
     const auto openings = transport.count(ClientTag::open_pane);
 
-    require(client.leaveWorktree(), "A linked checkout must select its source project");
+    require(application::workbench::leaveWorktree(client), "A linked checkout must select its source project");
     require(transport.count(ClientTag::open_pane) == openings + 1, "Leaving a checkout must hand off to its source project instead of only reading its metadata");
     const auto request = transport.last<OpenPane>();
 

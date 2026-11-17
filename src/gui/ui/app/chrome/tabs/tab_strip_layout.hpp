@@ -24,8 +24,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.tab_drop;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -90,8 +89,8 @@ namespace telar::gui::qt {
       return next_sample_ns_.has_value();
     }
 
-    [[nodiscard]] std::size_t dropSlots(std::span<TabDropSlot> output) const;
-    void setDrag(std::optional<TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset);
+    [[nodiscard]] std::size_t dropSlots(std::span<application::workbench::TabDropSlot> output) const;
+    void setDrag(std::optional<application::workbench::TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset);
     [[nodiscard]] QVariantMap counter() const;
     [[nodiscard]] QRectF plus() const noexcept;
     void setPlus(const QRectF& plus);
@@ -121,16 +120,16 @@ namespace telar::gui::qt {
     [[nodiscard]] float captionAdvance(const QString& label);
     void rebuild();
     void raiseDraggedSlot();
-    [[nodiscard]] QRectF placeTab(std::uint64_t id, QRectF bounds, TabMotionFrame& frame);
-    [[nodiscard]] QVariantList placeCards(const QVariantMap& tab, TabMotionFrame& frame);
-    [[nodiscard]] TabStripGeometry::Plan measureTabs(QList<QVariantMap>& records, std::span<TabStripGeometry::Measure> sizes, const TabStripGeometry::Room& room);
+    [[nodiscard]] QRectF placeTab(std::uint64_t id, QRectF bounds, application::workbench::TabMotionFrame& frame);
+    [[nodiscard]] QVariantList placeCards(const QVariantMap& tab, application::workbench::TabMotionFrame& frame);
+    [[nodiscard]] application::workbench::TabStripGeometry::Plan measureTabs(QList<QVariantMap>& records, std::span<application::workbench::TabStripGeometry::Measure> sizes, const application::workbench::TabStripGeometry::Room& room);
 
     QPointer<WindowAnimationClock> clock_;
     QMetaObject::Connection frame_connection_;
-    TabMotions motions_;
-    TabCardMotions card_motions_;
+    application::workbench::TabMotions motions_;
+    application::workbench::TabCardMotions card_motions_;
     QRectF plus_;
-    std::optional<TabMotion> selection_motion_;
+    std::optional<application::workbench::TabMotion> selection_motion_;
     std::optional<WorkspaceLocation> workspace_;
     std::uint64_t machine_view_ = 0;
     std::optional<std::uint64_t> next_sample_ns_;
@@ -148,9 +147,9 @@ namespace telar::gui::qt {
     QRectF selection_bounds_;
     QRectF drop_marker_;
     QRectF dragged_bounds_;
-    std::array<TabDropSlot, TabDropSlots::capacity> drop_slots_{};
+    std::array<application::workbench::TabDropSlot, application::workbench::TabDropSlots::capacity> drop_slots_{};
     std::size_t drop_slot_count_ = 0;
-    std::optional<TabDragMove> drag_preview_;
+    std::optional<application::workbench::TabDragMove> drag_preview_;
     std::optional<std::uint64_t> dragged_;
     QPointF drag_pointer_;
     qreal drag_grab_offset_ = 0;

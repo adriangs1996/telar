@@ -1,15 +1,14 @@
-module telar.gui.layout.snapshots;
+module telar.gui.features.workbench;
 
 import std;
 import telar.tbc;
-
 import telar.base.memory.allocators;
 import telar.base.text;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.foundation.model;
 
-namespace telar::gui {
+namespace telar::gui::features::workbench {
 
   template <Allocator Memory>
   tbc::view<std::string_view, tbc::lt::a> LayoutToken::write(const ClientLayoutSnapshot& snapshot, tbc::view<String<Memory>&, tbc::lt::a> output) {

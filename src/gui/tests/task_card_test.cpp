@@ -53,7 +53,7 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.gui.features.activity;
-import telar.gui.presentation.activity_order;
+import telar.gui.features.workbench;
 
 namespace {
 

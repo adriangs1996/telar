@@ -37,9 +37,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.tab_drop;
 import telar.gui.foundation.drawing;
-import telar.gui.presentation.frame_pacer;
 import telar.gui.foundation.model;
 import telar.gui.application;
 
@@ -47,9 +45,9 @@ namespace telar::gui::qt {
 
   namespace {
 
-    using Geometry = TabStripGeometry;
+    using Geometry = application::workbench::TabStripGeometry;
 
-    void previewOrder(std::span<std::size_t> order, const QList<QVariantMap>& records, const TabDragMove& move) {
+    void previewOrder(std::span<std::size_t> order, const QList<QVariantMap>& records, const application::workbench::TabDragMove& move) {
       const auto id_at = [&](std::size_t index) {
         return records[static_cast<qsizetype>(index)].value(QStringLiteral("key")).toString().toULongLong();
       };
@@ -222,7 +220,7 @@ namespace telar::gui::qt {
     return dragged_bounds_;
   }
 
-  std::size_t TabStripLayout::dropSlots(std::span<TabDropSlot> output) const {
+  std::size_t TabStripLayout::dropSlots(std::span<application::workbench::TabDropSlot> output) const {
     if (!isVisible() || window() == nullptr) {
       return 0;
     }
@@ -240,7 +238,7 @@ namespace telar::gui::qt {
     return count;
   }
 
-  void TabStripLayout::setDrag(std::optional<TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset) {
+  void TabStripLayout::setDrag(std::optional<application::workbench::TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset) {
     if (preview && (!workspace_ || workspace_->kind != preview->location.workspace.kind || workspace_->id != preview->location.workspace.id)) {
       preview.reset();
     }
@@ -408,7 +406,7 @@ namespace telar::gui::qt {
     return static_cast<float>(QFontMetricsF{font_}.horizontalAdvance(label));
   }
 
-  TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap>& records, std::span<TabStripGeometry::Measure> sizes, const TabStripGeometry::Room& room) {
+  application::workbench::TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap>& records, std::span<application::workbench::TabStripGeometry::Measure> sizes, const application::workbench::TabStripGeometry::Room& room) {
     const auto ratio = static_cast<float>(ratio_);
     const auto count = model_ == nullptr ? 0 : std::clamp(model_->rowCount(), 0, static_cast<int>(Geometry::maximum_tabs));
     std::size_t active = 0;
@@ -464,7 +462,7 @@ namespace telar::gui::qt {
     return plan;
   }
 
-  QRectF TabStripLayout::placeTab(std::uint64_t id, QRectF bounds, TabMotionFrame& frame) {
+  QRectF TabStripLayout::placeTab(std::uint64_t id, QRectF bounds, application::workbench::TabMotionFrame& frame) {
     const auto dragging = dragged_ == id;
     if (dragging) {
       if (drag_preview_) {
@@ -492,9 +490,9 @@ namespace telar::gui::qt {
     return bounds;
   }
 
-  QVariantList TabStripLayout::placeCards(const QVariantMap& tab, TabMotionFrame& frame) {
+  QVariantList TabStripLayout::placeCards(const QVariantMap& tab, application::workbench::TabMotionFrame& frame) {
     const auto source = tab.value(QStringLiteral("cards")).toList();
-    std::array<TabCardInput, PaneLayout::maximum_panes> inputs{};
+    std::array<application::workbench::TabCardInput, PaneLayout::maximum_panes> inputs{};
     std::size_t count = 0;
 
     for (const auto& entry : source) {
@@ -507,11 +505,11 @@ namespace telar::gui::qt {
       inputs[count++] = {.pane = card.value(QStringLiteral("key")).toString().toULongLong(), .focused = card.value(QStringLiteral("focused")).toBool(), .attention = !card.value(QStringLiteral("attentionColor")).toString().isEmpty()};
     }
 
-    std::array<TabCardPlacement, TabCardMotions::maximum_cards> placed{};
+    std::array<application::workbench::TabCardPlacement, application::workbench::TabCardMotions::maximum_cards> placed{};
     const auto written = card_motions_.place(std::span{inputs}.first(count), placed, frame);
 
     // Delegates follow pane order, so a card keeps its item while its pose moves.
-    std::sort(placed.begin(), placed.begin() + written, [](const TabCardPlacement& left, const TabCardPlacement& right) {
+    std::sort(placed.begin(), placed.begin() + written, [](const application::workbench::TabCardPlacement& left, const application::workbench::TabCardPlacement& right) {
       return left.pane < right.pane;
     });
 
@@ -529,7 +527,7 @@ namespace telar::gui::qt {
       record.insert(QStringLiteral("rotation"), card.pose.rotation);
       record.insert(QStringLiteral("scale"), card.pose.scale);
       record.insert(QStringLiteral("rank"), static_cast<qulonglong>(card.rank));
-      record.insert(QStringLiteral("layer"), card.lifted ? static_cast<int>(TabCardMotions::maximum_cards) : static_cast<int>(TabCardMotions::maximum_cards - 1 - card.rank));
+      record.insert(QStringLiteral("layer"), card.lifted ? static_cast<int>(application::workbench::TabCardMotions::maximum_cards) : static_cast<int>(application::workbench::TabCardMotions::maximum_cards - 1 - card.rank));
       cards.append(std::move(record));
     }
 
@@ -538,7 +536,7 @@ namespace telar::gui::qt {
 
   void TabStripLayout::raiseDraggedSlot() {
     const auto delivered = std::span{drop_slots_}.first(drop_slot_count_);
-    const auto lifted = std::ranges::find(delivered, dragged_, [](const TabDropSlot& slot) {
+    const auto lifted = std::ranges::find(delivered, dragged_, [](const application::workbench::TabDropSlot& slot) {
       return std::optional{slot.id};
     });
     if (lifted != delivered.end()) {
@@ -564,7 +562,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    TabMotionFrame frame{.now_ns = clock_.isNull() ? 0 : clock_->now(), .interval_ns = clock_.isNull() ? TabMotionFrame::default_interval_ns : clock_->frameInterval(), .deadline_ns = std::nullopt};
+    application::workbench::TabMotionFrame frame{.now_ns = clock_.isNull() ? 0 : clock_->now(), .interval_ns = clock_.isNull() ? application::workbench::TabMotionFrame::default_interval_ns : clock_->frameInterval(), .deadline_ns = std::nullopt};
 
     motions_.begin(workspace_);
     card_motions_.begin();
@@ -656,7 +654,7 @@ namespace telar::gui::qt {
     selection_bounds_ = {};
     if (selection) {
       if (!selection_motion_) {
-        selection_motion_ = TabMotion{.from = *selection, .to = *selection};
+        selection_motion_ = application::workbench::TabMotion{.from = *selection, .to = *selection};
       }
 
       const auto visible = selection_motion_->place(*selection, frame, selection_dragging || !workspace_);

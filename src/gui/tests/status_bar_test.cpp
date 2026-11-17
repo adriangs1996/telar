@@ -37,7 +37,7 @@ static_assert(true);
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
 import telar.gui.features.machines;
-import telar.gui.presentation.history_inspection;
+import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
 
 namespace {

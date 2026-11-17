@@ -21,7 +21,7 @@ namespace telar::gui::application::terminal::links {
 
     void split(Session& session, const features::terminal::links::EditorRequest& request) {
       launch(request.target, [&](std::span<const std::string_view> arguments) {
-        Access::launchSplit(session, request.source.pane_id, arguments);
+        workbench::launchSplit(session, request.source.pane_id, arguments);
       });
     }
 
@@ -62,7 +62,7 @@ namespace telar::gui::application::terminal::links {
   void openAnchored(Session& session, const FilePath& path, std::string_view executable, std::string_view anchored, std::optional<std::uint64_t> source_id) {
     if (!source_id) {
       launch(features::terminal::links::EditorTarget{executable, path.text(), path.line(), path.column()}, [&](std::span<const std::string_view> arguments) {
-        Access::launchTab(session, arguments);
+        workbench::launchTab(session, arguments);
       });
 
       return;
@@ -124,7 +124,7 @@ namespace telar::gui::application::terminal::links {
         return Change::none;
       }
 
-      session.focusPane(editor->id);
+      workbench::focusPane(session, editor->id);
 
       return Change::model;
     }

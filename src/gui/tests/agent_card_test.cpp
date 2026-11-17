@@ -42,7 +42,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
-import telar.gui.presentation.activity_order;
+import telar.gui.features.workbench;
 import telar.gui.foundation.drawing;
 import telar.gui.features.activity;
 

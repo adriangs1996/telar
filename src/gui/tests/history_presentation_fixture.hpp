@@ -19,7 +19,7 @@ namespace telar::gui::test {
 
   struct HistoryPresentation {
     static void renameTab(qt::ApplicationController& application, std::string_view label) {
-      application.session().renameTab(label);
+      application::workbench::renameTab(application.session(), label);
     }
 
     [[nodiscard]] static bool current(qt::ApplicationController& application) {

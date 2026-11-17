@@ -50,13 +50,12 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
-import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.features.workbench;
 import telar.gui.features.window;
 
 namespace {
 
-  using telar::gui::PaneAttentionKey;
+  using telar::gui::features::workbench::PaneAttentionKey;
   using telar::gui::qt::NativePaneAttention;
   using telar::gui::qt::paneAttentionKey;
   using telar::gui::qt::paneAttentionValue;
@@ -322,7 +321,7 @@ namespace {
     Q_SLOT static void attentionRadiusFollowsPaneSurfaces() {
       NativePaneAttention item;
 
-      QCOMPARE(item.radius(), qreal{telar::gui::PaneDecorationGeometry::frame_radius});
+      QCOMPARE(item.radius(), qreal{telar::gui::features::workbench::PaneDecorationGeometry::frame_radius});
       const QSignalSpy changes{&item, &NativePaneAttention::radiusChanged};
 
       item.setRadius(4);

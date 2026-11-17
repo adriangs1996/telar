@@ -5,6 +5,7 @@ import std;
 import :access;
 import telar.base.text.utf8;
 import telar.gui.features.terminal.graphics;
+import telar.gui.features.workbench;
 import telar.gui.foundation.text;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
@@ -33,7 +34,7 @@ namespace telar::gui::application::terminal::graphics {
 
       title.append("Images paused");
       const auto* pane = session.findPane(pane_id);
-      const auto* tab = pane == nullptr ? nullptr : Access::findTab(session, pane->location);
+      const auto* tab = pane == nullptr ? nullptr : features::workbench::find(session.tabs(), pane->location);
       const auto index = tab == nullptr ? 0 : tab->layout.displayIndex(pane_id);
       if (index != 0) {
         const std::string_view foreground{pane->foreground};

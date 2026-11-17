@@ -16,7 +16,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -71,7 +71,7 @@ namespace telar::gui::qt {
     QPointer<QAbstractItemModel> model_;
     std::array<QMetaObject::Connection, 6> connections_;
     ListModel items_{this};
-    PaneMotions motions_;
+    application::workbench::PaneMotions motions_;
     QString context_;
     QPointer<WindowAnimationClock> clock_;
     QMetaObject::Connection frame_connection_;

@@ -80,7 +80,7 @@ namespace {
 
     require(request.pane_id == entries.front().pane_id && request.pane_generation == entries.front().pane_generation, "the wire acknowledgement must use the committed snapshot identity");
     deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
-    client.focusPane(entries.front().pane_id);
+    application::workbench::focusPane(client, entries.front().pane_id);
     require(countAcknowledgements(transport) == initial + 1, "repeated snapshots and repeated focus must not resend a completion");
     entries.front().status = AgentStatus::working;
     deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});

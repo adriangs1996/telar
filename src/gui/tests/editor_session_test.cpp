@@ -75,12 +75,12 @@ namespace {
     auto& client = fixture.client;
     const auto& transport = fixture.transport;
 
-    client.split(ClientLayoutAxis::vertical);
+    application::workbench::split(client, ClientLayoutAxis::vertical);
     const auto split = transport.last<CreatePane>();
     constexpr std::uint64_t editor_generation = 7;
 
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = editor_generation});
-    client.focusPane(1);
+    application::workbench::focusPane(client, 1);
     fixture.open("../src/a.cpp:12:3", true);
     const auto request = transport.last<OpenEditor>();
     constexpr std::uint32_t line = 12;
@@ -103,7 +103,7 @@ namespace {
     deliver(client, EditorOpened{.request_id = request.request_id, .outcome = EditorOutcome::unavailable});
     require(transport.count(ClientTag::create_pane) == count, "a duplicate reply must not spawn an editor");
 
-    client.focusPane(1);
+    application::workbench::focusPane(client, 1);
     fixture.open("../src/pinned.cpp:12:3", true);
     const auto fallback_id = transport.last<OpenEditor>().request_id;
 
@@ -208,11 +208,11 @@ namespace {
     const auto location = fixture.client.activeTab()->location;
     const auto generation = fixture.client.findPane(1)->attachment_generation;
 
-    fixture.client.createTab();
+    application::workbench::createTab(fixture.client);
     const auto created = fixture.transport.last<CreateTab>();
 
     deliver(fixture.client, TabCreated{.request_id = created.request_id, .location = {.workspace = location.workspace, .tab_id = 2}, .position = 1, .root_pane_id = 2, .pane_generation = 1});
-    fixture.client.selectTab(location);
+    application::workbench::selectTab(fixture.client, location);
     const auto attach = fixture.transport.last<OpenPane>();
 
     deliver(fixture.client, PaneOpened{.request_id = attach.request_id, .pane_id = 1, .location = location, .pane_generation = 1});
@@ -228,7 +228,7 @@ namespace {
   void duplicateAttachmentPreservesPendingEditor() {
     Fixture fixture;
 
-    fixture.client.split(ClientLayoutAxis::horizontal);
+    application::workbench::split(fixture.client, ClientLayoutAxis::horizontal);
     const auto split = fixture.transport.last<CreatePane>();
     const std::array<PaneDescriptor, 2> panes{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, {.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
 
@@ -277,21 +277,21 @@ namespace {
 
     require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::opened, .pane_id = 1, .pane_generation = 2}) == application::Change::none, "an editor reply must not focus a mismatched runtime generation");
 
-    auto geometry = fixture.client.workbenchGeometry();
+    auto geometry = application::workbench::geometry(fixture.client);
     const auto minimum_extent = geometry.layout_metrics.minimumPaneExtent();
     const auto required_columns = (PaneLayout::maximum_panes * (minimum_extent + geometry.layout_metrics.gap)) - geometry.layout_metrics.gap;
 
     geometry.area.width = static_cast<float>(static_cast<double>(required_columns * geometry.grid.cell_width_px) / geometry.grid.scale);
-    fixture.client.setWorkbenchGeometry(geometry);
+    application::workbench::setGeometry(fixture.client, geometry);
 
     std::uint64_t next_pane_id = 2;
 
     for (std::uint64_t level_size = 1; level_size < PaneLayout::maximum_panes; level_size *= 2) {
       for (std::uint64_t target = 1; target <= level_size; ++target) {
-        fixture.client.focusPane(target);
+        application::workbench::focusPane(fixture.client, target);
         const auto requests = fixture.transport.count(ClientTag::create_pane);
 
-        fixture.client.split(ClientLayoutAxis::horizontal);
+        application::workbench::split(fixture.client, ClientLayoutAxis::horizontal);
         require(fixture.transport.count(ClientTag::create_pane) == requests + 1, "the capacity fixture must have enough physical space for each requested split");
         const auto split = fixture.transport.last<CreatePane>();
 
@@ -301,7 +301,7 @@ namespace {
 
     require(fixture.client.activeTab()->layout.nodes().size() == PaneLayout::maximum_nodes, "the capacity fixture must fill a spatially valid balanced tab");
 
-    fixture.client.focusPane(1);
+    application::workbench::focusPane(fixture.client, 1);
     fixture.open();
     const auto full_request = fixture.transport.last<OpenEditor>().request_id;
     const auto count = fixture.transport.count(ClientTag::create_pane);

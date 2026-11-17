@@ -137,7 +137,7 @@ namespace {
       openFirstPane(client, transport);
       const auto location = client.activeTab()->location;
 
-      client.toggleFullscreen();
+      application::workbench::toggleFullscreen(client);
       deliverSingleCell(client, {.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = 1}});
       const auto retained = budget.liveBytes();
 

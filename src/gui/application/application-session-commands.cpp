@@ -3,11 +3,9 @@ module telar.gui.application;
 import std;
 import telar.gui.features.notifications;
 import telar.gui.foundation.terminal;
-import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.graphics;
-import telar.gui.layout.snapshots;
 import telar.config.client;
 import telar.config.runtime;
 import telar.wire.clients;
@@ -49,11 +47,11 @@ namespace telar::gui::application {
   Change Session::executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, const ClientCommandHandler& handler) {
     switch (message.action) {
     case ClientAction::layout_get:
-      reply.text = exportLayout();
+      reply.text = workbench::exportLayout(*this);
 
       return Change::none;
     case ClientAction::layout_apply:
-      importLayout(message.text);
+      workbench::importLayout(*this, message.text);
       reply.text = {};
 
       return Change::model;
@@ -115,7 +113,7 @@ namespace telar::gui::application {
 
       const auto before = *active_tab_;
 
-      selectTabOffset(message.action == ClientAction::tab_next ? 1 : -1);
+      workbench::selectTabBeside(*this, message.action == ClientAction::tab_next ? 1 : -1);
       reply.status = sameTab(before, *active_tab_) ? ClientCommandStatus::applied : ClientCommandStatus::admitted;
       break;
     }
@@ -136,7 +134,7 @@ namespace telar::gui::application {
         break;
       }
 
-      if (!selectWorkspace(location)) {
+      if (!workbench::selectWorkspace(*this, location)) {
         throw EncodingError{"ClientBusy"};
       }
 
@@ -144,7 +142,7 @@ namespace telar::gui::application {
       break;
     }
     case ClientAction::tab_create:
-      if (createTab(message.text) != TabCreationOutcome::requested) {
+      if (workbench::createTab(*this, message.text) != TabCreationOutcome::requested) {
         throw EncodingError{"ClientBusy"};
       }
 
@@ -163,7 +161,7 @@ namespace telar::gui::application {
         break;
       }
 
-      selectTab((*tab)->location);
+      workbench::selectTab(*this, (*tab)->location);
       reply.status = ClientCommandStatus::admitted;
       break;
     }
@@ -173,7 +171,7 @@ namespace telar::gui::application {
   }
 
   void Session::admitPaneSplit(ClientLayoutAxis axis, CompleteClientCommand& reply) {
-    if (!split(axis)) {
+    if (!workbench::split(*this, axis)) {
       throw EncodingError{"PaneCreationUnavailable"};
     }
 
@@ -196,7 +194,7 @@ namespace telar::gui::application {
       break;
     case ClientAction::pane_close:
       focusCommandPane(message.target_id);
-      if (!closePane(message.target_id)) {
+      if (!workbench::closePane(*this, message.target_id)) {
         throw EncodingError{"PaneClosureUnavailable"};
       }
 
@@ -209,7 +207,7 @@ namespace telar::gui::application {
       const auto direction = parseDirection(message.text);
 
       focusCommandPane(message.target_id);
-      if (!resizeDirection(direction)) {
+      if (!workbench::resizeToward(*this, direction)) {
         throw EncodingError{"PaneResizeUnavailable"};
       }
 
@@ -217,7 +215,7 @@ namespace telar::gui::application {
     } break;
     case ClientAction::pane_fullscreen:
       focusCommandPane(message.target_id);
-      toggleFullscreen();
+      workbench::toggleFullscreen(*this);
       reply.value = activeTab()->fullscreen;
       break;
     case ClientAction::pane_scroll:
@@ -254,7 +252,7 @@ namespace telar::gui::application {
       changed = width != sidebar_columns_;
       sidebar_columns_ = width;
       if (changed) {
-        retainLayout();
+        workbench::retainLayout(*this);
       }
     } else if (message.action != ClientAction::sidebar_get) {
       changed = configuration_.sidebar_visible != (message.action == ClientAction::sidebar_show);
@@ -299,120 +297,18 @@ namespace telar::gui::application {
   }
 
   void Session::focusCommandPane(std::uint64_t identity) {
-    focusPane(commandPane(identity).id);
-  }
-
-  tbc::view<std::string_view, tbc::lt::a> Session::exportLayout() {
-    const auto* tab = activeTab();
-    if (tab == nullptr || tab->focused_pane == 0) {
-      throw EncodingError{"No active tab layout"};
-    }
-
-    const ClientTabLayout saved_tab{
-        .location = tab->location,
-        .focused_pane = tab->focused_pane,
-        .fullscreen = tab->fullscreen,
-        .workspace_active = true,
-        .nodes = tab->layout.nodes(),
-    };
-
-    const std::array tabs{saved_tab};
-    const ClientLayoutSnapshot snapshot{
-        .restored = true,
-        .sidebar_visible = configuration_.sidebar_visible,
-        .sidebar_width = sidebar_columns_,
-        .workspace_list_collapsed = workspace_list_collapsed_,
-        .active_tab = tab->location,
-        .tabs = tabs,
-    };
-
-    return LayoutToken::write(snapshot, command_response_);
-  }
-
-  void Session::importLayout(std::string_view token) {
-    auto* tab = activeTab();
-    if (pending_count_ != 0 || (tab != nullptr && tab->loading)) {
-      throw EncodingError{"Client has requests in flight"};
-    }
-
-    if (tab == nullptr) {
-      throw EncodingError{"No active tab layout"};
-    }
-
-    const auto preset = LayoutToken::read(token);
-    if (!sameTab(preset.location, tab->location)) {
-      throw EncodingError{"Layout token belongs to another tab"};
-    }
-
-    validateLayoutMembership(preset);
-    tab->layout.restore(preset.layout.nodes());
-    ++view_version_.panes;
-    tab->focused_pane = preset.focused_pane;
-    tab->fullscreen = preset.fullscreen;
-    synchronizeAttachments();
-    retainLayout();
-  }
-
-  void Session::validateLayoutMembership(const TabLayoutPreset& preset) const {
-    std::size_t leaves = 0;
-
-    for (const auto& node : preset.layout.nodes()) {
-      if (const auto* leaf = std::get_if<ClientLayoutPane>(&node)) {
-        const auto* pane = findPane(leaf->pane_id);
-        if (pane == nullptr || !sameTab(pane->location, preset.location)) {
-          throw EncodingError{"Layout token pane does not belong to its tab"};
-        }
-
-        ++leaves;
-      }
-    }
-
-    const auto members = std::ranges::count_if(panes_, [&](const auto& pane) {
-      return sameTab(pane->location, preset.location);
-    });
-    if (std::cmp_not_equal(leaves, members)) {
-      throw EncodingError{"Layout token pane membership has changed"};
-    }
-  }
-
-  std::size_t Session::orderedTabs(tbc::view<std::array<Tab<Memory>*, maximum_tabs>&, tbc::lt::a> ordered) const noexcept {
-    std::size_t count = 0;
-
-    if (!active_tab_) {
-      return count;
-    }
-
-    for (const auto& tab : tabs_) {
-      if (sameWorkspace(tab->location.workspace, active_tab_->workspace)) {
-        ordered[count++] = tab.get();
-      }
-    }
-
-    std::sort(ordered.begin(), ordered.begin() + count, [](const auto* left, const auto* right) {
-      return left->position != right->position ? left->position < right->position : left->location.tab_id < right->location.tab_id;
-    });
-
-    return count;
-  }
-
-  std::uint64_t Session::neighboringPane(PaneDirection direction) {
-    auto* tab = activeTab();
-    if (tab == nullptr) {
-      return 0;
-    }
-
-    return tab->layout.focusTarget(workbench_geometry_.cellArea(), workbench_geometry_.layout_metrics, {.pane_id = tab->focused_pane, .direction = direction, .fullscreen = tab->fullscreen});
+    workbench::focusPane(*this, commandPane(identity).id);
   }
 
   Change Session::apply(const PaneFocusCommand& message) {
     auto outcome = PaneFocusOutcome::source_not_focused;
     const auto* source = focusedPane();
     if (source != nullptr && source->id == message.pane_id && source->generation == message.pane_generation) {
-      const auto neighbor = neighboringPane(message.direction);
+      const auto neighbor = workbench::neighbor(*this, message.direction);
 
       outcome = neighbor == 0 ? PaneFocusOutcome::no_neighbor : PaneFocusOutcome::focused;
       if (neighbor != 0) {
-        focusPane(neighbor);
+        workbench::focusPane(*this, neighbor);
       }
     }
 

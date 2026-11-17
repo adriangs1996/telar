@@ -15,6 +15,7 @@ import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.terminal.links;
+import telar.gui.features.workbench;
 
 namespace telar::gui::application {
 
@@ -23,8 +24,10 @@ namespace telar::gui::application {
   // the use cases that need them, and stay inline so a use case costs what the method it
   // replaces did.
   struct Access {
-    // The kinds of the requests Session tracks until the runtime answers them.
+    // The kinds of the requests Session tracks until the runtime answers them, and what it tracks
+    // of each.
     using RequestKind = Session::RequestKind;
+    using Pending = Session::Pending;
 
     [[nodiscard]] static constexpr Configuration& configuration(Session& session) noexcept {
       return session.configuration_;
@@ -162,21 +165,75 @@ namespace telar::gui::application {
       return session.blockKey(pane_id, line, key);
     }
 
-    // ---- the workbench, until it is a feature -----------------------------------------------
+    // ---- the tabs and panes the session holds ------------------------------------------------
 
-    // Opens a tab, or the first pane, running `arguments`.
-    static void launchTab(Session& session, std::span<const std::string_view> arguments) {
-      session.launchTab(arguments);
+    [[nodiscard]] static constexpr features::workbench::State& workbench(Session& session) noexcept {
+      return session.workbench_;
     }
 
-    // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
-    static void launchSplit(Session& session, std::uint64_t pane_id, std::span<const std::string_view> arguments) {
-      session.launchSplit(pane_id, arguments);
+    [[nodiscard]] static constexpr const features::workbench::State& workbench(const Session& session) noexcept {
+      return session.workbench_;
     }
 
-    // The tab at `location`, if the session holds it.
-    [[nodiscard]] static Tab<Memory>* findTab(const Session& session, TabLocation location) noexcept {
-      return session.findTab(location);
+    [[nodiscard]] static constexpr std::optional<TabLocation>& activeTab(Session& session) noexcept {
+      return session.active_tab_;
+    }
+
+    // The tab at `location`, added to the model when the session holds none there.
+    static Tab<Memory>& ensureTab(Session& session, TabLocation location) {
+      return session.ensureTab(location);
+    }
+
+    // The pane `pane_id` in the tab at `location`, added to the model when the session holds none.
+    static Pane<Memory>& ensurePane(Session& session, std::uint64_t pane_id, TabLocation location) {
+      return session.ensurePane(pane_id, location);
+    }
+
+    // The panes the active tab shows attach, and the others detach.
+    static void synchronizeAttachments(Session& session) {
+      session.synchronizeAttachments();
+    }
+
+    // What a pane opened on its own runs: the launch's program and directory.
+    [[nodiscard]] static Launch defaultLaunch(const Session& session) noexcept {
+      return session.defaultLaunch();
+    }
+
+    // Asks the runtime to describe a tab, which it answers with a snapshot.
+    static void requestSnapshot(Session& session, RequestTabSnapshot request) {
+      session.sendSnapshotRequest(request);
+    }
+
+    // Asks the runtime to open a pane or a workspace, tracked as `kind` until it does.
+    template <typename Request>
+    static void open(Session& session, RequestKind kind, Request request) {
+      session.sendOpeningRequest(kind, request);
+    }
+
+    // Leaves the active workspace for the one holding pane `pane_id`, else `fallback_workspace`.
+    static void handoffPane(Session& session, std::uint64_t pane_id, std::optional<std::uint64_t> fallback_workspace) {
+      session.handoffPane(pane_id, fallback_workspace);
+    }
+
+    // Leaves the active workspace for `target`, else `fallback_workspace`.
+    static void handoffWorkspace(Session& session, PaneTarget target, std::optional<std::uint64_t> fallback_workspace) {
+      session.handoffWorkspace(target, fallback_workspace);
+    }
+
+    // Sends a request to create, rename, move or close a tab, tracked until the runtime answers.
+    template <typename Request>
+    static void sendTabOperation(Session& session, RequestKind kind, Request request) {
+      session.sendTabOperation(kind, request);
+    }
+
+    // The width of the sidebar in columns, which the layout the runtime retains carries.
+    [[nodiscard]] static constexpr std::uint16_t sidebarColumns(const Session& session) noexcept {
+      return session.sidebar_columns_;
+    }
+
+    // What the session answers a command of the CLI with, until the next one.
+    [[nodiscard]] static constexpr String<Memory>& commandResponse(Session& session) noexcept {
+      return session.command_response_;
     }
 
     // The session's clock, monotonic and in nanoseconds.
@@ -221,8 +278,18 @@ namespace telar::gui::application {
     }
 
     // A request of `kind` the runtime will answer, tracked under a new id until it does.
-    [[nodiscard]] static std::uint64_t pending(Session& session, RequestKind kind, std::uint64_t pane_id = 0) {
-      return session.pending(kind, pane_id);
+    [[nodiscard]] static std::uint64_t pending(Session& session, RequestKind kind, std::uint64_t pane_id = 0, ClientLayoutAxis axis = ClientLayoutAxis::horizontal) {
+      return session.pending(kind, pane_id, axis);
+    }
+
+    // What the session tracks of the request `pending` registered last, for its reply to read.
+    [[nodiscard]] static constexpr Pending& lastPending(Session& session) noexcept {
+      return session.pending_[session.pending_count_ - 1];
+    }
+
+    // The requests the runtime is yet to answer.
+    [[nodiscard]] static constexpr std::span<const Pending> requests(const Session& session) noexcept {
+      return std::span{session.pending_}.first(session.pending_count_);
     }
 
     // Sends `request` under a new pending id of `kind`; a request the transport refuses leaves

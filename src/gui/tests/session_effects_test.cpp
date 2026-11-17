@@ -27,7 +27,7 @@ import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.workbench;
 import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.gui.features.window;

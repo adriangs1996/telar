@@ -11,12 +11,9 @@ static_assert(true);
 import std;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.graphics;
-import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.features.workbench;
 import telar.gui.features.machines;
-import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
-import telar.gui.presentation.frame_pacer;
 import telar.gui.application;
 import telar.gui.features.activity;
 import telar.gui.features.notifications;
@@ -26,6 +23,7 @@ import telar.gui.features.window;
 namespace {
 
   using namespace telar::gui::features::terminal::graphics;
+  using namespace telar::gui::features::workbench;
 
   using telar::gui::features::window::WindowTitle;
 
@@ -84,7 +82,7 @@ namespace {
   }
 
   void workspaceMarksPreserveTheOriginalInitial() {
-    using telar::gui::WorkspaceMark;
+    using telar::gui::features::workbench::WorkspaceMark;
 
     require(WorkspaceMark::resolve("telar").initial.view() == "T", "ASCII initials must be uppercase");
     require(WorkspaceMark::resolve("ñandú").initial.view() == "ñ", "non-ASCII initials must preserve the original scalar");
@@ -96,6 +94,7 @@ namespace {
 
   void chromeSurfacesPreserveThemeAndTransparency() {
     using namespace telar::gui;
+    using namespace telar::gui::features::workbench;
     using namespace telar::gui::features::machines;
     using namespace telar::gui::features::window;
 
@@ -212,7 +211,7 @@ namespace {
   }
 
   void tabStripsCompressAroundTheirFocus() {
-    using Geometry = telar::gui::TabStripGeometry;
+    using Geometry = telar::gui::features::workbench::TabStripGeometry;
     const auto metrics = Geometry::Metrics::scaled(1);
     constexpr std::size_t tab_count = 4;
     constexpr float caption_width = 100;

@@ -130,7 +130,7 @@ namespace telar::gui::qt {
 
         title = toQString(application::peek::PeekLabels::title(*agent, task));
         facts = toQString(application::peek::PeekLabels::facts(*agent, task).view());
-        const auto geometry = application::peek::PeekGeometry::measure(session.workbenchGeometry().cellArea());
+        const auto geometry = application::peek::PeekGeometry::measure(application::workbench::geometry(session).cellArea());
         const auto visible = application::peek::lines(session, geometry.screen.height);
 
         lines = toQString(visible).split(QLatin1Char('\n'));
@@ -143,7 +143,7 @@ namespace telar::gui::qt {
   QVariantMap PeekController::geometry() const {
     const auto& display = display_;
     const auto density = display.density;
-    const auto& workbench = store_.session().workbenchGeometry();
+    const auto& workbench = application::workbench::geometry(store_.session());
     const auto geometry = application::peek::PeekGeometry::measure(workbench.cellArea());
     auto bounds = workbench.pixels(geometry.bounds);
 

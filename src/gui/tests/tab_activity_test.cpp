@@ -23,8 +23,7 @@ import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.graphics;
 import telar.gui.foundation.drawing;
-import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.activity_order;
+import telar.gui.features.workbench;
 import telar.gui.foundation.model;
 import telar.gui.features.activity;
 
@@ -32,6 +31,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::workbench;
   using namespace telar::gui::features::activity;
   using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::test;

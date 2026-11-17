@@ -9,6 +9,7 @@
 #include <cstddef>
 
 import telar.gui.foundation.model;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -113,7 +114,7 @@ namespace telar::gui::qt {
 
   void PaneMotionLayout::updatePolish() {
     QList<QVariantMap> records;
-    std::array<PaneMotionSlot, PaneLayout::maximum_panes> placements;
+    std::array<application::workbench::PaneMotionSlot, PaneLayout::maximum_panes> placements;
     const auto count = model_ ? std::clamp(model_->rowCount(), 0, static_cast<int>(placements.size())) : 0;
 
     records.reserve(count);
@@ -134,7 +135,7 @@ namespace telar::gui::qt {
     motions_.update(std::span{placements}.first(static_cast<std::size_t>(count)), now, immediate_ || !enabled_ || !eligible() || context != context_);
     context_ = context;
     immediate_ = false;
-    TabMotionFrame frame{.now_ns = now, .interval_ns = clock_ ? clock_->frameInterval() : TabMotionFrame::default_interval_ns, .deadline_ns = std::nullopt};
+    application::workbench::TabMotionFrame frame{.now_ns = now, .interval_ns = clock_ ? clock_->frameInterval() : application::workbench::TabMotionFrame::default_interval_ns, .deadline_ns = std::nullopt};
 
     for (int index = 0; index < count; ++index) {
       const auto bounds = motions_.place(static_cast<std::size_t>(index), frame);

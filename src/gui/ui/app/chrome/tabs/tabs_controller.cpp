@@ -126,7 +126,7 @@ namespace telar::gui::qt {
     const auto& session = store_.session();
     const auto* active = session.activeTab();
     const auto& surface = presented_;
-    if (active == nullptr || store_.dialog().kind != Store::Dialog::none || surface.machine_view != store_.machineView() || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
+    if (active == nullptr || store_.dialog().kind != Store::Dialog::none || surface.machine_view != store_.machineView() || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &application::workbench::TabDropSlot::id) == surface.view().end()) {
       return;
     }
 
@@ -137,8 +137,8 @@ namespace telar::gui::qt {
     }
   }
 
-  TabDropSurface TabsController::dropSurface(qreal ratio) const {
-    TabDropSurface result;
+  application::workbench::TabDropSurface TabsController::dropSurface(qreal ratio) const {
+    application::workbench::TabDropSurface result;
     const auto* active = store_.session().activeTab();
     if (store_.dialog().kind != Store::Dialog::none || strip_ == nullptr || active == nullptr || strip_->window() != window_ || window_ == nullptr) {
       return result;
@@ -148,7 +148,7 @@ namespace telar::gui::qt {
     result.machine_view = store_.machineView();
     result.scale = window_->effectiveDevicePixelRatio();
     result.viewport = {.width = static_cast<float>(window_->width() * result.scale), .height = static_cast<float>(window_->height() * result.scale)};
-    result.threshold = TabDrag::logical_threshold * ratio * result.scale;
+    result.threshold = application::workbench::TabDrag::logical_threshold * ratio * result.scale;
     result.count = strip_->dropSlots(result.targets);
     const auto origin = strip_->mapToScene(QPointF{});
     const auto create = strip_->plus();
@@ -221,7 +221,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void TabsController::present(const TabDropSurface& surface) {
+  void TabsController::present(const application::workbench::TabDropSurface& surface) {
     presented_ = surface;
     validateDrag();
   }
@@ -229,7 +229,7 @@ namespace telar::gui::qt {
   void TabsController::validateDrag() {
     const auto& surface = presented_;
     const auto& session = store_.session();
-    if (pending_move_ && (!session.tabOperationPending() || surface.machine_view != capture_surface_.machine_view || surface.workspace.kind != pending_move_->location.workspace.kind || surface.workspace.id != pending_move_->location.workspace.id)) {
+    if (pending_move_ && (!application::workbench::tabOperationPending(session) || surface.machine_view != capture_surface_.machine_view || surface.workspace.kind != pending_move_->location.workspace.kind || surface.workspace.id != pending_move_->location.workspace.id)) {
       pending_move_.reset();
       updateDragVisual();
     }
@@ -244,12 +244,12 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (surface.machine_view != capture_surface_.machine_view || surface.viewport != capture_surface_.viewport || surface.threshold != capture_surface_.threshold || std::ranges::find(surface.view(), drag_.source()->tab_id, &TabDropSlot::id) == surface.view().end()) {
+    if (surface.machine_view != capture_surface_.machine_view || surface.viewport != capture_surface_.viewport || surface.threshold != capture_surface_.threshold || std::ranges::find(surface.view(), drag_.source()->tab_id, &application::workbench::TabDropSlot::id) == surface.view().end()) {
       cancelDrag();
       return;
     }
 
-    std::array<std::uint64_t, TabDropSlots::capacity> tabs{};
+    std::array<std::uint64_t, application::workbench::TabDropSlots::capacity> tabs{};
     std::size_t count = 0;
 
     for (const auto& tab : session.tabs()) {
@@ -306,11 +306,11 @@ namespace telar::gui::qt {
     }
 
     pointer_ = event.position();
-    const TabDrag::Position point{event.position().x() * capture_surface_.scale, event.position().y() * capture_surface_.scale};
+    const application::workbench::TabDrag::Position point{event.position().x() * capture_surface_.scale, event.position().y() * capture_surface_.scale};
 
     drag_.update({point[0] / capture_surface_.threshold, point[1] / capture_surface_.threshold}, drop_slots_.at(point));
     if (released) {
-      if (const auto move = drag_.finish(); move && store_.session().requestTabMove(*move)) {
+      if (const auto move = drag_.finish(); move && application::workbench::dropTab(store_.session(), *move)) {
         pending_move_ = move;
       }
 

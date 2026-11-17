@@ -1,10 +1,10 @@
-module telar.gui.presentation.display_metrics;
+module telar.gui.features.workbench;
 
 import std;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::features::workbench {
 
   std::uint64_t ProgressAnimation::nextStep(std::uint64_t now_ns, std::uint64_t interval_ns) noexcept {
     const auto remaining = interval_ns - (now_ns % interval_ns);

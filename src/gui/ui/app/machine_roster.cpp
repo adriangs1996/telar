@@ -294,7 +294,7 @@ namespace telar::gui::qt {
 
     std::ranges::copy(arguments, command.arguments.begin());
     machines_.select(store_.machines().token(application::machines::Machines::local_slot));
-    static_cast<void>(store_.session().createCommandTab(command));
+    static_cast<void>(application::workbench::createCommandTab(store_.session(), command));
   }
 
   void MachineRoster::configureRemoteLaunch(const QString& destination, const QStringList& arguments) {

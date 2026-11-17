@@ -65,8 +65,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application;
-import telar.gui.presentation.history_inspection;
-import telar.gui.presentation.display_metrics;
+import telar.gui.features.workbench;
 import telar.gui.features.activity;
 import telar.gui.features.machines;
 import telar.gui.features.window;

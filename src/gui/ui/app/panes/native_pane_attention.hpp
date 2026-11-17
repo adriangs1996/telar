@@ -19,8 +19,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -74,14 +73,14 @@ namespace telar::gui::qt {
     void bindClock();
     void synchronize();
     void setAlpha(float alpha);
-    void sample(std::uint64_t now_ns, AttentionFades& fades);
+    void sample(std::uint64_t now_ns, application::workbench::AttentionFades& fades);
     [[nodiscard]] bool eligible() const noexcept;
     [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
 
-    std::optional<PaneAttentionKey> key_;
+    std::optional<application::workbench::PaneAttentionKey> key_;
     QColor color_ = Qt::transparent;
     qreal ratio_ = 1;
-    qreal radius_ = gui::PaneDecorationGeometry::frame_radius;
+    qreal radius_ = gui::application::workbench::PaneDecorationGeometry::frame_radius;
     float alpha_ = 0;
     bool active_ = false;
     bool notification_pending_ = false;
@@ -110,7 +109,7 @@ namespace telar::gui::qt {
 
   private:
     WindowAnimationItems<NativePaneAttention> items_;
-    AttentionFades fades_;
+    application::workbench::AttentionFades fades_;
   };
 
 }

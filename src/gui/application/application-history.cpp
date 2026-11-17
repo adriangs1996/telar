@@ -144,7 +144,7 @@ namespace telar::gui::application::history {
   }
 
   void visit(Session& session, std::uint64_t entry_id) {
-    session.visitPane(view(session).entry(entry_id).pane_id);
+    workbench::visit(session, view(session).entry(entry_id).pane_id);
   }
 
   void remove(Session& session, std::uint64_t entry_id) {

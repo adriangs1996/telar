@@ -49,7 +49,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      const auto& geometry = session.workbenchGeometry();
+      const auto& geometry = application::workbench::geometry(session);
       const auto parent_bounds = geometry.pixels(divider->parent_bounds);
       const auto divider_bounds = geometry.pixels(divider->bounds);
       const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
@@ -67,7 +67,7 @@ namespace telar::gui::qt {
       }
 
       if (commit) {
-        session.retainLayout();
+        application::workbench::retainLayout(session);
       }
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
@@ -143,7 +143,7 @@ namespace telar::gui::qt {
 
     elements_.begin(ElementSlots::pane_slots);
     if (tab != nullptr) {
-      const auto& geometry = session.workbenchGeometry();
+      const auto& geometry = application::workbench::geometry(session);
       const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
       const auto fullscreen_entries = fullscreenEntries(*tab);
       const auto motion_context = QStringLiteral("%1/%2/%3/%4/%5")
