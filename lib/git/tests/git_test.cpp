@@ -964,6 +964,65 @@ namespace {
       }
     }
 
+    // Changes the owner of `path` to a user other than the caller.
+    void giveAway(const std::string& path, uid_t owner) {
+      check(::lchown(path.c_str(), owner, static_cast<gid_t>(-1)) == 0, "chown " + path);
+    }
+
+    // A repository another user can write is never read: its config and objects are that user's
+    // (the class of CVE-2022-24765). Without root, root's own "/" is the directory someone else
+    // owns; as root, the test hands each directory of a repository to another user in turn.
+    void testNotOwnedRepository(Reader& reader) {
+      const auto not_owned = [&](const std::string& directory, std::string_view label) {
+        Reader fresh_reader{system_memory};
+
+        check(fresh_reader.read(directory).repository == git::RepositoryState::not_owned, std::string{label} + " is not owned");
+      };
+
+      if (::geteuid() != 0) {
+        const auto gitdir = fresh("foreign-common-gitdir");
+        const auto worktree = fresh("foreign-common-worktree");
+
+        shell("mkdir -p " + quote(gitdir + "/objects") + " " + quote(gitdir + "/refs"));
+        write(gitdir + "/HEAD", "ref: refs/heads/main\n");
+        write(gitdir + "/commondir", "/\n");
+        write(worktree + "/.git", "gitdir: " + gitdir + "\n");
+        not_owned(worktree, "a common directory another user owns");
+
+        const auto configured = initialize("foreign-configured-worktree");
+
+        write(configured + "/a.txt", "alpha\n");
+        commitAll(configured, "base");
+        run(configured, "git config core.worktree /");
+        not_owned(configured + "/.git", "a configured worktree another user owns");
+        return;
+      }
+
+      constexpr uid_t other = 65534;
+      const auto directory = initialize("foreign-owner");
+
+      write(directory + "/a.txt", "alpha\n");
+      commitAll(directory, "base");
+      agrees(reader, directory, "owned repository");
+      giveAway(directory, other);
+      not_owned(directory, "a worktree another user owns");
+      giveAway(directory, 0);
+      giveAway(directory + "/.git", other);
+      not_owned(directory, "a git directory another user owns");
+      giveAway(directory + "/.git", 0);
+
+      const auto gitdir = fresh("foreign-gitfile-target");
+      const auto linked = fresh("foreign-gitfile");
+
+      run(gitdir, "git init -q --bare .");
+      write(linked + "/.git", "gitdir: " + gitdir + "\n");
+      giveAway(linked + "/.git", other);
+      not_owned(linked, "a .git file another user owns");
+      giveAway(linked + "/.git", 0);
+      giveAway(gitdir, other);
+      not_owned(linked, "a gitdir another user owns");
+    }
+
     void testConflict(Reader& reader) {
       const auto directory = initialize("conflict");
 
@@ -1248,5 +1307,6 @@ namespace {
   const telar::testing::Case case_hostile{"git.hostile", readsWithGit<testHostile>};
   const telar::testing::Case case_hostile_tree_entries{"git.hostile_tree_entries", readsWithGit<testHostileTreeEntries>};
   const telar::testing::Case case_hostile_pack_delta{"git.hostile_pack_delta", readsWithGit<testHostilePackDelta>};
+  const telar::testing::Case case_not_owned_repository{"git.not_owned_repository", readsWithGit<testNotOwnedRepository>};
 
 }
