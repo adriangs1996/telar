@@ -20,6 +20,7 @@ import telar.base.memory.allocators;
 import telar.runtime.terminal.control;
 import telar.testing;
 import telar.runtime.command_capture.tracker;
+import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.runtime.history.command;
 import telar.runtime.shell_integration.token;
@@ -398,6 +399,61 @@ namespace {
     check(!zones.remote());
   }
 
+  // telar's private reports count only when the pane's shell signs them; without a token no mark
+  // is signed, so nothing a program prints changes the PATH completion searches.
+  void testPrivateReportWithoutToken() {
+    struct Completions {
+      void complete(CommandCompletion) {}
+    };
+
+    const auto token = ShellToken::generate();
+    const auto report = "\x1b]6973;telar=" + std::string{token.text()} + ";path=/evil\x07";
+    Completions sink;
+    CommandZones signed_zones{"/", token};
+
+    signed_zones.feed(byteSpan(report), {}, sink);
+    check(signed_zones.path() == "/evil");
+
+    CommandZones zones{"/"};
+
+    zones.feed(byteSpan(report), {}, sink);
+    zones.feed(byteSpan("\x1b]6973;telar=;path=/evil\x07"), {}, sink);
+    check(zones.path().empty(), "an unsigned report changed the PATH");
+    zones.feed(byteSpan("\x1b]6973;nest=" + std::string{token.text()} + ";token=" + std::string{token.text()} + ";shell=fish\x07"), {}, sink);
+    check(!zones.remote());
+  }
+
+  // A pane keeps its newest 64 command blocks, the most the wire carries.
+  void testBlockRingKeepsNewest() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    Terminal terminal{memory, TerminalSize{40, 12, 8, 16}};
+    CommandBlocks blocks{memory, terminal};
+    const auto now = std::chrono::steady_clock::now();
+    const auto mark = [&](char action, std::string_view sequence) {
+      terminal.feed(byteSpan(sequence));
+      blocks.mark(action, now);
+    };
+
+    for (int index = 1; index <= 65; ++index) {
+      mark('A', "\x1b]133;A\x07");
+      mark('B', "$ \x1b]133;B\x07");
+      terminal.feed(byteSpan(std::format("command{:02}\r\n", index)));
+      mark('C', "\x1b]133;C\x07");
+      terminal.feed(byteSpan("\x1b]133;D;0\x07"));
+      blocks.finished(0, now);
+      blocks.follow();
+    }
+
+    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    const auto shown = blocks.message(7, storage).blocks;
+
+    check(shown.size() == PaneBlocks::capacity);
+    check(shown.front().command.ends_with("command02"), "the oldest block was kept");
+    check(shown.back().command.ends_with("command65"));
+  }
+
   const telar::testing::Case case_signed_marks{"command_capture.signed_marks", testSignedMarks};
   const telar::testing::Case case_nested_marks{"command_capture.nested_marks", testNestedMarks};
   const telar::testing::Case case_input_boundaries{"command_capture.input_boundaries", testInputBoundaries};
@@ -410,5 +466,7 @@ namespace {
   const telar::testing::Case case_discarded_edits{"command_capture.discarded_edits", testDiscardedEdits};
   const telar::testing::Case case_capture_bounds_and_resize{"command_capture.capture_bounds_and_resize", testCaptureBoundsAndResize};
   const telar::testing::Case case_osc_fragments{"command_capture.osc_fragments", testOscFragments};
+  const telar::testing::Case case_private_report_without_token_ignored{"command_capture.private_report_without_token_ignored", testPrivateReportWithoutToken};
+  const telar::testing::Case case_block_ring_keeps_newest{"command_capture.block_ring_keeps_newest", testBlockRingKeepsNewest};
 
 }
