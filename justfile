@@ -160,6 +160,10 @@ ebnf-test *args:
 configure preset="dev":
     "{{ cpp }}" configure {{ preset }} -- {{ if preset == "release" { "" } else if preset == "dist" { "" } else { test_options } }}
 
+playground:
+  cmake --build out/dev --target gui-playground
+  out/dev/src/gui/gui-playground src/gui/playground/play.qml
+
 [private]
 dev-bin preset="dev" state_dir=dev_dir: (runtime-build preset)
     mkdir -p -m 700 "{{ state_dir }}" "{{ state_dir }}/bin"

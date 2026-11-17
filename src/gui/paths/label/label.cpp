@@ -34,7 +34,11 @@ namespace telar::gui {
 
     result.exact_exists = partial.empty() || std::filesystem::is_directory(std::filesystem::path{std::string{query}}, error);
 
-    std::filesystem::directory_iterator directory{result.base, std::filesystem::directory_options::skip_permission_denied, error};
+    std::filesystem::directory_iterator directory{
+        result.base,
+        std::filesystem::directory_options::skip_permission_denied,
+        error,
+    };
 
     for (const std::filesystem::directory_iterator end; !error && directory != end; directory.increment(error)) {
       const auto name = directory->path().filename().string();
