@@ -9,9 +9,6 @@ set(CMAKE_AUTOUIC OFF)
 file(GLOB gui_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
 telar_add_test(gui-test-fixtures STATIC SOURCES ${gui_test_fixtures} LIBRARIES gui-foundation-actions gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-application gui-features-plugins)
 
-telar_add_test(gui-clipboard-image-pipe-test SOURCES clipboard_image_pipe_test.cpp platform/clipboard_pipe_status.c LIBRARIES gui-posix gui-test-fixtures gui-platform
-  TEST gui-clipboard-image-pipe LABELS gui.platform TIMEOUT 20)
-
 telar_add_test(gui-attachment-capture-test SOURCES attachment_capture_test.cpp LIBRARIES gui-features-terminal-attachments
   TEST gui-attachment-capture LABELS gui.features.terminal.attachments)
 
@@ -107,32 +104,9 @@ if(TELAR_GUI_NATIVE)
     TEST gui-surface-command LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-native-pointer-events-test SOURCES native_pointer_events_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/input/native_pointer_events.cpp LIBRARIES gui-foundation-core Qt6::Gui Qt6::GuiPrivate
     TEST gui-native-pointer-events LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-background-blur-radius-test SOURCES background_blur_radius_test.cpp LIBRARIES gui-foundation-core
-    TEST gui-background-blur-radius LABELS gui.platform)
   if(APPLE)
-    telar_add_test(gui-native-scroll-input-test SOURCES native_scroll_input_test.mm LIBRARIES gui-platform-native Qt6::Gui
-      TEST gui-native-scroll-input LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
-    target_compile_options(gui-native-scroll-input-test PRIVATE -fobjc-arc)
-    if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-native-scroll-input-test PRIVATE -fno-objc-msgsend-class-selector-stubs)
-    endif()
-    telar_add_test(gui-native-window-appearance-test SOURCES native_window_appearance_test.mm LIBRARIES gui-platform-native Qt6::Quick
-      TEST gui-native-window-appearance LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
-    target_compile_options(gui-native-window-appearance-test PRIVATE -fobjc-arc)
-    if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-native-window-appearance-test PRIVATE -fno-objc-msgsend-class-selector-stubs)
-    endif()
     telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-platform gui-application
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
-    telar_add_test(gui-clipboard-image-source-test SOURCES clipboard_image_source_test.mm LIBRARIES gui-platform-native
-      TEST gui-clipboard-image-source LABELS gui.platform TIMEOUT 30)
-    target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
-    if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
-    endif()
-    if(TELAR_SANITIZERS)
-      target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
-    endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     pkg_check_modules(GUI_WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
     telar_add_test(gui-clipboard-wayland-lifecycle-server NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_lifecycle_server.c LIBRARIES PkgConfig::GUI_WAYLAND_SERVER
@@ -171,6 +145,25 @@ if(TELAR_GUI_NATIVE)
   add_library(gui-testing-main STATIC testing_main.cpp)
   target_link_libraries(gui-testing-main PUBLIC telar::testing Qt6::Gui)
   telar_register_checks(gui-testing-main CHECKS lint blank_lines)
+
+  # The tests of src/gui/platform, declared here where Qt is found: its macOS cases drive
+  # AppKit and Qt windows, on the window server and one at a time. The Objective-C++ cases
+  # register through objc_case.hpp, as an Objective-C++ unit cannot import telar.testing.
+  set(gui_platform_native "")
+  if(APPLE)
+    set(gui_platform_native ENVIRONMENT QT_QPA_PLATFORM=cocoa RUN_SERIAL)
+  endif()
+  telar_add_tests(gui-platform-tests LABEL gui.platform DIRECTORY ../platform/tests QT MAIN gui-testing-main
+    LINK telar::gui::platform gui-platform-native gui-posix gui-test-fixtures Qt6::Quick
+    SOURCES ../platform/tests/clipboard_pipe_status/clipboard_pipe_status.c MACOS_SOURCES objc_case.cpp
+    ${gui_platform_native} TIMEOUT 30)
+  target_include_directories(gui-platform-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
+    target_compile_options(gui-platform-tests PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
+  endif()
+  if(TELAR_SANITIZERS)
+    target_compile_options(gui-platform-tests PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
+  endif()
 
   # The tests of src/gui/ui live beside the folders they check, one program per tree. They
   # are declared here, where Qt is found, and see the shared fixtures of this folder.

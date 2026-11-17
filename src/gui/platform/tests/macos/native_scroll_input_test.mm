@@ -1,14 +1,11 @@
-#include "assertions.hpp"
 #include "foundation/core/wheel_accumulator.hpp"
+#include "objc_case.hpp"
 #include "platform/scroll_event.hpp"
 #include <AppKit/AppKit.h>
-#include <QGuiApplication>
 #include <QWindow>
 #include <array>
 #include <bit>
-#include <exception>
 #include <initializer_list>
-#include <iostream>
 #include <limits>
 #include <utility>
 
@@ -57,7 +54,7 @@ namespace {
 
   using telar::gui::ScrollPhase;
   using telar::gui::platform::nativeScrollInput;
-  using telar::gui::test::require;
+  using telar::gui::test::check;
 
   void verifyNativeScroll() {
     QWindow window;
@@ -94,10 +91,10 @@ namespace {
       for (const auto* const type : {"mac_generic_NSEvent", "NSEvent"}) {
         const auto input = nativeScrollInput(type, (__bridge const void*)event, window);
 
-        require(input && input->valid, "owned native wheel must decode through both Qt event kinds");
-        require(input->sample.phase == expected, "native phase must preserve begin, cancellation and end");
-        require(input->sample.delta == -event.delta && input->sample.precise, "native delta must preserve fractions and direction");
-        require(input->x == x && input->y == y, "native position must remain in logical top-left coordinates");
+        check(input && input->valid, "owned native wheel must decode through both Qt event kinds");
+        check(input->sample.phase == expected, "native phase must preserve begin, cancellation and end");
+        check(input->sample.delta == -event.delta && input->sample.precise, "native delta must preserve fractions and direction");
+        check(input->x == x && input->y == y, "native position must remain in logical top-left coordinates");
       }
     }
 
@@ -106,33 +103,20 @@ namespace {
     event.precise = NO;
     const auto momentum = nativeScrollInput("NSEvent", (__bridge const void*)event, window);
 
-    require(momentum && momentum->valid && momentum->sample.phase == ScrollPhase::none && !momentum->sample.precise, "momentum must not invent a new finger gesture or discard a discrete fraction");
+    check(momentum && momentum->valid && momentum->sample.phase == ScrollPhase::none && !momentum->sample.precise, "momentum must not invent a new finger gesture or discard a discrete fraction");
     event.delta = std::numeric_limits<double>::quiet_NaN();
     const auto invalid = nativeScrollInput("NSEvent", (__bridge const void*)event, window);
 
-    require(invalid && !invalid->valid, "recognized malformed input must be consumed without changing history");
-    require(!nativeScrollInput("unrelated", (__bridge const void*)event, window), "other native sources must pass through");
-    require(!nativeScrollInput("NSEvent", nullptr, window), "missing native input must pass through");
+    check(invalid && !invalid->valid, "recognized malformed input must be consumed without changing history");
+    check(!nativeScrollInput("unrelated", (__bridge const void*)event, window), "other native sources must pass through");
+    check(!nativeScrollInput("NSEvent", nullptr, window), "missing native input must pass through");
     QWindow other;
 
-    require(!nativeScrollInput("NSEvent", (__bridge const void*)event, other), "missing window handle must not create a window");
+    check(!nativeScrollInput("NSEvent", (__bridge const void*)event, other), "missing window handle must not create a window");
     other.create();
-    require(!nativeScrollInput("NSEvent", (__bridge const void*)event, other), "wheel input must remain scoped to its owning native window");
+    check(!nativeScrollInput("NSEvent", (__bridge const void*)event, other), "wheel input must remain scoped to its owning native window");
   }
 
-}
+  const telar::gui::test::ObjcCase case_verify_native_scroll{"native_scroll_input.verify_native_scroll", verifyNativeScroll};
 
-int main(int argc, char** argv) {
-  const QGuiApplication application(argc, argv);
-
-  try {
-    verifyNativeScroll();
-    std::cout << "PASS native scroll phases, fractional deltas, coordinates, momentum and window guards\n";
-
-    return 0;
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-
-    return 1;
-  }
 }

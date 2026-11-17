@@ -101,8 +101,8 @@ jobs:
       - name: Test native macOS navigation
         if: runner.os == 'macOS'
         run: |
-          tools/cpp build ci -- --parallel 3 --target gui-native-window-appearance-test
-          QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui-native-window-appearance$'
+          tools/cpp build ci -- --parallel 3 --target gui-platform-tests
+          QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui\.platform\.native_window_appearance\.'
 
       - name: Check lifetimes
         if: matrix.configuration == 'Release'
