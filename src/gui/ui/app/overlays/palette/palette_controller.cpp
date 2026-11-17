@@ -315,7 +315,7 @@ namespace telar::gui::qt {
   }
 
   bool PaletteController::updateMachineResults(std::string_view query) {
-    const auto matches = MachinePicker::collect(store_.machines(), query);
+    const auto matches = application::machines::MachinePicker::collect(store_.machines(), query);
     QVariantList rows;
 
     rows.reserve(static_cast<qsizetype>(matches.rows().size()) + 1);
@@ -329,13 +329,13 @@ namespace telar::gui::qt {
     }
 
     for (std::size_t index = 0; index < matches.rows().size(); ++index) {
-      targets_[index] = MachinePickerTarget{.machine = matches.rows()[index].target};
+      targets_[index] = application::machines::MachinePickerTarget{.machine = matches.rows()[index].target};
       kinds_[index] = application::palette::PaletteRowKind::machine;
     }
 
     const auto last = matches.rows().size();
 
-    targets_[last] = MachinePickerTarget{.machine = std::nullopt};
+    targets_[last] = application::machines::MachinePickerTarget{.machine = std::nullopt};
     kinds_[last] = application::palette::PaletteRowKind::machine;
     rows_ = std::move(rows);
     selection_ = std::min(selection_, static_cast<std::size_t>(rows_.size() - 1));
@@ -419,7 +419,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantMap PaletteController::machineRecord(MachinePickerTarget target) const {
+  QVariantMap PaletteController::machineRecord(application::machines::MachinePickerTarget target) const {
     QVariantMap result{
         {QStringLiteral("kind"), static_cast<int>(application::palette::PaletteRowKind::machine)},
         {QStringLiteral("detailBelow"), false},
@@ -446,19 +446,19 @@ namespace telar::gui::qt {
       state = QStringLiteral("shown");
     } else {
       switch (row.phase) {
-      case MachinePhase::connected:
+      case application::machines::MachinePhase::connected:
         state = row.cpu_percent ? QString::number(*row.cpu_percent) + QStringLiteral("% cpu") : QStringLiteral("connected");
         break;
-      case MachinePhase::connecting:
+      case application::machines::MachinePhase::connecting:
         state = QStringLiteral("connecting");
         break;
-      case MachinePhase::lost:
+      case application::machines::MachinePhase::lost:
         state = QStringLiteral("unreachable · enter retries");
         break;
-      case MachinePhase::failed:
+      case application::machines::MachinePhase::failed:
         state = row.needs_setup ? QStringLiteral("no telar for this build · enter sets it up") : QStringLiteral("failed · enter retries");
         break;
-      case MachinePhase::stopped:
+      case application::machines::MachinePhase::stopped:
         state = QStringLiteral("disabled");
         break;
       }
@@ -552,7 +552,7 @@ namespace telar::gui::qt {
     return Choice{.target = targets_[index], .index = index};
   }
 
-  std::optional<MachinePickerTarget> PaletteController::chosenMachine(const QVariantMap& choice) const {
+  std::optional<application::machines::MachinePickerTarget> PaletteController::chosenMachine(const QVariantMap& choice) const {
     if (!isOpen() || choice.value(QStringLiteral("revision")).toString() != QString::number(revision_)) {
       return std::nullopt;
     }
@@ -561,7 +561,7 @@ namespace telar::gui::qt {
 
     for (qsizetype index = 0; index < rows_.size(); ++index) {
       if (rows_[index].toMap().value(QStringLiteral("key")).toString() == key) {
-        if (const auto* target = std::get_if<MachinePickerTarget>(&targets_[static_cast<std::size_t>(index)])) {
+        if (const auto* target = std::get_if<application::machines::MachinePickerTarget>(&targets_[static_cast<std::size_t>(index)])) {
           return *target;
         }
       }
@@ -608,7 +608,7 @@ namespace telar::gui::qt {
     }
 
     const auto& target = found->target;
-    if (const auto* machine = std::get_if<MachinePickerTarget>(&target)) {
+    if (const auto* machine = std::get_if<application::machines::MachinePickerTarget>(&target)) {
       emit machineRequested(*machine, choice.value(QStringLiteral("alternate"), false).toBool());
 
       return;

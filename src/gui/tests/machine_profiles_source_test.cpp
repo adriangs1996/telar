@@ -29,20 +29,21 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-import telar.gui.machines.profile_store;
-import telar.gui.machines.discovery;
-import telar.gui.platform.profile_file;
+import telar.gui.features.machines;
+import telar.gui.foundation.system;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
   using telar::gui::qt::MachineProfilesSource;
   constexpr int wait_ms = 5000;
 
-  platform::ProfileFile profileFile(const QString& path) {
+  system::ProfileFile profileFile(const QString& path) {
     const auto encoded = path.toUtf8();
 
-    return platform::ProfileFile{{encoded.constData(), static_cast<std::size_t>(encoded.size())}};
+    return system::ProfileFile{{encoded.constData(), static_cast<std::size_t>(encoded.size())}};
   }
 
   void replaceFile(const QString& path, std::string_view source) {
@@ -102,7 +103,7 @@ namespace {
       source.open(path, QStringLiteral("local"));
       QTRY_VERIFY_WITH_TIMEOUT(source.loaded(), wait_ms);
       const auto file = profileFile(path);
-      std::optional<platform::ProfileFileTransaction> held{file.lock()};
+      std::optional<system::ProfileFileTransaction> held{file.lock()};
       std::string label = "build";
       std::string destination = "dev@build";
       std::string color = "#a0B1c2";

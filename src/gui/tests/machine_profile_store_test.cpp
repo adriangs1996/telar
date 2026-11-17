@@ -21,12 +21,13 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
-import telar.gui.machines.profile_store;
-import telar.gui.machines.discovery;
+import telar.gui.features.machines;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
   using telar::gui::test::require;
 
   struct Random {

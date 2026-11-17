@@ -20,8 +20,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.profile_store;
 import telar.platform.fs;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -36,7 +36,7 @@ namespace telar::gui::qt {
     static constexpr unsigned control_hash_shift = digest_prefix_bits - (control_hash_digits * bits_per_hex_digit);
 
     [[nodiscard]] static QString controlName(QByteArrayView destination) {
-      MachineFieldRules::destination({destination.data(), static_cast<std::size_t>(destination.size())});
+      application::machines::MachineFieldRules::destination({destination.data(), static_cast<std::size_t>(destination.size())});
       const auto digest = QCryptographicHash::hash(destination, QCryptographicHash::Sha256);
       auto prefix = byteView({digest.constData(), static_cast<std::size_t>(digest.size())}).first(sizeof(std::uint64_t));
       const auto hash = u64::decode(prefix) >> control_hash_shift;

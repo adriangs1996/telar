@@ -14,7 +14,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.foundation.model;
 import telar.gui.features.history;
 import telar.gui.features.terminal.input;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 
@@ -318,7 +318,7 @@ namespace {
     std::ranges::copy(payload, output.begin());
 
     for (std::size_t split = 0; split <= bytes.size(); ++split) {
-      FrameStream<telar::Memory> stream{adapter};
+      application::FrameStream<telar::Memory> stream{adapter};
       std::size_t received = 0;
       const auto consume = [&](std::span<const Byte> frame) {
         require(Codec::decode<PaneExited>(frame).pane_id == 1, "fragmented payload");
@@ -330,7 +330,7 @@ namespace {
       require(received == 1, "every fragmentation must emit exactly one frame");
     }
 
-    FrameStream<telar::Memory> stream{adapter};
+    application::FrameStream<telar::Memory> stream{adapter};
     const std::array<Byte, frame_prefix_size> invalid{};
     bool rejected = false;
     const auto ignore_payload = [](std::span<const Byte>) {
@@ -364,7 +364,7 @@ namespace {
     telar::MemoryAdapter adapter{memory};
 
     {
-      FrameStream<telar::Memory> stream{adapter};
+      application::FrameStream<telar::Memory> stream{adapter};
       std::array<Byte, (2 * frame_prefix_size) + payload_bytes> bytes{};
       std::span<Byte> output{bytes};
 

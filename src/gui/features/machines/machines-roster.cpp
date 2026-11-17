@@ -1,8 +1,8 @@
-module telar.gui.machines.picker;
+module telar.gui.features.machines;
 
 import telar.base.history;
 
-namespace telar::gui {
+namespace telar::gui::features::machines {
 
   void MachineRow::write(MachineFields fields) {
     id = fields.id;

@@ -19,7 +19,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.machines.picker;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -92,15 +91,15 @@ namespace telar::gui::qt {
     void setDisplayRefresh(std::uint16_t fps);
 
     // Admits a new client to the slot, in place of the one it held.
-    [[nodiscard]] MachineClient& createClient(Machines::Slot slot);
-    [[nodiscard]] MachineClient& clientAt(Machines::Slot slot) const noexcept;
-    [[nodiscard]] MachineClient* findClient(MachineClientKey key) const noexcept;
+    [[nodiscard]] MachineClient& createClient(application::machines::Machines::Slot slot);
+    [[nodiscard]] MachineClient& clientAt(application::machines::Machines::Slot slot) const noexcept;
+    [[nodiscard]] MachineClient* findClient(application::machines::MachineClientKey key) const noexcept;
     // Shows another machine in the window, if it is live.
-    void select(MachineToken target);
+    void select(application::machines::MachineToken target);
     // Shows the next live machine in the direction of `delta`.
     void move(int delta);
     // Brings the machine list's row up to date with what the client's session holds.
-    void summarize(MachineClientKey key);
+    void summarize(application::machines::MachineClientKey key);
     // The client's runtime went away: its session and its row say so.
     void markDisconnected(MachineClient& client);
     void publishList();
@@ -120,7 +119,7 @@ namespace telar::gui::qt {
     void linkChanged();
 
   private:
-    void connectMachine(Machines::Slot slot);
+    void connectMachine(application::machines::Machines::Slot slot);
     void release(MachineClient& client);
 
     ApplicationAllocator& memory_;
@@ -134,7 +133,7 @@ namespace telar::gui::qt {
     MachinesHost& host_;
     QByteArray hostname_;
     // The client whose agent the desktop's one sound plays for.
-    std::optional<MachineClientKey> sound_owner_;
+    std::optional<application::machines::MachineClientKey> sound_owner_;
   };
 
 }

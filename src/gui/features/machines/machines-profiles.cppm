@@ -1,11 +1,13 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.machines.profile_store;
+// The machines the user saved: the profiles shared with the CLI, the edits that change them and
+// the store that reads and replaces their file.
+export module telar.gui.features.machines:profiles;
 
 import std;
 
-import telar.gui.machines.discovery;
+import :discovery;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
@@ -15,13 +17,13 @@ import telar.machines;
 
 // Interface: machines/field_rules.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineFieldRules;
 }
 
 // Interface: machines/profile.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::machine_agent_names;
   using telar::runtime::machines::machine_agents;
   using telar::runtime::machines::machine_login_names;
@@ -33,13 +35,13 @@ export namespace telar::gui {
 
 // Interface: machines/profiles.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineProfiles;
 }
 
 // Interface: machines/edit.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     enum class MachineEditKind : std::uint8_t {
       add,
@@ -87,7 +89,7 @@ export {
 
 // Interface: machines/owned_edit.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     class OwnedMachineEdit {
     public:
@@ -113,13 +115,13 @@ export {
 
 // Interface: machines/profile_codec.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineProfileCodec;
 }
 
 // Interface: machines/profile_store.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     template <typename Source, typename Memory>
     concept MachineProfileSource = Allocator<Memory> && requires(Source& source, Memory& memory) {
@@ -181,6 +183,6 @@ export {
 
 // Interface: machines/remote_command.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineRemoteCommand;
 }

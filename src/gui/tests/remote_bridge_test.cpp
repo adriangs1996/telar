@@ -32,13 +32,15 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
-import telar.gui.machines.discovery;
+import telar.gui.features.machines;
 import telar.client;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::qt;
 
   struct TestSshHost {
@@ -86,7 +88,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       const auto schema_text = telar::textView(std::span{schema});
       const auto expected = QString::fromLatin1(schema_text.data(), static_cast<qsizetype>(schema_text.size()));
       const auto mismatch = QString{expected.size(), QLatin1Char('Z')};
-      const auto legacy_text = telar::textView(std::span{RuntimeProtocol::schema87});
+      const auto legacy_text = telar::textView(std::span{application::RuntimeProtocol::schema87});
       const auto legacy = QString::fromLatin1(legacy_text.data(), static_cast<qsizetype>(legacy_text.size()));
 
       process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-ssh-fixture"), arguments.at(arguments.size() - 2), arguments.back(), expected, mismatch, legacy}, QIODevice::ReadWrite);
@@ -194,7 +196,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
         QFAIL("Legacy discovery did not publish its schema");
       }
 
-      QCOMPARE(observer.discovery->schema(), RuntimeProtocol::schema87);
+      QCOMPARE(observer.discovery->schema(), application::RuntimeProtocol::schema87);
       QVERIFY(!observer.failure);
       bridge.close();
     }

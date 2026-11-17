@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "machine_chrome_controller.hpp"
 
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -43,7 +42,7 @@ namespace telar::gui::qt {
     emit pickerRequested();
   }
 
-  void MachineChromeController::select(MachineToken token) {
+  void MachineChromeController::select(application::machines::MachineToken token) {
     emit selectRequested(token);
   }
 

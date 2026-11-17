@@ -37,10 +37,8 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.machines.discovery;
 import telar.gui.foundation.system;
 import telar.client;
-import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 
@@ -63,8 +61,8 @@ namespace telar::gui::qt {
     void openRemote(RemoteTarget target);
     void remoteDiscovered(const RemoteDiscovery& discovery);
     void remoteChannelReady(runtime::FileDescriptor channel);
-    void remoteFailed(MachineError error, std::string_view detail);
-    [[nodiscard]] std::optional<MachineError> remoteError() const noexcept;
+    void remoteFailed(application::machines::MachineError error, std::string_view detail);
+    [[nodiscard]] std::optional<application::machines::MachineError> remoteError() const noexcept;
     void close();
     void retryNow();
     void finishSession() noexcept;
@@ -87,7 +85,7 @@ namespace telar::gui::qt {
       return schema_;
     }
 
-    [[nodiscard]] const RuntimeLink& link() const noexcept;
+    [[nodiscard]] const application::RuntimeLink& link() const noexcept;
     [[nodiscard]] QString error() const;
     void dismissError();
     void recover(std::string_view reason) override;
@@ -133,10 +131,10 @@ namespace telar::gui::qt {
     QLocalSocket socket_;
     QTimer retry_;
     QTimer deadline_;
-    FrameStream<ApplicationAllocator> stream_;
+    application::FrameStream<ApplicationAllocator> stream_;
     Vector<Byte, ApplicationAllocator> output_;
     std::array<char, read_chunk_size> read_buffer_{};
-    RuntimeLink link_;
+    application::RuntimeLink link_;
     std::uint64_t read_generation_ = 0;
     QString path_;
     QString error_;
@@ -152,7 +150,7 @@ namespace telar::gui::qt {
     bool schema_retried_ = false;
     bool schema_retry_pending_ = false;
     std::optional<RemoteTarget> remote_target_;
-    std::optional<MachineError> remote_error_;
+    std::optional<application::machines::MachineError> remote_error_;
     std::optional<RemoteBridge<NativeSshHost, RuntimeConnection>> remote_;
   };
 

@@ -24,19 +24,18 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.keys;
-import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
   struct AttachmentSource {
-    MachineClientKey source;
+    application::machines::MachineClientKey source;
     std::uint64_t runtime_generation = 0;
 
     bool operator==(const AttachmentSource&) const = default;
   };
 
   struct AttachmentPrompt {
-    MachineClientKey source;
+    application::machines::MachineClientKey source;
     std::uint64_t runtime_generation = 0;
     AttachmentTarget target;
     std::uint64_t attachment_generation = 0;

@@ -29,10 +29,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
-import telar.gui.presentation.suggestion_geometry;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -94,13 +91,13 @@ namespace telar::gui::qt {
     };
 
     struct Source {
-      MachineToken token;
-      runtime::FixedText<MachineLimits::label_bytes> label;
-      runtime::FixedText<MachineLimits::color_bytes> color;
+      application::machines::MachineToken token;
+      runtime::FixedText<application::machines::MachineLimits::label_bytes> label;
+      runtime::FixedText<application::machines::MachineLimits::color_bytes> color;
       bool active = false;
       bool attention = false;
       bool live = false;
-      MachinePhase phase = MachinePhase::connecting;
+      application::machines::MachinePhase phase = application::machines::MachinePhase::connecting;
       std::optional<std::uint8_t> cpu_percent = std::nullopt;
       std::array<StackCard, stack_cards> cards{};
       std::size_t card_count = 0;
@@ -119,13 +116,13 @@ namespace telar::gui::qt {
     void rebuild();
     [[nodiscard]] qreal segmentRecords(Rect area, QList<QVariantMap>& records);
     qreal listRecords(Rect area, QList<QVariantMap>& records);
-    [[nodiscard]] QVariantMap listRecord(const Source& source, const MachineChromeGeometry::ListRow& row) const;
-    void collectCards(Machines::Slot slot, Source& source) const;
+    [[nodiscard]] QVariantMap listRecord(const Source& source, const application::machines::MachineChromeGeometry::ListRow& row) const;
+    void collectCards(application::machines::Machines::Slot slot, Source& source) const;
     qreal factsRecords(Rect area, QList<QVariantMap>& records);
-    [[nodiscard]] QVariantMap factRecord(const Source& source, const MachineFacts::Geometry& geometry) const;
+    [[nodiscard]] QVariantMap factRecord(const Source& source, const application::machines::MachineFacts::Geometry& geometry) const;
     [[nodiscard]] float measure(std::string_view text, bool emphasized) const;
     [[nodiscard]] QVariantMap controlRecord(const Source& source, Rect bounds, float advance) const;
-    [[nodiscard]] QVariantMap geometryRecord(const MachineChromeGeometry::Control& geometry) const;
+    [[nodiscard]] QVariantMap geometryRecord(const application::machines::MachineChromeGeometry::Control& geometry) const;
     [[nodiscard]] QColor ink(std::string_view written) const;
     [[nodiscard]] QColor fill(CellColor value) const;
 
@@ -133,7 +130,7 @@ namespace telar::gui::qt {
     QPointer<WindowFontCatalog> catalog_;
     QMetaObject::Connection font_connection_;
     std::shared_ptr<ResidentFonts> fonts_;
-    std::array<std::optional<Source>, MachineLimits::window_slots> sources_;
+    std::array<std::optional<Source>, application::machines::MachineLimits::window_slots> sources_;
     ListModel items_{this};
     QVariantMap style_;
     ChromeMetrics chrome_;

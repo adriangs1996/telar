@@ -12,7 +12,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -44,14 +43,14 @@ namespace telar::gui::qt {
     // The window the chrome activates machines in; activations from any other are ignored.
     [[nodiscard]] QQuickWindow* window() const noexcept;
     void pick();
-    void select(MachineToken token);
+    void select(application::machines::MachineToken token);
 
   signals:
     // The display moved, and with it the configuration it measures.
     void changed();
     void machinesChanged();
     void pickerRequested();
-    void selectRequested(telar::gui::MachineToken token);
+    void selectRequested(telar::gui::application::machines::MachineToken token);
 
   private:
     const Store& store_;

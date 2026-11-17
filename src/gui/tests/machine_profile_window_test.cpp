@@ -44,12 +44,13 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
-import telar.gui.platform.profile_file;
+import telar.gui.features.machines;
+import telar.gui.foundation.system;
 import telar.wire.layout;
 
 namespace telar::gui::test {
+
+  using namespace telar::gui::features::machines;
 
   struct MachineProfileWindow {
     static const Machines& machines(const qt::ApplicationController& application) {
@@ -86,6 +87,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
   constexpr int wait_ms = 5000;
@@ -165,7 +167,7 @@ namespace {
 
     void replace(std::string_view profiles) {
       const auto encoded = path().toUtf8();
-      const platform::ProfileFile file{{encoded.constData(), static_cast<std::size_t>(encoded.size())}};
+      const system::ProfileFile file{{encoded.constData(), static_cast<std::size_t>(encoded.size())}};
       const auto transaction = file.lock();
 
       transaction.replace(profiles);

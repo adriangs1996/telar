@@ -2,7 +2,7 @@ module telar.gui.application;
 
 import std;
 import telar.gui.foundation.core;
-import telar.gui.presentation.suggestion_geometry;
+import telar.gui.features.machines;
 
 namespace telar::gui::application {
 
@@ -43,7 +43,7 @@ namespace telar::gui::application {
       content.y += header;
       content.height -= header;
       // Activity keeps two headers of room; machine rows that do not fit stay out whole.
-      const auto row = MachineChromeGeometry::listRowHeight(chrome);
+      const auto row = features::machines::MachineChromeGeometry::listRowHeight(chrome);
       const auto section = sectionGap(chrome);
       const auto room = std::max(0.0F, content.height - ((minimum_machine_headers - 1) * header) - section);
       const auto rows = std::min(static_cast<float>(machines.rows), std::floor(room / row));

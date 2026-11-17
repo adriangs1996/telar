@@ -40,10 +40,8 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
 import telar.client;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -125,17 +123,17 @@ namespace telar::gui::qt {
     beginHandshake();
   }
 
-  void RuntimeConnection::remoteFailed(MachineError error, std::string_view detail) {
+  void RuntimeConnection::remoteFailed(application::machines::MachineError error, std::string_view detail) {
     if (closed_ || session_finished_ || !remote_target_) {
       return;
     }
 
     remote_error_ = error;
-    const std::string_view fallback = link_.phase == MachinePhase::connected ? "EndOfStream" : MachineFailure::name(error);
+    const std::string_view fallback = link_.phase == application::machines::MachinePhase::connected ? "EndOfStream" : application::machines::MachineFailure::name(error);
     const auto message = detail.empty() ? fallback : detail;
 
     if (dispatching_payload_) {
-      RuntimeLink bounded;
+      application::RuntimeLink bounded;
 
       bounded.fail(message);
       const auto kept = bounded.failure().value_or(std::string_view{});
@@ -146,7 +144,7 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<MachineError> RuntimeConnection::remoteError() const noexcept {
+  std::optional<application::machines::MachineError> RuntimeConnection::remoteError() const noexcept {
     return remote_error_;
   }
 
@@ -192,7 +190,7 @@ namespace telar::gui::qt {
     }
 
     session_finished_ = false;
-    link_.phase = MachinePhase::connecting;
+    link_.phase = application::machines::MachinePhase::connecting;
     link_.attempt = 0;
     link_.clearFailure();
     connectSocket();
@@ -224,7 +222,7 @@ namespace telar::gui::qt {
     return accepted_;
   }
 
-  const RuntimeLink& RuntimeConnection::link() const noexcept {
+  const application::RuntimeLink& RuntimeConnection::link() const noexcept {
     return link_;
   }
 
@@ -284,16 +282,16 @@ namespace telar::gui::qt {
     }
 
     if (socket_.state() != QLocalSocket::UnconnectedState) {
-      if (link_.phase == MachinePhase::lost) {
+      if (link_.phase == application::machines::MachinePhase::lost) {
         retry_.start(link_.retryDelayMilliseconds());
       }
 
       return;
     }
 
-    if (link_.phase == MachinePhase::lost) {
+    if (link_.phase == application::machines::MachinePhase::lost) {
       static_cast<void>(link_.retry());
-    } else if (link_.phase != MachinePhase::connecting) {
+    } else if (link_.phase != application::machines::MachinePhase::connecting) {
       return;
     }
 
@@ -393,7 +391,7 @@ namespace telar::gui::qt {
 
     try {
       drainInput();
-    } catch (const MachineFailure& error) {
+    } catch (const application::machines::MachineFailure& error) {
       if (!accepted_) {
         const auto detail = link_.failure_storage;
 
@@ -456,18 +454,18 @@ namespace telar::gui::qt {
   void RuntimeConnection::consume(std::span<const Byte> payload) {
     if (!accepted_) {
       if (!remote_target_ && !schema_retried_) {
-        if (const auto retry = RuntimeProtocol::retry(payload, schema_)) {
+        if (const auto retry = application::RuntimeProtocol::retry(payload, schema_)) {
           retrySchema(*retry);
 
           return;
         }
       }
 
-      const auto negotiation = RuntimeHandshake::inspect(payload, schema_);
+      const auto negotiation = application::RuntimeHandshake::inspect(payload, schema_);
       if (negotiation.error) {
         remote_error_ = negotiation.error;
         link_.fail(negotiation.detail.view());
-        throw MachineFailure{*negotiation.error};
+        throw application::machines::MachineFailure{*negotiation.error};
       }
 
       accepted_ = true;
@@ -498,7 +496,7 @@ namespace telar::gui::qt {
   }
 
   void RuntimeConnection::write(std::span<const Byte> payload) {
-    if (accepted_ && !payload.empty() && !RuntimeProtocol::supports(schema_, static_cast<ClientTag>(payload.front()))) {
+    if (accepted_ && !payload.empty() && !application::RuntimeProtocol::supports(schema_, static_cast<ClientTag>(payload.front()))) {
       throw std::runtime_error{"The runtime schema does not support this request"};
     }
 
@@ -532,10 +530,10 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (link_.phase == MachinePhase::connected) {
+    if (link_.phase == application::machines::MachinePhase::connected) {
       link_.lose(message, system::AwakeClock::nowNanoseconds());
     } else {
-      link_.connectionFailed(remote_error_.value_or(MachineError::endpoint_unavailable), message);
+      link_.connectionFailed(remote_error_.value_or(application::machines::MachineError::endpoint_unavailable), message);
     }
 
     const auto detail = link_.failure().value_or(std::string_view{});
@@ -558,7 +556,7 @@ namespace telar::gui::qt {
     emit disconnected();
     emit linkChanged();
 
-    if (!closed_ && link_.phase == MachinePhase::lost) {
+    if (!closed_ && link_.phase == application::machines::MachinePhase::lost) {
       retry_.start(link_.retryDelayMilliseconds());
     }
   }

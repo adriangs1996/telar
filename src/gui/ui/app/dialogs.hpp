@@ -11,7 +11,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -59,7 +58,7 @@ namespace telar::gui::qt {
     void showPalette(application::palette::PaletteMode mode);
     void showPaths();
     // Opens the prompt that adds a machine, or renames the one given.
-    void showMachinePrompt(std::optional<MachineToken> renamed = {});
+    void showMachinePrompt(std::optional<application::machines::MachineToken> renamed = {});
 
   signals:
     void changed();

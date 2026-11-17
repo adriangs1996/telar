@@ -13,7 +13,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -65,20 +65,20 @@ namespace telar::gui::qt {
     Store(Store&&) = delete;
     Store& operator=(Store&&) = delete;
 
-    [[nodiscard]] Machines& machines() noexcept;
-    [[nodiscard]] const Machines& machines() const noexcept;
+    [[nodiscard]] application::machines::Machines& machines() noexcept;
+    [[nodiscard]] const application::machines::Machines& machines() const noexcept;
     [[nodiscard]] Clients& clients() noexcept;
     [[nodiscard]] const Clients& clients() const noexcept;
     // The client of an occupied slot; an empty slot is a broken invariant and terminates.
-    [[nodiscard]] MachineClient& client(Machines::Slot slot) const noexcept;
+    [[nodiscard]] MachineClient& client(application::machines::Machines::Slot slot) const noexcept;
     // The client the key names, or null once its slot holds another client or none.
-    [[nodiscard]] MachineClient* find(MachineClientKey key) const noexcept;
+    [[nodiscard]] MachineClient* find(application::machines::MachineClientKey key) const noexcept;
     [[nodiscard]] GuiSession& session() noexcept;
     [[nodiscard]] const GuiSession& session() const noexcept;
     [[nodiscard]] RuntimeConnection& connection() noexcept;
     [[nodiscard]] const RuntimeConnection& connection() const noexcept;
     // The key for the next client admitted to the slot; each one gets a new generation.
-    [[nodiscard]] MachineClientKey admission(Machines::Slot slot) noexcept;
+    [[nodiscard]] application::machines::MachineClientKey admission(application::machines::Machines::Slot slot) noexcept;
     // Changes whenever the active session stops being the one the window showed.
     [[nodiscard]] std::uint64_t machineView() const noexcept;
     void advanceMachineView() noexcept;
@@ -121,7 +121,7 @@ namespace telar::gui::qt {
     void interacted();
 
   private:
-    Machines machines_;
+    application::machines::Machines machines_;
     // Each client reports back to the application that owns this store.
     tbc::view<Clients, tbc::lt::self> clients_;
     std::uint64_t next_client_generation_ = 1;

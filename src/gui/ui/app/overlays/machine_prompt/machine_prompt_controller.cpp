@@ -10,7 +10,6 @@ static_assert(true);
 #include <QStringView>
 #include <string_view>
 
-import telar.gui.machines.profile_store;
 import telar.gui.foundation.forms;
 import telar.gui.application;
 
@@ -34,8 +33,8 @@ namespace telar::gui::qt {
     prompt_.reset();
   }
 
-  bool MachinePromptController::open(std::optional<MachineToken> renamed) {
-    if (renamed && (!store_.machines().contains(*renamed) || renamed->slot == Machines::local_slot)) {
+  bool MachinePromptController::open(std::optional<application::machines::MachineToken> renamed) {
+    if (renamed && (!store_.machines().contains(*renamed) || renamed->slot == application::machines::Machines::local_slot)) {
       return false;
     }
 
@@ -50,7 +49,7 @@ namespace telar::gui::qt {
   }
 
   std::size_t MachinePromptController::limit() const noexcept {
-    return prompt_ && prompt_->mode == Mode::add_destination ? MachineLimits::destination_bytes : MachineLimits::label_bytes;
+    return prompt_ && prompt_->mode == Mode::add_destination ? application::machines::MachineLimits::destination_bytes : application::machines::MachineLimits::label_bytes;
   }
 
   void MachinePromptController::search(const QString& text) {
@@ -103,12 +102,12 @@ namespace telar::gui::qt {
     if (prompt_->mode == Mode::rename) {
       const auto renamed = prompt_->renamed;
       if (renamed && store_.machines().contains(*renamed)) {
-        static_cast<void>(profiles_.edit({.kind = MachineEditKind::rename, .label = store_.machines().row(renamed->slot).label.view(), .value = value}));
+        static_cast<void>(profiles_.edit({.kind = application::machines::MachineEditKind::rename, .label = store_.machines().row(renamed->slot).label.view(), .value = value}));
       }
     } else {
       const auto label = prompt_->label.toUtf8();
 
-      static_cast<void>(profiles_.edit({.kind = MachineEditKind::add, .label = {label.constData(), static_cast<std::size_t>(label.size())}, .value = value}));
+      static_cast<void>(profiles_.edit({.kind = application::machines::MachineEditKind::add, .label = {label.constData(), static_cast<std::size_t>(label.size())}, .value = value}));
     }
 
     prompt_.reset();

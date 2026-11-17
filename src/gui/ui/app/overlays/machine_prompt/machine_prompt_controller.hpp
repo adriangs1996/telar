@@ -15,7 +15,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -46,7 +45,7 @@ namespace telar::gui::qt {
     Q_INVOKABLE void reportLimit(qulonglong requested_bytes);
 
     // Starts adding a machine, or renaming one; false when the machine cannot be renamed.
-    bool open(std::optional<MachineToken> renamed);
+    bool open(std::optional<application::machines::MachineToken> renamed);
     // The dialog closed: nothing typed belongs to the next prompt.
     void forget() noexcept;
     void setDisplay(const application::window::DisplayMetrics& display);
@@ -66,7 +65,7 @@ namespace telar::gui::qt {
       Mode mode = Mode::add_label;
       QString text;
       QString label;
-      std::optional<MachineToken> renamed;
+      std::optional<application::machines::MachineToken> renamed;
     };
 
     [[nodiscard]] bool isOpen() const noexcept;

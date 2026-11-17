@@ -20,7 +20,7 @@ static_assert(true);
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -60,7 +60,7 @@ namespace telar::gui::qt {
     // Changes on every reset, so a render started before it is dropped.
     std::uint64_t epoch = 0;
     std::uint64_t panel_identity = 0;
-    MachineClientKey source;
+    application::machines::MachineClientKey source;
     std::uint64_t runtime = 0;
   };
 

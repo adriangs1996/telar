@@ -13,7 +13,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -45,7 +44,7 @@ namespace telar::gui::qt {
     Q_INVOKABLE void reportLimit(qulonglong requested_bytes);
 
     // Peeks at the agent the card targets; false when the session cannot.
-    bool open(const MachineActivityTarget& target);
+    bool open(const application::machines::MachineActivityTarget& target);
     // Asks to close once the peek no longer shows the agent it was opened from.
     void synchronize();
     // The dialog closed: the session stops reading the agent's screen.
@@ -61,7 +60,7 @@ namespace telar::gui::qt {
 
   private:
     struct Origin {
-      MachineActivityTarget target;
+      application::machines::MachineActivityTarget target;
       std::uint64_t window;
     };
 

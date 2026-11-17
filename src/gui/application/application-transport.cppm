@@ -1,24 +1,24 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.transport.runtime_link;
+// The session's link with its runtime: the frames of its stream, the handshake that opens it,
+// the schemas it speaks and the state of the connection a window shows.
+export module telar.gui.application:transport;
 
 import std;
 
 import telar.client;
 
-import telar.gui.machines.discovery;
-
 import telar.gui.foundation.text;
 
-import telar.gui.machines.picker;
+import telar.gui.features.machines;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
 // Interface: transport/frame_stream.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     template <Allocator Memory>
     class FrameStream {
@@ -79,7 +79,7 @@ export {
 
 // Interface: transport/runtime_protocol.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     struct RuntimeProtocol {
       // Schema 88 only adds hold_tab (0x47); existing schema 87 message layouts are unchanged.
@@ -106,21 +106,21 @@ export {
 
 // Interface: transport/runtime_handshake.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     struct RuntimeHandshake {
       static constexpr std::size_t detail_bytes = 256;
       using Detail = BoundedText<detail_bytes>;
 
       struct Result {
-        std::optional<MachineError> error;
+        std::optional<features::machines::MachineError> error;
         Detail detail{};
       };
 
       [[nodiscard]] static Result inspect(std::span<const Byte> payload, const SchemaId& requested = handshake::schema_id);
 
     private:
-      [[nodiscard]] static Result failure(MachineError error, std::string_view message);
+      [[nodiscard]] static Result failure(features::machines::MachineError error, std::string_view message);
 
       [[nodiscard]] static Result rejected(const ServerReject& reply);
 
@@ -132,7 +132,7 @@ export {
 
 // Interface: transport/runtime_link.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     struct RuntimeLink {
       static constexpr std::size_t failure_bytes = 256;
@@ -144,7 +144,7 @@ export {
       static constexpr auto healthy_after_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds{60}).count());
       using Headline = BoundedText<headline_bytes>;
 
-      MachinePhase phase = MachinePhase::connecting;
+      features::machines::MachinePhase phase = features::machines::MachinePhase::connecting;
       std::uint16_t attempt = 0;
       std::uint32_t sessions = 0;
       bool setup_repairs = false;
@@ -168,7 +168,7 @@ export {
 
       void lose(std::string_view text, std::uint64_t now_ns);
 
-      void connectionFailed(MachineError error, std::string_view text);
+      void connectionFailed(features::machines::MachineError error, std::string_view text);
 
       bool retry();
 

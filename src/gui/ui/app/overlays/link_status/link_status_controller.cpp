@@ -9,7 +9,6 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -22,7 +21,7 @@ namespace telar::gui::qt {
     const auto& link = store_.connection().link();
     const auto detail = link.failure().value_or(std::string_view{});
 
-    return {{QStringLiteral("visible"), link.phase != MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().has_value()}, {QStringLiteral("dimAlpha"), application::terminal::links::LinkStatusGeometry::dim_alpha}};
+    return {{QStringLiteral("visible"), link.phase != application::machines::MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().has_value()}, {QStringLiteral("dimAlpha"), application::terminal::links::LinkStatusGeometry::dim_alpha}};
   }
 
   QVariantMap LinkStatusController::geometry() const {

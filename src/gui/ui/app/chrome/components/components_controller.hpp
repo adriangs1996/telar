@@ -138,7 +138,7 @@ namespace telar::gui::qt {
     void applyRender(std::size_t index, bool panel, const components::Context& context, bool truncated = false);
     void commandFinished(const ComponentCommandOwner& owner, SurfaceCommandResult result);
     [[nodiscard]] const ComponentSlotState::Bar* bar(std::size_t index) const;
-    [[nodiscard]] bool commandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const;
+    [[nodiscard]] bool commandCurrent(std::uint64_t generation, application::machines::MachineClientKey source, std::uint64_t runtime) const;
 
     // What PickController asks of its host.
     [[nodiscard]] PickOwner pickOwner() const;

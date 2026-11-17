@@ -20,7 +20,7 @@ static_assert(true);
 #pragma once
 
 import telar.client;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 
 namespace telar::gui::test {
 
@@ -95,7 +95,7 @@ namespace telar::gui::test {
     QLocalSocket& socket_;
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> adapter_{memory_};
-    FrameStream<telar::ConcurrentMemory> stream_;
+    application::FrameStream<telar::ConcurrentMemory> stream_;
     std::vector<std::vector<Byte>> received_;
     static constexpr std::size_t decode_capacity = 4096;
     mutable std::array<Byte, decode_capacity> decode_{};

@@ -31,17 +31,18 @@ static_assert(true);
 #include <system_error>
 #include <thread>
 
-import telar.gui.machines.profile_store;
-import telar.gui.machines.discovery;
-import telar.gui.platform.profile_file;
+import telar.gui.features.machines;
+import telar.gui.foundation.system;
 import telar.platform.error;
 import telar.platform.fs;
 
 namespace {
 
   using namespace telar::gui;
-  using telar::gui::platform::InsecureProfileFile;
-  using telar::gui::platform::ProfileFile;
+
+  using namespace telar::gui::features::machines;
+  using telar::gui::system::InsecureProfileFile;
+  using telar::gui::system::ProfileFile;
   using telar::gui::test::require;
   using telar::runtime::TemporaryDirectory;
 
@@ -293,13 +294,13 @@ namespace {
     const auto directory = temporaryDirectory();
     const auto path = (std::filesystem::path{directory.path()} / "machines.json").string();
     ProfileFile first{path};
-    std::optional<platform::ProfileFileTransaction> held{first.lock()};
+    std::optional<system::ProfileFileTransaction> held{first.lock()};
     std::stop_source cancellation;
     ProfileFile waiting{path, cancellation.get_token()};
     auto result = std::async(std::launch::async, [&] {
       try {
         static_cast<void>(waiting.lock());
-      } catch (const platform::ProfileOperationCancelled&) {
+      } catch (const system::ProfileOperationCancelled&) {
         return true;
       }
 

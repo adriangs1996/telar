@@ -68,12 +68,14 @@ import telar.gui.application;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.application_mark;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.machines;
 import telar.gui.features.window;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
 
   using namespace telar::gui::features::window;
   using namespace telar::gui::qt;

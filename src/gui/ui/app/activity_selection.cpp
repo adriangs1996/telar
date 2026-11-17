@@ -12,7 +12,7 @@ static_assert(true);
 #include <QString>
 #include <variant>
 
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -38,13 +38,13 @@ namespace telar::gui::qt {
     pending_.reset();
   }
 
-  void ActivitySelection::drop(MachineClientKey source) noexcept {
+  void ActivitySelection::drop(application::machines::MachineClientKey source) noexcept {
     if (pending_ && pending_->target.source == source) {
       pending_.reset();
     }
   }
 
-  void ActivitySelection::openPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
+  void ActivitySelection::openPeek(const application::machines::MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
     if (peek_.open(target)) {
       activity_.showHover(identity, pointer_revision);
       dialogs_.show(Store::Dialog::peek);
@@ -55,7 +55,7 @@ namespace telar::gui::qt {
   void ActivitySelection::select(const QString& identity, bool peek) {
     pending_.reset();
     const auto* listed = activity_.target(identity);
-    if (listed == nullptr || !activityAvailable(store_, *listed) || (peek && !std::holds_alternative<MachineActivityTarget::Agent>(listed->owner))) {
+    if (listed == nullptr || !activityAvailable(store_, *listed) || (peek && !std::holds_alternative<application::machines::MachineActivityTarget::Agent>(listed->owner))) {
       return;
     }
 
@@ -84,16 +84,16 @@ namespace telar::gui::qt {
     }
 
     pending_.reset();
-    if (const auto* agent = std::get_if<MachineActivityTarget::Agent>(&pending.target.owner)) {
+    if (const auto* agent = std::get_if<application::machines::MachineActivityTarget::Agent>(&pending.target.owner)) {
       if (pending.peek) {
         openPeek(pending.target, ActivityController::identity(pending.target), pending.pointer_revision);
       } else {
         static_cast<void>(store_.session().focusAgent(agent->key.pane_id, agent->key.pane_generation));
       }
-    } else if (const auto* process = std::get_if<MachineActivityTarget::Process>(&pending.target.owner)) {
+    } else if (const auto* process = std::get_if<application::machines::MachineActivityTarget::Process>(&pending.target.owner)) {
       static_cast<void>(store_.session().focusListedPane(process->pane_id, process->pane_generation));
     } else {
-      static_cast<void>(store_.session().openWorktree(std::get<MachineActivityTarget::Command>(pending.target.owner).worktree));
+      static_cast<void>(store_.session().openWorktree(std::get<application::machines::MachineActivityTarget::Command>(pending.target.owner).worktree));
     }
   }
 

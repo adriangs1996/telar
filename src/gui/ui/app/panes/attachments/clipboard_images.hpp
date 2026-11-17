@@ -14,12 +14,12 @@
 #include <cstdint>
 #include <optional>
 
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
   struct ClipboardImageJob {
-    MachineClientKey source;
+    application::machines::MachineClientKey source;
     std::uint64_t runtime_generation = 0;
     std::uint64_t attachment_generation = 0;
     ClipboardCaptureRequest request;

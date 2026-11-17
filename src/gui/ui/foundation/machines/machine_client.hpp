@@ -48,8 +48,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
 import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
@@ -57,19 +55,19 @@ namespace telar::gui::qt {
   using GuiSession = application::Session;
 
   struct MachineClient {
-    MachineClientKey key;
+    application::machines::MachineClientKey key;
     RuntimeConnection connection;
     MachineEffects effects;
     GuiSession session;
     std::optional<system::WindowLease> identity_lease;
     std::uint64_t identity = 0;
     std::uint64_t runtime_generation = 0;
-    MachinePhase phase = MachinePhase::connecting;
+    application::machines::MachinePhase phase = application::machines::MachinePhase::connecting;
     bool needs_setup = false;
     bool named_launch = false;
-    runtime::FixedText<MachineLimits::program_bytes> admitted_program;
+    runtime::FixedText<application::machines::MachineLimits::program_bytes> admitted_program;
 
-    explicit MachineClient(ApplicationAllocator& memory, const MachineEffects::Sinks& sinks, MachineClientKey admission)
+    explicit MachineClient(ApplicationAllocator& memory, const MachineEffects::Sinks& sinks, application::machines::MachineClientKey admission)
         : key(admission),
           connection(memory),
           effects(sinks, admission),
@@ -77,7 +75,7 @@ namespace telar::gui::qt {
   };
 
   // The client the key names, or null once its slot holds another client or none.
-  [[nodiscard]] inline MachineClient* findMachineClient(const Machines& machines, const MachineClients& clients, MachineClientKey key) noexcept {
+  [[nodiscard]] inline MachineClient* findMachineClient(const application::machines::Machines& machines, const MachineClients& clients, application::machines::MachineClientKey key) noexcept {
     if (!machines.contains(key.machine)) {
       return nullptr;
     }

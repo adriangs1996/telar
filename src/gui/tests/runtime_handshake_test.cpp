@@ -33,69 +33,70 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.machines.discovery;
+import telar.gui.features.machines;
 import telar.client;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using telar::gui::test::require;
 
   void exactSchemaAndRefusalPolicies() {
-    const auto accepted = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{handshake::schema_id}));
+    const auto accepted = application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{handshake::schema_id}));
 
     require(!accepted.error && accepted.detail.view().empty(), "Only an exact schema may adopt the runtime");
     constexpr SchemaId other{'0', '0', '0', '0', '0', '0', '0', '0'};
-    const auto wrong = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{other}));
+    const auto wrong = application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{other}));
 
     require(wrong.error == MachineError::endpoint_unavailable && wrong.detail.view() == "InvalidServerSelection", "A server selecting another schema must fail the handshake with the original error");
-    const auto incompatible = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = other}));
+    const auto incompatible = application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = other}));
 
     require(incompatible.error == MachineError::incompatible_schema && MachineConnectionPolicy::permanent(*incompatible.error), "An explicit incompatible-schema refusal must wait for the person");
     const auto expected_refusal = std::string{"the runtime speaks wire schema 00000000; this telar speaks "} + std::string{textView(std::span{handshake::schema_id})} + ". Update telar on one side";
 
     require(incompatible.detail.view() == expected_refusal, "The refusal must explain both wire schemas exactly");
-    const auto full = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = handshake::schema_id}));
+    const auto full = application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = handshake::schema_id}));
 
     require(full.error && !MachineConnectionPolicy::permanent(*full.error), "Runtime client capacity must remain retryable");
     require(full.detail.view() == "clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish", "A client-capacity refusal must retain its original explanation");
-    static_assert(std::is_trivially_destructible_v<RuntimeHandshake::Result>);
+    static_assert(std::is_trivially_destructible_v<application::RuntimeHandshake::Result>);
   }
 
   void auditedSchema87Negotiation() {
-    const auto legacy_accept = HandshakeCodec::encode(ServerAccept{RuntimeProtocol::schema87});
+    const auto legacy_accept = HandshakeCodec::encode(ServerAccept{application::RuntimeProtocol::schema87});
 
-    require(RuntimeHandshake::inspect(legacy_accept).error.has_value(), "An unsolicited legacy selection must not adopt an unrequested schema");
-    require(!RuntimeHandshake::inspect(legacy_accept, RuntimeProtocol::schema87).error, "An explicitly requested audited schema may be accepted");
-    const auto legacy_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = RuntimeProtocol::schema87});
+    require(application::RuntimeHandshake::inspect(legacy_accept).error.has_value(), "An unsolicited legacy selection must not adopt an unrequested schema");
+    require(!application::RuntimeHandshake::inspect(legacy_accept, application::RuntimeProtocol::schema87).error, "An explicitly requested audited schema may be accepted");
+    const auto legacy_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87});
 
-    require(RuntimeProtocol::retry(legacy_refusal, handshake::schema_id) == RuntimeProtocol::schema87, "A supported explicit refusal may request one new connection with that schema");
-    require(!RuntimeProtocol::retry(legacy_refusal, RuntimeProtocol::schema87), "A repeated refusal must not loop on the same schema");
+    require(application::RuntimeProtocol::retry(legacy_refusal, handshake::schema_id) == application::RuntimeProtocol::schema87, "A supported explicit refusal may request one new connection with that schema");
+    require(!application::RuntimeProtocol::retry(legacy_refusal, application::RuntimeProtocol::schema87), "A repeated refusal must not loop on the same schema");
     const auto current_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id});
 
-    require(RuntimeProtocol::retry(current_refusal, RuntimeProtocol::schema87) == handshake::schema_id, "An upgraded runtime may select the current audited dialect on reconnect");
+    require(application::RuntimeProtocol::retry(current_refusal, application::RuntimeProtocol::schema87) == handshake::schema_id, "An upgraded runtime may select the current audited dialect on reconnect");
     constexpr SchemaId unknown{'8', '6', '6', 'b', '4', '8', '0', 'd'};
     const auto unknown_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = unknown});
 
-    require(!RuntimeProtocol::retry(unknown_refusal, handshake::schema_id) && RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{unknown}), unknown).error.has_value(), "A matching suffix alone must not enable an unknown protocol generation");
-    const auto full = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = RuntimeProtocol::schema87});
+    require(!application::RuntimeProtocol::retry(unknown_refusal, handshake::schema_id) && application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{unknown}), unknown).error.has_value(), "A matching suffix alone must not enable an unknown protocol generation");
+    const auto full = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = application::RuntimeProtocol::schema87});
 
-    require(!RuntimeProtocol::retry(full, handshake::schema_id) && !RuntimeProtocol::retry(legacy_accept, handshake::schema_id), "Capacity and unsolicited acceptance must never trigger a fallback");
+    require(!application::RuntimeProtocol::retry(full, handshake::schema_id) && !application::RuntimeProtocol::retry(legacy_accept, handshake::schema_id), "Capacity and unsolicited acceptance must never trigger a fallback");
     for (std::size_t size = 0; size < legacy_refusal.size(); ++size) {
-      require(!RuntimeProtocol::retry(std::span<const Byte>{legacy_refusal}.first(size), handshake::schema_id), "A truncated refusal must not trigger a fallback");
+      require(!application::RuntimeProtocol::retry(std::span<const Byte>{legacy_refusal}.first(size), handshake::schema_id), "A truncated refusal must not trigger a fallback");
     }
 
-    require(RuntimeProtocol::supports(handshake::schema_id, ClientTag::hold_tab) && !RuntimeProtocol::supports(RuntimeProtocol::schema87, ClientTag::hold_tab), "The new hold_tab request must stay blocked on schema 87");
-    require(RuntimeProtocol::supports(RuntimeProtocol::schema87, ClientTag::pane_input) && !RuntimeProtocol::supports(unknown), "Common terminal traffic may use the audited legacy dialect exclusively");
+    require(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::hold_tab) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::schema87, ClientTag::hold_tab), "The new hold_tab request must stay blocked on schema 87");
+    require(application::RuntimeProtocol::supports(application::RuntimeProtocol::schema87, ClientTag::pane_input) && !application::RuntimeProtocol::supports(unknown), "Common terminal traffic may use the audited legacy dialect exclusively");
   }
 
   void malformedResponsesKeepOriginalDecoderErrors() {
     const auto valid = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id});
 
     for (std::size_t length = 0; length < valid.size(); ++length) {
-      const auto result = RuntimeHandshake::inspect(std::span<const Byte>{valid}.first(length));
+      const auto result = application::RuntimeHandshake::inspect(std::span<const Byte>{valid}.first(length));
 
       require(result.error && result.detail.view() == "InvalidLength", "Every truncated response must stay a bounded original length error");
     }
@@ -104,21 +105,21 @@ namespace {
       auto bad = valid;
 
       bad[index] ^= 1U;
-      require(RuntimeHandshake::inspect(bad).detail.view() == "InvalidMagic", "Every magic byte must be validated");
+      require(application::RuntimeHandshake::inspect(bad).detail.view() == "InvalidMagic", "Every magic byte must be validated");
     }
 
     auto bad = valid;
 
     bad[handshake::magic.size()] = 0;
-    require(RuntimeHandshake::inspect(bad).detail.view() == "UnknownMessage", "An unknown message tag must retain its original error");
-    require(RuntimeHandshake::inspect(HandshakeCodec::encode(ClientHello{})).detail.view() == "UnexpectedMessage", "A client hello cannot be accepted as a server response");
+    require(application::RuntimeHandshake::inspect(bad).detail.view() == "UnknownMessage", "An unknown message tag must retain its original error");
+    require(application::RuntimeHandshake::inspect(HandshakeCodec::encode(ClientHello{})).detail.view() == "UnexpectedMessage", "A client hello cannot be accepted as a server response");
     bad = valid;
     bad[handshake::magic.size() + 1] = 0;
-    require(RuntimeHandshake::inspect(bad).detail.view() == "UnknownRejectReason", "An unknown refusal reason must be rejected");
+    require(application::RuntimeHandshake::inspect(bad).detail.view() == "UnknownRejectReason", "An unknown refusal reason must be rejected");
     std::array<Byte, HandshakeCodec::max_message_size + 1> oversized{};
 
     std::ranges::copy(valid, oversized.begin());
-    require(RuntimeHandshake::inspect(oversized).detail.view() == "BufferTooSmall", "An oversized response must fail the original bounded receive before decoding");
+    require(application::RuntimeHandshake::inspect(oversized).detail.view() == "BufferTooSmall", "An oversized response must fail the original bounded receive before decoding");
   }
 
   void schemaBytesReachTheOriginalFailureSanitizer() {
@@ -126,8 +127,8 @@ namespace {
     constexpr Byte invalid_utf8_lead = 0xff;
 
     invalid.fill(invalid_utf8_lead);
-    const auto result = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = invalid}));
-    RuntimeLink link;
+    const auto result = application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = invalid}));
+    application::RuntimeLink link;
 
     if (!result.error) {
       throw std::logic_error{"Invalid UTF-8 schema was accepted"};
@@ -149,7 +150,7 @@ namespace {
     telar::MemoryAdapter forbidden_memory{forbidden};
 
     {
-      FrameStream<telar::Memory> stream{forbidden_memory};
+      application::FrameStream<telar::Memory> stream{forbidden_memory};
 
       stream.setMaximum(HandshakeCodec::max_message_size);
       std::array<Byte, frame_prefix_size> prefix{};
@@ -178,7 +179,7 @@ namespace {
     telar::MemoryAdapter adapter{memory};
 
     {
-      FrameStream<telar::Memory> stream{adapter};
+      application::FrameStream<telar::Memory> stream{adapter};
 
       stream.setMaximum(first_payload_bytes);
       std::array<Byte, (2 * frame_prefix_size) + first_payload_bytes + next_payload_bytes> bytes{};

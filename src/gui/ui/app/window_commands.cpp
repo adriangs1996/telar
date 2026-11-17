@@ -68,8 +68,6 @@ import telar.gui.input.key_encoder;
 import telar.gui.config.gui_query;
 import telar.config.client;
 import telar.gui.config.plugin_effects;
-import telar.gui.machines.picker;
-import telar.gui.machines.profile_store;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -777,7 +775,7 @@ namespace telar::gui::qt {
 
   void WindowCommands::editMachineResult(const QVariantMap& choice, window_actions::MachineEditAction action) {
     const auto target = palette_.chosenMachine(choice);
-    if (!target || !target->machine || !store_.machines().contains(*target->machine) || target->machine->slot == Machines::local_slot) {
+    if (!target || !target->machine || !store_.machines().contains(*target->machine) || target->machine->slot == application::machines::Machines::local_slot) {
       return;
     }
 
@@ -789,7 +787,7 @@ namespace telar::gui::qt {
       } else {
         const auto label = store_.machines().row(token.slot).label.view();
 
-        static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::remove, .label = label, .value = {}}));
+        static_cast<void>(machine_profiles_.edit({.kind = application::machines::MachineEditKind::remove, .label = label, .value = {}}));
       }
     });
   }

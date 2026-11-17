@@ -22,6 +22,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.presentation.activity_order;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -43,11 +44,11 @@ namespace telar::gui::qt {
       return true;
     }
 
-    MachineActivityTarget activityTarget(const MachineClient& source, const Order::Entry& entry) {
+    application::machines::MachineActivityTarget activityTarget(const MachineClient& source, const Order::Entry& entry) {
       if (entry.agent) {
         const auto& agent = source.session.agents()[*entry.agent];
 
-        return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Agent{.key = {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation}, .session = agent.session_id}};
+        return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Agent{.key = {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation}, .session = agent.session_id}};
       }
 
       if (!entry.worktree) {
@@ -56,7 +57,7 @@ namespace telar::gui::qt {
 
       const auto& row = source.session.workspaceList().worktrees()[*entry.worktree];
 
-      return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Command{.worktree = row.id, .workspace = row.workspace.value_or(0)}};
+      return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Command{.worktree = row.id, .workspace = row.workspace.value_or(0)}};
     }
 
     struct ListedProcess {
@@ -157,11 +158,11 @@ namespace telar::gui::qt {
     window_ = window;
   }
 
-  QString ActivityController::identity(const MachineActivityTarget& target) {
+  QString ActivityController::identity(const application::machines::MachineActivityTarget& target) {
     const auto& source = target.source;
     const auto prefix = QStringLiteral("machine:") + QString::number(source.machine.slot) + QLatin1Char(':') + QString::number(source.machine.generation) + QLatin1Char(':') + QString::number(source.generation) + QLatin1Char(':') + QString::number(target.runtime_generation);
 
-    if (const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner)) {
+    if (const auto* agent = std::get_if<application::machines::MachineActivityTarget::Agent>(&target.owner)) {
       QByteArray session;
 
       session.reserve(static_cast<qsizetype>(agent->session.size()));
@@ -172,11 +173,11 @@ namespace telar::gui::qt {
       return prefix + QStringLiteral(":agent:") + QString::number(agent->key.pane_id) + QLatin1Char(':') + QString::number(agent->key.pane_generation) + QLatin1Char(':') + QString::fromLatin1(session.toHex());
     }
 
-    if (const auto* process = std::get_if<MachineActivityTarget::Process>(&target.owner)) {
+    if (const auto* process = std::get_if<application::machines::MachineActivityTarget::Process>(&target.owner)) {
       return prefix + QStringLiteral(":process:") + QString::number(process->pane_id) + QLatin1Char(':') + QString::number(process->pane_generation);
     }
 
-    const auto command = std::get<MachineActivityTarget::Command>(target.owner);
+    const auto command = std::get<application::machines::MachineActivityTarget::Command>(target.owner);
 
     return prefix + QStringLiteral(":command:") + QString::number(command.worktree) + QLatin1Char(':') + QString::number(command.workspace);
   }
@@ -184,17 +185,17 @@ namespace telar::gui::qt {
   void ActivityController::synchronize() {
     const auto active = store_.machines().active();
     // The top bar names the active machine, so only cards from other machines repeat theirs.
-    const auto machineLabel = [active](const SourceVersion& version, Machines::Slot slot) {
+    const auto machineLabel = [active](const SourceVersion& version, application::machines::Machines::Slot slot) {
       return slot == active ? std::string_view{} : version.label.view();
     };
 
-    std::array<std::optional<SourceVersion>, Machines::capacity> versions;
+    std::array<std::optional<SourceVersion>, application::machines::Machines::capacity> versions;
 
     for (std::size_t index = 0; index < store_.clients().size(); ++index) {
       const auto& client = store_.clients()[index];
-      const auto& row = store_.machines().row(static_cast<Machines::Slot>(index));
+      const auto& row = store_.machines().row(static_cast<application::machines::Machines::Slot>(index));
       if (row.used && row.live && client) {
-        versions[index] = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == MachinePhase::connected && (*client)->session.ready(), .label = row.label};
+        versions[index] = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
       }
     }
 
@@ -209,13 +210,13 @@ namespace telar::gui::qt {
     elements_.begin(ElementSlots::agent_slots);
     Vector<Order::Source, ApplicationAllocator> sources{AllocatorRef<Order::Source, ApplicationAllocator>{memory_}};
 
-    sources.reserve(Machines::capacity);
+    sources.reserve(application::machines::Machines::capacity);
     for (std::size_t index = 0; index < versions.size(); ++index) {
       if (!versions[index]) {
         continue;
       }
 
-      const auto slot = static_cast<Machines::Slot>(index);
+      const auto slot = static_cast<application::machines::Machines::Slot>(index);
       const auto& session = store_.client(slot).session;
 
       sources.push_back({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList()});
@@ -285,7 +286,7 @@ namespace telar::gui::qt {
       const auto& source = store_.client(slot);
       const auto& version = *versions[slot];
       const auto& pane = *process.pane;
-      const MachineActivityTarget target{.source = source.key, .runtime_generation = source.runtime_generation, .owner = MachineActivityTarget::Process{.pane_id = pane.pane_id, .pane_generation = pane.pane_generation}};
+      const application::machines::MachineActivityTarget target{.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Process{.pane_id = pane.pane_id, .pane_generation = pane.pane_generation}};
       const auto key = identity(target);
       const auto* tab = slot == active ? source.session.activeTab() : nullptr;
       const AgentRecordContext context{.machine = machineLabel(version, slot), .selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location), .connected = version.connected};
@@ -307,7 +308,7 @@ namespace telar::gui::qt {
     }
   }
 
-  const MachineActivityTarget* ActivityController::target(const QString& identity) const {
+  const application::machines::MachineActivityTarget* ActivityController::target(const QString& identity) const {
     const auto row = std::ranges::find(targets_, identity, &RowTarget::identity);
 
     return row == targets_.end() ? nullptr : &row->target;

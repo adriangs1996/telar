@@ -11,13 +11,13 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
-import telar.gui.machines.profile_store;
+import telar.gui.features.machines;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::test;
 
   void savedMachineSelection() {

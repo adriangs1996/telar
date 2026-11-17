@@ -141,16 +141,17 @@ import telar.gui.tests.activity_fixture;
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
 import telar.gui.config.plugin_effects;
-import telar.gui.machines.picker;
+import telar.gui.features.machines;
 #if (defined(__APPLE__))
 #endif
 import telar.gui.features.notifications;
-import telar.gui.transport.runtime_link;
 import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.layout;
 
 namespace telar::gui::test {
+
+  using namespace telar::gui::features::machines;
 
   struct MachineWindow {
     static qt::LinksController& links(qt::ApplicationController& application) {
@@ -271,6 +272,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::features::notifications;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
@@ -802,7 +804,7 @@ namespace {
       QCOMPARE(application::status_bar::metrics(remote.session).sample().cpu_percent, retained_cpu);
       fixture.remote_runtime.reset();
       fixture.remote_socket_->disconnectFromServer();
-      constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+      constexpr int observe_retry_ms = application::RuntimeLink::first_retry_ms * 2;
 
       QTest::qWait(observe_retry_ms);
       QCOMPARE(remote.phase, MachinePhase::connected);

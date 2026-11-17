@@ -20,7 +20,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.gui.foundation.text;
@@ -33,7 +32,7 @@ namespace telar::gui::qt {
     int value = 0;
   };
 
-  using PaletteTarget = std::variant<NavigationTarget, PaletteAction, MachinePickerTarget>;
+  using PaletteTarget = std::variant<NavigationTarget, PaletteAction, application::machines::MachinePickerTarget>;
 
   // The command palette: its query, the rows it matches among the active session's contexts, tabs
   // and agents, the window's actions or the machines, which row is selected, and where each is
@@ -111,7 +110,7 @@ namespace telar::gui::qt {
 
     [[nodiscard]] application::palette::PaletteMode mode() const;
     [[nodiscard]] const QString& query() const noexcept;
-    [[nodiscard]] std::optional<MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
+    [[nodiscard]] std::optional<application::machines::MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
     // Returns to the actions palette the suggestion was opened from; false when the palette is
     // closed or was not opened from one.
     bool restoreParent();
@@ -128,7 +127,7 @@ namespace telar::gui::qt {
     void closeRequested();
     void failed(const QString& message);
     // A row named a machine or one of the window's actions, which the window runs.
-    void machineRequested(telar::gui::MachinePickerTarget target, bool alternate);
+    void machineRequested(telar::gui::application::machines::MachinePickerTarget target, bool alternate);
     void actionRequested(telar::gui::qt::PaletteAction action);
 
   private:
@@ -140,7 +139,7 @@ namespace telar::gui::qt {
     bool updateMachineResults(std::string_view query);
     void collectNavigation(Matches& matches, std::string_view query) const;
     [[nodiscard]] QVariantMap record(const PaletteTarget& target, bool queried) const;
-    [[nodiscard]] QVariantMap machineRecord(MachinePickerTarget target) const;
+    [[nodiscard]] QVariantMap machineRecord(application::machines::MachinePickerTarget target) const;
     // The row a choice from QML names, while it is the one the palette shows.
     [[nodiscard]] std::optional<Choice> chosen(const QVariantMap& choice) const;
     // The actions palette as it is, to return to from the suggestion opened from its row.

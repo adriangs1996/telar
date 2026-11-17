@@ -1,11 +1,13 @@
-export module telar.gui.machines.picker;
+// The machines a window lists: their rows, tokens and keys, the roster of slots, the picker's
+// matches and what a machine opens on. Each window holds its own roster.
+export module telar.gui.features.machines:roster;
 
 import std;
 import telar.tbc;
 
-import telar.gui.machines.discovery;
+import :discovery;
 
-import telar.gui.machines.profile_store;
+import :profiles;
 
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
@@ -14,7 +16,7 @@ import telar.wire.vocabulary;
 
 // Interface: machines/machine_row.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineFields {
       MachineId id{};
@@ -82,7 +84,7 @@ export {
 
 // Interface: machines/machine_token.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineToken {
       std::uint8_t slot = 0;
@@ -96,7 +98,7 @@ export {
 
 // Interface: machines/machines.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     class Machines {
     public:
@@ -160,7 +162,7 @@ export {
 
 // Interface: machines/opening.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineOpening {
       // The destination is one of the profiles', region `a`.
@@ -174,7 +176,7 @@ export {
 
 // Interface: machines/picker.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachinePicker {
       using Matches = RankedMatches<MachineToken, Machines::capacity>;
@@ -198,7 +200,7 @@ export {
 
 // Interface: machines/picker_target.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachinePickerTarget {
       std::optional<MachineToken> machine;
@@ -209,7 +211,7 @@ export {
 
 // Interface: machines/machine_client_key.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineClientKey {
       MachineToken machine;
@@ -223,7 +225,7 @@ export {
 
 // Interface: machines/machine_activity_target.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineActivityTarget {
       struct Agent {

@@ -135,17 +135,18 @@ static_assert(true);
 #include <QtGui/qtestsupport_gui.h>
 #endif
 
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.history;
 import telar.wire.layout;
-import telar.gui.machines.picker;
+import telar.gui.features.machines;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

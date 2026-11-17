@@ -29,12 +29,12 @@ static_assert(true);
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
   struct PickOwner {
-    MachineClientKey source;
+    application::machines::MachineClientKey source;
     std::uint64_t runtime = 0;
     std::uint64_t generation = 0;
   };

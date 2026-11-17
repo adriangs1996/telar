@@ -19,8 +19,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.presentation.activity_order;
-import telar.gui.machines.picker;
-import telar.gui.presentation.suggestion_geometry;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -161,7 +159,7 @@ namespace telar::gui::qt {
     float machines_width = 0;
 
     for (std::size_t index = 0; index < store_.clients().size() && !machine_list_collapsed_; ++index) {
-      const auto slot = static_cast<Machines::Slot>(index);
+      const auto slot = static_cast<application::machines::Machines::Slot>(index);
       if (slot == store_.machines().active() || !store_.machines().shown(slot)) {
         continue;
       }
@@ -176,11 +174,11 @@ namespace telar::gui::qt {
         }));
       }
 
-      std::array<char, MachineChromeGeometry::list_status_capacity> storage{};
-      const auto status = MachineChromeGeometry::listStatus(row.live, active, storage);
+      std::array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
+      const auto status = application::machines::MachineChromeGeometry::listStatus(row.live, active, storage);
       const auto advance = std::max(measure(toQString(row.label.view()), chrome.body, true), measure(toQString(status), chrome.small, false));
 
-      machines_width = std::max(machines_width, MachineChromeGeometry::listNaturalWidth(chrome, advance, active != 0));
+      machines_width = std::max(machines_width, application::machines::MachineChromeGeometry::listNaturalWidth(chrome, advance, active != 0));
     }
 
     const auto scale = display.viewport.scale;

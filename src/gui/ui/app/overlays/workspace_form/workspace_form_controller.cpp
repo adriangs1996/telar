@@ -16,7 +16,6 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
-import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
@@ -39,7 +38,7 @@ namespace telar::gui::qt {
   }
 
   bool WorkspaceFormController::local() const noexcept {
-    return store_.machines().active() == Machines::local_slot;
+    return store_.machines().active() == application::machines::Machines::local_slot;
   }
 
   QVariantMap WorkspaceFormController::state() const {

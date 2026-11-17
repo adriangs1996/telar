@@ -12,13 +12,15 @@ import telar.gui.features.history;
 import telar.gui.foundation.actions;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.machines;
 
 import telar.gui.config.gui_query;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
 
   enum class TestAction : std::uint8_t {
     first,

@@ -41,21 +41,18 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.suggestion_geometry;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
   namespace {
 
     constexpr std::string_view segment_suffix = " ▾";
 
-    QString machineKey(MachineToken token) {
+    QString machineKey(application::machines::MachineToken token) {
       return QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation);
     }
 
@@ -146,17 +143,17 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeLayout::observeSources() {
-    std::array<std::optional<Source>, MachineLimits::window_slots> incoming;
+    std::array<std::optional<Source>, application::machines::MachineLimits::window_slots> incoming;
     const bool shown = controller_ != nullptr && controller_->store().machines().count() > 1;
     const bool attention = controller_ != nullptr && controller_->store().machines().attentionElsewhere();
 
     if (controller_ != nullptr) {
       for (std::size_t index = 0; index < incoming.size(); ++index) {
-        const auto slot = static_cast<Machines::Slot>(index);
+        const auto slot = static_cast<application::machines::Machines::Slot>(index);
         if (controller_->store().machines().shown(slot)) {
           const auto& row = controller_->store().machines().row(slot);
 
-          incoming[index] = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
+          incoming[index] = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
           if (mode_ == Mode::list && !incoming[index]->active) {
             collectCards(slot, *incoming[index]);
           }
@@ -218,7 +215,7 @@ namespace telar::gui::qt {
     return value.kind == CellColor::Kind::default_color ? QColor{Qt::transparent} : toQColor(theme.resolve(value, theme.background));
   }
 
-  QVariantMap MachineChromeLayout::geometryRecord(const MachineChromeGeometry::Control& geometry) const {
+  QVariantMap MachineChromeLayout::geometryRecord(const application::machines::MachineChromeGeometry::Control& geometry) const {
     return {
         {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
         {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
@@ -229,7 +226,7 @@ namespace telar::gui::qt {
   }
 
   QVariantMap MachineChromeLayout::controlRecord(const Source& source, Rect bounds, float advance) const {
-    using Geometry = MachineChromeGeometry;
+    using Geometry = application::machines::MachineChromeGeometry;
     const bool segment = mode_ == Mode::segment;
     const bool attention = segment ? attention_elsewhere_ : source.attention && !source.active;
     const auto geometry = Geometry::control(bounds, chrome_, segment ? Geometry::Kind::segment : Geometry::Kind::switcher, advance, attention);
@@ -320,7 +317,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      BoundedText<MachineLimits::label_bytes + segment_suffix.size()> text;
+      BoundedText<application::machines::MachineLimits::label_bytes + segment_suffix.size()> text;
 
       text.append(source->label.view());
       text.append(segment_suffix);
@@ -330,15 +327,15 @@ namespace telar::gui::qt {
         records.append(controlRecord(*source, area, advance));
       }
 
-      return MachineChromeGeometry::preferredSegment(chrome_, advance) / density_;
+      return application::machines::MachineChromeGeometry::preferredSegment(chrome_, advance) / density_;
     }
 
     return 0;
   }
 
-  void MachineChromeLayout::collectCards(Machines::Slot slot, Source& source) const {
+  void MachineChromeLayout::collectCards(application::machines::Machines::Slot slot, Source& source) const {
     const auto& client = controller_->store().clients()[slot];
-    if (!client || (*client)->phase != MachinePhase::connected || !(*client)->session.ready()) {
+    if (!client || (*client)->phase != application::machines::MachinePhase::connected || !(*client)->session.ready()) {
       return;
     }
 
@@ -368,7 +365,7 @@ namespace telar::gui::qt {
     source.agent_count = count;
   }
 
-  QVariantMap MachineChromeLayout::listRecord(const Source& source, const MachineChromeGeometry::ListRow& row) const {
+  QVariantMap MachineChromeLayout::listRecord(const Source& source, const application::machines::MachineChromeGeometry::ListRow& row) const {
     QVariantList cards;
 
     for (std::size_t rank = 0; rank < source.card_count; ++rank) {
@@ -388,8 +385,8 @@ namespace telar::gui::qt {
     }
 
     const auto label = toQString(source.label.view());
-    std::array<char, MachineChromeGeometry::list_status_capacity> storage{};
-    const auto status = MachineChromeGeometry::listStatus(source.live, source.agent_count, storage);
+    std::array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
+    const auto status = application::machines::MachineChromeGeometry::listStatus(source.live, source.agent_count, storage);
 
     return {
         {QStringLiteral("key"), machineKey(source.token)},
@@ -412,7 +409,7 @@ namespace telar::gui::qt {
   }
 
   qreal MachineChromeLayout::listRecords(Rect area, QList<QVariantMap>& records) {
-    using Geometry = MachineChromeGeometry;
+    using Geometry = application::machines::MachineChromeGeometry;
     float widest = 0;
     std::size_t index = 0;
 
@@ -437,10 +434,10 @@ namespace telar::gui::qt {
     return std::ceil(widest) / density_;
   }
 
-  QVariantMap MachineChromeLayout::factRecord(const Source& source, const MachineFacts::Geometry& geometry) const {
-    const auto glyph = MachineFacts::glyph(source.phase, source.attention);
-    const auto cpu = MachineFacts::cpu(source.phase, source.cpu_percent);
-    const auto role = MachineFacts::glyphInk(source.phase, source.attention);
+  QVariantMap MachineChromeLayout::factRecord(const Source& source, const application::machines::MachineFacts::Geometry& geometry) const {
+    const auto glyph = application::machines::MachineFacts::glyph(source.phase, source.attention);
+    const auto cpu = application::machines::MachineFacts::cpu(source.phase, source.cpu_percent);
+    const auto role = application::machines::MachineFacts::glyphInk(source.phase, source.attention);
 
     return {
         {QStringLiteral("key"), machineKey(source.token)},
@@ -453,7 +450,7 @@ namespace telar::gui::qt {
         {QStringLiteral("cpu"), toQString(cpu.view())},
         {QStringLiteral("bold"), source.active},
         {QStringLiteral("ink"), toQColor(controller_->configuration().theme.chromeColor(role))},
-        {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
+        {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(application::machines::MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
     };
   }
 
@@ -467,12 +464,12 @@ namespace telar::gui::qt {
       }
 
       if (any) {
-        left += chrome_.px(MachineFacts::machine_gap);
+        left += chrome_.px(application::machines::MachineFacts::machine_gap);
       }
 
-      const auto cpu = MachineFacts::cpu(source->phase, source->cpu_percent);
-      const MachineFacts::Widths parts{.glyph = measure(MachineFacts::glyph(source->phase, source->attention), false), .label = measure(source->label.view(), source->active), .cpu = cpu.view().empty() ? 0 : measure(cpu.view(), false)};
-      const auto geometry = MachineFacts::geometry({.x = left, .y = area.y, .height = area.height}, chrome_, parts);
+      const auto cpu = application::machines::MachineFacts::cpu(source->phase, source->cpu_percent);
+      const application::machines::MachineFacts::Widths parts{.glyph = measure(application::machines::MachineFacts::glyph(source->phase, source->attention), false), .label = measure(source->label.view(), source->active), .cpu = cpu.view().empty() ? 0 : measure(cpu.view(), false)};
+      const auto geometry = application::machines::MachineFacts::geometry({.x = left, .y = area.y, .height = area.height}, chrome_, parts);
 
       left = geometry.bounds.right();
       if (!area.empty()) {

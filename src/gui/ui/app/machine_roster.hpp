@@ -15,8 +15,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
-import telar.gui.machines.profile_store;
+import telar.gui.application;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -56,7 +55,7 @@ namespace telar::gui::qt {
     void configureRemoteLaunch(const QString& destination, const QStringList& arguments);
     // Runs what the machine picker chose: show the machine, set it up, enable or disable its
     // profile, or add one.
-    void choose(MachinePickerTarget target, bool alternate);
+    void choose(application::machines::MachinePickerTarget target, bool alternate);
 
   signals:
     void launchFailed(const QString& error);
@@ -76,10 +75,10 @@ namespace telar::gui::qt {
     void applyProfiles();
     void openRequestedMachine();
     void reconcileMachines();
-    void reconcileMachine(const MachineProfile& profile);
-    void admit(Machines::Slot slot);
-    void retire(Machines::Slot slot, Retirement reason);
-    void setup(MachineToken target);
+    void reconcileMachine(const application::machines::MachineProfile& profile);
+    void admit(application::machines::Machines::Slot slot);
+    void retire(application::machines::Machines::Slot slot, Retirement reason);
+    void setup(application::machines::MachineToken target);
 
     Store& store_;
     MachinesCoordinator& machines_;

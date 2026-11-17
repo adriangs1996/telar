@@ -22,12 +22,13 @@ import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.machines;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::features::status_bar;
   using telar::gui::test::hostSample;
   using telar::gui::test::require;

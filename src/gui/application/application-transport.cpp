@@ -1,10 +1,11 @@
-module telar.gui.transport.runtime_link;
+module telar.gui.application;
 
 import std;
 import telar.base.text.utf8;
+import telar.gui.features.machines;
 import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   template <Allocator Memory>
   FrameStream<Memory>::FrameStream(Memory& memory)
@@ -107,26 +108,26 @@ namespace telar::gui {
 
   RuntimeHandshake::Result RuntimeHandshake::inspect(std::span<const Byte> payload, const SchemaId& requested) {
     if (!RuntimeProtocol::supports(requested)) {
-      return failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
+      return failure(features::machines::MachineError::endpoint_unavailable, "InvalidServerSelection");
     }
 
     if (payload.size() > HandshakeCodec::max_message_size) {
-      return failure(MachineError::endpoint_unavailable, "BufferTooSmall");
+      return failure(features::machines::MachineError::endpoint_unavailable, "BufferTooSmall");
     }
 
     try {
       const auto response = HandshakeCodec::decodeResponse(payload);
       if (const auto* accepted = std::get_if<ServerAccept>(&response)) {
-        return accepted->schema == requested ? Result{} : failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
+        return accepted->schema == requested ? Result{} : failure(features::machines::MachineError::endpoint_unavailable, "InvalidServerSelection");
       }
 
       return rejected(std::get<ServerReject>(response));
     } catch (const EncodingError& error) {
-      return failure(MachineError::endpoint_unavailable, decodingFailure(error.what()));
+      return failure(features::machines::MachineError::endpoint_unavailable, decodingFailure(error.what()));
     }
   }
 
-  RuntimeHandshake::Result RuntimeHandshake::failure(MachineError error, std::string_view message) {
+  RuntimeHandshake::Result RuntimeHandshake::failure(features::machines::MachineError error, std::string_view message) {
     Result result{.error = error};
 
     result.detail.append(message);
@@ -136,10 +137,10 @@ namespace telar::gui {
 
   RuntimeHandshake::Result RuntimeHandshake::rejected(const ServerReject& reply) {
     if (reply.reason == HandshakeRejectReason::client_limit_reached) {
-      return failure(MachineError::endpoint_unavailable, "clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish");
+      return failure(features::machines::MachineError::endpoint_unavailable, "clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish");
     }
 
-    Result result{.error = MachineError::incompatible_schema};
+    Result result{.error = features::machines::MachineError::incompatible_schema};
 
     result.detail.append("the runtime speaks wire schema ");
     result.detail.append(textView(std::span{reply.expected_schema}));
@@ -208,13 +209,13 @@ namespace telar::gui {
 
   void RuntimeLink::start(std::string_view text) {
     name(text);
-    phase = MachinePhase::connecting;
+    phase = features::machines::MachinePhase::connecting;
     clearFailure();
   }
 
   void RuntimeLink::adopt(std::uint64_t now_ns) {
     connected_at_ns = now_ns;
-    phase = MachinePhase::connected;
+    phase = features::machines::MachinePhase::connected;
     if (sessions != std::numeric_limits<std::uint32_t>::max()) {
       ++sessions;
     }
@@ -223,7 +224,7 @@ namespace telar::gui {
   }
 
   void RuntimeLink::lose(std::string_view text, std::uint64_t now_ns) {
-    if (phase != MachinePhase::connected) {
+    if (phase != features::machines::MachinePhase::connected) {
       return;
     }
 
@@ -233,21 +234,21 @@ namespace telar::gui {
 
     fail(text);
     setup_repairs = false;
-    phase = MachinePhase::lost;
+    phase = features::machines::MachinePhase::lost;
   }
 
-  void RuntimeLink::connectionFailed(MachineError error, std::string_view text) {
+  void RuntimeLink::connectionFailed(features::machines::MachineError error, std::string_view text) {
     fail(text);
-    setup_repairs = MachineConnectionPolicy::setupRepairs(error);
-    phase = MachineConnectionPolicy::permanent(error) ? MachinePhase::failed : MachinePhase::lost;
+    setup_repairs = features::machines::MachineConnectionPolicy::setupRepairs(error);
+    phase = features::machines::MachineConnectionPolicy::permanent(error) ? features::machines::MachinePhase::failed : features::machines::MachinePhase::lost;
   }
 
   bool RuntimeLink::retry() {
-    if (phase != MachinePhase::lost) {
+    if (phase != features::machines::MachinePhase::lost) {
       return false;
     }
 
-    phase = MachinePhase::connecting;
+    phase = features::machines::MachinePhase::connecting;
     if (attempt != std::numeric_limits<std::uint16_t>::max()) {
       ++attempt;
     }
@@ -256,18 +257,18 @@ namespace telar::gui {
   }
 
   bool RuntimeLink::retryNow() {
-    if (phase != MachinePhase::lost && phase != MachinePhase::failed) {
+    if (phase != features::machines::MachinePhase::lost && phase != features::machines::MachinePhase::failed) {
       return false;
     }
 
-    phase = MachinePhase::connecting;
+    phase = features::machines::MachinePhase::connecting;
     attempt = 0;
 
     return true;
   }
 
   void RuntimeLink::stop() noexcept {
-    phase = MachinePhase::stopped;
+    phase = features::machines::MachinePhase::stopped;
     clearFailure();
   }
 
@@ -279,9 +280,9 @@ namespace telar::gui {
 
   RuntimeLink::Headline RuntimeLink::headline() const {
     switch (phase) {
-    case MachinePhase::connected:
+    case features::machines::MachinePhase::connected:
       return {};
-    case MachinePhase::connecting:
+    case features::machines::MachinePhase::connecting:
       if (sessions == 0 && attempt == 0) {
         return assemble({.prefix = "Connecting to ", .suffix = "…", .fallback = "Connecting…"});
       }
@@ -295,11 +296,11 @@ namespace telar::gui {
 
         return result;
       }
-    case MachinePhase::lost:
+    case features::machines::MachinePhase::lost:
       return assemble({.prefix = "", .suffix = " is unreachable; trying again shortly", .fallback = "The runtime is unreachable"});
-    case MachinePhase::failed:
+    case features::machines::MachinePhase::failed:
       return setup_repairs ? assemble({.prefix = "", .suffix = " lacks this telar build; choose it in the machine list to set it up", .fallback = "This machine lacks this telar build"}) : assemble({.prefix = "Cannot connect to ", .suffix = "; retry it from the machine list", .fallback = "Cannot connect to the runtime"});
-    case MachinePhase::stopped:
+    case features::machines::MachinePhase::stopped:
       return assemble({.prefix = "", .suffix = " is disabled", .fallback = "The machine is disabled"});
     }
 

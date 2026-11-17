@@ -31,8 +31,8 @@ namespace telar::gui::qt {
     window_generation_ = generation;
   }
 
-  bool PeekController::open(const MachineActivityTarget& target) {
-    const auto* agent = std::get_if<MachineActivityTarget::Agent>(&target.owner);
+  bool PeekController::open(const application::machines::MachineActivityTarget& target) {
+    const auto* agent = std::get_if<application::machines::MachineActivityTarget::Agent>(&target.owner);
     if (agent == nullptr || !application::peek::open(store_.session(), application::peek::PeekTarget{.agent = agent->key, .session = agent->session})) {
       return false;
     }
@@ -54,7 +54,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    const auto* agent = std::get_if<MachineActivityTarget::Agent>(&origin_->target.owner);
+    const auto* agent = std::get_if<application::machines::MachineActivityTarget::Agent>(&origin_->target.owner);
     const auto& target = application::peek::target(store_.session());
 
     return agent != nullptr && origin_->target.source.machine.slot == store_.machines().active() && target && *target == application::peek::PeekTarget{.agent = agent->key, .session = agent->session};

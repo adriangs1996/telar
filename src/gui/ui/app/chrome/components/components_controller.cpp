@@ -44,7 +44,6 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
-import telar.gui.machines.picker;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -505,7 +504,7 @@ namespace telar::gui::qt {
     emit changed();
   }
 
-  bool ComponentsController::commandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const {
+  bool ComponentsController::commandCurrent(std::uint64_t generation, application::machines::MachineClientKey source, std::uint64_t runtime) const {
     const auto* client = store_.find(source);
 
     return generation == configuration_.configurationGeneration() && client != nullptr && client->key.machine.slot == store_.machines().active() && client->runtime_generation == runtime;

@@ -1,5 +1,5 @@
 // The services of the operating system the GUI uses: clocks, files, processes, the login
-// shell, sockets, shared images, the native window, and the commands that post desktop
+// shell, sockets, shared images, the native window, the private file profiles live in, and the commands that post desktop
 // notifications and play sounds.
 export module telar.gui.foundation.system;
 
@@ -18,6 +18,7 @@ export import :notification_payload;
 export import :peer_identity;
 export import :private_file_stamp;
 export import :process_group;
+export import :profile_file;
 export import :runtime_endpoint;
 export import :secure_random;
 export import :shared_image_source;

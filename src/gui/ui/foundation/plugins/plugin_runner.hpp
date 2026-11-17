@@ -16,7 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.config.plugin_effects;
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -54,7 +54,7 @@ namespace telar::gui::qt {
     friend struct test::ComponentActions;
 
     struct Owner {
-      MachineClientKey source;
+      application::machines::MachineClientKey source;
       std::uint64_t runtime_generation = 0;
       std::uint64_t execution = 0;
     };

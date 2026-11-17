@@ -28,9 +28,8 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.machines.profile_store;
-import telar.gui.machines.discovery;
-import telar.gui.platform.profile_file;
+import telar.gui.foundation.system;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -103,9 +102,9 @@ namespace telar::gui::qt {
     }
   }
 
-  bool MachineProfilesSource::edit(const MachineEdit& edit) {
+  bool MachineProfilesSource::edit(const application::machines::MachineEdit& edit) {
     if (editing()) {
-      fail(errorText(MachineProfileMessages::edit_pending), FailureSource::edit);
+      fail(errorText(application::machines::MachineProfileMessages::edit_pending), FailureSource::edit);
 
       return false;
     }
@@ -117,9 +116,9 @@ namespace telar::gui::qt {
     }
 
     try {
-      pending_edit_ = OwnedMachineEdit::copy(edit);
-    } catch (const MachineFailure& failure) {
-      fail(errorText(MachineProfileMessages::failure(failure.code())), FailureSource::edit);
+      pending_edit_ = application::machines::OwnedMachineEdit::copy(edit);
+    } catch (const application::machines::MachineFailure& failure) {
+      fail(errorText(application::machines::MachineProfileMessages::failure(failure.code())), FailureSource::edit);
 
       return false;
     }
@@ -132,7 +131,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  const MachineProfiles& MachineProfilesSource::profiles() const noexcept {
+  const application::machines::MachineProfiles& MachineProfilesSource::profiles() const noexcept {
     return profiles_;
   }
 
@@ -168,11 +167,11 @@ namespace telar::gui::qt {
 
     try {
       if (request.stop.stop_requested()) {
-        throw platform::ProfileOperationCancelled{};
+        throw system::ProfileOperationCancelled{};
       }
 
-      platform::ProfileFile file{textView(request.path), request.stop};
-      MachineProfileStore store{memory, file};
+      system::ProfileFile file{textView(request.path), request.stop};
+      application::machines::MachineProfileStore store{memory, file};
 
       if (request.edit) {
         system::SecureRandom random;
@@ -182,12 +181,12 @@ namespace telar::gui::qt {
       } else {
         result.profiles = store.load();
       }
-    } catch (const platform::ProfileOperationCancelled&) {
+    } catch (const system::ProfileOperationCancelled&) {
       result.cancelled = true;
-    } catch (const platform::InsecureProfileFile&) {
-      result.error = errorText(MachineProfileMessages::insecure_file);
-    } catch (const MachineFailure& failure) {
-      result.error = errorText(MachineProfileMessages::failure(failure.code()));
+    } catch (const system::InsecureProfileFile&) {
+      result.error = errorText(application::machines::MachineProfileMessages::insecure_file);
+    } catch (const application::machines::MachineFailure& failure) {
+      result.error = errorText(application::machines::MachineProfileMessages::failure(failure.code()));
     } catch (const std::exception& error) {
       result.error = QString::fromUtf8(error.what());
     }

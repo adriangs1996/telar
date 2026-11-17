@@ -40,16 +40,16 @@ static_assert(true);
 #include <string_view>
 #include <vector>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
+import telar.gui.features.machines;
 import telar.client;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 import telar.wire.layout;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::qt;
 
   class RemoteConnectionTest : public QObject {
@@ -239,7 +239,7 @@ namespace {
       QVERIFY(replacement != nullptr);
       QVERIFY(sendHandshake(*replacement, ServerAccept{handshake::schema_id}));
       QVERIFY(sendPayload(*replacement, QByteArrayLiteral("REPLACEMENT_SESSION")));
-      constexpr int before_retry_ms = RuntimeLink::first_retry_ms / 2;
+      constexpr int before_retry_ms = application::RuntimeLink::first_retry_ms / 2;
 
       QTRY_VERIFY_WITH_TIMEOUT(connection.ready(), before_retry_ms);
       QTRY_COMPARE_WITH_TIMEOUT(delivered.size(), 2, before_retry_ms);
@@ -284,7 +284,7 @@ namespace {
       const auto bytes = textView(std::span<const Byte>{prefix});
 
       QCOMPARE(peer->write(bytes.data(), static_cast<qint64>(bytes.size())), static_cast<qint64>(bytes.size()));
-      constexpr int before_retry_ms = RuntimeLink::first_retry_ms / 2;
+      constexpr int before_retry_ms = application::RuntimeLink::first_retry_ms / 2;
 
       QTRY_COMPARE_WITH_TIMEOUT(connection.error(), detail, before_retry_ms);
       QCOMPARE(connection.link().phase, MachinePhase::lost);
@@ -314,7 +314,7 @@ namespace {
       const auto schema = QString::fromLatin1(textView(handshake::schema_id).data(), static_cast<qsizetype>(handshake::schema_id.size()));
 
       QCOMPARE(connection.error(), QStringLiteral("the runtime speaks wire schema 00000000; this telar speaks %1. Update telar on one side").arg(schema));
-      constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+      constexpr int observe_retry_ms = application::RuntimeLink::first_retry_ms * 2;
 
       QTest::qWait(observe_retry_ms);
       QVERIFY(!listener.hasPendingConnections());
@@ -353,17 +353,17 @@ namespace {
 
       QTRY_COMPARE(first->bytesAvailable(), current_hello.size());
       QCOMPARE(first->readAll(), current_hello);
-      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = RuntimeProtocol::schema87}));
+      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87}));
       QVERIFY(sendPayload(*first, QByteArrayLiteral("OLD_CONNECTION_TAIL")));
       QTRY_VERIFY(listener.hasPendingConnections());
       const std::unique_ptr<QLocalSocket> legacy{listener.nextPendingConnection()};
 
       QVERIFY(legacy != nullptr);
-      const auto legacy_hello = framedHello(RuntimeProtocol::schema87);
+      const auto legacy_hello = framedHello(application::RuntimeProtocol::schema87);
 
       QTRY_COMPARE(legacy->bytesAvailable(), legacy_hello.size());
       QCOMPARE(legacy->readAll(), legacy_hello);
-      QVERIFY(sendHandshake(*legacy, ServerAccept{RuntimeProtocol::schema87}));
+      QVERIFY(sendHandshake(*legacy, ServerAccept{application::RuntimeProtocol::schema87}));
       QVERIFY(sendPayload(*legacy, QByteArrayLiteral("CURRENT_LEGACY_DATA")));
       QTRY_VERIFY(connection.ready());
       QTRY_COMPARE(delivered.size(), std::size_t{1});
@@ -404,7 +404,7 @@ namespace {
       const std::unique_ptr<QLocalSocket> first{listener.nextPendingConnection()};
 
       QVERIFY(first != nullptr);
-      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = RuntimeProtocol::schema87}));
+      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87}));
       QTRY_VERIFY(listener.hasPendingConnections());
       const std::unique_ptr<QLocalSocket> second{listener.nextPendingConnection()};
 
@@ -413,7 +413,7 @@ namespace {
       QVERIFY(sendHandshake(*second, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id}));
       QTRY_COMPARE(connection.link().phase, MachinePhase::failed);
       QCOMPARE(connection.remoteError(), std::optional{MachineError::incompatible_schema});
-      constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+      constexpr int observe_retry_ms = application::RuntimeLink::first_retry_ms * 2;
 
       QTest::qWait(observe_retry_ms);
       QVERIFY(!listener.hasPendingConnections());
@@ -541,7 +541,7 @@ namespace {
       QTRY_COMPARE(connection.link().phase, MachinePhase::lost);
       QTRY_COMPARE(connection.link().attempt, 2);
       QCOMPARE(attempts.size(), std::size_t{3});
-      constexpr qint64 earliest_first_ms = (qint64{RuntimeLink::first_retry_ms} * 9) / 10;
+      constexpr qint64 earliest_first_ms = (qint64{application::RuntimeLink::first_retry_ms} * 9) / 10;
 
       QVERIFY(attempts[1].started_ms - attempts[0].started_ms >= earliest_first_ms);
       QVERIFY(attempts[2].started_ms - attempts[1].started_ms >= earliest_first_ms * 2);
@@ -558,7 +558,7 @@ namespace {
       QVERIFY(peer != nullptr);
       QTRY_VERIFY(peer->bytesAvailable() > 0);
       connection.retryNow();
-      constexpr int observe_handshake_ms = RuntimeLink::first_retry_ms * 2;
+      constexpr int observe_handshake_ms = application::RuntimeLink::first_retry_ms * 2;
 
       QTest::qWait(observe_handshake_ms);
       QCOMPARE(connection.link().phase, MachinePhase::connecting);
@@ -595,7 +595,7 @@ namespace {
 
       QVERIFY(second != nullptr);
       QTRY_VERIFY(second->bytesAvailable() > 0);
-      constexpr int observe_handshake_ms = RuntimeLink::first_retry_ms * 2;
+      constexpr int observe_handshake_ms = application::RuntimeLink::first_retry_ms * 2;
 
       QTest::qWait(observe_handshake_ms);
       QCOMPARE(failures, std::size_t{1});
@@ -627,7 +627,7 @@ namespace {
 
       connection.openRemote({.destination = QStringLiteral("legacy"), .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))});
       QTRY_VERIFY2(connection.ready(), qPrintable(connection.error()));
-      QCOMPARE(connection.schema(), RuntimeProtocol::schema87);
+      QCOMPARE(connection.schema(), application::RuntimeProtocol::schema87);
       const ReportLimit report{.reach = {.name = "legacy.ssh", .noun = "cells", .value = 1, .requested = 2, .route = "gui"}, .hits = 1};
 
       connection.send(report);
@@ -701,7 +701,7 @@ namespace {
       QCOMPARE(connection.remoteError(), std::optional{MachineError::authentication_failed});
       QVERIFY(connection.error().contains(QStringLiteral("Permission denied")));
       QCOMPARE(disconnects, std::size_t{1});
-      constexpr int beyond_retry_ms = (RuntimeLink::first_retry_ms * 2) + 100;
+      constexpr int beyond_retry_ms = (application::RuntimeLink::first_retry_ms * 2) + 100;
 
       QTest::qWait(beyond_retry_ms);
       QCOMPARE(disconnects, std::size_t{1});

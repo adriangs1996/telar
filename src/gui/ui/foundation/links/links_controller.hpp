@@ -16,7 +16,6 @@ static_assert(true);
 #include "tbc/view.hpp"
 
 import telar.gui.application;
-import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
@@ -42,7 +41,7 @@ namespace telar::gui::qt {
     // Opens the link written at a cell of the pane's screen, if any.
     void openAt(std::uint64_t pane_id, CellPosition point);
     // The host's opener finished the link the client `source` asked for.
-    void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
+    void linkOpeningFinished(application::machines::MachineClientKey source, std::optional<LinkOpeningFailure> failure);
 
   signals:
     void openingFailed(const QString& message);
@@ -51,7 +50,7 @@ namespace telar::gui::qt {
 
   private:
     Store& store_;
-    tbc::view<ExternalLinkOpener<ApplicationLinkHost, LinksController, MachineClientKey>, tbc::lt::self> opener_;
+    tbc::view<ExternalLinkOpener<ApplicationLinkHost, LinksController, application::machines::MachineClientKey>, tbc::lt::self> opener_;
   };
 
 }

@@ -53,7 +53,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.machines.picker;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -182,7 +181,7 @@ namespace telar::gui::qt {
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
       commands_.execute(window_actions::Action::machine_picker);
     });
-    connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](MachineToken token) {
+    connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](application::machines::MachineToken token) {
       commands_.interact([this, token] {
         machines_.select(token);
       });
@@ -534,8 +533,8 @@ namespace telar::gui::qt {
 
       static_cast<void>(client.session.settlePresentation());
       machines_.summarize(client.key);
-      if (active && client.key.machine.slot != Machines::local_slot && (change == application::Change::stopped || change == application::Change::closed)) {
-        machines_.select(store_.machines().token(Machines::local_slot));
+      if (active && client.key.machine.slot != application::machines::Machines::local_slot && (change == application::Change::stopped || change == application::Change::closed)) {
+        machines_.select(store_.machines().token(application::machines::Machines::local_slot));
         return;
       }
 

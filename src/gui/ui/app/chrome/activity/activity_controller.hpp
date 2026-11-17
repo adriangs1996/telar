@@ -23,7 +23,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -64,8 +64,8 @@ namespace telar::gui::qt {
     [[nodiscard]] std::uint64_t rebuilds() const noexcept;
 
     // What the card with this identity points at, while it is listed.
-    [[nodiscard]] const MachineActivityTarget* target(const QString& identity) const;
-    [[nodiscard]] static QString identity(const MachineActivityTarget& target);
+    [[nodiscard]] const application::machines::MachineActivityTarget* target(const QString& identity) const;
+    [[nodiscard]] static QString identity(const application::machines::MachineActivityTarget& target);
 
     [[nodiscard]] QString hovered() const;
     // The pointer entered a card, or left one when the identity is empty. Hover input that the
@@ -85,13 +85,13 @@ namespace telar::gui::qt {
 
   private:
     struct SourceVersion {
-      MachineClientKey source;
+      application::machines::MachineClientKey source;
       std::uint64_t runtime_generation;
       std::uint64_t agents;
       std::uint64_t workspaces;
       std::uint64_t panes;
       bool connected;
-      runtime::FixedText<MachineLimits::label_bytes> label;
+      runtime::FixedText<application::machines::MachineLimits::label_bytes> label;
 
       bool operator==(const SourceVersion& other) const noexcept {
         return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && panes == other.panes && connected == other.connected && label.view() == other.label.view();
@@ -99,7 +99,7 @@ namespace telar::gui::qt {
     };
 
     struct Selection {
-      Machines::Slot slot;
+      application::machines::Machines::Slot slot;
       std::uint64_t tabs;
       std::uint64_t panes;
 
@@ -108,14 +108,14 @@ namespace telar::gui::qt {
 
     struct RowTarget {
       QString identity;
-      MachineActivityTarget target;
+      application::machines::MachineActivityTarget target;
     };
 
     Store& store_;
     ElementSlots& elements_;
     ApplicationAllocator& memory_;
     ListModel rows_;
-    std::array<std::optional<SourceVersion>, Machines::capacity> versions_;
+    std::array<std::optional<SourceVersion>, application::machines::Machines::capacity> versions_;
     std::optional<Selection> selection_;
     Vector<RowTarget, ApplicationAllocator> targets_;
     int agent_count_ = 0;

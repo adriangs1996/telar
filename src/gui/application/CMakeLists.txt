@@ -23,10 +23,11 @@ telar_add_domain(gui application
     application-terminal_graphics.cpp
     application-terminal_input.cpp
     application-terminal_links.cpp
+    application-transport.cpp
     application-window.cpp
     application-workspace_replica.cpp
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
        foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history
        features/prompt features/terminal/input features/terminal/links features/terminal/copy_mode
-       features/terminal/graphics features/terminal/attachments features/window features/status_bar features/notifications layout
+       features/terminal/graphics features/terminal/attachments features/window features/status_bar features/notifications features/machines layout
        presentation components config)

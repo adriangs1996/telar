@@ -1,9 +1,8 @@
-module telar.gui.platform.profile_file;
+module telar.gui.foundation.system;
 
 import std;
 import telar.sys.posix;
 
-import telar.gui.foundation.system;
 import telar.platform.error;
 import telar.machines;
 import telar.platform.fs;
@@ -12,7 +11,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.platform.primitives;
 
-namespace telar::gui::platform {
+namespace telar::gui::inline foundation::inline system {
 
   namespace {
 

@@ -34,7 +34,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.machines.picker;
 import telar.gui.presentation.activity_order;
 import telar.platform.process;
 import telar.gui.application;
@@ -101,7 +100,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::initialize() {
-    const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
+    const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, application::machines::Machines::local_slot);
 
     static_cast<void>(createClient(slot));
     const system::login_shell::Command shell;
@@ -142,7 +141,7 @@ namespace telar::gui::qt {
     }
   }
 
-  MachineClient& MachinesCoordinator::createClient(Machines::Slot slot) {
+  MachineClient& MachinesCoordinator::createClient(application::machines::Machines::Slot slot) {
     const auto key = store_.admission(slot);
     const MachineEffects::Sinks sinks{
         .machines = store_.machines(),
@@ -182,15 +181,15 @@ namespace telar::gui::qt {
     return clientAt(slot);
   }
 
-  MachineClient& MachinesCoordinator::clientAt(Machines::Slot slot) const noexcept {
+  MachineClient& MachinesCoordinator::clientAt(application::machines::Machines::Slot slot) const noexcept {
     return store_.client(slot);
   }
 
-  MachineClient* MachinesCoordinator::findClient(MachineClientKey key) const noexcept {
+  MachineClient* MachinesCoordinator::findClient(application::machines::MachineClientKey key) const noexcept {
     return store_.find(key);
   }
 
-  void MachinesCoordinator::connectMachine(Machines::Slot slot) {
+  void MachinesCoordinator::connectMachine(application::machines::Machines::Slot slot) {
     auto& client = clientAt(slot);
     const auto key = client.key;
 
@@ -204,9 +203,9 @@ namespace telar::gui::qt {
     connect(&client.connection, &RuntimeConnection::connected, this, [this, key] {
       if (auto* source = findClient(key)) {
         ++source->runtime_generation;
-        source->phase = MachinePhase::connected;
+        source->phase = application::machines::MachinePhase::connected;
         source->needs_setup = false;
-        source->session.connected(source->identity, RuntimeProtocol::readsRows(source->connection.schema()));
+        source->session.connected(source->identity, application::RuntimeProtocol::readsRows(source->connection.schema()));
         summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
           status_.publish();
@@ -235,7 +234,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void MachinesCoordinator::select(MachineToken target) {
+  void MachinesCoordinator::select(application::machines::MachineToken target) {
     if (!store_.machines().contains(target) || target.slot == store_.machines().active() || !store_.machines().shown(target.slot) || !store_.machines().row(target.slot).live || !store_.clients()[target.slot]) {
       return;
     }
@@ -259,7 +258,7 @@ namespace telar::gui::qt {
     host_.presentMachine();
   }
 
-  void MachinesCoordinator::summarize(MachineClientKey key) {
+  void MachinesCoordinator::summarize(application::machines::MachineClientKey key) {
     const auto slot = key.machine.slot;
     const auto* const found = findClient(key);
     if (found == nullptr) {
@@ -269,7 +268,7 @@ namespace telar::gui::qt {
     const auto& client = *found;
     const auto& summary = store_.machines().row(slot);
     const auto& sample = application::status_bar::metrics(client.session).sample();
-    MachineObservation observation{
+    application::machines::MachineObservation observation{
         .phase = client.phase,
         .needs_setup = client.needs_setup,
         .attention = summary.attention,
@@ -279,7 +278,7 @@ namespace telar::gui::qt {
     };
 
     if (sample.revision != 0) {
-      observation.metrics = MachineMetrics{.cpu_percent = sample.cpu_percent, .cpu_count = sample.cpu_count, .memory_used_decigib = sample.memory_used_decigib, .memory_total_decigib = sample.memory_total_decigib};
+      observation.metrics = application::machines::MachineMetrics{.cpu_percent = sample.cpu_percent, .cpu_count = sample.cpu_count, .memory_used_decigib = sample.memory_used_decigib, .memory_total_decigib = sample.memory_total_decigib};
       if (summary.metrics_revision != sample.revision) {
         observation.now_ns = system::AwakeClock::nowNanoseconds();
       }
@@ -299,9 +298,9 @@ namespace telar::gui::qt {
   void MachinesCoordinator::move(int delta) {
     auto slot = static_cast<int>(store_.machines().active());
 
-    for (std::size_t step = 0; step < Machines::capacity; ++step) {
-      slot = (slot + delta + static_cast<int>(Machines::capacity)) % static_cast<int>(Machines::capacity);
-      const auto candidate = static_cast<Machines::Slot>(slot);
+    for (std::size_t step = 0; step < application::machines::Machines::capacity; ++step) {
+      slot = (slot + delta + static_cast<int>(application::machines::Machines::capacity)) % static_cast<int>(application::machines::Machines::capacity);
+      const auto candidate = static_cast<application::machines::Machines::Slot>(slot);
       if (store_.machines().shown(candidate) && store_.machines().row(candidate).live && store_.clients()[candidate]) {
         select(store_.machines().token(candidate));
 
@@ -311,7 +310,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::open(const QString& endpoint) {
-    auto& client = clientAt(Machines::local_slot);
+    auto& client = clientAt(application::machines::Machines::local_slot);
     const auto path = endpoint.toUtf8();
 
     client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});

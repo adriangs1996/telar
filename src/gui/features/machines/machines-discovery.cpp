@@ -1,8 +1,8 @@
-module telar.gui.machines.discovery;
+module telar.gui.features.machines;
 
 import std;
 
-namespace telar::gui {
+namespace telar::gui::features::machines {
 
   namespace {
 

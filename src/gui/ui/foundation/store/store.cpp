@@ -9,11 +9,11 @@ static_assert(true);
 
 namespace telar::gui::qt {
 
-  Machines& Store::machines() noexcept {
+  application::machines::Machines& Store::machines() noexcept {
     return machines_;
   }
 
-  const Machines& Store::machines() const noexcept {
+  const application::machines::Machines& Store::machines() const noexcept {
     return machines_;
   }
 
@@ -25,7 +25,7 @@ namespace telar::gui::qt {
     return clients_;
   }
 
-  MachineClient& Store::client(Machines::Slot slot) const noexcept {
+  MachineClient& Store::client(application::machines::Machines::Slot slot) const noexcept {
     const auto& client = clients_[slot];
     if (!client) {
       std::terminate();
@@ -34,7 +34,7 @@ namespace telar::gui::qt {
     return **client;
   }
 
-  MachineClient* Store::find(MachineClientKey key) const noexcept {
+  MachineClient* Store::find(application::machines::MachineClientKey key) const noexcept {
     return findMachineClient(machines_, clients_, key);
   }
 
@@ -54,7 +54,7 @@ namespace telar::gui::qt {
     return client(machines_.active()).connection;
   }
 
-  MachineClientKey Store::admission(Machines::Slot slot) noexcept {
+  application::machines::MachineClientKey Store::admission(application::machines::Machines::Slot slot) noexcept {
     return {.machine = machines_.token(slot), .generation = next_client_generation_++};
   }
 

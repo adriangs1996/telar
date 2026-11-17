@@ -16,13 +16,14 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.profile_store;
+import telar.gui.features.machines;
 import telar.client;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
   using telar::gui::test::require;
   // The capacity the library compiles discovery for, as the CLI and the GUI use it.
   constexpr std::size_t path_capacity = PATH_MAX;

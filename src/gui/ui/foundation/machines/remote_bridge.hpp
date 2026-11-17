@@ -40,14 +40,12 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.profile_store;
 import telar.gui.foundation.system;
-import telar.gui.transport.runtime_link;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  using RemoteDiscovery = MachineDiscovery<system::PathLimits::path_bytes>;
+  using RemoteDiscovery = application::machines::MachineDiscovery<system::PathLimits::path_bytes>;
 
   struct RemoteTarget {
     QString destination;
@@ -70,7 +68,7 @@ namespace telar::gui::qt {
   };
 
   template <typename Observer>
-  concept RemoteBridgeObserver = requires(Observer& observer, const RemoteDiscovery& discovery, runtime::FileDescriptor channel, MachineError error, std::string_view detail) {
+  concept RemoteBridgeObserver = requires(Observer& observer, const RemoteDiscovery& discovery, runtime::FileDescriptor channel, application::machines::MachineError error, std::string_view detail) {
     { observer.remoteDiscovered(discovery) } -> std::same_as<void>;
     { observer.remoteChannelReady(std::move(channel)) } -> std::same_as<void>;
     { observer.remoteFailed(error, detail) } -> std::same_as<void>;
@@ -89,7 +87,7 @@ namespace telar::gui::qt {
 
       deadline_.setSingleShot(true);
       QObject::connect(&deadline_, &QTimer::timeout, &context_, [this] {
-        fail(MachineError::endpoint_unavailable);
+        fail(application::machines::MachineError::endpoint_unavailable);
       });
 
       QObject::connect(&options_task_, &QFutureWatcher<OptionsResult>::finished, &context_, [this] {
@@ -113,7 +111,7 @@ namespace telar::gui::qt {
 
       QObject::connect(&process_, &QProcess::errorOccurred, &context_, [this](QProcess::ProcessError error) {
         if (running_ && error != QProcess::Crashed) {
-          fail(MachineError::endpoint_unavailable);
+          fail(application::machines::MachineError::endpoint_unavailable);
         }
       });
 
@@ -141,10 +139,10 @@ namespace telar::gui::qt {
     void open(RemoteTarget target) {
       const auto destination = target.destination.toUtf8();
 
-      MachineFieldRules::profileDestination(view(destination));
+      application::machines::MachineFieldRules::profileDestination(view(destination));
       const auto program = target.program.toUtf8();
       if (!program.isEmpty()) {
-        MachineFieldRules::program(view(program));
+        application::machines::MachineFieldRules::program(view(program));
       }
 
       close();
@@ -183,7 +181,7 @@ namespace telar::gui::qt {
 
     struct OptionsResult {
       QStringList arguments;
-      std::optional<MachineError> error = std::nullopt;
+      std::optional<application::machines::MachineError> error = std::nullopt;
       std::uint64_t generation = 0;
     };
 
@@ -212,10 +210,10 @@ namespace telar::gui::qt {
           }
 
           result.arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
-        } catch (const MachineFailure& failure) {
+        } catch (const application::machines::MachineFailure& failure) {
           result.error = failure.code();
         } catch (...) {
-          result.error = MachineError::invalid_runtime_directory;
+          result.error = application::machines::MachineError::invalid_runtime_directory;
         }
 
         return result;
@@ -249,7 +247,7 @@ namespace telar::gui::qt {
       process_.setInputChannelMode(QProcess::ManagedInputChannel);
       process_.setStandardInputFile(QProcess::nullDevice());
       deadline_.start(discovery_timeout);
-      launch(MachineRemoteCommand::discovery(program()).view());
+      launch(application::machines::MachineRemoteCommand::discovery(program()).view());
     }
 
     [[nodiscard]] std::optional<std::string_view> program() {
@@ -269,7 +267,7 @@ namespace telar::gui::qt {
       try {
         Host::start(process_, arguments);
       } catch (const std::exception&) {
-        fail(MachineError::endpoint_unavailable);
+        fail(application::machines::MachineError::endpoint_unavailable);
       }
     }
 
@@ -294,7 +292,7 @@ namespace telar::gui::qt {
           }
         } else if (phase_ == Phase::discovery) {
           if (std::cmp_greater(output_.size() + received, RemoteDiscovery::max_output_bytes)) {
-            fail(MachineError::discovery_unreadable);
+            fail(application::machines::MachineError::discovery_unreadable);
 
             return;
           }
@@ -319,15 +317,15 @@ namespace telar::gui::qt {
         constexpr int maximum_exit_status = 255;
         const auto exited = outcome == QProcess::NormalExit && status >= 0 && status <= maximum_exit_status;
 
-        fail(MachineConnectionPolicy::failure({.exit_status = exited ? std::optional{static_cast<std::uint8_t>(status)} : std::nullopt, .standard_error = view(errors_)}));
+        fail(application::machines::MachineConnectionPolicy::failure({.exit_status = exited ? std::optional{static_cast<std::uint8_t>(status)} : std::nullopt, .standard_error = view(errors_)}));
 
         return;
       }
 
       try {
         discovery_ = RemoteDiscovery::parse(view(output_));
-        if (!RuntimeProtocol::supports(discovery_->schema())) {
-          fail(MachineError::remote_program_incompatible);
+        if (!application::RuntimeProtocol::supports(discovery_->schema())) {
+          fail(application::machines::MachineError::remote_program_incompatible);
 
           return;
         }
@@ -344,10 +342,10 @@ namespace telar::gui::qt {
             startBridge();
           }
         });
-      } catch (const MachineFailure& failure) {
+      } catch (const application::machines::MachineFailure& failure) {
         fail(failure.code());
       } catch (const std::exception&) {
-        fail(MachineError::endpoint_unavailable);
+        fail(application::machines::MachineError::endpoint_unavailable);
       }
     }
 
@@ -368,13 +366,13 @@ namespace telar::gui::qt {
           }
         });
 
-        launch(MachineRemoteCommand::bridge(program()).view());
+        launch(application::machines::MachineRemoteCommand::bridge(program()).view());
       } catch (const std::exception&) {
-        fail(MachineError::endpoint_unavailable);
+        fail(application::machines::MachineError::endpoint_unavailable);
       }
     }
 
-    void fail(MachineError error) {
+    void fail(application::machines::MachineError error) {
       if (closed_) {
         return;
       }

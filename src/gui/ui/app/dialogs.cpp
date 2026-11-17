@@ -99,7 +99,7 @@ namespace telar::gui::qt {
     show(Dialog::palette);
   }
 
-  void Dialogs::showMachinePrompt(std::optional<MachineToken> renamed) {
+  void Dialogs::showMachinePrompt(std::optional<application::machines::MachineToken> renamed) {
     if (machine_prompt_.open(renamed)) {
       show(Dialog::machine);
     }

@@ -15,7 +15,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.machines.picker;
 import telar.gui.foundation.actions;
 
 namespace telar::gui::qt {
@@ -45,8 +44,8 @@ namespace telar::gui::qt {
     connect(&shelf_, &AttachmentShelf::failed, this, [this](const QString& message) {
       const auto bytes = message.toUtf8();
 
-      application::notifications::publish(store_.client(Machines::local_slot).session, {.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
-      if (store_.machines().active() == Machines::local_slot) {
+      application::notifications::publish(store_.client(application::machines::Machines::local_slot).session, {.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
+      if (store_.machines().active() == application::machines::Machines::local_slot) {
         store_.commit();
       }
     });
@@ -74,13 +73,13 @@ namespace telar::gui::qt {
         return;
       }
 
-      application::notifications::reportLimit(store_.client(Machines::local_slot).session, {.name = name, .noun = noun, .value = value});
+      application::notifications::reportLimit(store_.client(application::machines::Machines::local_slot).session, {.name = name, .noun = noun, .value = value});
     });
 
     connect(&shelf_, &AttachmentShelf::evicted, this, [this](application::terminal::attachments::AttachmentEviction reason, qulonglong requested) {
       const bool items = reason == application::terminal::attachments::AttachmentEviction::items;
 
-      application::notifications::reportLimit(store_.client(Machines::local_slot).session, {.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
+      application::notifications::reportLimit(store_.client(application::machines::Machines::local_slot).session, {.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
     });
   }
 
@@ -163,7 +162,7 @@ namespace telar::gui::qt {
   }
 
   void AttachmentsController::synchronize() {
-    const auto& local = store_.client(Machines::local_slot);
+    const auto& local = store_.client(application::machines::Machines::local_slot);
 
     shelf_.setSource({.source = local.key, .runtime_generation = local.runtime_generation});
     std::optional<AttachmentPrompt> prompt;
@@ -178,14 +177,14 @@ namespace telar::gui::qt {
       }
     }
 
-    shelf_.setPrompt(prompt, store_.machines().active() == Machines::local_slot);
+    shelf_.setPrompt(prompt, store_.machines().active() == application::machines::Machines::local_slot);
     std::optional<PaneBottomReservation> reservation;
 
     if (prompt && shelf_.hasVisibleItems()) {
       reservation = PaneBottomReservation{.pane_id = prompt->target.pane_id};
     }
 
-    store_.client(Machines::local_slot).session.setAttachmentReservation(reservation);
+    store_.client(application::machines::Machines::local_slot).session.setAttachmentReservation(reservation);
   }
 
   bool AttachmentsController::interceptKey(QKeyEvent& event) {
@@ -202,7 +201,7 @@ namespace telar::gui::qt {
 
   void AttachmentsController::reconcileFrame(std::uint64_t pane_id) {
     const auto& prompt = shelf_.capturePrompt();
-    const auto* const pane = store_.client(Machines::local_slot).session.findPane(pane_id);
+    const auto* const pane = store_.client(application::machines::Machines::local_slot).session.findPane(pane_id);
     if (prompt && prompt->target.pane_id == pane_id && pane != nullptr && prompt->policy != AttachmentMarkerPolicy::ordered) {
       shelf_.reconcile(application::terminal::attachments::AttachmentMarkerScreen::from(pane->screen));
     }

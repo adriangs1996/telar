@@ -17,8 +17,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.profile_store;
 import telar.gui.foundation.system;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -35,8 +35,8 @@ namespace telar::gui::qt {
 
     void open(const QString& path, const QString& local_label);
     void poll();
-    bool edit(const MachineEdit& edit);
-    [[nodiscard]] const MachineProfiles& profiles() const noexcept;
+    bool edit(const application::machines::MachineEdit& edit);
+    [[nodiscard]] const application::machines::MachineProfiles& profiles() const noexcept;
     [[nodiscard]] const QString& error() const noexcept;
     [[nodiscard]] bool editing() const noexcept;
     [[nodiscard]] bool editError() const noexcept;
@@ -59,14 +59,14 @@ namespace telar::gui::qt {
       QByteArray path;
       QByteArray local_label;
       std::optional<system::FileStamp> known;
-      std::optional<OwnedMachineEdit> edit;
+      std::optional<application::machines::OwnedMachineEdit> edit;
       std::stop_token stop;
       std::uint64_t generation = 0;
       bool force = false;
     };
 
     struct Result {
-      std::optional<MachineProfiles> profiles;
+      std::optional<application::machines::MachineProfiles> profiles;
       std::optional<system::FileStamp> observed;
       QString error;
       std::uint64_t generation = 0;
@@ -85,8 +85,8 @@ namespace telar::gui::qt {
     QByteArray path_;
     QByteArray local_label_;
     std::optional<system::FileStamp> known_;
-    std::optional<OwnedMachineEdit> pending_edit_;
-    MachineProfiles profiles_;
+    std::optional<application::machines::OwnedMachineEdit> pending_edit_;
+    application::machines::MachineProfiles profiles_;
     QString error_;
     std::uint64_t generation_ = 0;
     std::uint64_t revision_ = 0;

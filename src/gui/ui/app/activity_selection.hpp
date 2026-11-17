@@ -11,7 +11,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -49,17 +49,17 @@ namespace telar::gui::qt {
     void settle();
     void cancel() noexcept;
     // Drops the choice if it waits on the client, whose runtime went away.
-    void drop(MachineClientKey source) noexcept;
+    void drop(application::machines::MachineClientKey source) noexcept;
 
   private:
     struct Pending {
-      MachineActivityTarget target;
+      application::machines::MachineActivityTarget target;
       std::uint64_t window;
       bool peek = false;
       std::uint64_t pointer_revision = 0;
     };
 
-    void openPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
+    void openPeek(const application::machines::MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
 
     Store& store_;
     ActivityController& activity_;

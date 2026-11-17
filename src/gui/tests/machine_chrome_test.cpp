@@ -17,16 +17,14 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.core;
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
-import telar.gui.presentation.suggestion_geometry;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.machines;
 import telar.client;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::machines;
   using namespace telar::gui::test;
 
   void colorNamesKeepWrittenSemantics() {

@@ -1,8 +1,8 @@
-module telar.gui.machines.profile_store;
+module telar.gui.features.machines;
 
 import std;
 
-namespace telar::gui {
+namespace telar::gui::features::machines {
 
   void MachineProfileEdits::add(MachineProfiles& profiles, const MachineEdit& edit, MachineId id) {
     profiles.add(MachineProfile::create(id, {

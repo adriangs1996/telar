@@ -36,13 +36,15 @@ static_assert(true);
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.machines;
 import telar.gui.presentation.history_inspection;
 import telar.gui.features.status_bar;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
 
   using namespace telar::gui::features::status_bar;
   using namespace telar::gui::qt;

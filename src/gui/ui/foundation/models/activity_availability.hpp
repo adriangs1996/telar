@@ -5,7 +5,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -13,6 +13,6 @@ namespace telar::gui::qt {
 
   // Whether the target is still there to select: its machine connected and shown, and its
   // agent, process or worktree still listed.
-  [[nodiscard]] bool activityAvailable(const Store& store, const MachineActivityTarget& target);
+  [[nodiscard]] bool activityAvailable(const Store& store, const application::machines::MachineActivityTarget& target);
 
 }

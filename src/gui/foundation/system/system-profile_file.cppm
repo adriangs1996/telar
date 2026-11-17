@@ -1,17 +1,19 @@
-export module telar.gui.platform.profile_file;
+// A file only its owner may read or replace, read whole and replaced atomically under a lock;
+// the machine profiles live in one.
+export module telar.gui.foundation.system:profile_file;
 
 import std;
 import telar.tbc;
 
 import telar.gui.foundation.core;
-import telar.gui.foundation.system;
+import :path_limits;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.vocabulary;
 import telar.base.memory.allocators;
 
 export {
-  namespace telar::gui::platform {
+  namespace telar::gui::inline foundation::inline system {
 
     class InsecureProfileFile final : public std::runtime_error {
     public:

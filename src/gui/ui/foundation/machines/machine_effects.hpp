@@ -13,14 +13,13 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
-import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
   struct MachineClient;
 
   // The client of each window slot, as the store holds them.
-  using MachineClients = std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity>;
+  using MachineClients = std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, application::machines::Machines::capacity>;
 
   // What one machine's session asks of the desktop. Only the client the window holds for the
   // active machine reaches it: the others' notifications, sounds and input are dropped.
@@ -28,17 +27,17 @@ namespace telar::gui::qt {
   public:
     // What the window lends the effects of every client it holds.
     struct Sinks {
-      const Machines& machines;
+      const application::machines::Machines& machines;
       const MachineClients& clients;
       // The desktop's notifications and sounds.
       HostEffects& desktop;
       // The client whose sound plays, which the window tells when the sound ends.
-      std::optional<MachineClientKey>& sound_owner;
+      std::optional<application::machines::MachineClientKey>& sound_owner;
       // The pacer of the window's frames, while the window has one.
       std::optional<WindowFramePacer<>>& frame_pacer;
     };
 
-    MachineEffects(const Sinks& sinks, MachineClientKey source) noexcept
+    MachineEffects(const Sinks& sinks, application::machines::MachineClientKey source) noexcept
         : sinks_(sinks),
           source_(source) {}
 
@@ -51,7 +50,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool presented() const noexcept;
 
     Sinks sinks_;
-    MachineClientKey source_;
+    application::machines::MachineClientKey source_;
   };
 
 }

@@ -13,7 +13,7 @@ import telar.gui.foundation.core;
 import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection_geometry;
-import telar.gui.presentation.suggestion_geometry;
+import telar.gui.features.machines;
 import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
 import telar.gui.presentation.frame_pacer;
@@ -96,6 +96,7 @@ namespace {
 
   void chromeSurfacesPreserveThemeAndTransparency() {
     using namespace telar::gui;
+    using namespace telar::gui::features::machines;
     using namespace telar::gui::features::window;
 
     for (const auto background : {Color::rgb(0x15151a), Color::rgb(0xf6f4ef)}) {

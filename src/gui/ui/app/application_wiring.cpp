@@ -22,7 +22,6 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;
-import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 
@@ -92,7 +91,7 @@ namespace telar::gui::qt {
     });
 
     connect(&palette_, &PaletteController::failed, &status_, &WindowStatus::report);
-    connect(&palette_, &PaletteController::machineRequested, this, [this](MachinePickerTarget target, bool alternate) {
+    connect(&palette_, &PaletteController::machineRequested, this, [this](application::machines::MachinePickerTarget target, bool alternate) {
       commands_.interact([&] {
         roster_.choose(target, alternate);
       });

@@ -27,10 +27,8 @@ static_assert(true);
 #include <cstdlib>
 
 import std;
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
-import telar.gui.machines.profile_store;
-import telar.gui.platform.profile_file;
+import telar.gui.application;
+import telar.gui.foundation.system;
 import telar.platform.paths;
 
 namespace {
@@ -142,12 +140,12 @@ namespace {
     }
 
     const auto path = machineProfilesPath().toUtf8();
-    const telar::gui::platform::ProfileFile file{{path.constData(), static_cast<std::size_t>(path.size())}};
+    const telar::gui::system::ProfileFile file{{path.constData(), static_cast<std::size_t>(path.size())}};
     const auto source = file.read(memory);
-    const auto profiles = source ? telar::gui::MachineProfileCodec::parse(memory, telar::textView(*source)) : telar::gui::MachineProfiles{};
+    const auto profiles = source ? telar::gui::application::machines::MachineProfileCodec::parse(memory, telar::textView(*source)) : telar::gui::application::machines::MachineProfiles{};
     const auto label = parser.value(QStringLiteral("machine")).toUtf8();
     const auto hostname = telar::gui::system::hostName();
-    const auto destination = telar::gui::MachineOpening::saved(
+    const auto destination = telar::gui::application::machines::MachineOpening::saved(
         profiles,
         {
             label.constData(),
@@ -251,8 +249,8 @@ int main(int argc, char** argv) {
     scheduleSmokeTest(parser, client, *window);
 
     return QGuiApplication::exec();
-  } catch (const telar::gui::MachineFailure& error) {
-    const auto* message = error.code() == telar::gui::MachineError::unknown_machine ? "no saved machine or local label has that name; see telar machine list" : error.what();
+  } catch (const telar::gui::application::machines::MachineFailure& error) {
+    const auto* message = error.code() == telar::gui::application::machines::MachineError::unknown_machine ? "no saved machine or local label has that name; see telar machine list" : error.what();
 
     std::cerr << "telar-gui: " << message << '\n';
 

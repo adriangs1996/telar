@@ -1,7 +1,9 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.machines.discovery;
+// The machines telar reaches: their identities, limits and failures, which errors a retry or
+// setup can mend, and where this machine's runtime listens.
+export module telar.gui.features.machines:discovery;
 
 import std;
 
@@ -11,14 +13,14 @@ import telar.platform.paths;
 
 // Interface: machines/failure.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineError;
   using telar::runtime::machines::MachineFailure;
 }
 
 // Interface: machines/connection_policy.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineSshResult {
       std::optional<std::uint8_t> exit_status;
@@ -38,26 +40,26 @@ export {
 
 // Interface: machines/discovery.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineDiscovery;
 }
 
 // Interface: machines/identity.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineId;
   using telar::runtime::machines::MachineIdentityRandom;
 }
 
 // Interface: machines/limits.cppm
 // Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
+export namespace telar::gui::features::machines {
   using telar::runtime::machines::MachineLimits;
 }
 
 // Interface: machines/messages.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     struct MachineProfileMessages {
       static constexpr std::string_view insecure_file = MachineFailure::insecure_file;
@@ -71,7 +73,7 @@ export {
 
 // Interface: machines/runtime_location.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::machines {
 
     template <typename Environment>
     concept MachineRuntimeEnvironment = requires(const Environment& environment, const char* name) {

@@ -15,12 +15,13 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-import telar.gui.machines.discovery;
-import telar.gui.machines.picker;
+import telar.gui.features.machines;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
   using telar::gui::test::require;
 
   void identitySurvivesRenameAndRejectsRetiredDestinations() {

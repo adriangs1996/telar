@@ -27,12 +27,12 @@ target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-h
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS foundation features layout
-    input platform machines presentation components config transport
+    input platform presentation components config
     application)
   add_subdirectory(${domain})
 endforeach()
 
-add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/system-peer_identity.cpp foundation/system/system-window_lease.cpp platform/profile_file/profile_file.cpp foundation/system/system-stdio_socket.cpp foundation/system/system-managed_directory.cpp foundation/system/system-process_group.cpp)
+add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/system-peer_identity.cpp foundation/system/system-window_lease.cpp foundation/system/system-profile_file.cpp foundation/system/system-stdio_socket.cpp foundation/system/system-managed_directory.cpp foundation/system/system-process_group.cpp)
 target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-foundation-core gui-foundation-system gui-platform Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
@@ -73,7 +73,7 @@ if(TELAR_GUI_NATIVE)
   add_dependencies(gui-surface-command telar-gui-command)
 
   add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source.cpp ui/app/overlays/machine_prompt/machine_profiles_source.hpp)
-  target_link_libraries(gui-machine-profiles PUBLIC gui-posix gui-platform gui-machines Qt6::Concurrent)
+  target_link_libraries(gui-machine-profiles PUBLIC gui-posix gui-platform gui-application Qt6::Concurrent)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
   endif()
@@ -149,7 +149,7 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-keyboard PUBLIC gui-foundation-core Qt6::Gui)
 
   add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-machines gui-application Qt6::Concurrent)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-application Qt6::Concurrent)
 
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
@@ -163,7 +163,7 @@ if(TELAR_GUI_NATIVE)
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-layout
     gui-input
-    gui-platform gui-machines gui-presentation gui-components gui-config gui-transport
+    gui-platform gui-presentation gui-components gui-config
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Most of a gui-quick compilation parses the same Qt headers again; the ones
@@ -243,7 +243,7 @@ if(TELAR_GUI_NATIVE)
     set_target_properties(telar-gui-launcher PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     add_dependencies(telar-gui telar-gui-launcher)
   endif()
-  target_link_libraries(telar-gui PRIVATE gui-platform gui-machines gui-quick gui-quickplugin)
+  target_link_libraries(telar-gui PRIVATE gui-platform gui-quick gui-quickplugin)
   add_dependencies(telar-gui telar-gui-command)
   # Run by hand by tools/measure_startup.py, in Release too, so a tree configured
   # without tests builds it.

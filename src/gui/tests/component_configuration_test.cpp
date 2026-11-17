@@ -31,7 +31,7 @@ import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.generation;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.machines;
 
 import telar.gui.config.gui_query;
 import telar.gui.application;
@@ -41,6 +41,8 @@ import telar.gui.foundation.core;
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::machines;
 
   struct Fixture {
     static constexpr std::uint64_t generation = 42;
