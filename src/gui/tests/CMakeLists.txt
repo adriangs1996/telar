@@ -51,9 +51,6 @@ gui_add_wall_clock_test(gui-wall-clock-baker-island IDLW12 -720)
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.features.palette)
 
-telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES gui-features-prompt
-  TEST gui-prompt-editor LABELS gui.features.prompt)
-
 telar_add_test(gui-machine-runtime-location-test SOURCES machine_runtime_location_test.cpp LIBRARIES gui-platform gui-features-machines gui-foundation-system
   TEST gui-machine-runtime-location LABELS gui.features.machines)
 

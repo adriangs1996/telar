@@ -4,9 +4,9 @@ static_assert(true);
 #endif
 
 #include <cstdio>
-#include <cstdlib>
 
 import std;
+import telar.testing;
 import telar.gui.features.prompt;
 import telar.gui.foundation.core;
 import telar.shell.syntax;
@@ -75,8 +75,7 @@ namespace {
         std::fprintf(stderr, "text: [%.*s] cursor %zu\n", static_cast<int>(value.size()), value.data(), current->view().cursor());
       }
 
-      std::fprintf(stderr, "%s:%u: %.*s\n", location.file_name(), location.line(), static_cast<int>(message.size()), message.data());
-      std::exit(1);
+      telar::testing::fail(message, location);
     }
   }
 
@@ -428,17 +427,14 @@ namespace {
     require(cjk.caret_column == Layout::indent + 5 + 4, "wide characters take two cells");
   }
 
-}
+  const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
+  const telar::testing::Case case_routing{"prompt_editor.routing", routing};
+  const telar::testing::Case case_text_model{"prompt_editor.text_model", textModel};
+  const telar::testing::Case case_emacs{"prompt_editor.emacs", emacs};
+  const telar::testing::Case case_vim_basics{"prompt_editor.vim_basics", vimBasics};
+  const telar::testing::Case case_vim_operators{"prompt_editor.vim_operators", vimOperators};
+  const telar::testing::Case case_vim_objects{"prompt_editor.vim_objects", vimObjects};
+  const telar::testing::Case case_vim_lines{"prompt_editor.vim_lines", vimLines};
+  const telar::testing::Case case_vim_visual{"prompt_editor.vim_visual", vimVisual};
 
-int main() {
-  layoutAndStyles();
-  routing();
-  textModel();
-  emacs();
-  vimBasics();
-  vimOperators();
-  vimObjects();
-  vimLines();
-  vimVisual();
-  std::puts("prompt editor tests passed");
 }
