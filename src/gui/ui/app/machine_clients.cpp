@@ -119,7 +119,7 @@ namespace telar::gui::qt {
     const bool replacing_active = store_.clients()[slot] && slot == store_.machines().active();
     if (replacing_active) {
       releaseMachineInput();
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
       store_.advanceMachineView();
       forgetMachineView();
     }
@@ -245,7 +245,7 @@ namespace telar::gui::qt {
     pending_activity_.reset();
     activity_.clearHover();
     releaseMachineInput();
-    showDialog(Dialog::none);
+    dialogs_.show(Dialog::none);
     session().invalidateSuggestion();
     session().setPresented(false);
     store_.advanceMachineView();

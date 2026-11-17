@@ -49,10 +49,10 @@ namespace telar::gui::test {
     }
 
     // Sets the dialog and the pane whose prompt line hosts it, then announces them, as the last two
-    // steps of the window's showDialog do, so a test chooses any pane and kind in one change.
+    // steps of Dialogs::show do, so a test chooses any pane and kind in one change.
     static void showLineSearch(qt::ApplicationController& application, qt::Store::Dialog kind, std::uint64_t pane_id) {
       application.store_.setDialog(kind, pane_id);
-      emit application.dialogChanged();
+      emit application.dialogs_.changed();
     }
 
     static void describe(qt::ApplicationController& application) {

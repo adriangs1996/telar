@@ -385,7 +385,7 @@ namespace {
       const auto offline = requireValue(machines.find(MachineId::fromRaw(2)), "Expected disabled picker row");
 
       application.palette()->activate(machineChoice(application, QStringLiteral("Offline")));
-      QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
+      QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
       QTRY_VERIFY(machines.row(offline).enabled);
       QCOMPARE(machines.active(), slot);
       application.execute(window_actions::Action::machine_picker);
@@ -400,7 +400,7 @@ namespace {
 
       local.insert(QStringLiteral("alternate"), true);
       application.palette()->activate(local);
-      QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
+      QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
       QCOMPARE(machines.active(), slot);
       QVERIFY(machines.row(Machines::local_slot).enabled);
     }
@@ -415,7 +415,7 @@ namespace {
       application.palette()->search(QStringLiteral(":unmatched"));
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 1);
       application.palette()->activate(machineChoice(application, QStringLiteral("Add machine…")));
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::machine);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
       const auto first_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
 
       application.machinePrompt()->search(QStringLiteral("Added"));
@@ -427,9 +427,9 @@ namespace {
       application.machinePrompt()->search(QStringLiteral("window-added@fixture"));
       application.machinePrompt()->submit(first_revision);
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::machine);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
       application.machinePrompt()->submit(second_revision);
-      QVERIFY((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none));
+      QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
       const auto& machines = MachineProfileWindow::machines(application);
 
       QTRY_VERIFY(machines.findDestination("window-added@fixture").has_value());
@@ -444,7 +444,7 @@ namespace {
       application.execute(window_actions::Action::machine_picker);
       application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), window_actions::MachineEditAction::remove);
       QTRY_VERIFY(!machines.row(slot).used);
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 2);
     }
 

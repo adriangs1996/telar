@@ -6,19 +6,19 @@ Popup {
     id: root
 
     property real ratio: 1
-    readonly property bool historyMode: telar.dialog === Store.Dialog.history
-    readonly property bool pathMode: telar.dialog === Store.Dialog.paths
-    readonly property bool machineMode: telar.dialog === Store.Dialog.machine
-    readonly property bool peekMode: telar.dialog === Store.Dialog.peek
+    readonly property bool historyMode: telar.dialogs.kind === Store.Dialog.history
+    readonly property bool pathMode: telar.dialogs.kind === Store.Dialog.paths
+    readonly property bool machineMode: telar.dialogs.kind === Store.Dialog.machine
+    readonly property bool peekMode: telar.dialogs.kind === Store.Dialog.peek
     readonly property bool customMode: historyMode || paletteMode || pathMode || machineMode || peekMode
     readonly property var activeSearch: peekMode ? (peekBrowser.item?.queryField ?? standardField) : machineMode ? (machineBrowser.item?.queryField ?? standardField) : pathMode ? (pathBrowser.item?.queryField ?? standardField) : historyMode ? historyQuery : paletteMode ? (paletteBrowser.item?.queryField ?? standardField) : standardField
-    readonly property bool paletteMode: telar.dialog === Store.Dialog.palette
+    readonly property bool paletteMode: telar.dialogs.kind === Store.Dialog.palette
     // The focused pane's prompt line hosts the history and path searches; the history's
     // inspector still opens here, over it.
-    readonly property bool lineHosted: telar.lineSearch !== Store.Dialog.none && !(historyMode && telar.history.state.inspecting)
+    readonly property bool lineHosted: telar.dialogs.lineSearch !== Store.Dialog.none && !(historyMode && telar.history.state.inspecting)
     readonly property bool listing: historyMode || paletteMode
-    readonly property bool promptMode: telar.dialog !== Store.Dialog.none && !customMode
-    readonly property bool workspaceMode: telar.dialog === Store.Dialog.new_workspace
+    readonly property bool promptMode: telar.dialogs.kind !== Store.Dialog.none && !customMode
+    readonly property bool workspaceMode: telar.dialogs.kind === Store.Dialog.new_workspace
     readonly property var standardField: workspaceMode ? workspaceForm.field.input : prompt.field.input
     readonly property real dimmingAlpha: 0.25
     readonly property real historyEntranceOffset: Math.min(12 * root.ratio, Math.max(0, root.parent.height - historyBounds.y - historyBounds.height))
@@ -75,7 +75,7 @@ Popup {
 
     readonly property rect historyBounds: telar.history.geometry.bounds
     readonly property rect paletteBounds: paletteMode ? telar.palette.geometry.bounds : Qt.rect(0, 0, 0, 0)
-    readonly property rect pathBounds: pathMode && telar.lineSearch === Store.Dialog.none ? telar.paths.geometry.bounds : Qt.rect(0, 0, 0, 0)
+    readonly property rect pathBounds: pathMode && telar.dialogs.lineSearch === Store.Dialog.none ? telar.paths.geometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect machineBounds: machineMode ? telar.machinePrompt.geometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect peekBounds: peekMode ? telar.peek.geometry.bounds : Qt.rect(0, 0, 0, 0)
     x: peekMode ? peekBounds.x : machineMode ? machineBounds.x : pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
@@ -89,13 +89,13 @@ Popup {
     padding: customMode ? 0 : 22 * ratio
     closePolicy: customMode ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     onClosed: {
-        if (telar.dialog !== Store.Dialog.none && !root.lineHosted)
+        if (telar.dialogs.kind !== Store.Dialog.none && !root.lineHosted)
             telar.execute(WindowActions.Action.cancel);
     }
 
     // The inspector opens and closes over the prompt line's search.
     onLineHostedChanged: {
-        if (telar.dialog === Store.Dialog.none) {
+        if (telar.dialogs.kind === Store.Dialog.none) {
             return;
         }
 
@@ -118,13 +118,13 @@ Popup {
     }
 
     Connections {
-        target: telar
-        function onDialogChanged() {
-            if (telar.dialog === Store.Dialog.new_workspace) {
+        target: telar.dialogs
+        function onChanged() {
+            if (telar.dialogs.kind === Store.Dialog.new_workspace) {
                 workspaceForm.clear();
             }
 
-            if (telar.dialog !== Store.Dialog.none) {
+            if (telar.dialogs.kind !== Store.Dialog.none) {
                 if (!root.paletteMode && !root.pathMode && !root.machineMode && !root.peekMode) {
                     root.activeSearch.text = "";
                 }
@@ -194,7 +194,7 @@ Popup {
         Loader {
             id: pathBrowser
             anchors.fill: parent
-            active: root.pathMode && telar.lineSearch === Store.Dialog.none
+            active: root.pathMode && telar.dialogs.lineSearch === Store.Dialog.none
             sourceComponent: PathPickerPanel {
                 controller: telar.paths
                 colors: telar.colors
@@ -270,7 +270,7 @@ Popup {
             visible: !root.customMode && !root.workspaceMode
             colors: telar.colors
             typography: telar.display.geometry.typography
-            dialog: telar.dialog
+            dialog: telar.dialogs.kind
             searchScope: telar.copy.searchScope
             searchScopes: telar.copy.searchScopes
             ratio: root.ratio

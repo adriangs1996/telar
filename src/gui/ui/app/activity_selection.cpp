@@ -20,7 +20,7 @@ namespace telar::gui::qt {
   void ApplicationController::openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision) {
     if (peek_.open(target)) {
       activity_.showHover(identity, pointer_revision);
-      showDialog(Dialog::peek);
+      dialogs_.show(Dialog::peek);
       peek_.synchronize();
     }
   }

@@ -1349,7 +1349,7 @@ namespace {
       application.peekActivity(key);
       QVERIFY(MachineWindow::pendingActivity(application));
       QVERIFY(finishOpening(*fixture.remote_runtime));
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
       QCOMPARE(application.activity()->hovered(), key);
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 1, wait_ms);
       QCOMPARE(fixture.local_runtime->count(ClientTag::read_pane), 0);
@@ -1380,12 +1380,12 @@ namespace {
       QCOMPARE(message.mode, PaneTextMode::prompt);
       QCOMPARE(message.text, "Continue the remote task");
       QCOMPARE(fixture.local_runtime->count(ClientTag::send_pane_text), 0);
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       panel.reset();
       fixture.remote_runtime->send(RequestCompleted{.request_id = message.request_id});
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.requestsPending(), wait_ms);
       application.peekActivity(key);
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
       const auto stale_revision = application.peek()->state().value(QStringLiteral("revision")).toString();
 
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
@@ -1393,7 +1393,7 @@ namespace {
 
       ++agents.front().session_id.front();
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::none, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, wait_ms);
       application.peek()->search(QStringLiteral("/stop"));
       application.peek()->submit(stale_revision);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1422,14 +1422,14 @@ namespace {
       const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
       application.peekActivity(key);
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::peek);
       const auto retired = application.peek()->state().value(QStringLiteral("revision")).toString();
 
       QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
       const auto retired_read = fixture.local_runtime->last<ReadPane>();
 
       application.setWindow(replacement);
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       application.peek()->search(QStringLiteral("/stop"));
       application.peek()->submit(retired);
       QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1437,7 +1437,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, Machines::local_slot).session.requestsPending(), wait_ms);
       application.setWindow(window);
       application.peekActivity(key);
-      QCOMPARE(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::peek);
       application.peek()->search(QStringLiteral("/stop"));
       application.peek()->submit(retired);
       QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1469,7 +1469,7 @@ namespace {
       QVERIFY(MachineWindow::pendingActivity(application));
       MachineWindow::pointerMoved(application);
       QVERIFY(finishOpening(*fixture.remote_runtime));
-      QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::peek, wait_ms);
       QVERIFY(application.activity()->hovered().isEmpty());
     }
 
@@ -1753,14 +1753,14 @@ namespace {
       window.resize(wide);
       QTRY_COMPARE_WITH_TIMEOUT(lines().size(), line_count, wait_ms);
       window.resize(tiny);
-      QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialog())).arg(application.peek()->geometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialogs()->kind())).arg(application.peek()->geometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
       // The panel asks to close; the window, here the test, runs the cancel.
       const QSignalSpy cancelled{panel.get(), SIGNAL(cancelled())};
 
       QTest::keyClick(&window, Qt::Key_Escape);
       QTRY_COMPARE_WITH_TIMEOUT(cancelled.count(), 1, wait_ms);
       application.execute(window_actions::Action::cancel);
-      QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
     }
 
     Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {

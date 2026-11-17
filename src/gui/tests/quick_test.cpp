@@ -971,7 +971,7 @@ return {api_version = 2, client = {
       });
 
       client_->execute(window_actions::Action::rename_tab);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::rename_tab);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::rename_tab);
       const auto* field = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
       const auto* submit = window_->findChild<QQuickItem*>(QStringLiteral("promptSubmit"));
 
@@ -991,13 +991,13 @@ return {api_version = 2, client = {
 
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), renamed, runtime_wait_ms);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
 
       client_->execute(window_actions::Action::rename_tab);
       QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), runtime_wait_ms);
       typeText(QStringLiteral("discarded"));
       QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QCOMPARE(tab_label(), renamed);
 
       client_->execute(window_actions::Action::rename_tab);
@@ -1033,7 +1033,7 @@ return {api_version = 2, client = {
       };
 
       client_->execute(window_actions::Action::new_workspace);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::new_workspace);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::new_workspace);
       QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("commandSearch"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("workspaceDirectory"), runtime_wait_ms);
@@ -1061,7 +1061,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(field->text(), missing, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT(client_->workspaceForm()->state().value(QStringLiteral("confirmCreate")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::new_workspace);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::new_workspace);
       QVERIFY(!QFileInfo::exists(missing));
       captureArtifact(QStringLiteral("workspace-confirm"));
 
@@ -1076,7 +1076,7 @@ return {api_version = 2, client = {
       };
 
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rows()->rowCount(), workspaces + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(QFileInfo{missing}.isDir(), runtime_wait_ms);
       QVERIFY2(workspace_names().contains(QStringLiteral("gamma")), qPrintable(workspace_names().join(QLatin1Char(','))));
@@ -1123,13 +1123,13 @@ return {api_version = 2, client = {
 
       static_cast<void>(open.evaluate());
       QVERIFY2(!open.hasError(), qPrintable(open.error().toString()));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
 
       QQmlExpression cancel{context, window_, QStringLiteral("telar.execute(WindowActions.Action.cancel)")};
 
       static_cast<void>(cancel.evaluate());
       QVERIFY2(!cancel.hasError(), qPrintable(cancel.error().toString()));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
 
       const auto tab_label = [&] {
         return client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
@@ -1143,7 +1143,7 @@ return {api_version = 2, client = {
       static_cast<void>(rename.evaluate());
       QVERIFY2(!rename.hasError(), qPrintable(rename.error().toString()));
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), QStringLiteral("QML renamed tab"), runtime_wait_ms);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       client_->execute(window_actions::Action::rename_tab);
       client_->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), original_label, runtime_wait_ms);
@@ -1160,7 +1160,7 @@ return {api_version = 2, client = {
       QKeyEvent activate{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &activate);
-      QTRY_COMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QTRY_COMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       client_->execute(window_actions::Action::close_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs, runtime_wait_ms);
@@ -1586,7 +1586,7 @@ return {api_version = 2, client = {
       QVERIFY(mode_bar != nullptr);
       QTRY_COMPARE_WITH_TIMEOUT(modeTitle(*mode_bar), QStringLiteral("COPY"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Slash);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::copy_search);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::copy_search);
       client_->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
       // The match found holds the cursor, nothing selected; y copies the match.
       QTRY_VERIFY_WITH_TIMEOUT(client_->copy()->state() && !client_->copy()->state()->anchor.has_value() && client_->copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
@@ -2012,7 +2012,7 @@ return {api_version = 2, client = {
         if (trace_focus) {
           const auto* terminal = terminalIn(window_->contentItem());
 
-          qInfo().noquote() << "notification focus" << windowObservation(*window_) << "terminal=" << terminal << "visible=" << (terminal != nullptr && terminal->isVisible()) << "focus=" << (terminal != nullptr && terminal->hasActiveFocus()) << "dialog=" << static_cast<int>(client_->dialog());
+          qInfo().noquote() << "notification focus" << windowObservation(*window_) << "terminal=" << terminal << "visible=" << (terminal != nullptr && terminal->isVisible()) << "focus=" << (terminal != nullptr && terminal->hasActiveFocus()) << "dialog=" << static_cast<int>(client_->dialogs()->kind());
         }
       };
 
@@ -2181,7 +2181,7 @@ return {api_version = 2, client = {
       QVERIFY(!client_->status()->prefixPending());
       settleLua();
       QCOMPARE(client_->status()->error(), QString{});
-      QVERIFY2(client_->display()->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialog())).arg(static_cast<int>(client_->copy()->active()))));
+      QVERIFY2(client_->display()->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialogs()->kind())).arg(static_cast<int>(client_->copy()->active()))));
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), true};
 
       QCoreApplication::sendEvent(window_, &repeated);
@@ -2601,7 +2601,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(!key.isEmpty());
       client_->palette()->search(QStringLiteral(">no matching command exists here"));
       client_->palette()->activate({{QStringLiteral("key"), key}, {QStringLiteral("revision"), revision}});
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->palette()->search(QStringLiteral("@context query"));
       client_->palette()->setMode('>');
@@ -2615,7 +2615,7 @@ return {api_version=2, client={keybindings={
       client_->execute(window_actions::Action::palette);
       client_->palette()->search(QStringLiteral(">Split right"));
       client_->palette()->activate({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->execute(window_actions::Action::cancel);
       QCOMPARE(client_->status()->error(), QString{});
@@ -2627,7 +2627,7 @@ return {api_version=2, client={keybindings={
         client_->execute(window_actions::Action::cancel);
       });
 
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
       QVERIFY(!client_->palette()->suggestion().value(QStringLiteral("canSubmit")).toBool());
       client_->palette()->search(QStringLiteral("?list files"));
@@ -2642,7 +2642,7 @@ return {api_version=2, client={keybindings={
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(suggestion().value(QStringLiteral("failed")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(suggestion().value(QStringLiteral("message")).toString(), QStringLiteral("Configure runtime.engine to enable suggestions."));
       const auto obsolete = suggestion().value(QStringLiteral("revision")).toString();
 
@@ -2710,7 +2710,7 @@ return {api_version=2, client={keybindings={
       terminalIn(window_->contentItem())->forceActiveFocus();
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
       QTest::keyClick(window_, Qt::Key_G);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette, runtime_wait_ms);
       client_->palette()->search(QStringLiteral("@PLT_DST"));
       QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
       const auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
@@ -2719,7 +2719,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("@PLT_DST"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == destination, runtime_wait_ms);
       QCOMPARE(client_->tabs()->rows()->rowCount(), original_tabs + 1);
       client_->execute(window_actions::Action::close_tab, QString::number(destination_tab));
@@ -2757,7 +2757,7 @@ return {api_version=2, client={keybindings={
       terminalIn(window_->contentItem())->forceActiveFocus();
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
       QTest::keyClick(window_, Qt::Key_F);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::paths, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::paths, runtime_wait_ms);
       client_->paths()->search(QStringLiteral("folder/"));
       QTRY_VERIFY_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("count")).toInt() >= 1, runtime_wait_ms);
       auto const* panel = window_->findChild<QQuickItem*>(QStringLiteral("pathPickerPanel"));
@@ -2778,11 +2778,11 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Backtab, Qt::ShiftModifier);
       QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("root")).toString(), root, runtime_wait_ms);
       client_->paths()->activate({{QStringLiteral("revision"), stale}, {QStringLiteral("path"), QStringLiteral("a b'c.txt")}});
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::paths);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::paths);
       client_->paths()->search(QStringLiteral("a b"));
       QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen, ScreenTextLayout::logical).contains(QStringLiteral("'folder/a b'\\''c.txt'")), qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
       QCOMPARE(toQString(firstPane()->cwd), root);
       client_->terminals()->input(pane_id, "\x15");
@@ -2798,7 +2798,7 @@ return {api_version=2, client={keybindings={
         client_->execute(window_actions::Action::cancel);
       });
 
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::paths);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::paths);
       constexpr int path_query_bytes = 64;
 
       QCOMPARE(client_->paths()->state().value(QStringLiteral("maximumQueryBytes")).toInt(), path_query_bytes);
@@ -2954,7 +2954,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(layout->property("dropMarker").toRectF(), QRectF{});
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
       QCOMPARE(tabKeys(), before);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       const auto* animation = window_->findChild<QTimer*>(QStringLiteral("agentStatusAnimation"));
 
       QVERIFY(animation != nullptr);
@@ -3172,7 +3172,7 @@ return {api_version=2, client={keybindings={
       run(QStringLiteral("Move tab right"));
       QTRY_COMPARE_WITH_TIMEOUT(tab_keys(), original_order, runtime_wait_ms);
       QCOMPARE(client_->tabs()->rows()->rowCount(), original_count + 1);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QCOMPARE(client_->status()->error(), QString{});
       client_->execute(window_actions::Action::close_tab, QString::number(destination_tab));
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_count, runtime_wait_ms);
@@ -3205,9 +3205,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(search != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_R, Qt::KeyboardModifiers{ApplicationController::superModifier()});
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QTest::keyClick(window_, Qt::Key_R, Qt::KeyboardModifiers{ApplicationController::controlModifier()});
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::machine, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine, runtime_wait_ms);
       search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
       QVERIFY(search != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
@@ -3218,7 +3218,7 @@ return {api_version=2, client={keybindings={
       commit.setCommitString(QStringLiteral("Renamed"));
       QCoreApplication::sendEvent(search, &commit);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), runtime_wait_ms);
       client_->execute(window_actions::Action::machine_picker);
       client_->palette()->search(QStringLiteral(":Renamed"));
       QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
@@ -3227,7 +3227,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_D, Qt::KeyboardModifiers{ApplicationController::controlModifier()});
       QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
     }
 
     Q_SLOT void machinePromptKeepsCompositionAndByteBounds() {
@@ -3245,7 +3245,7 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(search, &preedit);
       QTRY_VERIFY_WITH_TIMEOUT(search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::machine);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       const auto maximum = client_->machinePrompt()->state().value(QStringLiteral("maximumBytes")).toInt();
       const QString retained(maximum, QLatin1Char('x'));
@@ -3269,7 +3269,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
       QCOMPARE(search->text(), QString{});
       QTest::keyClick(window_, Qt::Key_Escape);
-      QVERIFY((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none));
+      QVERIFY((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
     }
 
     Q_SLOT void paletteCompositionAndUtf8LimitsKeepTheEditorOwned() {
@@ -3283,7 +3283,7 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(search, &preedit);
       QTRY_VERIFY_WITH_TIMEOUT(search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       const auto maximum = client_->palette()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
       const QString retained(maximum - 1, QLatin1Char('x'));
@@ -3307,16 +3307,16 @@ return {api_version=2, client={keybindings={
       client_->notifications()->dismiss(client_->notifications()->identity(identity));
       QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(identity) == nullptr, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void dialogsAndHistory() {
       client_->execute(window_actions::Action::palette);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QTest::qWait(frame_settle_ms);
       client_->execute(window_actions::Action::cancel);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       client_->execute(window_actions::Action::history);
       QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       client_->execute(window_actions::Action::cancel);
@@ -3339,7 +3339,7 @@ return {api_version=2, client={keybindings={
       QKeyEvent paste{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
 
       QCoreApplication::sendEvent(search, &paste);
-      QTRY_COMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QTRY_COMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo GUI_HISTORY_FIXTURE")), qPrintable(QStringLiteral("columns=%1 contents=%2").arg(pane->screen.columns()).arg(screenText(pane->screen))), runtime_wait_ms);
       client_->terminals()->input(pane->id, "\x15");
 
@@ -3350,7 +3350,7 @@ return {api_version=2, client={keybindings={
       QKeyEvent run{QEvent::KeyPress, Qt::Key_Return, Qt::ShiftModifier};
 
       QCoreApplication::sendEvent(search, &run);
-      QTRY_COMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QTRY_COMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       const auto has_output = [&] {
         const auto lines = screenText(pane->screen).split(QLatin1Char('\n'));
 
@@ -3410,7 +3410,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(client_->history()->state().value(QStringLiteral("canSubmit")).toBool());
       QTest::mouseDClick(window_, Qt::LeftButton, Qt::NoModifier, position);
       QTest::qWait(frame_settle_ms);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QQuickItem* copy = nullptr;
       const auto locate_copy = [&] {
@@ -3438,7 +3438,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(copy_position.has_value());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, copy_position->toPoint());
       QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_POINTER_FIRST"));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
     }
 
     Q_SLOT void historyCardActionsSurviveSelectionChanges() {
@@ -3497,7 +3497,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(clipboard->text(), sentinel);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, release_position);
       QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_RETAINED_ONE"));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       previous = selected_copy();
       clipboard->setText(sentinel);
       release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
@@ -3516,7 +3516,7 @@ return {api_version=2, client={keybindings={
       QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
       held = false;
       QCOMPARE(clipboard->text(), sentinel);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       for (const auto button : {Qt::MiddleButton, Qt::RightButton}) {
         previous = selected_copy();
         release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
@@ -3536,7 +3536,7 @@ return {api_version=2, client={keybindings={
         QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
         held = false;
         QCOMPARE(clipboard->text(), sentinel);
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       }
 
       held_button = Qt::LeftButton;
@@ -3741,7 +3741,7 @@ return {api_version=2, client={keybindings={
         QTest::mouseRelease(window_, button, Qt::NoModifier, position);
         held = false;
         QCOMPARE(clipboard->text(), sentinel);
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       }
     }
 
@@ -3791,7 +3791,7 @@ return {api_version=2, client={keybindings={
       test::FramePacing::presentSwapped(*client_);
       QVERIFY(!client_->history()->state().value(QStringLiteral("enterRuns")).toBool());
       QVERIFY(click(QStringLiteral("submit")));
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       const auto* pane = firstPane();
 
       QVERIFY(pane != nullptr);
@@ -3836,22 +3836,22 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       for (const auto& action : {QStringLiteral("submit"), QStringLiteral("alternate")}) {
         QVERIFY(activate(action));
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       }
 
       window_->beforeSynchronizing();
       QVERIFY(activate(QStringLiteral("submit")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->frameSwapped();
       QVERIFY(activate(QStringLiteral("submit")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       test::FramePacing::presentSwapped(*client_);
       client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
       QVERIFY(activate(QStringLiteral("alternate")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(activate(QStringLiteral("submit")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
       client_->execute(window_actions::Action::cancel);
@@ -3859,7 +3859,7 @@ return {api_version=2, client={keybindings={
       client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(activate(QStringLiteral("submit")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
       test::FramePacing::presentSwapped(*client_);
@@ -3868,18 +3868,18 @@ return {api_version=2, client={keybindings={
       client_->setWindow(replacement);
       client_->setWindow(*window_);
       QVERIFY(activate(QStringLiteral("submit")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
       test::FramePacing::presentSwapped(*client_);
       for (const auto& revision : {QString{}, QStringLiteral("not-a-revision"), QStringLiteral("18446744073709551616")}) {
         QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, QStringLiteral("submit")), Q_ARG(QString, revision)));
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       }
 
       QCOMPARE(client_->history()->state().value(QStringLiteral("error")).toString(), QString{});
       QVERIFY(activate(QStringLiteral("submit")));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       const auto* pane = firstPane();
 
@@ -3974,7 +3974,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(activate(1, current_revision));
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QCOMPARE(client_->history()->command(), QStringLiteral("echo GUI_ROW_PRESENTATION_B_FIRST"));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QCOMPARE(client_->history()->state().value(QStringLiteral("error")).toString(), QString{});
     }
 
@@ -4035,7 +4035,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(footer != nullptr);
       QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, QStringLiteral("submit")), Q_ARG(QString, replacement_revision)));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
 
       const QSignalSpy frames{window_, &QQuickWindow::frameSwapped};
 
@@ -4044,9 +4044,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(waitForHistoryPresentation());
       QVERIFY(!frames.empty());
       QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, QStringLiteral("submit")), Q_ARG(QString, original_revision)));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, QStringLiteral("submit")), Q_ARG(QString, replacement_revision)));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       const auto* pane = firstPane();
 
       QVERIFY(pane != nullptr);
@@ -4172,14 +4172,14 @@ return {api_version=2, client={keybindings={
         held = false;
       } else {
         QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
         window_->beforeSynchronizing();
         window_->frameSwapped();
         test::FramePacing::presentSwapped(*client_);
         QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
       }
 
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       const auto* pane = firstPane();
 
@@ -4236,7 +4236,7 @@ return {api_version=2, client={keybindings={
 
       QCoreApplication::sendEvent(search, &close_output);
       QVERIFY(!client_->history()->state().value(QStringLiteral("inspecting")).toBool());
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
 
       auto* clipboard = QGuiApplication::clipboard();
       auto saved_clipboard = test::copyClipboard();
@@ -4516,7 +4516,7 @@ return {api_version=2, client={keybindings={
         QVERIFY(sendHistoryWheel(position, {}, {0, half_notch}, Qt::ScrollUpdate));
         QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
         QVERIFY(search->hasActiveFocus());
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       }
 
       client_->history()->select(0);
@@ -4816,7 +4816,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->command(), command);
       QCOMPARE(client_->history()->rows()->rowCount(), 1);
       QCOMPARE(rows_changed.size(), 0);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QCOMPARE(client_->status()->error(), QString{});
     }
 
@@ -4942,10 +4942,10 @@ return {api_version=2, client={keybindings={
 
       QCoreApplication::sendEvent(window_, &close_output);
       QVERIFY(!client_->history()->state().value(QStringLiteral("inspecting")).toBool());
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
 
       client_->history()->use(0);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       const auto* pane = firstPane();
       if (pane == nullptr) {
         QFAIL("Required terminal fixture is missing");
@@ -5056,7 +5056,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
       QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), stale_query);
       client_->execute(window_actions::Action::cancel);
 
@@ -5064,7 +5064,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
       QCOMPARE(peer.result().text, QString{});
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("mode")).toInt(), static_cast<int>(PaletteMode::navigate));
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("@"));
       QCOMPARE(client_->palette()->state().value(QStringLiteral("query")).toString(), QString{});
@@ -5082,7 +5082,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
       QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
       QVERIFY(client_->copy()->active());
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->status()->error(), QString{});
     }
@@ -5096,7 +5096,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
       QCOMPARE(peer.result().text, QString{});
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       client_->execute(window_actions::Action::cancel);
       QCOMPARE(peer.error(), QString{});
@@ -5909,9 +5909,9 @@ return {api_version=2, client={keybindings={
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_center);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       client_->execute(window_actions::Action::history);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history, runtime_wait_ms);
       client_->execute(window_actions::Action::cancel);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
     }
 
     Q_SLOT void configuredTooltipsYieldToOpenSurfaces() {
@@ -8211,19 +8211,19 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(search, &preedit);
       QTRY_VERIFY_WITH_TIMEOUT(search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QCOMPARE(client_->history()->state().value(QStringLiteral("inspecting")).toBool(), inspecting);
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
       QCOMPARE(search->property("text").toString(), query);
       QCOMPARE(search->property("selectedText").toString(), query.first(3));
       QTest::keyClick(window_, Qt::Key_Escape);
       if (inspecting) {
-        QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
+        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
         QVERIFY(!client_->history()->state().value(QStringLiteral("inspecting")).toBool());
         QTest::keyClick(window_, Qt::Key_Escape);
       }
 
-      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), runtime_wait_ms);
     }
 
     // Saves the window when TELAR_GUI_TEST_ARTIFACT_DIRECTORY names a directory.

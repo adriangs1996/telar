@@ -54,7 +54,7 @@ namespace telar::gui::qt {
   bool ApplicationController::executeMachineAction(window_actions::Action action) {
     switch (action) {
     case window_actions::Action::machine_picker:
-      showPalette(PaletteMode::machines);
+      dialogs_.showPalette(PaletteMode::machines);
       break;
     case window_actions::Action::next_machine:
       moveMachine(1);
@@ -63,19 +63,13 @@ namespace telar::gui::qt {
       moveMachine(-1);
       break;
     case window_actions::Action::add_machine:
-      showMachinePrompt();
+      dialogs_.showMachinePrompt();
       break;
     default:
       return false;
     }
 
     return true;
-  }
-
-  void ApplicationController::showMachinePrompt(std::optional<MachineToken> renamed) {
-    if (machine_prompt_.open(renamed)) {
-      showDialog(Dialog::machine);
-    }
   }
 
   void ApplicationController::moveMachine(int delta) {
@@ -95,12 +89,12 @@ namespace telar::gui::qt {
   void ApplicationController::chooseMachine(MachinePickerTarget target, bool alternate) {
     const auto intent = MachinePicker::choose(store_.machines(), target.machine, alternate);
     if (intent == MachinePicker::Intent::add) {
-      showMachinePrompt();
+      dialogs_.showMachinePrompt();
 
       return;
     }
 
-    showDialog(Dialog::none);
+    dialogs_.show(Dialog::none);
     if (intent == MachinePicker::Intent::none || !target.machine) {
       return;
     }
@@ -140,7 +134,7 @@ namespace telar::gui::qt {
 
     applyInteraction([&] {
       if (action == window_actions::MachineEditAction::rename) {
-        showMachinePrompt(token);
+        dialogs_.showMachinePrompt(token);
       } else {
         const auto label = store_.machines().row(token.slot).label.view();
 

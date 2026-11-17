@@ -121,7 +121,7 @@ namespace {
       panel_->setParentItem(window_->contentItem());
       connect(client_->display(), &WindowDisplay::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_->palette(), &PaletteController::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
-      connect(client_.get(), &ApplicationController::dialogChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
+      connect(client_->dialogs(), &Dialogs::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       synchronizeSurfaces();
       QVERIFY(test::showComponentWindow(*window_, wait_ms));
       QTRY_VERIFY_WITH_TIMEOUT(client_->pane(pane_id_) != nullptr && client_->pane(pane_id_)->screen.frameId() != 0, wait_ms);
@@ -133,7 +133,7 @@ namespace {
       QTest::keyClick(window_.get(), Qt::Key_B, NativeKeyAdapter::control_modifier);
       QVERIFY2(client_->status()->prefixPending(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_.get(), Qt::Key_Question);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette, wait_ms);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
       query()->forceActiveFocus();
       QTRY_VERIFY_WITH_TIMEOUT(query()->hasActiveFocus(), wait_ms);
@@ -155,7 +155,7 @@ namespace {
       QVERIFY(!QFileInfo::exists(marker_));
       query()->forceActiveFocus();
       QTest::keyClick(window_.get(), Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
       QVERIFY(!QFileInfo::exists(marker_));
       terminal_->forceActiveFocus();
@@ -180,7 +180,7 @@ namespace {
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine timed out. Try again."));
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       client_->palette()->search(QStringLiteral("?fixture:ready"));
       submit();
       QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
@@ -193,7 +193,7 @@ namespace {
       QTest::mousePress(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
       client_->palette()->search(QStringLiteral("?edited before release"));
       QTest::mouseRelease(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
-      QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
       QVERIFY(!QFileInfo::exists(marker_));
       client_->execute(window_actions::Action::cancel);
@@ -209,7 +209,7 @@ namespace {
       const auto command = state().value(QStringLiteral("text")).toString();
 
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
       QVERIFY(!QFileInfo::exists(marker_));
       client_->terminals()->input(pane_id_, "\x15");
@@ -242,8 +242,8 @@ namespace {
 
       panel_->setPosition(palette.topLeft());
       panel_->setSize(palette.size());
-      panel_->setVisible(client_->dialog() == telar::gui::qt::ApplicationController::Dialog::palette);
-      if ((client_->dialog() == telar::gui::qt::ApplicationController::Dialog::none)) {
+      panel_->setVisible(client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::palette);
+      if ((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none)) {
         terminal_->forceActiveFocus();
       }
     }

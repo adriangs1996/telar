@@ -7,6 +7,7 @@ static_assert(true);
 #include "application_effects.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
+#include "dialogs.hpp"
 #include "frame_presenter.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "key_bindings.hpp"
@@ -117,7 +118,6 @@ import telar.gui.core.metrics;
 import telar.gui.presentation.history_pointer;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
-import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.suggestion_geometry;
@@ -153,6 +153,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::AttachmentsController* attachments READ attachments CONSTANT)
     Q_PROPERTY(telar::gui::qt::WindowDisplay* display READ display CONSTANT)
     Q_PROPERTY(telar::gui::qt::WindowStatus* status READ status CONSTANT)
+    Q_PROPERTY(telar::gui::qt::Dialogs* dialogs READ dialogs CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -168,10 +169,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
-    Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
-    // The history or path search the focused pane's prompt line hosts in place of the dialog.
-    Q_PROPERTY(telar::gui::qt::Store::Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
-    Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
     Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
@@ -230,6 +227,10 @@ namespace telar::gui::qt {
 
     WindowStatus* status() noexcept {
       return &status_;
+    }
+
+    Dialogs* dialogs() noexcept {
+      return &dialogs_;
     }
 
     TabsController* tabs() noexcept {
@@ -310,15 +311,11 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap machineContext() const;
     // A click on a mod element: runs its action, URL or Lua function.
     Q_INVOKABLE void activateElement(const QString& slot, const QString& key, const QString& revision, int element);
-    [[nodiscard]] Dialog dialog() const noexcept;
-    [[nodiscard]] Dialog lineSearch() const noexcept;
-    [[nodiscard]] QString lineSearchPane() const;
 
   signals:
     // The attachment shelf's region or the attachment modal's layout moved.
     // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
     void configurationChanged();
-    void dialogChanged();
     // The document a pane shows natively appeared, changed or went away.
     void notification(const QString& message);
     void machineChanged();
@@ -364,7 +361,6 @@ namespace telar::gui::qt {
     bool executeMachineAction(window_actions::Action action);
     void moveMachine(int delta);
     void chooseMachine(MachinePickerTarget target, bool alternate);
-    void showMachinePrompt(std::optional<MachineToken> renamed = {});
     void setupMachine(MachineToken target);
     void initializeMachineProfiles();
     void applyMachineProfiles();
@@ -391,10 +387,8 @@ namespace telar::gui::qt {
     void runtimeDisconnected(MachineClient& client);
     void cancelCurrentInteraction();
     void initializePalette();
-    void showPalette(PaletteMode mode);
     // Pushes the display the controllers measure what they draw in.
     void measureDisplay();
-    void showPathPicker();
 
     // Answers the commands of the active machine's client. A configuration reply views the
     // application's buffers, region `a`, until the client encodes it.
@@ -426,7 +420,6 @@ namespace telar::gui::qt {
     void presentChange(Change change);
     void initializeAttachments();
     void refreshPanes();
-    void showDialog(Dialog kind);
     void configureWindow();
     void synchronizeCadence();
     void initializeNotifications();
@@ -523,6 +516,8 @@ namespace telar::gui::qt {
     tbc::view<WindowStatus, tbc::lt::self> status_;
     // After every recipient of a frame.
     tbc::view<FramePresenter, tbc::lt::self> frames_;
+    // After every controller a dialog opens over, and the routers it interrupts.
+    tbc::view<Dialogs, tbc::lt::self> dialogs_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
 

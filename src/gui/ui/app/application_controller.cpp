@@ -167,7 +167,8 @@ namespace telar::gui::qt {
         key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
         status_(store_, copy_, key_bindings_, hostname_),
-        frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_) {
+        frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_),
+        dialogs_(store_, peek_, machine_prompt_, palette_, paths_, history_, workspace_form_, key_bindings_, pointer_dispatcher_) {
     composeWindowAnimation();
     initializeMachines();
     initializeMachineProfiles();
@@ -186,19 +187,19 @@ namespace telar::gui::qt {
       key_bindings_.cancelSequence();
     });
     connect(&copy_, &CopyController::searchRequested, this, [this] {
-      showDialog(Dialog::copy_search);
+      dialogs_.show(Dialog::copy_search);
     });
     connect(&copy_, &CopyController::linkRequested, this, [this](qulonglong pane_id, CellPosition cursor) {
       links_.openAt(pane_id, cursor);
     });
     connect(&copy_, &CopyController::closeRequested, this, [this] {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     });
     connect(&copy_, &CopyController::failed, &status_, &WindowStatus::report);
     connect(&key_bindings_, &KeyBindings::failed, &status_, &WindowStatus::report);
     connect(&pointer_dispatcher_, &PointerDispatcher::failed, &status_, &WindowStatus::report);
     // The search reads the command the dialog's line was opened on.
-    connect(this, &ApplicationController::dialogChanged, &copy_, &CopyController::publishSearch);
+    connect(&dialogs_, &Dialogs::changed, &copy_, &CopyController::publishSearch);
     // The prefix mode lists the keymap's hints.
     connect(this, &ApplicationController::configurationChanged, &status_, &WindowStatus::modeChanged);
     connect(this, &ApplicationController::configurationChanged, this, [this] {
@@ -218,15 +219,15 @@ namespace telar::gui::qt {
       status_.clear();
     });
     connect(&history_, &HistoryController::closeRequested, this, [this] {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     });
     connect(&history_, &HistoryController::failed, &status_, &WindowStatus::report);
     connect(&paths_, &PathPickerController::closeRequested, this, [this] {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     });
     connect(&paths_, &PathPickerController::failed, &status_, &WindowStatus::report);
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     });
     connect(this, &ApplicationController::machinesChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
@@ -238,7 +239,7 @@ namespace telar::gui::qt {
       });
     });
     connect(&peek_, &PeekController::closeRequested, this, [this] {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     });
     connect(&peek_, &PeekController::failed, &status_, &WindowStatus::report);
     connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
@@ -334,7 +335,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.dialog().kind == Dialog::paths || store_.dialog().kind == Dialog::peek) {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     }
 
     scheduleGraphicsRecovery();
@@ -403,7 +404,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.dialog().kind == Dialog::peek) {
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     }
 
     if (window_ != nullptr) {
@@ -815,7 +816,7 @@ namespace telar::gui::qt {
         session().searchCopy(text);
       }
 
-      showDialog(Dialog::none);
+      dialogs_.show(Dialog::none);
     });
   }
 
@@ -930,16 +931,16 @@ namespace telar::gui::qt {
       session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
       display_.publish();
     } else if (action == window_actions::Action::history) {
-      showDialog(Dialog::history);
+      dialogs_.show(Dialog::history);
       history_.open();
     } else if (action == window_actions::Action::palette || action == window_actions::Action::goto_picker) {
-      showPalette(action == window_actions::Action::palette ? PaletteMode::actions : PaletteMode::navigate);
+      dialogs_.showPalette(action == window_actions::Action::palette ? PaletteMode::actions : PaletteMode::navigate);
     } else if (action == window_actions::Action::path_picker) {
-      showPathPicker();
+      dialogs_.showPaths();
     } else if (action == window_actions::Action::suggest_command) {
-      showPalette(PaletteMode::suggest);
+      dialogs_.showPalette(PaletteMode::suggest);
     } else if (action == window_actions::Action::new_workspace || action == window_actions::Action::rename_tab || action == window_actions::Action::rename_workspace) {
-      showDialog(dialogFor(action));
+      dialogs_.show(dialogFor(action));
     } else if (action == window_actions::Action::copy_mode) {
       if (store_.dialog().kind == Dialog::none && session().enterBlocks()) {
         prompt_.publish(session().changedPane());
@@ -971,7 +972,7 @@ namespace telar::gui::qt {
       status_.publish();
     }
 
-    showDialog(Dialog::none);
+    dialogs_.show(Dialog::none);
   }
 
   void ApplicationController::synchronizeWindowSize() {
@@ -979,49 +980,6 @@ namespace telar::gui::qt {
       display_.publish();
       refreshPanes();
     }
-  }
-
-  void ApplicationController::showDialog(Dialog kind) {
-    if (kind != Dialog::peek) {
-      peek_.forget();
-    }
-
-    if (kind != Dialog::machine) {
-      machine_prompt_.forget();
-    }
-
-    if (kind != Dialog::palette) {
-      palette_.forget();
-    }
-
-    if (store_.dialog().kind == Dialog::paths && kind != Dialog::paths) {
-      session().closePathPicker();
-    }
-
-    key_bindings_.cancelSequence();
-    store_.advanceDialog();
-    history_.retire();
-    pointer_dispatcher_.presentHistoryActions({});
-
-    if (kind == Dialog::new_workspace || store_.dialog().kind == Dialog::new_workspace) {
-      workspace_form_.reset();
-    }
-
-    // The focused pane's prompt line hosts the history and path searches while its shell waits
-    // for a command; anywhere else they open as a dialog. The scrollback search lives in the
-    // line of the pane copy mode reads, whatever runs there.
-    const auto* focused = session().focusedPane();
-    const bool searching = kind == Dialog::history || kind == Dialog::paths;
-    const auto& copy = session().copyMode().state();
-    std::uint64_t line_search_pane = 0;
-    if (kind == Dialog::copy_search && copy) {
-      line_search_pane = copy->pane_id;
-    } else {
-      line_search_pane = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
-    }
-
-    store_.setDialog(kind, line_search_pane);
-    emit dialogChanged();
   }
 
   void ApplicationController::restoreTerminalFocus() {
@@ -1056,13 +1014,6 @@ namespace telar::gui::qt {
     connect(&attachments_, &AttachmentsController::failed, &status_, &WindowStatus::report);
   }
 
-  void ApplicationController::showPathPicker() {
-    if (paths_.open()) {
-      showDialog(Dialog::paths);
-      paths_.refresh();
-    }
-  }
-
   void ApplicationController::publishConfiguration() {
     // Qt notifies QML bindings before any connected slot, so the cache is dropped before the
     // signal rather than in a slot of it.
@@ -1090,18 +1041,6 @@ namespace telar::gui::qt {
 
   ResolvedFont ApplicationController::resolveFont(qreal scale) {
     return display_.resolveFont(scale);
-  }
-
-  ApplicationController::Dialog ApplicationController::dialog() const noexcept {
-    return store_.dialog().kind;
-  }
-
-  ApplicationController::Dialog ApplicationController::lineSearch() const noexcept {
-    return store_.dialog().line_search_pane == 0 ? Dialog::none : store_.dialog().kind;
-  }
-
-  QString ApplicationController::lineSearchPane() const {
-    return store_.dialog().line_search_pane == 0 ? QString{} : QString::number(store_.dialog().line_search_pane);
   }
 
   QVariantMap ApplicationController::machineContext() const {

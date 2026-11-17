@@ -20,7 +20,7 @@ namespace telar::gui::qt {
     });
 
     connect(&prompt_, &PromptController::searchRequested, this, [this] {
-      showDialog(Dialog::copy_search);
+      dialogs_.show(Dialog::copy_search);
     });
 
     connect(&prompt_, &PromptController::failed, &status_, &WindowStatus::report);

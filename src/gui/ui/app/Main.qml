@@ -95,9 +95,9 @@ Window {
         colors: telar.colors
         typography: root.geometry.typography
         headerHeight: root.geometry.paneHeader
-        dialog: telar.dialog
+        dialog: telar.dialogs.kind
         // The kind and the pane in one value, read together on each dialogChanged.
-        lineSearch: ({kind: telar.lineSearch, pane: telar.lineSearchPane})
+        lineSearch: ({kind: telar.dialogs.lineSearch, pane: telar.dialogs.lineSearchPane})
         prefixPending: telar.status.prefixPending
         controlModifier: telar.controlModifier
         superModifier: telar.superModifier
@@ -113,8 +113,8 @@ Window {
 
     // Once the panes read the new dialog, the focused one takes the keyboard back if none is open.
     Connections {
-        target: telar
-        function onDialogChanged() {
+        target: telar.dialogs
+        function onChanged() {
             paneArea.dialogShown();
         }
     }
