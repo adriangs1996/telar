@@ -306,10 +306,9 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap font() const;
 
   signals:
-    // The attachment shelf's region or the attachment modal's layout moved.
     // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
     void configurationChanged();
-    // The document a pane shows natively appeared, changed or went away.
+    // Something to tell the user that no dialog shows.
     void notification(const QString& message);
 
   private:
@@ -414,7 +413,8 @@ namespace telar::gui::qt {
     tbc::view<ComponentsController, tbc::lt::self> components_;
     tbc::view<PluginRunner, tbc::lt::self> plugins_;
     tbc::view<WorkspaceFormController, tbc::lt::self> workspace_form_;
-    // The routers come after every recipient they hold, so they never outlive one.
+    // The routers come after every recipient they hold, so they never outlive one. The keys also
+    // hold the commands, built last: no key is routed once the window is being destroyed.
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
     // After the copy mode and the keys, whose mode it reports.
