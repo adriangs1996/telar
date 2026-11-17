@@ -32,6 +32,19 @@ namespace {
     check(padded && padded->framing.kind == Http1Framing::Kind::content_length && padded->framing.length == 5);
   }
 
+  // A response with neither length nor chunking runs until the origin closes; reading it as empty
+  // would hand its body to the relay as the next response.
+  void testResponseUntilClose() {
+    const auto response = Http1Head::analyze("HTTP/1.1 200 OK\r\n\r\n", true);
+
+    check(response && response->framing.kind == Http1Framing::Kind::until_close && response->closes);
+
+    const auto request = Http1Head::analyze("GET / HTTP/1.1\r\nHost: a\r\n\r\n", false);
+
+    check(request && request->framing.kind == Http1Framing::Kind::none && !request->framing.hasBody());
+  }
+
   const telar::testing::Case case_field_name_whitespace{"http1_head.field_name_whitespace", testFieldNameWhitespace};
+  const telar::testing::Case case_response_until_close{"http1_head.response_until_close", testResponseUntilClose};
 
 }
