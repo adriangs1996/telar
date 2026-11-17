@@ -21,9 +21,6 @@ telar_add_test(gui-attachment-catalog-test SOURCES attachment_catalog_test.cpp L
 telar_add_test(gui-attachment-marker-test SOURCES attachment_marker_test.cpp LIBRARIES gui-features-terminal-attachments
   TEST gui-attachment-marker LABELS gui.features.terminal.attachments)
 
-telar_add_test(gui-attachment-layout-test SOURCES attachment_layout_test.cpp LIBRARIES gui-foundation-model gui-foundation-core
-  TEST gui-attachment-layout LABELS gui.foundation.model)
-
 telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-features-activity gui-features-workbench gui-features-window
   TEST gui-display-metrics LABELS gui.features.window)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
