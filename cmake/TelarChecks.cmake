@@ -35,16 +35,13 @@ function(telar_register_checks)
   endforeach()
 endfunction()
 
-# telar_checks([PREFIX <prefix>]): the check targets of the top-level project,
-# <prefix>-lint, <prefix>-lifetime, <prefix>-blank-lines and <prefix>-interface-bodies
-# (without PREFIX, lint, lifetime, ...) for each check some target registered for, and
-# format and format-check. Their scope is written to <build>/checks/<check>.txt once the
-# project is configured, so the call can come before the targets.
+# telar_checks(): the check targets of the top-level project, lint, lifetime, blank-lines
+# and interface-bodies for each check some target registered for, and format and
+# format-check. Their scope is written to <build>/checks/<check>.txt once the project is
+# configured, so the call can come before the targets.
 function(telar_checks)
-  cmake_parse_arguments(PARSE_ARGV 0 checks "" "PREFIX" "")
-  set(prefix "")
-  if(checks_PREFIX)
-    set(prefix "${checks_PREFIX}-")
+  if(ARGN)
+    message(FATAL_ERROR "telar_checks(): unexpected arguments ${ARGN}")
   endif()
   set(script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/format.cmake")
   add_custom_target(format
@@ -55,12 +52,11 @@ function(telar_checks)
     COMMAND "${CMAKE_COMMAND}" -DMODE=format-check -P "${script}"
     USES_TERMINAL
     VERBATIM)
-  # A deferred call reads its arguments when it runs, so the prefix is written into it.
-  cmake_language(EVAL CODE "cmake_language(DEFER DIRECTORY [[${CMAKE_SOURCE_DIR}]] CALL _telar_checks_define [[${prefix}]])")
+  cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _telar_checks_define)
 endfunction()
 
 # Writes the scope of each check and defines its target.
-function(_telar_checks_define prefix)
+function(_telar_checks_define)
   get_property(targets GLOBAL PROPERTY TELAR_CHECK_TARGETS)
   list(REMOVE_DUPLICATES targets)
   foreach(check IN LISTS TELAR_CHECKS)
@@ -115,7 +111,7 @@ function(_telar_checks_define prefix)
     list(SORT scope_${check})
     list(JOIN scope_${check} "\n" content)
     file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/checks/${check}.txt" CONTENT "${content}\n" @ONLY)
-    string(REPLACE "_" "-" name "${prefix}${check}")
+    string(REPLACE "_" "-" name "${check}")
     add_custom_target(${name}
       COMMAND "${CMAKE_COMMAND}" "-DCHECK=${check}" "-DBUILD_DIRECTORY=${CMAKE_BINARY_DIR}"
         "-DJOBS=${TELAR_CHECK_JOBS}" "-DTBC_LINTER=${TBC_LINTER}" -P "${script}"

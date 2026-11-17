@@ -170,7 +170,7 @@ para no alterar sus cálculos de representación al cambiar de unidad.
 `cmake/TelarTargets.cmake` registra `FILE_SET CXX_MODULES` públicos y aplica una variante coherente a todos
 los proveedores e importadores. Debug activa `TELAR_DEBUG` y `TELAR_DIAGNOSTICS`;
 Release puede activar `TELAR_DIAGNOSTICS`. `TELAR_SANITIZERS` instrumenta todo el
-grafo C/C++ propio. Los nombres antiguos de opciones sanitizer siguen aceptándose.
+grafo C/C++ propio.
 Release y RelWithDebInfo enlazan con ThinLTO (`TELAR_THIN_LTO`, activa por
 defecto); [thinlto.md](thinlto.md) recoge lo que cuesta y lo que gana.
 `-fwhole-program-vtables` no se usa; [memory-call.md](memory-call.md) explica por qué.
@@ -397,9 +397,11 @@ los importadores grandes tarda varios minutos al construir su caché; el check
 acepta `--timeout 600` para esos casos. No se afirma una mejora de tiempo respecto
 al parser de headers anterior.
 
-Los targets lint y format incluyen `.cppm` y conservan las exclusiones de fixtures
-intencionalmente inválidos. Para clang-tidy, construir antes los proveedores de
-módulos referenciados por la base de compilación.
+Los targets lint y format incluyen `.cppm`. lint analiza cada fuente con el
+`.clang-tidy` más cercano, el perfil de su proyecto, y deja fuera las que no tienen
+ninguno; antes de analizar, construye los proveedores de módulos y las cabeceras
+generadas que lee la base de compilación. Las fixtures que no se compilan no están en
+la base y quedan fuera de lint.
 
 ## CI y release
 
