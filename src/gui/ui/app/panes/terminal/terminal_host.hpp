@@ -22,6 +22,11 @@ namespace telar::gui::qt {
   // implements it; each input event a terminal receives costs at most one of these calls.
   class TerminalHost {
   public:
+    TerminalHost(const TerminalHost&) = delete;
+    TerminalHost& operator=(const TerminalHost&) = delete;
+    TerminalHost(TerminalHost&&) = delete;
+    TerminalHost& operator=(TerminalHost&&) = delete;
+
     // A key press the terminal has the focus for. The window's bindings take it first, then an
     // inline document over the pane; the window hands what they leave to terminal.type().
     virtual void pressKey(TerminalItem& terminal, QKeyEvent& event) = 0;
@@ -38,6 +43,7 @@ namespace telar::gui::qt {
     [[nodiscard]] virtual ResolvedFont resolveFont(qreal scale) = 0;
 
   protected:
+    TerminalHost() = default;
     ~TerminalHost() = default;
   };
 

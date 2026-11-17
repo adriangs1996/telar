@@ -14,6 +14,7 @@ static_assert(true);
 #include <cstdint>
 #include <exception>
 #include <optional>
+#include <utility>
 
 #pragma once
 
@@ -109,9 +110,9 @@ namespace telar::gui::qt {
     void interact(Mutation&& mutate, Failure&& failed) {
       begin();
       try {
-        mutate();
+        std::forward<Mutation>(mutate)();
       } catch (const std::exception& error) {
-        failed(error);
+        std::forward<Failure>(failed)(error);
 
         return;
       }
