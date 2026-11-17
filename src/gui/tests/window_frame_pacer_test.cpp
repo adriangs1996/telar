@@ -19,11 +19,11 @@ static_assert(true);
 #include <span>
 #include <stdexcept>
 
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.window;
 
 namespace {
 
-  using telar::gui::FramePacer;
+  using telar::gui::features::window::FramePacer;
   using telar::gui::qt::WindowFramePacer;
   using telar::gui::test::waitForGuiCondition;
 

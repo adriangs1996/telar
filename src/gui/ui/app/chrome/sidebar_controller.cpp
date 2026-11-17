@@ -21,6 +21,7 @@ static_assert(true);
 import telar.gui.presentation.activity_order;
 import telar.gui.machines.picker;
 import telar.gui.presentation.suggestion_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -36,7 +37,7 @@ namespace telar::gui::qt {
     connect(workspaces_.rows(), &QAbstractItemModel::dataChanged, this, &SidebarController::changed);
   }
 
-  void SidebarController::setDisplay(const DisplayMetrics& display) {
+  void SidebarController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit changed();
   }

@@ -68,10 +68,13 @@ import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.notification_stack;
+import telar.gui.features.window;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::window;
 
   using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;

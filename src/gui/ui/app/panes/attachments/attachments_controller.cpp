@@ -92,7 +92,7 @@ namespace telar::gui::qt {
     return modal_open_;
   }
 
-  void AttachmentsController::setDisplay(const DisplayMetrics& display) {
+  void AttachmentsController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
   }
 

@@ -16,7 +16,7 @@ static_assert(true);
 #include <qpa/qplatformwindow.h>
 #include <utility>
 
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.window;
 
 namespace {
 
@@ -60,7 +60,7 @@ int main(int argc, char** argv) try {
               wait_ms),
       "window must be exposed");
   telar::gui::qt::WindowFramePacer<telar::gui::system::AwakeClock, QWindow> pacing{window};
-  telar::gui::FramePacer::Pane pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1};
+  telar::gui::features::window::FramePacer::Pane pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1};
 
   const auto before = window.received;
 

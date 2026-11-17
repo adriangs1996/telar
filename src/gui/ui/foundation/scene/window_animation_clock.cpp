@@ -26,7 +26,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -99,14 +99,14 @@ namespace telar::gui::qt {
 
   std::uint64_t WindowAnimationClock::frameInterval() const noexcept {
     constexpr double default_refresh_rate = Configuration::default_fps;
-    constexpr double nanoseconds_per_second = FramePacer::nanoseconds_per_second;
+    constexpr double nanoseconds_per_second = application::window::FramePacer::nanoseconds_per_second;
     const auto* screen = window_.screen();
     const auto reported = screen == nullptr ? default_refresh_rate : screen->refreshRate();
     const auto rate = std::isfinite(reported) && reported > 0 ? reported : default_refresh_rate;
 
     const auto display_interval_ns = static_cast<std::uint64_t>(std::clamp(std::ceil(nanoseconds_per_second / rate), 1.0, nanoseconds_per_second));
 
-    return FramePacer::resolveInterval(display_interval_ns, maximum_fps_);
+    return application::window::FramePacer::resolveInterval(display_interval_ns, maximum_fps_);
   }
 
   void WindowAnimationClock::setMaximumFrameRate(std::optional<std::uint16_t> maximum_fps) {

@@ -6,7 +6,7 @@ static_assert(true);
 #include "machine_chrome_controller.hpp"
 
 import telar.gui.machines.picker;
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -14,7 +14,7 @@ namespace telar::gui::qt {
       : QObject(parent),
         store_(store) {}
 
-  void MachineChromeController::setDisplay(const DisplayMetrics& display) {
+  void MachineChromeController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit changed();
   }
@@ -31,7 +31,7 @@ namespace telar::gui::qt {
     return store_.session().configuration();
   }
 
-  const DisplayMetrics& MachineChromeController::display() const noexcept {
+  const application::window::DisplayMetrics& MachineChromeController::display() const noexcept {
     return display_;
   }
 

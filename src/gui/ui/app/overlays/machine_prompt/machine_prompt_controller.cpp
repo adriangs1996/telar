@@ -12,6 +12,7 @@ static_assert(true);
 
 import telar.gui.machines.profile_store;
 import telar.gui.foundation.forms;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -24,7 +25,7 @@ namespace telar::gui::qt {
     return store_.dialog().kind == Store::Dialog::machine && prompt_.has_value();
   }
 
-  void MachinePromptController::setDisplay(const DisplayMetrics& display) {
+  void MachinePromptController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit changed();
   }

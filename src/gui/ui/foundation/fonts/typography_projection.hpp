@@ -11,11 +11,11 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  inline QVariantMap chromeTypographyRecord(const DisplayMetrics& display, const FontConfiguration& font) {
+  inline QVariantMap chromeTypographyRecord(const application::window::DisplayMetrics& display, const FontConfiguration& font) {
     const auto& chrome = display.chrome;
     const auto density = display.density;
 

@@ -28,7 +28,6 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
-import telar.gui.presentation.frame_pacer;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -64,7 +63,7 @@ namespace telar::gui::qt {
   }
 
   bool FramePresenter::defer() {
-    std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
+    std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
     const auto count = collectPacingPanes(panes);
 
     return frame_pacer_->defer(std::span{panes}.first(count));
@@ -162,7 +161,7 @@ namespace telar::gui::qt {
     });
   }
 
-  std::size_t FramePresenter::collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
+  std::size_t FramePresenter::collectPacingPanes(std::span<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
     const auto* tab = store_.session().activeTab();
     if (window_ == nullptr || tab == nullptr) {
       return 0;
@@ -188,7 +187,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
+    std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
 
     for (std::size_t index = 0; index < frame.pane_count; ++index) {
       panes[index] = frame.panes[index].frame.pane;
@@ -202,7 +201,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
+    std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
     const auto count = collectPacingPanes(panes);
 
     frame_pacer_->reconsider(std::span{panes}.first(count));

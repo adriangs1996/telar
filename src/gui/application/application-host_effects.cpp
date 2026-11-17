@@ -6,7 +6,7 @@ import telar.gui.foundation.system;
 import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
 import telar.tbc;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.window;
 import telar.gui.text.notification_payload;
 import telar.base.diagnostics;
 import telar.wire.agents;
@@ -44,7 +44,7 @@ namespace telar::gui::application {
     reply.text = "Command is not supported by this client";
   }
 
-  void HostEffects::notePaneInput([[maybe_unused]] FramePacer::Pane pane) noexcept {}
+  void HostEffects::notePaneInput([[maybe_unused]] features::window::FramePacer::Pane pane) noexcept {}
 
   bool DiscardHostEffects::postNotification([[maybe_unused]] const NotificationPayload& payload) noexcept {
     return false;

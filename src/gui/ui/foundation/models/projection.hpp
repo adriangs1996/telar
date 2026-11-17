@@ -338,7 +338,7 @@ namespace telar::gui::qt {
     colors.insert(QStringLiteral("theme"), static_cast<int>(theme.name));
     colors.insert(QStringLiteral("background"), toQColor(theme.background));
     colors.insert(QStringLiteral("panelBackground"), panel_background);
-    const auto surfaces = ChromeSurfaces::derive(theme, configuration.background_opacity, configuration.opacity);
+    const auto surfaces = application::window::ChromeSurfaces::derive(theme, configuration.background_opacity, configuration.opacity);
 
     colors.insert(QStringLiteral("sidebarBackground"), toQColor(surfaces.sidebar));
     colors.insert(QStringLiteral("topbarBackground"), toQColor(surfaces.topbar));

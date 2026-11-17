@@ -34,7 +34,7 @@ telar_add_test(gui-host-commands-test SOURCES host_commands_test.cpp LIBRARIES g
 telar_add_test(gui-agent-acknowledgement-test SOURCES agent_acknowledgement_test.cpp LIBRARIES gui-application gui-test-fixtures
   TEST gui-agent-acknowledgement LABELS gui.application)
 
-telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-core gui-presentation
+telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-core gui-presentation gui-features-window
   TEST gui-display-metrics LABELS gui.presentation)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 
@@ -262,7 +262,7 @@ if(TELAR_GUI_NATIVE)
     if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
       target_compile_options(gui-native-window-appearance-test PRIVATE -fno-objc-msgsend-class-selector-stubs)
     endif()
-    telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-core gui-platform gui-presentation
+    telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-core gui-platform gui-presentation gui-application
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
     telar_add_test(gui-clipboard-image-source-test SOURCES clipboard_image_source_test.mm LIBRARIES gui-platform-native
       TEST gui-clipboard-image-source LABELS gui.platform TIMEOUT 30)
@@ -357,7 +357,7 @@ if(TELAR_GUI_NATIVE)
   target_include_directories(gui-prompt-window-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   telar_add_test(gui-machine-profiles-source-test QT SOURCES machine_profiles_source_test.cpp LIBRARIES gui-foundation-system gui-machine-profiles Qt6::Test gui-platform gui-machines
     TEST gui-machine-profiles-source LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-window-frame-pacer-test QT SOURCES window_frame_pacer_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-core gui-platform gui-presentation Qt6::Quick Qt6::Test
+  telar_add_test(gui-window-frame-pacer-test QT SOURCES window_frame_pacer_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-core gui-platform gui-presentation gui-application Qt6::Quick Qt6::Test
     TEST gui-window-frame-pacer LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   if(APPLE)
     telar_add_test(gui-test-window-activation STATIC SOURCES platform/macos/window_activation.mm platform/window_hiding.cpp

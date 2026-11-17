@@ -16,7 +16,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 
@@ -59,7 +58,7 @@ namespace telar::gui::qt {
     void refresh();
     // The workbench or a pane moved under the picker.
     void publishGeometry();
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
 
   signals:
     void changed();
@@ -82,7 +81,7 @@ namespace telar::gui::qt {
     Store& store_;
     QString query_;
     std::size_t selection_ = 0;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
   };
 
 }

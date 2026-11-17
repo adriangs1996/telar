@@ -148,6 +148,7 @@ import telar.base.text.utf8;
 import telar.plugins;
 import telar.gui.presentation.notification_center;
 import telar.wire.history;
+import telar.gui.features.window;
 
 namespace telar::gui::test {
 
@@ -198,6 +199,8 @@ namespace {
   using telar::gui::test::ScreenTextLayout;
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::window;
 
   using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
@@ -7763,10 +7766,10 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("FRAME_PACING_WAIT")), runtime_wait_ms);
       QVERIFY(telar::gui::test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
-      constexpr int grace_expiry_ms = static_cast<int>(telar::gui::FramePacer::input_grace_ns / nanoseconds_per_millisecond) + 1;
+      constexpr int grace_expiry_ms = static_cast<int>(telar::gui::features::window::FramePacer::input_grace_ns / nanoseconds_per_millisecond) + 1;
 
       QTest::qWait(grace_expiry_ms);
-      constexpr auto hold_ns = telar::gui::FramePacer::nanoseconds_per_second * 2;
+      constexpr auto hold_ns = telar::gui::features::window::FramePacer::nanoseconds_per_second * 2;
 
       telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() + hold_ns);
       window_->update();
@@ -7774,7 +7777,7 @@ return {api_version=2, client={keybindings={
         return telar::gui::test::FramePacing::pending(*client_);
       },
           runtime_wait_ms));
-      telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() - telar::gui::FramePacer::maximum_interval_ns);
+      telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() - telar::gui::features::window::FramePacer::maximum_interval_ns);
       const auto previous = pane->screen.frameId();
 
       writeTestFile(release_path, "");
@@ -7800,7 +7803,7 @@ return {api_version=2, client={keybindings={
         telar::gui::test::FramePacing::release(*client_);
       });
 
-      constexpr auto hold_ns = telar::gui::FramePacer::nanoseconds_per_second * 2;
+      constexpr auto hold_ns = telar::gui::features::window::FramePacer::nanoseconds_per_second * 2;
 
       telar::gui::test::FramePacing::anchor(*client_, telar::gui::system::AwakeClock::nowNanoseconds() + hold_ns);
       window_->update();

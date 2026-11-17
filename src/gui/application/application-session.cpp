@@ -1,7 +1,6 @@
 module telar.gui.application;
 
 import std;
-import telar.gui.presentation.frame_pacer;
 import telar.platform.events;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
@@ -125,7 +124,7 @@ namespace telar::gui::application {
     proxy_ = {};
     send(RequestRuntimeState{.client_identity = identity, .interactive = true});
     send(ConfigureGraphics{supportsSharedGraphics()});
-    configureCadence();
+    window::pace(*this);
     prompt::configureShell(*this);
   }
 
@@ -343,17 +342,6 @@ namespace telar::gui::application {
     default:
       return Change::none;
     }
-  }
-
-  void Session::setDisplayRefreshRate(std::uint16_t fps) noexcept {
-    display_fps_ = std::clamp(fps, Configuration::minimum_fps, Configuration::maximum_fps);
-  }
-
-  void Session::configureCadence() {
-    const auto maximum_fps = configuration_.max_fps == 0 ? std::nullopt : std::optional{configuration_.max_fps};
-    const auto interval_ns = FramePacer::resolveInterval(FramePacer::nanoseconds_per_second / display_fps_, maximum_fps);
-
-    send(ConfigureFrameInterval{static_cast<std::uint32_t>(interval_ns)});
   }
 
   Pane<Memory>* Session::findPane(std::uint64_t pane_id) const noexcept {
@@ -706,6 +694,7 @@ namespace telar::gui::application {
   template void Session::send<CompleteClientCommand>(const CompleteClientCommand& message);
   template void Session::send<CompletePaneFocus>(const CompletePaneFocus& message);
   template void Session::send<CompleteWords>(const CompleteWords& message);
+  template void Session::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
   template void Session::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
   template void Session::send<CopySelection>(const CopySelection& message);
   template void Session::send<CreatePane>(const CreatePane& message);

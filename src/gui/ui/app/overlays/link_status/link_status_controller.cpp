@@ -47,7 +47,7 @@ namespace telar::gui::qt {
     emit changed();
   }
 
-  void LinkStatusController::setDisplay(const DisplayMetrics& display) {
+  void LinkStatusController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit changed();
   }

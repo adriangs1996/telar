@@ -13,8 +13,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.display_metrics;
 import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -50,7 +50,7 @@ namespace telar::gui::qt {
     void synchronize();
     // The dialog closed: the session stops reading the agent's screen.
     void forget();
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
     // A new window presents the session; a peek opened in another one is stale.
     void setWindowGeneration(std::uint64_t generation) noexcept;
 
@@ -71,7 +71,7 @@ namespace telar::gui::qt {
     std::optional<Origin> origin_;
     QString editor_;
     std::uint64_t window_generation_ = 0;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
   };
 
 }

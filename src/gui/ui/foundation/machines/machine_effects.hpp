@@ -14,7 +14,6 @@ static_assert(true);
 import telar.gui.text.notification_payload;
 import telar.gui.application;
 import telar.gui.machines.picker;
-import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
@@ -45,7 +44,7 @@ namespace telar::gui::qt {
 
     bool postNotification(const NotificationPayload& payload) override;
     bool playSound(AgentSound sound) override;
-    void notePaneInput(FramePacer::Pane pane) noexcept override;
+    void notePaneInput(application::window::FramePacer::Pane pane) noexcept override;
 
   private:
     // Whether the window still holds this client and shows its machine.

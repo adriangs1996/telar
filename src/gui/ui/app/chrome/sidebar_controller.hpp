@@ -15,7 +15,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -42,7 +41,7 @@ namespace telar::gui::qt {
     SidebarController(SidebarController&&) = delete;
     SidebarController& operator=(SidebarController&&) = delete;
 
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
     void setWindow(QQuickWindow& window);
     // The machines moved: the list's rows and the count follow.
     void publishMachines();
@@ -71,7 +70,7 @@ namespace telar::gui::qt {
     Store& store_;
     WorkspacesController& workspaces_;
     ActivityController& activity_;
-    DisplayMetrics display_;
+    application::window::DisplayMetrics display_;
     QPointer<QQuickWindow> window_;
     application::SidebarMachines machines_{};
     bool machine_list_collapsed_ = false;

@@ -5,7 +5,7 @@ import telar.tbc;
 
 import telar.gui.foundation.text;
 
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.window;
 
 import telar.gui.text.notification_payload;
 
@@ -76,7 +76,7 @@ export {
       virtual bool postNotification(const NotificationPayload& payload) = 0;
       virtual bool playSound(AgentSound sound) = 0;
       // The session queued input for `pane`. A host that paces frames by input reads its clock here.
-      virtual void notePaneInput(FramePacer::Pane pane) noexcept;
+      virtual void notePaneInput(features::window::FramePacer::Pane pane) noexcept;
 
     protected:
       ~HostEffects() = default;

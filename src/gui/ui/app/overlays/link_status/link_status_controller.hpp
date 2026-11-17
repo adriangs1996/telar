@@ -10,7 +10,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -39,14 +39,14 @@ namespace telar::gui::qt {
 
     // The active machine's link moved, or another machine became the active one.
     void publish();
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
 
   signals:
     void changed();
 
   private:
     Store& store_;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
   };
 
 }

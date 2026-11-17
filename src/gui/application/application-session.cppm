@@ -23,7 +23,6 @@ import telar.gui.features.peek;
 import telar.gui.foundation.system;
 import :client_view_state;
 import :sidebar;
-import telar.gui.presentation.application_mark;
 import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
@@ -264,10 +263,6 @@ export {
 
       void retainLayout();
 
-      void setDisplayRefreshRate(std::uint16_t fps) noexcept;
-
-      void configureCadence();
-
       [[nodiscard]] Pane<Memory>* findPane(std::uint64_t pane_id) const noexcept;
 
       [[nodiscard]] Tab<Memory>* activeTab() const noexcept;
@@ -313,8 +308,6 @@ export {
       bool activateNotification(NotificationId id);
 
       [[nodiscard]] bool notificationTargetVisible(NotificationTarget target) const noexcept;
-
-      [[nodiscard]] WindowTitle windowTitle(std::string_view hostname) const;
 
       [[nodiscard]] std::string_view error() const noexcept;
 

@@ -116,7 +116,7 @@ namespace telar::gui::qt {
     return rebuilds_;
   }
 
-  void PaletteController::setDisplay(const DisplayMetrics& display) {
+  void PaletteController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit changed();
   }

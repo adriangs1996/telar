@@ -124,7 +124,7 @@ namespace telar::gui::qt {
 
       (*client)->session.configure(configuration_source_.configuration());
       if ((*client)->session.ready()) {
-        (*client)->session.configureCadence();
+        application::window::pace((*client)->session);
       }
     }
   }
@@ -135,9 +135,9 @@ namespace telar::gui::qt {
         continue;
       }
 
-      (*client)->session.setDisplayRefreshRate(fps);
+      application::window::setRefreshRate((*client)->session, fps);
       if ((*client)->session.ready()) {
-        (*client)->session.configureCadence();
+        application::window::pace((*client)->session);
       }
     }
   }

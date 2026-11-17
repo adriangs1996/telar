@@ -17,7 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.model;
 import telar.gui.foundation.system;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.features.window;
 
 namespace telar::gui::test {
 
@@ -31,7 +31,7 @@ namespace telar::gui::test {
         throw std::logic_error{"The application has no window frame pacer"};
       }
 
-      std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
+      std::array<features::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
       const auto count = application.frames_.collectPacingPanes(panes);
 
       application.frames_.frame_pacer_->record(std::span{panes}.first(count), now_ns);
@@ -47,7 +47,7 @@ namespace telar::gui::test {
     }
 
     static void release(qt::ApplicationController& application) {
-      anchor(application, system::AwakeClock::nowNanoseconds() - FramePacer::maximum_interval_ns);
+      anchor(application, system::AwakeClock::nowNanoseconds() - features::window::FramePacer::maximum_interval_ns);
       application.frames_.reconsider();
     }
   };

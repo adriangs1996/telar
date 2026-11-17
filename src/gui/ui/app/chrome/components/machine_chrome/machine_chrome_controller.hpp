@@ -13,7 +13,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.machines.picker;
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -36,11 +36,11 @@ namespace telar::gui::qt {
     MachineChromeController(MachineChromeController&&) = delete;
     MachineChromeController& operator=(MachineChromeController&&) = delete;
 
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
     void setWindow(QQuickWindow& window);
     [[nodiscard]] const Store& store() const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
-    [[nodiscard]] const DisplayMetrics& display() const noexcept;
+    [[nodiscard]] const application::window::DisplayMetrics& display() const noexcept;
     // The window the chrome activates machines in; activations from any other are ignored.
     [[nodiscard]] QQuickWindow* window() const noexcept;
     void pick();
@@ -55,7 +55,7 @@ namespace telar::gui::qt {
 
   private:
     const Store& store_;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
     QPointer<QQuickWindow> window_;
   };
 

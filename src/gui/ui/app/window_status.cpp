@@ -50,7 +50,7 @@ namespace telar::gui::qt {
   }
 
   QString WindowStatus::title() const {
-    const auto title = store_.session().windowTitle({hostname_.constData(), static_cast<std::size_t>(hostname_.size())});
+    const auto title = application::window::title(store_.session(), {hostname_.constData(), static_cast<std::size_t>(hostname_.size())});
 
     return toQString(title.view());
   }

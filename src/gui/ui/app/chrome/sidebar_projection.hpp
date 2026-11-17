@@ -14,13 +14,12 @@ static_assert(true);
 #pragma once
 
 import telar.gui.presentation.history_inspection_geometry;
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 
-  inline QVariantMap agentCardGeometryRecord(const DisplayMetrics& display, float list_width) {
+  inline QVariantMap agentCardGeometryRecord(const application::window::DisplayMetrics& display, float list_width) {
     const auto& chrome = display.chrome;
     const auto density = display.density;
     const auto geometry = AgentCardGeometry::derive(chrome);
@@ -60,7 +59,7 @@ namespace telar::gui::qt {
     };
   }
 
-  inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics& display, std::size_t count, application::SidebarMachines machines = {}) {
+  inline QVariantMap sidebarRegionsRecord(Rect area, const application::window::DisplayMetrics& display, std::size_t count, application::SidebarMachines machines = {}) {
     const auto& chrome = display.chrome;
     const auto density = display.density;
     const auto geometry = application::SidebarGeometry::measure(area, chrome, count, machines);

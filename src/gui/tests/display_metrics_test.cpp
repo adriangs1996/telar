@@ -15,10 +15,13 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.display_metrics;
+import telar.gui.features.window;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::window;
   using telar::gui::test::require;
 
   static_assert(std::is_trivially_copyable_v<DisplayMetrics>);

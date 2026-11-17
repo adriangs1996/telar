@@ -21,7 +21,6 @@ static_assert(true);
 #include <optional>
 #include <utility>
 
-import telar.gui.presentation.display_metrics;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -60,8 +59,8 @@ namespace telar::gui::qt {
     emit changed();
   }
 
-  DisplayMetrics WindowDisplay::metrics(qreal density) const {
-    return DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
+  application::window::DisplayMetrics WindowDisplay::metrics(qreal density) const {
+    return application::window::DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
   }
 
   qreal WindowDisplay::chromeRatio() const {

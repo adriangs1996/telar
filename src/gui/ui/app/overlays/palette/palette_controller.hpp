@@ -24,7 +24,6 @@ import telar.gui.machines.picker;
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.gui.foundation.text;
-import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 
@@ -107,7 +106,7 @@ namespace telar::gui::qt {
     // The dialog closed: no actions palette waits to be returned to.
     void forget() noexcept;
     // The display and the window's actions, as the window measures and binds them.
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
     void setCommands(QVariantList commands);
 
     [[nodiscard]] application::palette::PaletteMode mode() const;
@@ -170,7 +169,7 @@ namespace telar::gui::qt {
     std::size_t selection_ = 0;
     std::uint64_t revision_ = 0;
     std::uint64_t rebuilds_ = 0;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
   };
 
 }

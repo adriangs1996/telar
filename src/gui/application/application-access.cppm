@@ -94,6 +94,11 @@ namespace telar::gui::application {
 
     // ---- what the session keeps for every feature -------------------------------------------
 
+    // The refresh rate of the display the session's window shows on.
+    [[nodiscard]] static constexpr std::uint16_t& displayFps(Session& session) noexcept {
+      return session.display_fps_;
+    }
+
     [[nodiscard]] static constexpr Memory& memory(Session& session) noexcept {
       return session.memory_;
     }

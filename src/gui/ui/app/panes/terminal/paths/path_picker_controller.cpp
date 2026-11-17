@@ -25,7 +25,7 @@ namespace telar::gui::qt {
     return store_.dialog().kind == Store::Dialog::paths;
   }
 
-  void PathPickerController::setDisplay(const DisplayMetrics& display) {
+  void PathPickerController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit geometryChanged();
   }

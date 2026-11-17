@@ -25,7 +25,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -87,14 +87,14 @@ namespace telar::gui::qt {
       }
     }
 
-    void noteInput(FramePacer::Pane pane, std::uint64_t now_ns) {
+    void noteInput(application::window::FramePacer::Pane pane, std::uint64_t now_ns) {
       pacer_.noteInput(pane, now_ns);
       if (pending_) {
         deadline_.start(immediate_delivery_ms);
       }
     }
 
-    void record(std::span<const FramePacer::Pane> panes, std::uint64_t now_ns) noexcept {
+    void record(std::span<const application::window::FramePacer::Pane> panes, std::uint64_t now_ns) noexcept {
       pacer_.record(panes, now_ns);
     }
 
@@ -102,7 +102,7 @@ namespace telar::gui::qt {
       return pending_;
     }
 
-    bool defer(std::span<const FramePacer::Pane> panes) {
+    bool defer(std::span<const application::window::FramePacer::Pane> panes) {
       if (!visible()) {
         pending_ = false;
         deadline_.stop();
@@ -129,7 +129,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    void requestInputFrame(FramePacer::Pane pane) {
+    void requestInputFrame(application::window::FramePacer::Pane pane) {
       if constexpr (std::derived_from<Window, QWindow>) {
         if (!platform::supportsImmediateWindowUpdates()) {
           return;
@@ -155,7 +155,7 @@ namespace telar::gui::qt {
       deadline_.start(immediate_delivery_ms);
     }
 
-    void reconsider(std::span<const FramePacer::Pane> panes) {
+    void reconsider(std::span<const application::window::FramePacer::Pane> panes) {
       if (pending_ && !pacer_.waitUntil(panes, Clock::nowNanoseconds())) {
         deadline_.start(immediate_delivery_ms);
       }
@@ -174,7 +174,7 @@ namespace telar::gui::qt {
     }
 
     QPointer<Window> window_;
-    FramePacer pacer_;
+    application::window::FramePacer pacer_;
     QTimer deadline_;
     Delivery delivery_ = Delivery::held;
     bool pending_ = false;

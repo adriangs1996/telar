@@ -16,7 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.machines.picker;
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -49,7 +49,7 @@ namespace telar::gui::qt {
     bool open(std::optional<MachineToken> renamed);
     // The dialog closed: nothing typed belongs to the next prompt.
     void forget() noexcept;
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
 
   signals:
     void changed();
@@ -75,7 +75,7 @@ namespace telar::gui::qt {
     Store& store_;
     MachineProfilesSource& profiles_;
     std::optional<Prompt> prompt_;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
   };
 
 }

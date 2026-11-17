@@ -101,7 +101,7 @@ namespace telar::gui::qt {
 
     const std::string_view application = pane.foreground.empty() ? std::string_view{"shell"} : std::string_view{pane.foreground};
     const auto mark = ApplicationMark::forApplication(application);
-    const auto safe_context = WindowTitle::render("{pane_title}", {.workspace = {}, .tab = {}, .pane_title = context, .hostname = {}});
+    const auto safe_context = application::window::WindowTitle::render("{pane_title}", {.workspace = {}, .tab = {}, .pane_title = context, .hostname = {}});
     const auto progress_color = PaneProgressPresentation::color(pane.progress_state);
 
     return {

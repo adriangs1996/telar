@@ -19,7 +19,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.model;
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -55,7 +55,7 @@ namespace telar::gui::qt {
     void synchronize();
     // Notifies the geometries when what they are measured from moved.
     void publishGeometry();
-    void setDisplay(const DisplayMetrics& display);
+    void setDisplay(const application::window::DisplayMetrics& display);
     // A key the window received while the modal is open belongs to it.
     bool interceptKey(QKeyEvent& event);
     // A key a pane received: Ctrl+V takes the clipboard's image, and editing keys move the
@@ -91,7 +91,7 @@ namespace telar::gui::qt {
     AttachmentShelf shelf_;
     bool modal_open_ = false;
     std::optional<Inputs> published_;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
   };
 
 }

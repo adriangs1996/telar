@@ -189,7 +189,7 @@ namespace {
     {
       TestSession client{memory, transport};
 
-      require(client.windowTitle("host").view() == "Telar", "the GUI default title must match the original even without a pane");
+      require(application::window::title(client, "host").view() == "Telar", "the GUI default title must match the original even without a pane");
       openFirstPane(client, transport);
       const auto location = client.activeTab()->location;
       const std::array entries{WorkspaceListEntry{.workspace = location.workspace.id, .name = "project", .path = "/project"}};
@@ -199,34 +199,34 @@ namespace {
 
       configuration.window_title.assign("{workspace}/{tab}/{pane_title}@{hostname}");
       client.configure(configuration);
-      require(client.windowTitle("host").view() == "project/shell/@host", "automatic tab labels must default to shell before foreground discovery");
+      require(application::window::title(client, "host").view() == "project/shell/@host", "automatic tab labels must default to shell before foreground discovery");
 
       const std::array metadata_panes{TabPane{.pane_id = 1, .foreground = "Python"}};
       const std::array metadata_tabs{TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 1, .panes = metadata_panes}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "project", .tabs = metadata_tabs});
-      require(client.windowTitle("host").view() == "project/Python/@host", "configured titles must use remembered foreground metadata before a pane report arrives");
+      require(application::window::title(client, "host").view() == "project/Python/@host", "configured titles must use remembered foreground metadata before a pane report arrives");
 
       deliver(client, PaneTitle{.pane_id = 1, .title = "compiler"});
       deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
       const auto allocations = budget.allocations();
-      const auto rendered = client.windowTitle("host");
+      const auto rendered = application::window::title(client, "host");
 
       require(rendered.view() == "project/nvim/compiler@host", "titles must follow current workspace, foreground and pane metadata");
       require(budget.allocations() == allocations, "title projection must not allocate through the session allocator");
       const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .label = "manual"}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "renamed", .tabs = tabs});
-      require(client.windowTitle("host").view() == "renamed/manual/compiler@host", "manual tab labels and renamed workspaces must replace automatic title tokens");
+      require(application::window::title(client, "host").view() == "renamed/manual/compiler@host", "manual tab labels and renamed workspaces must replace automatic title tokens");
       client.split(ClientLayoutAxis::horizontal);
       const auto request = transport.last<CreatePane>();
 
       deliver(client, PaneOpened{.request_id = request.request_id, .pane_id = 2, .location = location, .created = true, .pane_generation = 1});
       deliver(client, PaneTitle{.pane_id = 2, .title = "second"});
-      require(client.windowTitle("host").view() == "renamed/manual/second@host", "focused pane changes must select that pane's title");
+      require(application::window::title(client, "host").view() == "renamed/manual/second@host", "focused pane changes must select that pane's title");
       require(rendered.view() == "project/nvim/compiler@host", "an earlier rendered value must not borrow mutable session strings");
       client.configure(Configuration{});
-      require(client.windowTitle("host").view() == "Telar", "clearing a configured template must restore the original GUI default");
+      require(application::window::title(client, "host").view() == "Telar", "clearing a configured template must restore the original GUI default");
     }
 
     require(budget.liveBytes() == 0, "title projection must preserve session allocation ownership");
@@ -375,17 +375,17 @@ namespace {
     constexpr std::uint16_t configured_frame_cap = 120;
     constexpr std::uint64_t nanoseconds_per_second = 1'000'000'000;
 
-    client.setDisplayRefreshRate(display_refresh_rate);
+    application::window::setRefreshRate(client, display_refresh_rate);
     auto configuration = client.configuration();
 
     configuration.max_fps = configured_frame_cap;
     client.configure(configuration);
-    client.configureCadence();
+    application::window::pace(client);
     require(transport.last<ConfigureFrameInterval>().interval_ns == nanoseconds_per_second / configured_frame_cap, "terminal cadence must follow the configured display cap");
 
     configuration.max_fps = 1;
     client.configure(configuration);
-    client.configureCadence();
+    application::window::pace(client);
     require(transport.last<ConfigureFrameInterval>().interval_ns == nanoseconds_per_second / Configuration::minimum_fps, "terminal cadence must remain inside protocol bounds for a low frame cap");
   }
 

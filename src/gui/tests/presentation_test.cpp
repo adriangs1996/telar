@@ -21,12 +21,13 @@ import telar.gui.application;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.notification_stack;
 import telar.gui.foundation.model;
+import telar.gui.features.window;
 
 namespace {
 
   using namespace telar::gui::features::terminal::graphics;
 
-  using telar::gui::WindowTitle;
+  using telar::gui::features::window::WindowTitle;
 
   void require(bool condition, const char* message) {
     if (!condition) {
@@ -95,6 +96,7 @@ namespace {
 
   void chromeSurfacesPreserveThemeAndTransparency() {
     using namespace telar::gui;
+    using namespace telar::gui::features::window;
 
     for (const auto background : {Color::rgb(0x15151a), Color::rgb(0xf6f4ef)}) {
       Theme theme;

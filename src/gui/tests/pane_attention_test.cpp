@@ -52,6 +52,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.features.window;
 
 namespace {
 
@@ -196,7 +197,7 @@ namespace {
       QCOMPARE(item.alpha(), quarter_alpha);
 
       clock.setMaximumFrameRate(telar::gui::Configuration::minimum_fps);
-      QCOMPARE(clock.frameInterval(), telar::gui::FramePacer::maximum_interval_ns);
+      QCOMPARE(clock.frameInterval(), telar::gui::features::window::FramePacer::maximum_interval_ns);
       QVERIFY(frameAt(window, quarter_ns));
       QCOMPARE(item.alpha(), quarter_alpha);
       QVERIFY(frameAt(window, half_ns));

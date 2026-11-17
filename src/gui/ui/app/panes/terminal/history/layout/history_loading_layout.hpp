@@ -12,7 +12,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.application_mark;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -63,7 +63,7 @@ namespace telar::gui::qt {
     void bindClock();
 
     QPointer<WindowAnimationClock> clock_;
-    LoadingCue cue_;
+    application::window::LoadingCue cue_;
     QRectF line_;
     qreal ratio_ = 1;
     bool waiting_ = false;

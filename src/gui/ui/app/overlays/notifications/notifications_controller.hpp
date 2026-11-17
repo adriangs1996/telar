@@ -18,8 +18,8 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.notification_center;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -48,7 +48,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool targetVisible(NotificationTarget target) const noexcept;
     // Where the cards stack: the terminal area, cut to whole cells.
     [[nodiscard]] Rect host() const;
-    [[nodiscard]] const DisplayMetrics& display() const noexcept;
+    [[nodiscard]] const application::window::DisplayMetrics& display() const noexcept;
     [[nodiscard]] std::uint64_t machineView() const noexcept;
 
     Q_INVOKABLE void dismiss(const QString& identity);
@@ -64,7 +64,7 @@ namespace telar::gui::qt {
     void present();
     // What the window shows moved: a card's target may have come into view or left it.
     void publishView();
-    void setDisplay(const DisplayMetrics& display, TerminalGrid grid);
+    void setDisplay(const application::window::DisplayMetrics& display, TerminalGrid grid);
     // The window the cards show in, and its generation, which changes with each window.
     void setWindow(QQuickWindow& window, std::uint64_t generation);
 
@@ -83,7 +83,7 @@ namespace telar::gui::qt {
     Store& store_;
     QTimer timer_;
     std::uint64_t presented_ = 0;
-    DisplayMetrics display_{};
+    application::window::DisplayMetrics display_{};
     TerminalGrid grid_{};
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;

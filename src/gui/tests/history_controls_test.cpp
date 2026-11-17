@@ -70,10 +70,13 @@ import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_filter_geometry;
+import telar.gui.features.window;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::window;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

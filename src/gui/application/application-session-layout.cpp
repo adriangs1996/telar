@@ -401,31 +401,6 @@ namespace telar::gui::application {
     }
   }
 
-  WindowTitle Session::windowTitle(std::string_view hostname) const {
-    const auto* tab = activeTab();
-    const auto* pane = focusedPane();
-    WindowTitle::Tokens tokens{.workspace = {}, .tab = {}, .pane_title = pane != nullptr ? std::string_view{pane->title} : std::string_view{}, .hostname = hostname};
-
-    if (tab != nullptr) {
-      if (!tab->label.empty()) {
-        tokens.tab = tab->label;
-      } else {
-        tokens.tab = tabApplicationName(*tab, pane);
-      }
-
-      const auto workspace = std::ranges::find_if(workspaces_, [&](const auto& entry) {
-        return sameWorkspace(entry.location, tab->location.workspace);
-      });
-      if (workspace != workspaces_.end()) {
-        tokens.workspace = workspace->name;
-      }
-    }
-
-    const auto pattern = configuration_.window_title.view();
-
-    return WindowTitle::render(pattern.empty() ? WindowTitle::default_title : pattern, tokens);
-  }
-
   TerminalSize Session::launchSize() const {
     const auto size = workbench_geometry_.launchSize();
     if (!size) {

@@ -19,7 +19,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.model;
-import telar.gui.presentation.frame_pacer;
 import telar.gui.application;
 import telar.gui.presentation.tab_drop;
 
@@ -116,7 +115,7 @@ namespace telar::gui::qt {
     void prepareTerminalFrames(PresentedFrame& frame);
     void recordPreparedFrame(const PresentedFrame& frame);
     void present(const PresentedFrame& frame);
-    [[nodiscard]] std::size_t collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
+    [[nodiscard]] std::size_t collectPacingPanes(std::span<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
 
     ApplicationAllocator& memory_;
     Store& store_;

@@ -80,7 +80,7 @@ namespace telar::gui::qt {
     return size ? Rect{.x = geometry.terminal.x, .y = geometry.terminal.y, .width = static_cast<float>(size->cols * grid.cell_width_px), .height = static_cast<float>(size->rows * grid.cell_height_px)} : Rect{};
   }
 
-  const DisplayMetrics& NotificationsController::display() const noexcept {
+  const application::window::DisplayMetrics& NotificationsController::display() const noexcept {
     return display_;
   }
 
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
     return store_.machineView();
   }
 
-  void NotificationsController::setDisplay(const DisplayMetrics& display, TerminalGrid grid) {
+  void NotificationsController::setDisplay(const application::window::DisplayMetrics& display, TerminalGrid grid) {
     display_ = display;
     grid_ = grid;
     emit displayChanged();

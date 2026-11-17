@@ -22,7 +22,7 @@ namespace telar::gui::qt {
       : QObject(parent),
         store_(store) {}
 
-  void PeekController::setDisplay(const DisplayMetrics& display) {
+  void PeekController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     emit changed();
   }
