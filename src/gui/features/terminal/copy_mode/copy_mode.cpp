@@ -2,7 +2,6 @@ module telar.gui.features.terminal.copy_mode;
 
 import std;
 
-import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
@@ -60,42 +59,6 @@ namespace telar::gui::features::terminal::copy_mode {
     search.rows.reset();
     search.origin.reset();
     search.query.clear();
-  }
-
-  std::optional<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid) {
-    auto plan = Access::mode(state).key(key, grid);
-    if (plan && plan->effect.search) {
-      auto& search = Access::search(state);
-
-      search.origin.reset();
-      search.query.clear();
-    }
-
-    return plan;
-  }
-
-  bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept {
-    return Access::mode(state).beginPointer(press, grid);
-  }
-
-  std::optional<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
-    return Access::mode(state).pointer(local, grid, released);
-  }
-
-  std::optional<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
-    return Access::mode(state).vertical(rows, grid);
-  }
-
-  void release(State& state) noexcept {
-    Access::mode(state).finishPointer();
-  }
-
-  bool current(const State& state, const CopyPlan& plan) noexcept {
-    return Access::mode(state).current(plan);
-  }
-
-  bool commit(State& state, const CopyPlan& plan) noexcept {
-    return Access::mode(state).commit(plan);
   }
 
   std::optional<CopyPlan> type(State& state, std::string_view needle, const CopyGrid& grid) {

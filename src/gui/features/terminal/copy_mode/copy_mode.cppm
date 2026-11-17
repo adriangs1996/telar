@@ -98,30 +98,30 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // The plan a key asks for; none when copy mode does not take keys. A key that begins a search
   // begins it from where the cursor is now.
-  [[nodiscard]] std::optional<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid);
+  [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid);
 
   // A press at `press.position` selects from there, a word or a line on a second or third click.
-  bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
+  TBC_HOT_PATH inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
 
   // The plan a drag to `local` asks for, ending the gesture when `released`.
-  [[nodiscard]] std::optional<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
 
   // The plan a wheel step of `rows` asks for.
-  [[nodiscard]] std::optional<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
 
   // Typing drops a selection the pointer made; false when there was none.
   TBC_HOT_PATH inline bool clearPointer(State& state) noexcept;
 
   // The pointer let go: its gesture ends.
-  void release(State& state) noexcept;
+  TBC_HOT_PATH inline void release(State& state) noexcept;
 
   // ---- plans --------------------------------------------------------------------------------------
 
   // Whether `plan` was made from copy mode as it stands.
-  [[nodiscard]] bool current(const State& state, const CopyPlan& plan) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline bool current(const State& state, const CopyPlan& plan) noexcept;
 
   // Copy mode becomes what `plan` leads to; false when it is no longer current.
-  bool commit(State& state, const CopyPlan& plan) noexcept;
+  TBC_HOT_PATH inline bool commit(State& state, const CopyPlan& plan) noexcept;
 
   // A frame of copy mode's pane arrived, its view at `previous_offset` before it: the cursor and
   // selection follow the rows the scrollback dropped.
@@ -198,6 +198,42 @@ namespace telar::gui::features::terminal::copy_mode {
 
   inline void follow(State& state, std::uint32_t previous_offset, const CopyGrid& grid) noexcept {
     Access::mode(state).onFrame(previous_offset, grid);
+  }
+
+  inline std::optional<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid) {
+    auto plan = Access::mode(state).key(key, grid);
+    if (plan && plan->effect.search) {
+      auto& search = Access::search(state);
+
+      search.origin.reset();
+      search.query.clear();
+    }
+
+    return plan;
+  }
+
+  inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept {
+    return Access::mode(state).beginPointer(press, grid);
+  }
+
+  inline std::optional<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
+    return Access::mode(state).pointer(local, grid, released);
+  }
+
+  inline std::optional<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
+    return Access::mode(state).vertical(rows, grid);
+  }
+
+  inline void release(State& state) noexcept {
+    Access::mode(state).finishPointer();
+  }
+
+  inline bool current(const State& state, const CopyPlan& plan) noexcept {
+    return Access::mode(state).current(plan);
+  }
+
+  inline bool commit(State& state, const CopyPlan& plan) noexcept {
+    return Access::mode(state).commit(plan);
   }
 
 }
