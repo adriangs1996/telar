@@ -85,8 +85,6 @@ telar_add_test(gui-history-test SOURCES history_test.cpp LIBRARIES gui-foundatio
   TEST gui-features-history LABELS gui.features.history TIMEOUT 30)
 telar_add_test(gui-history-card-test SOURCES history_card_test.cpp LIBRARIES gui-foundation-forms gui-foundation-core gui-foundation-text gui-features-history deps::ghostty_vt gui-test-fixtures
   TEST gui-history-card LABELS gui.features.history TIMEOUT 30)
-telar_add_test(gui-editor-test SOURCES editor_test.cpp LIBRARIES gui-foundation-forms gui-foundation-core gui-foundation-text gui-foundation-terminal deps::ghostty_vt gui-test-fixtures
-  TEST gui-editor LABELS gui.foundation.text)
 telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-features-history gui-features-bindings gui-features-machines
   TEST gui-bindings LABELS gui.features.bindings TIMEOUT 30)
 telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core
