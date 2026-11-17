@@ -25,18 +25,4 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void ApplicationController::soundPlaybackFinished([[maybe_unused]] std::optional<CommandFailure> failure) {
-    const auto owner = std::exchange(sound_owner_, std::nullopt);
-    auto* client = owner ? findClient(*owner) : nullptr;
-    if (client == nullptr) {
-      return;
-    }
-
-    try {
-      client->session.completeAgentSound();
-    } catch (const std::exception& error) {
-      status_.fail(error);
-    }
-  }
-
 }

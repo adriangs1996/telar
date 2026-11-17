@@ -34,7 +34,7 @@ namespace telar::gui::qt {
 
     const auto target = *listed;
 
-    selectMachine(target.source.machine);
+    machines_.select(target.source.machine);
     activity_.hover(identity);
     pending_activity_ = PendingActivity{.target = target, .window = window_generation_, .peek = peek, .pointer_revision = activity_.pointerRevision()};
     settleActivity();

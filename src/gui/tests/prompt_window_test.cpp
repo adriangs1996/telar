@@ -287,7 +287,7 @@ namespace {
 
       window.resize(QSize{720, 300});
       application.setWindow(window);
-      application.open(listener.fullServerName());
+      application.machines()->open(listener.fullServerName());
       QVERIFY(waitForGuiCondition([&] {
         return listener.hasPendingConnections();
       },
@@ -495,7 +495,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       window.resize(QSize{720, 300});
       application.setWindow(window);
-      application.open(listener.fullServerName());
+      application.machines()->open(listener.fullServerName());
       QVERIFY(waitForGuiCondition([&] {
         return listener.hasPendingConnections();
       },
@@ -557,7 +557,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       window.resize(QSize{820, 420});
       application.setWindow(window);
-      application.open(listener.fullServerName());
+      application.machines()->open(listener.fullServerName());
       QVERIFY(waitForGuiCondition([&] {
         return listener.hasPendingConnections();
       },
@@ -748,7 +748,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       window.resize(QSize{820, 300});
       application.setWindow(window);
-      application.open(listener.fullServerName());
+      application.machines()->open(listener.fullServerName());
       QVERIFY(waitForGuiCondition([&] {
         return listener.hasPendingConnections();
       },
@@ -868,7 +868,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       window.resize(QSize{720, 300});
       application.setWindow(window);
-      application.open(socket);
+      application.machines()->open(socket);
       QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, runtime_wait_ms);
       const auto record = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap();
       const auto pane = record.value(QStringLiteral("key")).toString().toULongLong();

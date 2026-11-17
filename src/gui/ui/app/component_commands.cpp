@@ -15,7 +15,7 @@ namespace telar::gui::qt {
 
   void ApplicationController::initializeComponents() {
     connect(this, &ApplicationController::configurationChanged, &components_, &ComponentsController::configure);
-    connect(this, &ApplicationController::machineChanged, &components_, &ComponentsController::reset);
+    connect(&machines_, &MachinesCoordinator::changed, &components_, &ComponentsController::reset);
     connect(&dialogs_, &Dialogs::changed, this, [this] {
       if (store_.dialog().kind != Dialog::none && components_.panelOpen()) {
         components_.closePanel();
@@ -45,7 +45,7 @@ namespace telar::gui::qt {
 
   void ApplicationController::initializePicks() {
     connect(&configuration_source_, &ConfigurationSource::changed, &components_, &ComponentsController::closePick);
-    connect(this, &ApplicationController::machineChanged, &components_, &ComponentsController::closePick);
+    connect(&machines_, &MachinesCoordinator::changed, &components_, &ComponentsController::closePick);
     connect(&dialogs_, &Dialogs::changed, this, [this] {
       if (store_.dialog().kind != Dialog::none) {
         components_.closePick();

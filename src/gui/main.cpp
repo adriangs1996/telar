@@ -222,14 +222,14 @@ int main(int argc, char** argv) {
     const auto remote = initialMachine(parser, memory);
     telar::gui::qt::ApplicationController client{memory};
 
-    QObject::connect(&client, &telar::gui::qt::ApplicationController::machineLaunchFailed, &application, [](const QString& error) {
+    QObject::connect(client.roster(), &telar::gui::qt::MachineRoster::launchFailed, &application, [](const QString& error) {
       std::cerr << "telar-gui: " << error.toStdString() << '\n';
       QGuiApplication::exit(EXIT_FAILURE);
     });
 
-    client.configureLaunch(parser.value(QStringLiteral("cwd")), remote ? QStringList{} : parser.positionalArguments(), !parser.isSet(QStringLiteral("fresh")));
+    client.roster()->configureLaunch(parser.value(QStringLiteral("cwd")), remote ? QStringList{} : parser.positionalArguments(), !parser.isSet(QStringLiteral("fresh")));
     if (remote) {
-      client.configureRemoteLaunch(*remote, parser.positionalArguments());
+      client.roster()->configureRemoteLaunch(*remote, parser.positionalArguments());
     }
 
     client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")), trustStorePath());
@@ -248,8 +248,8 @@ int main(int argc, char** argv) {
     }
 
     client.setWindow(*window);
-    client.open(runtimeEndpoint(parser, memory));
-    client.openMachines(machineProfilesPath());
+    client.machines()->open(runtimeEndpoint(parser, memory));
+    client.roster()->openProfiles(machineProfilesPath());
     scheduleSmokeTest(parser, client, *window);
 
     return QGuiApplication::exec();

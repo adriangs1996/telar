@@ -99,11 +99,11 @@ namespace {
       QTRY_VERIFY2_WITH_TIMEOUT(QFileInfo::exists(socket_), runtime_.readAllStandardError().constData(), wait_ms);
       bundledFonts();
       client_ = std::make_unique<ApplicationController>(memory_);
-      client_->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, false);
+      client_->roster()->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, false);
       client_->loadConfiguration(configuration, {}, {});
       window_->resize(window_width, window_height);
       client_->setWindow(*window_);
-      client_->open(socket_);
+      client_->machines()->open(socket_);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, wait_ms);
       const auto record = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap();
 

@@ -147,7 +147,7 @@ namespace {
 
     window.resize(QSize{960, 820});
     client.setWindow(window);
-    client.open(listener.fullServerName());
+    client.machines()->open(listener.fullServerName());
     require(waitForGuiCondition([&] {
       return listener.hasPendingConnections();
     },

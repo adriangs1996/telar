@@ -119,7 +119,7 @@ namespace {
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
 
-      application.open(endpoint);
+      application.machines()->open(endpoint);
       QTRY_VERIFY_WITH_TIMEOUT(listener.hasPendingConnections(), wait_ms);
       const std::unique_ptr<QLocalSocket> socket{listener.nextPendingConnection()};
       WireRuntime runtime{*socket};

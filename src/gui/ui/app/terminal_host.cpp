@@ -15,7 +15,7 @@ namespace telar::gui::qt {
   void ApplicationController::initializeTerminals() {
     // After the window's own slots, which ran before the terminals' when they listened here.
     connect(this, &ApplicationController::configurationChanged, &terminals_, &TerminalController::configurationChanged);
-    connect(this, &ApplicationController::machineChanged, &terminals_, &TerminalController::machineChanged);
+    connect(&machines_, &MachinesCoordinator::changed, &terminals_, &TerminalController::machineChanged);
     connect(&dialogs_, &Dialogs::changed, &terminals_, &TerminalController::dialogChanged);
     connect(&terminals_, &TerminalController::notificationPublished, &notifications_, &NotificationsController::refresh);
     connect(&terminals_, &TerminalController::failed, &status_, &WindowStatus::report);

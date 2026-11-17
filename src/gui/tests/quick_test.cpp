@@ -3196,7 +3196,7 @@ return {api_version=2, client={keybindings={
         static_cast<void>(QFile::remove(path));
       });
 
-      client_->openMachines(path);
+      client_->roster()->openProfiles(path);
       client_->execute(window_actions::Action::machine_picker);
       client_->palette()->search(QStringLiteral(":Offline"));
       QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
@@ -5533,7 +5533,7 @@ return {api_version=2, client={keybindings={
     )");
       const auto restore = qScopeGuard([this, before] {
         client_->loadConfiguration({}, {}, {});
-        client_->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, true);
+        client_->roster()->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, true);
         closeExtraTabs(before.count);
       });
 
@@ -5548,7 +5548,7 @@ return {api_version=2, client={keybindings={
       const auto count = client_->tabs()->rows()->rowCount();
       const QTemporaryDir fallback;
 
-      client_->configureLaunch(fallback.path(), {QStringLiteral("/bin/sh")}, true);
+      client_->roster()->configureLaunch(fallback.path(), {QStringLiteral("/bin/sh")}, true);
 
       struct CommandCase {
         Qt::Key key;
@@ -8079,7 +8079,7 @@ return {api_version=2, client={keybindings={
 
     void openWindow() {
       client_ = std::make_unique<ApplicationController>(memory_);
-      client_->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, true);
+      client_->roster()->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, true);
       client_->loadConfiguration({}, {}, {});
       engine_ = std::make_unique<QQmlApplicationEngine>();
       connect(engine_.get(), &QQmlEngine::warnings, this, [this](const QList<QQmlError>& errors) {
@@ -8104,7 +8104,7 @@ return {api_version=2, client={keybindings={
       window_ = qobject_cast<QQuickWindow*>(engine_->rootObjects().first());
       if (window_ != nullptr) {
         client_->setWindow(*window_);
-        client_->open(socket_);
+        client_->machines()->open(socket_);
       }
     }
 

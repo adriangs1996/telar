@@ -190,7 +190,7 @@ namespace telar::gui::test {
 
     static qt::MachineClientKey add(qt::ApplicationController& application, const QString& endpoint) {
       const auto slot = application.store_.machines().add({.label = "Build", .destination = "dev@build"});
-      auto& client = application.createClient(slot);
+      auto& client = application.machines_.createClient(slot);
 
       application.display_.layoutWorkbench();
       client.connection.open(endpoint);
@@ -199,11 +199,11 @@ namespace telar::gui::test {
     }
 
     static void select(qt::ApplicationController& application, MachineToken target) {
-      application.selectMachine(target);
+      application.machines_.select(target);
     }
 
     static qt::MachineClient& client(qt::ApplicationController& application, Machines::Slot slot) {
-      return application.clientAt(slot);
+      return application.machines_.clientAt(slot);
     }
 
     static void refreshActivity(qt::ApplicationController& application) {
@@ -230,24 +230,24 @@ namespace telar::gui::test {
       const auto& row = application.store_.machines().row(slot);
 
       application.store_.machines().update(slot, {.label = label, .destination = row.destination.view()});
-      emit application.machinesChanged();
+      application.machines_.publishList();
     }
 
     static void recolor(qt::ApplicationController& application, Machines::Slot slot, std::string_view color) {
       const auto& row = application.store_.machines().row(slot);
 
       application.store_.machines().update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
-      emit application.machinesChanged();
+      application.machines_.publishList();
     }
 
     static qt::MachineClientKey reuse(qt::ApplicationController& application, Machines::Slot slot) {
-      application.retireMachine(slot, qt::ApplicationController::MachineRetirement::removed);
+      application.roster_.retire(slot, qt::MachineRoster::Retirement::removed);
       application.store_.clients()[slot].reset();
       application.store_.machines().remove(slot);
       const auto added = application.store_.machines().add({.label = "Replacement", .destination = "dev@replacement"}, slot);
-      const auto key = application.createClient(added).key;
+      const auto key = application.machines_.createClient(added).key;
 
-      emit application.machinesChanged();
+      application.machines_.publishList();
 
       return key;
     }
@@ -270,11 +270,11 @@ namespace telar::gui::test {
     }
 
     static qt::MachineClientKey replace(qt::ApplicationController& application, Machines::Slot slot) {
-      return application.createClient(slot).key;
+      return application.machines_.createClient(slot).key;
     }
 
     static bool contains(const qt::ApplicationController& application, qt::MachineClientKey key) {
-      return application.findClient(key) != nullptr;
+      return application.machines_.findClient(key) != nullptr;
     }
   };
 
@@ -398,7 +398,7 @@ namespace {
         return false;
       }
 
-      application.open(local_listener_.fullServerName());
+      application.machines()->open(local_listener_.fullServerName());
       if (!waitForGuiCondition([&] {
             return local_listener_.hasPendingConnections();
           },

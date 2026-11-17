@@ -22,7 +22,7 @@ namespace telar::gui::qt {
     connect(&palette_, &PaletteController::failed, &status_, &WindowStatus::report);
     connect(&palette_, &PaletteController::machineRequested, this, [this](MachinePickerTarget target, bool alternate) {
       applyInteraction([&] {
-        chooseMachine(target, alternate);
+        roster_.choose(target, alternate);
       });
     });
 

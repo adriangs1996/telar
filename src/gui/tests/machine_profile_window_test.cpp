@@ -86,14 +86,14 @@ namespace telar::gui::test {
     }
 
     static void select(qt::ApplicationController& application, Machines::Slot slot) {
-      application.selectMachine(application.store_.machines().token(slot));
+      application.machines_.select(application.store_.machines().token(slot));
     }
 
     static Machines::Slot temporary(qt::ApplicationController& application) {
       const auto slot = application.store_.machines().add({.label = "temporary", .destination = "window@fixture"});
 
       application.store_.machines().pin(slot);
-      application.admitMachine(slot);
+      application.roster_.admit(slot);
 
       return slot;
     }
@@ -156,7 +156,7 @@ namespace {
         return false;
       }
 
-      application.open(listener.fullServerName());
+      application.machines()->open(listener.fullServerName());
       if (!waitForGuiCondition([&] {
             return listener.hasPendingConnections();
           },
@@ -167,7 +167,7 @@ namespace {
       socket.reset(listener.nextPendingConnection());
       runtime = std::make_unique<WireRuntime>(*socket);
       replace(profiles);
-      application.openMachines(path());
+      application.roster()->openProfiles(path());
 
       return waitForGuiCondition([&] {
         const auto& source = MachineProfileWindow::profiles(application);
@@ -256,7 +256,7 @@ namespace {
     Q_SLOT static void requestedRemoteSurvivesRejectedInitialProfiles() {
       ProfileFixture fixture;
 
-      fixture.application.configureRemoteLaunch(QStringLiteral("window@fixture"), {});
+      fixture.application.roster()->configureRemoteLaunch(QStringLiteral("window@fixture"), {});
       QVERIFY(fixture.start(R"({"version":1,"machines":false})", ProfileLoad::rejected));
       const auto& machines = MachineProfileWindow::machines(fixture.application);
 
@@ -269,8 +269,8 @@ namespace {
     Q_SLOT static void unavailableInitialMachineReportsItsCapacityFailure() {
       ProfileFixture fixture;
 
-      fixture.application.configureRemoteLaunch(QStringLiteral("window@fixture"), {});
-      const QSignalSpy failures{&fixture.application, &ApplicationController::machineLaunchFailed};
+      fixture.application.roster()->configureRemoteLaunch(QStringLiteral("window@fixture"), {});
+      const QSignalSpy failures{fixture.application.roster(), &MachineRoster::launchFailed};
       QStringList rows;
       constexpr int hexadecimal_base = 16;
 
@@ -286,15 +286,15 @@ namespace {
       QCOMPARE(failures.size(), qsizetype{1});
       QCOMPARE(failures.front().front().toString(), QStringLiteral("TooManyMachines"));
       QCOMPARE(MachineProfileWindow::machines(fixture.application).active(), Machines::local_slot);
-      QVERIFY_THROWS_EXCEPTION(std::logic_error, fixture.application.configureRemoteLaunch(QStringLiteral("other"), {}));
+      QVERIFY_THROWS_EXCEPTION(std::logic_error, fixture.application.roster()->configureRemoteLaunch(QStringLiteral("other"), {}));
     }
 
     Q_SLOT static void requestedDisabledMachineRunsTheNamedCommandInRemoteHome() {
       ProfileFixture fixture;
       auto& application = fixture.application;
 
-      application.configureLaunch(fixture.directory.path(), {QStringLiteral("/bin/sh")}, false);
-      application.configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
+      application.roster()->configureLaunch(fixture.directory.path(), {QStringLiteral("/bin/sh")}, false);
+      application.roster()->configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Saved","destination":"window-command@fixture","enabled":false}]})"));
       const auto slot = remoteSlot(application);
       const auto& machines = MachineProfileWindow::machines(application);
@@ -311,7 +311,7 @@ namespace {
     Q_SLOT static void requestedMachineLabelUsesItsSavedDestination() {
       ProfileFixture fixture;
 
-      fixture.application.configureRemoteLaunch(QStringLiteral("Saved"), {});
+      fixture.application.roster()->configureRemoteLaunch(QStringLiteral("Saved"), {});
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Saved","destination":"window@fixture","enabled":false}]})"));
       const auto& machines = MachineProfileWindow::machines(fixture.application);
 
@@ -324,7 +324,7 @@ namespace {
     Q_SLOT static void requestedTemporaryMachineAdoptsASavedProfile() {
       ProfileFixture temporary;
 
-      temporary.application.configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
+      temporary.application.roster()->configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
       QVERIFY(temporary.start(R"({"version":1,"machines":[]})"));
       const auto& machines = MachineProfileWindow::machines(temporary.application);
       const auto selected = machines.active();
@@ -347,11 +347,11 @@ namespace {
       constexpr qsizetype reference_argument_limit = 64;
       const QStringList arguments(reference_argument_limit, QStringLiteral("argument"));
 
-      fixture.application.configureLaunch(fixture.directory.path(), arguments, false);
+      fixture.application.roster()->configureLaunch(fixture.directory.path(), arguments, false);
       auto overflow = arguments;
 
       overflow.append(QStringLiteral("overflow"));
-      QVERIFY_THROWS_EXCEPTION(std::length_error, fixture.application.configureLaunch(fixture.directory.path(), overflow, false));
+      QVERIFY_THROWS_EXCEPTION(std::length_error, fixture.application.roster()->configureLaunch(fixture.directory.path(), overflow, false));
       QVERIFY(openLocalPane(fixture));
       const auto opening = fixture.runtime->last<OpenPane>();
 

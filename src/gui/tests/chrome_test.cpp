@@ -447,7 +447,7 @@ namespace {
       auto properties = navigationProperties(tabs, 1000);
 
       properties.insert(QStringLiteral("tabs"), QVariant::fromValue(application.tabs()));
-      properties.insert(QStringLiteral("machineContext"), application.machineContext());
+      properties.insert(QStringLiteral("machineContext"), application.machines()->context());
       properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("telar")}});
       properties.insert(QStringLiteral("controlsInset"), 80);
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
@@ -469,7 +469,7 @@ namespace {
 
       QCOMPARE(name->property("text").toString(), QStringLiteral("telar"));
       QVERIFY(!machine->property("text").toString().isEmpty());
-      QCOMPARE(machine->property("text").toString(), application.machineContext().value(QStringLiteral("label")).toString());
+      QCOMPARE(machine->property("text").toString(), application.machines()->context().value(QStringLiteral("label")).toString());
       for (const bool rail : {false, true}) {
         QVERIFY(navigation->setProperty("rail", rail));
         QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));

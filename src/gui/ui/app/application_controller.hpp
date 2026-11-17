@@ -11,6 +11,8 @@ static_assert(true);
 #include "frame_presenter.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "key_bindings.hpp"
+#include "machine_roster.hpp"
+#include "machines_coordinator.hpp"
 #include "pointer_dispatcher.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -116,10 +118,6 @@ static_assert(true);
 import telar.gui.components.builtin_content;
 import telar.gui.core.metrics;
 import telar.gui.presentation.history_pointer;
-import telar.gui.machines.picker;
-import telar.gui.machines.profile_store;
-import telar.gui.paths.label;
-import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.prompt.line;
 import telar.gui.prompt.editor;
@@ -143,7 +141,7 @@ namespace telar::gui::qt {
   //
   // Each feature's state lives in its own controller, which reads the store and never calls
   // back here; this controller synchronizes them in order and runs what they ask of the window.
-  class ApplicationController final : public QObject, private TerminalHost {
+  class ApplicationController final : public QObject, private TerminalHost, private MachinesHost {
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 
@@ -154,6 +152,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::WindowDisplay* display READ display CONSTANT)
     Q_PROPERTY(telar::gui::qt::WindowStatus* status READ status CONSTANT)
     Q_PROPERTY(telar::gui::qt::Dialogs* dialogs READ dialogs CONSTANT)
+    Q_PROPERTY(telar::gui::qt::MachinesCoordinator* machines READ machines CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -164,7 +163,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(int superModifier READ superModifier CONSTANT)
     Q_PROPERTY(QVariantMap colors READ colors NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap font READ font NOTIFY configurationChanged)
-    Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
     Q_PROPERTY(telar::gui::qt::ComponentsController* components READ components CONSTANT)
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
@@ -194,11 +192,7 @@ namespace telar::gui::qt {
     ApplicationController& operator=(ApplicationController&&) = delete;
 
     [[nodiscard]] AttachmentsController* attachments() noexcept;
-    void open(const QString& endpoint);
-    void openMachines(const QString& path);
     void loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path = {});
-    void configureLaunch(const QString& directory, const QStringList& arguments, bool restore);
-    void configureRemoteLaunch(const QString& destination, const QStringList& arguments);
     void setWindow(QQuickWindow& window);
     bool eventFilter(QObject* watched, QEvent* event) override;
     [[nodiscard]] Pane<Memory>* pane(std::uint64_t identity) const noexcept;
@@ -231,6 +225,14 @@ namespace telar::gui::qt {
 
     Dialogs* dialogs() noexcept {
       return &dialogs_;
+    }
+
+    MachinesCoordinator* machines() noexcept {
+      return &machines_;
+    }
+
+    MachineRoster* roster() noexcept {
+      return &roster_;
     }
 
     TabsController* tabs() noexcept {
@@ -308,7 +310,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap colors() const;
     [[nodiscard]] QVariantMap font() const;
     [[nodiscard]] QVariantList commands() const;
-    [[nodiscard]] QVariantMap machineContext() const;
     // A click on a mod element: runs its action, URL or Lua function.
     Q_INVOKABLE void activateElement(const QString& slot, const QString& key, const QString& revision, int element);
 
@@ -318,9 +319,6 @@ namespace telar::gui::qt {
     void configurationChanged();
     // The document a pane shows natively appeared, changed or went away.
     void notification(const QString& message);
-    void machineChanged();
-    void machinesChanged();
-    void machineLaunchFailed(const QString& error);
 
   private:
     friend struct test::HistoryPresentation;
@@ -348,38 +346,7 @@ namespace telar::gui::qt {
     void scrollBinding(ScrollDirection direction);
     [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
 
-    enum class MachineRetirement : std::uint8_t {
-      disabled,
-      removed,
-    };
-
-    struct RemoteLaunch {
-      QString destination;
-      QStringList arguments;
-    };
-
     bool executeMachineAction(window_actions::Action action);
-    void moveMachine(int delta);
-    void chooseMachine(MachinePickerTarget target, bool alternate);
-    void setupMachine(MachineToken target);
-    void initializeMachineProfiles();
-    void applyMachineProfiles();
-    void openRequestedMachine();
-    void reconcileMachines();
-    void reconcileMachine(const MachineProfile& profile);
-    void admitMachine(Machines::Slot slot);
-    void retireMachine(Machines::Slot slot, MachineRetirement reason);
-    void initializeMachines();
-    void configureClients();
-    void setClientsDisplayRefresh(std::uint16_t fps);
-    [[nodiscard]] MachineClient& createClient(Machines::Slot slot);
-    [[nodiscard]] MachineClient& clientAt(Machines::Slot slot) const noexcept;
-    void selectMachine(MachineToken target);
-    void releaseMachineInput();
-    void forgetMachineView();
-    void summarizeMachine(MachineClientKey key);
-    void connectMachine(Machines::Slot slot);
-    [[nodiscard]] MachineClient* findClient(MachineClientKey key) const noexcept;
     [[nodiscard]] GuiSession& session() noexcept;
     [[nodiscard]] const GuiSession& session() const noexcept;
     [[nodiscard]] RuntimeConnection& connection() noexcept;
@@ -429,6 +396,12 @@ namespace telar::gui::qt {
     bool executeNavigation(window_actions::Action action, const QString& target);
     bool executePane(window_actions::Action action, std::uint64_t identity);
     void executeWindowAction(window_actions::Action action);
+    // What the machines ask of the window.
+    void attend(MachineClient& client) override;
+    void dismiss(MachineClient& client) override;
+    void releaseInput() override;
+    void forgetView() override;
+    void presentMachine() override;
     // What the terminals ask of the window (terminal_host.cpp).
     void pressKey(TerminalItem& terminal, QKeyEvent& event) override;
     [[nodiscard]] bool releaseKey(TerminalItem& terminal, QKeyEvent& event) override;
@@ -453,7 +426,6 @@ namespace telar::gui::qt {
     void synchronize();
 
     ApplicationAllocator& memory_;
-    QByteArray hostname_;
     Store store_;
     tbc::view<HistoryController, tbc::lt::self> history_;
 
@@ -465,7 +437,6 @@ namespace telar::gui::qt {
     };
 
     std::optional<PendingActivity> pending_activity_;
-    std::optional<MachineClientKey> sound_owner_;
     ConfigurationSource configuration_source_;
     tbc::view<WindowDisplay, tbc::lt::self> display_;
     // The theme and font QML reads, built on first read after each configurationChanged.
@@ -479,11 +450,6 @@ namespace telar::gui::qt {
     std::optional<QPointF> component_action_anchor_;
     MachineProfilesSource machine_profiles_;
     tbc::view<AttachmentsController, tbc::lt::self> attachments_;
-    std::optional<RemoteLaunch> remote_launch_;
-    QTimer machine_retry_;
-    QString machine_control_endpoint_;
-    bool prepare_machine_directory_ = false;
-    bool restore_layout_ = true;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     // What every client's MachineEffects reaches on the desktop.
@@ -518,6 +484,8 @@ namespace telar::gui::qt {
     tbc::view<FramePresenter, tbc::lt::self> frames_;
     // After every controller a dialog opens over, and the routers it interrupts.
     tbc::view<Dialogs, tbc::lt::self> dialogs_;
+    tbc::view<MachinesCoordinator, tbc::lt::self> machines_;
+    tbc::view<MachineRoster, tbc::lt::self> roster_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
 

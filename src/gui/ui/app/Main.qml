@@ -28,7 +28,7 @@ Window {
 
     NavigationBar {
         tabs: telar.tabs
-        machineContext: telar.machineContext
+        machineContext: telar.machines.context
         drawn: telar.components.elementBars.top_bar ?? null
         x: root.geometry.navigation.x
         y: root.geometry.navigation.y
@@ -62,7 +62,7 @@ Window {
         controller: telar.sidebar
         activity: telar.activity
         machineChrome: telar.machineChrome
-        machineContext: telar.machineContext
+        machineContext: telar.machines.context
 
         x: root.geometry.sidebar.x
         y: root.geometry.sidebar.y

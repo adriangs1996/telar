@@ -135,7 +135,6 @@ namespace telar::gui::qt {
   ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         memory_(memory),
-        hostname_(platform::hostName()),
         history_(store_),
         configuration_source_(memory),
         display_(store_, configuration_source_),
@@ -166,12 +165,14 @@ namespace telar::gui::qt {
         workspace_form_(store_),
         key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
-        status_(store_, copy_, key_bindings_, hostname_),
+        status_(store_, copy_, key_bindings_, platform::hostName()),
         frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_),
-        dialogs_(store_, peek_, machine_prompt_, palette_, paths_, history_, workspace_form_, key_bindings_, pointer_dispatcher_) {
+        dialogs_(store_, peek_, machine_prompt_, palette_, paths_, history_, workspace_form_, key_bindings_, pointer_dispatcher_),
+        machines_(memory, store_, configuration_source_, effects_, frames_, display_, status_, dialogs_, *this, platform::hostName()),
+        roster_(store_, machines_, machine_profiles_, display_, dialogs_, notifications_, platform::hostName()) {
     composeWindowAnimation();
-    initializeMachines();
-    initializeMachineProfiles();
+    machines_.initialize();
+    connect(&machines_, &MachinesCoordinator::listChanged, &palette_, &PaletteController::refreshMachines);
     initializeAttachments();
     initializeComponents();
     initializeElements();
@@ -229,13 +230,13 @@ namespace telar::gui::qt {
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
-    connect(this, &ApplicationController::machinesChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
+    connect(&machines_, &MachinesCoordinator::listChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
       execute(window_actions::Action::machine_picker);
     });
     connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](MachineToken token) {
       applyInteraction([this, token] {
-        selectMachine(token);
+        machines_.select(token);
       });
     });
     connect(&peek_, &PeekController::closeRequested, this, [this] {
@@ -243,7 +244,12 @@ namespace telar::gui::qt {
     });
     connect(&peek_, &PeekController::failed, &status_, &WindowStatus::report);
     connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
-    connect(this, &ApplicationController::machineChanged, &link_status_, &LinkStatusController::publish);
+    connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
+    connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
+    connect(&machines_, &MachinesCoordinator::selecting, this, [this] {
+      pending_activity_.reset();
+      activity_.clearHover();
+    });
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
     connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
@@ -254,19 +260,8 @@ namespace telar::gui::qt {
       emit terminals_.terminalChanged(pane_id);
       frames_.request();
     });
-    connect(this, &ApplicationController::machineChanged, &status_, &WindowStatus::publishMetrics);
+    connect(&machines_, &MachinesCoordinator::changed, &status_, &WindowStatus::publishMetrics);
     connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
-
-    const platform::login_shell::Command shell;
-    const auto directory = QDir::currentPath().toUtf8();
-
-    session().setLaunch(Launch{
-        .cwd = {
-            directory.constData(),
-            static_cast<std::size_t>(directory.size()),
-        },
-        .arguments = shell.arguments(),
-    });
 
     refresh_timer_.setSingleShot(true);
     initializeNotifications();
@@ -276,7 +271,7 @@ namespace telar::gui::qt {
     connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
       status_.clear();
       key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
-      configureClients();
+      machines_.configure();
       display_.measureFont();
       publishConfiguration();
 
@@ -304,8 +299,8 @@ namespace telar::gui::qt {
     });
 
     connect(&refresh_timer_, &QTimer::timeout, this, &ApplicationController::refresh);
-    connect(this, &ApplicationController::machinesChanged, &sidebar_, &SidebarController::publishMachines);
-    connect(this, &ApplicationController::machinesChanged, this, [this] {
+    connect(&machines_, &MachinesCoordinator::listChanged, &sidebar_, &SidebarController::publishMachines);
+    connect(&machines_, &MachinesCoordinator::listChanged, this, [this] {
       if (!refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
@@ -321,11 +316,7 @@ namespace telar::gui::qt {
       pending_activity_.reset();
     }
 
-    client.session.disconnected();
-    static_cast<void>(client.session.settlePresentation());
-    client.phase = client.connection.link().phase;
-    client.needs_setup = client.connection.link().setup_repairs;
-    summarizeMachine(client.key);
+    machines_.markDisconnected(client);
     if (client.key.machine.slot != store_.machines().active()) {
       return;
     }
@@ -343,19 +334,91 @@ namespace telar::gui::qt {
     refresh_timer_.start();
   }
 
-  void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
-    configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path});
+  GuiSession& ApplicationController::session() noexcept {
+    return store_.session();
   }
 
-  void ApplicationController::configureLaunch(const QString& directory, const QStringList& arguments, bool restore) {
-    const auto cwd = QDir{directory.isEmpty() ? QDir::currentPath() : directory}.absolutePath().toUtf8();
-    const platform::login_shell::Command shell;
-    const LaunchArguments prepared{arguments};
-    const auto command = arguments.isEmpty() ? shell.arguments() : prepared.argv();
+  const GuiSession& ApplicationController::session() const noexcept {
+    return store_.session();
+  }
 
-    session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
-    restore_layout_ = restore;
-    session().setRestoreLayout(restore);
+  RuntimeConnection& ApplicationController::connection() noexcept {
+    return store_.connection();
+  }
+
+  const RuntimeConnection& ApplicationController::connection() const noexcept {
+    return store_.connection();
+  }
+
+  void ApplicationController::releaseInput() {
+    interruptBindings();
+    for (const auto& pane : session().panes()) {
+      terminals_.releaseInput(pane->id);
+    }
+  }
+
+  void ApplicationController::forgetView() {
+    history_.forget();
+    graphics_resume_timer_.stop();
+    panes_.forget();
+    tabs_.forget();
+    workspaces_.forget();
+    activity_.forget();
+    status_.clear();
+    frames_.restart();
+  }
+
+  void ApplicationController::attend(MachineClient& client) {
+    const auto key = client.key;
+
+    connect(
+        &client.connection,
+        &RuntimeConnection::payloadReceived,
+        this,
+        [this, key](QByteArrayView payload) {
+          if (auto* source = store_.find(key)) {
+            consume(*source, payload);
+          }
+        },
+        Qt::DirectConnection
+    );
+
+    connect(
+        &client.connection,
+        &RuntimeConnection::paneWillDetach,
+        this,
+        [this, key](qulonglong pane_id) {
+          if (store_.find(key) != nullptr && key.machine.slot == store_.machines().active()) {
+            terminals_.releaseInput(pane_id);
+          }
+        },
+        Qt::DirectConnection
+    );
+
+    connect(&client.connection, &RuntimeConnection::disconnected, this, [this, key] {
+      if (auto* source = store_.find(key)) {
+        runtimeDisconnected(*source);
+      }
+    });
+  }
+
+  void ApplicationController::dismiss(MachineClient& client) {
+    client.connection.disconnect(this);
+  }
+
+  void ApplicationController::presentMachine() {
+    configureWindow();
+    notifications_.refresh();
+    refresh();
+    restoreTerminalFocus();
+  }
+
+  void ApplicationController::soundPlaybackFinished(std::optional<CommandFailure> failure) {
+    machines_.soundFinished(failure);
+  }
+
+  void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
+    configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path});
   }
 
   ApplicationController::~ApplicationController() {
@@ -366,36 +429,7 @@ namespace telar::gui::qt {
 
     frames_.stop();
     QObject::disconnect(screen_refresh_connection_);
-    for (auto& client : store_.clients()) {
-      if (client) {
-        (*client)->connection.disconnect(this);
-        (*client)->connection.close();
-      }
-    }
-  }
-
-  void ApplicationController::open(const QString& endpoint) {
-    auto& client = clientAt(Machines::local_slot);
-    const auto path = endpoint.toUtf8();
-
-    client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
-    QCryptographicHash hash{QCryptographicHash::Sha256};
-    constexpr auto identity_namespace = std::to_array("telar-gui-window-v1");
-    const auto canonical_endpoint = client.identity_lease->endpoint();
-
-    hash.addData(QByteArrayView{identity_namespace.data(), static_cast<qsizetype>(identity_namespace.size())});
-    hash.addData(QByteArrayView{canonical_endpoint.data(), static_cast<qsizetype>(canonical_endpoint.size())});
-    constexpr char separator = '\0';
-
-    hash.addData(QByteArrayView{&separator, 1});
-    const auto slot = static_cast<char>(client.identity_lease->slot());
-
-    hash.addData(QByteArrayView{&slot, 1});
-    const auto digest = hash.result();
-    auto identity_bytes = byteView({digest.constData(), static_cast<std::size_t>(digest.size())}).first(sizeof(std::uint64_t));
-
-    client.identity = u64::decode(identity_bytes) | std::uint64_t{1};
-    client.connection.open(endpoint);
+    machines_.shutdown();
   }
 
   void ApplicationController::setWindow(QQuickWindow& window) {
@@ -486,7 +520,7 @@ namespace telar::gui::qt {
     if (std::isfinite(rate) && rate > 0) {
       const auto fps = static_cast<std::uint16_t>(std::clamp(std::round(rate), qreal{Configuration::minimum_fps}, qreal{Configuration::maximum_fps}));
 
-      setClientsDisplayRefresh(fps);
+      machines_.setDisplayRefresh(fps);
     }
 
     frames_.configure();
@@ -541,9 +575,9 @@ namespace telar::gui::qt {
       }
 
       static_cast<void>(client.session.settlePresentation());
-      summarizeMachine(client.key);
+      machines_.summarize(client.key);
       if (active && client.key.machine.slot != Machines::local_slot && (change == Change::stopped || change == Change::closed)) {
-        selectMachine(store_.machines().token(Machines::local_slot));
+        machines_.select(store_.machines().token(Machines::local_slot));
         return;
       }
 
@@ -1041,13 +1075,6 @@ namespace telar::gui::qt {
 
   ResolvedFont ApplicationController::resolveFont(qreal scale) {
     return display_.resolveFont(scale);
-  }
-
-  QVariantMap ApplicationController::machineContext() const {
-    return {
-        {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
-        {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
-    };
   }
 
 }

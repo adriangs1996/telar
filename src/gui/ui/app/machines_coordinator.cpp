@@ -3,19 +3,28 @@
 static_assert(true);
 #endif
 
-#include "application_controller.hpp"
+#include "machines_coordinator.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
+#include "dialogs.hpp"
+#include "frame_presenter.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
+#include "ui/foundation/models/projection.hpp"
+#include "window_display.hpp"
+#include "window_status.hpp"
 #include <QByteArrayView>
+#include <QCryptographicHash>
+#include <QDir>
 #include <QRandomGenerator>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
@@ -45,6 +54,9 @@ import telar.gui.machines.picker;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.activity_order;
 import telar.platform.process;
+import telar.gui.application.session;
+import telar.gui.platform.login_shell;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 
@@ -67,13 +79,62 @@ namespace telar::gui::qt {
 
   }
 
-  void ApplicationController::initializeMachines() {
+  MachinesCoordinator::MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent)
+      : QObject(parent),
+        memory_(memory),
+        store_(store),
+        configuration_source_(configuration),
+        desktop_(desktop),
+        frames_(frames),
+        display_(display),
+        status_(status),
+        dialogs_(dialogs),
+        host_(host),
+        hostname_(std::move(hostname)) {}
+
+  void MachinesCoordinator::release(MachineClient& client) {
+    host_.dismiss(client);
+    client.connection.disconnect(this);
+    client.connection.close();
+  }
+
+  void MachinesCoordinator::shutdown() {
+    for (auto& client : store_.clients()) {
+      if (client) {
+        release(**client);
+      }
+    }
+  }
+
+  void MachinesCoordinator::markDisconnected(MachineClient& client) {
+    client.session.disconnected();
+    static_cast<void>(client.session.settlePresentation());
+    client.phase = client.connection.link().phase;
+    client.needs_setup = client.connection.link().setup_repairs;
+    summarize(client.key);
+  }
+
+  void MachinesCoordinator::publishList() {
+    emit listChanged();
+  }
+
+  void MachinesCoordinator::initialize() {
     const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
 
     static_cast<void>(createClient(slot));
+    const platform::login_shell::Command shell;
+    const auto directory = QDir::currentPath().toUtf8();
+
+    store_.session().setLaunch(Launch{
+        .cwd = {
+            directory.constData(),
+            static_cast<std::size_t>(directory.size()),
+        },
+        .arguments = shell.arguments(),
+    });
   }
 
-  void ApplicationController::configureClients() {
+  void MachinesCoordinator::configure() {
     for (auto& client : store_.clients()) {
       if (!client) {
         continue;
@@ -86,7 +147,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::setClientsDisplayRefresh(std::uint16_t fps) {
+  void MachinesCoordinator::setDisplayRefresh(std::uint16_t fps) {
     for (auto& client : store_.clients()) {
       if (!client) {
         continue;
@@ -99,12 +160,12 @@ namespace telar::gui::qt {
     }
   }
 
-  MachineClient& ApplicationController::createClient(Machines::Slot slot) {
+  MachineClient& MachinesCoordinator::createClient(Machines::Slot slot) {
     const auto key = store_.admission(slot);
     const MachineEffects::Sinks sinks{
         .machines = store_.machines(),
         .clients = store_.clients(),
-        .desktop = effects_,
+        .desktop = desktop_,
         .sound_owner = sound_owner_,
         .frame_pacer = frames_.pacer(),
     };
@@ -118,15 +179,14 @@ namespace telar::gui::qt {
     client->session.setPresented(slot == store_.machines().active());
     const bool replacing_active = store_.clients()[slot] && slot == store_.machines().active();
     if (replacing_active) {
-      releaseMachineInput();
-      dialogs_.show(Dialog::none);
+      host_.releaseInput();
+      dialogs_.show(Store::Dialog::none);
       store_.advanceMachineView();
-      forgetMachineView();
+      host_.forgetView();
     }
 
     if (auto& previous = store_.clients()[slot]) {
-      (*previous)->connection.disconnect(this);
-      (*previous)->connection.close();
+      release(**previous);
       previous.reset();
     }
 
@@ -134,37 +194,21 @@ namespace telar::gui::qt {
     store_.machines().setLive(slot, true);
     connectMachine(slot);
     if (replacing_active) {
-      emit machineChanged();
+      emit changed();
     }
 
     return clientAt(slot);
   }
 
-  MachineClient& ApplicationController::clientAt(Machines::Slot slot) const noexcept {
+  MachineClient& MachinesCoordinator::clientAt(Machines::Slot slot) const noexcept {
     return store_.client(slot);
   }
 
-  MachineClient* ApplicationController::findClient(MachineClientKey key) const noexcept {
+  MachineClient* MachinesCoordinator::findClient(MachineClientKey key) const noexcept {
     return store_.find(key);
   }
 
-  GuiSession& ApplicationController::session() noexcept {
-    return store_.session();
-  }
-
-  const GuiSession& ApplicationController::session() const noexcept {
-    return store_.session();
-  }
-
-  RuntimeConnection& ApplicationController::connection() noexcept {
-    return store_.connection();
-  }
-
-  const RuntimeConnection& ApplicationController::connection() const noexcept {
-    return store_.connection();
-  }
-
-  void ApplicationController::connectMachine(Machines::Slot slot) {
+  void MachinesCoordinator::connectMachine(Machines::Slot slot) {
     auto& client = clientAt(slot);
     const auto key = client.key;
 
@@ -181,7 +225,7 @@ namespace telar::gui::qt {
         source->phase = MachinePhase::connected;
         source->needs_setup = false;
         source->session.connected(source->identity, RuntimeProtocol::readsRows(source->connection.schema()));
-        summarizeMachine(source->key);
+        summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
           status_.publish();
           status_.publishMetrics();
@@ -189,43 +233,15 @@ namespace telar::gui::qt {
       }
     });
 
-    connect(
-        &client.connection,
-        &RuntimeConnection::payloadReceived,
-        this,
-        [this, key](QByteArrayView payload) {
-          if (auto* source = findClient(key)) {
-            consume(*source, payload);
-          }
-        },
-        Qt::DirectConnection
-    );
-
-    connect(
-        &client.connection,
-        &RuntimeConnection::paneWillDetach,
-        this,
-        [this, key](qulonglong pane_id) {
-          if (findClient(key) != nullptr && key.machine.slot == store_.machines().active()) {
-            terminals_.releaseInput(pane_id);
-          }
-        },
-        Qt::DirectConnection
-    );
-
-    connect(&client.connection, &RuntimeConnection::disconnected, this, [this, key] {
-      if (auto* source = findClient(key)) {
-        runtimeDisconnected(*source);
-      }
-    });
+    host_.attend(client);
 
     connect(&client.connection, &RuntimeConnection::linkChanged, this, [this, key] {
       if (auto* source = findClient(key)) {
         source->phase = source->connection.link().phase;
         source->needs_setup = source->connection.link().setup_repairs;
-        summarizeMachine(source->key);
+        summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
-          link_status_.publish();
+          emit linkChanged();
         }
       }
     });
@@ -237,53 +253,31 @@ namespace telar::gui::qt {
     });
   }
 
-  void ApplicationController::selectMachine(MachineToken target) {
+  void MachinesCoordinator::select(MachineToken target) {
     if (!store_.machines().contains(target) || target.slot == store_.machines().active() || !store_.machines().shown(target.slot) || !store_.machines().row(target.slot).live || !store_.clients()[target.slot]) {
       return;
     }
 
-    pending_activity_.reset();
-    activity_.clearHover();
-    releaseMachineInput();
-    dialogs_.show(Dialog::none);
-    session().invalidateSuggestion();
-    session().setPresented(false);
+    emit selecting();
+    host_.releaseInput();
+    dialogs_.show(Store::Dialog::none);
+    store_.session().invalidateSuggestion();
+    store_.session().setPresented(false);
     store_.advanceMachineView();
-    forgetMachineView();
+    host_.forgetView();
     if (!store_.machines().select(target.slot)) {
       return;
     }
 
-    connection().resumeSession();
-    emit machineChanged();
-    emit machinesChanged();
+    store_.connection().resumeSession();
+    emit changed();
+    emit listChanged();
     display_.layoutWorkbench();
-    session().setPresented(true);
-    configureWindow();
-    notifications_.refresh();
-    refresh();
-    restoreTerminalFocus();
+    store_.session().setPresented(true);
+    host_.presentMachine();
   }
 
-  void ApplicationController::releaseMachineInput() {
-    interruptBindings();
-    for (const auto& pane : session().panes()) {
-      terminals_.releaseInput(pane->id);
-    }
-  }
-
-  void ApplicationController::forgetMachineView() {
-    history_.forget();
-    graphics_resume_timer_.stop();
-    panes_.forget();
-    tabs_.forget();
-    workspaces_.forget();
-    activity_.forget();
-    status_.clear();
-    frames_.restart();
-  }
-
-  void ApplicationController::summarizeMachine(MachineClientKey key) {
+  void MachinesCoordinator::summarize(MachineClientKey key) {
     const auto slot = key.machine.slot;
     const auto* const found = findClient(key);
     if (found == nullptr) {
@@ -316,7 +310,66 @@ namespace telar::gui::qt {
     }
 
     if (store_.machines().summarize(slot, observation)) {
-      emit machinesChanged();
+      emit listChanged();
+    }
+  }
+
+  void MachinesCoordinator::move(int delta) {
+    auto slot = static_cast<int>(store_.machines().active());
+
+    for (std::size_t step = 0; step < Machines::capacity; ++step) {
+      slot = (slot + delta + static_cast<int>(Machines::capacity)) % static_cast<int>(Machines::capacity);
+      const auto candidate = static_cast<Machines::Slot>(slot);
+      if (store_.machines().shown(candidate) && store_.machines().row(candidate).live && store_.clients()[candidate]) {
+        select(store_.machines().token(candidate));
+
+        return;
+      }
+    }
+  }
+
+  void MachinesCoordinator::open(const QString& endpoint) {
+    auto& client = clientAt(Machines::local_slot);
+    const auto path = endpoint.toUtf8();
+
+    client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
+    QCryptographicHash hash{QCryptographicHash::Sha256};
+    constexpr auto identity_namespace = std::to_array("telar-gui-window-v1");
+    const auto canonical_endpoint = client.identity_lease->endpoint();
+
+    hash.addData(QByteArrayView{identity_namespace.data(), static_cast<qsizetype>(identity_namespace.size())});
+    hash.addData(QByteArrayView{canonical_endpoint.data(), static_cast<qsizetype>(canonical_endpoint.size())});
+    constexpr char separator = '\0';
+
+    hash.addData(QByteArrayView{&separator, 1});
+    const auto slot = static_cast<char>(client.identity_lease->slot());
+
+    hash.addData(QByteArrayView{&slot, 1});
+    const auto digest = hash.result();
+    auto identity_bytes = byteView({digest.constData(), static_cast<std::size_t>(digest.size())}).first(sizeof(std::uint64_t));
+
+    client.identity = u64::decode(identity_bytes) | std::uint64_t{1};
+    client.connection.open(endpoint);
+  }
+
+  QVariantMap MachinesCoordinator::context() const {
+    return {
+        {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
+        {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
+    };
+  }
+
+  void MachinesCoordinator::soundFinished([[maybe_unused]] std::optional<CommandFailure> failure) {
+    const auto owner = std::exchange(sound_owner_, std::nullopt);
+    auto* client = owner ? findClient(*owner) : nullptr;
+    if (client == nullptr) {
+      return;
+    }
+
+    try {
+      client->session.completeAgentSound();
+    } catch (const std::exception& error) {
+      status_.fail(error);
     }
   }
 

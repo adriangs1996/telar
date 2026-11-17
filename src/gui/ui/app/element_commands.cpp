@@ -42,7 +42,7 @@ namespace telar::gui::qt {
   void ApplicationController::refreshElementBars() {
     components_.refreshElementBars({
         {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
-        {QStringLiteral("machine"), machineContext().value(QStringLiteral("label"))},
+        {QStringLiteral("machine"), machines_.context().value(QStringLiteral("label"))},
         {QStringLiteral("tab_count"), tabs_.count()},
         {QStringLiteral("sidebar_visible"), display_.sidebarVisible()},
     });

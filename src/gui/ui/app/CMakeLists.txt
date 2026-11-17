@@ -14,9 +14,10 @@ telar_add_qml_sources(gui-quick
     graphics_recovery.cpp
     key_bindings.cpp
     machine_actions.cpp
-    machine_clients.cpp
-    machine_launch.cpp
-    machine_profiles.cpp
+    machine_roster.cpp
+    machine_roster.hpp
+    machines_coordinator.cpp
+    machines_coordinator.hpp
     notification_commands.cpp
     palette_commands.cpp
     plugin_commands.cpp
