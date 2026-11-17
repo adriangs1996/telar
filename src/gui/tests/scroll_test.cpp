@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../input/scroll_motion.hpp"
 #include "../terminal/fold_map.hpp"
+#include "../ui/app/panes/terminal/scroll_motion.hpp"
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"

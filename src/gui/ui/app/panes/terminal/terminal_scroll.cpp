@@ -5,12 +5,12 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "core/wheel_accumulator.hpp"
-#include "input/scroll_motion.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
+#include "ui/app/panes/terminal/scroll_motion.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QWheelEvent>

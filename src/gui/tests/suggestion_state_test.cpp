@@ -30,7 +30,6 @@ static_assert(true);
 #include <system_error>
 
 import telar.gui.foundation.core;
-import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.forms;
 import telar.gui.features.palette;

@@ -8,7 +8,7 @@ set(CMAKE_AUTOUIC OFF)
 # -ffp-contract=off they inherit like every other GUI importer.
 file(GLOB gui_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
 list(REMOVE_ITEM gui_test_fixtures "${CMAKE_CURRENT_SOURCE_DIR}/font_fixture/font_fixture.cppm")
-telar_add_test(gui-test-fixtures STATIC SOURCES ${gui_test_fixtures} LIBRARIES gui-foundation-actions gui-foundation-core gui-foundation-system gui-foundation-fonts gui-input gui-platform gui-application gui-config)
+telar_add_test(gui-test-fixtures STATIC SOURCES ${gui_test_fixtures} LIBRARIES gui-foundation-actions gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-application gui-config)
 
 telar_add_test(gui-session-effects-test SOURCES session_effects_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform gui-application gui-test-fixtures
   TEST gui-session-effects LABELS gui.application)
@@ -64,7 +64,7 @@ telar_add_test(gui-shared-image-test SOURCES shared_image_test.cpp LIBRARIES gui
 telar_add_test(gui-session-notifications-test SOURCES session_notifications_test.cpp LIBRARIES gui-application gui-test-fixtures
   TEST gui-session-notifications LABELS gui.application)
 
-telar_add_test(gui-notification-actions-test SOURCES notification_actions_test.cpp LIBRARIES gui-foundation-actions gui-input gui-config gui-application
+telar_add_test(gui-notification-actions-test SOURCES notification_actions_test.cpp LIBRARIES gui-foundation-actions gui-config gui-application
   TEST gui-notification-actions LABELS gui.config)
 
 telar_add_test(gui-notification-effects-test SOURCES notification_effects_test.cpp LIBRARIES gui-foundation-system gui-application
@@ -72,13 +72,13 @@ telar_add_test(gui-notification-effects-test SOURCES notification_effects_test.c
 
 telar_add_test(gui-pane-creation-test SOURCES pane_creation_test.cpp LIBRARIES gui-foundation-model gui-application gui-test-fixtures
   TEST gui-pane-creation LABELS gui.application)
-telar_add_test(gui-command-tab-test SOURCES command_tab_test.cpp LIBRARIES gui-foundation-actions gui-input gui-application gui-config gui-test-fixtures
+telar_add_test(gui-command-tab-test SOURCES command_tab_test.cpp LIBRARIES gui-foundation-actions gui-application gui-config gui-test-fixtures
   TEST gui-command-tab LABELS gui.config)
-telar_add_test(gui-binding-query-test SOURCES binding_query_test.cpp LIBRARIES gui-input gui-config gui-test-fixtures
+telar_add_test(gui-binding-query-test SOURCES binding_query_test.cpp LIBRARIES gui-config gui-test-fixtures
   TEST gui-binding-query LABELS gui.config)
-telar_add_test(gui-theme-test SOURCES theme_test.cpp LIBRARIES gui-foundation-core gui-input gui-config gui-application
+telar_add_test(gui-theme-test SOURCES theme_test.cpp LIBRARIES gui-foundation-core gui-config gui-application
   TEST gui-theme LABELS gui.config)
-telar_add_test(gui-config-query-test SOURCES configuration_query_test.cpp LIBRARIES gui-features-status_bar gui-foundation-actions gui-foundation-keys gui-foundation-core gui-input gui-config gui-test-fixtures
+telar_add_test(gui-config-query-test SOURCES configuration_query_test.cpp LIBRARIES gui-features-status_bar gui-foundation-actions gui-foundation-keys gui-foundation-core gui-config gui-test-fixtures
   TEST gui-config-query LABELS gui.config)
 telar_add_test(gui-presentation-test SOURCES presentation_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-text gui-features-terminal-graphics gui-application
   TEST LABELS gui.presentation)
@@ -87,7 +87,7 @@ telar_add_test(gui-text-fit-test SOURCES text_fit_test.cpp LIBRARIES gui-foundat
 target_compile_options(gui-text-fit-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-font-grid-test SOURCES font_grid_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-test-fixtures
   TEST gui-font-grid LABELS gui.foundation.terminal)
-telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-terminal gui-features-history gui-features-terminal-input gui-input gui-application gui-test-fixtures
+telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-terminal gui-features-history gui-features-terminal-input gui-application gui-test-fixtures
   TEST LABELS gui.core TIMEOUT 30)
 telar_add_test(gui-color-test SOURCES color_test.cpp LIBRARIES gui-foundation-core
   TEST gui-color LABELS gui.core)
@@ -119,7 +119,7 @@ telar_add_test(gui-activity-test SOURCES activity_test.cpp LIBRARIES gui-foundat
 telar_add_test(gui-machine-chrome-test SOURCES machine_chrome_test.cpp LIBRARIES gui-foundation-core gui-features-machines
   TEST gui-machine-chrome LABELS gui.machines)
 target_compile_options(gui-machine-chrome-test PRIVATE -ffp-contract=off)
-telar_add_test(gui-session-test SOURCES session_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-core gui-features-history gui-input gui-application gui-test-fixtures
+telar_add_test(gui-session-test SOURCES session_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-core gui-features-history gui-application gui-test-fixtures
   TEST gui-session LABELS gui.application TIMEOUT 30)
 telar_add_test(gui-document-session-test SOURCES document_session_test.cpp LIBRARIES gui-application gui-test-fixtures
   TEST gui-document-session LABELS gui.application)
@@ -149,7 +149,7 @@ telar_add_test(gui-path-picker-session-test SOURCES path_picker_session_test.cpp
 telar_add_test(gui-path-picker-test SOURCES path_picker_test.cpp LIBRARIES gui-foundation-core gui-features-paths deps::ghostty_vt
   TEST gui-path-picker LABELS gui.paths)
 
-telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette gui-input deps::ghostty_vt
+telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.suggestions)
 
 telar_add_test(gui-prompt-editor-test SOURCES prompt_editor_test.cpp LIBRARIES gui-features-prompt
@@ -193,9 +193,9 @@ telar_add_test(gui-history-card-test SOURCES history_card_test.cpp LIBRARIES gui
   TEST gui-history-card LABELS gui.history TIMEOUT 30)
 telar_add_test(gui-editor-test SOURCES editor_test.cpp LIBRARIES gui-foundation-forms gui-foundation-core gui-foundation-text gui-foundation-terminal deps::ghostty_vt gui-test-fixtures
   TEST gui-editor LABELS gui.text)
-telar_add_test(gui-input-test SOURCES input_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-features-history gui-input gui-features-machines gui-config
+telar_add_test(gui-input-test SOURCES input_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-features-history gui-features-bindings gui-features-machines gui-config
   TEST gui-input LABELS gui.input TIMEOUT 30)
-telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-input
+telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core
   TEST gui-key-encoder LABELS gui.input TIMEOUT 30)
 telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-features-terminal-copy_mode gui-test-fixtures
   TEST gui-copy-mode LABELS gui.input TIMEOUT 30)
@@ -217,9 +217,9 @@ telar_add_test(gui-layout-test SOURCES layout_test.cpp LIBRARIES gui-features-wo
   TEST LABELS gui.layout TIMEOUT 30)
 telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-graphics gui-test-fixtures
   TEST gui-features-terminal-graphics LABELS gui.graphics TIMEOUT 30)
-telar_add_test(gui-config-test SOURCES configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-input gui-config gui-application
+telar_add_test(gui-config-test SOURCES configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-config gui-application
   TEST gui-config LABELS gui.config TIMEOUT 30)
-telar_add_test(gui-component-config-test SOURCES component_configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-input gui-components gui-config gui-application
+telar_add_test(gui-component-config-test SOURCES component_configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-components gui-config gui-application
   TEST gui-component-config LABELS gui.components TIMEOUT 30)
 target_compile_definitions(gui-component-config-test PRIVATE TELAR_GUI_EXAMPLES_DIR="${TELAR_ROOT}/docs/examples")
 
@@ -436,12 +436,12 @@ if(TELAR_GUI_NATIVE)
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-test-fixtures
     CHECKS lint lifetime blank_lines)
-  telar_add_test(gui-key-adapter-test SOURCES key_adapter_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-foundation-system gui-keyboard gui-input gui-platform
+  telar_add_test(gui-key-adapter-test SOURCES key_adapter_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-foundation-system gui-keyboard gui-platform
     TEST gui-key-adapter LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-link-opener-test QT SOURCES link_opener_test.cpp LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-system gui-foundation-text gui-features-history gui-features-terminal-links gui-platform gui-application deps::ghostty_vt Qt6::Gui Qt6::Test
     TEST gui-link-opener LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-link-opener-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
-  telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-input gui-config
+  telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-config
     TEST gui-plugin-worker LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-plugin-worker-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-pick-controller-test SOURCES pick_controller_test.cpp LIBRARIES gui-features-machines gui-components gui-config gui-surface-command gui-application

@@ -27,7 +27,7 @@ target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-h
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS foundation features
-    input platform components config
+    platform components config
     application)
   add_subdirectory(${domain})
 endforeach()
@@ -162,7 +162,6 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms
-    gui-input
     gui-platform gui-components gui-config
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)

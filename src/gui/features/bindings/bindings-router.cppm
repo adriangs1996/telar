@@ -1,54 +1,19 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.input.key_encoder;
+// What a key does before it reaches the terminal: the bindings a press starts or completes, the
+// physical keys each window holds and who owns them until they are released, and the repeat of a
+// held binding. Each window holds its router and routes every key through it.
+export module telar.gui.features.bindings:router;
 
 import std;
 
-import telar.config.client;
-import telar.base.text;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
-import telar.gui.foundation.text;
-
-// Interface: input/key_label.cppm
-export {
-  namespace telar::gui {
-
-    enum class KeyLabelStyle : std::uint8_t {
-      pc,
-      mac,
-    };
-
-    class KeyLabel {
-    public:
-      static constexpr std::size_t capacity = 64;
-      using Text = BoundedText<capacity>;
-
-      [[nodiscard]] static Text chord(std::optional<KeyChord> prefix, KeyChord key, KeyLabelStyle style);
-
-    private:
-      struct ModifierLabel {
-        KeyChord::Modifier modifier;
-        std::string_view pc;
-        std::string_view mac;
-      };
-
-      struct KeyName {
-        KeyChord::Key key;
-        std::string_view pc;
-        std::string_view mac;
-      };
-
-      static void append(Text& text, KeyChord key, KeyLabelStyle style);
-    };
-
-  }
-}
 
 // Interface: input/key_router.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::bindings {
 
     template <typename Event>
     concept BindingInput = requires(const Event& event) {

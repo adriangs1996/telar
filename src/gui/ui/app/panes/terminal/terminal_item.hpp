@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "core/wheel_accumulator.hpp"
-#include "input/scroll_motion.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
@@ -14,6 +13,7 @@ static_assert(true);
 #include "terminal/fold_map.hpp"
 #include "terminal_controller.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
+#include "ui/app/panes/terminal/scroll_motion.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include "ui/foundation/fonts/terminal_font.hpp"

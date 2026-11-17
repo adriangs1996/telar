@@ -2,6 +2,7 @@ telar_add_domain(gui application
   SOURCES
     application-activity.cpp
     application-configuration.cpp
+    application-configuration_readers.cpp
     application-history.cpp
     application-host_effects.cpp
     application-notifications.cpp
@@ -32,4 +33,4 @@ telar_add_domain(gui application
        foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history
        features/prompt features/terminal/input features/terminal/links features/terminal/copy_mode
        features/terminal/graphics features/terminal/attachments features/window features/status_bar features/notifications features/machines features/activity
-       features/workbench components config)
+       features/workbench features/bindings components config)

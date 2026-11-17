@@ -21,7 +21,7 @@ import telar.config.client;
 import telar.config.runtime;
 import telar.base.memory.containers;
 import :client_view_state;
-import telar.gui.config.generation;
+import :configuration_readers;
 
 // Interface: config/reader.cppm
 export {

@@ -38,7 +38,6 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
 import telar.gui.features.workbench;
 import telar.wire.agents;

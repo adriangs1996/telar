@@ -41,7 +41,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.actions;
-import telar.gui.input.key_encoder;
+import telar.gui.features.bindings;
 import telar.gui.foundation.keys;
 import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
@@ -50,6 +50,7 @@ namespace {
 
   using namespace telar::gui;
 
+  using namespace telar::gui::features::bindings;
   using namespace telar::gui::features::status_bar;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;

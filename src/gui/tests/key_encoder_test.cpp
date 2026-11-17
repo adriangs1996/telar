@@ -9,7 +9,6 @@ static_assert(true);
 
 import std;
 import telar.gui.foundation.core;
-import telar.gui.input.key_encoder;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.wire.vocabulary;

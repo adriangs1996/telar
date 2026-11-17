@@ -24,7 +24,6 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
-import telar.gui.input.key_encoder;
 
 namespace telar::gui::qt {
 
@@ -88,7 +87,7 @@ namespace telar::gui::qt {
       std::uint64_t machine_view = 0;
     };
 
-    using Router = KeyRouter<BindingAction, RoutedKey>;
+    using Router = application::bindings::KeyRouter<BindingAction, RoutedKey>;
     using Decision = Router::Decision;
     using Outcome = Router::Outcome;
 

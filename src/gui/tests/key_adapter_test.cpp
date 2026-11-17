@@ -19,7 +19,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.core;
-import telar.gui.input.key_encoder;
 
 namespace {
 

@@ -10,7 +10,7 @@ static_assert(true);
 import std;
 import telar.gui.features.history;
 import telar.gui.foundation.actions;
-import telar.gui.input.key_encoder;
+import telar.gui.features.bindings;
 import telar.gui.foundation.keys;
 import telar.gui.features.machines;
 
@@ -20,6 +20,7 @@ namespace {
 
   using namespace telar::gui;
 
+  using namespace telar::gui::features::bindings;
   using namespace telar::gui::features::machines;
 
   enum class TestAction : std::uint8_t {

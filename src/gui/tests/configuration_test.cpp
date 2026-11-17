@@ -22,7 +22,6 @@ import telar.gui.config.plugin_effects;
 import telar.gui.config.generation;
 import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
-import telar.gui.input.key_encoder;
 import telar.lua;
 
 import telar.config.snapshot;

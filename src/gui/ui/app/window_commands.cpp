@@ -63,7 +63,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.components.configuration;
-import telar.gui.input.key_encoder;
 
 import telar.gui.config.gui_query;
 import telar.config.client;
@@ -256,8 +255,8 @@ namespace telar::gui::qt {
       return {};
     }
 
-    const auto style = platform::usesCommandKey() ? KeyLabelStyle::mac : KeyLabelStyle::pc;
-    const auto label = KeyLabel::chord(configuration_source_.input().prefix, *key, style);
+    const auto style = platform::usesCommandKey() ? application::bindings::KeyLabelStyle::mac : application::bindings::KeyLabelStyle::pc;
+    const auto label = application::bindings::KeyLabel::chord(configuration_source_.input().prefix, *key, style);
 
     return toQString(label.view());
   }
