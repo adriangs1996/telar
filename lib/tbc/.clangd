@@ -1,5 +1,12 @@
+# The linter and its tests are a project of their own, built in lib/tbc/out (tools/cpp configure
+# tbc). The telar.tbc module and its headers belong to the main tree: they keep the root's
+# out/dev, where every module that imports them is compiled.
+If:
+  PathMatch: (linter|tests)/.*|main\.cpp
 CompileFlags:
-  CompilationDatabase: out/debug
+  CompilationDatabase: out
+
+---
 
 Index:
   Background: Build
