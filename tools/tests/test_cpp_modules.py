@@ -445,6 +445,17 @@ class ModuleNamespaces(unittest.TestCase):
         }), 1)
 
 
+class InterfaceNames(unittest.TestCase):
+    def test_an_interface_unit_or_a_partition_the_module_does_not_export(self):
+        self.assertEqual(checker.interface_name('export module telar.gui.application;\n'), 'telar.gui.application')
+        self.assertEqual(checker.interface_name('export module telar.gui.application:session;\n'), 'telar.gui.application:session')
+        self.assertEqual(checker.interface_name('module;\n#include "a.hpp"\nmodule telar.gui.application:access;\n'),
+                         'telar.gui.application:access')
+
+    def test_an_implementation_unit_declares_no_interface(self):
+        self.assertFalse(checker.interface_name('module telar.gui.application;\n'))
+
+
 RULES = {
     'src/gui/features': ['telar.gui.foundation'],
     'src/gui/foundation': ['telar.gui.foundation'],

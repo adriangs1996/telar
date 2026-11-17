@@ -62,10 +62,9 @@ def main():
     graph = {}
     for source in sorted(interfaces):
         text = (ROOT / source).read_text()
-        match = re.search(r'^export module ([\w.:]+);', text, re.M)
-        if not match or match[1] != inventory['interfaces'][source] or match[1] in graph:
+        name = interface_name(text)
+        if not name or name != inventory['interfaces'][source] or name in graph:
             raise RuntimeError('Invalid or duplicate module ownership: ' + source)
-        name = match[1]
         if GNU_MACROS & set(name.replace(':', '.').split('.')):
             raise RuntimeError(f'{source} names {name}, but a GNU mode predefines one of its components as a macro')
         graph[name] = imports_of(name, text)
@@ -99,6 +98,14 @@ def main():
 
 
 IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
+INTERFACE_RE = re.compile(r'^(?:export module ([\w.:]+)|module ([\w.]+:[\w.]+));', re.M)
+
+
+def interface_name(text):
+    """The module unit a .cppm declares: an interface unit, or a partition the module does not
+    export (`module telar.gui.application:access;`), which only the module's own units import."""
+    match = INTERFACE_RE.search(text)
+    return match and (match[1] or match[2])
 
 
 def imports_of(name, text):
