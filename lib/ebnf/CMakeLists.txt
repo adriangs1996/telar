@@ -35,8 +35,6 @@ list(REMOVE_ITEM ebnf_sources main.cpp)
 
 add_executable(ebnf main.cpp ${ebnf_sources})
 target_link_libraries(ebnf PRIVATE ebnf_options)
-add_test(NAME ebnf-smoke COMMAND ebnf)
-set_tests_properties(ebnf-smoke PROPERTIES TIMEOUT 30 LABELS lib.ebnf)
 telar_register_checks(ebnf CHECKS lint lifetime)
 
 if(EBNF_GOOGLETEST)

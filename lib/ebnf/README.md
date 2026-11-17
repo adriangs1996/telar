@@ -36,12 +36,10 @@ GoogleTest output. Without Just, run the steps directly:
 tools/cpp configure ci
 tools/cpp build ci -- --target ebnf ebnf_tests
 tools/cpp test ci -- -L '^lib\.ebnf$'
-out/ci/lib/ebnf/ebnf
 ```
 
-The executable currently only returns success. `ebnf-smoke` checks that it starts
-and exits successfully. `ToolchainTest.Cpp23IsEnabled` is the initial GoogleTest
-check; it verifies the language mode, not parser behavior.
+The executable currently only returns success; it instantiates every parser
+member so the lifetime check covers the library. No test runs it.
 
 GoogleTest v1.18.0 is fetched into each build directory with a pinned commit and
 SHA-256 checksum. It is only needed when `EBNF_GOOGLETEST=ON`; the dev, release,
@@ -56,7 +54,7 @@ no CMake edits are needed. CTest discovers individual `TEST` and `TEST_F` cases
 automatically. To run one suite:
 
 ```sh
-tools/cpp test ci -- -R '^ToolchainTest\.'
+tools/cpp test ci -- -R '^Lifetime\.'
 ```
 
 ## Lexer and parser boundary

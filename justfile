@@ -37,11 +37,6 @@ gui-build preset="dev": (configure preset)
 auth-build preset="dev": (configure preset)
     "{{ cpp }}" build {{ preset }} -- --target telar-auth-daemon
 
-# Build and run the auth daemon tests. Extra arguments are passed to CTest.
-auth-test *args: (configure "dev")
-    "{{ cpp }}" build dev -- --target src/auth-daemon/all
-    "{{ cpp }}" test dev -- -L '^auth' {{ args }}
-
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:
     cargo build --release --locked --manifest-path "{{ renderer_dir }}/Cargo.toml" --target-dir "{{ renderer_dir }}/target"

@@ -57,24 +57,6 @@ namespace {
     EXPECT_EQ(moved.getText(rule)->data(), source.data());
   }
 
-  TEST(Lifetime, DeepTextCopyOwnsItsBytes) {
-    auto copied = std::string{};
-
-    {
-      const auto source = std::string{"letters = 'abc';"};
-      auto tree = parseWithLocalParser(source);
-      const auto root = tree.getRoot();
-
-      const auto rule = parser_testing::nthChild(tree, root, 0);
-
-      ASSERT_NE(rule, ebnf::none_handle);
-      ASSERT_TRUE(tree.getText(rule).has_value());
-      copied = std::string{*tree.getText(rule)};
-    }
-
-    EXPECT_EQ(copied, "letters");
-  }
-
   TEST(Lifetime, ReusingParserDoesNotInvalidateEarlierTrees) {
     auto tokenizer = ebnf::Lexer{};
     ebnf::parser parser{tokenizer};

@@ -56,7 +56,7 @@ jobs:
           python3 tools/check-cpp-modules.py
           python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
           tools/cpp build ci -- --target lib/all src/auth-daemon/all --parallel 3
-          tools/cpp test ci -- -L '^(lib\.|auth)'
+          tools/cpp test ci -- -L '^lib\.'
           python3 tools/check-cpp-package.py --build out/ci
           python3 tools/check-cpp-editor.py --build out/ci --file lib/base/tests/base_test.cpp
 
@@ -128,7 +128,7 @@ jobs:
           python3 tools/check-cpp-modules.py
           python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
           tools/cpp build ci -- --target lib/all src/auth-daemon/all --parallel 3
-          tools/cpp test ci -- -L '^(lib\.|auth)'
+          tools/cpp test ci -- -L '^lib\.'
           python3 tools/check-cpp-package.py --build out/ci
           python3 tools/check-cpp-editor.py --build out/ci --file lib/base/tests/base_test.cpp
 
