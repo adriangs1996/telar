@@ -15,9 +15,7 @@ Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
 without requiring a system installation. Only `Regular` is available;
 bold and italic terminal attributes use the existing synthesized styles.
 It retains the SIL Open Font License 1.1 and copyright notices; the license
-text is in `TelarForma-OFL.txt`. `TelarForma-glyphs.json` stores the 402
-approved glyph overrides as coordinates, contour ends, point flags and
-horizontal metrics.
+text is in `TelarForma-OFL.txt`.
 
 Text rasterization links FreeType 2.13.2 from the source archive pinned in
 `src/gui/cmake/fonts.cmake`. Portions of this software are copyright © 2023 The FreeType
