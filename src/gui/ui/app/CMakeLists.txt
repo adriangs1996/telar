@@ -7,6 +7,8 @@ telar_add_qml_sources(gui-quick
     binding_commands.cpp
     component_commands.cpp
     element_commands.cpp
+    frame_presenter.cpp
+    frame_presenter.hpp
     graphics_recovery.cpp
     key_bindings.cpp
     machine_actions.cpp

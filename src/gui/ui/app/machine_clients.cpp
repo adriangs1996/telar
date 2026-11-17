@@ -106,7 +106,7 @@ namespace telar::gui::qt {
         .clients = store_.clients(),
         .desktop = effects_,
         .sound_owner = sound_owner_,
-        .frame_pacer = frame_pacer_,
+        .frame_pacer = frames_.pacer(),
     };
 
     auto owned = makeOwned<MachineClient>(memory_, memory_, sinks, key);
@@ -280,11 +280,7 @@ namespace telar::gui::qt {
     workspaces_.forget();
     activity_.forget();
     status_.clear();
-    frame_pacer_.reset();
-    if (window_) {
-      frame_pacer_.emplace(*window_);
-      configureFramePacer();
-    }
+    frames_.restart();
   }
 
   void ApplicationController::summarizeMachine(MachineClientKey key) {

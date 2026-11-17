@@ -253,9 +253,9 @@ namespace telar::gui::test {
     }
 
     static auto capture(qt::ApplicationController& application) {
-      qt::ApplicationController::PresentedFrame frame;
+      qt::FramePresenter::PresentedFrame frame;
 
-      application.prepareFrame(frame);
+      application.frames_.prepareFrame(frame);
       const auto* pane = application.session().focusedPane();
       if (pane != nullptr) {
         frame.pane_count = 1;
@@ -266,7 +266,7 @@ namespace telar::gui::test {
     }
 
     static void present(qt::ApplicationController& application, const auto& frame) {
-      application.present(frame);
+      application.frames_.present(frame);
     }
 
     static qt::MachineClientKey replace(qt::ApplicationController& application, Machines::Slot slot) {

@@ -1,7 +1,7 @@
 """Check queued frame snapshots using the source's observeFrames implementation.
 
 Only observeFrames is transplanted into a QObject facade. Both builds use the
-current ApplicationController::PresentedFrame type, real QQuickWindow signals and Qt queued
+current FramePresenter::PresentedFrame type, real QQuickWindow signals and Qt queued
 callbacks. Preparation and presentation are simulated; this does not replace
 native scene, runtime acknowledgement, weak QObject lifetime or pixel tests.
 This driver currently supports macOS Qt framework builds.
@@ -23,7 +23,7 @@ def digest(path):
 
 
 def observer(source):
-    marker = 'void ApplicationController::observeFrames('
+    marker = 'void FramePresenter::observeFrames('
     if source.count(marker) != 1:
         raise ValueError('Expected exactly one observeFrames implementation')
     start = source.index(marker)
@@ -32,14 +32,14 @@ def observer(source):
     while depth:
         depth += (source[end] == '{') - (source[end] == '}')
         end += 1
-    return source[start:end].replace('ApplicationController::', 'ProbeApplication::')
+    return source[start:end].replace('FramePresenter::', 'ProbeApplication::')
 
 
 def build_probe(build, source, output, sanitize=False, unsafe=False):
     output.mkdir()
     database = json.loads((build / 'compile_commands.json').read_text())
-    row = next(row for row in database if row['file'].endswith('/ui/app/application_controller.cpp'))
-    application_header = Path(row['file']).with_suffix('.hpp')
+    row = next(row for row in database if row['file'].endswith('/ui/app/frame_presenter.cpp'))
+    presenter_header = Path(row['file']).with_suffix('.hpp')
     command = row.get('arguments') or shlex.split(row['command'])
     compiler = command[0]
     body = observer(source.read_text())
@@ -50,14 +50,14 @@ def build_probe(build, source, output, sanitize=False, unsafe=False):
         body = body.replace(condition, 'false')
     generated = output / 'observe_frames.inc'
     generated.write_text(body + '\n')
-    (output / 'application_controller.cpp').write_bytes(source.read_bytes())
-    (output / 'application_controller.hpp').write_bytes(application_header.read_bytes())
+    (output / 'frame_presenter.cpp').write_bytes(source.read_bytes())
+    (output / 'frame_presenter.hpp').write_bytes(presenter_header.read_bytes())
     probe = Path(__file__).with_name('presented_frames_probe.cpp')
     obj = output / 'probe.o'
     command[command.index('-o') + 1] = str(obj)
     command[-1] = str(probe)
     command.insert(1, '-I' + str(output))
-    # The snapshot of application_controller.hpp lives beside the generated include. Its
+    # The snapshot of frame_presenter.hpp lives beside the generated include. Its
     # sibling headers still resolve through the build's original include paths.
     flags = ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'] if sanitize else []
     command[1:1] = flags
@@ -74,7 +74,7 @@ def build_probe(build, source, output, sanitize=False, unsafe=False):
     libraries = {name: digest(qt / f'lib/{name}.framework/Versions/A/{name}')
                  for name in ('QtCore', 'QtGui', 'QtQuick')}
     return binary, qt, dict(commands=[command, link], source_sha256=digest(source),
-                            header_sha256=digest(application_header), generated_sha256=digest(generated),
+                            header_sha256=digest(presenter_header), generated_sha256=digest(generated),
                             probe_source_sha256=digest(probe), binary_sha256=digest(binary),
                             libraries=libraries, sanitized_translation_unit=sanitize)
 

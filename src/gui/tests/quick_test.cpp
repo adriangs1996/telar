@@ -3402,7 +3402,7 @@ return {api_version=2, client={keybindings={
       }
 
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       const auto position = older->mapToScene(QPointF{older->width() / 2, older->height() / 2}).toPoint();
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, position);
@@ -3486,7 +3486,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       const auto* current = selected_copy();
 
       release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
@@ -3788,7 +3788,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(click(QStringLiteral("inspect")));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->state().value(QStringLiteral("inspecting")).toBool(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       QVERIFY(!client_->history()->state().value(QStringLiteral("enterRuns")).toBool());
       QVERIFY(click(QStringLiteral("submit")));
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
@@ -3819,10 +3819,10 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       window_->beforeSynchronizing();
       window_->frameSwapped();
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       auto* footer = window_->findChild<QQuickItem*>(QStringLiteral("historyFooter"));
 
       QVERIFY(footer != nullptr);
@@ -3845,7 +3845,7 @@ return {api_version=2, client={keybindings={
       window_->frameSwapped();
       QVERIFY(activate(QStringLiteral("submit")));
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
       QVERIFY(activate(QStringLiteral("alternate")));
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
@@ -3862,7 +3862,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       QQuickWindow replacement;
 
       client_->setWindow(replacement);
@@ -3871,7 +3871,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       for (const auto& revision : {QString{}, QStringLiteral("not-a-revision"), QStringLiteral("18446744073709551616")}) {
         QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, QStringLiteral("submit")), Q_ARG(QString, revision)));
         QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
@@ -3913,7 +3913,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE(test::visualItems(*window_->contentItem(), QStringLiteral("historyResult")).size(), 2);
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       QQuickWindow replacement;
 
       client_->setWindow(replacement);
@@ -3942,7 +3942,7 @@ return {api_version=2, client={keybindings={
       window_->frameSwapped();
       QVERIFY(activate(1, original_revision));
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       client_->history()->selectPresented(-1, original_revision);
       client_->history()->selectPresented(client_->history()->rows()->rowCount(), original_revision);
       QVERIFY(activate(1, QStringLiteral("not-a-revision")));
@@ -3968,7 +3968,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       window_->beforeSynchronizing();
       window_->frameSwapped();
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       QVERIFY(activate(1, original_revision));
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       QVERIFY(activate(1, current_revision));
@@ -4144,10 +4144,10 @@ return {api_version=2, client={keybindings={
       } else {
         window_->hide();
         QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-        QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+        test::FramePacing::presentSwapped(*client_);
         window_->beforeSynchronizing();
         window_->frameSwapped();
-        QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+        test::FramePacing::presentSwapped(*client_);
       }
 
       const auto previous_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
@@ -4175,7 +4175,7 @@ return {api_version=2, client={keybindings={
         QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
         window_->beforeSynchronizing();
         window_->frameSwapped();
-        QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+        test::FramePacing::presentSwapped(*client_);
         QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
       }
 
@@ -4661,7 +4661,7 @@ return {api_version=2, client={keybindings={
 
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_B_"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       constexpr int notch = 120;
@@ -7888,7 +7888,7 @@ return {api_version=2, client={keybindings={
             return false;
           }
 
-          QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+          test::FramePacing::presentSwapped(*client_);
 
           if (pane->acknowledged_frame == pane->screen.frameId()) {
             return true;
@@ -7918,7 +7918,7 @@ return {api_version=2, client={keybindings={
           client_->setWindow(*window_);
         }
 
-        QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+        test::FramePacing::presentSwapped(*client_);
         QCOMPARE(pane->acknowledged_frame, acknowledged);
         client_->setWindow(*window_);
         window_->show();
@@ -8278,11 +8278,11 @@ return {api_version=2, client={keybindings={
         return false;
       }
 
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
 
       const auto current = QTest::qWaitFor([this] {
         window_->update();
-        QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+        test::FramePacing::presentSwapped(*client_);
 
         return test::HistoryPresentation::current(*client_);
       },
@@ -8397,7 +8397,7 @@ return {api_version=2, client={keybindings={
 
       terminal->setVisible(suppression != TerminalSuppression::hidden);
       terminal->setFlag(QQuickItem::ItemHasContents, suppression != TerminalSuppression::no_contents);
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       const auto acknowledged = pane->acknowledged_frame;
       const auto previous_frame = pane->screen.frameId();
 
@@ -8406,7 +8406,7 @@ return {api_version=2, client={keybindings={
       const auto pending_frame = pane->screen.frameId();
 
       QVERIFY(telar::gui::test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      test::FramePacing::presentSwapped(*client_);
       QCOMPARE(pane->acknowledged_frame, acknowledged);
 
       terminal->setVisible(true);

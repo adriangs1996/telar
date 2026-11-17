@@ -71,7 +71,6 @@ static_assert(true);
 #include "core/terminal_size.hpp"
 #include "platform/window.hpp"
 
-import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.config.gui_query;
@@ -83,8 +82,6 @@ import telar.gui.platform.login_shell;
 import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
-import telar.gui.platform.awake_clock;
-import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
@@ -169,7 +166,8 @@ namespace telar::gui::qt {
         workspace_form_(store_),
         key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
-        status_(store_, copy_, key_bindings_, hostname_) {
+        status_(store_, copy_, key_bindings_, hostname_),
+        frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_) {
     composeWindowAnimation();
     initializeMachines();
     initializeMachineProfiles();
@@ -253,7 +251,7 @@ namespace telar::gui::qt {
     });
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
       emit terminals_.terminalChanged(pane_id);
-      requestTerminalFrame();
+      frames_.request();
     });
     connect(this, &ApplicationController::machineChanged, &status_, &WindowStatus::publishMetrics);
     connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
@@ -365,7 +363,7 @@ namespace telar::gui::qt {
       window_->disconnect(this);
     }
 
-    frame_pacer_.reset();
+    frames_.stop();
     QObject::disconnect(screen_refresh_connection_);
     for (auto& client : store_.clients()) {
       if (client) {
@@ -422,8 +420,7 @@ namespace telar::gui::qt {
     peek_.setWindowGeneration(window_generation_);
     notifications_.setWindow(window, window_generation_);
     components_.setWindow(window);
-    frame_pacer_.reset();
-    frame_pacer_.emplace(window);
+    frames_.setWindow(window, window_generation_);
     history_.setWindow(&window);
     activity_.setWindow(&window);
     sidebar_.setWindow(window);
@@ -438,7 +435,7 @@ namespace telar::gui::qt {
     connect(&window, &QWindow::screenChanged, this, &ApplicationController::synchronizeScreen);
     connect(&window, &QWindow::windowStateChanged, &display_, &WindowDisplay::publish);
     terminals_.setWindow(window);
-    observeFrames(window);
+    frames_.observeFrames(window);
     synchronizeScreen();
     configureWindow();
   }
@@ -468,11 +465,8 @@ namespace telar::gui::qt {
   }
 
   bool ApplicationController::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == window_ && frame_pacer_ && event->type() == QEvent::UpdateRequest) {
-      std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
-      const auto count = collectPacingPanes(panes);
-
-      return frame_pacer_->defer(std::span{panes}.first(count));
+    if (watched == window_ && frames_.pacing() && event->type() == QEvent::UpdateRequest) {
+      return frames_.defer();
     }
 
     if (watched == window_ && window_ != nullptr && event->type() == QEvent::DevicePixelRatioChange && window_->effectiveDevicePixelRatio() != display_.grid().scale) {
@@ -480,174 +474,6 @@ namespace telar::gui::qt {
     }
 
     return false;
-  }
-
-  void ApplicationController::observeFrames(QQuickWindow& window) {
-    WindowImages::forWindow(window);
-    const auto generation = window_generation_;
-    // Preparation runs while the scene graph synchronizes, with the GUI thread blocked, so it
-    // never overlaps a present on the GUI thread.
-    const auto frames = std::allocate_shared<PresentedFrames>(AllocatorRef<PresentedFrames, ApplicationAllocator>{memory_});
-
-    connect(&window, &QQuickWindow::beforeSynchronizing, this, [this, frames, generation] {
-      if (generation == window_generation_) {
-        prepareFrame(frames->next());
-      }
-    },
-        Qt::DirectConnection);
-    connect(&window, &QQuickWindow::afterSynchronizing, this, [this, frames, generation] {
-      if (generation == window_generation_) {
-        auto& frame = frames->prepared[frames->current];
-
-        prepareTerminalFrames(frame);
-        recordPreparedFrame(frame);
-      }
-    },
-        Qt::DirectConnection);
-
-    connect(
-        &window,
-        &QQuickWindow::frameSwapped,
-        this,
-        [this, frames, generation] {
-          const auto slot = frames->current;
-
-          QMetaObject::invokeMethod(
-              this,
-              [this, frames, slot, sequence = frames->sequences[slot], generation] {
-                if (window_ != nullptr && generation == window_generation_ && frames->sequences[slot] == sequence) {
-                  present(frames->prepared[slot]);
-                }
-              },
-              Qt::QueuedConnection
-          );
-        },
-        Qt::DirectConnection
-    );
-  }
-
-  void ApplicationController::prepareFrame(PresentedFrame& frame) {
-    frame = {};
-    frame.machine_view = store_.machineView();
-    frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
-    frame.tabs = tabs_.dropSurface(display_.chromeRatio());
-    if (window_ == nullptr) {
-      return;
-    }
-
-    auto* images = WindowImages::findWindow(*window_);
-    if (images != nullptr && !images->empty()) {
-      images->beginCatalogSnapshot();
-      for (const auto& pane : std::as_const(*this).session().panes()) {
-        images->observeCatalog(pane->graphics);
-      }
-    }
-
-    history_.prepare(frame.history);
-  }
-
-  void ApplicationController::prepareTerminalFrames(PresentedFrame& frame) {
-    if (window_ == nullptr) {
-      return;
-    }
-
-    const auto* tab = session().activeTab();
-    if (tab == nullptr) {
-      return;
-    }
-
-    forEachLeaf(*tab, true, [&](const ClientLayoutPane& leaf) {
-      const auto* pane = session().findPane(leaf.pane_id);
-      auto* terminal = pane != nullptr && pane->attached ? terminals_.visible(pane->id) : nullptr;
-      if (terminal == nullptr) {
-        return;
-      }
-
-      const auto& prepared = terminal->preparedFrame();
-      if (prepared.pane.attached && prepared.pane.pane_id == pane->id && prepared.pane.attachment_generation == pane->attachment_generation) {
-        frame.panes[frame.pane_count++] = {.frame = prepared, .terminal = terminal};
-      }
-    });
-  }
-
-  std::size_t ApplicationController::collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
-    const auto* tab = session().activeTab();
-    if (window_ == nullptr || tab == nullptr) {
-      return 0;
-    }
-
-    std::size_t count = 0;
-
-    forEachLeaf(*tab, true, [&](const ClientLayoutPane& leaf) {
-      if (terminals_.visible(leaf.pane_id) == nullptr) {
-        return;
-      }
-
-      if (const auto* pane = session().findPane(leaf.pane_id); pane != nullptr && pane->attached) {
-        panes[count++] = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()};
-      }
-    });
-
-    return count;
-  }
-
-  void ApplicationController::recordPreparedFrame(const PresentedFrame& frame) {
-    if (!frame_pacer_) {
-      return;
-    }
-
-    std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
-
-    for (std::size_t index = 0; index < frame.pane_count; ++index) {
-      panes[index] = frame.panes[index].frame.pane;
-    }
-
-    frame_pacer_->record(std::span{panes}.first(frame.pane_count), frame.preparation_ns);
-  }
-
-  void ApplicationController::reconsiderFrame() {
-    if (!frame_pacer_ || !frame_pacer_->pending()) {
-      return;
-    }
-
-    std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
-    const auto count = collectPacingPanes(panes);
-
-    frame_pacer_->reconsider(std::span{panes}.first(count));
-  }
-
-  void ApplicationController::requestTerminalFrame() {
-    if (!platform::supportsImmediateWindowUpdates()) {
-      reconsiderFrame();
-
-      return;
-    }
-
-    if (!frame_pacer_) {
-      return;
-    }
-
-    if (frame_pacer_->pending()) {
-      reconsiderFrame();
-
-      return;
-    }
-
-    const auto pane_id = session().changedPane();
-    const auto* tab = session().activeTab();
-    if (tab == nullptr || !tab->layout.contains(pane_id) || (tab->fullscreen && tab->focused_pane != pane_id) || terminals_.visible(pane_id) == nullptr) {
-      return;
-    }
-
-    if (const auto* pane = session().findPane(pane_id); pane != nullptr && pane->attached && frame_pacer_) {
-      frame_pacer_->requestInputFrame({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()});
-    }
-  }
-
-  void ApplicationController::configureFramePacer() {
-    if (frame_pacer_ && window_ != nullptr) {
-      frame_pacer_->configure(WindowAnimationClock::forWindow(*window_).frameInterval(), std::nullopt);
-    }
   }
 
   void ApplicationController::synchronizeCadence() {
@@ -662,7 +488,7 @@ namespace telar::gui::qt {
       setClientsDisplayRefresh(fps);
     }
 
-    configureFramePacer();
+    frames_.configure();
   }
 
   void ApplicationController::configureWindow() {
@@ -673,7 +499,7 @@ namespace telar::gui::qt {
     const auto& configuration = session().configuration();
 
     WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? std::nullopt : std::optional{configuration.max_fps});
-    configureFramePacer();
+    frames_.configure();
     const QPointer<ApplicationController> lifetime{this};
     const auto owner = window_;
 
@@ -684,35 +510,6 @@ namespace telar::gui::qt {
 
     platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = display_.metrics(window_->effectiveDevicePixelRatio()).chrome.top_bar / static_cast<float>(window_->effectiveDevicePixelRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
     display_.publish();
-  }
-
-  void ApplicationController::present(const PresentedFrame& frame) {
-    if (frame.machine_view != store_.machineView()) {
-      return;
-    }
-
-    tabs_.present(frame.tabs);
-    history_.present(frame.history);
-    pointer_dispatcher_.presentHistoryActions(history_.presentedActions());
-
-    try {
-      for (const auto& pane : std::span{frame.panes}.first(frame.pane_count)) {
-        const auto& identity = pane.frame.pane;
-        const auto* current = session().findPane(identity.pane_id);
-        if (current == nullptr || !current->attached || current->attachment_generation != identity.attachment_generation) {
-          continue;
-        }
-
-        auto* const terminal = pane.terminal.data();
-        if (terminal != nullptr && terminal->controller() == &terminals_ && terminal->paneIdentity() == identity.pane_id) {
-          terminal->presentFrame(pane.frame);
-        }
-
-        session().presented(identity.pane_id, identity.frame_id);
-      }
-    } catch (const std::exception& error) {
-      status_.fail(error);
-    }
   }
 
   Pane<Memory>* ApplicationController::pane(std::uint64_t identity) const noexcept {
@@ -795,7 +592,7 @@ namespace telar::gui::qt {
         paths_.publishGeometry();
       }
 
-      requestTerminalFrame();
+      frames_.request();
       break;
     case Change::paths:
       paths_.refresh();
@@ -811,7 +608,7 @@ namespace telar::gui::qt {
       documents_.publish(session().changedPane());
       // Inline documents take rows of the view, or give them back.
       emit terminals_.terminalChanged(session().changedPane());
-      requestTerminalFrame();
+      frames_.request();
       break;
     case Change::copy_mode:
       copy_.publishSearch();
@@ -978,7 +775,7 @@ namespace telar::gui::qt {
     attachments_.publishGeometry();
     notifications_.publishView();
     emit terminals_.refreshed();
-    reconsiderFrame();
+    frames_.reconsider();
   }
 
   void ApplicationController::refreshPanes() {

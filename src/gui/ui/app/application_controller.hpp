@@ -7,6 +7,7 @@ static_assert(true);
 #include "application_effects.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
+#include "frame_presenter.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "key_bindings.hpp"
 #include "pointer_dispatcher.hpp"
@@ -114,12 +115,10 @@ static_assert(true);
 import telar.gui.components.builtin_content;
 import telar.gui.core.metrics;
 import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.tab_drop;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
-import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.prompt.line;
@@ -397,36 +396,6 @@ namespace telar::gui::qt {
     void measureDisplay();
     void showPathPicker();
 
-    struct PresentedPane {
-      TerminalPreparation frame;
-      QPointer<TerminalItem> terminal;
-    };
-
-    struct PresentedFrame {
-      std::uint64_t machine_view = 0;
-      std::array<PresentedPane, PaneLayout::maximum_panes> panes;
-      std::size_t pane_count = 0;
-      std::uint64_t preparation_ns = 0;
-      TabDropSurface tabs;
-      HistoryController::Frame history;
-    };
-
-    // The render thread prepares each frame into the slot after the last one while the GUI
-    // thread presents, and posts the slot and the sequence it prepared there. A slot prepared
-    // again before its frame was presented holds a newer frame, whose own post presents it.
-    struct PresentedFrames {
-      std::array<PresentedFrame, 2> prepared;
-      std::array<std::uint64_t, 2> sequences{};
-      std::uint64_t sequence = 0;
-      std::size_t current = 0;
-
-      PresentedFrame& next() noexcept {
-        current = ++sequence % prepared.size();
-        sequences[current] = sequence;
-        return prepared[current];
-      }
-    };
-
     // Answers the commands of the active machine's client. A configuration reply views the
     // application's buffers, region `a`, until the client encodes it.
     struct HostCommands final : ClientCommandHandler {
@@ -446,7 +415,6 @@ namespace telar::gui::qt {
     void synchronizeDisplay();
     void synchronizeScreen();
     void synchronizeWindowSize();
-    void observeFrames(QQuickWindow& window);
     // Names the animated item types, in the order every window samples them.
     static void composeWindowAnimation() noexcept;
     void refresh();
@@ -459,14 +427,6 @@ namespace telar::gui::qt {
     void initializeAttachments();
     void refreshPanes();
     void showDialog(Dialog kind);
-    void present(const PresentedFrame& frame);
-    void prepareFrame(PresentedFrame& frame);
-    void prepareTerminalFrames(PresentedFrame& frame);
-    void recordPreparedFrame(const PresentedFrame& frame);
-    [[nodiscard]] std::size_t collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
-    void reconsiderFrame();
-    void requestTerminalFrame();
-    void configureFramePacer();
     void configureWindow();
     void synchronizeCadence();
     void initializeNotifications();
@@ -531,7 +491,6 @@ namespace telar::gui::qt {
     QString machine_control_endpoint_;
     bool prepare_machine_directory_ = false;
     bool restore_layout_ = true;
-    std::optional<WindowFramePacer<>> frame_pacer_;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     // What every client's MachineEffects reaches on the desktop.
@@ -562,6 +521,8 @@ namespace telar::gui::qt {
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
     // After the copy mode and the keys, whose mode it reports.
     tbc::view<WindowStatus, tbc::lt::self> status_;
+    // After every recipient of a frame.
+    tbc::view<FramePresenter, tbc::lt::self> frames_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
 
