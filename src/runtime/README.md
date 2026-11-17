@@ -432,14 +432,12 @@ path ranking, editor validation and suggestion-engine failure modes. The Neovim
 integration test runs when `nvim` is available. It checks a filename containing
 spaces and a quote, cursor position, and rejection of a stale process identity.
 
-`runtime-probe`, `history-probe`, `services-probe`, `agent-probe`,
-`process-probe`, `reporter-probe`, `hook-probe`, `resume-probe` and
-`graphics-probe` talk to actual daemon sockets. The default build and
-`just runtime-test` skip every probe CTest does not run; build them with
-`cmake --build out/dev --target runtime-probes`. The agent fixture executes
-inside a PTY and reports through an independently authenticated connection.
-Only nondeterministic identities, timestamps and explicitly documented fixture
-paths are canonicalized.
+`runtime-probe`, `services-probe`, `reporter-probe` and `graphics-probe` talk
+to actual daemon sockets. The default build and `just runtime-test` skip every
+probe CTest does not run; build them with
+`cmake --build out/dev --target runtime-probes`. Only nondeterministic
+identities, timestamps and explicitly documented fixture paths are
+canonicalized.
 
 For ASan and UBSan, use the sanitize preset's tree,
 `tools/cpp configure sanitize`. This instruments C++ code; the independently

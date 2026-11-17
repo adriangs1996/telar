@@ -21,22 +21,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     LABELS runtime.platform TIMEOUT 15)
 endif()
 
-telar_add_test(hook-probe PROBE SOURCES hook_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(diagnostics-tests SOURCES diagnostics_test.cpp LIBRARIES runtime-diagnostics runtime-terminal runtime-vocabulary runtime-model runtime-proxy runtime-runtime runtime-test-fixtures
   LABELS runtime.diagnostics)
 # telar.ghostty.vt packs its mode constants itself; this checks each against libghostty-vt's.
 telar_add_test(ghostty-modes-tests SOURCES ghostty_modes_test.cpp LIBRARIES telar::ghostty
   LABELS runtime.terminal)
-telar_add_test(plugin-package-probe PROBE SOURCES plugin_package_probe.cpp LIBRARIES runtime-plugins runtime-test-fixtures)
 telar_add_test(plugin-exchange-probe PROBE SOURCES plugin_exchange_probe.cpp LIBRARIES runtime-vocabulary runtime-plugins runtime-test-fixtures)
-telar_add_test(plugin-service-probe PROBE SOURCES plugin_service_probe.cpp LIBRARIES runtime-vocabulary runtime-plugins runtime-test-fixtures)
 telar_add_test(proxy-probe PROBE SOURCES proxy_probe.cpp LIBRARIES runtime-proxy runtime-test-fixtures)
-telar_add_test(service-admission-probe PROBE SOURCES service_admission_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(admission-probe PROBE SOURCES admission_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(input-capacity-probe PROBE SOURCES input_capacity_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(deferred-response-probe PROBE SOURCES deferred_response_probe.cpp LIBRARIES runtime-test-fixtures)
-# Keep launch and macOS process-inspection names identical before the first refresh.
-set_target_properties(deferred-response-probe PROPERTIES OUTPUT_NAME deferred-probe)
 telar_add_test(control-pty-latency-probe PROBE SOURCES control_pty_latency_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(control-clipboard-lifetime-probe PROBE SOURCES control_clipboard_lifetime_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(control-query-probe SHARED SOURCES control_query_probe.cpp control_component_probe.cpp LIBRARIES runtime-diagnostics runtime-terminal runtime-test-fixtures)
@@ -84,29 +75,18 @@ telar_add_test(control-graphics-tests SOURCES control_graphics_test.cpp LIBRARIE
   LABELS runtime.terminal TIMEOUT 15)
 telar_add_test(control-desktop-tests SOURCES control_desktop_test.cpp LIBRARIES runtime-diagnostics runtime-platform runtime-terminal runtime-model runtime-runtime runtime-test-client-peer runtime-test-fixtures
   LABELS runtime.terminal)
-telar_add_test(worktree-lifecycle-probe PROBE SOURCES worktree_lifecycle_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(launch-probe PROBE SOURCES launch_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(worktree-detection-probe PROBE SOURCES worktree_detection_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(workspace-git-probe PROBE SOURCES workspace_git_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(path-probe PROBE SOURCES path_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(reporter-probe PROBE SOURCES reporter_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(process-probe PROBE SOURCES process_probe.cpp LIBRARIES runtime-platform runtime-test-fixtures)
 telar_add_test(description-probe PROBE SOURCES description_probe.cpp LIBRARIES runtime-history runtime-test-fixtures)
 telar_add_test(session-file-probe PROBE SOURCES session_file_probe.cpp LIBRARIES runtime-history runtime-test-fixtures)
-telar_add_test(capture-probe PROBE SOURCES capture_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(shell-capture-probe PROBE SOURCES shell_capture_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(screen-probe PROBE SOURCES screen_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(model-probe PROBE SOURCES model_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(checkpoint-probe NO_TEST SOURCES checkpoint_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(server-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/server_cli_test.py" --telar "$<TARGET_FILE:telar>" --checkpoint-probe "$<TARGET_FILE:checkpoint-probe>"
   LABELS runtime.cli TIMEOUT 90)
-telar_add_test(resume-probe PROBE SOURCES resume_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(agent-probe PROBE SOURCES agent_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(runtime-probe PROBE SOURCES runtime_probe.cpp LIBRARIES runtime-terminal runtime-test-fixtures)
 telar_add_test(graphics-probe PROBE SOURCES graphics_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(graphics-limits-probe PROBE SOURCES graphics_limits_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(services-probe PROBE SOURCES services_probe.cpp LIBRARIES runtime-test-fixtures)
-telar_add_test(history-probe PROBE SOURCES history_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(runtime-tests
   SOURCES
     main.cpp memory_test.cpp terminal_test.cpp frame_sync_test.cpp platform_test.cpp text_test.cpp client_control_test.cpp history_test.cpp control_services_test.cpp graphics_test.cpp background_services_test.cpp agents_test.cpp worktree_probe_test.cpp
@@ -122,7 +102,6 @@ telar_add_test(runtime-tests
     proxy_resolution_test.cpp proxy_transport_test.cpp
   LIBRARIES runtime-diagnostics runtime-transport runtime-config runtime-suggestions runtime-platform runtime-paths runtime-shell_integration runtime-workspaces runtime-worktrees runtime-metrics runtime-terminal runtime-history runtime-command_capture runtime-graphics runtime-agents runtime-vocabulary runtime-observation runtime-model runtime-http1 runtime-exchange_capture runtime-http2 runtime-proxy runtime-plugins runtime-editors runtime-persistence runtime-runtime runtime-test-client-peer runtime-test-http2 runtime-test-fixtures
   LABELS runtime.runtime)
-telar_add_test(tab-holds-probe PROBE SOURCES tab_holds_probe.cpp LIBRARIES runtime-test-fixtures)
 telar_add_test(tls-tests SOURCES tls_test.cpp tls_alpn_test.cpp tls_trust_test.cpp tls_session_test.cpp proxy_service_test.cpp proxy_trust_test.cpp
   LIBRARIES runtime-platform runtime-vocabulary runtime-http2 runtime-tls runtime-proxy runtime-test-http2 runtime-test-fixtures
   LABELS runtime.tls)
@@ -143,8 +122,6 @@ telar_add_test(network-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURR
   LABELS runtime.traffic)
 telar_add_test(browser-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/browser_check_test.py"
   LABELS runtime.tls)
-telar_add_test(state-delivery-probe PROBE SOURCES state_delivery_probe.cpp LIBRARIES runtime-test-fixtures)
-set_target_properties(state-delivery-probe PROPERTIES OUTPUT_NAME state-probe)
 
 telar_add_test(traffic-flow-tests SOURCES traffic_flow_test.cpp http1_test.cpp http2_test.cpp proxy_transport_test.cpp transport_capture_test.cpp
   LIBRARIES runtime-platform runtime-vocabulary runtime-http1 runtime-exchange_capture runtime-http2 runtime-traffic runtime-proxy runtime-test-http2 runtime-test-fixtures

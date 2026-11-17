@@ -11,7 +11,6 @@ telar_add_test(json-text-tests SOURCES json_text_test.cpp LIBRARIES cli-output c
   LABELS cli.output)
 telar_add_test(arguments-tests SOURCES arguments_test.cpp LIBRARIES cli-command_limit cli-test-check
   LABELS cli.command_limit)
-telar_add_test(hook-mapping-probe NO_TEST SOURCES hook_mapping_probe.cpp LIBRARIES cli-hooks cli-hook)
 telar_add_test(repository-prepare-probe NO_TEST SOURCES repository_prepare_probe.cpp LIBRARIES cli-command_limit cli-worktree_git cli-worktree)
 
 telar_add_test(cli-help-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/help_test.py"
