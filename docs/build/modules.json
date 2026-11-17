@@ -79,6 +79,10 @@
     ],
     "tbc": []
   },
+  "namespaced_folders": [
+    "src/gui/foundation",
+    "src/gui/features"
+  ],
   "process_layers": {
     "runtime": [
       "diagnostics",

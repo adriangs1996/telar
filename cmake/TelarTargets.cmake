@@ -137,14 +137,16 @@ endfunction()
 
 # telar_add_domain(<process> <domain> [SOURCES <file>...] [MACOS_SOURCES <file>...]
 #                  [LINUX_SOURCES <file>...] [INCLUDES <directory>...]
-#                  [DEPS <domain or target>...] [CHECKS <check>...])
+#                  [EXCLUDE <folder>...] [DEPS <domain or target>...] [CHECKS <check>...])
 # A domain of a process (docs/build/modules.json, process_layers) as the library
 # <process>-<domain>, aliased telar::<process>::<domain>, from the folder whose
-# CMakeLists.txt declares it, below the folder of telar_process(<process>). It links
-# <process>-settings. A plain name in DEPS is a domain of the same process, and
-# tools/check-cpp-modules.py checks those against the domain's imports.
+# CMakeLists.txt declares it, below the folder of telar_process(<process>). A domain may be
+# a nested folder, features/terminal/links: its target and alias spell the folders with
+# dashes and with ::, and EXCLUDE leaves out the folders below it that are domains of their
+# own. It links <process>-settings. A plain name or folder in DEPS is a domain of the same
+# process, and tools/check-cpp-modules.py checks those against the domain's imports.
 function(telar_add_domain process domain)
-  cmake_parse_arguments(PARSE_ARGV 2 domain "" "" "SOURCES;MACOS_SOURCES;LINUX_SOURCES;INCLUDES;DEPS;CHECKS")
+  cmake_parse_arguments(PARSE_ARGV 2 domain "" "" "SOURCES;MACOS_SOURCES;LINUX_SOURCES;INCLUDES;DEPS;CHECKS;EXCLUDE")
   if(domain_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_domain(${process} ${domain}): unexpected arguments ${domain_UNPARSED_ARGUMENTS}")
   endif()
@@ -153,7 +155,8 @@ function(telar_add_domain process domain)
   endif()
   telar_process_settings(dependencies)
   foreach(dependency IN LISTS domain_DEPS)
-    if(dependency MATCHES "^[a-z0-9_]+$")
+    if(dependency MATCHES "^[a-z0-9_]+(/[a-z0-9_]+)*$")
+      string(REPLACE "/" "::" dependency "${dependency}")
       set(dependency "telar::${process}::${dependency}")
     endif()
     list(APPEND dependencies "${dependency}")
@@ -162,16 +165,21 @@ function(telar_add_domain process domain)
   if(DEFINED domain_CHECKS OR "CHECKS" IN_LIST domain_KEYWORDS_MISSING_VALUES)
     set(checks CHECKS ${domain_CHECKS})
   endif()
-  telar_add_library(${process}-${domain} ALIAS telar::${process}::${domain}
+  # A nested domain (features/terminal/links) names its target with dashes and its alias with
+  # the namespaces of its modules: gui-features-terminal-links, telar::gui::features::terminal::links.
+  string(REPLACE "/" "-" target "${process}-${domain}")
+  string(REPLACE "/" "::" alias "telar::${process}::${domain}")
+  telar_add_library(${target} ALIAS ${alias}
     SOURCES ${domain_SOURCES}
     MACOS_SOURCES ${domain_MACOS_SOURCES}
     LINUX_SOURCES ${domain_LINUX_SOURCES}
     INCLUDES ${domain_INCLUDES}
+    EXCLUDE ${domain_EXCLUDE}
     DEPS ${dependencies}
     ${checks})
   # The process's options are the domain's own, so they come before those of the targets
   # it links (telar::build_flags), in its sources and in those of its importers.
-  target_compile_options(${process}-${domain} PUBLIC ${TELAR_PROCESS_OPTIONS})
+  target_compile_options(${target} PUBLIC ${TELAR_PROCESS_OPTIONS})
 endfunction()
 
 # telar_add_test(<name> [QT | STATIC | SHARED] SOURCES <file>... [LIBRARIES <target>...]

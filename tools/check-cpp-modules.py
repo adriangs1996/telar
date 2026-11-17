@@ -72,6 +72,8 @@ def main():
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
     check_module_paths(owned)
+    namespaced = check_module_namespaces(owned, inventory.get('namespaced_folders', []),
+                                         lambda path: (ROOT / path).read_text(errors='replace'))
     imports = unit_imports(owned, graph)
     check_library_layers(inventory['library_layers'], inventory['interfaces'], imports)
     upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
@@ -90,7 +92,8 @@ def main():
           f'{domains} domain targets depending on what they import, '
           f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
           f'{owned} headers reached only through their owner module, '
-          f'{reexports} re-exports left, {unused} unused imports left')
+          f'{reexports} re-exports left, {unused} unused imports left, '
+          f'{namespaced} modules exporting into the namespace of their name')
 
 
 IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
@@ -187,11 +190,20 @@ def check_library_layers(layers, interfaces, imports):
                 raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
 
 
-def component(name):
-    """`lib/<library>` for a library module, `<process>/<top folder>` for a process module."""
+def component(name, layers):
+    """`lib/<library>` for a library module. For a process module, `<process>/<domain>`: the
+    longest folder of `process_layers` that holds the module, so a domain may be nested
+    (`gui/features/terminal/links`); a module below none of them names its top folder."""
     parts = name.split(':')[0].split('.')
+    if parts[1] not in PROCESSES:
+        return f'lib/{parts[1]}'
 
-    return f'{parts[1]}/{parts[2]}' if parts[1] in PROCESSES else f'lib/{parts[1]}'
+    path = parts[2:]
+    domains = set(layers.get(parts[1], ()))
+    for end in range(len(path), 0, -1):
+        if '/'.join(path[:end]) in domains:
+            return f'{parts[1]}/' + '/'.join(path[:end])
+    return f'{parts[1]}/{parts[2]}'
 
 
 def check_process_layers(layers, allowed, imports):
@@ -201,13 +213,13 @@ def check_process_layers(layers, allowed, imports):
     imports that exist today; the change that removes one removes its entry."""
     position = {f'{process}/{folder}': index
                 for process, folders in layers.items() for index, folder in enumerate(folders)}
-    unplaced = {component(name) for name in imports} - position.keys()
+    unplaced = {component(name, layers) for name in imports} - position.keys()
     unplaced = sorted(name for name in unplaced if not name.startswith('lib/'))
     if unplaced:
         raise RuntimeError('Place each component in process_layers: ' + ', '.join(unplaced))
 
     def downward(source, target):
-        upper, lower = component(source), component(target)
+        upper, lower = component(source, layers), component(target, layers)
         if lower.startswith('lib/'):
             return True
         if upper.startswith('lib/') or upper.split('/')[0] != lower.split('/')[0]:
@@ -228,7 +240,7 @@ def check_process_layers(layers, allowed, imports):
 
 
 DOMAIN_CALL_RE = re.compile(r'\btelar_add_domain\(([^()]*)\)')
-DOMAIN_KEYWORDS = {'SOURCES', 'MACOS_SOURCES', 'LINUX_SOURCES', 'INCLUDES', 'DEPS', 'CHECKS'}
+DOMAIN_KEYWORDS = {'SOURCES', 'MACOS_SOURCES', 'LINUX_SOURCES', 'INCLUDES', 'DEPS', 'CHECKS', 'EXCLUDE'}
 DOMAIN_FILES = ('SOURCES', 'MACOS_SOURCES', 'LINUX_SOURCES')
 # What telar_modules leaves out of a target's module interfaces.
 UNBUILT_FOLDER_RE = re.compile(r'/(tests|tools|vendor|out(-[^/]*)?|CMakeFiles)/')
@@ -260,7 +272,9 @@ def check_domain_targets(layers, files, read):
     A DEPS entry names a lower domain of `process_layers`, since the target links it; a domain
     imported but missing from DEPS builds only while another dependency happens to bring it,
     and one declared but not imported relinks the target for nothing. DEPS entries that name
-    a target rather than a domain (telar::config) are not checked."""
+    a target rather than a domain (telar::config) are not checked. A domain may be a nested
+    folder (`features/terminal/links`); EXCLUDE leaves out the folders below it that are
+    domains of their own."""
     errors, count = [], 0
     for path in sorted(name for name in files if name.endswith('CMakeLists.txt')):
         for process, domain, arguments in domain_declarations(path, read(path)):
@@ -275,15 +289,16 @@ def check_domain_targets(layers, files, read):
                 errors.append(f'{where} names no domain of process_layers')
                 continue
 
-            declared = [name for name in arguments.get('DEPS', []) if re.fullmatch(r'[a-z0-9_]+', name)]
+            declared = [name for name in arguments.get('DEPS', []) if re.fullmatch(r'[a-z0-9_]+(/[a-z0-9_]+)*', name)]
             for name in declared:
                 if name not in order:
                     errors.append(f'{where} depends on {name}, which is no domain of {process}')
                 elif order.index(name) >= order.index(domain):
                     errors.append(f'{where} depends on {name}, which is not below {domain} in process_layers')
 
+            excluded = tuple(f'{folder}/{name}/' for name in arguments.get('EXCLUDE', []))
             compiled = [name for name in files if name.startswith(folder + '/') and name.endswith('.cppm')
-                        and not UNBUILT_FOLDER_RE.search(name[len(folder):])]
+                        and not UNBUILT_FOLDER_RE.search(name[len(folder):]) and not name.startswith(excluded)]
             compiled += [f'{folder}/{name}' for keyword in DOMAIN_FILES for name in arguments.get(keyword, [])
                          if '$' not in name]
             imported = {}
@@ -291,9 +306,9 @@ def check_domain_targets(layers, files, read):
                 text = COMMENTS_RE.sub('', read(source))
                 declaration = DECLARATION_RE.search(text)
                 for name in imports_of(declaration[2] if declaration else '', text):
-                    owner = component(name)
+                    owner = component(name, layers)
                     if owner.startswith(f'{process}/') and owner != f'{process}/{domain}':
-                        imported.setdefault(owner.split('/')[1], f'{source} imports {name}')
+                        imported.setdefault(owner[len(process) + 1:], f'{source} imports {name}')
             for name in sorted(imported.keys() - set(declared), key=order.index):
                 errors.append(f'{where} does not depend on {name}, but {imported[name]}')
             for name in sorted(set(declared) - imported.keys()):
@@ -949,6 +964,97 @@ def declarations(found, lists={}):
             exported.update(names)
 
     return exported, every, namespaces
+
+
+def exported_namespaces(found):
+    """The namespaces in which a module unit exports a declaration, as `a::b`, from its tokens."""
+    closing = closing_braces(found)
+    scopes, used, index = [], set(), 0
+    while index < len(found):
+        token = found[index]
+        if token == '}':
+            if scopes:
+                scopes.pop()
+            index += 1
+            continue
+
+        if token == ';':
+            index += 1
+            continue
+
+        exporting = bool(scopes) and scopes[-1][0]
+        path = [name for _, name in scopes if name]
+        if token == 'export':
+            exporting = True
+            index += 1
+            token = found[index] if index < len(found) else ';'
+        if token == '{':
+            scopes.append((exporting, None))
+            index += 1
+            continue
+
+        if token in ('module', 'import'):
+            index = statement_end(found, index, closing)
+            continue
+
+        if token == 'inline' and found[index + 1] == 'namespace':
+            index += 1
+            token = 'namespace'
+        if token == 'namespace':
+            end = index + 1
+            while end < len(found) and found[end] not in ('{', '=', ';'):
+                end += 1
+
+            if found[end] == '{':
+                scopes.append((exporting, '::'.join(name for name in found[index + 1:end] if name != '::')))
+                index = end + 1
+            else:
+                index = statement_end(found, end, closing)
+            continue
+
+        if token == 'extern' and found[index + 1] == '""' and found[index + 2] == '{':
+            scopes.append((exporting, None))
+            index += 3
+            continue
+
+        index, names = declaration(found, index, closing)
+        if exporting and names:
+            used.add('::'.join(path))
+
+    return used
+
+
+def module_namespace(name, roots):
+    """The namespace a module exports into when its folder is below one of `roots`: its folder
+    below the process, `telar.gui.features.history` exporting into telar::gui::features::history."""
+    folder = module_folder(name.split(':')[0])
+    if folder is None or not any(str(folder) == root or str(folder).startswith(root + '/') for root in roots):
+        return None
+    parts = name.split(':')[0].split('.')
+    return '::'.join(parts)
+
+
+def check_module_namespaces(files, roots, read):
+    """Rule 8: a module below a folder of `namespaced_folders` exports into the namespace its name
+    spells, `telar.gui.features.history` into telar::gui::features::history (or a namespace
+    below it), so the import, the folder and the qualified names say the same thing."""
+    errors, count = [], 0
+    for path in sorted(name for name in files if name.endswith('.cppm')):
+        text = read(path)
+        match = DECLARATION_RE.search(COMMENTS_RE.sub('', text))
+        if not match or not match[1]:
+            continue
+        expected = module_namespace(match[2], roots)
+        if expected is None:
+            continue
+        count += 1
+        for used in sorted(exported_namespaces(tokens(text))):
+            if used != expected and not used.startswith(expected + '::'):
+                errors.append(f'{path} exports into {used or "the global namespace"}; {match[2]} exports into {expected}')
+    if errors:
+        raise RuntimeError('Modules exporting outside the namespace of their name:\n  ' + '\n  '.join(errors))
+
+    return count
 
 
 def provided_names(sources, interfaces, reexports, implicit):

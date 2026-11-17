@@ -374,5 +374,76 @@ class DomainTargets(unittest.TestCase):
             check_domains(domain_files('platform terminal cache'))
 
 
+NESTED_LAYERS = {'gui': ['core', 'foundation/text', 'features/terminal/screen', 'features/terminal/links', 'tests']}
+
+
+def nested_files(deps='foundation/text features/terminal/screen', exclude='EXCLUDE screen'):
+    """A links feature nested below the terminal group: its interface imports a foundation module
+    and a sibling feature, and the terminal group folder holds the screen feature below it."""
+    return {
+        'src/gui/features/terminal/links/CMakeLists.txt': f'telar_add_domain(gui features/terminal/links\n  DEPS {deps})\n',
+        'src/gui/features/terminal/links/links.cppm': 'export module telar.gui.features.terminal.links;\n'
+                                                       'import telar.gui.foundation.text;\nimport telar.gui.features.terminal.screen;\n',
+        'src/gui/features/terminal/screen/CMakeLists.txt': f'telar_add_domain(gui features/terminal/screen\n  DEPS foundation/text)\n',
+        'src/gui/features/terminal/screen/screen.cppm': 'export module telar.gui.features.terminal.screen;\nimport telar.gui.foundation.text;\n',
+    }
+
+
+class NestedDomains(unittest.TestCase):
+    def test_a_module_belongs_to_the_longest_domain_that_holds_it(self):
+        self.assertEqual(checker.component('telar.gui.features.terminal.links', NESTED_LAYERS), 'gui/features/terminal/links')
+        self.assertEqual(checker.component('telar.gui.features.terminal.links:hover', NESTED_LAYERS), 'gui/features/terminal/links')
+        self.assertEqual(checker.component('telar.gui.core.metrics', NESTED_LAYERS), 'gui/core')
+        self.assertEqual(checker.component('telar.base.memory', NESTED_LAYERS), 'lib/base')
+
+    def test_accepts_nested_deps_that_match_the_imports(self):
+        files = nested_files()
+        self.assertEqual(checker.check_domain_targets(NESTED_LAYERS, set(files), files.__getitem__), 2)
+
+    def test_rejects_a_nested_dependency_above_the_domain(self):
+        files = nested_files()
+        files['src/gui/features/terminal/screen/CMakeLists.txt'] = 'telar_add_domain(gui features/terminal/screen\n  DEPS features/terminal/links)\n'
+        files['src/gui/features/terminal/screen/screen.cppm'] = 'export module telar.gui.features.terminal.screen;\nimport telar.gui.features.terminal.links;\n'
+        with self.assertRaisesRegex(RuntimeError, r'depends on features/terminal/links, which is not below features/terminal/screen'):
+            checker.check_domain_targets(NESTED_LAYERS, set(files), files.__getitem__)
+
+    def test_a_domain_leaves_out_the_domains_it_excludes(self):
+        files = nested_files()
+        files['src/gui/features/terminal/CMakeLists.txt'] = 'telar_add_domain(gui features/terminal\n  EXCLUDE links screen)\n'
+        layers = {'gui': ['foundation/text', 'features/terminal', 'features/terminal/screen', 'features/terminal/links', 'tests']}
+        files['src/gui/features/terminal/terminal.cppm'] = 'export module telar.gui.features.terminal;\n'
+        self.assertEqual(checker.check_domain_targets(layers, set(files), files.__getitem__), 3)
+
+
+ROOTS = ['src/gui/features', 'src/gui/foundation']
+
+
+def namespaces(files):
+    return checker.check_module_namespaces(set(files), ROOTS, files.__getitem__)
+
+
+class ModuleNamespaces(unittest.TestCase):
+    def test_accepts_exports_into_the_namespace_of_the_name_or_below_it(self):
+        self.assertEqual(namespaces({
+            'src/gui/features/history/history.cppm': 'export module telar.gui.features.history;\n'
+                                                     'export namespace telar::gui::features::history {\n  struct Query {};\n}\n'
+                                                     'export {\n  namespace telar::gui::features::history::detail {\n    int depth();\n  }\n}\n',
+            'src/gui/features/history/history-browser.cppm': 'export module telar.gui.features.history:browser;\n'
+                                                             'export namespace telar::gui::features::history {\n  struct Page {};\n}\n',
+        }), 2)
+
+    def test_rejects_an_export_outside_it(self):
+        with self.assertRaisesRegex(RuntimeError, r'exports into telar::gui; telar.gui.features.history exports into telar::gui::features::history'):
+            namespaces({'src/gui/features/history/history.cppm': 'export module telar.gui.features.history;\n'
+                                                                 'export namespace telar::gui {\n  struct Query {};\n}\n'})
+
+    def test_ignores_modules_outside_the_roots_and_unexported_declarations(self):
+        self.assertEqual(namespaces({
+            'src/gui/core/metrics/metrics.cppm': 'export module telar.gui.core.metrics;\nexport namespace telar::gui {\n  struct Rect {};\n}\n',
+            'src/gui/features/peek/peek.cppm': 'export module telar.gui.features.peek;\nnamespace telar::gui::detail {\n  int hidden();\n}\n'
+                                               'export namespace telar::gui::features::peek {\n  int open();\n}\n',
+        }), 1)
+
+
 if __name__ == '__main__':
     unittest.main()
