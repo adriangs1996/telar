@@ -25,6 +25,7 @@ namespace telar::gui::qt {
           .link = {},
       });
     });
+
     connect(&notifications_, &NotificationsController::focusRestoreRequested, this, &ApplicationController::restoreTerminalFocus);
     connect(&notifications_, &NotificationsController::failed, this, &ApplicationController::reportFailure);
     connect(&notifications_, &NotificationsController::linkRequested, this, [this](const QString& uri) {

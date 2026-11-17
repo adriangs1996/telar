@@ -336,6 +336,7 @@ namespace {
           {QStringLiteral("colors"), application.colors()},
           {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
       };
+
       const auto load = [&](const QString& path) {
         QQmlComponent component{&engine, QUrl::fromLocalFile(path)};
         auto object = std::unique_ptr<QObject>{component.createWithInitialProperties(properties)};

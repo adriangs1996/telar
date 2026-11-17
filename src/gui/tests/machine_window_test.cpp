@@ -630,6 +630,7 @@ namespace {
           {QStringLiteral("colors"), application.colors()},
           {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
       };
+
       auto shelf_properties = properties;
 
       shelf_properties.insert(QStringLiteral("ratio"), application.chromeRatio());
@@ -735,6 +736,7 @@ namespace {
           {QStringLiteral("colors"), application.colors()},
           {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
       };
+
       auto shelf_properties = properties;
 
       shelf_properties.insert(QStringLiteral("ratio"), application.chromeRatio());

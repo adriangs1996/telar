@@ -2479,6 +2479,7 @@ return {api_version=2, client={keybindings={
       const auto key = [this](int row) {
         return client_->panes()->rows()->data(client_->panes()->rows()->index(row, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
       };
+
       const auto first = key(0);
       const auto second = key(1);
       const auto line = [this](const QString& pane) -> QQuickItem* {

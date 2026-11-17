@@ -15,15 +15,18 @@ namespace telar::gui::qt {
     connect(&palette_, &PaletteController::showRequested, this, [this] {
       showDialog(Dialog::palette);
     });
+
     connect(&palette_, &PaletteController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
+
     connect(&palette_, &PaletteController::failed, this, &ApplicationController::reportFailure);
     connect(&palette_, &PaletteController::machineRequested, this, [this](MachinePickerTarget target, bool alternate) {
       applyInteraction([&] {
         chooseMachine(target, alternate);
       });
     });
+
     connect(&palette_, &PaletteController::actionRequested, this, [this](PaletteAction chosen) {
       const auto action = static_cast<window_actions::Action>(chosen.value);
 

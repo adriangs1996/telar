@@ -13,13 +13,16 @@ namespace telar::gui::qt {
     connect(&prompt_, &PromptController::historyRequested, this, [this] {
       execute(window_actions::Action::history);
     });
+
     connect(&prompt_, &PromptController::blockChanged, this, [this](qulonglong pane_id) {
       emit terminals_.terminalChanged(pane_id);
       publishStatus();
     });
+
     connect(&prompt_, &PromptController::searchRequested, this, [this] {
       showDialog(Dialog::copy_search);
     });
+
     connect(&prompt_, &PromptController::failed, this, &ApplicationController::reportFailure);
   }
 

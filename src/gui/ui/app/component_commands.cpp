@@ -21,6 +21,7 @@ namespace telar::gui::qt {
         components_.closePanel();
       }
     });
+
     connect(&components_, &ComponentsController::failed, this, &ApplicationController::reportFailure);
     connect(&components_, &ComponentsController::bindingRequested, this, [this](const BindingAction& action, const ConfigurationSource::Actions& actions, QPointF anchor) {
       try {
@@ -34,9 +35,11 @@ namespace telar::gui::qt {
         fail(error);
       }
     });
+
     connect(&components_, &ComponentsController::linkRequested, this, [this](const LinkTarget& target) {
       static_cast<void>(links_.open(target));
     });
+
     connect(&components_, &ComponentsController::focusRestoreRequested, this, &ApplicationController::restoreTerminalFocus);
   }
 
