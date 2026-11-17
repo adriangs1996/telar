@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Check setup's file sync through a substituted SSH transport and real receivers."""
+import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,7 +15,25 @@ home=os.environ['FIXTURE_REMOTE_HOME']
 schema=os.environ['FIXTURE_SCHEMA']
 mode=os.environ.get('FIXTURE_LOGIN','')
 state=Path(home)/'fixture-pane.json'
+def person(words):
+ # The person's own workspace 11, whose ids a stale login record still names; setup's login
+ # pane is workspace 21.
+ if words[:2]==['workspace','create']:
+  state.write_text(json.dumps({'title':words[words.index('--name')+1]}))
+  print(json.dumps({'workspace_id':21,'tab_id':22,'pane_id':23}))
+ elif words[:2]==['workspace','list']:
+  print(json.dumps([{'workspace_id':11,'name':'My work'}]+([{'workspace_id':21,'name':json.loads(state.read_text())['title']}] if state.exists() else [])))
+ elif words[:2] in (['tab','get'],['tab','close']):
+  workspace,tab=int(words[words.index('--workspace')+1]),int(words[2])
+  print(json.dumps({'workspace_id':workspace,'tab_id':tab,'panes':[{'pane_id':tab+1}],'closed':True}))
+ elif words[:2]==['pane','read']:
+  print(json.dumps({'pane_id':int(words[2]),'truncated':False,'exit_code':0,'text':''}))
+ else:raise RuntimeError(words)
 def respond(words):
+ if os.environ.get('FIXTURE_ARGV'):
+  with open(os.environ['FIXTURE_ARGV'],'a') as log:log.write(json.dumps(words)+'\n')
+ if os.environ.get('FIXTURE_PERSON'):
+  return person(words)
  if words[:2]==['workspace','create']:
   state.write_text(json.dumps({'title':words[words.index('--name')+1]}))
   print(json.dumps({'workspace_id':11,'tab_id':12,'pane_id':13}))
@@ -64,7 +84,8 @@ else:
 '''
 
 
-def run(binary, provider, seed, login=False):
+def run(binary, provider, seed, login=False, prepare=None):
+    """Runs setup twice; `prepare(root, env)`, when given, changes either side before."""
     with tempfile.TemporaryDirectory(prefix='telar-sync-',dir='/tmp') as temporary:
         root=Path(temporary).resolve();env=environment(root)
         home=Path(env['HOME']);remote=root/'remote';remote.mkdir(mode=0o700)
@@ -86,6 +107,7 @@ def run(binary, provider, seed, login=False):
         (local/'tool.sh').write_text('#!/bin/sh\necho safe\n');(local/'tool.sh').chmod(0o755)
         (skills/'outside').symlink_to(root/'outside');(root/'outside').write_text('outside root')
         profiles=Path(env['XDG_CONFIG_HOME'])/'telar/machines.json';profiles.parent.mkdir(exist_ok=True,mode=0o700)
+        if prepare:prepare(root,env)
         result=[]
         for repetition in range(2):
             child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=20)
@@ -104,3 +126,30 @@ def scenarios():
                ('claude','{"hooks":false}'),('claude','{'),
                ('codex','prompt="""\nline\n[not-a-table]\n"""\n"mcp_servers".key="secret"\n[features]\nrequires_openai_auth=true\n'),
                ('claude','{"statusLine":{"command":"curl https://hooks.slack.com/services/secret"}}')]
+
+
+def hard_link(root, env):
+    """A file under a synced directory whose other name is a file outside every agent's."""
+    (root/'private.txt').write_text('hard linked content')
+    os.link(root/'private.txt', Path(env['HOME'])/'.claude/skills/custom/notes.md')
+
+
+def stale_login_record(root, env):
+    """A login record from an earlier setup whose workspace id now names the person's own
+    workspace, and every dispatched command logged."""
+    records=root/'remote/.local/state/telar/setup-logins';records.mkdir(parents=True)
+    (records/'claude').write_text('11 12 13\n')
+    env.update(FIXTURE_PERSON='1',FIXTURE_ARGV=str(root/'remote-argv.jsonl'))
+
+
+def contracts(binary):
+    """Setup contracts asserted on their effects alone, beside the recorded outputs."""
+    for result in run(binary,'claude','{}',prepare=hard_link):
+        files=result['files']
+        assert 'remote/.claude/skills/custom/SKILL.md' in files, sorted(files)
+        assert 'remote/.claude/skills/custom/notes.md' not in files and not any('hard linked content' in entry.get('text','') for name,entry in files.items() if name.startswith('remote/')), sorted(files)
+    first,_=run(binary,'claude','{}',login='ended',prepare=stale_login_record)
+    commands=[json.loads(line) for line in first['files']['remote-argv.jsonl']['text'].splitlines()]
+    assert ['tab','close','12','--workspace','11','--json'] not in commands, commands
+    assert [words[:2] for words in commands].count(['workspace','create'])==1, commands
+    return 3

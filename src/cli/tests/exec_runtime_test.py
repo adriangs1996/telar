@@ -121,12 +121,23 @@ def fixed_runtime_outputs(f):
     proxy = bytes([0x95, 1, 1, 0, 1]) + struct.pack("<H", 4242) + bytes([1]) + struct.pack("<H", 1111)
     workspace = bytes([0x98]) + struct.pack("<QHH", 12, 0, 0)
     agents = bytes([0x96]) + struct.pack("<QH", 13, 0)
-    fixture_query(f, "fixture/metrics-json", ["runtime", "metrics", "--json"], [metrics])
+    expected = {"revision": 11, "cpu_percent": 37, "memory_used_decigib": 125, "memory_total_decigib": 320, "cpu_count": 12, "battery_percent": 81}
+    result = fixture_query(f, "fixture/metrics-json", ["runtime", "metrics", "--json"], [metrics])
+    assert json.loads(result.stdout) == expected, result.stdout
     fixture_query(f, "fixture/metrics-text", ["runtime", "metrics"], [metrics])
-    fixture_query(f, "fixture/metrics-no-battery-json", ["runtime", "metrics", "--json"], [no_battery])
+    # A machine without a battery reports none, not an empty one.
+    result = fixture_query(f, "fixture/metrics-no-battery-json", ["runtime", "metrics", "--json"], [no_battery])
+    assert json.loads(result.stdout) == expected | {"battery_percent": None}, result.stdout
     fixture_query(f, "fixture/metrics-no-battery-text", ["runtime", "metrics"], [no_battery])
     fixture_query(f, "fixture/status-port", ["runtime", "status"], [proxy])
-    fixture_query(f, "fixture/watch", ["runtime", "watch", "--count", "4"], [proxy, metrics, workspace, agents])
+    status = json.loads(fixture_query(f, "fixture/status-port-json", ["runtime", "status", "--json"], [proxy]).stdout)
+    assert status["running"] and status["proxy"]["scope"] == "wildcard", status
+    assert (status["proxy"]["port"], status["proxy"]["preferred_port"]) == (4242, 1111), status
+    status = json.loads(fixture_query(f, "fixture/status-no-port-json", ["runtime", "status", "--json"], [bytes([0x95, 1, 1, 0, 0, 0])]).stdout)
+    assert (status["proxy"]["port"], status["proxy"]["preferred_port"]) == (None, None), status
+    events = fixture_query(f, "fixture/watch", ["runtime", "watch", "--count", "4"], [proxy, metrics, workspace, agents]).stdout.splitlines()
+    sample = next(event["data"] for event in map(json.loads, events) if event["type"] == "system_metrics")
+    assert sample["has_battery"] is True and sample["battery_percent"] == 81, sample
     fixture_query(f, "fixture/proxy-filter", ["proxy", "watch", "--count", "1"], [metrics, workspace, agents, proxy])
     fixture_query(f, "fixture/proxy-stop", ["proxy", "watch"], [metrics, proxy, bytes([0x85])])
     resync = bytes([0x93]) + struct.pack("<BQBB", 0, 7, 0, 0)
@@ -135,15 +146,25 @@ def fixed_runtime_outputs(f):
     def text(value):
         encoded = value.encode()
         return struct.pack("<H", len(encoded)) + encoded
-    workspace_entry = struct.pack("<Q", 7) + text('Work "one"') + text(str(f.root)) + struct.pack("<H", 1) + text("main") + bytes([1])
-    workspace = bytes([0x98]) + struct.pack("<QH", 12, 1) + workspace_entry + struct.pack("<H", 0)
-    agent_entry = struct.pack("<QQBQQHI", 1, 2, 0, 7, 3, 1, 123) + bytes(range(16))
-    agent_entry += text("Workspace") + text("Tab") + text('A "title"') + bytes([2, 2]) + text("checkout")
-    agent_entry += bytes([1]) + text("claude") + text("Claude Code") + text("") + bytes([0, 2, 2]) + text("Needs input")
-    agent_entry += struct.pack("<IBBBQqqQ", 5, 3, 1, 100, 1, 1000, 2000, 0)
-    agent_entry += text('line\nquote"') + struct.pack("<HH", 1, 2) + text("Review")
-    agents = bytes([0x96]) + struct.pack("<QH", 13, 1) + agent_entry
-    fixture_query(f, "fixture/snapshots", ["runtime", "watch", "--count", "2"], [workspace, agents])
+    def workspace_entry(identity, name):
+        return struct.pack("<Q", identity) + text(name) + text(str(f.root)) + struct.pack("<H", 1) + text("main") + bytes([1])
+
+    def agent_entry(pane, title):
+        entry = struct.pack("<QQBQQHI", pane, 2, 0, 7, 3, 1, 123) + bytes(range(16))
+        entry += text("Workspace") + text("Tab") + text(title) + bytes([2, 2]) + text("checkout")
+        entry += bytes([1]) + text("claude") + text("Claude Code") + text("") + bytes([0, 2, 2]) + text("Needs input")
+        entry += struct.pack("<IBBBQqqQ", 5, 3, 1, 100, 1, 1000, 2000, 0)
+        return entry + text('line\nquote"') + struct.pack("<HH", 1, 2) + text("Review")
+    # Agents parse every line of the stream, whatever number of entries it lists.
+    names = ['Work "one"', "line\ntwo"]
+    titles = ['A "title"', "back\\slash"]
+    workspace = bytes([0x98]) + struct.pack("<QH", 12, 2) + workspace_entry(7, names[0]) + workspace_entry(8, names[1]) + struct.pack("<H", 0)
+    agents = bytes([0x96]) + struct.pack("<QH", 13, 2) + agent_entry(1, titles[0]) + agent_entry(4, titles[1])
+    lines = fixture_query(f, "fixture/snapshots", ["runtime", "watch", "--count", "2"], [workspace, agents]).stdout.splitlines()
+    assert len(lines) == 2, lines
+    listed, snapshot = map(json.loads, lines)
+    assert [(entry["workspace_id"], entry["name"]) for entry in listed["data"]] == [(7, names[0]), (8, names[1])], listed
+    assert [(entry["pane_id"], entry["title"], entry["final_message"]) for entry in snapshot["data"]] == [(1, titles[0], 'line\nquote"'), (4, titles[1], 'line\nquote"')], snapshot
 
 
 def offline(f):
@@ -243,6 +264,10 @@ def offline(f):
     checkout = f.root / "project"
     checkout.mkdir(mode=0o700)
     f.invoke("project/absent", "project", "setup", "--cwd", checkout)
+    # A coordinator reads `not_declared` and knows nothing prepared the checkout.
+    result = f.invoke("project/absent-json", "project", "setup", "--cwd", checkout, "--json")
+    assert json.loads(result.stdout) == {"execution_id": None, "environment": "not_declared", "ready": False}, result.stdout
+    assert not [path for path in f.root.rglob("*") if path.is_socket()], "a checkout without a recipe started a runtime"
     (checkout / ".telar").mkdir(mode=0o700)
     (checkout / ".telar/setup.json").write_text('{"version":2,"argv":["true"]}')
     f.invoke("project/version", "project", "setup", "--cwd", checkout, code=1)
@@ -410,6 +435,41 @@ def projects(f):
     f.invoke("project/failure", "project", "setup", "--cwd", root, code=1)
 
 
+def project_recipe_gate(f):
+    """A recipe runs as the user only from a file they alone own and reach without links,
+    and only within its argument cap."""
+    root = f.root / "gated"
+    directory = root / ".telar"
+    directory.mkdir(parents=True, mode=0o700)
+    marker = f.root / "gated-ran"
+    program = "import pathlib,sys;pathlib.Path(sys.argv[1]).write_text(str(len(sys.argv)))"
+
+    def recipe(count):
+        argv = [sys.executable, "-c", program, str(marker)]
+        return json.dumps({"version": 1, "argv": argv + ["pad"] * (count - len(argv))})
+    (directory / "setup.json").write_text(recipe(64))
+    f.invoke("project/argv-limit", "project", "setup", "--cwd", root)
+    assert marker.read_text() == "62"
+    marker.unlink()
+    (directory / "setup.json").write_text(recipe(65))
+    assert b"InvalidProjectRecipe" in f.invoke("project/argv-over-limit", "project", "setup", "--cwd", root, code=1).stderr
+    assert not marker.exists()
+    (directory / "setup.json").write_text(recipe(4))
+    link = f.root / "gated-link"
+    os.link(directory / "setup.json", link)
+    f.invoke("project/hardlinked", "project", "setup", "--cwd", root, code=1)
+    assert not marker.exists()
+    link.unlink()
+    directory.chmod(0o777)
+    f.invoke("project/shared-directory", "project", "setup", "--cwd", root, code=1)
+    assert not marker.exists()
+    directory.chmod(0o700)
+    directory.rename(f.root / "gated-target")
+    directory.symlink_to(f.root / "gated-target", target_is_directory=True)
+    f.invoke("project/linked-directory", "project", "setup", "--cwd", root, code=1)
+    assert not marker.exists()
+
+
 def repositories(f, prepare_probe=None):
     source = f.root / "source"
     source.mkdir(mode=0o700)
@@ -527,6 +587,7 @@ def run_suite(binary, root, with_runtime=True, prepare_probe=None):
             runtime_queries(f)
             history(f)
             projects(f)
+            project_recipe_gate(f)
             repositories(f, prepare_probe)
             dispatch(f)
     return f

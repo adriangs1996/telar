@@ -68,6 +68,7 @@ class Fixture:
         self.tree = 0
         self.agents = []
         self.panes = [(17, 0, 29)]
+        self.tabs = [5]
         self.generation = 29
         self.bump_on_send = False
         self.ack_ignored = False
@@ -124,8 +125,8 @@ class Fixture:
                         trees = b''.join(integer(identity) + integer(3) + b'\0\0\0\0' + text('/fixture/tree') + text(branch) + text('main') + text(title) + text('') + text('') + self.coordinator(identity) + integer(0, 'I') * 4 + text('') + b'\0' + integer(0, 'i') for identity, branch, title in self.trees)
                         send(connection, b'\x98' + integer(1) + integer(int(self.topology), 'H') + (entry if self.topology else b'') + integer(len(self.trees), 'H') + trees)
                     elif tag == 0x0c:
-                        tab = integer(5) + integer(0, 'H') + integer(1, 'H') + text('Tab') + integer(0, 'H')
-                        send(connection, b'\x88' + request + frame[9:18] + text('Workspace') + integer(1, 'H') + tab)
+                        tabs = b''.join(integer(tab) + integer(0, 'H') + integer(1, 'H') + text('Tab') + integer(0, 'H') for tab in self.tabs)
+                        send(connection, b'\x88' + request + frame[9:18] + text('Workspace') + integer(len(self.tabs), 'H') + tabs)
                     elif tag == 0x08:
                         panes = b''.join(integer(pane) + bytes([lifecycle]) + integer(generation) for pane, lifecycle, generation in self.panes)
                         send(connection, b'\x86' + request + frame[9:26] + integer(len(self.panes), 'H') + panes)
@@ -277,6 +278,16 @@ def check(binary, root):
         fixture.panes = [(17, 0, 29), (19, 1, 31)]
         tab = json.loads(run('tab', 'get', '5', '--workspace', '3', '--json').stdout)
         assert tab['panes'] == [{'pane_id': 17, 'pane_generation': 29, 'lifecycle': 'running'}, {'pane_id': 19, 'pane_generation': 31, 'lifecycle': 'exited'}], tab
+        # Each tab numbers its own panes from 0.
+        fixture.tabs = [5, 6]
+        panes = json.loads(run('pane', 'list', '--json').stdout)
+        assert [(pane['tab_id'], pane['pane_id'], pane['position']) for pane in panes] == [(5, 17, 0), (5, 19, 1), (6, 17, 0), (6, 19, 1)], panes
+        fixture.tabs = [5]
+        # Scripts parse the whole listing, however many agents it holds.
+        fixture.duplicate = True
+        listed = json.loads(run('agent', 'list', '--json').stdout)
+        assert [entry['pane_id'] for entry in listed['agents']] == [17, 17], listed
+        fixture.duplicate = False
     finally:
         fixture.close()
     print(f'{count} pane/agent CLI contract cases passed')
