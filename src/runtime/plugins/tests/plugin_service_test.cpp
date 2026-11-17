@@ -495,8 +495,8 @@ namespace {
   }
 
   // Replaces trust.json at `path` in one rename, as `telar plugin trust` does, with one grant
-  // for the plugin.
-  void writeTrust(const std::string& path, std::string_view capabilities) {
+  // for the tapper plugin.
+  void writeTapperTrust(const std::string& path, std::string_view capabilities) {
     const auto staged = path + ".staged";
 
     {
@@ -527,15 +527,15 @@ namespace {
 
       granted.name.assign("tapper");
       granted.digest.fill(0x11);
-      writeTrust(path, R"(["proxy.tap","notifications"])");
+      writeTapperTrust(path, R"(["proxy.tap","notifications"])");
       tap::Service service{memory, std::span<const tap::ServiceSpec>{&granted, 1}, executable.c_str()};
 
       service.watchTrust(path);
       check(service.listening());
-      writeTrust(path, R"(["proxy.tap","notifications","history.read"])");
+      writeTapperTrust(path, R"(["proxy.tap","notifications","history.read"])");
       std::this_thread::sleep_for(tap::Limits::trust_check_interval * 4);
       check(service.listening());
-      writeTrust(path, R"(["proxy.tap"])");
+      writeTapperTrust(path, R"(["proxy.tap"])");
       awaitCondition([&] {
         return !service.listening();
       });
