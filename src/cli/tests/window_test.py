@@ -9,7 +9,6 @@ import socket
 import struct
 import subprocess
 import tempfile
-import time
 
 
 def exact(connection, size):
@@ -59,9 +58,6 @@ def peer(listener, fixture, frames):
         while (frame := receive(connection)) is not None:
             frames.append(frame.hex())
             request = frame[1:9]
-            if fixture.get('silent'):
-                time.sleep(31)
-                return
             if frame[0] == 0x33:
                 entries = b'' if fixture.get('empty') else struct.pack('<QQQHQQ', 7, 11, 19, 2, 23, 29)
                 send(connection, b'\xad' + request + bytes([bool(entries)]) + entries)
