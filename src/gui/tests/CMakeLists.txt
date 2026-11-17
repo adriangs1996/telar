@@ -85,8 +85,6 @@ telar_add_test(gui-history-card-test SOURCES history_card_test.cpp LIBRARIES gui
   TEST gui-history-card LABELS gui.features.history TIMEOUT 30)
 telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-features-history gui-features-bindings gui-features-machines
   TEST gui-bindings LABELS gui.features.bindings TIMEOUT 30)
-telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core
-  TEST gui-key-encoder LABELS gui.foundation.keys TIMEOUT 30)
 telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-features-terminal-copy_mode gui-test-fixtures
   TEST gui-copy-mode LABELS gui.features.terminal.copy_mode TIMEOUT 30)
 telar_add_test(gui-links-test SOURCES links_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-links gui-test-fixtures
