@@ -7,17 +7,7 @@ set(CMAKE_AUTOUIC OFF)
 # Shared test fixtures are module interfaces. They link the domains they import, whose
 # -ffp-contract=off they inherit like every other GUI importer.
 file(GLOB gui_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
-list(REMOVE_ITEM gui_test_fixtures "${CMAKE_CURRENT_SOURCE_DIR}/font_fixture/font_fixture.cppm")
 telar_add_test(gui-test-fixtures STATIC SOURCES ${gui_test_fixtures} LIBRARIES gui-foundation-actions gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-application gui-features-plugins)
-
-telar_add_test(gui-clipboard-image-pipe-test SOURCES clipboard_image_pipe_test.cpp platform/clipboard_pipe_status.c LIBRARIES gui-posix gui-test-fixtures gui-platform
-  TEST gui-clipboard-image-pipe LABELS gui.platform TIMEOUT 20)
-
-telar_add_test(gui-attachment-layout-test SOURCES attachment_layout_test.cpp LIBRARIES gui-foundation-model gui-foundation-core
-  TEST gui-attachment-layout LABELS gui.foundation.model)
-
-telar_add_test(gui-host-commands-test SOURCES host_commands_test.cpp LIBRARIES gui-foundation-system gui-platform
-  TEST gui-host-commands LABELS gui.platform)
 
 telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-features-activity gui-features-workbench gui-features-window
   TEST gui-display-metrics LABELS gui.features.window)
@@ -26,27 +16,10 @@ target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-notification-payload-test SOURCES notification_payload_test.cpp LIBRARIES gui-foundation-system gui-foundation-core
   TEST gui-notification-payload LABELS gui.foundation.system)
 
-telar_add_test(gui-text-fit-test SOURCES text_fit_test.cpp LIBRARIES gui-foundation-text gui-foundation-system deps::ghostty_vt gui-test-fixtures
-  TEST gui-text-fit LABELS gui.foundation.text)
-target_compile_options(gui-text-fit-test PRIVATE -ffp-contract=off)
-telar_add_test(gui-font-grid-test SOURCES font_grid_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-test-fixtures
-  TEST gui-font-grid LABELS gui.foundation.terminal)
 telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core gui-foundation-terminal
   CHECKS lint lifetime blank_lines)
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
   CHECKS lint lifetime blank_lines)
-telar_add_test(gui-awake-clock-test SOURCES awake_clock_test.cpp LIBRARIES gui-foundation-system gui-platform
-  TEST gui-awake-clock LABELS gui.platform TIMEOUT 30)
-telar_add_test(gui-wall-clock-test NO_TEST SOURCES wall_clock_test.cpp LIBRARIES gui-foundation-system gui-platform)
-function(gui_add_wall_clock_test name zone offset)
-  telar_add_test(${name} COMMAND "${CMAKE_COMMAND}" -E env "TZ=${zone}" $<TARGET_FILE:gui-wall-clock-test> "${offset}"
-    LABELS gui.platform TIMEOUT 30)
-endfunction()
-gui_add_wall_clock_test(gui-wall-clock UTC0 0)
-gui_add_wall_clock_test(gui-wall-clock-nepal NPT-5:45 345)
-gui_add_wall_clock_test(gui-wall-clock-newfoundland NST3:30 -210)
-gui_add_wall_clock_test(gui-wall-clock-line-islands LINT-14 840)
-gui_add_wall_clock_test(gui-wall-clock-baker-island IDLW12 -720)
 
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.features.palette)
@@ -57,28 +30,10 @@ telar_add_test(gui-machine-runtime-location-test SOURCES machine_runtime_locatio
 telar_add_test(gui-machine-profile-file-test SOURCES machine_profile_file_test.cpp LIBRARIES gui-posix Threads::Threads gui-platform gui-features-machines gui-foundation-system
   TEST gui-machine-profile-file LABELS gui.features.machines TIMEOUT 30)
 
-telar_add_test(gui-editor-test SOURCES editor_test.cpp LIBRARIES gui-foundation-forms gui-foundation-core gui-foundation-text gui-foundation-terminal deps::ghostty_vt gui-test-fixtures
-  TEST gui-editor LABELS gui.foundation.text)
 telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-features-history gui-features-bindings gui-features-machines
   TEST gui-bindings LABELS gui.features.bindings TIMEOUT 30)
-telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core
-  TEST gui-key-encoder LABELS gui.foundation.keys TIMEOUT 30)
-telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
-  TEST gui-directory-completion LABELS gui.foundation.system TIMEOUT 30)
-telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-test-fixtures
-  TEST gui-cell-glyphs LABELS gui.foundation.terminal)
-
-telar_add_test(gui-platform-test SOURCES platform_test.cpp LIBRARIES gui-foundation-system gui-posix gui-platform
-  TEST gui-platform LABELS gui.platform TIMEOUT 30)
 
 if(TELAR_GUI_NATIVE)
-  telar_add_test(gui-test-font-fixture STATIC SOURCES font_fixture/font_fixture.cppm LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native gui-test-fixtures)
-  telar_add_test(gui-font-cascade-test SOURCES font_cascade_test.cpp LIBRARIES gui-foundation-fonts gui-fonts-native deps::ghostty_vt gui-test-font-fixture
-    TEST gui-font-cascade ARGS "${TELAR_ROOT}/assets" LABELS gui.foundation.fonts)
-  target_compile_options(gui-font-cascade-test PRIVATE -ffp-contract=off)
-  telar_add_test(gui-row-text-test SOURCES row_text_test.cpp LIBRARIES gui-foundation-fonts gui-fonts-native deps::ghostty_vt gui-test-font-fixture
-    TEST gui-row-text ARGS "${TELAR_ROOT}/assets" LABELS gui.foundation.fonts)
-  target_compile_options(gui-row-text-test PRIVATE -ffp-contract=off)
   telar_add_test(gui-font-coverage-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/font_coverage_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native
     CHECKS lint lifetime blank_lines)
 
@@ -88,32 +43,9 @@ if(TELAR_GUI_NATIVE)
     TEST gui-surface-command LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-native-pointer-events-test SOURCES native_pointer_events_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/input/native_pointer_events.cpp LIBRARIES gui-foundation-core Qt6::Gui Qt6::GuiPrivate
     TEST gui-native-pointer-events LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-background-blur-radius-test SOURCES background_blur_radius_test.cpp LIBRARIES gui-foundation-core
-    TEST gui-background-blur-radius LABELS gui.platform)
   if(APPLE)
-    telar_add_test(gui-native-scroll-input-test SOURCES native_scroll_input_test.mm LIBRARIES gui-platform-native Qt6::Gui
-      TEST gui-native-scroll-input LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
-    target_compile_options(gui-native-scroll-input-test PRIVATE -fobjc-arc)
-    if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-native-scroll-input-test PRIVATE -fno-objc-msgsend-class-selector-stubs)
-    endif()
-    telar_add_test(gui-native-window-appearance-test SOURCES native_window_appearance_test.mm LIBRARIES gui-platform-native Qt6::Quick
-      TEST gui-native-window-appearance LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
-    target_compile_options(gui-native-window-appearance-test PRIVATE -fobjc-arc)
-    if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-native-window-appearance-test PRIVATE -fno-objc-msgsend-class-selector-stubs)
-    endif()
     telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-platform gui-application
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
-    telar_add_test(gui-clipboard-image-source-test SOURCES clipboard_image_source_test.mm LIBRARIES gui-platform-native
-      TEST gui-clipboard-image-source LABELS gui.platform TIMEOUT 30)
-    target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
-    if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-      target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
-    endif()
-    if(TELAR_SANITIZERS)
-      target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
-    endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     pkg_check_modules(GUI_WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
     telar_add_test(gui-clipboard-wayland-lifecycle-server NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_lifecycle_server.c LIBRARIES PkgConfig::GUI_WAYLAND_SERVER
@@ -152,6 +84,25 @@ if(TELAR_GUI_NATIVE)
   add_library(gui-testing-main STATIC testing_main.cpp)
   target_link_libraries(gui-testing-main PUBLIC telar::testing Qt6::Gui)
   telar_register_checks(gui-testing-main CHECKS lint blank_lines)
+
+  # The tests of src/gui/platform, declared here where Qt is found: its macOS cases drive
+  # AppKit and Qt windows, on the window server and one at a time. The Objective-C++ cases
+  # register through objc_case.hpp, as an Objective-C++ unit cannot import telar.testing.
+  set(gui_platform_native "")
+  if(APPLE)
+    set(gui_platform_native ENVIRONMENT QT_QPA_PLATFORM=cocoa RUN_SERIAL)
+  endif()
+  telar_add_tests(gui-platform-tests LABEL gui.platform DIRECTORY ../platform/tests QT MAIN gui-testing-main
+    LINK telar::gui::platform gui-platform-native gui-posix gui-test-fixtures Qt6::Quick
+    SOURCES ../platform/tests/clipboard_pipe_status/clipboard_pipe_status.c MACOS_SOURCES objc_case.cpp
+    ${gui_platform_native} TIMEOUT 30)
+  target_include_directories(gui-platform-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
+    target_compile_options(gui-platform-tests PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
+  endif()
+  if(TELAR_SANITIZERS)
+    target_compile_options(gui-platform-tests PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
+  endif()
 
   # The tests of src/gui/ui live beside the folders they check, one program per tree. They
   # are declared here, where Qt is found, and see the shared fixtures of this folder.

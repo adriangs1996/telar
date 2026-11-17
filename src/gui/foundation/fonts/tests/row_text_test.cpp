@@ -3,16 +3,13 @@
 static_assert(true);
 #endif
 
-#include "assertions.hpp"
 #include "foundation/core/memory.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
 #include <filesystem>
-#include <iostream>
 #include <limits>
 #include <new>
 #include <optional>
@@ -22,17 +19,20 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
+import telar.testing;
 import telar.wire.vocabulary;
 import telar.gui.tests.allocation_gate;
-import telar.gui.tests.font_fixture;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.fonts;
+import telar.gui.foundation.fonts.tests.font_fixture;
 
 namespace {
 
   using namespace telar::gui;
   using namespace telar::gui::fonts;
   using namespace telar::gui::test;
+  using telar::gui::fonts::tests::font_fixture::FontFixture;
+  using telar::testing::check;
 
   constexpr std::size_t columns = TextRuns<telar::ConcurrentMemory>::maximum_cells;
   constexpr std::uint16_t pixel_height = 15;
@@ -69,12 +69,12 @@ namespace {
         request.cursor = column;
         request.selection = {.anchor = 0, .head = static_cast<int>(column)};
         layout.shape(fonts, cells, request);
-        require(!layout.glyphs().empty(), "an allocation-free cursor transition must retain visible glyphs");
-        require(budget.liveBytes() == retained_bytes, "warm row storage must retain its allocation budget");
+        check(!layout.glyphs().empty(), "an allocation-free cursor transition must retain visible glyphs");
+        check(budget.liveBytes() == retained_bytes, "warm row storage must retain its allocation budget");
       }
     }
 
-    require(budget.liveBytes() == 0, "row layout must release every allocator-owned buffer");
+    check(budget.liveBytes() == 0, "row layout must release every allocator-owned buffer");
   }
 
   void fontAndGridChangesRetireCachedPositions(FontFixture<telar::ConcurrentMemory>& fonts, FontFixture<telar::ConcurrentMemory>& alternate) {
@@ -95,8 +95,8 @@ namespace {
           layout.shape(*source, cells, {.pixel_height = height, .cell_width = width});
           const auto expected = source->face(FontRole::primary).shape("W", height).glyph(0);
 
-          require(layout.glyphs().front().x_advance == expected.x_advance, "cached glyph advances must belong to the current face and pixel height");
-          require(std::cmp_equal(layout.spans().back().offset, width), "cell placement must use the current physical grid");
+          check(layout.glyphs().front().x_advance == expected.x_advance, "cached glyph advances must belong to the current face and pixel height");
+          check(std::cmp_equal(layout.spans().back().offset, width), "cell placement must use the current physical grid");
         }
       }
     }
@@ -133,12 +133,12 @@ namespace {
     layout.shape(fonts, cells, request);
     const auto shaped = snapshot();
 
-    require(!shaped.first.empty(), "the row shapes its cells");
+    check(!shaped.first.empty(), "the row shapes its cells");
     layout.shape(fonts, cells, request);
-    require(snapshot() == shaped, "a row recalled from what it kept lays out as it was shaped");
+    check(snapshot() == shaped, "a row recalled from what it kept lays out as it was shaped");
     layout.resetFont();
     layout.shape(fonts, cells, request);
-    require(snapshot() == shaped, "a row shaped again after a font change lays out the same");
+    check(snapshot() == shaped, "a row shaped again after a font change lays out the same");
 
     // What a row kept belongs to the pixel height it was shaped at.
     for (const std::uint16_t height : {std::uint16_t{39}, pixel_height, std::uint16_t{39}}) {
@@ -149,7 +149,7 @@ namespace {
       RowTextLayout fresh{memory};
 
       fresh.shape(fonts, cells, sized);
-      require(kept.first == std::vector<ShapedGlyph>{fresh.glyphs().begin(), fresh.glyphs().end()}, "a kept cell follows the row's pixel height");
+      check(kept.first == std::vector<ShapedGlyph>{fresh.glyphs().begin(), fresh.glyphs().end()}, "a kept cell follows the row's pixel height");
     }
   }
 
@@ -170,35 +170,37 @@ namespace {
       failed = true;
     }
 
-    require(failed, "row buffers must honor the injected allocator");
+    check(failed, "row buffers must honor the injected allocator");
     gate.permit(std::nullopt);
     layout.shape(fonts, cells, {.pixel_height = pixel_height, .cell_width = cell_width});
-    require(layout.spans().size() == cells.size(), "a failed first allocation must leave the layout reusable");
+    check(layout.spans().size() == cells.size(), "a failed first allocation must leave the layout reusable");
   }
 
-}
-
-int main(int argc, char** argv) {
-  const auto arguments = std::span{argv, static_cast<std::size_t>(argc)};
-  constexpr std::size_t expected_arguments = 2;
-  if (arguments.size() != expected_arguments) {
-    return 1;
-  }
-
-  try {
+  // The fonts of the repository's assets, read into system memory for one case.
+  template <void (*verify)(FontFixture<telar::ConcurrentMemory>&)>
+  void withFonts() {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const std::filesystem::path assets{arguments[1]};
+    FontFixture fonts{memory, std::filesystem::path{TELAR_GUI_ASSETS_DIR}};
+
+    verify(fonts);
+  }
+
+  void fontAndGridChanges() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    const std::filesystem::path assets{TELAR_GUI_ASSETS_DIR};
     FontFixture fonts{memory, assets};
     FontFixture alternate{memory, assets, "IBMPlexSans-Regular.ttf"};
 
-    storageIsReusedAcrossCursorAndSelectionChanges(fonts);
     fontAndGridChangesRetireCachedPositions(fonts, alternate);
-    failedStorageCanBeRetried(fonts);
-    keptClustersLayOutAsShaped(fonts);
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-    return 1;
   }
+
+  const telar::testing::Case case_storage_is_reused_across_cursor_and_selection_changes{"row_text.storage_is_reused_across_cursor_and_selection_changes", withFonts<storageIsReusedAcrossCursorAndSelectionChanges>};
+  const telar::testing::Case case_font_and_grid_changes_retire_cached_positions{"row_text.font_and_grid_changes_retire_cached_positions", fontAndGridChanges};
+  const telar::testing::Case case_failed_storage_can_be_retried{"row_text.failed_storage_can_be_retried", withFonts<failedStorageCanBeRetried>};
+  const telar::testing::Case case_kept_clusters_lay_out_as_shaped{"row_text.kept_clusters_lay_out_as_shaped", withFonts<keptClustersLayOutAsShaped>};
+
 }
