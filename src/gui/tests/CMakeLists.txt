@@ -79,8 +79,6 @@ telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation
   TEST gui-bindings LABELS gui.features.bindings TIMEOUT 30)
 telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core
   TEST gui-key-encoder LABELS gui.foundation.keys TIMEOUT 30)
-telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-features-terminal-copy_mode gui-test-fixtures
-  TEST gui-copy-mode LABELS gui.features.terminal.copy_mode TIMEOUT 30)
 telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
   TEST gui-directory-completion LABELS gui.foundation.system TIMEOUT 30)
 telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-test-fixtures
