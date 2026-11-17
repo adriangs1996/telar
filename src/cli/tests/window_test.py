@@ -105,38 +105,54 @@ def run_fixture(binary, root, words, fixture):
 
 
 def cases():
+    """Each case: the words, the peer's fixture, the exit status, the stdout or None, and the
+    `ClientCommand` a routed command sends as (action, target_id, value), None where the
+    words leave a field unset."""
     for words, expected in [(['client', 'list'], 'CLIENT\tGENERATION\tIDENTITY\tATTACHMENTS\tLAST INPUT PANE\n7\t11\t19\t2\t23\n'), (['client', 'get', '7'], '7\t11\t19\t2\t23\n'), (['client', 'detach', '7'], 'client 7 detached\n')]:
-        yield words, {}, 0, expected
-        yield words + ['--json'], {}, 0, None
-    yield ['client', 'get', '8'], {}, 2, ''
-    yield ['client', 'list', '--json'], {'empty': True}, 0, '[]\n'
-    yield ['client', 'list', '--json'], {'second': True}, 0, None
+        yield words, {}, 0, expected, None
+        yield words + ['--json'], {}, 0, None, None
+    yield ['client', 'get', '8'], {}, 2, '', None
+    yield ['client', 'list', '--json'], {'empty': True}, 0, '[]\n', None
+    yield ['client', 'list', '--json'], {'second': True}, 0, None, None
     actions = [(['sidebar', 'get'], 12), (['sidebar', 'show'], 13), (['sidebar', 'hide'], 14), (['sidebar', 'resize', '48'], 15), (['workspace-list', 'expand'], 16), (['workspace-list', 'collapse'], 17), (['client', 'open', 'goto'], 18), (['client', 'open', 'history'], 19), (['client', 'copy-mode'], 20), (['notification', 'dismiss', '9'], 21), (['client', 'open-link', 'https://example.invalid'], 22), (['client', 'clipboard', 'copy', 'fixture'], 23), (['layout', 'get'], 25), (['layout', 'apply', 'token'], 26), (['config', 'reload'], 27), (['config', 'show'], 28), (['plugin', 'list'], 29), (['plugin', 'get', 'test'], 30), (['plugin', 'enable', 'test'], 31), (['plugin', 'disable', 'test'], 32), (['plugin', 'run', 'test', 'run'], 33)]
+    targets = {15: (None, 48), 21: (9, None)}
     for words, action in actions:
         fixture = {'text': 'visible', 'value': 48} if action == 12 else {'text': '{"escaped":"a\\b\\f\\u007f","list":[1,true,null]}'} if action == 28 else {}
+        route = (action, *targets.get(action, (None, None)))
         for flags in ([], ['--json']):
-            yield words + ['--client', '7'] + flags, fixture, 0, None
-        yield words + ['--client', '7'], {'empty': True}, 2, ''
-        yield words + ['--client', '7'], {'status': 3, 'text': 'FixtureRefusal'}, 1, ''
-    yield ['config','show','--client','7','--json'], {'text':'{"x":1.0,"y":1e2,"z":1e-20,"a":1e300,"b":-0.0,"c":1e999,"d":1e-999}'}, 0, '{"x":1,"y":100,"z":0.'+'0'*19+'1,"a":1'+'0'*300+',"b":-0,"c":1e999,"d":0}\n'
-    yield ['sidebar', 'get', '--client', '7'], {'bad_route': True}, 1, ''
-    yield ['plugin', 'list', '--client', '7'], {'generation': 0}, 1, ''
+            yield words + ['--client', '7'] + flags, fixture, 0, None, route
+        yield words + ['--client', '7'], {'empty': True}, 2, '', None
+        yield words + ['--client', '7'], {'status': 3, 'text': 'FixtureRefusal'}, 1, '', None
+    yield ['pane', 'split', '5', 'vertical', '--client', '7'], {}, 0, None, (6, 5, None)
+    yield ['pane', 'scroll', '5', '-3', '--client', '7'], {}, 0, None, (11, 5, -3)
+    yield ['pane', 'close', '5', '--client', '7'], {}, 0, None, (7, 5, None)
+    yield ['config','show','--client','7','--json'], {'text':'{"x":1.0,"y":1e2,"z":1e-20,"a":1e300,"b":-0.0,"c":1e999,"d":1e-999}'}, 0, '{"x":1,"y":100,"z":0.'+'0'*19+'1,"a":1'+'0'*300+',"b":-0,"c":1e999,"d":0}\n', None
+    yield ['sidebar', 'get', '--client', '7'], {'bad_route': True}, 1, '', None
+    yield ['plugin', 'list', '--client', '7'], {'generation': 0}, 1, '', None
     for status in range(4):
-        yield ['command', 'suggest', '23', 'list files', '--json'], {'suggestion': status, 'text': 'ls' if status == 0 else ''}, 3 if status == 2 else 0 if status == 0 else 1, None
-    yield ['client', 'clipboard', 'copy', 'x'*4097, '--client', '7'], {}, 1, ''
-    yield ['sidebar', 'hide', '--client', '7', '--json'], {'text': 'a\b\f\x7fé', 'value': -9223372036854775808}, 0, None
-    yield ['notification', 'show', 'bad\ntext'], {}, 1, ''
-    yield ['notification', 'show', 'Fixture', '--link', 'http://invalid'], {}, 1, ''
-    yield ['notification','show','Fixture','--body','é'*300], {}, 1, ''
-    yield ['notification', 'show', 'Fixture'], {}, 0, ''
-    yield ['notification', 'show', 'Fixture'], {'delivered': 0}, 1, ''
+        yield ['command', 'suggest', '23', 'list files', '--json'], {'suggestion': status, 'text': 'ls' if status == 0 else ''}, 3 if status == 2 else 0 if status == 0 else 1, None, None
+    yield ['client', 'clipboard', 'copy', 'x'*4097, '--client', '7'], {}, 1, '', None
+    yield ['sidebar', 'hide', '--client', '7', '--json'], {'text': 'a\b\f\x7fé', 'value': -9223372036854775808}, 0, None, None
+    yield ['notification', 'show', 'bad\ntext'], {}, 1, '', None
+    yield ['notification', 'show', 'Fixture', '--link', 'http://invalid'], {}, 1, '', None
+    yield ['notification','show','Fixture','--body','é'*300], {}, 1, '', None
+    yield ['notification', 'show', 'Fixture'], {}, 0, '', None
+    yield ['notification', 'show', 'Fixture'], {'delivered': 0}, 1, '', None
 
 
 def check(binary, root):
     count = 0
-    for words, fixture, status, output in cases():
+    for words, fixture, status, output, route in cases():
         result = run_fixture(binary, root, words, fixture)
         assert result['status'] == status, (words, result)
+        if route:
+            # The window acts on the action byte, so the CLI's word for it must name the same one.
+            commands = [frame for frame in map(bytes.fromhex, result['frames']) if frame[0] == 0x35]
+            action, target, value = route
+            assert commands and all(frame[25] == action for frame in commands), (words, result['frames'])
+            sent_target, sent_value = struct.unpack('<Qq', commands[0][27:43])
+            assert target is None or sent_target == target, (words, sent_target)
+            assert value is None or sent_value == value, (words, sent_value)
         if output is not None:
             assert result['stdout'] == output, (words, result)
         if '--json' in words and status == 0:
