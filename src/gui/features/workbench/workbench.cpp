@@ -105,14 +105,6 @@ namespace telar::gui::features::workbench {
     return !tab.fullscreen && tab.layout.resize(tab.focused_pane, direction, geometry.cellArea(), geometry.layout_metrics);
   }
 
-  Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept {
-    const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
-      return sameTab(tab->location, location);
-    });
-
-    return found == tabs.end() ? nullptr : found->get();
-  }
-
   std::optional<TabLocation> tabAt(Tabs tabs, std::optional<TabLocation> active, std::size_t index) noexcept {
     std::array<Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);

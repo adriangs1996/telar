@@ -174,11 +174,7 @@ namespace telar::gui::application {
   }
 
   Tab<Memory>* Session::findTab(TabLocation location) const noexcept {
-    const auto found = std::find_if(tabs_.begin(), tabs_.end(), [&](const auto& tab) {
-      return sameTab(tab->location, location);
-    });
-
-    return found == tabs_.end() ? nullptr : found->get();
+    return features::workbench::find(tabs_, location);
   }
 
   Tab<Memory>& Session::ensureTab(TabLocation location) {

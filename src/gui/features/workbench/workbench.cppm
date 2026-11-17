@@ -101,8 +101,9 @@ export namespace telar::gui::features::workbench {
 
   // ---- the tabs of a workspace --------------------------------------------------------------
 
-  // The tab at `location`, if the session holds it.
-  [[nodiscard]] Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
+  // The tab at `location`, if the session holds it. The session's own lookup, which ui makes
+  // every frame for the active tab.
+  [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
 
   // The tab at `index` in the order the workspace of `active` shows its tabs.
   [[nodiscard]] std::optional<TabLocation> tabAt(Tabs tabs, std::optional<TabLocation> active, std::size_t index) noexcept;
@@ -195,6 +196,14 @@ namespace telar::gui::features::workbench {
 
   inline const WorkbenchGeometry& geometry(const State& state) noexcept {
     return Access::geometry(state);
+  }
+
+  inline Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept {
+    const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
+      return sameTab(tab->location, location);
+    });
+
+    return found == tabs.end() ? nullptr : found->get();
   }
 
   template <typename Visit>
