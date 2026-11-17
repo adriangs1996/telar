@@ -181,6 +181,12 @@ de sonido). Lo que una feature compone con otra aún no migrada (el editor de la
 `paths`) lo hace `application`, con accesores temporales en `Access` (`promptLine`,
 `notePromptWrite`) que desaparecen cuando esa otra feature exista.
 
+Un encabezado textual que Objective-C++ o Qt incluyen (`input/wheel_accumulator.hpp`) no se
+reexporta desde el namespace inline de un módulo de `foundation`: donde ui lo incluye después de
+importar ese módulo, sus nombres quedan ambiguos. La sección que lo necesita (`history_scroll`)
+espera en su dominio antiguo hasta que el paso que mueva el encabezado le dé un hogar solo de
+módulos.
+
 **En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
 nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
 
