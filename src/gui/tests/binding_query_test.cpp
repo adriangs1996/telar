@@ -22,8 +22,7 @@ static_assert(true);
 
 import telar.gui.tests.json_fixture;
 import telar.gui.config.plugin_query;
-import telar.gui.config.generation;
-import telar.gui.config.gui_query;
+import telar.gui.features.configuration;
 import telar.gui.application;
 import telar.base.text.json;
 import telar.plugins;
@@ -31,6 +30,8 @@ import telar.plugins;
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::configuration;
   using telar::gui::test::requiredJsonField;
 
   void require(bool condition, const char* message) {

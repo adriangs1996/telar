@@ -234,7 +234,7 @@ namespace telar::gui::qt {
     connect(&configuration_source_, &ConfigurationSource::themeChanged, this, [this] {
       for (auto& client : store_.clients()) {
         if (client) {
-          (*client)->session.setTheme(configuration_source_.configuration().theme);
+          application::configuration::setTheme((*client)->session, configuration_source_.configuration().theme);
         }
       }
 

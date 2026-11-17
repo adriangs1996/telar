@@ -14,8 +14,6 @@ import telar.gui.features.bindings;
 import telar.gui.foundation.keys;
 import telar.gui.features.machines;
 
-import telar.gui.config.gui_query;
-
 namespace {
 
   using namespace telar::gui;

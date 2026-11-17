@@ -42,9 +42,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.gui.features.components;
-import telar.gui.config.generation;
 
-import telar.gui.config.gui_query;
 import telar.gui.application;
 
 namespace {

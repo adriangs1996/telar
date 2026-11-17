@@ -242,10 +242,6 @@ export {
 
       [[nodiscard]] ClientViewState clientViewState() const noexcept;
 
-      void configure(const Configuration& configuration);
-
-      void setTheme(const Theme& theme);
-
       [[nodiscard]] ViewVersion viewVersion() const noexcept;
 
       void invalidateView() noexcept;

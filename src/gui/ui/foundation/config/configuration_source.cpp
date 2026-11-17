@@ -49,7 +49,6 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
-import telar.gui.config.gui_query;
 import telar.config.client;
 import telar.plugins;
 
@@ -86,7 +85,7 @@ namespace telar::gui::qt {
     connect(&poll_, &QTimer::timeout, this, &ConfigurationSource::poll);
     connect(&debounce_, &QTimer::timeout, this, &ConfigurationSource::reload);
     connect(&task_, &QFutureWatcher<PreparedConfiguration>::finished, this, &ConfigurationSource::complete);
-    configuration_.themes.base = default_theme_values;
+    configuration_.themes.base = application::configuration::default_theme_values;
     configuration_.theme = projectTheme(configuration_.themes.base);
     const auto* style_hints = QGuiApplication::styleHints();
 
@@ -431,7 +430,7 @@ namespace telar::gui::qt {
       throw std::invalid_argument{"Command belongs to an obsolete configuration or a different binding kind"};
     }
 
-    const auto reference = commandTabReference(action);
+    const auto reference = application::configuration::commandTabReference(action);
     if (!reference) {
       return std::nullopt;
     }
@@ -505,43 +504,19 @@ namespace telar::gui::qt {
     return error_;
   }
 
-  std::string_view ConfigurationSource::query(ConfigurationQuery query, const application::ClientViewState& view) {
+  std::string_view ConfigurationSource::query(application::configuration::ConfigurationQuery query, const application::ClientViewState& view) {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
 
-    if (query.section != ConfigurationQuery::Section::client && query.index < 0) {
-      throw std::invalid_argument{"InvalidIndex"};
-    }
+    const application::ClientQueryContext context{
+        .source = optionalText(source_path_),
+        .profile = optionalText(profile_name_),
+        .generation = generation_->number(),
+        .view = view,
+    };
 
-    switch (query.section) {
-    case ConfigurationQuery::Section::client: {
-      const application::ClientQueryContext context{
-          .source = optionalText(source_path_),
-          .profile = optionalText(profile_name_),
-          .generation = generation_->number(),
-          .view = view,
-      };
-
-      return application::ClientQuery::write(generation_->configuration(), context, query_buffer_);
-    }
-    case ConfigurationQuery::Section::binding:
-      if (!std::in_range<std::size_t>(query.index)) {
-        throw std::runtime_error{"BindingNotFound"};
-      }
-
-      return BindingQuery::write(generation_->input(), static_cast<std::size_t>(query.index), generation_->actionDescriptions(), *commands_, query_buffer_);
-    case ConfigurationQuery::Section::runtime:
-      return RuntimeQuery::write(generation_->runtimeValues(), query_buffer_);
-    case ConfigurationQuery::Section::gui:
-      return GuiQuery::write(generation_->configuration(), query_buffer_, platform::defaultTitlebar());
-    case ConfigurationQuery::Section::input:
-      return InputQuery::write(generation_->input(), query_buffer_);
-    case ConfigurationQuery::Section::theme:
-      return ThemeQuery::write(generation_->configuration().themes, query_buffer_);
-    default:
-      throw std::runtime_error{"ConfigurationSectionUnavailable"};
-    }
+    return application::configuration::query(*generation_, *commands_, query, context, platform::defaultTitlebar(), query_buffer_);
   }
 
   PluginPage ConfigurationSource::queryPlugins(const ClientCommand& request) {

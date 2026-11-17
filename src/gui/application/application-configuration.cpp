@@ -16,9 +16,10 @@ import telar.config.gui;
 import telar.config.client;
 import telar.config.runtime;
 import telar.config.snapshot;
-import telar.gui.config.gui_query;
+import telar.gui.features.configuration;
 import telar.gui.config.plugin_effects;
-import telar.gui.config.generation;
+import telar.gui.features.notifications;
+import :access;
 
 namespace telar::gui::application {
 
@@ -38,14 +39,14 @@ namespace telar::gui::application {
   Configuration ConfigurationReader::read(const runtime::lua::Value& root, std::string_view profile) {
     Configuration result;
 
-    result.themes.base = default_theme_values;
+    result.themes.base = features::configuration::default_theme_values;
     runtime::config::ConfigurationLayers::each(root, profile, [&](const runtime::lua::Value& configuration) {
       std::vector<PromptBinding> bindings;
       const auto settings = runtime::config::ConfigurationLayers::read(configuration, [&](const runtime::config::PromptBindingSetting& binding) {
         bindings.push_back({.key = static_cast<std::uint8_t>(binding.chord.key), .character = binding.chord.character, .modifiers = binding.chord.modifiers, .action = binding.action, .normal = binding.normal});
       });
 
-      ThemeReader::apply(settings.themes, result.themes);
+      features::configuration::ThemeReader::apply(settings.themes, result.themes);
       client(settings.client, result);
       prompt(settings.client.prompt, std::move(bindings), result.prompt);
       gui(settings.gui, result);
@@ -704,7 +705,7 @@ namespace telar::gui::application {
       throw std::invalid_argument{"Command belongs to an obsolete configuration or a different binding kind"};
     }
 
-    const auto reference = commandTabReference(action);
+    const auto reference = features::configuration::commandTabReference(action);
 
     return reference ? client_state_.commands.load(*reference) : std::nullopt;
   }
@@ -1069,10 +1070,76 @@ namespace telar::gui::application {
 
   void ClientQuery::writeSections(JsonWriter& writer) {
     writer.array([](JsonWriter& sections) {
-      for (const auto& [name, section] : ConfigurationQuery::sections) {
+      for (const auto& [name, section] : features::configuration::ConfigurationQuery::sections) {
         sections.element(name);
       }
     });
   }
+
+}
+
+namespace telar::gui::application::configuration {
+
+  void configure(Session& session, const Configuration& configuration) {
+    auto& shown = Access::configuration(session);
+    const bool prompt_changed = shown.prompt.mode != configuration.prompt.mode;
+
+    shown = configuration;
+    features::notifications::configure(Access::notifications(session), configuration.sound);
+    ++Access::viewVersion(session).configuration;
+    if (prompt_changed) {
+      prompt::configureShell(session);
+    }
+  }
+
+  void setTheme(Session& session, const Theme& theme) {
+    auto& shown = Access::configuration(session);
+    if (shown.theme == theme) {
+      return;
+    }
+
+    shown.theme = theme;
+    ++Access::viewVersion(session).configuration;
+  }
+
+  template <Allocator Memory>
+  tbc::view<std::string_view, tbc::lt::a> query(
+      const ConfigurationGeneration<Memory>& generation,
+      const runtime::config::RetainedCommandTabRegistry& commands,
+      ConfigurationQuery query,
+      const ClientQueryContext& context,
+      bool default_titlebar,
+      tbc::view<std::span<char>, tbc::lt::a> output
+  ) {
+    using Section = ConfigurationQuery::Section;
+
+    if (query.section != Section::client && query.index < 0) {
+      throw std::invalid_argument{"InvalidIndex"};
+    }
+
+    switch (query.section) {
+    case Section::client:
+      return ClientQuery::write(generation.configuration(), context, output);
+    case Section::binding:
+      if (!std::in_range<std::size_t>(query.index)) {
+        throw std::runtime_error{"BindingNotFound"};
+      }
+
+      return features::configuration::BindingQuery::write(generation.input(), static_cast<std::size_t>(query.index), generation.actionDescriptions(), commands, output);
+    case Section::runtime:
+      return RuntimeQuery::write(generation.runtimeValues(), output);
+    case Section::gui:
+      return features::configuration::GuiQuery::write(generation.configuration(), output, default_titlebar);
+    case Section::input:
+      return features::configuration::InputQuery::write(generation.input(), output);
+    case Section::theme:
+      return features::configuration::ThemeQuery::write(generation.configuration().themes, output);
+    default:
+      throw std::runtime_error{"ConfigurationSectionUnavailable"};
+    }
+  }
+
+  template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
 
 }

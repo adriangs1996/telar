@@ -36,11 +36,10 @@ import telar.gui.application;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
-import telar.gui.config.generation;
 import telar.gui.features.workbench;
 import telar.config.client;
 
-import telar.gui.config.gui_query;
+import telar.gui.features.configuration;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.config.core;
@@ -49,6 +48,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::configuration;
   using namespace telar::gui::features::workbench;
   using namespace telar::gui::test;
 

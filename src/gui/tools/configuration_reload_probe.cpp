@@ -30,8 +30,6 @@ static_assert(true);
 import telar.gui.config.plugin_effects;
 import telar.gui.application;
 
-import telar.gui.config.gui_query;
-
 namespace {
 
   using namespace telar::gui;

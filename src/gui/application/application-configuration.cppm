@@ -20,6 +20,8 @@ import telar.config.client;
 import telar.config.runtime;
 import telar.base.memory.containers;
 import :client_view_state;
+import :session;
+import telar.gui.features.configuration;
 import :configuration_readers;
 
 // Interface: config/reader.cppm
@@ -284,4 +286,38 @@ export {
     };
 
   }
+}
+
+// The configuration as ui drives it: the section of a loaded configuration a client asks for,
+// the themes it names, and the configuration and theme the session shows.
+export namespace telar::gui::application::configuration {
+
+  using features::configuration::commandTabReference;
+  using features::configuration::ConfigurationQuery;
+  using features::configuration::default_theme_values;
+  using features::configuration::themeValuesByName;
+
+  // The session shows `configuration` from now on; a new prompt mode configures the shells again.
+  void configure(Session& session, const Configuration& configuration);
+
+  // The session shows `theme`, picked by the system's appearance, without reading the
+  // configuration again.
+  void setTheme(Session& session, const Theme& theme);
+
+  // Writes the section of the loaded configuration `query` names, the binding at its index or
+  // the client's state in `context`, into the output, region `a`. `commands` holds the command
+  // tabs the generation's bindings name.
+  template <Allocator Memory>
+  [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> query(
+      const ConfigurationGeneration<Memory>& generation,
+      const runtime::config::RetainedCommandTabRegistry& commands,
+      ConfigurationQuery query,
+      const ClientQueryContext& context,
+      bool default_titlebar,
+      tbc::view<std::span<char>, tbc::lt::a> output
+  );
+
+  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
+  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
+
 }

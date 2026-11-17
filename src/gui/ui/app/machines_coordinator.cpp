@@ -120,7 +120,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      (*client)->session.configure(configuration_source_.configuration());
+      application::configuration::configure((*client)->session, configuration_source_.configuration());
       if ((*client)->session.ready()) {
         application::window::pace((*client)->session);
       }
@@ -155,7 +155,7 @@ namespace telar::gui::qt {
 
     client->admitted_program.assign(store_.machines().row(slot).program.view());
     client->identity = QRandomGenerator::system()->generate64() | std::uint64_t{1};
-    client->session.configure(configuration_source_.configuration());
+    application::configuration::configure(client->session, configuration_source_.configuration());
     client->session.setPresented(slot == store_.machines().active());
     const bool replacing_active = store_.clients()[slot] && slot == store_.machines().active();
     if (replacing_active) {

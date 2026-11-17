@@ -65,7 +65,6 @@ import telar.gui.application;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.plugin_effects;
-import telar.gui.config.gui_query;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.config.client;
@@ -120,7 +119,7 @@ namespace telar::gui::qt {
     void invokeElement(std::uint64_t instance, std::uint32_t callback, const application::components::Context& context, const QByteArray& item, Done<Effects> done);
     void forgetElements(std::uint64_t instance);
     [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char* field) const;
-    [[nodiscard]] std::string_view query(ConfigurationQuery query, const application::ClientViewState& view = {});
+    [[nodiscard]] std::string_view query(application::configuration::ConfigurationQuery query, const application::ClientViewState& view = {});
     [[nodiscard]] PluginPage queryPlugins(const ClientCommand& request);
     void setPluginEnabled(const ClientCommand& request, bool enabled);
     [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
@@ -187,7 +186,7 @@ namespace telar::gui::qt {
     bool pending_reload_ = false;
     bool pending_poll_ = false;
     QFutureWatcher<PreparedConfiguration> task_;
-    std::array<char, ConfigurationQuery::capacity> query_buffer_{};
+    std::array<char, application::configuration::ConfigurationQuery::capacity> query_buffer_{};
     // Declared last so it stops, finishing its current call, before the generation it runs dies.
     LuaHost lua_;
   };

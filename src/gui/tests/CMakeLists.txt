@@ -74,11 +74,11 @@ telar_add_test(gui-pane-creation-test SOURCES pane_creation_test.cpp LIBRARIES g
   TEST gui-pane-creation LABELS gui.application)
 telar_add_test(gui-command-tab-test SOURCES command_tab_test.cpp LIBRARIES gui-foundation-actions gui-application gui-config gui-test-fixtures
   TEST gui-command-tab LABELS gui.config)
-telar_add_test(gui-binding-query-test SOURCES binding_query_test.cpp LIBRARIES gui-config gui-test-fixtures
+telar_add_test(gui-binding-query-test SOURCES binding_query_test.cpp LIBRARIES gui-features-configuration gui-config gui-test-fixtures
   TEST gui-binding-query LABELS gui.config)
 telar_add_test(gui-theme-test SOURCES theme_test.cpp LIBRARIES gui-foundation-core gui-config gui-application
   TEST gui-theme LABELS gui.config)
-telar_add_test(gui-config-query-test SOURCES configuration_query_test.cpp LIBRARIES gui-features-status_bar gui-foundation-actions gui-foundation-keys gui-foundation-core gui-config gui-test-fixtures
+telar_add_test(gui-config-query-test SOURCES configuration_query_test.cpp LIBRARIES gui-features-configuration gui-features-status_bar gui-foundation-actions gui-foundation-keys gui-foundation-core gui-config gui-test-fixtures
   TEST gui-config-query LABELS gui.config)
 telar_add_test(gui-presentation-test SOURCES presentation_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-text gui-features-terminal-graphics gui-application
   TEST LABELS gui.presentation)

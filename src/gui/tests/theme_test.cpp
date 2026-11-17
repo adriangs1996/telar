@@ -23,8 +23,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.base.text.utf8;
-import telar.gui.config.generation;
-import telar.gui.config.gui_query;
+import telar.gui.features.configuration;
 import telar.gui.foundation.core;
 import telar.gui.features.machines;
 import telar.gui.application;
@@ -32,6 +31,8 @@ import telar.gui.application;
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::configuration;
 
   using namespace telar::gui::features::machines;
 

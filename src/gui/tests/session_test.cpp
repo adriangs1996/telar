@@ -197,7 +197,7 @@ namespace {
       Configuration configuration;
 
       configuration.window_title.assign("{workspace}/{tab}/{pane_title}@{hostname}");
-      client.configure(configuration);
+      application::configuration::configure(client, configuration);
       require(application::window::title(client, "host").view() == "project/shell/@host", "automatic tab labels must default to shell before foreground discovery");
 
       const std::array metadata_panes{TabPane{.pane_id = 1, .foreground = "Python"}};
@@ -224,7 +224,7 @@ namespace {
       deliver(client, PaneTitle{.pane_id = 2, .title = "second"});
       require(application::window::title(client, "host").view() == "renamed/manual/second@host", "focused pane changes must select that pane's title");
       require(rendered.view() == "project/nvim/compiler@host", "an earlier rendered value must not borrow mutable session strings");
-      client.configure(Configuration{});
+      application::configuration::configure(client, Configuration{});
       require(application::window::title(client, "host").view() == "Telar", "clearing a configured template must restore the original GUI default");
     }
 
@@ -378,12 +378,12 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.max_fps = configured_frame_cap;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     application::window::pace(client);
     require(transport.last<ConfigureFrameInterval>().interval_ns == nanoseconds_per_second / configured_frame_cap, "terminal cadence must follow the configured display cap");
 
     configuration.max_fps = 1;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     application::window::pace(client);
     require(transport.last<ConfigureFrameInterval>().interval_ns == nanoseconds_per_second / Configuration::minimum_fps, "terminal cadence must remain inside protocol bounds for a low frame cap");
   }
@@ -839,7 +839,7 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.history = {.show_agent_commands = true, .enter_runs = true, .match_fts = true};
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     first_message = transport.sent.size();
     application::history::paste(client, 1);
     require(transport.inputSince(first_message) == "echo safe\r", "configured run must append Enter after the complete paste");
@@ -1189,7 +1189,7 @@ namespace {
     const auto before_configuration = client.viewVersion();
     const auto configuration = client.configuration();
 
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     require(client.viewVersion().configuration > before_configuration.configuration, "adopting a configuration must invalidate links even when its geometry matches");
 
     application::workbench::split(client, ClientLayoutAxis::horizontal);

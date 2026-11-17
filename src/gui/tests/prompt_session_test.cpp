@@ -84,10 +84,10 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.prompt.mode = PromptMode::telar;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     require(prompt::surface(client, 1) == prompt::Surface::editor, "telar mode edits at the shell's prompt");
     require(transport.count(ClientTag::configure_shell_prompt) == 2 && transport.last<ConfigureShellPrompt>().bare, "telar mode asks for bare prompts in the shells it opens next");
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     require(transport.count(ClientTag::configure_shell_prompt) == 2, "an unchanged mode is not sent again");
 
     auto before = transport.sent.size();
@@ -181,7 +181,7 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.prompt.mode = PromptMode::telar;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     require(prompt::hidesTerminalCursor(client, 1), "a quick command's cursor at a line's start, where no key lands, is not drawn");
     prompt::key(client, 1, prompt::KeyPress{prompt::Key::enter, 0, {.alt = true}});
     require(prompt::line(client, 1)->answering() && !prompt::hidesTerminalCursor(client, 1), "answering the program, the keys land at its cursor");
@@ -246,7 +246,7 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.prompt.mode = PromptMode::telar;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
     require(prompt::commandPresence(client, 1, "g") == prompt::CommandPresence::pending, "the first letter asks the runtime");
@@ -291,7 +291,7 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.prompt.mode = PromptMode::telar;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
     for (std::size_t index = 0; index <= 1000; ++index) {
@@ -320,7 +320,7 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.prompt.mode = PromptMode::telar;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
     require(prompt::commandPresence(client, 1, "g") == prompt::CommandPresence::pending, "the first letter asks the runtime");
@@ -352,7 +352,7 @@ namespace {
     auto configuration = client.configuration();
 
     configuration.prompt.mode = PromptMode::telar;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
     // The spec of a command comes from the runtime, asked the first time Tab needs it; the Tab
@@ -557,7 +557,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
         {.key = static_cast<std::uint8_t>(Chord::Key::character), .character = 'H', .modifiers = 0, .action = static_cast<std::uint8_t>(prompt::Action::line_start), .normal = true},
     };
 
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
     typeKeys(client, "echo hi");
@@ -591,7 +591,7 @@ void lineBlocks() {
 
   configuration.prompt.mode = PromptMode::telar;
   configuration.prompt.keymap = PromptKeymap::vim;
-  client.configure(configuration);
+  application::configuration::configure(client, configuration);
   deliver(client, atPrompt(3));
   const std::array blocks{
       CommandBlock{.row = 0, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 5, .command = "ls"},
@@ -650,7 +650,7 @@ void lineBlocks() {
 
   // Without vim's normal mode, prefix+[ is the way in.
   configuration.prompt.keymap = PromptKeymap::emacs;
-  client.configure(configuration);
+  application::configuration::configure(client, configuration);
   require(client.enterBlocks() && client.selectedBlock(1) == std::size_t{2}, "prefix+[ selects the last block");
   prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
   require(!client.selectedBlock(1), "Esc goes back to the prompt");
@@ -674,7 +674,7 @@ void lineBlockMotions() {
 
   configuration.prompt.mode = PromptMode::telar;
   configuration.prompt.keymap = PromptKeymap::vim;
-  client.configure(configuration);
+  application::configuration::configure(client, configuration);
   deliver(client, atPrompt(3));
   const std::array blocks{
       CommandBlock{.row = 10, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls"},
@@ -784,7 +784,7 @@ void lineSearches() {
   auto configuration = client.configuration();
 
   configuration.prompt.mode = PromptMode::telar;
-  client.configure(configuration);
+  application::configuration::configure(client, configuration);
 
   typeKeys(client, "cat src/ma");
   require(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::search_history, "Ctrl-R at the prompt searches the history");

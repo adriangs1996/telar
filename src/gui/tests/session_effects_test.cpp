@@ -238,7 +238,7 @@ namespace {
     Configuration configuration;
 
     configuration.notification_delivery = NotificationDelivery::system;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     const NotificationInput input{.title = "--help\n\"quoted\"\\end", .message = "body\t\"quoted\"\\end", .link = {}};
 
     application::notifications::publish(client, input);
@@ -260,7 +260,7 @@ namespace {
     Configuration configuration;
 
     configuration.notification_delivery = NotificationDelivery::system;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     Notification notice;
 
     notice.title = "Runtime notice";
@@ -340,13 +340,13 @@ namespace {
     Configuration configuration;
 
     configuration.sound.enabled = false;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     application::notifications::completeSound(client);
     deliver(client, ready);
     require(recorder.sounds.size() == 1, "policy reload must discard a now-disabled successor and reject new requests");
 
     configuration.sound.enabled = true;
-    client.configure(configuration);
+    application::configuration::configure(client, configuration);
     deliver(client, ready);
     require(recorder.sounds.size() == 2, "re-enabling audio must permit a fresh sound");
     application::notifications::completeSound(client);

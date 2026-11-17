@@ -32,9 +32,7 @@ static_assert(true);
 
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
-import telar.gui.config.generation;
 
-import telar.gui.config.gui_query;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -91,7 +89,7 @@ namespace telar::gui::qt {
   }
 
   void ConfigurationLoader::load(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request, tbc::view<ConfigurationPreparation&, tbc::lt::a> result) {
-    result.configuration.themes.base = default_theme_values;
+    result.configuration.themes.base = application::configuration::default_theme_values;
     result.configuration.theme = projectTheme(result.configuration.themes.base);
     if (!request.selection.trust_path.isEmpty()) {
       const auto path = QFile::encodeName(request.selection.trust_path);
@@ -148,7 +146,7 @@ namespace telar::gui::qt {
     if (!request.selection.theme.isEmpty()) {
       const auto name = request.selection.theme.toLower().toUtf8();
 
-      result.locked_theme = themeValuesByName({name.constData(), static_cast<std::size_t>(name.size())});
+      result.locked_theme = application::configuration::themeValuesByName({name.constData(), static_cast<std::size_t>(name.size())});
       result.configuration.theme = projectTheme(*result.locked_theme);
     }
   }

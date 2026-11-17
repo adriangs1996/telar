@@ -11,7 +11,7 @@ import telar.plugins;
 import telar.config.client;
 import telar.config.core;
 import telar.gui.foundation.actions;
-import telar.gui.config.plugin_query;
+import telar.gui.features.configuration;
 
 namespace telar::gui::application {
 
@@ -87,7 +87,7 @@ namespace telar::gui::application {
       throw std::runtime_error{"BindingNotFound"};
     }
 
-    return commandTabAction(*reference, generation_);
+    return features::configuration::commandTabAction(*reference, generation_);
   }
 
   BindingAction BindingActionReader::builtin(const runtime::lua::Value& value, std::string_view name) {

@@ -1,10 +1,14 @@
-module telar.gui.config.generation;
+module telar.gui.features.configuration;
 
-import telar.gui.config.gui_query;
+import std;
+
+import telar.config.client;
+import telar.config.gui;
 import telar.gui.foundation.core;
-import telar.gui.foundation.actions;
+import telar.wire.vocabulary;
+import telar.base.text;
 
-namespace telar::gui {
+namespace telar::gui::features::configuration {
 
   std::string_view canonicalThemeName(std::string_view name) noexcept {
     if (name == "catppuccin-mocha" || name == "mocha") {

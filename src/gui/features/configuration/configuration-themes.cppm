@@ -1,70 +1,17 @@
-export module telar.gui.config.gui_query;
+// The themes a configuration names: the presets telar ships, the names it accepts for them and
+// how the themes a configuration read apply over a preset.
+export module telar.gui.features.configuration:themes;
 
 import std;
-import telar.tbc;
 
-import telar.gui.foundation.core;
-
+import telar.config.client;
 import telar.config.gui;
-import telar.gui.foundation.actions;
+import telar.gui.foundation.core;
 import telar.wire.vocabulary;
-
-// Interface: config/query.cppm
-export {
-  namespace telar::gui {
-
-    struct ConfigurationQuery {
-      static constexpr std::size_t capacity = 4096;
-
-      enum class Section : std::uint8_t {
-        client,
-        theme,
-        gui,
-        input,
-        runtime,
-        binding,
-      };
-
-      Section section = Section::client;
-      std::int64_t index = 0;
-
-      static constexpr auto sections = std::to_array<std::pair<std::string_view, Section>>({
-          {"client", Section::client},
-          {"theme", Section::theme},
-          {"gui", Section::gui},
-          {"input", Section::input},
-          {"runtime", Section::runtime},
-          {"binding", Section::binding},
-      });
-
-      [[nodiscard]] static ConfigurationQuery parse(std::string_view name, std::int64_t index);
-    };
-
-  }
-}
-
-// Interface: config/gui_query.cppm
-export {
-  namespace telar::gui {
-
-    class GuiQuery {
-    public:
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const Configuration& configuration, tbc::view<std::span<char>, tbc::lt::a> output, bool default_titlebar);
-
-    private:
-      static void writeFont(JsonWriter& writer, const FontConfiguration& font);
-      static void writeWindow(JsonWriter& writer, const Configuration& configuration, bool default_titlebar);
-
-      // CursorShape leads with the terminal's default, which a configuration cannot choose.
-      static std::string_view cursorStyle(CursorShape cursor);
-    };
-
-  }
-}
 
 // Interface: config/theme_presets.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::configuration {
 
     struct ThemePreset {
       std::string_view name;
@@ -795,26 +742,40 @@ export {
   }
 }
 
-// Interface: config/theme_query.cppm
+// Interface: config/themes.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::configuration {
 
-    class ThemeQuery {
+    std::string_view canonicalThemeName(std::string_view name) noexcept;
+
+    ThemeValues themeValuesByName(std::string_view name);
+
+    Theme themeByName(std::string_view name);
+
+  }
+}
+
+// Interface: config/theme_reader.cppm
+export {
+  namespace telar::gui::features::configuration {
+
+    // Applies the themes runtime::config::ThemeReader read onto the GUI's presets.
+    class ThemeReader {
+      using Settings = runtime::config::ThemeSettings;
+
     public:
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const ThemeSelection& selection, tbc::view<std::span<char>, tbc::lt::a> output);
+      static_assert(std::ranges::equal(palette_names, runtime::config::theme_color_names));
+      static_assert(std::ranges::equal(syntax_names, runtime::config::theme_syntax_names));
+      static_assert(TerminalThemeValues::palette_size == Settings::Terminal::palette_size);
+
+      static void apply(const runtime::config::ThemeSelectionSettings& settings, ThemeSelection& selection);
 
     private:
-      static void byteValue(JsonWriter& writer, ThemeRgb bytes);
-      static void writeColor(JsonWriter& writer, CellColor color);
-      static void writeTheme(JsonWriter& writer, const ThemeValues& theme);
-      static void writePalette(JsonWriter& writer, const ThemeValues& theme);
-      static void writeOptionalRgb(JsonWriter& writer, const std::optional<ThemeRgb>& color);
-      static void writeTerminal(JsonWriter& writer, const TerminalThemeValues& terminal);
-      static void writeRgbPalette(JsonWriter& writer, std::span<const ThemeRgb> colors);
-      static void writeSyntaxStyles(JsonWriter& writer, const ThemeValues& theme);
-      static void writeStyles(JsonWriter& writer, const ThemeValues& theme);
-      static void writeStyle(JsonWriter& writer, const SyntaxStyleValues& style);
-      static void writeOptionalTheme(JsonWriter& writer, const std::optional<ThemeValues>& theme);
+      static CellColor color(const runtime::config::ThemeColor& color) noexcept;
+      static void applyVariant(const std::optional<Settings>& settings, std::optional<ThemeValues>& variant, const ThemeValues& base);
+      static void applyTheme(const std::optional<Settings>& settings, ThemeValues& theme);
+      static void applyTerminal(const Settings::Terminal& settings, TerminalThemeValues& terminal) noexcept;
+      static void applySyntax(const Settings& settings, ThemeValues& theme);
     };
 
   }

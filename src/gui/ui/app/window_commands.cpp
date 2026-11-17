@@ -63,7 +63,6 @@ static_assert(true);
 
 import telar.gui.application;
 
-import telar.gui.config.gui_query;
 import telar.config.client;
 import telar.gui.config.plugin_effects;
 import telar.wire.vocabulary;
@@ -507,7 +506,7 @@ namespace telar::gui::qt {
       auto state = commands.store_.session().clientViewState();
 
       state.window_title = title.view();
-      reply.text = commands.configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), state);
+      reply.text = commands.configuration_source_.query(application::configuration::ConfigurationQuery::parse(message.text, message.value), state);
 
       return true;
     }

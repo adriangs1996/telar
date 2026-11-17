@@ -421,26 +421,6 @@ namespace telar::gui::application {
     return {.sidebar_visible = configuration_.sidebar_visible, .sidebar_width = sidebar_columns_, .workspace_list_collapsed = workspace_list_collapsed_, .pane_gaps = configuration_.pane_gaps, .window_title = configuration_.window_title.view()};
   }
 
-  void Session::configure(const Configuration& configuration) {
-    const bool prompt_changed = configuration_.prompt.mode != configuration.prompt.mode;
-
-    configuration_ = configuration;
-    features::notifications::configure(notifications_, configuration.sound);
-    ++view_version_.configuration;
-    if (prompt_changed) {
-      prompt::configureShell(*this);
-    }
-  }
-
-  void Session::setTheme(const Theme& theme) {
-    if (configuration_.theme == theme) {
-      return;
-    }
-
-    configuration_.theme = theme;
-    ++view_version_.configuration;
-  }
-
   ViewVersion Session::viewVersion() const noexcept {
     return view_version_;
   }
