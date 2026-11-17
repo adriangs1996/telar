@@ -1,0 +1,11 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    tab_strip_layout.cpp
+    tab_strip_layout.hpp
+    tabs_controller.cpp
+    tabs_controller.hpp
+  QML_FILES
+    TerminalTabs.qml
+  FP_CONTRACT_OFF
+    tab_strip_layout.cpp
+  REGISTERS)

@@ -14,7 +14,7 @@ def run(command, directory, log):
 
 
 # The scene sources, by their path below src/gui.
-SCENES = ['ui/foundation/scene/text_scene.cpp', 'ui/foundation/scene/text_scene.hpp', 'ui/app/panes/terminal/terminal_scene.cpp', 'ui/app/panes/terminal/terminal_scene.hpp']
+SCENES = ['ui/foundation/scene/text_scene.cpp', 'ui/foundation/scene/text_scene.hpp', 'ui/app/panes/terminal/scene/terminal_scene.cpp', 'ui/app/panes/terminal/scene/terminal_scene.hpp']
 
 
 def historical(root, revision, relative):
@@ -55,7 +55,7 @@ def main():
     database = json.loads((build / 'compile_commands.json').read_text())
     objects = []
     commands = []
-    for relative in ['tools/terminal_scene_probe.cpp', 'ui/foundation/scene/text_scene.cpp', 'ui/app/panes/terminal/terminal_scene.cpp']:
+    for relative in ['tools/terminal_scene_probe.cpp', 'ui/foundation/scene/text_scene.cpp', 'ui/app/panes/terminal/scene/terminal_scene.cpp']:
         row = next(row for row in database if Path(row['file']).as_posix().endswith('/' + relative))
         arguments = shlex.split(row['command'])
         source = root / 'src/gui' / relative if relative.startswith('tools/') else output / relative

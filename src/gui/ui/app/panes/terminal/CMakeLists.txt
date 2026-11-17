@@ -2,9 +2,6 @@ telar_add_qml_sources(gui-quick
   SOURCES
     copy_controller.cpp
     copy_controller.hpp
-    graphics_scene.cpp
-    graphics_scene.hpp
-    image_resource.cpp
     terminal_controller.cpp
     terminal_controller.hpp
     terminal_host.hpp
@@ -12,10 +9,7 @@ telar_add_qml_sources(gui-quick
     terminal_item.hpp
     terminal_links.cpp
     terminal_pointer.cpp
-    terminal_scene.cpp
-    terminal_scene.hpp
     terminal_scroll.cpp
-    window_images.cpp
   QML_FILES
     CommandRail.qml
     CommandSeparators.qml
@@ -23,6 +17,7 @@ telar_add_qml_sources(gui-quick
     PromptLine.qml
   REGISTERS)
 
+add_subdirectory(scene)
 add_subdirectory(prompt)
 add_subdirectory(links)
 add_subdirectory(history)

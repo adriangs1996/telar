@@ -34,7 +34,7 @@ void deferredOwnedCapture() {
 
 // CASE: gui.inline_borrowed_capture
 // PAIR: gui.deferred_capture
-// SOURCE: src/gui/ui/app/panes/terminal/history/history_filters_layout.cpp :: chipRecord
+// SOURCE: src/gui/ui/app/panes/terminal/history/layout/history_filters_layout.cpp :: chipRecord
 // STATUS: pending
 // CONTRACT: invokeNow invokes and destroys its callback before returning; it does not retain captures.
 // SCENARIO: A borrowed local is valid for the entire synchronous callback execution.
@@ -94,7 +94,7 @@ void publishedOwnedRequest() {
 
 // CASE: gui.context_bound_capture
 // PAIR: gui.callback_context
-// SOURCE: src/gui/ui/app/panes/terminal/window_images.cpp :: scheduleTimer / QMetaObject::invokeMethod
+// SOURCE: src/gui/ui/app/panes/terminal/scene/window_images.cpp :: scheduleTimer / QMetaObject::invokeMethod
 // STATUS: pending
 // CONTRACT: The future adapter model must cancel callbacks before the captured context is destroyed.
 // SCENARIO: A deferred borrow is legal when execution is bounded by that same referent's lifetime.
@@ -109,7 +109,7 @@ void contextBoundCapture() {
 
 // CASE: gui.unrelated_context_capture
 // PAIR: gui.callback_context
-// SOURCE: src/gui/ui/app/panes/terminal/window_images.cpp :: scheduleTimer / QMetaObject::invokeMethod
+// SOURCE: src/gui/ui/app/panes/terminal/scene/window_images.cpp :: scheduleTimer / QMetaObject::invokeMethod
 // STATUS: pending
 // CONTRACT: Binding callback lifetime to one context does not protect unrelated captured storage.
 // SCENARIO: The caller's context can survive the local source; reject this retained capture.

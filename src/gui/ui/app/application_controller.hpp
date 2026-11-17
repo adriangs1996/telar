@@ -24,7 +24,7 @@ static_assert(true);
 #include "ui/app/chrome/components/components_controller.hpp"
 #include "ui/app/chrome/components/machine_chrome/machine_chrome_controller.hpp"
 #include "ui/app/chrome/sidebar_controller.hpp"
-#include "ui/app/chrome/tabs_controller.hpp"
+#include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/chrome/workspaces/workspaces_controller.hpp"
 #include "ui/app/overlays/link_status/link_status_controller.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"

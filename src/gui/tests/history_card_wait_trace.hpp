@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "qml_fixture.hpp"
-#include "ui/app/panes/terminal/history/history_selection_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
 #include <QDebug>
 #include <QEvent>
 #include <QMetaObject>
@@ -27,7 +27,7 @@ static_assert(true);
 #include <mutex>
 
 #pragma once
-#include "ui/app/panes/terminal/history/history_selection_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
 
 import telar.gui.platform.awake_clock;
 

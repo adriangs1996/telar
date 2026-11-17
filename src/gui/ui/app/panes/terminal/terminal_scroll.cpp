@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
-#include "terminal_scene.hpp"
+#include "ui/app/panes/terminal/scene/terminal_scene.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QWheelEvent>

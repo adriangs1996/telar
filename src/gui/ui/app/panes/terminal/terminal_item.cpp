@@ -7,7 +7,6 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "graphics_scene.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "platform/font.h"
 #include "platform/window.hpp"
@@ -19,14 +18,15 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "terminal_scene.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_keys.hpp"
+#include "ui/app/panes/terminal/scene/graphics_scene.hpp"
+#include "ui/app/panes/terminal/scene/terminal_scene.hpp"
+#include "ui/app/panes/terminal/scene/window_images.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include "ui/foundation/fonts/terminal_font.hpp"
 #include "ui/foundation/fonts/window_font_catalog.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/input/key_encoding.hpp"
-#include "window_images.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QHoverEvent>

@@ -13,7 +13,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/app/panes/pane_header_layout.hpp"
+#include "ui/app/panes/header/pane_header_layout.hpp"
 #include "ui/app/panes/pane_projection.hpp"
 #include "ui/design/controls/native_agent_status.hpp"
 #include "ui/design/controls/native_tab_activity.hpp"
@@ -60,7 +60,7 @@ static_assert(true);
 #include <variant>
 
 #include "core/memory.hpp"
-#include "ui/app/panes/pane_header_layout.hpp"
+#include "ui/app/panes/header/pane_header_layout.hpp"
 #include "ui/app/panes/pane_projection.hpp"
 #include "ui/design/controls/native_agent_status.hpp"
 #include "ui/design/controls/native_tab_activity.hpp"

@@ -7,7 +7,7 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "ui/app/chrome/mode_projection.hpp"
+#include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -55,7 +55,7 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "ui/app/chrome/mode_projection.hpp"
+#include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"

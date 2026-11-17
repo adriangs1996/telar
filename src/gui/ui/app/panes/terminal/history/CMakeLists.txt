@@ -2,24 +2,8 @@ telar_add_qml_sources(gui-quick
   SOURCES
     history_controller.cpp
     history_controller.hpp
-    history_empty_layout.cpp
-    history_empty_layout.hpp
-    history_filters_layout.cpp
-    history_filters_layout.hpp
-    history_footer_layout.cpp
-    history_footer_layout.hpp
-    history_inspection_layout.cpp
-    history_inspection_layout.hpp
-    history_loading_layout.cpp
-    history_loading_layout.hpp
     history_match_model.hpp
-    history_meta_layout.cpp
-    history_meta_layout.hpp
     history_pointer.cpp
-    history_row_layout.cpp
-    history_row_layout.hpp
-    history_selection_layout.cpp
-    history_selection_layout.hpp
   QML_FILES
     HistoryEmpty.qml
     HistoryFilterChip.qml
@@ -31,13 +15,6 @@ telar_add_qml_sources(gui-quick
     HistoryPanel.qml
     HistoryRow.qml
     HistorySearchBar.qml
-  FP_CONTRACT_OFF
-    history_empty_layout.cpp
-    history_filters_layout.cpp
-    history_footer_layout.cpp
-    history_loading_layout.cpp
-    history_meta_layout.cpp
-    history_row_layout.cpp
-    history_row_layout.cpp
-    history_selection_layout.cpp
   REGISTERS)
+
+add_subdirectory(layout)

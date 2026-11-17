@@ -1,0 +1,9 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    native_mode_layout.cpp
+    native_mode_layout.hpp
+  QML_FILES
+    ModeBar.qml
+  FP_CONTRACT_OFF
+    native_mode_layout.cpp
+  REGISTERS)

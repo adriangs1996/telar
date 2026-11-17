@@ -1,29 +1,20 @@
 telar_add_qml_sources(gui-quick
   SOURCES
-    fullscreen_strip_layout.cpp
-    fullscreen_strip_layout.hpp
     native_pane_attention.cpp
     native_pane_attention.hpp
-    pane_header_layout.cpp
-    pane_header_layout.hpp
     pane_motion_layout.cpp
     pane_motion_layout.hpp
     panes_controller.cpp
     panes_controller.hpp
   QML_FILES
-    FullscreenStrip.qml
     PaneActions.qml
     PaneArea.qml
-    PaneHeader.qml
-    PaneProgress.qml
-    PaneStatusChip.qml
   FP_CONTRACT_OFF
-    fullscreen_strip_layout.cpp
     native_pane_attention.cpp
-    pane_header_layout.cpp
     pane_motion_layout.cpp
   REGISTERS)
 
+add_subdirectory(header)
 add_subdirectory(terminal)
 add_subdirectory(documents)
 add_subdirectory(attachments)

@@ -2,6 +2,7 @@ telar_add_qml_sources(gui-quick
   SOURCES
     history_hint_projection.hpp
   QML_FILES
+    BarBadge.qml
     BarBattery.qml
     BarMetric.qml
     BarPill.qml

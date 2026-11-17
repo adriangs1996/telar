@@ -7,11 +7,6 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "history_controller.hpp"
-#include "history_filters_layout.hpp"
-#include "history_footer_layout.hpp"
-#include "history_inspection_layout.hpp"
-#include "history_meta_layout.hpp"
-#include "history_row_layout.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -20,6 +15,11 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_meta_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_row_layout.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QQuickItem>
@@ -51,9 +51,9 @@ static_assert(true);
 #include <variant>
 
 #include "application/dependencies.hpp"
-#include "history_meta_layout.hpp"
-#include "history_row_layout.hpp"
 #include "input/wheel_accumulator.hpp"
+#include "ui/app/panes/terminal/history/layout/history_meta_layout.hpp"
+#include "ui/app/panes/terminal/history/layout/history_row_layout.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 
 import telar.gui.input.child_mouse;

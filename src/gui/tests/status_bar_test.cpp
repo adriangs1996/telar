@@ -10,7 +10,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/metrics_projection.hpp"
-#include "ui/app/chrome/mode_projection.hpp"
+#include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/design/elements/component_projection.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
@@ -49,7 +49,7 @@ static_assert(true);
 #include <utility>
 
 #include "ui/app/chrome/metrics_projection.hpp"
-#include "ui/app/chrome/mode_projection.hpp"
+#include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/design/elements/component_projection.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"

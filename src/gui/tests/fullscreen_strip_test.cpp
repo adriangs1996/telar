@@ -13,7 +13,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/app/panes/fullscreen_strip_layout.hpp"
+#include "ui/app/panes/header/fullscreen_strip_layout.hpp"
 #include "ui/app/panes/pane_projection.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
@@ -59,7 +59,7 @@ static_assert(true);
 #include <variant>
 
 #include "core/memory.hpp"
-#include "ui/app/panes/fullscreen_strip_layout.hpp"
+#include "ui/app/panes/header/fullscreen_strip_layout.hpp"
 #include "ui/app/panes/pane_projection.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"

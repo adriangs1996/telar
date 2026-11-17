@@ -15,7 +15,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
-#include "ui/app/chrome/tabs_controller.hpp"
+#include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/panes/attachments/attachment_shelf.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/input/mouse_buttons.hpp"
