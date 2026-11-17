@@ -1,10 +1,11 @@
-export module telar.gui.input.configuration;
+// The bytes a mouse report or a wheel step is to the program: SGR or the legacy X10 packet.
+export module telar.gui.features.terminal.input:mouse_encoder;
 
 import std;
 
 // Interface: input/mouse_encoder.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::input {
 
     class MouseEncoder {
     public:

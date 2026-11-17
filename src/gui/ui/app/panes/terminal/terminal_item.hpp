@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
+#include "core/wheel_accumulator.hpp"
 #include "input/scroll_motion.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
@@ -44,7 +44,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.input.child_mouse;
 import telar.gui.foundation.keys;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
@@ -249,7 +248,7 @@ namespace telar::gui::qt {
     }
 
     void presentFrame(const application::TerminalPreparation& preparation);
-    [[nodiscard]] ChildMouseView childMouseView() const;
+    [[nodiscard]] application::terminal::input::ChildMouseView childMouseView() const;
     void releaseMouse();
     [[nodiscard]] static unsigned mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept;
     void observeLinkPointer(QPointF position, Qt::KeyboardModifiers modifiers);
@@ -309,7 +308,7 @@ namespace telar::gui::qt {
     void releaseKeys();
     void invalidateMachine();
     bool send(const QByteArray& bytes, application::PaneInputSource source = application::PaneInputSource::keyboard);
-    [[nodiscard]] ChildMouseSample childMouseSample(const QMouseEvent& event, MousePhase phase, MouseButton button) const;
+    [[nodiscard]] application::terminal::input::ChildMouseSample childMouseSample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button) const;
     void mousePacket(unsigned button, QPointF position, bool released);
     std::optional<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
     void sendCommittedText(const QString& text);

@@ -167,4 +167,30 @@ namespace telar::gui::features::history {
     return changed;
   }
 
+  std::int32_t HistoryScroll::consume(HistoryScrollState state, const HistoryScrollSurface& surface, HistoryScrollPosition pointer, ScrollSample sample) noexcept {
+    if (!state.ready) {
+      wheel_.reset();
+
+      return 0;
+    }
+
+    if (!surface.delivered || surface.generation != state.generation || (surface.has_rows && surface.revision != state.revision) || !within(surface.bounds, pointer)) {
+      return 0;
+    }
+
+    if (generation_ != state.generation || inspecting_ != state.inspecting) {
+      wheel_.reset();
+      generation_ = state.generation;
+      inspecting_ = state.inspecting;
+    }
+
+    sample.cell_height = state.inspecting || !surface.has_rows ? surface.cell_height : surface.row_height;
+
+    return wheel_.consume(sample);
+  }
+
+  bool HistoryScroll::within(Rect bounds, HistoryScrollPosition pointer) noexcept {
+    return pointer.x >= bounds.x && pointer.y >= bounds.y && pointer.x < static_cast<double>(bounds.x) + bounds.width && pointer.y < static_cast<double>(bounds.y) + bounds.height;
+  }
+
 }

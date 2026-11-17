@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "../core/memory.hpp"
 #include "../core/terminal_size.hpp"
-#include "../input/wheel_accumulator.hpp"
+#include "../core/wheel_accumulator.hpp"
 #include "../terminal/cell_position.hpp"
 #include "../terminal/screen.hpp"
 #include "assertions.hpp"

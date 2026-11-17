@@ -6,7 +6,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "machine_effects.hpp"
 #include "runtime_connection.hpp"
 #include "telar_base/memory/allocator.hpp"

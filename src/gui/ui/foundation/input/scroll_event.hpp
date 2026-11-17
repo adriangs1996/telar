@@ -1,6 +1,6 @@
 #pragma once
 
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include <QInputDevice>
 #include <QPointF>
 #include <QWheelEvent>

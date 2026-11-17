@@ -11,8 +11,8 @@ import std;
 import telar.gui.foundation.terminal;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.copy_mode;
+import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
-import telar.gui.input.wheel_accumulator;
 import telar.wire.vocabulary;
 
 namespace {

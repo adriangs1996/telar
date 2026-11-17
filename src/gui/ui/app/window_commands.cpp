@@ -486,7 +486,7 @@ namespace telar::gui::qt {
   }
 
   void WindowCommands::scrollBinding(application::ScrollDirection direction) {
-    store_.session().scrollFocused(direction);
+    application::terminal::input::scroll(store_.session(), direction);
     if (const auto* pane = store_.session().focusedPane()) {
       emit terminals_.terminalChanged(pane->id);
     }

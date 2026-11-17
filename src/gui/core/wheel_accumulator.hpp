@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline core {
 
   enum class ScrollPhase : std::uint8_t {
     none,

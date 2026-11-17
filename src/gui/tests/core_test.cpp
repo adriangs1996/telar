@@ -13,7 +13,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.model;
 import telar.gui.features.history;
-import telar.gui.input.configuration;
+import telar.gui.features.terminal.input;
 import telar.gui.transport.runtime_link;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
@@ -394,7 +394,7 @@ namespace {
   }
 
   void mouseEncoding() {
-    telar::gui::MouseEncoder encoder;
+    telar::gui::features::terminal::input::MouseEncoder encoder;
     constexpr unsigned column = 12;
     constexpr unsigned row = 34;
     constexpr unsigned first_unrepresentable_coordinate = 224;

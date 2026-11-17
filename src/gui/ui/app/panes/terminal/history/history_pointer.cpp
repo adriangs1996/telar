@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
+#include "core/wheel_accumulator.hpp"
 #include "history_controller.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
@@ -32,7 +32,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.input.child_mouse;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -225,14 +224,14 @@ namespace telar::gui::qt {
     }
   }
 
-  HistoryScrollSurface HistoryController::scrollSurface(HoverFrame& hover) const {
+  application::history::HistoryScrollSurface HistoryController::scrollSurface(HoverFrame& hover) const {
     const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
     const auto browser = application::history::view(store_.session());
     const auto generation = store_.dialog().generation;
 
     hover.generation = generation;
     hover.scale = density;
-    HistoryScrollSurface surface{
+    application::history::HistoryScrollSurface surface{
         .generation = generation,
         .revision = browser.revision(),
         .row_height = metrics_.cell_height,
@@ -375,17 +374,17 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void HistoryController::scroll(HistoryScrollPosition pointer, ScrollSample sample) {
+  void HistoryController::scroll(application::history::HistoryScrollPosition pointer, ScrollSample sample) {
     const auto browser = application::history::view(store_.session());
     const auto& view = browser.state();
-    const HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !busy() && view.phase == application::history::HistoryPhase::ready, .inspecting = view.inspecting};
+    const application::history::HistoryScrollState state{.generation = store_.dialog().generation, .revision = browser.revision(), .ready = !busy() && view.phase == application::history::HistoryPhase::ready, .inspecting = view.inspecting};
     const auto& surface = presented_surface_;
 
     if (sample.precise) {
       sample.delta *= surface.scale;
     }
 
-    const HistoryScrollPosition physical{.x = pointer.x * surface.scale, .y = pointer.y * surface.scale};
+    const application::history::HistoryScrollPosition physical{.x = pointer.x * surface.scale, .y = pointer.y * surface.scale};
     if (!std::isfinite(physical.x) || !std::isfinite(physical.y) || !std::isfinite(sample.delta)) {
       return;
     }

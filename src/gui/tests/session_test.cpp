@@ -6,7 +6,7 @@ static_assert(true);
 #include "../terminal/screen.hpp"
 #include "assertions.hpp"
 #include "core/memory.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
@@ -583,7 +583,7 @@ namespace {
     Transport transport;
     TestSession client{memory, transport};
 
-    client.scrollFocused(application::ScrollDirection::up);
+    application::terminal::input::scroll(client, application::ScrollDirection::up);
     require(transport.sent.empty(), "focused scrolling without a pane must have no effects");
     openFirstPane(client, transport);
     constexpr std::uint32_t history_rows = 10;
@@ -592,12 +592,12 @@ namespace {
     FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = history_rows, .offset = initial_offset}};
 
     deliverSingleCell(client, frame);
-    client.scrollFocused(application::ScrollDirection::up);
+    application::terminal::input::scroll(client, application::ScrollDirection::up);
     require(transport.last<SetPaneViewport>().offset == previous_offset, "an untracked scroll action must move three history rows");
-    client.scrollFocused(application::ScrollDirection::down);
+    application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.last<SetPaneViewport>().offset == initial_offset, "opposite focused scroll actions must restore the viewport");
-    client.scrollFocused(application::ScrollDirection::down);
-    client.scrollFocused(application::ScrollDirection::down);
+    application::terminal::input::scroll(client, application::ScrollDirection::down);
+    application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.last<SetPaneViewport>().offset == std::numeric_limits<std::uint32_t>::max() && client.focusedPane()->screen.scroll().offset == history_rows - 1, "scrolling to the bottom asks the runtime to follow the output");
 
     ++frame.frame_id;
@@ -610,8 +610,8 @@ namespace {
     const auto viewport_requests = transport.count(ClientTag::set_pane_viewport);
     auto first_message = transport.sent.size();
 
-    client.scrollFocused(application::ScrollDirection::up);
-    client.scrollFocused(application::ScrollDirection::down);
+    application::terminal::input::scroll(client, application::ScrollDirection::up);
+    application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.inputSince(first_message) == "\x1b[<64;1;1M\x1b[<65;1;1M", "tracked scroll actions must report one SGR packet at the pane origin");
     require(client.copyMode().state() && client.focusedPane()->screen.scroll().offset == initial_offset && transport.count(ClientTag::set_pane_viewport) == viewport_requests, "mouse reports must preserve highlighting and the scrolled viewport");
 
@@ -621,8 +621,8 @@ namespace {
     frame.scroll.offset = history_rows - 1;
     deliverSingleCell(client, frame);
     first_message = transport.sent.size();
-    client.scrollFocused(application::ScrollDirection::up);
-    client.scrollFocused(application::ScrollDirection::down);
+    application::terminal::input::scroll(client, application::ScrollDirection::up);
+    application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.inputSince(first_message) == "\x1b[A\x1b[A\x1b[A\x1b[B\x1b[B\x1b[B", "alternate scrolling must use literal arrows independently of Kitty mode");
     require(client.copyMode().state() && client.focusedPane()->screen.scroll().offset == frame.scroll.offset, "alternate scrolling must preserve highlighting and the bottom viewport");
 
@@ -630,13 +630,13 @@ namespace {
     frame.scroll.offset = initial_offset;
     deliverSingleCell(client, frame);
     first_message = transport.sent.size();
-    client.scrollFocused(application::ScrollDirection::up);
+    application::terminal::input::scroll(client, application::ScrollDirection::up);
     require(transport.inputSince(first_message).empty() && transport.last<SetPaneViewport>().offset == previous_offset, "alternate scrolling away from the bottom must scroll history without child input");
     ++frame.frame_id;
     frame.mouse = {.tracking = MouseTracking::normal};
     deliverSingleCell(client, frame);
     first_message = transport.sent.size();
-    client.scrollFocused(application::ScrollDirection::up);
+    application::terminal::input::scroll(client, application::ScrollDirection::up);
     require(transport.inputSince(first_message).empty() && transport.last<SetPaneViewport>().offset == previous_offset, "a tracking mode without SGR must retain the original viewport fallback");
     client.scroll({.pane_id = 1, .rows = std::numeric_limits<std::int64_t>::min()});
     require(client.focusedPane()->screen.scroll().offset == history_rows - 1, "the largest downward scroll must clamp without signed overflow");
@@ -652,7 +652,7 @@ namespace {
     require(transport.count(ClientTag::set_pane_viewport) == bounded_requests && client.focusedPane()->screen.scroll().offset == 0, "keyboard copy mode must retain exclusive viewport ownership");
     client.disconnected();
     first_message = transport.sent.size();
-    client.scrollFocused(application::ScrollDirection::down);
+    application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.sent.size() == first_message, "detached panes must not receive scroll effects");
   }
 

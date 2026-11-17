@@ -1,8 +1,8 @@
-module telar.gui.input.configuration;
+module telar.gui.features.terminal.input;
 
 import std;
 
-namespace telar::gui {
+namespace telar::gui::features::terminal::input {
 
   std::string_view MouseEncoder::encode(unsigned button, unsigned x, unsigned y, bool released, bool sgr) noexcept {
     used_ = 0;

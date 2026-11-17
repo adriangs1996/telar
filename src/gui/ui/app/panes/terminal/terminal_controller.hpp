@@ -29,7 +29,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.input.child_mouse;
 import telar.gui.links.link_hover;
 
 namespace telar::gui::qt {
@@ -131,7 +130,7 @@ namespace telar::gui::qt {
     // The pointer buttons a terminal holds. Its press acquires the button, and hands a gesture to
     // the program when the program tracks the mouse; its release lets the button go.
     void acquire(TerminalItem& terminal, Qt::MouseButton button);
-    void beginChild(const ChildMouseView& view, ChildMouseSample sample);
+    void beginChild(const application::terminal::input::ChildMouseView& view, application::terminal::input::ChildMouseSample sample);
     void release(Qt::MouseButton button);
     void abandon(TerminalItem& terminal);
     // The window's pointer while a terminal holds a button: whether one does, a drag delivered to
@@ -163,7 +162,7 @@ namespace telar::gui::qt {
   private:
     struct Capture {
       QPointer<TerminalItem> terminal;
-      ChildMouseGesture child{};
+      application::terminal::input::ChildMouseGesture child{};
       std::uint64_t pane_id = 0;
       bool held = false;
     };
@@ -174,13 +173,13 @@ namespace telar::gui::qt {
       Qt::MouseButtons child_buttons;
     };
 
-    using Recipients = std::array<Recipient, static_cast<std::size_t>(MouseButton::none)>;
+    using Recipients = std::array<Recipient, static_cast<std::size_t>(application::terminal::input::MouseButton::none)>;
 
     [[nodiscard]] Capture* capture(Qt::MouseButton button) noexcept;
     [[nodiscard]] Recipients recipients() const;
-    [[nodiscard]] ChildMouseView view(const Capture& lease) const;
-    [[nodiscard]] static ChildMouseSample sample(const QMouseEvent& event, MousePhase phase, MouseButton button);
-    void report(std::uint64_t pane_id, const std::optional<ChildMouseReport>& report);
+    [[nodiscard]] application::terminal::input::ChildMouseView view(const Capture& lease) const;
+    [[nodiscard]] static application::terminal::input::ChildMouseSample sample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button);
+    void report(std::uint64_t pane_id, const std::optional<application::terminal::input::ChildMouseReport>& report);
     void cancelPane(std::uint64_t pane_id);
     static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 
@@ -194,7 +193,7 @@ namespace telar::gui::qt {
     qreal chrome_ratio_ = 1;
     Qt::KeyboardModifiers pointer_modifiers_;
     QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
-    std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
+    std::array<Capture, static_cast<std::size_t>(application::terminal::input::MouseButton::none)> captures_;
     QPointer<TerminalItem> scroll_owner_;
   };
 

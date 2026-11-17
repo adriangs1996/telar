@@ -57,7 +57,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.input.child_mouse;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -117,7 +116,7 @@ namespace telar::gui::qt {
   application::history::HistoryActionCapture* PointerDispatcher::capture(Qt::MouseButton button) noexcept {
     const auto semantic = mouseButton(button);
 
-    return semantic == MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
+    return semantic == application::terminal::input::MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
   }
 
   bool PointerDispatcher::occupied() const noexcept {

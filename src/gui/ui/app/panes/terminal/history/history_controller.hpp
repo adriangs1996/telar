@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/store/store.hpp"
@@ -32,7 +32,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.input.child_mouse;
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
@@ -111,7 +110,7 @@ namespace telar::gui::qt {
     // What the dialog contributes to one prepared frame.
     struct Frame {
       std::optional<Presented> history;
-      HistoryScrollSurface surface;
+      application::history::HistoryScrollSurface surface;
       application::history::HistoryActionSurface actions;
       std::optional<HoverFrame> hover;
     };
@@ -144,7 +143,7 @@ namespace telar::gui::qt {
     // Whether the focused pane's prompt line hosts the search and scrolls its own rows.
     [[nodiscard]] bool hosted() const;
     bool handleWheel(QWheelEvent& event);
-    void scroll(HistoryScrollPosition pointer, ScrollSample sample);
+    void scroll(application::history::HistoryScrollPosition pointer, ScrollSample sample);
     void activate(application::history::HistoryCardAction action, application::history::HistoryChoice choice);
     void observeHover(QPointF position, application::history::HistoryHover::Observation observation);
     void retireHover();
@@ -225,7 +224,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool busy() const;
     [[nodiscard]] const Presented* presented(const QString& revision) const;
     [[nodiscard]] application::history::HistoryActionSurface actionSurface() const;
-    [[nodiscard]] HistoryScrollSurface scrollSurface(HoverFrame& hover) const;
+    [[nodiscard]] application::history::HistoryScrollSurface scrollSurface(HoverFrame& hover) const;
     void submit(std::uint64_t entry_id, bool alternate);
     void moveRows(std::int32_t steps);
     void notifyHover();
@@ -257,7 +256,7 @@ namespace telar::gui::qt {
     QString directory_value_;
     application::history::HistoryModalMetrics metrics_;
     QPointer<QQuickWindow> window_;
-    HistoryScroll scroll_;
+    application::history::HistoryScroll scroll_;
     ScrollEventSequence wheel_sequence_;
     QPointer<QQuickItem> panel_;
     QPointer<QQuickItem> viewport_;
@@ -268,7 +267,7 @@ namespace telar::gui::qt {
     QPointer<QQuickItem> filter_layout_;
     QPointer<QQuickItem> inspector_;
     std::optional<Presented> presented_;
-    HistoryScrollSurface presented_surface_;
+    application::history::HistoryScrollSurface presented_surface_;
     application::history::HistoryActionSurface presented_actions_;
     std::optional<HoverFrame> presented_hover_;
     application::history::HistoryHover hover_;

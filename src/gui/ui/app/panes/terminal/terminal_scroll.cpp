@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "core/memory.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "input/scroll_motion.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"

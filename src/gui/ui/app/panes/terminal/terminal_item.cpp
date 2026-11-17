@@ -7,7 +7,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "platform/font.h"
 #include "platform/window.hpp"
 #include "tbc/view.hpp"

@@ -1,5 +1,5 @@
 #include "platform/scroll_event.hpp"
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include <AppKit/AppKit.h>
 #include <QWindow>
 #include <bit>

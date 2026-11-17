@@ -20,7 +20,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.input.child_mouse;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -75,7 +74,7 @@ namespace telar::gui::qt {
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;
-    std::array<application::history::HistoryActionCapture, static_cast<std::size_t>(MouseButton::none)> captures_;
+    std::array<application::history::HistoryActionCapture, static_cast<std::size_t>(application::terminal::input::MouseButton::none)> captures_;
     bool delivering_ = false;
     bool handing_off_ = false;
   };

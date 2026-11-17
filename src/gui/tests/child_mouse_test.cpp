@@ -7,13 +7,14 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.input.child_mouse;
+import telar.gui.features.terminal.input;
 import telar.wire.vocabulary;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::input;
 
   void require(bool condition, const char* message) {
     if (!condition) {

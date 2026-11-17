@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "input/wheel_accumulator.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
@@ -27,9 +27,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
-import telar.gui.input.child_mouse;
 import telar.gui.input.copy_pointer;
-import telar.gui.input.configuration;
 
 namespace telar::gui::qt {
 
@@ -62,7 +60,7 @@ namespace telar::gui::qt {
     const auto maximum_y = std::max(1U, rows * (current->screen.mouse().pixels ? current->size.cell_height_px : 1U));
     const auto x = static_cast<unsigned>(std::clamp(position.x() * scale / (current->screen.mouse().pixels ? 1 : font_.cell.width()), 0.0, static_cast<double>(maximum_x - 1))) + 1;
     const auto y = static_cast<unsigned>(std::clamp(position.y() * scale / (current->screen.mouse().pixels ? 1 : font_.cell.height()), 0.0, static_cast<double>(maximum_y - 1))) + 1;
-    MouseEncoder encoder;
+    application::terminal::input::MouseEncoder encoder;
     const auto packet = encoder.encode(button, x, y, released, current->screen.mouse().sgr);
 
     send(QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, application::PaneInputSource::mouse);
@@ -77,7 +75,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  ChildMouseView TerminalItem::childMouseView() const {
+  application::terminal::input::ChildMouseView TerminalItem::childMouseView() const {
     const auto* current = pane();
     if (current == nullptr) {
       return {};
@@ -86,7 +84,7 @@ namespace telar::gui::qt {
     return {.pane_id = current->id, .location = current->location, .surface = terminalSurface(), .protocol = current->screen.mouse(), .columns = current->screen.columns(), .rows = current->screen.rows(), .cell_width_px = current->size.cell_width_px, .cell_height_px = current->size.cell_height_px, .attached = current->attached, .visible = isVisible() && window() != nullptr};
   }
 
-  ChildMouseSample TerminalItem::childMouseSample(const QMouseEvent& event, MousePhase phase, MouseButton button) const {
+  application::terminal::input::ChildMouseSample TerminalItem::childMouseSample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button) const {
     const auto position = mapToScene(event.position());
 
     return {.button = button, .phase = phase, .position = {.x = static_cast<float>(position.x()), .y = static_cast<float>(position.y())}, .modifiers = mouseModifiers(event.modifiers())};
@@ -143,9 +141,9 @@ namespace telar::gui::qt {
 
     const auto child_tracking = current->screen.mouse().tracking != MouseTracking::none && !(left && event->modifiers().testFlag(Qt::ShiftModifier));
     const auto button = mouseButton(event->button());
-    if (child_tracking && button != MouseButton::none) {
+    if (child_tracking && button != application::terminal::input::MouseButton::none) {
       const auto view = childMouseView();
-      const auto sample = childMouseSample(*event, MousePhase::press, button);
+      const auto sample = childMouseSample(*event, application::terminal::input::MousePhase::press, button);
 
       controller_->beginChild(view, sample);
     } else if (left && input.pane_id != 0 && input.inside) {
@@ -283,7 +281,7 @@ namespace telar::gui::qt {
       const auto modifiers = mouseModifiers(event.modifiers());
 
       for (int step = 0; step < std::abs(lines); ++step) {
-        mousePacket((lines < 0 ? MouseEncoder::wheel_up : MouseEncoder::wheel_down) | modifiers, event.position(), false);
+        mousePacket((lines < 0 ? application::terminal::input::MouseEncoder::wheel_up : application::terminal::input::MouseEncoder::wheel_down) | modifiers, event.position(), false);
       }
 
       return;
@@ -315,9 +313,9 @@ namespace telar::gui::qt {
     }
 
     if (controller_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && controller_->dialog() == Store::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
-      const auto no_button = static_cast<unsigned>(MouseButton::none);
+      const auto no_button = static_cast<unsigned>(application::terminal::input::MouseButton::none);
 
-      mousePacket(ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);
+      mousePacket(application::terminal::input::ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);
     }
 
     observeLinkPointer(event->position(), event->modifiers());

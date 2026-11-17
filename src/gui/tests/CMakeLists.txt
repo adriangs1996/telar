@@ -87,7 +87,7 @@ telar_add_test(gui-text-fit-test SOURCES text_fit_test.cpp LIBRARIES gui-foundat
 target_compile_options(gui-text-fit-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-font-grid-test SOURCES font_grid_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-test-fixtures
   TEST gui-font-grid LABELS gui.foundation.terminal)
-telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-terminal gui-core gui-features-history gui-layout gui-input gui-transport gui-test-fixtures
+telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-terminal gui-core gui-features-history gui-features-terminal-input gui-layout gui-input gui-transport gui-test-fixtures
   TEST gui-core LABELS gui.core TIMEOUT 30)
 telar_add_test(gui-color-test SOURCES color_test.cpp LIBRARIES gui-foundation-core gui-core
   TEST gui-color LABELS gui.core)
@@ -209,7 +209,7 @@ telar_add_test(gui-editor-session-test SOURCES editor_session_test.cpp LIBRARIES
   TEST gui-editor-session LABELS gui.application TIMEOUT 30)
 telar_add_test(gui-link-interaction-test SOURCES link_interaction_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-links gui-test-fixtures
   TEST gui-link-interaction LABELS gui.links TIMEOUT 30)
-telar_add_test(gui-child-mouse-test SOURCES child_mouse_test.cpp LIBRARIES gui-core gui-input
+telar_add_test(gui-child-mouse-test SOURCES child_mouse_test.cpp LIBRARIES gui-core gui-features-terminal-input
   TEST gui-child-mouse LABELS gui.input TIMEOUT 30)
 telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-core gui-test-fixtures
   TEST gui-cell-glyphs LABELS gui.foundation.terminal)

@@ -73,6 +73,10 @@ export namespace telar::gui::application::history {
   using features::history::HistoryRow;
   using features::history::HistoryRowGeometry;
   using features::history::HistoryRowMeasurements;
+  using features::history::HistoryScroll;
+  using features::history::HistoryScrollPosition;
+  using features::history::HistoryScrollState;
+  using features::history::HistoryScrollSurface;
   using features::history::HistorySearch;
   using features::history::HistorySelectionMotion;
   using features::history::HistoryText;

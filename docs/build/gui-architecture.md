@@ -181,11 +181,12 @@ de sonido). Lo que una feature compone con otra aún no migrada (el editor de la
 `paths`) lo hace `application`, con accesores temporales en `Access` (`promptLine`,
 `notePromptWrite`) que desaparecen cuando esa otra feature exista.
 
-Un encabezado textual que Objective-C++ o Qt incluyen (`input/wheel_accumulator.hpp`) no se
-reexporta desde el namespace inline de un módulo de `foundation`: donde ui lo incluye después de
-importar ese módulo, sus nombres quedan ambiguos. La sección que lo necesita (`history_scroll`)
-espera en su dominio antiguo hasta que el paso que mueva el encabezado le dé un hogar solo de
-módulos.
+Un encabezado textual que Objective-C++ o Qt incluyen (`core/wheel_accumulator.hpp`) declara sus
+nombres en el namespace inline del módulo de `foundation` que lo posee
+(`telar::gui::inline foundation::inline core`), y ese módulo los reexporta con `using` desde su
+fragmento global (`core-wheel.cppm`). Así un fuente de Qt que incluye el encabezado después de
+importar el módulo nombra una sola entidad. Reexportar desde el namespace inline nombres que el
+encabezado declara en `telar::gui` los deja ambiguos en ese mismo fuente.
 
 **En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
 nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.

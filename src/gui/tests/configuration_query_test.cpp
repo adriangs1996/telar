@@ -35,7 +35,6 @@ import telar.gui.foundation.core;
 import telar.gui.core.json_writer;
 import telar.gui.input.copy_pointer;
 import telar.base.text.json;
-import telar.gui.input.configuration;
 import telar.gui.foundation.keys;
 import telar.gui.input.key_encoder;
 

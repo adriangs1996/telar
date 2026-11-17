@@ -1,9 +1,6 @@
 module telar.gui.application;
 
 import std;
-import telar.gui.input.configuration;
-import telar.gui.foundation.keys;
-import telar.gui.input.wheel_accumulator;
 import telar.gui.foundation.terminal;
 import telar.render.document;
 import telar.gui.foundation.core;
@@ -179,35 +176,6 @@ namespace telar::gui::application {
     send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
     pane->screen.setViewport(requested);
     ++view_version_.viewport;
-  }
-
-  void Session::scrollFocused(ScrollDirection direction) {
-    const auto* pane = focusedPane();
-    if (pane == nullptr || !pane->attached || pane->exited) {
-      return;
-    }
-
-    switch (wheelRoute(pane->screen)) {
-    case WheelRoute::report: {
-      MouseEncoder encoder;
-
-      input(pane->id, encoder.encode(direction == ScrollDirection::up ? MouseEncoder::wheel_up : MouseEncoder::wheel_down, 1, 1, false, true), PaneInputSource::mouse);
-      return;
-    }
-    case WheelRoute::keys: {
-      KeyEncoder encoder;
-      const auto bytes = encoder.alternateScroll(direction == ScrollDirection::up, pane->screen.modes());
-
-      for (std::int32_t step = 0; step < WheelAccumulator::rows_per_line; ++step) {
-        input(pane->id, bytes, PaneInputSource::mouse);
-      }
-
-      return;
-    }
-    case WheelRoute::scroll:
-      scroll({.pane_id = pane->id, .rows = direction == ScrollDirection::up ? WheelAccumulator::rows_per_line : -WheelAccumulator::rows_per_line});
-      return;
-    }
   }
 
   bool Session::measureInline(std::uint64_t pane_id, std::uint64_t id, std::uint32_t rows) {

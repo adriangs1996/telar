@@ -322,8 +322,6 @@ export {
 
       void scroll(PaneScrollDelta delta);
 
-      void scrollFocused(ScrollDirection direction);
-
       [[nodiscard]] const CopyMode& copyMode() const noexcept;
 
       bool beginSelection(CopyPress press) noexcept;

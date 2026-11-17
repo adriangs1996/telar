@@ -10,20 +10,20 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.input.child_mouse;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  inline constexpr auto mouse_buttons = std::to_array<std::pair<Qt::MouseButton, MouseButton>>({
-      {Qt::LeftButton, MouseButton::left},
-      {Qt::MiddleButton, MouseButton::middle},
-      {Qt::RightButton, MouseButton::right},
+  inline constexpr auto mouse_buttons = std::to_array<std::pair<Qt::MouseButton, application::terminal::input::MouseButton>>({
+      {Qt::LeftButton, application::terminal::input::MouseButton::left},
+      {Qt::MiddleButton, application::terminal::input::MouseButton::middle},
+      {Qt::RightButton, application::terminal::input::MouseButton::right},
   });
 
-  inline MouseButton mouseButton(Qt::MouseButton button) noexcept {
+  inline application::terminal::input::MouseButton mouseButton(Qt::MouseButton button) noexcept {
     const auto* const found = std::ranges::find(mouse_buttons, button, &decltype(mouse_buttons)::value_type::first);
 
-    return found == mouse_buttons.end() ? MouseButton::none : found->second;
+    return found == mouse_buttons.end() ? application::terminal::input::MouseButton::none : found->second;
   }
 
 }

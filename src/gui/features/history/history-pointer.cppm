@@ -123,3 +123,45 @@ export {
 
   }
 }
+
+// Interface: input/history_scroll.cppm
+export {
+  namespace telar::gui::features::history {
+
+    struct HistoryScrollState {
+      std::uint64_t generation = 0;
+      std::uint64_t revision = 0;
+      bool ready = false;
+      bool inspecting = false;
+    };
+
+    struct HistoryScrollSurface {
+      Rect bounds{};
+      std::uint64_t generation = 0;
+      std::uint64_t revision = 0;
+      double row_height = 1;
+      double cell_height = 1;
+      double scale = 1;
+      bool delivered = false;
+      bool has_rows = false;
+    };
+
+    struct HistoryScrollPosition {
+      double x = 0;
+      double y = 0;
+    };
+
+    class HistoryScroll {
+    public:
+      [[nodiscard]] std::int32_t consume(HistoryScrollState state, const HistoryScrollSurface& surface, HistoryScrollPosition pointer, ScrollSample sample) noexcept;
+
+    private:
+      [[nodiscard]] static bool within(Rect bounds, HistoryScrollPosition pointer) noexcept;
+
+      WheelAccumulator wheel_;
+      std::uint64_t generation_ = 0;
+      bool inspecting_ = false;
+    };
+
+  }
+}

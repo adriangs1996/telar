@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "core/memory.hpp"
+#include "core/wheel_accumulator.hpp"
 #include "frame_fixture.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "qml_fixture.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/panes/terminal/history/layout/history_empty_layout.hpp"

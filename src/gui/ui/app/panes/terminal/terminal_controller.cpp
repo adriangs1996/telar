@@ -14,7 +14,7 @@ static_assert(true);
 #include <exception>
 #include <utility>
 
-import telar.gui.input.configuration;
+import telar.gui.application;
 import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
@@ -188,7 +188,7 @@ namespace telar::gui::qt {
   TerminalController::Capture* TerminalController::capture(Qt::MouseButton button) noexcept {
     const auto semantic = mouseButton(button);
 
-    return semantic == MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
+    return semantic == application::terminal::input::MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
   }
 
   void TerminalController::acquire(TerminalItem& terminal, Qt::MouseButton button) {
@@ -197,15 +197,15 @@ namespace telar::gui::qt {
     }
   }
 
-  void TerminalController::beginChild(const ChildMouseView& view, ChildMouseSample sample) {
-    if (sample.button == MouseButton::none) {
+  void TerminalController::beginChild(const application::terminal::input::ChildMouseView& view, application::terminal::input::ChildMouseSample sample) {
+    if (sample.button == application::terminal::input::MouseButton::none) {
       return;
     }
 
     auto& lease = captures_[static_cast<std::size_t>(sample.button)];
 
     lease.child.begin(view, sample);
-    report(lease.pane_id, ChildMouseProjection::project(view, sample));
+    report(lease.pane_id, application::terminal::input::ChildMouseProjection::project(view, sample));
   }
 
   void TerminalController::release(Qt::MouseButton button) {
@@ -226,7 +226,7 @@ namespace telar::gui::qt {
     return std::ranges::any_of(captures_, &Capture::held);
   }
 
-  ChildMouseView TerminalController::view(const Capture& lease) const {
+  application::terminal::input::ChildMouseView TerminalController::view(const Capture& lease) const {
     if (const auto terminal = terminals_.value(lease.pane_id); terminal != nullptr) {
       return terminal->childMouseView();
     }
@@ -236,23 +236,23 @@ namespace telar::gui::qt {
       return {};
     }
 
-    ChildMouseView result{.pane_id = current->id, .location = current->location, .protocol = current->screen.mouse(), .columns = current->screen.columns(), .rows = current->screen.rows(), .cell_width_px = current->size.cell_width_px, .cell_height_px = current->size.cell_height_px, .attached = current->attached, .visible = false};
+    application::terminal::input::ChildMouseView result{.pane_id = current->id, .location = current->location, .protocol = current->screen.mouse(), .columns = current->screen.columns(), .rows = current->screen.rows(), .cell_width_px = current->size.cell_width_px, .cell_height_px = current->size.cell_height_px, .attached = current->attached, .visible = false};
 
     result.surface.attachment_generation = current->attachment_generation;
 
     return result;
   }
 
-  ChildMouseSample TerminalController::sample(const QMouseEvent& event, MousePhase phase, MouseButton button) {
+  application::terminal::input::ChildMouseSample TerminalController::sample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button) {
     return {.button = button, .phase = phase, .position = {.x = static_cast<float>(event.position().x()), .y = static_cast<float>(event.position().y())}, .modifiers = TerminalItem::mouseModifiers(event.modifiers())};
   }
 
-  void TerminalController::report(std::uint64_t pane_id, const std::optional<ChildMouseReport>& report) {
+  void TerminalController::report(std::uint64_t pane_id, const std::optional<application::terminal::input::ChildMouseReport>& report) {
     if (!report) {
       return;
     }
 
-    MouseEncoder encoder;
+    application::terminal::input::MouseEncoder encoder;
     const auto packet = encoder.encode(report->button, report->x, report->y, report->released, true);
 
     input(pane_id, QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, application::PaneInputSource::mouse);
@@ -340,7 +340,7 @@ namespace telar::gui::qt {
     for (const auto& [native, semantic] : mouse_buttons) {
       auto& lease = captures_[static_cast<std::size_t>(semantic)];
       if (lease.held && lease.child.owned() && event.buttons().testFlag(native)) {
-        report(lease.pane_id, lease.child.deliver(view(lease), sample(event, MousePhase::drag, semantic)));
+        report(lease.pane_id, lease.child.deliver(view(lease), sample(event, application::terminal::input::MousePhase::drag, semantic)));
       }
     }
 
@@ -360,7 +360,7 @@ namespace telar::gui::qt {
 
     auto previous = std::exchange(*lease, Capture{});
     if (previous.child.owned()) {
-      report(previous.pane_id, previous.child.deliver(view(previous), sample(event, MousePhase::release, mouseButton(event.button()))));
+      report(previous.pane_id, previous.child.deliver(view(previous), sample(event, application::terminal::input::MousePhase::release, mouseButton(event.button()))));
     } else if (previous.terminal != nullptr) {
       Qt::MouseButtons held;
 
