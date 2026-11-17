@@ -167,13 +167,15 @@ namespace {
     runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
 
     TerminalItem terminal{window.contentItem()};
+    // Read before the terminal takes the controller, which lends the client mutably.
+    const auto grid = client.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
+    const auto colors = client.colors();
 
     terminal.setController(client.terminals());
     terminal.setPaneId(QString::number(pane_id));
     terminal.setSize(QSizeF{960, 820});
     QQmlEngine engine;
-    const auto grid = client.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
-    const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), client.colors()}, {QStringLiteral("grid"), grid}});
+    const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), colors}, {QStringLiteral("grid"), grid}});
 
     separators->setParentItem(&terminal);
     window.show();
