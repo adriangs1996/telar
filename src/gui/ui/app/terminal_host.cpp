@@ -12,15 +12,6 @@ import telar.gui.links.cell_links;
 
 namespace telar::gui::qt {
 
-  void ApplicationController::initializeTerminals() {
-    // After the window's own slots, which ran before the terminals' when they listened here.
-    connect(this, &ApplicationController::configurationChanged, &terminals_, &TerminalController::configurationChanged);
-    connect(&machines_, &MachinesCoordinator::changed, &terminals_, &TerminalController::machineChanged);
-    connect(&dialogs_, &Dialogs::changed, &terminals_, &TerminalController::dialogChanged);
-    connect(&terminals_, &TerminalController::notificationPublished, &notifications_, &NotificationsController::refresh);
-    connect(&terminals_, &TerminalController::failed, &status_, &WindowStatus::report);
-  }
-
   void ApplicationController::pressKey(TerminalItem& terminal, QKeyEvent& event) {
     if (commands_.handleKey(event, terminal, terminal.composing())) {
       return;

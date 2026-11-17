@@ -135,12 +135,14 @@ namespace telar::gui::qt {
 
   class TerminalItem;
 
-  // The window and what runs it: the machines and their runtime connections, the store every
-  // controller reads, the frames the terminals present, the dialog that is open, and the
-  // commands keys, pointers and QML send, which act on the session or the window.
+  // The window: it owns the store and every part that reads it, connects what each part asks
+  // of the others, and keeps them up to date with the runtime in the order they depend on each
+  // other.
   //
-  // Each feature's state lives in its own controller, which reads the store and never calls
-  // back here; this controller synchronizes them in order and runs what they ask of the window.
+  // Each feature's state lives in its own controller, and what crosses features in its own
+  // coordinator: the display, the status, the frames, the dialogs, the machines, the chosen
+  // activity and the commands. None of them calls back here except through the narrow
+  // interfaces this class implements for the terminals, the machines and the commands.
   class ApplicationController final : public QObject, private TerminalHost, private MachinesHost, private CommandsHost {
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
@@ -359,7 +361,7 @@ namespace telar::gui::qt {
     void releaseInput() override;
     void forgetView() override;
     void presentMachine() override;
-    // What the terminals ask of the window (terminal_host.cpp).
+    // What the terminals ask of the window.
     void pressKey(TerminalItem& terminal, QKeyEvent& event) override;
     [[nodiscard]] bool releaseKey(TerminalItem& terminal, QKeyEvent& event) override;
     void interruptKeys() override;

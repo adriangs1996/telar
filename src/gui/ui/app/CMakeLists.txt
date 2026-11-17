@@ -5,23 +5,17 @@ telar_add_qml_sources(gui-quick
     application_controller.cpp
     application_controller.hpp
     application_effects.cpp
-    component_commands.cpp
+    application_wiring.cpp
     dialogs.cpp
     dialogs.hpp
-    element_commands.cpp
     frame_presenter.cpp
     frame_presenter.hpp
-    graphics_recovery.cpp
     key_bindings.cpp
     machine_roster.cpp
     machine_roster.hpp
     machines_coordinator.cpp
     machines_coordinator.hpp
-    notification_commands.cpp
-    palette_commands.cpp
-    plugin_commands.cpp
     pointer_dispatcher.cpp
-    prompt_commands.cpp
     terminal_host.cpp
     window_animation.cpp
     window_commands.cpp

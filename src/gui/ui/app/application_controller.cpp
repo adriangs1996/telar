@@ -29,6 +29,7 @@ static_assert(true);
 #include "ui/foundation/models/tab_leaves.hpp"
 #include "ui/foundation/process/launch_arguments.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/foundation/timing/deadline_timer.hpp"
 #include <QAbstractItemModel>
 #include <QClipboard>
 #include <QCryptographicHash>
@@ -684,6 +685,19 @@ namespace telar::gui::qt {
     terminals_.setChromeRatio(display_.chromeRatio());
   }
 
+  void ApplicationController::refreshElementBars() {
+    components_.refreshElementBars({
+        {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
+        {QStringLiteral("machine"), machines_.context().value(QStringLiteral("label"))},
+        {QStringLiteral("tab_count"), tabs_.count()},
+        {QStringLiteral("sidebar_visible"), display_.sidebarVisible()},
+    });
+  }
+
+  void ApplicationController::scheduleGraphicsRecovery() {
+    scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, platform::AwakeClock::nowNanoseconds());
+  }
+
   void ApplicationController::refresh() {
     synchronize();
     peek_.synchronize();
@@ -752,26 +766,6 @@ namespace telar::gui::qt {
 
   AttachmentsController* ApplicationController::attachments() noexcept {
     return &attachments_;
-  }
-
-  void ApplicationController::initializeAttachments() {
-    connect(&attachments_, &AttachmentsController::changed, this, [this] {
-      refresh_timer_.start();
-    });
-    // The modal takes the keyboard and the pointer from the panes while it is open.
-    connect(&attachments_, &AttachmentsController::modalChanged, this, [this](bool open) {
-      if (open) {
-        components_.closePick();
-        components_.closePanel();
-        commands_.interrupt();
-        for (const auto& pane : session().panes()) {
-          terminals_.releaseInput(pane->id);
-        }
-      } else {
-        restoreTerminalFocus();
-      }
-    });
-    connect(&attachments_, &AttachmentsController::failed, &status_, &WindowStatus::report);
   }
 
   void ApplicationController::publishConfiguration() {
