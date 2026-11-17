@@ -20,12 +20,13 @@ telar_add_qml_sources(gui-quick
     prompt_commands.cpp
     terminal_host.cpp
     window_animation.cpp
-    window_geometry.cpp
+    window_display.cpp
+    window_display.hpp
   QML_FILES
     CommandDialog.qml
     Main.qml
   FP_CONTRACT_OFF
-    window_geometry.cpp
+    window_display.cpp
   REGISTERS)
 
 add_subdirectory(chrome)

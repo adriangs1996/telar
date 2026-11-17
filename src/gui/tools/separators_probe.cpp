@@ -168,7 +168,7 @@ namespace {
 
     TerminalItem terminal{window.contentItem()};
     // Read before the terminal takes the controller, which lends the client mutably.
-    const auto grid = client.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
+    const auto grid = client.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
     const auto colors = client.colors();
 
     terminal.setController(client.terminals());

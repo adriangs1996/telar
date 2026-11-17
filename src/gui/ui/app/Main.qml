@@ -12,8 +12,8 @@ Window {
     title: telar.title
     color: "transparent"
 
-    readonly property real ratio: telar.chromeRatio
-    readonly property var geometry: telar.windowGeometry
+    readonly property real ratio: telar.display.chromeRatio
+    readonly property var geometry: telar.display.geometry
     readonly property real sidebarWidth: geometry.sidebar.width
 
     NativeRoundedRectangle {
@@ -41,9 +41,9 @@ Window {
         tabModel: telar.tabs.rows
         workspaceModel: telar.workspaces.rows
         prefixPending: telar.prefixPending
-        controlsInset: telar.windowControls
+        controlsInset: telar.display.windowControls
         ratio: root.ratio
-        textScale: telar.chromeTextScale
+        textScale: telar.display.chromeTextScale
         rail: root.geometry.rail
         onSidebarToggled: telar.execute(WindowActions.Action.toggle_sidebar)
         onWorkspaceSelected: key => telar.execute(WindowActions.Action.select_workspace, key)
@@ -74,11 +74,11 @@ Window {
         typography: sidebar.regions.typography
         regions: telar.sidebar.regions
         agentModel: telar.activity.rows
-        preferredWidth: telar.sidebarWidth
-        textScale: telar.chromeTextScale
+        preferredWidth: telar.display.sidebarWidth
+        textScale: telar.display.chromeTextScale
         onAgentSelected: key => telar.execute(WindowActions.Action.select_agent, key)
         onAgentPeekRequested: key => telar.peekActivity(key)
-        onSidebarResized: requestedWidth => telar.setSidebarWidth(requestedWidth)
+        onSidebarResized: requestedWidth => telar.display.setSidebarWidth(requestedWidth)
         onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
     }
 

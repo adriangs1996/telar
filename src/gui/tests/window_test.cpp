@@ -49,7 +49,7 @@ namespace {
       QQuickWindow window;
 
       client.setWindow(window);
-      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
+      const QSignalSpy geometry{client.display(), &WindowDisplay::changed};
 
       client.setWindow(window);
       QCOMPARE(geometry.size(), 0);
@@ -67,7 +67,7 @@ namespace {
 
       client.setWindow(previous);
       client.setWindow(current);
-      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
+      const QSignalSpy geometry{client.display(), &WindowDisplay::changed};
 
       previous.screenChanged(previous.screen());
       QCOMPARE(geometry.size(), 0);
@@ -86,7 +86,7 @@ namespace {
       client.setWindow(*previous);
       client.setWindow(current);
       previous.reset();
-      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
+      const QSignalSpy geometry{client.display(), &WindowDisplay::changed};
 
       client.setWindow(current);
       QCOMPARE(geometry.size(), 0);
@@ -107,7 +107,7 @@ namespace {
 
       client.setWindow(previous);
       client.setWindow(current);
-      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
+      const QSignalSpy geometry{client.display(), &WindowDisplay::changed};
       auto target = QQuickRenderTarget::fromPaintDevice(&image);
 
       target.setDevicePixelRatio(current.effectiveDevicePixelRatio() * scale_factor);
@@ -141,7 +141,7 @@ namespace {
       QQuickWindow current;
 
       client.setWindow(current);
-      const QSignalSpy geometry{&client, &ApplicationController::windowGeometryChanged};
+      const QSignalSpy geometry{client.display(), &WindowDisplay::changed};
 
       current.screenChanged(current.screen());
       QCOMPARE(geometry.size(), 1);
@@ -182,7 +182,7 @@ namespace {
 
         QCoreApplication::sendEvent(&window, &changed);
         QCOMPARE(window.effectiveDevicePixelRatio(), sample.density);
-        const auto geometry = client.windowGeometry();
+        const auto geometry = client.display()->geometry();
         const auto typography = geometry.value(QStringLiteral("typography")).toMap();
 
         QCOMPARE(geometry.value(QStringLiteral("navigation")).toRectF().height(), sample.navigation / sample.density);
@@ -204,12 +204,12 @@ namespace {
 
       window.resize(initial_size);
       client.setWindow(window);
-      QCOMPARE(client.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), initial_size.width());
+      QCOMPARE(client.display()->geometry().value(QStringLiteral("navigation")).toRectF().width(), initial_size.width());
 
       window.resize(replacement_size);
       QTRY_COMPARE_WITH_TIMEOUT(window.size(), replacement_size, native_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), replacement_size.width(), native_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client.windowGeometry().value(QStringLiteral("status")).toRectF().bottom(), replacement_size.height(), native_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client.display()->geometry().value(QStringLiteral("navigation")).toRectF().width(), replacement_size.width(), native_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client.display()->geometry().value(QStringLiteral("status")).toRectF().bottom(), replacement_size.height(), native_wait_ms);
     }
 
     Q_SLOT static void densityChangesRemeasureAnIndependentTerminal() {
@@ -244,7 +244,7 @@ namespace {
 
       client->setWindow(window);
       const QPointer<ApplicationController> lifetime{client.get()};
-      const QSignalSpy geometry{client.get(), &ApplicationController::windowGeometryChanged};
+      const QSignalSpy geometry{client->display(), &WindowDisplay::changed};
 
       client.reset();
       QVERIFY(lifetime.isNull());

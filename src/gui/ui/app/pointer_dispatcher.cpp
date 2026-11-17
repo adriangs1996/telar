@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "pointer_dispatcher.hpp"
-#include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "platform/scroll_event.hpp"
@@ -15,11 +14,17 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
+#include "ui/app/chrome/activity/activity_controller.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/panes/attachments/attachment_shelf.hpp"
+#include "ui/app/panes/attachments/attachments_controller.hpp"
+#include "ui/app/panes/terminal/history/history_controller.hpp"
+#include "ui/app/panes/terminal/terminal_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/input/mouse_buttons.hpp"
 #include "ui/foundation/input/native_pointer_events.hpp"
+#include "ui/foundation/store/store.hpp"
+#include "window_display.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -60,9 +65,8 @@ import telar.gui.application.workspace_replica;
 
 namespace telar::gui::qt {
 
-  PointerDispatcher::PointerDispatcher(ApplicationController& application, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals)
-      : QObject(&application),
-        application_(application),
+  PointerDispatcher::PointerDispatcher(WindowDisplay& display, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals)
+      : display_(display),
         store_(store),
         tabs_(tabs),
         history_(history),
@@ -154,7 +158,7 @@ namespace telar::gui::qt {
   }
 
   bool PointerDispatcher::press(QMouseEvent& event) {
-    if (tabs_.press(event, application_.chromeRatio())) {
+    if (tabs_.press(event, display_.chromeRatio())) {
       return false;
     }
 

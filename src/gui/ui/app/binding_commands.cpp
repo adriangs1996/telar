@@ -326,9 +326,9 @@ namespace telar::gui::qt {
     case BindingActionKind::resize_sidebar_left:
     case BindingActionKind::resize_sidebar_right: {
       constexpr float resize_columns = 2;
-      const auto change = resize_columns * cell_metrics_.width * (action.kind == BindingActionKind::resize_sidebar_left ? -1.0F : 1.0F);
+      const auto change = resize_columns * display_.cell().width * (action.kind == BindingActionKind::resize_sidebar_left ? -1.0F : 1.0F);
 
-      setSidebarWidth(sidebarWidth() + change);
+      display_.setSidebarWidth(display_.sidebarWidth() + change);
     } break;
     case BindingActionKind::command_tab:
       executeCommandTab(action, resolved);

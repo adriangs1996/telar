@@ -205,7 +205,7 @@ namespace telar::gui::qt {
       created.session.setRestoreLayout(restore_layout_);
     }
 
-    synchronizeWorkbenchGeometry();
+    display_.layoutWorkbench();
     auto& client = clientAt(slot);
     const auto& row = store_.machines().row(slot);
 

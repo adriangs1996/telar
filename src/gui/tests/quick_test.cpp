@@ -869,7 +869,7 @@ return {api_version = 2, client = {
       QVERIFY(terminal != nullptr);
       QCOMPARE(client_->panes()->rows()->rowCount(), 1);
       const auto fits_framed_content = [this, terminal] {
-        const auto bounds = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
+        const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
         const auto density = window_->effectiveDevicePixelRatio();
         const auto resolved = client_->resolveFont(density);
         constexpr std::uint16_t border_cells = 2;
@@ -1169,7 +1169,7 @@ return {api_version = 2, client = {
 
     Q_SLOT void workspaceListVisibility() {
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QTRY_VERIFY(!client_->windowGeometry().value(QStringLiteral("rail")).toBool());
+      QTRY_VERIFY(!client_->display()->geometry().value(QStringLiteral("rail")).toBool());
       QVERIFY(window_->findChild<QQuickItem*>(QStringLiteral("workspaceList")) == nullptr);
       const auto* projects = window_->findChild<QQuickItem*>(QStringLiteral("projectSwitcher"));
       auto* terminal = terminalIn(window_->contentItem());
@@ -1185,15 +1185,15 @@ return {api_version = 2, client = {
 
       QCoreApplication::sendEvent(terminal, &prefix);
       QCoreApplication::sendEvent(terminal, &collapse);
-      QVERIFY(client_->workspaceListCollapsed());
+      QVERIFY(client_->display()->workspaceListCollapsed());
       QTRY_VERIFY(projects->isVisible());
       QCOMPARE(firstPane()->id, focused_pane);
 
       client_->execute(window_actions::Action::toggle_workspace_list);
-      QVERIFY(!client_->workspaceListCollapsed());
+      QVERIFY(!client_->display()->workspaceListCollapsed());
       QTRY_VERIFY(projects->isVisible());
       client_->execute(window_actions::Action::toggle_sidebar);
-      QTRY_COMPARE(client_->windowGeometry().value(QStringLiteral("sidebar")).toRectF().width(), qreal{0});
+      QTRY_COMPARE(client_->display()->geometry().value(QStringLiteral("sidebar")).toRectF().width(), qreal{0});
       QTRY_VERIFY(projects->isVisible());
       QCOMPARE(firstPane()->id, focused_pane);
       client_->execute(window_actions::Action::toggle_sidebar);
@@ -2162,7 +2162,7 @@ return {api_version = 2, client = {
 
       terminal->forceActiveFocus();
       const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
-      const auto visible = client_->sidebarVisible();
+      const auto visible = client_->display()->sidebarVisible();
       const QSignalSpy configuration_events{client_.get(), &ApplicationController::configurationChanged};
       const QSignalSpy focus_events{window_, &QQuickWindow::activeFocusItemChanged};
 
@@ -2181,18 +2181,18 @@ return {api_version = 2, client = {
       QVERIFY(!client_->prefixPending());
       settleLua();
       QCOMPARE(client_->error(), QString{});
-      QVERIFY2(client_->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialog())).arg(static_cast<int>(client_->copy()->active()))));
+      QVERIFY2(client_->display()->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialog())).arg(static_cast<int>(client_->copy()->active()))));
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), true};
 
       QCoreApplication::sendEvent(window_, &repeated);
-      QCOMPARE(client_->sidebarVisible(), !visible);
+      QCOMPARE(client_->display()->sidebarVisible(), !visible);
       QTest::keyRelease(window_, Qt::Key_S);
       QTest::keyClick(window_, Qt::Key_A, control);
       QVERIFY(client_->prefixPending());
       QTest::keyClick(window_, Qt::Key_S);
       QVERIFY(!client_->prefixPending());
       settleLua();
-      QCOMPARE(client_->sidebarVisible(), visible);
+      QCOMPARE(client_->display()->sidebarVisible(), visible);
 
       QTest::keyClick(window_, Qt::Key_A, control);
       QVERIFY(client_->prefixPending());
@@ -2205,12 +2205,12 @@ return {api_version = 2, client = {
       client_->execute(window_actions::Action::cancel);
       terminal->forceActiveFocus();
 
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
 
       sendTextKeys(QLatin1StringView("gg"));
-      QCOMPARE(client_->workspaceListCollapsed(), !collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), !collapsed);
       sendTextKeys(QLatin1StringView("gg"));
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       sendTextKeys(QLatin1StringView("gk"));
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("gk")), runtime_wait_ms);
       client_->terminals()->input(pane->id, "\x15");
@@ -2256,16 +2256,16 @@ return {api_version = 2, client = {
       QTest::keyPress(window_, Qt::Key_S);
       writeTestFile(path, "return {api_version=2, client={keybindings={telar.bind_global({'s'}, telar.action.toggle_workspace_list())}}}");
       client_->loadConfiguration(path, {}, {});
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), true};
 
       QCoreApplication::sendEvent(window_, &repeated);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       QTest::keyRelease(window_, Qt::Key_S);
       QTest::keyClick(window_, Qt::Key_S);
-      QCOMPARE(client_->workspaceListCollapsed(), !collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), !collapsed);
       QTest::keyClick(window_, Qt::Key_S);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -2299,7 +2299,7 @@ return {api_version = 2, client = {
         QCOMPARE(surface->size(), frame->size());
         // A pane surface and its frame share one radius, the pane decoration's.
         QCOMPARE(surface->property("radius").toReal(), frame->property("radius").toReal());
-        QCOMPARE(frame->property("radius").toReal(), telar::gui::PaneDecorationGeometry::frame_radius * client_->chromeRatio());
+        QCOMPARE(frame->property("radius").toReal(), telar::gui::PaneDecorationGeometry::frame_radius * client_->display()->chromeRatio());
       }
 
       // Focus is a full accent frame on one pane; the others keep a faint hairline.
@@ -2414,7 +2414,7 @@ return {api_version = 2, client = {
       QVERIFY(bands.size() > bottom_band_index);
       const auto bottom_band = bands[bottom_band_index].toRectF();
       const auto frame_origin = QPointF{first_record.value(QStringLiteral("x")).toReal(), first_record.value(QStringLiteral("y")).toReal()};
-      const auto workbench_origin = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF().topLeft();
+      const auto workbench_origin = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF().topLeft();
 
       QTest::qWait(frame_settle_ms);
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, (workbench_origin + frame_origin + bottom_band.center()).toPoint());
@@ -2855,14 +2855,14 @@ return {api_version=2, client={keybindings={
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->dropSurface(client_->chromeRatio()).count > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->dropSurface(client_->display()->chromeRatio()).count > 0, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* label = componentItem(QStringLiteral("label"), QStringLiteral("Configured action"));
 
       QVERIFY(label != nullptr);
       const auto bounds = label->mapRectToScene(label->boundingRect());
       const auto point = bounds.center().toPoint();
-      const auto live = client_->tabs()->dropSurface(client_->chromeRatio());
+      const auto live = client_->tabs()->dropSurface(client_->display()->chromeRatio());
 
       QVERIFY(live.at({point.x() * live.scale, point.y() * live.scale}) == nullptr);
       auto stale = live;
@@ -4533,7 +4533,7 @@ return {api_version=2, client={keybindings={
         QFAIL("A delivered history row must exist");
       }
 
-      const auto grid = client_->windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap();
+      const auto grid = client_->display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap();
       const auto cell_pixels = static_cast<int>(std::ceil(grid.value(QStringLiteral("cellHeight")).toDouble()));
       const auto row_pixels = static_cast<int>(std::ceil(row_height));
 
@@ -4626,7 +4626,7 @@ return {api_version=2, client={keybindings={
         QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 0);
       }
 
-      const auto grid = client_->windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap();
+      const auto grid = client_->display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap();
       const auto whole_cell = static_cast<int>(std::ceil(grid.value(QStringLiteral("cellHeight")).toDouble()));
 
       QVERIFY(whole_cell > 1);
@@ -5118,7 +5118,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(peer.result().value >= minimum_width && peer.result().value < maximum_width);
       const auto width = peer.result().value;
       const auto visibility = peer.result().text;
-      const QSignalSpy unchanged{client_.get(), &ApplicationController::windowGeometryChanged};
+      const QSignalSpy unchanged{client_->display(), &WindowDisplay::changed};
 
       QVERIFY(unchanged.isValid());
       peer.request(telar::ClientAction::sidebar_resize, 3, {}, width);
@@ -5186,7 +5186,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->error(), QString{});
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      const auto geometry = client_->windowGeometry();
+      const auto geometry = client_->display()->geometry();
       const auto sidebar = geometry.value(QStringLiteral("sidebar")).toRectF();
       const auto navigation = geometry.value(QStringLiteral("navigation")).toRectF();
       const auto status = geometry.value(QStringLiteral("status")).toRectF();
@@ -5235,9 +5235,9 @@ return {api_version=2, client={keybindings={
       terminal->forceActiveFocus();
       constexpr qreal retained_width = 317;
 
-      client_->setSidebarWidth(retained_width);
-      const auto before_width = client_->sidebarWidth();
-      const auto visible = client_->sidebarVisible();
+      client_->display()->setSidebarWidth(retained_width);
+      const auto before_width = client_->display()->sidebarWidth();
+      const auto visible = client_->display()->sidebarVisible();
       const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
 
       QTest::keyClick(window_, Qt::Key_A, control);
@@ -5249,29 +5249,29 @@ return {api_version=2, client={keybindings={
 
       QCOMPARE(client_->colors().value(QStringLiteral("panelBackground")).value<QColor>(), QColor{Qt::transparent});
       QCOMPARE(client_->colors().value(QStringLiteral("panel_bg")).value<QColor>(), QColor::fromRgb(panel_rgb));
-      QCOMPARE(client_->sidebarWidth(), before_width);
+      QCOMPARE(client_->display()->sidebarWidth(), before_width);
       QTest::keyClick(window_, Qt::Key_S);
-      QCOMPARE(client_->sidebarVisible(), !visible);
+      QCOMPARE(client_->display()->sidebarVisible(), !visible);
       telar::gui::test::AppearanceFixture::set(Qt::ColorScheme::Dark);
-      QCOMPARE(client_->sidebarVisible(), !visible);
-      QCOMPARE(client_->sidebarWidth(), before_width);
+      QCOMPARE(client_->display()->sidebarVisible(), !visible);
+      QCOMPARE(client_->display()->sidebarWidth(), before_width);
       QCOMPARE(client_->error(), QString{});
     }
 
     Q_SLOT void sidebarLayoutLeavesTheConfigurationAlone() {
-      const auto visible = client_->sidebarVisible();
-      const auto width = client_->sidebarWidth();
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto visible = client_->display()->sidebarVisible();
+      const auto width = client_->display()->sidebarWidth();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto restore = qScopeGuard([this, visible, width, collapsed] {
-        if (client_->sidebarVisible() != visible) {
+        if (client_->display()->sidebarVisible() != visible) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
 
-        if (client_->workspaceListCollapsed() != collapsed) {
+        if (client_->display()->workspaceListCollapsed() != collapsed) {
           client_->execute(window_actions::Action::toggle_workspace_list);
         }
 
-        client_->setSidebarWidth(width);
+        client_->display()->setSidebarWidth(width);
       });
 
       if (!visible) {
@@ -5280,19 +5280,19 @@ return {api_version=2, client={keybindings={
 
       // The fonts, the theme and the mods stay; only what is laid out around the sidebar moves.
       const QSignalSpy configuration{client_.get(), &ApplicationController::configurationChanged};
-      const QSignalSpy sidebar{client_.get(), &ApplicationController::sidebarGeometryChanged};
+      const QSignalSpy sidebar{client_->display(), &WindowDisplay::changed};
       const auto terminal = [this] {
-        return client_->windowGeometry().value(QStringLiteral("terminal")).toRectF().width();
+        return client_->display()->geometry().value(QStringLiteral("terminal")).toRectF().width();
       };
       const auto terminal_width = terminal();
       constexpr qreal widened = 40;
 
-      client_->setSidebarWidth(client_->sidebarWidth() + widened);
+      client_->display()->setSidebarWidth(client_->display()->sidebarWidth() + widened);
       QVERIFY(terminal() < terminal_width);
       client_->execute(window_actions::Action::toggle_workspace_list);
-      QCOMPARE(client_->workspaceListCollapsed(), !collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), !collapsed);
       client_->execute(window_actions::Action::toggle_sidebar);
-      QVERIFY(!client_->sidebarVisible());
+      QVERIFY(!client_->display()->sidebarVisible());
       QVERIFY(terminal() > terminal_width);
       QVERIFY(sidebar.count() >= 3);
       QCOMPARE(configuration.count(), 0);
@@ -5308,7 +5308,7 @@ return {api_version=2, client={keybindings={
       client_->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
-      const auto bounds = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
+      const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
       const auto resolved = client_->resolveFont(window_->devicePixelRatio());
       const TerminalGrid grid{.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = window_->devicePixelRatio()};
       const auto full = grid.fit(bounds.width(), bounds.height());
@@ -5709,7 +5709,7 @@ return {api_version=2, client={keybindings={
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
       QCOMPARE(client_->error(), QString{});
-      QTRY_VERIFY_WITH_TIMEOUT(client_->sidebarVisible(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->display()->sidebarVisible(), runtime_wait_ms);
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -5724,7 +5724,7 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientCommand{.request_id = toggle_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("toggle"), .text = "sample"});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, toggle_request, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_VERIFY2_WITH_TIMEOUT(!client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
 
       const auto tabs = client_->tabs()->rows()->rowCount();
@@ -5734,16 +5734,16 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, denied_request, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
       QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
-      QVERIFY(!client_->sidebarVisible());
+      QVERIFY(!client_->display()->sidebarVisible());
       QCOMPARE(client_->tabs()->rows()->rowCount(), tabs);
 
       QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
-      QTRY_VERIFY2_WITH_TIMEOUT(client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QString{}, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_C, Qt::AltModifier);
-      QTRY_VERIFY2_WITH_TIMEOUT(!client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
-      QTRY_VERIFY2_WITH_TIMEOUT(client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
       {
         auto& pool = *QThreadPool::globalInstance();
         const int previous_threads = pool.maxThreadCount();
@@ -5770,7 +5770,7 @@ return {api_version=2, client={keybindings={
         QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
         client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
         QCOMPARE(client_->error(), QString{});
-        QVERIFY(client_->sidebarVisible());
+        QVERIFY(client_->display()->sidebarVisible());
       }
 
       auto barrier_request = denied_request + 1;
@@ -5787,7 +5787,7 @@ return {api_version=2, client={keybindings={
       })(),
           runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
-      QVERIFY(client_->sidebarVisible());
+      QVERIFY(client_->display()->sidebarVisible());
       QCOMPARE(client_->tabs()->rows()->rowCount(), tabs);
       QFile retained{path};
 
@@ -6019,11 +6019,11 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredPanelKeyboardActions() {
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
       });
@@ -6063,13 +6063,13 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Toggle sidebar")), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Space, Qt::ShiftModifier);
-      QCOMPARE(client_->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
       auto* action = window_->activeFocusItem();
 
       QVERIFY(action != nullptr && action->property("interactive").isValid());
       QVERIFY(action->setProperty("interactive", false));
       QTest::keyClick(window_, Qt::Key_Space);
-      QCOMPARE(client_->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
       QVERIFY(action->setProperty("interactive", true));
       const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_PANEL_KEYBOARD_SCREENSHOT");
       if (!screenshot.isEmpty()) {
@@ -6078,13 +6078,13 @@ return {api_version=2, client={keybindings={
       }
 
       QTest::keyPress(window_, Qt::Key_Space);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "), true};
 
       QCoreApplication::sendEvent(window_, &repeated);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QTest::keyRelease(window_, Qt::Key_Space);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
       QTest::keyClick(window_, Qt::Key_Tab, Qt::ShiftModifier);
       QTRY_VERIFY_WITH_TIMEOUT(close->hasActiveFocus(), runtime_wait_ms);
@@ -6104,11 +6104,11 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void configuredAccessibleGroups() {
       const bool accessibility = QAccessible::isActive();
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, accessibility, sidebar] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
 
@@ -6157,7 +6157,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(actions->actionNames().contains(QAccessibleActionInterface::pressAction()));
       actions->doAction(QAccessibleActionInterface::pressAction());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -6176,16 +6176,16 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredPluginRejectsMutatedTarget() {
-      const auto sidebar = client_->sidebarVisible();
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto sidebar = client_->display()->sidebarVisible();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
 
-        if (client_->workspaceListCollapsed() != collapsed) {
+        if (client_->display()->workspaceListCollapsed() != collapsed) {
           client_->execute(window_actions::Action::toggle_workspace_list);
         }
       });
@@ -6212,21 +6212,21 @@ return {api_version=2, client={keybindings={
         verifyPluginTargetMutation(pointer);
         QVERIFY(!QTest::currentTestFailed());
         client_->execute(window_actions::Action::toggle_workspace_list);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), collapsed, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), collapsed, runtime_wait_ms);
       }
     }
 
     Q_SLOT void configuredPluginUsesValidatedTarget() {
-      const auto sidebar = client_->sidebarVisible();
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto sidebar = client_->display()->sidebarVisible();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
 
-        if (client_->workspaceListCollapsed() != collapsed) {
+        if (client_->display()->workspaceListCollapsed() != collapsed) {
           client_->execute(window_actions::Action::toggle_workspace_list);
         }
       });
@@ -6275,8 +6275,8 @@ return {api_version=2, client={keybindings={
       QVERIFY(std::get<PluginActionDescription>(saved.destination).action == std::get<PluginActionDescription>(mutated.destination).action);
       QVERIFY(test::ComponentActions::run(*client_, saved));
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       QCOMPARE(client_->error(), QString{});
       client_->components()->closePanel();
       QVERIFY(!test::ComponentActions::run(*client_, saved));
@@ -6393,11 +6393,11 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredActionCaptionRefresh() {
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
       });
@@ -6440,19 +6440,19 @@ return {api_version=2, client={keybindings={
         QCOMPARE(after.data(), before.data());
         QTRY_VERIFY_WITH_TIMEOUT(after->hasActiveFocus(), runtime_wait_ms);
         QTest::keyClick(window_, Qt::Key_Space);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
         client_->execute(window_actions::Action::toggle_sidebar);
-        QCOMPARE(client_->sidebarVisible(), sidebar);
+        QCOMPARE(client_->display()->sidebarVisible(), sidebar);
         verifyComponentCaptionMouseRefresh(kind, sidebar);
         QVERIFY(!QTest::currentTestFailed());
       }
     }
 
     Q_SLOT void configuredBarCaptionRefresh() {
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
       });
@@ -6495,20 +6495,20 @@ return {api_version=2, client={keybindings={
       QCOMPARE(componentGroup(updated), before.data());
       QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Space);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
     }
 
     Q_SLOT void configuredActionCaptureRefresh() {
-      const auto sidebar = client_->sidebarVisible();
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto sidebar = client_->display()->sidebarVisible();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
 
-        if (client_->workspaceListCollapsed() != collapsed) {
+        if (client_->display()->workspaceListCollapsed() != collapsed) {
           client_->execute(window_actions::Action::toggle_workspace_list);
         }
       });
@@ -6547,11 +6547,11 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredGroupKeyboardActions() {
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
       });
@@ -6578,10 +6578,10 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(!first.isNull() && !second.isNull());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, first->mapToScene(first->boundingRect().center()).toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(first->hasActiveFocus(), runtime_wait_ms);
       client_->execute(window_actions::Action::toggle_sidebar);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), sidebar, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(!first.isNull() && !second.isNull());
       first->forceActiveFocus(Qt::TabFocusReason);
@@ -6602,16 +6602,16 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       first->forceActiveFocus(Qt::TabFocusReason);
       QTest::keyClick(window_, Qt::Key_Space, Qt::ShiftModifier);
-      QCOMPARE(client_->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
       QTest::keyPress(window_, Qt::Key_Space);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(first->hasActiveFocus(), runtime_wait_ms);
       QKeyEvent repeat{QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "), true};
 
       QCoreApplication::sendEvent(window_, &repeat);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QTest::keyRelease(window_, Qt::Key_Space);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* terminal = terminalIn(window_->contentItem());
 
@@ -6768,7 +6768,7 @@ return {api_version=2, client={keybindings={
       const auto full_width = summary->implicitWidth();
       constexpr qreal bar_spacing = 40;
       // The bottom bar starts right of the full-height sidebar; the summary fits or hides as one item.
-      const auto bar_left = client_->windowGeometry().value(QStringLiteral("status")).toRectF().x();
+      const auto bar_left = client_->display()->geometry().value(QStringLiteral("status")).toRectF().x();
       const auto narrow_width = qCeil(bar_left + label->implicitWidth() + (bar_spacing * ratio) + (full_width / 2));
 
       QVERIFY(narrow_width >= window_->minimumWidth());
@@ -7225,12 +7225,12 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredPicks() {
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePick();
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
       });
@@ -7268,7 +7268,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
       for (const auto visible : {!sidebar, sidebar}) {
         client_->execute(window_actions::Action::toggle_sidebar);
-        QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), visible, runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), visible, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
         QVERIFY(client_->components()->pick().value(QStringLiteral("open")).toBool());
@@ -7467,10 +7467,10 @@ return {api_version=2, client={keybindings={
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeTestFile(path, "return {api_version=2,client={window_title='work {tab}',sound={enabled=false}},profiles={chosen={client={notifications={delivery='system'}}}}}");
-      const auto original_collapsed = client_->workspaceListCollapsed();
+      const auto original_collapsed = client_->display()->workspaceListCollapsed();
       const auto restore = qScopeGuard([this, original_collapsed] {
         client_->loadConfiguration({}, {}, {});
-        if (client_->workspaceListCollapsed() != original_collapsed) {
+        if (client_->display()->workspaceListCollapsed() != original_collapsed) {
           client_->execute(window_actions::Action::toggle_workspace_list);
         }
       });
@@ -7505,8 +7505,8 @@ return {api_version=2, client={keybindings={
       parsed = telar::runtime::JsonValue::parse({text.constData(), static_cast<std::size_t>(text.size())});
       QCOMPARE(requiredJsonField(parsed, "generation").encoded(), std::string_view{generation});
       QCOMPARE(requiredJsonField(parsed, "sidebar_width").encoded(), std::string_view{expected_width});
-      QCOMPARE(requiredJsonField(parsed, "sidebar_visible").boolean(), client_->sidebarVisible());
-      QCOMPARE(requiredJsonField(parsed, "workspace_list_collapsed").boolean(), client_->workspaceListCollapsed());
+      QCOMPARE(requiredJsonField(parsed, "sidebar_visible").boolean(), client_->display()->sidebarVisible());
+      QCOMPARE(requiredJsonField(parsed, "workspace_list_collapsed").boolean(), client_->display()->workspaceListCollapsed());
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->error(), QString{});
     }
@@ -7932,7 +7932,7 @@ return {api_version=2, client={keybindings={
       const auto previous_pane = firstPane()->id;
 
       client_->execute(window_actions::Action::toggle_workspace_list);
-      QVERIFY(client_->workspaceListCollapsed());
+      QVERIFY(client_->display()->workspaceListCollapsed());
       QTest::qWait(frame_settle_ms);
       engine_.reset();
       client_.reset();
@@ -7942,7 +7942,7 @@ return {api_version=2, client={keybindings={
       QVERIFY2(window_ != nullptr, qPrintable(errors_));
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), previous_tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->id == previous_pane && firstPane()->screen.frameId() > 0, runtime_wait_ms);
-      QTRY_VERIFY(client_->workspaceListCollapsed());
+      QTRY_VERIFY(client_->display()->workspaceListCollapsed());
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -8690,11 +8690,11 @@ return {api_version=2, client={keybindings={
     }
 
     void verifyPluginCaptionRefresh(components::Kind kind, bool pointer) {
-      const auto sidebar = client_->sidebarVisible();
+      const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
-        if (client_->sidebarVisible() != sidebar) {
+        if (client_->display()->sidebarVisible() != sidebar) {
           client_->execute(window_actions::Action::toggle_sidebar);
         }
       });
@@ -8755,13 +8755,13 @@ return {api_version=2, client={keybindings={
       }
 
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QCOMPARE(client_->error(), QString{});
     }
 
     void verifyPluginTargetMutation(bool pointer) {
-      const auto sidebar = client_->sidebarVisible();
-      const auto collapsed = client_->workspaceListCollapsed();
+      const auto sidebar = client_->display()->sidebarVisible();
+      const auto collapsed = client_->display()->workspaceListCollapsed();
 
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
@@ -8795,9 +8795,9 @@ return {api_version=2, client={keybindings={
 
       // The button runs the action it was rendered with: the Lua thread resolved it then, so
       // mutating the table afterwards cannot redirect a click on what is already on screen.
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       QCOMPARE(client_->error(), QString{});
       client_->components()->refreshPanel();
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
@@ -8806,12 +8806,12 @@ return {api_version=2, client={keybindings={
       const auto* fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin"));
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
-      QCOMPARE(client_->sidebarVisible(), !sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QCOMPARE(client_->error(), QString{});
       client_->execute(window_actions::Action::toggle_sidebar);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), sidebar, runtime_wait_ms);
     }
 
     void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {
@@ -8955,9 +8955,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(before->mapRectToScene(before->boundingRect()).contains(center));
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       client_->execute(window_actions::Action::toggle_sidebar);
-      QCOMPARE(client_->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
     }
 
     void verifyConfiguredActionCapture(components::Kind kind, const QString& path, bool sidebar, bool collapsed) {
@@ -8984,12 +8984,12 @@ return {api_version=2, client={keybindings={
       QVERIFY(!QTest::currentTestFailed());
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
-      QCOMPARE(client_->sidebarVisible(), sidebar);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, center);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
       client_->execute(window_actions::Action::toggle_workspace_list);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = true;
@@ -8997,9 +8997,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(!QTest::currentTestFailed());
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
-      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
       client_->execute(window_actions::Action::toggle_workspace_list);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = true;
@@ -9009,8 +9009,8 @@ return {api_version=2, client={keybindings={
       QVERIFY(!QTest::currentTestFailed());
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
-      QCOMPARE(client_->sidebarVisible(), sidebar);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = true;
@@ -9022,13 +9022,13 @@ return {api_version=2, client={keybindings={
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
-      QCOMPARE(client_->sidebarVisible(), sidebar);
-      QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       target = componentActionItem(kind, QStringLiteral("Stable target"));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, target->mapToScene(target->boundingRect().center()).toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       client_->execute(window_actions::Action::toggle_sidebar);
-      QCOMPARE(client_->sidebarVisible(), sidebar);
+      QCOMPARE(client_->display()->sidebarVisible(), sidebar);
     }
 
     [[nodiscard]] QQuickItem* componentActionItem(components::Kind kind, const QString& caption) const {

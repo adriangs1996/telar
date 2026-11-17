@@ -140,6 +140,7 @@ namespace telar::gui::qt {
         memory_(memory),
         history_(store_),
         configuration_source_(memory),
+        display_(store_, configuration_source_),
         machine_profiles_(memory),
         attachments_(store_, memory),
         sound_player_(*this),
@@ -166,7 +167,7 @@ namespace telar::gui::qt {
         plugins_(store_, configuration_source_, memory),
         workspace_form_(store_),
         key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
-        pointer_dispatcher_(*this, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
+        pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
         hostname_(platform::hostName()) {
     composeWindowAnimation();
     initializeMachines();
@@ -180,7 +181,7 @@ namespace telar::gui::qt {
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
     palette_.setCommands(commands());
 
-    connect(this, &ApplicationController::configurationChanged, this, &ApplicationController::windowGeometryChanged);
+    connect(this, &ApplicationController::configurationChanged, &display_, &WindowDisplay::publish);
     connect(&copy_, &CopyController::activeChanged, this, &ApplicationController::statusModeChanged);
     connect(&copy_, &CopyController::paneChanged, &terminals_, &TerminalController::terminalChanged);
     connect(&copy_, &CopyController::inputStarted, this, [this] {
@@ -211,12 +212,10 @@ namespace telar::gui::qt {
       pending_activity_.reset();
     });
     connect(this, &ApplicationController::prefixChanged, this, &ApplicationController::statusModeChanged);
-    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::synchronizeWorkbenchGeometry);
     // After the workbench geometry, which the dialogs measured from the display are placed in.
-    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::measureDisplay);
-    connect(this, &ApplicationController::windowGeometryChanged, this, &ApplicationController::sidebarGeometryChanged);
-    connect(this, &ApplicationController::windowGeometryChanged, this, [this] {
-      history_.setMetrics(historyMetrics());
+    connect(&display_, &WindowDisplay::changed, this, &ApplicationController::measureDisplay);
+    connect(&display_, &WindowDisplay::changed, this, [this] {
+      history_.setMetrics(display_.historyMetrics());
     });
     connect(&history_, &HistoryController::submitted, this, [this] {
       error_.clear();
@@ -258,7 +257,7 @@ namespace telar::gui::qt {
       requestTerminalFrame();
     });
     connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
-    connect(&sidebar_, &SidebarController::widthRequested, this, &ApplicationController::setSidebarWidth);
+    connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
 
     const platform::login_shell::Command shell;
     const auto directory = QDir::currentPath().toUtf8();
@@ -280,13 +279,13 @@ namespace telar::gui::qt {
       error_.clear();
       key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
       configureClients();
-      synchronizeFontMetrics();
+      display_.measureFont();
       publishConfiguration();
 
       // A reload sets the sidebar back to its configured width, so an automatic one fits again,
       // in the display the published configuration measures.
       sidebar_.refit();
-      history_.setMetrics(historyMetrics());
+      history_.setMetrics(display_.historyMetrics());
       configureWindow();
       refresh();
     });
@@ -316,7 +315,7 @@ namespace telar::gui::qt {
     });
 
     initializeTerminals();
-    synchronizeWorkbenchGeometry();
+    display_.layoutWorkbench();
     measureDisplay();
   }
 
@@ -420,6 +419,7 @@ namespace telar::gui::qt {
     QGuiApplication::styleHints()->setTabFocusBehavior(Qt::TabFocusAllControls);
 
     window_ = &window;
+    display_.setWindow(window);
     ++window_generation_;
     peek_.setWindowGeneration(window_generation_);
     notifications_.setWindow(window, window_generation_);
@@ -438,7 +438,7 @@ namespace telar::gui::qt {
     connect(&window, &QWindow::widthChanged, this, &ApplicationController::synchronizeWindowSize);
     connect(&window, &QWindow::heightChanged, this, &ApplicationController::synchronizeWindowSize);
     connect(&window, &QWindow::screenChanged, this, &ApplicationController::synchronizeScreen);
-    connect(&window, &QWindow::windowStateChanged, this, &ApplicationController::windowGeometryChanged);
+    connect(&window, &QWindow::windowStateChanged, &display_, &WindowDisplay::publish);
     terminals_.setWindow(window);
     observeFrames(window);
     synchronizeScreen();
@@ -457,12 +457,12 @@ namespace telar::gui::qt {
 
   void ApplicationController::synchronizeDisplay() {
     try {
-      synchronizeFontMetrics();
+      display_.measureFont();
       if (window_ != nullptr) {
-        updateViewport(window_->width(), window_->height());
+        display_.resize(window_->width(), window_->height());
       }
 
-      emit windowGeometryChanged();
+      display_.publish();
       refreshPanes();
     } catch (const std::exception& error) {
       fail(error);
@@ -477,7 +477,7 @@ namespace telar::gui::qt {
       return frame_pacer_->defer(std::span{panes}.first(count));
     }
 
-    if (watched == window_ && window_ != nullptr && event->type() == QEvent::DevicePixelRatioChange && window_->effectiveDevicePixelRatio() != terminal_grid_.scale) {
+    if (watched == window_ && window_ != nullptr && event->type() == QEvent::DevicePixelRatioChange && window_->effectiveDevicePixelRatio() != display_.grid().scale) {
       synchronizeDisplay();
     }
 
@@ -532,7 +532,7 @@ namespace telar::gui::qt {
     frame = {};
     frame.machine_view = store_.machineView();
     frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
-    frame.tabs = tabs_.dropSurface(chromeRatio());
+    frame.tabs = tabs_.dropSurface(display_.chromeRatio());
     if (window_ == nullptr) {
       return;
     }
@@ -684,8 +684,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = displayMetrics(window_->effectiveDevicePixelRatio()).chrome.top_bar / static_cast<float>(window_->effectiveDevicePixelRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
-    emit windowGeometryChanged();
+    platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = display_.metrics(window_->effectiveDevicePixelRatio()).chrome.top_bar / static_cast<float>(window_->effectiveDevicePixelRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
+    display_.publish();
   }
 
   void ApplicationController::present(const PresentedFrame& frame) {
@@ -783,7 +783,7 @@ namespace telar::gui::qt {
   void ApplicationController::presentChange(Change change) {
     switch (change) {
     case Change::sidebar:
-      emit windowGeometryChanged();
+      display_.publish();
       refresh();
       break;
     case Change::terminal:
@@ -952,6 +952,21 @@ namespace telar::gui::qt {
     }
   }
 
+  void ApplicationController::measureDisplay() {
+    const auto display = display_.metrics(display_.density());
+
+    palette_.setDisplay(display);
+    paths_.setDisplay(display);
+    machine_prompt_.setDisplay(display);
+    peek_.setDisplay(display);
+    link_status_.setDisplay(display);
+    attachments_.setDisplay(display);
+    notifications_.setDisplay(display, display_.grid());
+    machine_chrome_.setDisplay(display);
+    sidebar_.setDisplay(display);
+    terminals_.setChromeRatio(display_.chromeRatio());
+  }
+
   void ApplicationController::refresh() {
     synchronize();
     peek_.synchronize();
@@ -970,7 +985,7 @@ namespace telar::gui::qt {
 
   void ApplicationController::refreshPanes() {
     attachments_.synchronize();
-    panes_.setScale(terminal_grid_.scale);
+    panes_.setScale(display_.grid().scale);
     panes_.synchronize();
   }
 
@@ -1115,10 +1130,10 @@ namespace telar::gui::qt {
       }
     } else if (action == window_actions::Action::toggle_sidebar) {
       session().setSidebarVisible(!session().configuration().sidebar_visible);
-      emit windowGeometryChanged();
+      display_.publish();
     } else if (action == window_actions::Action::toggle_workspace_list) {
       session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
-      emit windowGeometryChanged();
+      display_.publish();
     } else if (action == window_actions::Action::history) {
       showDialog(Dialog::history);
       history_.open();
@@ -1164,44 +1179,9 @@ namespace telar::gui::qt {
     showDialog(Dialog::none);
   }
 
-  void ApplicationController::setSidebarWidth(qreal width) {
-    session().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
-    emit windowGeometryChanged();
-  }
-
-  void ApplicationController::synchronizeFontMetrics() {
-    const auto scale = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto resolved = resolveFont(scale);
-    const auto& font = resolved.font;
-
-    cell_metrics_.width = static_cast<float>(font.cell.width());
-    cell_metrics_.height = static_cast<float>(font.cell.height());
-    cell_metrics_.baseline = static_cast<float>(font.baseline);
-    cell_metrics_.pixels = resolved.grid.pixel_height;
-    terminal_grid_ = {.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = scale};
-  }
-
-  bool ApplicationController::updateViewport(qreal width, qreal height) {
-    constexpr qreal maximum_dimension = std::numeric_limits<std::uint16_t>::max();
-
-    if (!std::isfinite(width) || !std::isfinite(height)) {
-      return false;
-    }
-
-    const Viewport next{.width = static_cast<std::uint32_t>(std::clamp(width, 0.0, maximum_dimension)), .height = static_cast<std::uint32_t>(std::clamp(height, 0.0, maximum_dimension)), .scale = 1};
-    if (viewport_ != next) {
-      session().invalidateView();
-      viewport_ = next;
-
-      return true;
-    }
-
-    return false;
-  }
-
   void ApplicationController::synchronizeWindowSize() {
-    if (window_ != nullptr && updateViewport(window_->width(), window_->height())) {
-      emit windowGeometryChanged();
+    if (window_ != nullptr && display_.resize(window_->width(), window_->height())) {
+      display_.publish();
       refreshPanes();
     }
   }
@@ -1324,23 +1304,7 @@ namespace telar::gui::qt {
   }
 
   ResolvedFont ApplicationController::resolveFont(qreal scale) {
-    return configuration_source_.resolveFont(session().configuration().font, scale);
-  }
-
-  bool ApplicationController::sidebarVisible() const {
-    return session().configuration().sidebar_visible;
-  }
-
-  qreal ApplicationController::sidebarWidth() const {
-    return session().configuration().sidebar_width;
-  }
-
-  bool ApplicationController::workspaceListCollapsed() const {
-    return session().workspaceListCollapsed();
-  }
-
-  qreal ApplicationController::windowControls() const {
-    return window_ == nullptr ? 0 : platform::windowControls(*window_);
+    return display_.resolveFont(scale);
   }
 
   ApplicationController::Dialog ApplicationController::dialog() const noexcept {

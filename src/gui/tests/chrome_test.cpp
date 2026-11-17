@@ -334,7 +334,7 @@ namespace {
       const QVariantMap properties{
           {QStringLiteral("controller"), QVariant::fromValue(application.attachments())},
           {QStringLiteral("colors"), application.colors()},
-          {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
+          {QStringLiteral("typography"), application.display()->geometry().value(QStringLiteral("typography"))},
       };
 
       const auto load = [&](const QString& path) {

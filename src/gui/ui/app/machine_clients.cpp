@@ -257,7 +257,7 @@ namespace telar::gui::qt {
     connection().resumeSession();
     emit machineChanged();
     emit machinesChanged();
-    synchronizeWorkbenchGeometry();
+    display_.layoutWorkbench();
     session().setPresented(true);
     configureWindow();
     notifications_.refresh();

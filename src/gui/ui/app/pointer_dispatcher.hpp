@@ -41,13 +41,13 @@ import telar.gui.presentation.history_pointer;
 namespace telar::gui::qt {
 
   class ActivityController;
-  class ApplicationController;
   class AttachmentsController;
   class HistoryController;
   class Store;
   class TabsController;
   class TerminalController;
   class TerminalItem;
+  class WindowDisplay;
 
   // Routes the window's pointer before the items under it: the tab strip, the history modal, the
   // attachment shelf, the activity list, and the terminals that hold a button. It holds every
@@ -56,7 +56,7 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    PointerDispatcher(ApplicationController& application, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals);
+    PointerDispatcher(WindowDisplay& display, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals);
     ~PointerDispatcher() override = default;
     PointerDispatcher(const PointerDispatcher&) = delete;
     PointerDispatcher& operator=(const PointerDispatcher&) = delete;
@@ -80,7 +80,7 @@ namespace telar::gui::qt {
     bool move(QMouseEvent& event);
     bool release(QMouseEvent& event);
 
-    ApplicationController& application_;
+    WindowDisplay& display_;
     Store& store_;
     TabsController& tabs_;
     HistoryController& history_;

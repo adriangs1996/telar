@@ -3,9 +3,10 @@
 static_assert(true);
 #endif
 
-#include "application_controller.hpp"
+#include "window_display.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
+#include "platform/window.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
@@ -36,37 +37,56 @@ import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
 
-  DisplayMetrics ApplicationController::displayMetrics(qreal density) const {
+  WindowDisplay::WindowDisplay(Store& store, ConfigurationSource& configuration, QObject* parent)
+      : QObject(parent),
+        store_(store),
+        configuration_(configuration) {}
+
+  void WindowDisplay::setWindow(QQuickWindow& window) {
+    window_ = &window;
+  }
+
+  qreal WindowDisplay::density() const {
+    return window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
+  }
+
+  const Configuration& WindowDisplay::configuration() const noexcept {
+    return store_.session().configuration();
+  }
+
+  const CellMetrics& WindowDisplay::cell() const noexcept {
+    return cell_metrics_;
+  }
+
+  const TerminalGrid& WindowDisplay::grid() const noexcept {
+    return terminal_grid_;
+  }
+
+  ResolvedFont WindowDisplay::resolveFont(qreal scale) {
+    return configuration_.resolveFont(configuration().font, scale);
+  }
+
+  void WindowDisplay::publish() {
+    layoutWorkbench();
+    emit changed();
+  }
+
+  DisplayMetrics WindowDisplay::metrics(qreal density) const {
     return DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
   }
 
-  void ApplicationController::measureDisplay() {
-    const auto display = displayMetrics(window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio());
-
-    palette_.setDisplay(display);
-    paths_.setDisplay(display);
-    machine_prompt_.setDisplay(display);
-    peek_.setDisplay(display);
-    link_status_.setDisplay(display);
-    attachments_.setDisplay(display);
-    notifications_.setDisplay(display, terminal_grid_);
-    machine_chrome_.setDisplay(display);
-    sidebar_.setDisplay(display);
-    terminals_.setChromeRatio(chromeRatio());
-  }
-
-  qreal ApplicationController::chromeRatio() const {
+  qreal WindowDisplay::chromeRatio() const {
     return 1;
   }
 
-  qreal ApplicationController::chromeTextScale() const {
+  qreal WindowDisplay::chromeTextScale() const {
     return configuration().chrome_scale;
   }
 
-  QVariantMap ApplicationController::windowGeometry() const {
+  QVariantMap WindowDisplay::geometry() const {
     const auto& font = configuration().font;
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
+    const auto density = this->density();
+    const auto display = metrics(density);
     const auto& geometry = display.geometry;
     const auto& chrome = display.chrome;
     auto typography = chromeTypographyRecord(display, font);
@@ -92,9 +112,9 @@ namespace telar::gui::qt {
     };
   }
 
-  HistoryModalMetrics ApplicationController::historyMetrics() const {
-    const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-    const auto display = displayMetrics(density);
+  HistoryModalMetrics WindowDisplay::historyMetrics() const {
+    const auto density = this->density();
+    const auto display = metrics(density);
 
     return {
         .viewport = {.width = static_cast<float>(display.viewport.width), .height = static_cast<float>(display.viewport.height)},
@@ -103,8 +123,8 @@ namespace telar::gui::qt {
     };
   }
 
-  void ApplicationController::synchronizeWorkbenchGeometry() {
-    const auto display = displayMetrics(terminal_grid_.scale);
+  void WindowDisplay::layoutWorkbench() {
+    const auto display = metrics(terminal_grid_.scale);
     const auto& configuration = this->configuration();
     const auto& geometry = display.geometry;
     auto grid = terminal_grid_;
@@ -128,6 +148,57 @@ namespace telar::gui::qt {
         (*client)->session.setHostColumns(static_cast<std::uint16_t>(columns));
       }
     }
+  }
+
+  void WindowDisplay::setSidebarWidth(qreal width) {
+    store_.session().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
+    publish();
+  }
+
+  void WindowDisplay::measureFont() {
+    const auto scale = density();
+    const auto resolved = resolveFont(scale);
+    const auto& font = resolved.font;
+
+    cell_metrics_.width = static_cast<float>(font.cell.width());
+    cell_metrics_.height = static_cast<float>(font.cell.height());
+    cell_metrics_.baseline = static_cast<float>(font.baseline);
+    cell_metrics_.pixels = resolved.grid.pixel_height;
+    terminal_grid_ = {.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = scale};
+  }
+
+  bool WindowDisplay::resize(qreal width, qreal height) {
+    constexpr qreal maximum_dimension = std::numeric_limits<std::uint16_t>::max();
+
+    if (!std::isfinite(width) || !std::isfinite(height)) {
+      return false;
+    }
+
+    const Viewport next{.width = static_cast<std::uint32_t>(std::clamp(width, 0.0, maximum_dimension)), .height = static_cast<std::uint32_t>(std::clamp(height, 0.0, maximum_dimension)), .scale = 1};
+    if (viewport_ != next) {
+      store_.session().invalidateView();
+      viewport_ = next;
+
+      return true;
+    }
+
+    return false;
+  }
+
+  bool WindowDisplay::sidebarVisible() const {
+    return store_.session().configuration().sidebar_visible;
+  }
+
+  qreal WindowDisplay::sidebarWidth() const {
+    return store_.session().configuration().sidebar_width;
+  }
+
+  bool WindowDisplay::workspaceListCollapsed() const {
+    return store_.session().workspaceListCollapsed();
+  }
+
+  qreal WindowDisplay::windowControls() const {
+    return window_ == nullptr ? 0 : platform::windowControls(*window_);
   }
 
 }

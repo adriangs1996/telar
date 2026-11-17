@@ -202,8 +202,8 @@ namespace {
       PromptLine {
         required property ApplicationController application
         colors: application.colors
-        typography: application.windowGeometry.typography
-        grid: application.windowGeometry.typography.grid
+        typography: application.display.geometry.typography
+        grid: application.display.geometry.typography.grid
         history: application.history
         pathPicker: application.paths
         copy: application.copy
@@ -517,7 +517,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       terminal.setPaneId(QString::number(pane_id));
       terminal.setSize(QSizeF{720, 300});
       QQmlEngine engine;
-      const auto grid = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
+      const auto grid = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
       const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}});
 
       separators->setParentItem(&terminal);
@@ -700,7 +700,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         const QVariantMap separator_properties{
             {QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))},
             {QStringLiteral("colors"), application.colors()},
-            {QStringLiteral("grid"), application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
+            {QStringLiteral("grid"), application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"))},
         };
 
         const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), separator_properties);
@@ -882,7 +882,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       terminal.setSize(QSizeF{720, 300});
       // The pieces a pane stacks over its terminal: the separators, the rail and the line.
       QQmlEngine engine;
-      const auto grid = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
+      const auto grid = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
       const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}});
 
       separators->setParentItem(&terminal);

@@ -172,7 +172,7 @@ Popup {
             sourceComponent: PeekPanel {
                 controller: telar.peek
                 colors: telar.colors
-                typography: telar.windowGeometry.typography
+                typography: telar.display.geometry.typography
                 ratio: root.ratio
                 onCancelled: telar.execute(WindowActions.Action.cancel)
             }
@@ -185,7 +185,7 @@ Popup {
             sourceComponent: MachinePromptPanel {
                 controller: telar.machinePrompt
                 colors: telar.colors
-                typography: telar.windowGeometry.typography
+                typography: telar.display.geometry.typography
                 ratio: root.ratio
                 onCancelled: telar.execute(WindowActions.Action.cancel)
             }
@@ -198,7 +198,7 @@ Popup {
             sourceComponent: PathPickerPanel {
                 controller: telar.paths
                 colors: telar.colors
-                typography: telar.windowGeometry.typography
+                typography: telar.display.geometry.typography
                 controlModifier: telar.controlModifier
                 ratio: root.ratio
                 onCancelled: telar.execute(WindowActions.Action.cancel)
@@ -212,7 +212,7 @@ Popup {
             sourceComponent: PalettePanel {
                 controller: telar.palette
                 colors: telar.colors
-                typography: telar.windowGeometry.typography
+                typography: telar.display.geometry.typography
                 controlModifier: telar.controlModifier
                 ratio: root.ratio
                 onCancelled: telar.execute(WindowActions.Action.cancel)
@@ -227,7 +227,7 @@ Popup {
             visible: root.historyMode
             controller: telar.history
             colors: telar.colors
-            typography: telar.windowGeometry.typography
+            typography: telar.display.geometry.typography
             workspaceName: telar.workspaces.context?.name ?? ""
             controlModifier: telar.controlModifier
             superModifier: telar.superModifier
@@ -242,7 +242,7 @@ Popup {
             anchors.fill: parent
             visible: root.historyMode
             colors: telar.colors
-            typography: telar.windowGeometry.typography
+            typography: telar.display.geometry.typography
             ratio: root.ratio
             maximumBytes: telar.history.state.maximumQueryBytes
             placeholderText: "Search commands"
@@ -269,7 +269,7 @@ Popup {
             anchors.fill: parent
             visible: !root.customMode && !root.workspaceMode
             colors: telar.colors
-            typography: telar.windowGeometry.typography
+            typography: telar.display.geometry.typography
             dialog: telar.dialog
             searchScope: telar.copy.searchScope
             searchScopes: telar.copy.searchScopes
@@ -285,7 +285,7 @@ Popup {
             visible: root.workspaceMode
             controller: telar.workspaceForm
             colors: telar.colors
-            typography: telar.windowGeometry.typography
+            typography: telar.display.geometry.typography
             ratio: root.ratio
             onSubmitted: input => telar.submitDialog(input)
             onCancelled: telar.execute(WindowActions.Action.cancel)

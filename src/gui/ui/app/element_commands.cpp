@@ -44,7 +44,7 @@ namespace telar::gui::qt {
         {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
         {QStringLiteral("machine"), machineContext().value(QStringLiteral("label"))},
         {QStringLiteral("tab_count"), tabs_.count()},
-        {QStringLiteral("sidebar_visible"), sidebarVisible()},
+        {QStringLiteral("sidebar_visible"), display_.sidebarVisible()},
     });
   }
 

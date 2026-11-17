@@ -117,9 +117,9 @@ namespace {
         }
       });
 
-      panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_->palette())}, {QStringLiteral("colors"), client_->colors()}, {QStringLiteral("typography"), client_->windowGeometry().value(QStringLiteral("typography"))}, {QStringLiteral("controlModifier"), ApplicationController::controlModifier()}, {QStringLiteral("ratio"), client_->chromeRatio()}});
+      panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_->palette())}, {QStringLiteral("colors"), client_->colors()}, {QStringLiteral("typography"), client_->display()->geometry().value(QStringLiteral("typography"))}, {QStringLiteral("controlModifier"), ApplicationController::controlModifier()}, {QStringLiteral("ratio"), client_->display()->chromeRatio()}});
       panel_->setParentItem(window_->contentItem());
-      connect(client_.get(), &ApplicationController::windowGeometryChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
+      connect(client_->display(), &WindowDisplay::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_->palette(), &PaletteController::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_.get(), &ApplicationController::dialogChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
       synchronizeSurfaces();
@@ -234,7 +234,7 @@ namespace {
         return;
       }
 
-      const auto terminal = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
+      const auto terminal = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
 
       terminal_->setPosition(terminal.topLeft());
       terminal_->setSize(terminal.size());

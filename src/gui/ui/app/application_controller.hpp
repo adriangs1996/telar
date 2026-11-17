@@ -58,6 +58,7 @@ static_assert(true);
 #include "ui/foundation/plugins/plugin_runner.hpp"
 #include "ui/foundation/store/store.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
+#include "window_display.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFutureWatcher>
@@ -117,10 +118,8 @@ import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
-import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
-import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.prompt.line;
 import telar.gui.prompt.editor;
@@ -152,6 +151,7 @@ namespace telar::gui::qt {
     QML_NAMED_ELEMENT(ApplicationController)
     QML_UNCREATABLE("Use the running GUI controller")
     Q_PROPERTY(telar::gui::qt::AttachmentsController* attachments READ attachments CONSTANT)
+    Q_PROPERTY(telar::gui::qt::WindowDisplay* display READ display CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -162,14 +162,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(int superModifier READ superModifier CONSTANT)
     Q_PROPERTY(QVariantMap colors READ colors NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap font READ font NOTIFY configurationChanged)
-    Q_PROPERTY(qreal chromeRatio READ chromeRatio NOTIFY configurationChanged)
-    Q_PROPERTY(qreal chromeTextScale READ chromeTextScale NOTIFY configurationChanged)
-    Q_PROPERTY(QVariantMap windowGeometry READ windowGeometry NOTIFY windowGeometryChanged)
     Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
-    Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY sidebarGeometryChanged)
-    Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY sidebarGeometryChanged)
-    Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY sidebarGeometryChanged)
-    Q_PROPERTY(qreal windowControls READ windowControls NOTIFY windowGeometryChanged)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
     Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
@@ -220,14 +213,12 @@ namespace telar::gui::qt {
     [[nodiscard]] Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
-    [[nodiscard]] DisplayMetrics displayMetrics(qreal density) const;
     void soundPlaybackFinished(std::optional<CommandFailure> failure);
 
     Q_INVOKABLE void execute(telar::gui::qt::window_actions::Action action, const QString& target = {});
     Q_INVOKABLE void submitDialog(const QVariantMap& input);
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
-    Q_INVOKABLE void setSidebarWidth(qreal width);
 
     bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
     void interruptBindings();
@@ -237,6 +228,10 @@ namespace telar::gui::qt {
 
     WorkspacesController* workspaces() noexcept {
       return &workspaces_;
+    }
+
+    WindowDisplay* display() noexcept {
+      return &display_;
     }
 
     TabsController* tabs() noexcept {
@@ -314,14 +309,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap colors() const;
     [[nodiscard]] QVariantMap font() const;
     [[nodiscard]] QVariantList commands() const;
-    [[nodiscard]] qreal chromeRatio() const;
-    [[nodiscard]] qreal chromeTextScale() const;
-    [[nodiscard]] QVariantMap windowGeometry() const;
     [[nodiscard]] QVariantMap machineContext() const;
-    [[nodiscard]] bool sidebarVisible() const;
-    [[nodiscard]] qreal sidebarWidth() const;
-    [[nodiscard]] bool workspaceListCollapsed() const;
-    [[nodiscard]] qreal windowControls() const;
     [[nodiscard]] QString title() const;
     [[nodiscard]] QVariantMap statusMode() const;
     [[nodiscard]] QVariantMap hostMetrics() const;
@@ -346,9 +334,6 @@ namespace telar::gui::qt {
     void hostMetricsChanged();
     // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
     void configurationChanged();
-    // The window was resized, or the sidebar shown, hidden, resized or its workspace list folded.
-    void windowGeometryChanged();
-    void sidebarGeometryChanged();
     void dialogChanged();
     // The document a pane shows natively appeared, changed or went away.
     void notification(const QString& message);
@@ -428,7 +413,6 @@ namespace telar::gui::qt {
     // A controller's interaction failed outside a dialog that shows it.
     void reportFailure(const QString& message);
     void showPathPicker();
-    static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};
 
     struct PresentedPane {
       TerminalPreparation frame;
@@ -476,12 +460,9 @@ namespace telar::gui::qt {
     void consume(MachineClient& client, QByteArrayView payload);
     [[nodiscard]] static bool answerConfiguration(tbc::view<ApplicationController&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply);
     void executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply);
-    void synchronizeFontMetrics();
-    void synchronizeWorkbenchGeometry();
     void synchronizeDisplay();
     void synchronizeScreen();
     void synchronizeWindowSize();
-    bool updateViewport(qreal width, qreal height);
     void observeFrames(QQuickWindow& window);
     // Names the animated item types, in the order every window samples them.
     static void composeWindowAnimation() noexcept;
@@ -497,7 +478,6 @@ namespace telar::gui::qt {
     void presentChange(Change change);
     void initializeAttachments();
     void refreshPanes();
-    [[nodiscard]] HistoryModalMetrics historyMetrics() const;
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
     void present(const PresentedFrame& frame);
@@ -554,6 +534,7 @@ namespace telar::gui::qt {
     std::optional<PendingActivity> pending_activity_;
     std::optional<MachineClientKey> sound_owner_;
     ConfigurationSource configuration_source_;
+    tbc::view<WindowDisplay, tbc::lt::self> display_;
     // The theme and font QML reads, built on first read after each configurationChanged.
     mutable std::optional<QVariantMap> colors_;
     mutable std::optional<QVariantMap> font_;
@@ -615,9 +596,6 @@ namespace telar::gui::qt {
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     QMetaObject::Connection screen_refresh_connection_;
-    Viewport viewport_ = default_viewport;
-    CellMetrics cell_metrics_;
-    TerminalGrid terminal_grid_;
     QByteArray hostname_;
   };
 

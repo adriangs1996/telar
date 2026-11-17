@@ -192,7 +192,7 @@ namespace telar::gui::test {
       const auto slot = application.store_.machines().add({.label = "Build", .destination = "dev@build"});
       auto& client = application.createClient(slot);
 
-      application.synchronizeWorkbenchGeometry();
+      application.display_.layoutWorkbench();
       client.connection.open(endpoint);
 
       return client.key;
@@ -553,7 +553,7 @@ namespace {
     static void verifyAttachmentModalHost(ApplicationController& application) {
       const auto modal_geometry = application.attachments()->modalGeometry();
       const auto modal_host = modal_geometry.value(QStringLiteral("host")).toRectF();
-      const auto terminal_region = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
+      const auto terminal_region = application.display()->geometry().value(QStringLiteral("terminal")).toRectF();
 
       QCOMPARE(modal_host.topLeft(), terminal_region.topLeft());
       QVERIFY(terminal_region.contains(modal_host));
@@ -628,12 +628,12 @@ namespace {
       const QVariantMap properties{
           {QStringLiteral("controller"), QVariant::fromValue(application.attachments())},
           {QStringLiteral("colors"), application.colors()},
-          {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
+          {QStringLiteral("typography"), application.display()->geometry().value(QStringLiteral("typography"))},
       };
 
       auto shelf_properties = properties;
 
-      shelf_properties.insert(QStringLiteral("ratio"), application.chromeRatio());
+      shelf_properties.insert(QStringLiteral("ratio"), application.display()->chromeRatio());
       const auto shelf_view = createChrome(engine, QStringLiteral("AttachmentShelf"), shelf_properties);
       const auto modal_view = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
 
@@ -676,7 +676,7 @@ namespace {
       QCOMPARE(pointingAreas(*shelf_view), 2);
       QCOMPARE(pointingAreas(*modal_view), 1);
       const auto after = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
-      const auto rows = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
+      const auto rows = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
 
       QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
 
@@ -734,12 +734,12 @@ namespace {
       const QVariantMap properties{
           {QStringLiteral("controller"), QVariant::fromValue(application.attachments())},
           {QStringLiteral("colors"), application.colors()},
-          {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))},
+          {QStringLiteral("typography"), application.display()->geometry().value(QStringLiteral("typography"))},
       };
 
       auto shelf_properties = properties;
 
-      shelf_properties.insert(QStringLiteral("ratio"), application.chromeRatio());
+      shelf_properties.insert(QStringLiteral("ratio"), application.display()->chromeRatio());
       const auto shelf = createChrome(engine, QStringLiteral("AttachmentShelf"), shelf_properties);
       const auto modal = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
 
@@ -1360,7 +1360,7 @@ namespace {
       fixture.remote_runtime->send(PaneText{.request_id = read.request_id, .pane_id = inspected_pane, .text = "OWNED_REMOTE_PEEK", .exit_code = {}});
       QTRY_VERIFY_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("lines")).toStringList().contains(QStringLiteral("OWNED_REMOTE_PEEK")), wait_ms);
       const auto bounds = application.peek()->geometry().value(QStringLiteral("bounds")).toRectF();
-      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(application.peek())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(application.peek())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.display()->geometry().value(QStringLiteral("typography"))}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
 
       panel->setParentItem(window.contentItem());
       window.show();
@@ -1534,14 +1534,14 @@ namespace {
       }
 
       QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::open_pane), 1, wait_ms);
-      QVERIFY(!application.sidebarVisible());
+      QVERIFY(!application.display()->sidebarVisible());
       const auto opening = runtime.last<OpenPane>();
 
       QVERIFY(!opening.launch);
       window->resize(latest_size);
       application.execute(window_actions::Action::toggle_sidebar);
-      QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), latest_size.width(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("status")).toRectF().bottom(), latest_size.height(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.display()->geometry().value(QStringLiteral("navigation")).toRectF().width(), latest_size.width(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.display()->geometry().value(QStringLiteral("status")).toRectF().bottom(), latest_size.height(), wait_ms);
       const auto geometry_changed = [&] {
         const auto size = session.workbenchGeometry().launchSize();
 
@@ -1549,8 +1549,8 @@ namespace {
       };
 
       QTRY_VERIFY2_WITH_TIMEOUT(geometry_changed(), qPrintable(QStringLiteral("window=%1x%2 open=%3x%4 area=%5x%6").arg(window->width()).arg(window->height()).arg(opening.size.cols).arg(opening.size.rows).arg(session.workbenchGeometry().area.width).arg(session.workbenchGeometry().area.height)), wait_ms);
-      QVERIFY(application.sidebarVisible());
-      const auto terminal = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
+      QVERIFY(application.display()->sidebarVisible());
+      const auto terminal = application.display()->geometry().value(QStringLiteral("terminal")).toRectF();
 
       QCOMPARE(session.workbenchGeometry().area.width, terminal.width() * window->effectiveDevicePixelRatio());
       QCOMPARE(session.workbenchGeometry().area.height, terminal.height() * window->effectiveDevicePixelRatio());
@@ -1735,7 +1735,7 @@ namespace {
 
       QTRY_COMPARE_WITH_TIMEOUT(application.peek()->state().value(QStringLiteral("lines")).toStringList().size(), line_count, wait_ms);
       const auto bounds = application.peek()->geometry().value(QStringLiteral("bounds")).toRectF();
-      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(application.peek())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.windowGeometry().value(QStringLiteral("typography"))}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+      auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(application.peek())}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.display()->geometry().value(QStringLiteral("typography"))}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
 
       panel->setParentItem(window.contentItem());
       const auto lines = [&] {
