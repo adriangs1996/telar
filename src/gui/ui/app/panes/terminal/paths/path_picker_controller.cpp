@@ -80,7 +80,7 @@ namespace telar::gui::qt {
 
   void PathPickerController::reportQueryLimit(qulonglong requested_bytes) {
     if (isOpen() && requested_bytes > application::paths::PathPickerLimits::query_bytes) {
-      store_.session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = application::paths::PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
+      application::notifications::reportLimit(store_.session(), {.name = "prompt.path_query_bytes", .noun = "bytes", .value = application::paths::PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
       store_.commit();
     }
   }

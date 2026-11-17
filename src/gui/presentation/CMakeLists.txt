@@ -7,9 +7,6 @@ telar_add_domain(gui presentation
     history_filter_geometry/history_filter_geometry.cpp
     history_inspection/history_inspection.cpp
     history_inspection_geometry/history_inspection_geometry.cpp
-    history_meta_geometry/history_meta_geometry.cpp
-    notification_center/notification_center.cpp
-    notification_stack/notification_stack.cpp
     suggestion_geometry/suggestion_geometry.cpp
     suggestion_labels/suggestion_labels.cpp
     tab_drop/tab_drop.cpp

@@ -1,6 +1,7 @@
 module telar.gui.application;
 
 import std;
+import telar.gui.features.notifications;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.model;
 import telar.tbc;
@@ -13,7 +14,6 @@ import telar.wire.clients;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
 
 namespace telar::gui::application {
@@ -93,7 +93,7 @@ namespace telar::gui::application {
 
       return Change::clipboard;
     case ClientAction::notification_dismiss:
-      if (!dismissNotification(NotificationId{message.target_id})) {
+      if (!notifications::dismiss(*this, notifications::NotificationId{message.target_id})) {
         throw EncodingError{"NotificationNotFound"};
       }
 

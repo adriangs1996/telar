@@ -16,11 +16,11 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.platform.notification_commands;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
-  inline void startHostCommand(QProcess& process, const platform::CommandLine& command) {
+  inline void startHostCommand(QProcess& process, const system::CommandLine& command) {
     QStringList arguments;
 
     arguments.reserve(static_cast<qsizetype>(command.count));

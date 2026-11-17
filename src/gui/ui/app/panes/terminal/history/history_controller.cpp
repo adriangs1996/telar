@@ -406,7 +406,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    store_.session().reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = application::history::HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.session(), {.name = "prompt.history_query_bytes", .noun = "bytes", .value = application::history::HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 

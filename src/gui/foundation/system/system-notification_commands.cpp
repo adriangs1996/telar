@@ -1,8 +1,9 @@
-module telar.gui.platform.notification_commands;
+module telar.gui.foundation.system;
 
 import std;
+import telar.wire.vocabulary;
 
-namespace telar::gui::platform {
+namespace telar::gui::inline foundation::inline system {
 
   std::span<const std::string_view> CommandLine::arguments() const noexcept {
     return std::span{values}.first(count);

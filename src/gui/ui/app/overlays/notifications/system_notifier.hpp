@@ -31,8 +31,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.platform.notification_commands;
-import telar.gui.text.notification_payload;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
@@ -41,11 +40,11 @@ namespace telar::gui::qt {
 
     static void start(QProcess& process, const NotificationPayload& payload) {
 #ifdef __APPLE__
-      platform::NativeNotificationCommand command;
+      system::NativeNotificationCommand command;
 
       startHostCommand(process, command.prepare(payload));
 #else
-      startHostCommand(process, platform::NativeNotificationCommand::prepare(payload));
+      startHostCommand(process, system::NativeNotificationCommand::prepare(payload));
 #endif
     }
   };

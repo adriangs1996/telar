@@ -1,13 +1,12 @@
-module telar.gui.presentation.history_meta_geometry;
+module telar.gui.features.notifications;
 
 import std;
-
 import telar.tbc;
 import telar.base.text.utf8;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 
-namespace telar::gui {
+namespace telar::gui::features::notifications {
 
   float NotificationText::Measured::operator()(std::string_view text) const {
     return call(target, text);

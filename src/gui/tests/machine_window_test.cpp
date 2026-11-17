@@ -144,7 +144,7 @@ import telar.gui.config.plugin_effects;
 import telar.gui.machines.picker;
 #if (defined(__APPLE__))
 #endif
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 import telar.gui.transport.runtime_link;
 import telar.wire.agents;
 import telar.wire.content;
@@ -271,6 +271,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 
@@ -2178,7 +2179,7 @@ namespace {
       MachineWindow::select(application, fixture.remote.machine);
       MachineWindow::links(application).linkOpeningFinished(original, LinkOpeningFailure::launch);
       QVERIFY(application.notifications()->center().items().empty());
-      QCOMPARE(local.session.notifications().items().size(), 1);
+      QCOMPARE(application::notifications::center(local.session).items().size(), 1);
       const auto retired = fixture.remote;
 
       static_cast<void>(MachineWindow::replace(application, retired.machine.slot));

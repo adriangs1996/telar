@@ -14,7 +14,7 @@ import telar.gui.features.history;
 import telar.gui.features.prompt;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.presentation.tab_drop;
-import :sound_playback;
+import telar.gui.features.notifications;
 import telar.gui.foundation.model;
 import telar.gui.layout.snapshots;
 import telar.gui.features.terminal.links;
@@ -28,7 +28,6 @@ import telar.gui.features.status_bar;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.agents;
 import telar.wire.clients;
@@ -42,7 +41,6 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
 
 // Interface: application/session.cppm
@@ -288,27 +286,10 @@ export {
 
       [[nodiscard]] std::string_view clipboard() const noexcept;
 
-      [[nodiscard]] const NotificationCenter& notifications() const noexcept;
-
-      [[nodiscard]] std::uint64_t notificationRevision() const noexcept;
       // Changes with what a pane's header and its tab show: title, directory, program, progress,
       // git, the shell's host and link, and whether a tab's panes are loaded. ViewVersion leaves
       // these out on purpose: they never move a link under the pointer.
       [[nodiscard]] std::uint64_t chromeRevision() const noexcept;
-
-      void publishNotification(NotificationInput input);
-
-      void reportLimit(LimitReach reach);
-
-      void completeAgentSound();
-
-      bool advanceNotifications(std::uint64_t now_ns) noexcept;
-
-      bool dismissNotification(NotificationId id) noexcept;
-
-      bool activateNotification(NotificationId id);
-
-      [[nodiscard]] bool notificationTargetVisible(NotificationTarget target) const noexcept;
 
       [[nodiscard]] std::string_view error() const noexcept;
 
@@ -501,8 +482,6 @@ export {
 
       void recoverRuntime(std::string_view reason);
 
-      LimitReports::Recorded countLimitReach(LimitReach reach);
-
       Change apply(const GraphicsSnapshot& message);
 
       Change apply(const GraphicsImage& message);
@@ -614,13 +593,7 @@ export {
 
       Change apply(const Notification& message);
 
-      void publishNotificationAt(NotificationInput input, std::uint64_t now_ns);
-
-      [[nodiscard]] bool deliverHostNotification(const NotificationInput& input) noexcept;
-
       Change apply(const AgentSoundNotification& message);
-
-      void startAgentSound(AgentSound sound);
 
       Change apply([[maybe_unused]] const RuntimeStopping& message);
 
@@ -716,18 +689,14 @@ export {
       tbc::view<MonotonicNow, tbc::lt::static_storage> now_;
       // A session built without effects points `effects_` here.
       DiscardHostEffects discard_effects_;
-      SoundPlayback sound_playback_;
       features::terminal::graphics::State graphics_;
-      LimitReports limit_reports_;
-      static constexpr std::uint64_t limit_notice_duration_ns = 8'000'000'000;
       tbc::view<Vector<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
       tbc::view<Vector<Owned<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
       AgentAcknowledgement agent_acknowledgement_;
-      NotificationCenter notifications_;
-      std::uint64_t notification_revision_ = 0;
+      features::notifications::State notifications_;
       std::uint64_t chrome_revision_ = 0;
       tbc::view<features::history::State, tbc::lt::a> history_;
       tbc::view<features::peek::State, tbc::lt::a> peek_;

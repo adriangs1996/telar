@@ -1,7 +1,7 @@
 module telar.gui.application;
 
 import std;
-import telar.platform.events;
+import telar.gui.features.notifications;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
@@ -14,8 +14,6 @@ import telar.gui.features.peek;
 import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.foundation.terminal;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.agents;
 import telar.wire.clients;
@@ -30,7 +28,6 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.base.memory.allocators;
-import telar.gui.presentation.notification_center;
 import telar.shell.syntax;
 
 namespace telar::gui::application {
@@ -398,14 +395,6 @@ namespace telar::gui::application {
     return clipboard_;
   }
 
-  const NotificationCenter& Session::notifications() const noexcept {
-    return notifications_;
-  }
-
-  std::uint64_t Session::notificationRevision() const noexcept {
-    return notification_revision_;
-  }
-
   std::uint64_t Session::chromeRevision() const noexcept {
     return chrome_revision_;
   }
@@ -438,7 +427,7 @@ namespace telar::gui::application {
     const bool prompt_changed = configuration_.prompt.mode != configuration.prompt.mode;
 
     configuration_ = configuration;
-    sound_playback_.configure(configuration.sound);
+    features::notifications::configure(notifications_, configuration.sound);
     ++view_version_.configuration;
     if (prompt_changed) {
       prompt::configureShell(*this);
@@ -560,28 +549,6 @@ namespace telar::gui::application {
     transport_.recover(reason);
   }
 
-  LimitReports::Recorded Session::countLimitReach(LimitReach reach) {
-    const auto awake_ms = static_cast<std::int64_t>(now_() / NotificationInput::nanoseconds_per_millisecond);
-    const LimitReports::Time sampled{.awake_ms = awake_ms, .real_ms = runtime::ObservationTime::now().milliseconds};
-    const auto recorded = limit_reports_.record(reach, sampled, 1);
-    if (const auto hits = limit_reports_.takeReport(recorded.slot, awake_ms)) {
-      const ReportLimit report{.reach = limit_reports_.row(recorded.slot).reach(), .hits = *hits};
-      bool delivered = false;
-
-      try {
-        delivered = transport_.report(encode(report));
-      } catch (const std::exception&) {
-        delivered = false;
-      }
-
-      if (!delivered) {
-        limit_reports_.restoreReport(recorded.slot, *hits);
-      }
-    }
-
-    return recorded;
-  }
-
   Change Session::apply(const SystemMetrics& message) {
     return status_bar::receive(*this, message);
   }
@@ -680,6 +647,9 @@ namespace telar::gui::application {
   }
 
   // The messages the other units of the session send.
+  // Limit reports go out through the transport's report, which may drop them.
+  template std::span<const Byte> Session::encode<ReportLimit>(const ReportLimit& message);
+
   template void Session::send<AcknowledgeAgent>(const AcknowledgeAgent& message);
   template void Session::send<ClosePane>(const ClosePane& message);
   template void Session::send<CloseTab>(const CloseTab& message);

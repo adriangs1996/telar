@@ -1,18 +1,19 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.presentation.history_meta_geometry;
+// A notice's message wrapped to the lines a card shows, the last one shortened to fit.
+export module telar.gui.features.notifications:text;
 
 import std;
-
 import telar.tbc;
+
 import telar.base.memory.containers;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 
 // Interface: presentation/notification_text.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::notifications {
 
     class NotificationText {
     public:

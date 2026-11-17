@@ -17,7 +17,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.machines.discovery;
-import telar.gui.platform.notification_commands;
+import telar.gui.foundation.system;
 
 namespace {
 
@@ -62,7 +62,7 @@ namespace {
   }
 
   void invalidLocationsAndCapacity() {
-    const std::string boundary = "/" + std::string(platform::SocketLimits::path_bytes - 1, 'x');
+    const std::string boundary = "/" + std::string(system::SocketLimits::path_bytes - 1, 'x');
 
     require(MachineRuntimeLocation::explicitPath(boundary).endpoint() == boundary, "the native Unix socket path boundary must be admitted");
     const auto too_long = boundary + 'x';

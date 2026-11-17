@@ -44,7 +44,6 @@ import telar.gui.foundation.actions;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
 import telar.gui.presentation.history_inspection;
-import telar.gui.presentation.history_meta_geometry;
 import telar.gui.features.status_bar;
 
 namespace {

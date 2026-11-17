@@ -11,12 +11,14 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.presentation.history_meta_geometry;
 import telar.gui.foundation.text;
+import telar.gui.features.notifications;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::notifications;
   using telar::gui::test::require;
 
   float measure(std::string_view text) {

@@ -48,16 +48,15 @@ namespace telar::gui::application::terminal::graphics {
       return title;
     }
 
-    void showPause(Session& session, LimitReports::Slot slot, std::uint64_t pane_id) {
-      const auto& row = Access::limitReports(session).row(slot);
-      const auto message = LimitReports::describe(row.reach(), row.hits);
+    void showPause(Session& session, features::notifications::LimitSlot slot, std::uint64_t pane_id) {
+      const auto message = notifications::describeLimit(session, slot);
       const auto title = pauseTitle(session, pane_id);
 
-      session.publishNotification({.level = NotificationLevel::warning, .target = {.kind = NotificationTarget::Kind::pane, .id = pane_id}, .title = title.view(), .message = message.view(), .link = {}, .duration_ns = Access::limit_notice_duration_ns});
+      notifications::publish(session, {.level = NotificationLevel::warning, .target = {.kind = NotificationTarget::Kind::pane, .id = pane_id}, .title = title.view(), .message = message.view(), .link = {}, .duration_ns = features::notifications::LimitNotices::duration_ns});
     }
 
     void pause(Session& session, std::uint64_t pane_id, const feature::GraphicsLimitError& error) {
-      const auto slot = Access::countLimitReach(session, {.name = error.what(), .route = "runtime_message"}).slot;
+      const auto slot = notifications::countLimitReach(session, {.name = error.what(), .route = "runtime_message"}).slot;
 
       feature::pause(Access::graphics(session), pane_id, Access::now(session), [&session](std::uint64_t paused_pane) {
         requestSnapshot(session, paused_pane);

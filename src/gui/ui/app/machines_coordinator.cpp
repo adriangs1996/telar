@@ -349,7 +349,7 @@ namespace telar::gui::qt {
     }
 
     try {
-      client->session.completeAgentSound();
+      application::notifications::completeSound(client->session);
     } catch (const std::exception& error) {
       status_.fail(error);
     }

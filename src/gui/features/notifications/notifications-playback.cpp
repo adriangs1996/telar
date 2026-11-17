@@ -1,10 +1,10 @@
-module telar.gui.application;
+module telar.gui.features.notifications;
 
 import std;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
-namespace telar::gui::application {
+namespace telar::gui::features::notifications {
 
   SoundPlayback::SoundPlayback(SoundPolicy configuration) noexcept
       : configuration_(configuration) {}

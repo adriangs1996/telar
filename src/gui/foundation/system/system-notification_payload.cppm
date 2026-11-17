@@ -1,4 +1,6 @@
-export module telar.gui.text.notification_payload;
+// What a desktop notification carries: a title and a message, cut to the protocol's sizes and
+// cleared of what a notifier's command line would misread.
+export module telar.gui.foundation.system:notification_payload;
 
 import std;
 
@@ -7,7 +9,7 @@ import telar.wire.vocabulary;
 
 // Interface: application/notification_payload.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline system {
 
     struct NotificationPayload {
       runtime::FixedText<max_notification_title_bytes> title;

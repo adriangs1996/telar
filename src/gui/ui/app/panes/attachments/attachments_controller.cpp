@@ -45,7 +45,7 @@ namespace telar::gui::qt {
     connect(&shelf_, &AttachmentShelf::failed, this, [this](const QString& message) {
       const auto bytes = message.toUtf8();
 
-      store_.client(Machines::local_slot).session.publishNotification({.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
+      application::notifications::publish(store_.client(Machines::local_slot).session, {.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
       if (store_.machines().active() == Machines::local_slot) {
         store_.commit();
       }
@@ -74,13 +74,13 @@ namespace telar::gui::qt {
         return;
       }
 
-      store_.client(Machines::local_slot).session.reportLimit({.name = name, .noun = noun, .value = value});
+      application::notifications::reportLimit(store_.client(Machines::local_slot).session, {.name = name, .noun = noun, .value = value});
     });
 
     connect(&shelf_, &AttachmentShelf::evicted, this, [this](application::terminal::attachments::AttachmentEviction reason, qulonglong requested) {
       const bool items = reason == application::terminal::attachments::AttachmentEviction::items;
 
-      store_.client(Machines::local_slot).session.reportLimit({.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
+      application::notifications::reportLimit(store_.client(Machines::local_slot).session, {.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
     });
   }
 
@@ -238,7 +238,7 @@ namespace telar::gui::qt {
         break;
       }
 
-      store_.session().reportLimit({.name = name, .noun = noun, .value = value, .requested = plan.requested});
+      application::notifications::reportLimit(store_.session(), {.name = name, .noun = noun, .value = value, .requested = plan.requested});
 
       return;
     }

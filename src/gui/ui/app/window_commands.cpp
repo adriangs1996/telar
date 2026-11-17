@@ -66,7 +66,6 @@ import telar.gui.components.configuration;
 import telar.gui.input.key_encoder;
 
 import telar.gui.config.gui_query;
-import telar.gui.presentation.notification_center;
 import telar.config.client;
 import telar.gui.config.plugin_effects;
 import telar.gui.machines.picker;
@@ -451,7 +450,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
     }
 
-    notifications_.publish({.level = notification->level, .target = notification->target, .title = notification->title.view(), .message = notification->message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification->duration_ms) * NotificationInput::nanoseconds_per_millisecond});
+    notifications_.publish({.level = notification->level, .target = notification->target, .title = notification->title.view(), .message = notification->message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification->duration_ms) * application::notifications::NotificationInput::nanoseconds_per_millisecond});
   }
 
   void WindowCommands::executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved) {
@@ -805,7 +804,7 @@ namespace telar::gui::qt {
       } else {
         const auto& notification = std::get<NotificationActionDescription>(effect);
 
-        notifications_.publish({.level = notification.level, .target = notification.target, .title = notification.title.view(), .message = notification.message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification.duration_ms) * NotificationInput::nanoseconds_per_millisecond});
+        notifications_.publish({.level = notification.level, .target = notification.target, .title = notification.title.view(), .message = notification.message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification.duration_ms) * application::notifications::NotificationInput::nanoseconds_per_millisecond});
       }
     }
   }

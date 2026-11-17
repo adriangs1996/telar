@@ -153,7 +153,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    store_.session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = application::palette::PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.session(), {.name = "prompt.field_bytes", .noun = "bytes", .value = application::palette::PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 

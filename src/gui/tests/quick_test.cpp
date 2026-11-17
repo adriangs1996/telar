@@ -145,7 +145,7 @@ import telar.gui.presentation.frame_pacer;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.plugins;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 import telar.wire.history;
 import telar.gui.features.window;
 
@@ -198,6 +198,8 @@ namespace {
   using telar::gui::test::ScreenTextLayout;
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::notifications;
 
   using namespace telar::gui::features::window;
 
@@ -2005,7 +2007,7 @@ return {api_version = 2, client = {
       });
 
       QVERIFY(client_->notifications()->center().find(focus_id) != nullptr);
-      QCOMPARE(client_->notifications()->center().find(focus_id)->phase, telar::gui::NotificationItem::Phase::exiting);
+      QCOMPARE(client_->notifications()->center().find(focus_id)->phase, telar::gui::features::notifications::NotificationItem::Phase::exiting);
       observation();
       QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);

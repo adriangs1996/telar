@@ -27,8 +27,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.notification_stack;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -89,9 +88,9 @@ namespace telar::gui::qt {
         action_line_height = 0;
       }
 
-      NotificationId id{};
+      application::notifications::NotificationId id{};
       runtime::FixedText<max_notification_message_bytes> message;
-      tbc::view<NotificationText, tbc::lt::self> body;
+      tbc::view<application::notifications::NotificationText, tbc::lt::self> body;
       QVariantMap record;
       float width = 0;
       float height = 0;
@@ -105,7 +104,7 @@ namespace telar::gui::qt {
     void bindWindow();
     void rebuild();
     void refreshFonts();
-    Content& content(const NotificationItem& item, float width);
+    Content& content(const application::notifications::NotificationItem& item, float width);
 
     struct ContentRecord {
       QVariantMap record;
@@ -113,7 +112,7 @@ namespace telar::gui::qt {
       float action_line_height = 0;
     };
 
-    [[nodiscard]] ContentRecord contentRecord(const NotificationItem& item, const Content& content) const;
+    [[nodiscard]] ContentRecord contentRecord(const application::notifications::NotificationItem& item, const Content& content) const;
     // Measures through the window's catalog and the resident fonts, apart from the layout's state.
     [[nodiscard]] static float measure(WindowFontCatalog& catalog, ResidentFonts& fonts, std::string_view text, std::uint16_t pixels, bool emphasized);
 
@@ -122,12 +121,12 @@ namespace telar::gui::qt {
     QPointer<WindowFontCatalog> catalog_;
     QMetaObject::Connection font_connection_;
     ListModel cards_;
-    NotificationStack stack_;
-    tbc::view<std::array<Content, NotificationCenter::capacity>, tbc::lt::self> contents_;
+    application::notifications::NotificationStack stack_;
+    tbc::view<std::array<Content, application::notifications::NotificationCenter::capacity>, tbc::lt::self> contents_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ChromeMetrics chrome_;
-    NotificationMetrics metrics_;
+    application::notifications::NotificationMetrics metrics_;
     QVariantMap style_;
     QRectF host_;
     qreal density_ = 1;

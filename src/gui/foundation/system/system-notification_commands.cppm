@@ -1,17 +1,18 @@
-export module telar.gui.platform.notification_commands;
+// The commands this system posts a desktop notification and plays a sound with, and the
+// command line a host process takes.
+export module telar.gui.foundation.system:notification_commands;
 
 import std;
 import telar.sys.socket;
 import telar.tbc;
 
-import telar.gui.text.notification_payload;
-
+import :notification_payload;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
 
 // Interface: platform/command_line.cppm
 export {
-  namespace telar::gui::platform {
+  namespace telar::gui::inline foundation::inline system {
 
     struct CommandLine {
       static constexpr std::size_t maximum_arguments = 5;
@@ -39,7 +40,7 @@ export {
 
 // Interface: platform/notification_commands.cppm
 export {
-  namespace telar::gui::platform {
+  namespace telar::gui::inline foundation::inline system {
 
     class AppleNotificationCommand {
     public:
@@ -76,7 +77,7 @@ export {
 
 // Interface: platform/socket_limits.cppm
 export {
-  namespace telar::gui::platform {
+  namespace telar::gui::inline foundation::inline system {
 
     struct SocketLimits {
       static constexpr std::size_t path_bytes = sizeof(sockaddr_un{}.sun_path) - 1;
@@ -87,7 +88,7 @@ export {
 
 // Interface: platform/sound_commands.cppm
 export {
-  namespace telar::gui::platform {
+  namespace telar::gui::inline foundation::inline system {
 
     struct SoundAttempt {
       AgentSound sound = AgentSound::ready;

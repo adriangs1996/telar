@@ -23,16 +23,16 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-import telar.gui.platform.notification_commands;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
   struct NativeSoundHost {
     static constexpr auto timeout = std::chrono::seconds{3};
-    static constexpr std::size_t attempts = platform::NativeSoundCommands::attempts;
+    static constexpr std::size_t attempts = system::NativeSoundCommands::attempts;
 
-    static void start(QProcess& process, platform::SoundAttempt request) {
-      startHostCommand(process, platform::NativeSoundCommands::prepare(request));
+    static void start(QProcess& process, system::SoundAttempt request) {
+      startHostCommand(process, system::NativeSoundCommands::prepare(request));
     }
   };
 
@@ -43,7 +43,7 @@ namespace telar::gui::qt {
   using ApplicationSoundHost = TELAR_GUI_SOUND_HOST;
 
   template <typename Host>
-  concept SoundHost = CommandHost<Host, platform::SoundAttempt> && requires {
+  concept SoundHost = CommandHost<Host, system::SoundAttempt> && requires {
     { Host::attempts } -> std::convertible_to<std::size_t>;
   };
 
@@ -99,8 +99,8 @@ namespace telar::gui::qt {
   private:
     Observer& observer_;
     // The process reports back to this player.
-    tbc::view<CommandProcess<Host, platform::SoundAttempt, SoundPlayer>, tbc::lt::self> process_;
-    platform::SoundAttempt attempt_;
+    tbc::view<CommandProcess<Host, system::SoundAttempt, SoundPlayer>, tbc::lt::self> process_;
+    system::SoundAttempt attempt_;
   };
 
 }

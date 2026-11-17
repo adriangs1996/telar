@@ -67,7 +67,7 @@ import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
-import telar.gui.presentation.notification_stack;
+import telar.gui.features.notifications;
 import telar.gui.features.window;
 import telar.gui.features.status_bar;
 

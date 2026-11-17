@@ -1,8 +1,11 @@
-module telar.gui.text.notification_payload;
+module telar.gui.foundation.system;
 
+import std;
+import telar.base.memory.containers;
 import telar.gui.foundation.text;
+import telar.wire.vocabulary;
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline system {
 
   template <std::size_t Capacity>
   runtime::FixedText<Capacity> NotificationPayload::sanitize(std::string_view text) {

@@ -22,7 +22,7 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.features.terminal.graphics;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 import telar.wire.graphics;
 import telar.wire.runtime;
 
@@ -30,6 +30,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using namespace telar::gui::features::terminal::graphics;
   using telar::gui::test::deliver;
   using telar::gui::test::openFirstPane;
@@ -83,18 +84,18 @@ namespace {
     openFirstPane(client, transport);
     constexpr LimitReach reach{.name = ImagePlacementSelection::limit_name, .noun = ImagePlacementSelection::limit_noun, .value = ImagePlacementSelection::capacity, .requested = ImagePlacementSelection::capacity + 1};
 
-    client.reportLimit(reach);
+    application::notifications::reportLimit(client, reach);
     const auto report = transport.last<ReportLimit>();
 
     require(report.reach.name == reach.name && report.reach.noun == reach.noun && report.reach.value == reach.value && report.reach.requested == reach.requested && report.reach.route.empty(), "a window limit must preserve its named bound without pretending to be a failed runtime message");
-    const auto& notice = client.notifications().items().front();
+    const auto& notice = application::notifications::center(client).items().front();
 
     require(notice.title.view() == "Limit reached" && notice.level == NotificationLevel::warning && notice.target.kind == NotificationTarget::Kind::none, "a window limit must publish the original global warning");
     require(notice.message.view() == "gui.images.placements_per_frame: 2049 image placements; limit 2048", "the warning must include requested and available placements");
-    client.reportLimit(reach);
-    require(client.notifications().items().size() == 1 && transport.count(ClientTag::report_limit) == 1, "repeated reaches must respect the notification and runtime reporting intervals");
-    Clock::now_ns = application::LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
-    client.reportLimit(reach);
+    application::notifications::reportLimit(client, reach);
+    require(application::notifications::center(client).items().size() == 1 && transport.count(ClientTag::report_limit) == 1, "repeated reaches must respect the notification and runtime reporting intervals");
+    Clock::now_ns = features::notifications::LimitNotices::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
+    application::notifications::reportLimit(client, reach);
     require(transport.last<ReportLimit>().hits == 2, "the next runtime report must include reaches collected during its interval");
     require(client.ready() && !application::terminal::graphics::paused(client, 1), "a presentation limit must preserve the runtime link and image stream");
   }
@@ -188,7 +189,7 @@ namespace {
     constexpr std::size_t expected_resyncs = 3;
 
     require(transport.count(ClientTag::request_graphics_snapshot) == expected_resyncs, "a fourth oversized snapshot must wait instead of creating an unbounded retry loop");
-    require(client.notifications().items().size() == 1, "one pause must publish one notice across repeated failed snapshots");
+    require(application::notifications::center(client).items().size() == 1, "one pause must publish one notice across repeated failed snapshots");
     require(client.ready(), "a graphics pause must preserve the runtime link and terminal input");
   }
 
@@ -202,7 +203,7 @@ namespace {
     deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
     failedSnapshot(client, 1);
     require(application::terminal::graphics::paused(client, 1), "the marker must start with the first failed transfer");
-    const auto& notice = client.notifications().items().front();
+    const auto& notice = application::notifications::center(client).items().front();
 
     require(notice.title.view() == "Images paused in pane 1: nvim", "a pause must name the pane by its displayed index and foreground");
     require(notice.message.view() == "GraphicsImageLimitExceeded: limit reached" && notice.level == NotificationLevel::warning, "the pause must describe the actual limit as a warning");
@@ -273,7 +274,7 @@ namespace {
     require(transport.last<ReportLimit>().hits == 2, "the next report must recover hits from an unsent report");
     failedSnapshot(client, 3);
     require(transport.count(ClientTag::report_limit) == 1, "a delivered limit report must be paced independently of snapshot retries");
-    Clock::now_ns = application::LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
+    Clock::now_ns = features::notifications::LimitNotices::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
     failedSnapshot(client, 4);
     require(transport.last<ReportLimit>().hits == 2 && transport.count(ClientTag::report_limit) == 2, "the next reporting interval must include the accumulated reaches");
   }
@@ -313,7 +314,7 @@ namespace {
     deliver(client, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin});
     deliver(client, GraphicsImage{.header = {.pane_id = 1, .revision = 2}, .image = description(1)});
     require(client.ready() && transport.count(ClientTag::request_graphics_snapshot) == 1, "a revision mismatch must request a graphics snapshot");
-    require(!application::terminal::graphics::paused(client, 1) && client.notifications().items().empty(), "revision drift must not be reported as a resource limit");
+    require(!application::terminal::graphics::paused(client, 1) && application::notifications::center(client).items().empty(), "revision drift must not be reported as a resource limit");
   }
 
 }

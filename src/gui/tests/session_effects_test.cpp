@@ -28,15 +28,15 @@ import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 import telar.wire.agents;
-import telar.gui.text.notification_payload;
 import telar.gui.features.window;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using namespace telar::gui::features::window;
   using namespace telar::gui::test;
 
@@ -232,8 +232,8 @@ namespace {
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};
 
-    client.publishNotification({.title = "Local only", .message = "body", .link = {}});
-    require(recorder.notifications.empty() && client.notifications().items().size() == 1, "default delivery must retain a card without contacting the desktop");
+    application::notifications::publish(client, {.title = "Local only", .message = "body", .link = {}});
+    require(recorder.notifications.empty() && application::notifications::center(client).items().size() == 1, "default delivery must retain a card without contacting the desktop");
 
     Configuration configuration;
 
@@ -241,15 +241,15 @@ namespace {
     client.configure(configuration);
     const NotificationInput input{.title = "--help\n\"quoted\"\\end", .message = "body\t\"quoted\"\\end", .link = {}};
 
-    client.publishNotification(input);
-    client.publishNotification(input);
+    application::notifications::publish(client, input);
+    application::notifications::publish(client, input);
     require(recorder.notifications.size() == 2, "desktop delivery must retain duplicate publications even when the center coalesces them");
     require(recorder.notifications.front().title.view() == "--helpquotedend" && recorder.notifications.front().message.view() == "bodyquotedend", "desktop payloads must remove the original controls, quotes and backslashes");
-    require(client.notifications().items().size() == 2 && client.notifications().items().front().title.view() == input.title, "desktop sanitization must not replace the original card text");
+    require(application::notifications::center(client).items().size() == 2 && application::notifications::center(client).items().front().title.view() == input.title, "desktop sanitization must not replace the original card text");
 
     recorder.throw_notification = true;
-    client.publishNotification({.title = "Still visible", .message = "admission failed", .link = {}});
-    require(client.notifications().items().front().title.view() == "Still visible", "optional desktop admission failure must not prevent in-app publication");
+    application::notifications::publish(client, {.title = "Still visible", .message = "admission failed", .link = {}});
+    require(application::notifications::center(client).items().front().title.view() == "Still visible", "optional desktop admission failure must not prevent in-app publication");
   }
 
   void wireDeliveryAndCommittedAgentAlertsUseTheSameHostBoundary() {
@@ -311,12 +311,12 @@ namespace {
     deliver(client, ready);
     require(recorder.sounds == std::vector{AgentSound::ready}, "one active sound must keep later requests off the host");
 
-    client.completeAgentSound();
+    application::notifications::completeSound(client);
     require(recorder.sounds == std::vector{AgentSound::ready, AgentSound::needs_input}, "attention must dominate the coalesced successor");
-    client.completeAgentSound();
+    application::notifications::completeSound(client);
     deliver(client, ready);
     require(recorder.sounds == std::vector{AgentSound::ready, AgentSound::needs_input, AgentSound::ready}, "completion must release admission for a later sound");
-    client.completeAgentSound();
+    application::notifications::completeSound(client);
   }
 
   void policyReloadAndAdmissionFailureDoNotLeavePlaybackReserved() {
@@ -341,7 +341,7 @@ namespace {
 
     configuration.sound.enabled = false;
     client.configure(configuration);
-    client.completeAgentSound();
+    application::notifications::completeSound(client);
     deliver(client, ready);
     require(recorder.sounds.size() == 1, "policy reload must discard a now-disabled successor and reject new requests");
 
@@ -349,7 +349,7 @@ namespace {
     client.configure(configuration);
     deliver(client, ready);
     require(recorder.sounds.size() == 2, "re-enabling audio must permit a fresh sound");
-    client.completeAgentSound();
+    application::notifications::completeSound(client);
   }
 
 }

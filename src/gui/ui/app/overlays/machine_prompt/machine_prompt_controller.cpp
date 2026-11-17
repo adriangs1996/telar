@@ -78,7 +78,7 @@ namespace telar::gui::qt {
 
     const auto* const name = prompt_->mode == Mode::add_destination ? "prompt.machine_destination_bytes" : "prompt.machine_label_bytes";
 
-    store_.session().reportLimit({.name = name, .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.session(), {.name = name, .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 

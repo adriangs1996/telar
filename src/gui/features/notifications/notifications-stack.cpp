@@ -1,10 +1,9 @@
-module telar.gui.presentation.notification_stack;
+module telar.gui.features.notifications;
 
 import std;
-
 import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::features::notifications {
 
   void NotificationActionLabel::format(std::string_view host, bool truncated, Buffer& buffer) {
     buffer.truncate(0);

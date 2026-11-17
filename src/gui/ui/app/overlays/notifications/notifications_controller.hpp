@@ -18,7 +18,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.notification_center;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -42,9 +41,9 @@ namespace telar::gui::qt {
     NotificationsController(NotificationsController&&) = delete;
     NotificationsController& operator=(NotificationsController&&) = delete;
 
-    [[nodiscard]] const NotificationCenter& center() const noexcept;
+    [[nodiscard]] const application::notifications::NotificationCenter& center() const noexcept;
     // A card's identity in QML, which names the machine view it was shown in.
-    [[nodiscard]] QString identity(NotificationId identity) const;
+    [[nodiscard]] QString identity(application::notifications::NotificationId identity) const;
     [[nodiscard]] bool targetVisible(NotificationTarget target) const noexcept;
     // Where the cards stack: the terminal area, cut to whole cells.
     [[nodiscard]] Rect host() const;
@@ -57,7 +56,7 @@ namespace telar::gui::qt {
     // nothing else did meanwhile.
     Q_INVOKABLE void retireFocus(const QString& identity, QQuickItem* retiring_owner = nullptr);
 
-    void publish(NotificationInput input);
+    void publish(application::notifications::NotificationInput input);
     // Shows what the session holds now, and when the next card fades.
     void refresh();
     // Refreshes only when the session published or retired a card since the last refresh.
@@ -77,7 +76,7 @@ namespace telar::gui::qt {
     void failed(const QString& message);
 
   private:
-    [[nodiscard]] std::optional<NotificationId> resolve(const QString& identity) const;
+    [[nodiscard]] std::optional<application::notifications::NotificationId> resolve(const QString& identity) const;
     void schedule();
 
     Store& store_;

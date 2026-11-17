@@ -3,15 +3,9 @@ export module telar.gui.application:host_effects;
 import std;
 import telar.tbc;
 
-import telar.gui.foundation.text;
-
 import telar.gui.features.window;
 
-import telar.gui.text.notification_payload;
-
 import telar.gui.foundation.core;
-import telar.base.diagnostics;
-import telar.base.memory.containers;
 import telar.gui.foundation.system;
 import telar.wire.agents;
 import telar.wire.clients;
@@ -111,85 +105,6 @@ export {
 
     protected:
       ~RuntimeTransport() = default;
-    };
-
-  }
-}
-
-// Interface: application/limit_reports.cppm
-export {
-  namespace telar::gui::application {
-
-    class LimitReports {
-    public:
-      static constexpr std::size_t capacity = 128;
-      static constexpr std::size_t name_capacity = 64;
-      static constexpr std::size_t noun_capacity = 32;
-      static constexpr std::size_t route_capacity = 32;
-      static constexpr std::size_t description_capacity = name_capacity + noun_capacity + 96;
-      static constexpr std::uint64_t notice_interval_ms = 60'000;
-      static constexpr std::uint64_t report_interval_ms = 1000;
-
-      struct Time {
-        std::int64_t awake_ms = 0;
-        std::int64_t real_ms = 0;
-      };
-
-      struct Row {
-        runtime::FixedText<name_capacity> name;
-        runtime::FixedText<noun_capacity> noun;
-        runtime::FixedText<route_capacity> route;
-        std::uint64_t value = 0;
-        std::optional<std::uint64_t> requested = std::nullopt;
-        std::uint64_t hits = 0;
-        std::uint32_t unreported = 0;
-        std::int64_t last_ms = 0;
-        std::optional<std::int64_t> shown_ms = std::nullopt;
-        std::optional<std::int64_t> reported_ms = std::nullopt;
-
-        [[nodiscard]] LimitReach reach() const noexcept;
-      };
-
-      struct Slot {
-        std::size_t value = 0;
-      };
-
-      struct Recorded {
-        Slot slot{};
-        bool show = false;
-      };
-
-      [[nodiscard]] Recorded record(LimitReach reach, Time sampled, std::uint32_t hits);
-
-      [[nodiscard]] std::optional<std::uint32_t> takeReport(Slot slot, std::int64_t awake_ms) noexcept;
-
-      void restoreReport(Slot slot, std::uint32_t hits) noexcept;
-
-      [[nodiscard]] const Row& row(Slot slot) const;
-
-      [[nodiscard]] std::span<const Row> rows() const noexcept;
-
-      [[nodiscard]] std::uint64_t evicted() const noexcept;
-
-      [[nodiscard]] static BoundedText<description_capacity> describe(LimitReach reach, std::uint64_t hits);
-
-    private:
-      template <typename Number>
-      [[nodiscard]] static Number saturatedAdd(Number left, Number right) noexcept;
-
-      [[nodiscard]] static bool elapsed(std::int64_t now_ms, std::int64_t since_ms, std::uint64_t interval_ms) noexcept;
-
-      static void appendNoun(BoundedText<description_capacity>& text, std::string_view noun);
-
-      [[nodiscard]] std::optional<std::size_t> find(std::string_view name) const noexcept;
-
-      std::size_t insert(std::string_view name);
-
-      [[nodiscard]] std::size_t oldest() const noexcept;
-
-      std::array<Row, capacity> rows_{};
-      std::size_t count_ = 0;
-      std::uint64_t evicted_ = 0;
     };
 
   }

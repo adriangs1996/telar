@@ -11,7 +11,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.notification_center;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -22,7 +22,7 @@ namespace telar::gui::qt {
     }
 
     const auto remaining = *deadline_ns - std::min(*deadline_ns, now_ns);
-    constexpr auto unit = NotificationInput::nanoseconds_per_millisecond;
+    constexpr auto unit = application::notifications::NotificationInput::nanoseconds_per_millisecond;
     const auto delay = (remaining / unit) + static_cast<std::uint64_t>(remaining % unit != 0);
 
     timer.start(static_cast<int>(std::clamp<std::uint64_t>(delay, 1, std::numeric_limits<int>::max())));

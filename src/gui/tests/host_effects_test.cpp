@@ -32,7 +32,7 @@ static_assert(true);
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.application;
-import telar.gui.platform.notification_commands;
+import telar.gui.foundation.system;
 
 namespace {
 
@@ -51,12 +51,12 @@ namespace {
 
   struct SoundHost {
     static constexpr auto timeout = std::chrono::milliseconds{100};
-    static constexpr auto attempts = platform::LinuxSoundCommands::attempts;
-    inline static std::vector<platform::SoundAttempt> started;
+    static constexpr auto attempts = system::LinuxSoundCommands::attempts;
+    inline static std::vector<system::SoundAttempt> started;
     inline static std::size_t successful_backend = 0;
     inline static FailureMode failure = FailureMode::process;
 
-    static void start(QProcess& process, platform::SoundAttempt request) {
+    static void start(QProcess& process, system::SoundAttempt request) {
       started.push_back(request);
       if (request.backend >= successful_backend) {
         process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QStringLiteral("exit 0")}, QIODevice::ReadOnly);

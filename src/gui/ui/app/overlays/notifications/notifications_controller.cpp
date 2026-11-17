@@ -39,20 +39,20 @@ namespace telar::gui::qt {
     timer_.setSingleShot(true);
     timer_.setTimerType(Qt::PreciseTimer);
     connect(&timer_, &QTimer::timeout, this, [this] {
-      store_.session().advanceNotifications(system::AwakeClock::nowNanoseconds());
+      application::notifications::advance(store_.session(), system::AwakeClock::nowNanoseconds());
       refresh();
     });
   }
 
-  const NotificationCenter& NotificationsController::center() const noexcept {
-    return store_.session().notifications();
+  const application::notifications::NotificationCenter& NotificationsController::center() const noexcept {
+    return application::notifications::center(store_.session());
   }
 
-  QString NotificationsController::identity(NotificationId identity) const {
+  QString NotificationsController::identity(application::notifications::NotificationId identity) const {
     return QString::number(store_.machineView()) + QLatin1Char(':') + QString::number(identity.value);
   }
 
-  std::optional<NotificationId> NotificationsController::resolve(const QString& identity) const {
+  std::optional<application::notifications::NotificationId> NotificationsController::resolve(const QString& identity) const {
     const auto separator = identity.indexOf(QLatin1Char(':'));
     if (separator < 0) {
       return std::nullopt;
@@ -63,11 +63,11 @@ namespace telar::gui::qt {
     const auto view = identity.first(separator).toULongLong(&valid_view);
     const auto raw_id = identity.sliced(separator + 1).toULongLong(&valid_id);
 
-    return valid_view && valid_id && view == store_.machineView() ? std::optional{NotificationId{raw_id}} : std::nullopt;
+    return valid_view && valid_id && view == store_.machineView() ? std::optional{application::notifications::NotificationId{raw_id}} : std::nullopt;
   }
 
   bool NotificationsController::targetVisible(NotificationTarget target) const noexcept {
-    return store_.session().notificationTargetVisible(target);
+    return application::notifications::targetVisible(store_.session(), target);
   }
 
   Rect NotificationsController::host() const {
@@ -94,19 +94,19 @@ namespace telar::gui::qt {
     emit displayChanged();
   }
 
-  void NotificationsController::publish(NotificationInput input) {
-    store_.session().publishNotification(input);
+  void NotificationsController::publish(application::notifications::NotificationInput input) {
+    application::notifications::publish(store_.session(), input);
     refresh();
   }
 
   void NotificationsController::refresh() {
-    presented_ = store_.session().notificationRevision();
+    presented_ = application::notifications::revision(store_.session());
     schedule();
     emit changed();
   }
 
   void NotificationsController::present() {
-    if (store_.session().notificationRevision() != presented_) {
+    if (application::notifications::revision(store_.session()) != presented_) {
       refresh();
     }
   }
@@ -123,7 +123,7 @@ namespace telar::gui::qt {
 
   void NotificationsController::dismiss(const QString& identity) {
     const auto id = resolve(identity);
-    if (id && store_.session().dismissNotification(*id)) {
+    if (id && application::notifications::dismiss(store_.session(), *id)) {
       refresh();
       emit focusRestoreRequested();
     }
@@ -140,7 +140,7 @@ namespace telar::gui::qt {
 
     store_.interact(
         [&] {
-          if (store_.session().activateNotification(*id)) {
+          if (application::notifications::activate(store_.session(), *id)) {
             if (!link.isEmpty()) {
               emit linkRequested(link);
             }

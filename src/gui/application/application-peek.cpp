@@ -152,7 +152,7 @@ namespace telar::gui::application::peek {
     }
 
     if (*dropped != 0) {
-      session.reportLimit({.name = "peek.text_bytes", .noun = "bytes", .value = PeekLimits::text_bytes, .requested = reply.text.size()});
+      notifications::reportLimit(session, {.name = "peek.text_bytes", .noun = "bytes", .value = PeekLimits::text_bytes, .requested = reply.text.size()});
     }
 
     return Change::peek;
@@ -165,7 +165,7 @@ namespace telar::gui::application::peek {
   Change actionFailed(Session& session, std::uint64_t pane_id, std::string_view message) {
     constexpr std::uint64_t duration_ns = 7'000'000'000;
 
-    session.publishNotification({.level = NotificationLevel::failure, .target = {.kind = NotificationTarget::Kind::pane, .id = pane_id}, .title = "The agent did not take it", .message = message, .link = {}, .duration_ns = duration_ns});
+    notifications::publish(session, {.level = NotificationLevel::failure, .target = {.kind = NotificationTarget::Kind::pane, .id = pane_id}, .title = "The agent did not take it", .message = message, .link = {}, .duration_ns = duration_ns});
 
     return Change::notification;
   }

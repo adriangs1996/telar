@@ -160,7 +160,7 @@ namespace telar::gui::qt {
     }
 
     if (result.matched > DirectoryCompletion::maximum_entries) {
-      store_.session().reportLimit({.name = "workspace_form.completion_entries", .noun = "directories", .value = DirectoryCompletion::maximum_entries, .requested = result.matched, .route = {}});
+      application::notifications::reportLimit(store_.session(), {.name = "workspace_form.completion_entries", .noun = "directories", .value = DirectoryCompletion::maximum_entries, .requested = result.matched, .route = {}});
       store_.commit();
     }
 

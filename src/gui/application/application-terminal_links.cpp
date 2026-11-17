@@ -26,7 +26,7 @@ namespace telar::gui::application::terminal::links {
     }
 
     Change report(Session& session, std::string_view message) {
-      session.publishNotification({.level = NotificationLevel::failure, .title = "Could not open link", .message = message, .link = {}});
+      notifications::publish(session, {.level = NotificationLevel::failure, .title = "Could not open link", .message = message, .link = {}});
 
       return Change::notification;
     }

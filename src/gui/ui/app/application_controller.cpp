@@ -517,7 +517,7 @@ namespace telar::gui::qt {
     try {
       const bool active = client.key.machine.slot == store_.machines().active();
       const WindowCommands::HostCommands handler{commands_, active};
-      const auto notification_revision = client.session.notificationRevision();
+      const auto notification_revision = application::notifications::revision(client.session);
       const auto graphics_revision = application::terminal::graphics::recoveryRevision(client.session);
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
       // Terminal frames and documents reach their panes directly, and are the bulk of the
@@ -548,7 +548,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      if (notification_revision != session().notificationRevision()) {
+      if (notification_revision != application::notifications::revision(session())) {
         notifications_.refresh();
       }
 

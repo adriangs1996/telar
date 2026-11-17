@@ -24,7 +24,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.text.notification_payload;
+import telar.gui.foundation.system;
 
 namespace {
 

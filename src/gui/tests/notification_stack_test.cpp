@@ -14,13 +14,13 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.presentation.notification_stack;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using telar::gui::test::require;
 
   constexpr std::uint64_t second = 1'000'000'000;

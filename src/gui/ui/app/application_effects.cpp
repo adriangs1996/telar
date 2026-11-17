@@ -7,7 +7,7 @@ static_assert(true);
 #include "application_controller.hpp"
 
 import std;
-import telar.gui.text.notification_payload;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 

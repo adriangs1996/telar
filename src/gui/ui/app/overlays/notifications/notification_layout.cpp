@@ -39,7 +39,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.presentation.notification_stack;
+import telar.gui.application;
 
 namespace telar::gui::qt {
   namespace {
@@ -225,7 +225,7 @@ namespace telar::gui::qt {
     return static_cast<float>(fonts::TextLayout<ConcurrentMemory>::measure(fonts, text, {.pixel_height = pixels, .preferred = role}));
   }
 
-  NotificationLayout::Content& NotificationLayout::content(const NotificationItem& item, float width) {
+  NotificationLayout::Content& NotificationLayout::content(const application::notifications::NotificationItem& item, float width) {
     auto* found = std::ranges::find(contents_, item.id, &Content::id);
     if (found == contents_.end()) {
       const auto retained = controller_->center().items();
@@ -250,7 +250,7 @@ namespace telar::gui::qt {
         return measure(*catalog, fonts, label, pixels, false);
       };
 
-      found->body.wrap(found->message.view(), width - metrics_.px(NotificationMetrics::text_insets), measure_body);
+      found->body.wrap(found->message.view(), width - metrics_.px(application::notifications::NotificationMetrics::text_insets), measure_body);
       found->height = metrics_.height(found->body.count(), item.clickable());
       auto made = contentRecord(item, *found);
 
@@ -262,30 +262,30 @@ namespace telar::gui::qt {
     return *found;
   }
 
-  NotificationLayout::ContentRecord NotificationLayout::contentRecord(const NotificationItem& item, const Content& content) const {
-    const NotificationCardGeometry geometry{.bounds = {.width = content.width, .height = content.height}, .metrics = metrics_};
+  NotificationLayout::ContentRecord NotificationLayout::contentRecord(const application::notifications::NotificationItem& item, const Content& content) const {
+    const application::notifications::NotificationCardGeometry geometry{.bounds = {.width = content.width, .height = content.height}, .metrics = metrics_};
     QVariantList body;
 
     for (std::size_t index = 0; index < content.body.count(); ++index) {
       body.append(QVariantMap{{QStringLiteral("text"), toQString(content.body.line(index))}, {QStringLiteral("bounds"), logicalBounds(geometry.body(index), density_)}});
     }
 
-    auto action = NotificationActionLabel::target(item.target.kind);
-    NotificationActionLabel::Buffer link_label;
+    auto action = application::notifications::NotificationActionLabel::target(item.target.kind);
+    application::notifications::NotificationActionLabel::Buffer link_label;
     const auto measure_action = [catalog = tbc::raw(catalog_.data()), &fonts = *fonts_, pixels = chrome_.small](std::string_view label) {
       return measure(*catalog, fonts, label, pixels, true);
     };
 
     if (!item.link.view().empty()) {
-      action = NotificationActionLabel::fitHost(item.linkHost(), geometry.bodyWidth(), measure_action, link_label);
+      action = application::notifications::NotificationActionLabel::fitHost(item.linkHost(), geometry.bodyWidth(), measure_action, link_label);
     }
 
     QVariantList shadows;
 
-    for (std::size_t layer = 0; layer < NotificationMetrics::shadow_layers; ++layer) {
-      const auto spread = metrics_.px(static_cast<float>(NotificationMetrics::shadow_layers - layer) * NotificationMetrics::shadow_spread);
+    for (std::size_t layer = 0; layer < application::notifications::NotificationMetrics::shadow_layers; ++layer) {
+      const auto spread = metrics_.px(static_cast<float>(application::notifications::NotificationMetrics::shadow_layers - layer) * application::notifications::NotificationMetrics::shadow_spread);
 
-      shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (metrics_.px(NotificationMetrics::radius) + spread) / density_}});
+      shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(application::notifications::NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (metrics_.px(application::notifications::NotificationMetrics::radius) + spread) / density_}});
     }
 
     const auto action_bounds = geometry.action();
@@ -338,14 +338,14 @@ namespace telar::gui::qt {
     const auto physical_host = controller_->host();
     const auto host = logicalBounds(physical_host, density_);
     const QVariantMap style{
-        {QStringLiteral("radius"), metrics_.px(NotificationMetrics::radius) / density_},
-        {QStringLiteral("iconRadius"), metrics_.px(NotificationMetrics::icon_radius) / density_},
-        {QStringLiteral("closeRadius"), metrics_.px(NotificationMetrics::close_radius) / density_},
-        {QStringLiteral("borderWidth"), metrics_.px(NotificationMetrics::border_width) / density_},
-        {QStringLiteral("focusBorderWidth"), metrics_.px(NotificationMetrics::focus_border_width) / density_},
-        {QStringLiteral("borderAlpha"), NotificationMetrics::border_alpha},
-        {QStringLiteral("iconAlpha"), NotificationMetrics::icon_alpha},
-        {QStringLiteral("shadowAlpha"), NotificationMetrics::shadow_alpha},
+        {QStringLiteral("radius"), metrics_.px(application::notifications::NotificationMetrics::radius) / density_},
+        {QStringLiteral("iconRadius"), metrics_.px(application::notifications::NotificationMetrics::icon_radius) / density_},
+        {QStringLiteral("closeRadius"), metrics_.px(application::notifications::NotificationMetrics::close_radius) / density_},
+        {QStringLiteral("borderWidth"), metrics_.px(application::notifications::NotificationMetrics::border_width) / density_},
+        {QStringLiteral("focusBorderWidth"), metrics_.px(application::notifications::NotificationMetrics::focus_border_width) / density_},
+        {QStringLiteral("borderAlpha"), application::notifications::NotificationMetrics::border_alpha},
+        {QStringLiteral("iconAlpha"), application::notifications::NotificationMetrics::icon_alpha},
+        {QStringLiteral("shadowAlpha"), application::notifications::NotificationMetrics::shadow_alpha},
         {QStringLiteral("titlePixels"), chrome_.title / density_},
         {QStringLiteral("bodyPixels"), chrome_.body / density_},
         {QStringLiteral("smallPixels"), chrome_.small / density_},
@@ -357,10 +357,10 @@ namespace telar::gui::qt {
     }
 
     now_ns_ = std::max(now_ns_, clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds());
-    const auto placements = stack_.prepare({.items = controller_->center().items(), .host = physical_host, .ratio = metrics_.ratio, .now_ns = now_ns_}, [&](const NotificationItem& item) {
+    const auto placements = stack_.prepare({.items = controller_->center().items(), .host = physical_host, .ratio = metrics_.ratio, .now_ns = now_ns_}, [&](const application::notifications::NotificationItem& item) {
       return controller_->targetVisible(item.target);
     },
-        [&](const NotificationItem& item, float width) {
+        [&](const application::notifications::NotificationItem& item, float width) {
           return content(item, width).height;
         });
 
@@ -369,7 +369,7 @@ namespace telar::gui::qt {
     for (const auto& placement : placements.items()) {
       const auto& item = controller_->center().items()[placement.index];
       const auto& cached = content(item, placement.bounds.width);
-      const NotificationCardGeometry geometry{.bounds = placement.bounds, .metrics = metrics_};
+      const application::notifications::NotificationCardGeometry geometry{.bounds = placement.bounds, .metrics = metrics_};
       auto underline = geometry.actionUnderline(cached.action_line_height, cached.action_advance);
 
       underline.x -= placement.bounds.x;
@@ -379,7 +379,7 @@ namespace telar::gui::qt {
       record.insert(QStringLiteral("underlineBounds"), logicalBounds(underline, density_));
       record.insert(QStringLiteral("bounds"), logicalBounds(placement.bounds, density_));
       record.insert(QStringLiteral("opacity"), placement.opacity);
-      record.insert(QStringLiteral("enabled"), item.phase != NotificationItem::Phase::exiting);
+      record.insert(QStringLiteral("enabled"), item.phase != application::notifications::NotificationItem::Phase::exiting);
       records.append(record);
     }
 

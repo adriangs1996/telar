@@ -1,19 +1,21 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.presentation.notification_stack;
+// The cards the window paints for the notices: their geometry, the label of their action and
+// the stack that moves them as notices come and go. Each window holds its own stack.
+export module telar.gui.features.notifications:stack;
 
 import std;
-
 import telar.tbc;
-import telar.wire.vocabulary;
+
+import :center;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
-import telar.gui.presentation.notification_center;
+import telar.wire.vocabulary;
 
 // Interface: presentation/notification_action_label.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::notifications {
 
     struct NotificationActionLabel {
       static constexpr std::size_t decoration_bytes = 16;
@@ -77,7 +79,7 @@ export {
 
 // Interface: presentation/notification_geometry.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::notifications {
 
     struct NotificationMetrics {
       static constexpr float margin = 16;
@@ -144,7 +146,7 @@ export {
 
 // Interface: presentation/notification_stack.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::notifications {
 
     struct NotificationPlacement {
       std::size_t index = 0;

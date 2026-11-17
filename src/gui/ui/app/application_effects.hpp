@@ -9,7 +9,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.text.notification_payload;
+import telar.gui.foundation.system;
 import telar.gui.application;
 
 namespace telar::gui::qt {

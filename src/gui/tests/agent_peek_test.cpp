@@ -34,7 +34,7 @@ import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.features.peek;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.layout;
@@ -45,6 +45,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using namespace telar::gui::test;
   using features::peek::PeekCommand;
   using features::peek::PeekGeometry;
@@ -496,7 +497,7 @@ namespace {
     const auto read = transport.last<ReadPane>();
 
     require(deliver(client, RequestFailed{.request_id = read.request_id, .code = FailureCode::pane_not_found, .message = "Read rejected"}) == application::Change::none && !application::peek::reading(client) && application::peek::target(client), "a failed recent read must quietly release ownership while keeping the open peek");
-    require(client.error().empty() && client.notifications().items().empty() && !client.requestsPending(), "a recent-read failure must not turn into an unrelated diagnostic or notification");
+    require(client.error().empty() && application::notifications::center(client).items().empty() && !client.requestsPending(), "a recent-read failure must not turn into an unrelated diagnostic or notification");
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
     const auto retry = transport.last<ReadPane>();
 
@@ -507,8 +508,8 @@ namespace {
     constexpr std::string_view refusal = "the pane has the focus in an attached window";
 
     require(deliver(client, RequestFailed{.request_id = action.request_id, .code = FailureCode::pane_focused, .message = refusal}) == application::Change::notification, "a refused peek action must publish the original failure notification");
-    require(client.notifications().items().size() == 1 && !client.requestsPending(), "a refusal must retain one notice and release the action correlation");
-    const auto& notice = client.notifications().items().front();
+    require(application::notifications::center(client).items().size() == 1 && !client.requestsPending(), "a refusal must retain one notice and release the action correlation");
+    const auto& notice = application::notifications::center(client).items().front();
     constexpr std::uint64_t original_duration_ns = 7'000'000'000;
 
     require(notice.level == NotificationLevel::failure && notice.title.view() == "The agent did not take it" && notice.message.view() == refusal && notice.target.kind == NotificationTarget::Kind::pane && notice.target.id == target.agent.pane_id, "the failure card must retain the original text and inspected pane target");

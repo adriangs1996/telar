@@ -40,7 +40,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.features.terminal.graphics;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 import telar.wire.graphics;
 import telar.wire.layout;
 
@@ -48,6 +48,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;

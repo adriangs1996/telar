@@ -175,7 +175,7 @@ namespace telar::gui::qt {
     }
 
     if (const auto reach = WindowImages::forWindow(*window_).preparePlacements(std::span{sources}.first(count))) {
-      session.reportLimit(*reach);
+      application::notifications::reportLimit(session, *reach);
       emit notificationPublished();
     }
   }

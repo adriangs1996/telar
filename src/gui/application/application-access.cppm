@@ -8,6 +8,7 @@ import :session;
 import telar.gui.features.palette;
 import telar.gui.features.paths;
 import telar.gui.features.history;
+import telar.gui.features.notifications;
 import telar.gui.features.prompt;
 import telar.gui.features.status_bar;
 import telar.gui.features.peek;
@@ -89,6 +90,14 @@ namespace telar::gui::application {
       return session.graphics_;
     }
 
+    [[nodiscard]] static constexpr features::notifications::State& notifications(Session& session) noexcept {
+      return session.notifications_;
+    }
+
+    [[nodiscard]] static constexpr const features::notifications::State& notifications(const Session& session) noexcept {
+      return session.notifications_;
+    }
+
     [[nodiscard]] static constexpr features::status_bar::State& statusBar(Session& session) noexcept {
       return session.status_bar_;
     }
@@ -161,19 +170,18 @@ namespace telar::gui::application {
       return session.now_();
     }
 
-    // ---- the limits the session reports, shared by the features that reach one -------------
+    // ---- the desktop the session runs in ----------------------------------------------------
 
-    static constexpr std::uint64_t limit_notice_duration_ns = Session::limit_notice_duration_ns;
-
-    static LimitReports::Recorded countLimitReach(Session& session, LimitReach reach) {
-      return session.countLimitReach(reach);
-    }
-
-    [[nodiscard]] static constexpr const LimitReports& limitReports(const Session& session) noexcept {
-      return session.limit_reports_;
+    [[nodiscard]] static constexpr HostEffects& effects(Session& session) noexcept {
+      return session.effects_;
     }
 
     // ---- the connection with the runtime ----------------------------------------------------
+
+    // Sends a limit report unless the transport is too busy for one; false when it dropped it.
+    static bool report(Session& session, const ReportLimit& report) {
+      return session.transport_.report(session.encode(report));
+    }
 
     // Whether the transport hands images over in shared memory.
     [[nodiscard]] static bool sharesImages(const Session& session) noexcept {

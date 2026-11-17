@@ -68,7 +68,6 @@ import telar.gui.application;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.application_mark;
-import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.features.window;
 

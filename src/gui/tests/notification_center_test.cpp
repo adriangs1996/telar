@@ -16,12 +16,13 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.presentation.notification_center;
+import telar.gui.features.notifications;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::notifications;
   using namespace telar::gui::test;
 
   constexpr std::uint64_t frame_interval_ns = 16'000'000;
