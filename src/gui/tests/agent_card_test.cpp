@@ -135,6 +135,7 @@ namespace {
       QCOMPARE(record.value(QStringLiteral("status")).toString(), QStringLiteral("Approval 0s"));
       QCOMPARE(record.value(QStringLiteral("statusColor")).toString(), QStringLiteral("yellow"));
       QCOMPARE(record.value(QStringLiteral("badge")).toString(), QStringLiteral("yellow"));
+      QCOMPARE(record.value(QStringLiteral("badgeGlyph")).toString(), QStringLiteral("\u26a0"));
       QCOMPARE(record.value(QStringLiteral("attention")).toString(), QStringLiteral("yellow"));
       QCOMPARE(record.value(QStringLiteral("signal")).toString(), QStringLiteral("live event"));
       QCOMPARE(record.value(QStringLiteral("signalColor")).toString(), QStringLiteral("yellow"));
@@ -154,6 +155,7 @@ namespace {
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("Session title"));
       QCOMPARE(record.value(QStringLiteral("status")).toString(), QStringLiteral("offline"));
       QCOMPARE(record.value(QStringLiteral("badge")).toString(), QString{});
+      QCOMPARE(record.value(QStringLiteral("badgeGlyph")).toString(), QString{});
       QCOMPARE(record.value(QStringLiteral("attention")).toString(), QString{});
       QCOMPARE(record.value(QStringLiteral("signalColor")).toString(), QStringLiteral("overlay1"));
       QVERIFY(!record.value(QStringLiteral("selected")).toBool());

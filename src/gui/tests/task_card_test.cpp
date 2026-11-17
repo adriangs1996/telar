@@ -201,6 +201,15 @@ namespace {
       // A task named after its branch does not repeat it.
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("worktree-fix"));
       QVERIFY(record.value(QStringLiteral("taskBranch")).toString().isEmpty());
+      task.diff_files = 0;
+      task.commits_ahead = 0;
+      task.command_state = CommandState::none;
+      agent.workspace_label = "project";
+      QVERIFY(card->setProperty("record", taskRecord(agent, task, {.machine = {}, .branch = {}})));
+      // With nothing to tell, the worktree's card names its project.
+      QTRY_VERIFY_WITH_TIMEOUT(visualItems(*card, QStringLiteral("agentProjectLabel")).front()->isVisible(), wait_ms);
+      QVERIFY(!visualItems(*card, QStringLiteral("agentFacts")).front()->isVisible());
+      QCOMPARE(text(*card, QStringLiteral("agentProjectLabel")), QStringLiteral("project"));
       QVERIFY(!window.grabWindow().isNull());
     }
 

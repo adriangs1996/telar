@@ -1,2 +1,4 @@
 out*/
 /measurements/
+# Prototype QML that gui-playground shows (tools/playground.cpp).
+/playground/

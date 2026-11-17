@@ -66,6 +66,7 @@ namespace telar::gui::qt {
         // What one design pixel measures beside the chrome text, in logical pixels.
         {QStringLiteral("ratio"), geometry.scale / density},
         {QStringLiteral("taskIndent"), geometry.px(AgentCardGeometry::task_indent) / density},
+        {QStringLiteral("badgeSide"), geometry.px(AgentCardGeometry::badge_side) / density},
         {QStringLiteral("planBarHeight"), geometry.px(AgentCardGeometry::plan_bar_height) / density},
         {QStringLiteral("attentionAlpha"), AgentCardGeometry::attention_alpha},
         {QStringLiteral("attentionOutlineAlpha"), AgentCardGeometry::attention_outline_alpha},

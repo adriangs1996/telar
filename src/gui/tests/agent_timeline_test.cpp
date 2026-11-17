@@ -259,8 +259,8 @@ namespace {
       const auto labels = visualItems(*card, QStringLiteral("agentStatusLabel"));
 
       qInfo() << "Agent timeline scene graph API:" << window.rendererInterface()->graphicsApi();
-      // The working dot on the provider's tile.
-      const auto glyphs = visualItems(*card, QStringLiteral("applicationStatus"));
+      // The working glyph on the provider's tile.
+      const auto glyphs = visualItems(*card, QStringLiteral("agentStatusBadgeGlyph"));
 
       QCOMPARE(labels.size(), 1);
       QCOMPARE(glyphs.size(), 1);

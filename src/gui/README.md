@@ -241,6 +241,12 @@ for the measurement endpoint, paired results, reproduction and limitations.
 The default build and `just gui-test` skip the probes; `cmake --build out --target gui-probes`
 builds the ones this platform defines.
 
+`gui-playground FILE.qml` shows a QML file from disk in a window and shows it again
+whenever a QML file beside it changes. The file's root is an Item that imports
+`Telar.Gui`; `telar.colors` and `telar.windowGeometry.typography` come from the default
+configuration. Prototypes live in `src/gui/playground/`, which git ignores; a copy of a
+module component there, under another name, takes edits without rebuilding `gui-quick`.
+
 `gui-screen-probe` measures application of preencoded terminal frames without Qt.
 It covers empty, one-cell, one-row and full-grid deltas, plus changing and retained
 snapshots. Each run verifies the final cells and rejects allocation churn after

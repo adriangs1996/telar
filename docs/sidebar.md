@@ -223,17 +223,19 @@ in a column that ends on that same edge.
 
 Every agent card has the same two rows, whether the agent runs in a worktree
 or not, focused or not; the state changes what the rows say, never the card's
-shape. The first row holds the provider's tile, the title and the state. The
-tile carries a dot in the state's color, which pulses while the agent works; an
-agent at rest has none. An agent in a worktree takes its task's name as its
-title. The second row starts with the signal, the line that matters in the
+shape. The first row holds the provider's tile, the title and the state. A
+badge on the tile's lower right corner carries the state's glyph in its color,
+the working one pulsing; an agent at rest has none. An agent in a worktree
+takes its task's title, or its branch when it has none, as its title; any other
+agent takes the title its session reports, or its provider's name. The second row starts with the signal, the line that matters in the
 current state: the question or request in yellow while the agent is blocked,
 the error in red when it failed, the plan's count and step while it works on a
 plan, its latest event while it works without one, and its final answer once it
 is done or at rest. The context closes the row on the right: the project, or
 for a worktree the machine, the branch, the lines it added (green) and removed
 (red), its files, its commits ahead and its command's outcome. The branch is
-left out when it reads like the title. The context may take half the row, less
+left out when it reads like the title, and a worktree with none of these shows
+its project instead. The context may take half the row, less
 while the agent waits on the person and more once it rests; when it runs short,
 the commits ahead give way first, then the branch, the files and the command's
 outcome, while the machine and the diff stay. A plan's progress is a thin line

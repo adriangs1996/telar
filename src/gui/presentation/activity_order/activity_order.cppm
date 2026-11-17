@@ -184,6 +184,8 @@ export {
 
       [[nodiscard]] static std::string_view word(AgentStatus status, AgentBlockedReason reason) noexcept;
 
+      [[nodiscard]] static std::string_view glyph(AgentStatus status, AgentBlockedReason reason) noexcept;
+
       [[nodiscard]] static PaletteRole color(AgentStatus status) noexcept;
 
       [[nodiscard]] static Age age(std::uint32_t seconds, bool duration = false);

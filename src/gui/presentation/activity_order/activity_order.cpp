@@ -448,6 +448,34 @@ namespace telar::gui {
     return {};
   }
 
+  std::string_view AgentStatusPresentation::glyph(AgentStatus status, AgentBlockedReason reason) noexcept {
+    switch (status) {
+    case AgentStatus::blocked:
+      switch (reason) {
+      case AgentBlockedReason::permission:
+        return "\u26a0";
+      case AgentBlockedReason::question:
+        return "?";
+      case AgentBlockedReason::plan:
+        return "\u2261";
+      default:
+        return "!";
+      }
+    case AgentStatus::working:
+      return "\u25cc";
+    case AgentStatus::done:
+      return "\u2713";
+    case AgentStatus::failed:
+      return "\u2715";
+    case AgentStatus::ready:
+      return "\u00b7";
+    case AgentStatus::unknown:
+      return "?";
+    }
+
+    return {};
+  }
+
   PaletteRole AgentStatusPresentation::color(AgentStatus status) noexcept {
     switch (status) {
     case AgentStatus::working:

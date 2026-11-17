@@ -13,9 +13,6 @@ NativeRoundedRectangle {
     property string attentionColor
     // The palette role of the agent's state, drawn as a dot on the card's corner.
     property string statusColor
-    // The dot's opacity, which a working agent pulses, and the ring that cuts it from the surface below.
-    property real statusOpacity: 1
-    property color statusRing: colors.paneBackground ?? colors.panel_bg
     // Recedes the card and its mark; the state dot keeps its strength.
     property bool dimmed: false
 
@@ -61,9 +58,8 @@ NativeRoundedRectangle {
         height: side
         radius: side / 2
         color: root.statusColor.length > 0 ? root.colors[root.statusColor] : "transparent"
-        borderColor: root.statusRing
+        borderColor: root.colors.paneBackground ?? root.colors.panel_bg
         borderWidth: 1.5 * root.ratio
-        opacity: root.statusOpacity
         visible: root.statusColor.length > 0
     }
 }

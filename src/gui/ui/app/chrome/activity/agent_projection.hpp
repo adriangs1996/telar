@@ -77,8 +77,9 @@ namespace telar::gui::qt {
         {QStringLiteral("status"), toQString(label.view())},
         {QStringLiteral("statusWord"), toQString(word)},
         {QStringLiteral("statusColor"), color},
-        // The dot on the provider's tile; an agent at rest has none.
+        // The badge on the provider's tile, its state's glyph in its color; an agent at rest has none.
         {QStringLiteral("badge"), resting ? QString{} : color},
+        {QStringLiteral("badgeGlyph"), resting ? QString{} : toQString(Status::glyph(state, agent.blocked_reason))},
         // Tints the card while the agent waits on the person.
         {QStringLiteral("attention"), waiting ? color : QString{}},
         {QStringLiteral("dim"), state == AgentStatus::ready},

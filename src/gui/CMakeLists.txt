@@ -246,6 +246,9 @@ if(TELAR_GUI_NATIVE)
   # without tests builds it.
   telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES gui-quick gui-quickplugin
     CHECKS lint lifetime blank_lines)
+  # Shows a QML file of the ignored playground/ and shows it again when it changes.
+  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES gui-quick gui-quickplugin
+    CHECKS lint lifetime blank_lines)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts

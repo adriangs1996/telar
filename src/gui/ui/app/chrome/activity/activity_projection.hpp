@@ -113,6 +113,7 @@ namespace telar::gui::qt {
         {QStringLiteral("statusWord"), context.connected ? QString{} : QStringLiteral("offline")},
         {QStringLiteral("statusColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(AgentStatus::ready))])},
         {QStringLiteral("badge"), QString{}},
+        {QStringLiteral("badgeGlyph"), QString{}},
         {QStringLiteral("attention"), QString{}},
         {QStringLiteral("signal"), QString{}},
         {QStringLiteral("signalColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(PaletteRole::overlay1)])},

@@ -23,6 +23,7 @@ ActivityFrame {
     implicitHeight: geometry.agentHeight
 
     ApplicationTile {
+        id: tile
         objectName: "agentProviderMark"
         x: root.geometry.padding + (root.geometry.markColumn - width) / 2
         y: root.geometry.padding + (root.geometry.agentTitleRow - height) / 2
@@ -34,9 +35,30 @@ ActivityFrame {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        statusColor: root.record.badge
-        statusOpacity: root.record.working ? (root.pulseAlpha ?? status.animatedAlpha) : 1
-        statusRing: root.colors.sidebarBackground
+    }
+
+    // The agent's state on the tile's lower right corner: its glyph in its color, cut from the
+    // sidebar. The working glyph pulses; an agent at rest has no badge.
+    NativeRoundedRectangle {
+        objectName: "agentStatusBadge"
+        x: tile.x + tile.width - width * 0.6
+        y: tile.y + tile.height - height * 0.6
+        width: root.geometry.badgeSide
+        height: width
+        radius: width / 2
+        color: root.colors.sidebarBackground
+        visible: tile.visible && root.record.badge.length > 0
+
+        ChromeIcon {
+            objectName: "agentStatusBadgeGlyph"
+            anchors.fill: parent
+            glyph: root.record.badgeGlyph
+            color: root.record.badge.length > 0 ? root.colors[root.record.badge] : "transparent"
+            pixelSize: Math.round(parent.width * 0.9)
+            primaryFamily: root.typography.primaryFamily ?? ""
+            primaryStyle: root.typography.primaryStyle ?? ""
+            opacity: root.record.working ? (root.pulseAlpha ?? status.animatedAlpha) : 1
+        }
     }
 
     AgentStatus {
@@ -129,8 +151,9 @@ ActivityFrame {
             }
         }
 
-        // Where the agent works: its project, or its worktree's facts, which give way one by one
-        // (commits ahead, the branch, the files, the command's outcome) while the row runs short.
+        // Where the agent works: its worktree's facts, which give way one by one (commits ahead, the
+        // branch, the files, the command's outcome) while the row runs short, or its project when
+        // it has no worktree or its worktree has nothing to tell.
         Item {
             id: context
             objectName: "agentContext"
@@ -142,12 +165,14 @@ ActivityFrame {
             readonly property real filesWidth: task ? piece(files.text, files.implicitWidth) : 0
             readonly property real aheadWidth: task ? piece(ahead.text, ahead.implicitWidth) : 0
             readonly property real commandWidth: task ? piece(command.text, command.implicitWidth) : 0
+            // A worktree on this machine, named after its branch and without changes, tells nothing.
+            readonly property bool factual: machineWidth + branchWidth + diffWidth + filesWidth + aheadWidth + commandWidth > 0
             readonly property bool showsAhead: fits([machineWidth, branchWidth, diffWidth, filesWidth, aheadWidth, commandWidth])
             readonly property bool showsBranch: fits([machineWidth, branchWidth, diffWidth, filesWidth, commandWidth])
             readonly property bool showsFiles: fits([machineWidth, diffWidth, filesWidth, commandWidth])
             readonly property bool showsCommand: fits([machineWidth, diffWidth, commandWidth])
             x: detailRow.width - width
-            width: task ? Math.min(root.contextRoom, facts.implicitWidth) : Math.min(root.contextRoom, Math.ceil(project.implicitWidth))
+            width: Math.min(root.contextRoom, factual ? facts.implicitWidth : Math.ceil(project.implicitWidth))
             height: detailRow.height
             visible: root.elements.agent_project === undefined
             clip: true
@@ -170,7 +195,7 @@ ActivityFrame {
                 text: root.record.project
                 color: root.colors.overlay1
                 pixelSize: root.typography.small
-                visible: !context.task
+                visible: !context.factual
             }
 
             Row {
@@ -178,7 +203,7 @@ ActivityFrame {
                 objectName: "agentFacts"
                 height: parent.height
                 spacing: context.space
-                visible: context.task
+                visible: context.factual
 
                 ChromeText {
                     id: machine
@@ -392,5 +417,5 @@ ActivityFrame {
         }
     }
 
-    Accessible.name: [record.title, record.ports ?? "", status.statusText, record.signal, context.task ? [record.machine, record.taskBranch, record.diffAdded, record.diffRemoved, record.diffFiles, record.commitsAhead, record.commandResult].join(" ") : record.project].filter(part => part.length > 0).join(" ")
+    Accessible.name: [record.title, record.ports ?? "", status.statusText, record.signal, context.factual ? [record.machine, record.taskBranch, record.diffAdded, record.diffRemoved, record.diffFiles, record.commitsAhead, record.commandResult].join(" ") : record.project].filter(part => part.length > 0).join(" ")
 }
