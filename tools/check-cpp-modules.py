@@ -1300,20 +1300,52 @@ def unit_names(text):
     return names, namespaces, imports, module[1] if module else None
 
 
+# A qualifier, as `runtime::` in `runtime::Terminal`.
+QUALIFIER_RE = re.compile(rb'\b(\w+)\s*::')
+
+
+def test_names(text):
+    """What a test names outside comments, literals, its preamble, using-directives and
+    namespace aliases, and the names it uses only to qualify another, as `runtime` in
+    `runtime::Terminal`."""
+    text = UNIT_JUNK_RE.sub(b' ', text)
+    # The preamble ends at the last import or module declaration, not at the last `import` in
+    # a name such as import_history.
+    preamble = [match.end() for match in UNIT_DECLARATION_RE.finditer(text)]
+    code = NAMESPACE_USE_RE.sub(b' ', text[preamble[-1] if preamble else 0:])
+    qualifiers = set(QUALIFIER_RE.findall(code))
+    names = set(code.translate(IDENTIFIER_BYTES).split()) | {qualifier + b'::' for qualifier in qualifiers}
+    alone = set(QUALIFIER_RE.sub(b' ', code).translate(IDENTIFIER_BYTES).split())
+
+    return names, qualifiers - alone
+
+
 def unused_import_sites(units, provided):
     """The imports of each unit that name nothing their module provides, as spelled. `units`
     maps each file to its bytes. std is left out, and so is a module the inventory does not
-    know: the checker cannot tell what it declares."""
+    know: the checker cannot tell what it declares. A test must name something the module
+    declares: a using-directive of a namespace many modules share, such as telar::runtime, does
+    not count, because where a test lives follows from what it imports (rule 9)."""
     sites = {}
     for name, text in units.items():
         names, namespaces, imports, module = unit_names(text)
+        test = '/tests/' in name
         for spelling in imports:
             target = (module or b'') + spelling if spelling.startswith(b':') else spelling
             found = provided.get(target.decode())
             if spelling == b'std' or found is None:
                 continue
 
-            if found[0].isdisjoint(names) and found[1].isdisjoint(namespaces):
+            if test:
+                # A namespace the module shares with others names it neither in a
+                # using-directive nor as the qualifier of a name another module declares.
+                # A namespace only this module declares does name it (provided_names).
+                named, qualifying = test_names(text)
+                shared = {space for space in found[1] & qualifying if space + b'::' not in found[0]}
+                unused = not (found[0] & named) - shared
+            else:
+                unused = found[0].isdisjoint(names) and found[1].isdisjoint(namespaces)
+            if unused:
                 sites.setdefault(name, set()).add(spelling.decode())
 
     return sites

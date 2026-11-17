@@ -153,6 +153,17 @@ class UnusedImports(unittest.TestCase):
 
         self.assertEqual(sites(uses, interfaces), {'src/gui/view/qualified.cpp': {'telar.base.geometry'}})
 
+    def test_a_test_must_name_what_the_module_declares(self):
+        # Where a test lives follows from its imports, so a using-directive of a namespace that
+        # many modules share does not make an import of one of them used.
+        units = {
+            'src/gui/view/tests/view_test.cpp': unit('using namespace telar;\n', 'telar.base.geometry'),
+            'src/gui/view/tests/size_test.cpp': unit('using namespace telar;\nSize size{};\n',
+                                                     'telar.base.geometry'),
+        }
+
+        self.assertEqual(sites(units, self.interfaces), {'src/gui/view/tests/view_test.cpp': {'telar.base.geometry'}})
+
     def test_a_qualifier_counts_when_only_that_module_declares_the_namespace(self):
         cells = ('telar.runtime.terminal.grid', 'export module telar.runtime.terminal.grid;\n'
                  'export namespace telar::runtime::cell_layout {\n#include "cell_layout.inc"\n}\n')

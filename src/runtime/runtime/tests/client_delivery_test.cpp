@@ -40,14 +40,11 @@ static_assert(true);
 #include <sys/stat.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.render.document;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.model.client_layouts;

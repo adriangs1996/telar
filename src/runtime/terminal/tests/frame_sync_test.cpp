@@ -7,8 +7,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
 import telar.testing;
 import telar.runtime.terminal.text_reader;

@@ -1,7 +1,6 @@
-# The integration tests of the CLI, which reach domains no single domain builds on, and the
-# Python tests that drive the telar executable, labelled cli.e2e; the ones that need a runtime run only where the
-# runtime builds beside the CLI. The tests of one domain live in its own tests/ folder.
-telar_add_tests(cli-tests LABEL cli.integration DIRECTORY . LINK cli-integration cli-tab telar::base)
+# The Python tests that drive the telar executable, labelled cli.e2e; the ones that need a
+# runtime run only where the runtime builds beside the CLI. The tests of one domain live in its
+# own tests/ folder, and a C++ test that reaches domains no single domain builds on goes here.
 telar_add_test(repository-prepare-probe NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/repository_prepare_probe.cpp
   LIBRARIES cli-command_limit cli-worktree_git cli-worktree)
 

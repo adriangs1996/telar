@@ -18,7 +18,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.features.machines;
-import telar.client;
 
 namespace {
 

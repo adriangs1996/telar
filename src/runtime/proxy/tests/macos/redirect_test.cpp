@@ -126,7 +126,6 @@ import telar.tls.tests.tls_fixture;
 import telar.runtime.redirect.socket_owners;
 import telar.runtime.redirect.ingress;
 import telar.runtime.proxy.runtime;
-import telar.runtime.traffic.control_backend;
 import telar.wire.vocabulary;
 import telar.config.runtime;
 import telar.platform.net;

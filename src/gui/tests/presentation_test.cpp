@@ -12,11 +12,8 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.workbench;
-import telar.gui.features.machines;
 import telar.gui.foundation.text;
 import telar.gui.application;
-import telar.gui.features.activity;
-import telar.gui.features.notifications;
 import telar.gui.foundation.model;
 import telar.gui.features.window;
 
@@ -95,7 +92,6 @@ namespace {
   void chromeSurfacesPreserveThemeAndTransparency() {
     using namespace telar::gui;
     using namespace telar::gui::features::workbench;
-    using namespace telar::gui::features::machines;
     using namespace telar::gui::features::window;
 
     for (const auto background : {Color::rgb(0x15151a), Color::rgb(0xf6f4ef)}) {

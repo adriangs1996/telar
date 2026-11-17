@@ -15,12 +15,9 @@ static_assert(true);
 #include <sys/types.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;

@@ -62,7 +62,6 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.platform.primitives;
 import telar.testing;
 import telar.tls.tests.tls_fixture;
 import telar.runtime.platform.system_certificates;

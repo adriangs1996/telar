@@ -31,8 +31,6 @@ import telar.base.memory.containers;
 import telar.config.runtime;
 import telar.base.text.utf8;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
 import telar.runtime.observation.processor;

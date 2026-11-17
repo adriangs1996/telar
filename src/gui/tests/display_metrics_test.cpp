@@ -13,7 +13,6 @@ static_assert(true);
 #include <type_traits>
 
 import telar.gui.foundation.core;
-import telar.gui.features.workbench;
 import telar.gui.features.window;
 import telar.gui.features.activity;
 

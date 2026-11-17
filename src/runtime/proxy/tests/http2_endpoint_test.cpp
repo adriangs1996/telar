@@ -15,7 +15,6 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
-import telar.platform.primitives;
 import telar.testing;
 import telar.testing.test_byte_stream;
 import telar.runtime.proxy.runtime;

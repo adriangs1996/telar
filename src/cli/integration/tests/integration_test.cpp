@@ -36,7 +36,6 @@ static_assert(true);
 
 import telar.testing;
 import telar.cli.integration.settings;
-import telar.cli.tab;
 import telar.base.text.json;
 
 namespace {

@@ -13,7 +13,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.platform.request_worker;
 import telar.wire.clients;

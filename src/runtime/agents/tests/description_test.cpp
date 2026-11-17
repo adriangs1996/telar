@@ -16,7 +16,6 @@ import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.testing;
-import telar.runtime.agents.snapshot;
 import telar.runtime.agents.description_generator;
 import telar.runtime.history.store;
 import telar.runtime.platform.request_worker;

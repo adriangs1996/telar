@@ -25,7 +25,6 @@ static_assert(true);
 import telar.base.text.utf8;
 import telar.gui.features.configuration;
 import telar.gui.foundation.core;
-import telar.gui.features.machines;
 import telar.gui.application;
 
 namespace {
@@ -34,7 +33,6 @@ namespace {
 
   using namespace telar::gui::features::configuration;
 
-  using namespace telar::gui::features::machines;
 
   void require(bool condition, const char* message) {
     if (!condition) {

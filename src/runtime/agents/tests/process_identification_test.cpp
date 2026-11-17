@@ -28,7 +28,6 @@ import telar.base.memory.containers;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.agents.snapshot;
-import telar.runtime.agents.screen_inference;
 import telar.runtime.platform.process_probe;
 import telar.platform.process;
 import telar.wire.agents;

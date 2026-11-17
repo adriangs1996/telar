@@ -10,7 +10,6 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.http2.tests.http2_fixture;
 import telar.testing.test_byte_stream;

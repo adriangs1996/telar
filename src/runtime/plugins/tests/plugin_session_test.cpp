@@ -54,7 +54,6 @@ static_assert(true);
 #endif
 
 import telar.testing;
-import telar.runtime.platform.request_worker;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.plugins.run_worker;
 import telar.runtime.plugins.worker;

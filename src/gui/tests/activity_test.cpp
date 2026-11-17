@@ -18,7 +18,6 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.features.activity;
-import telar.gui.features.workbench;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
