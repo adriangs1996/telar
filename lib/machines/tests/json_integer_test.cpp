@@ -80,9 +80,45 @@ namespace {
     check(budget.liveBytes() == 0, "numeric conversion must release every allocator-owned temporary");
   }
 
+  // An exponent is read digit by digit into a bounded count: one far past any representable
+  // value must neither wrap into a small exponent (2^64 wraps to zero) nor overflow, which
+  // UBSan reports in the sanitize preset.
+  void hugeExponentsStayHuge() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    telar::Memory& memory = adapter;
+
+    rejects(memory, "1e99999999999999999999");
+    check(JsonUnsignedInteger::parse<std::uint16_t>(memory, "1e-99999999999999999999") == 0, "a value below the smallest subnormal becomes zero");
+    rejects(memory, "1e18446744073709551616");
+    check(JsonUnsignedInteger::parse<std::uint16_t>(memory, "1e-18446744073709551616") == 0, "a value below the smallest subnormal becomes zero");
+    check(JsonUnsignedInteger::parse<std::uint16_t>(memory, "0e99999999999999999999") == 0, "zero stays zero at any exponent");
+  }
+
+  // A machine identity is never zero, whatever the entropy source yields first.
+  void machineIdentityRetriesZeroEntropy() {
+    struct ZeroThenEntropy {
+      std::size_t zero_draws = 0;
+      std::size_t draws = 0;
+
+      void fill(std::span<std::uint8_t> bytes) {
+        std::ranges::fill(bytes, draws++ < zero_draws ? std::uint8_t{0} : std::uint8_t{0xa5});
+      }
+    };
+
+    for (const std::size_t zero_draws : {std::size_t{0}, std::size_t{1}, std::size_t{3}}) {
+      ZeroThenEntropy random{.zero_draws = zero_draws};
+      const auto identity = MachineId::generate(random);
+
+      check(identity.value() != 0 && identity.value() <= MachineId::maximum_value);
+      check(MachineId::parse(identity.format().view()) == identity);
+    }
+  }
 
   const telar::testing::Case case_numeric_syntax{"json_integer.numeric_syntax", conversionsRetainOriginalNumericSyntaxAndRejectFractionalValues};
   const telar::testing::Case case_binary128_ties{"json_integer.binary128_ties", binary128TiesRoundToTheIntegerWithoutPlatformFloatingPoint};
   const telar::testing::Case case_subnormal_boundaries{"json_integer.subnormal_boundaries", subnormalBoundariesRoundToZeroAndReleaseTemporaryStorage};
+  const telar::testing::Case case_huge_exponents{"json_integer.bounds_huge_exponents", hugeExponentsStayHuge};
+  const telar::testing::Case case_machine_identity_zero_entropy{"machine_id.generate_retries_zero_entropy", machineIdentityRetriesZeroEntropy};
 
 }
