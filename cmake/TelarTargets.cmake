@@ -292,6 +292,83 @@ function(telar_add_probes target)
   add_custom_target(${target} DEPENDS ${probes})
 endfunction()
 
+# telar_add_tests(<target> LABEL <label> [LINK <target>...] [SOURCES <file>...]
+#                 [MACOS_SOURCES <file>...] [LINUX_SOURCES <file>...] [TIMEOUT <seconds>]
+#                 [ENVIRONMENT <variable=value>...] [CHECKS <check>...])
+# The test program of the current folder: tests/*_test.cpp and SOURCES, with
+# MACOS_SOURCES and LINUX_SOURCES on their platform. Module interfaces in
+# tests/<x>/<x>.cppm are its support, the library <target>-support, which tests of the
+# folders above may link as well. Both link LINK and telar::testing, whose main runs the
+# cases. Every case is a CTest test of its own, <label>.<suite>.<case>, carrying LABELS
+# <label>, TIMEOUT and ENVIRONMENT. CHECKS defaults to lint and blank_lines.
+function(telar_add_tests target)
+  cmake_parse_arguments(PARSE_ARGV 1 tests "" "LABEL;TIMEOUT" "LINK;SOURCES;MACOS_SOURCES;LINUX_SOURCES;ENVIRONMENT;CHECKS")
+  if(tests_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "telar_add_tests(${target}): unexpected arguments ${tests_UNPARSED_ARGUMENTS}")
+  endif()
+  if(NOT tests_LABEL)
+    message(FATAL_ERROR "telar_add_tests(${target}): name its LABEL")
+  endif()
+  if(NOT DEFINED tests_CHECKS AND NOT "CHECKS" IN_LIST tests_KEYWORDS_MISSING_VALUES)
+    set(tests_CHECKS lint blank_lines)
+  endif()
+
+  file(GLOB sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/*_test.cpp")
+  list(APPEND sources ${tests_SOURCES})
+  if(APPLE)
+    list(APPEND sources ${tests_MACOS_SOURCES})
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND sources ${tests_LINUX_SOURCES})
+  endif()
+  file(GLOB interfaces CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/*/*.cppm")
+  if(DEFINED TELAR_PROCESS_BINARY_DIR)
+    set(directory "${TELAR_PROCESS_BINARY_DIR}")
+  else()
+    set(directory "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
+
+  set(links ${tests_LINK} telar::testing)
+  if(interfaces)
+    add_library(${target}-support STATIC)
+    target_sources(${target}-support PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${interfaces})
+    target_link_libraries(${target}-support PUBLIC ${links})
+    set_target_properties(${target}-support PROPERTIES POSITION_INDEPENDENT_CODE ON ARCHIVE_OUTPUT_DIRECTORY "${directory}")
+    telar_register_checks(${target}-support CHECKS ${tests_CHECKS})
+    list(PREPEND links ${target}-support)
+  endif()
+
+  add_executable(${target} ${sources})
+  target_link_libraries(${target} PRIVATE ${links})
+  set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${directory}")
+  telar_register_checks(${target} CHECKS ${tests_CHECKS})
+
+  set(properties LABELS "${tests_LABEL}")
+  if(tests_TIMEOUT)
+    list(APPEND properties TIMEOUT ${tests_TIMEOUT})
+  endif()
+  if(tests_ENVIRONMENT)
+    list(JOIN tests_ENVIRONMENT "\\;" environment)
+    list(APPEND properties ENVIRONMENT "${environment}")
+  endif()
+  include(GoogleTest)
+  gtest_discover_tests(${target}
+    TEST_PREFIX "${tests_LABEL}."
+    WORKING_DIRECTORY "${directory}"
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES ${properties})
+endfunction()
+
+# telar_add_domain_tests(<domain> [LINK <target>...] [...]): telar_add_tests for the
+# domain the current folder declares, as <process>-<domain>-tests labelled
+# <process>.<domain>, linking the domain. The other arguments are telar_add_tests'.
+function(telar_add_domain_tests domain)
+  string(REPLACE "/" "-" target "${TELAR_PROCESS}-${domain}-tests")
+  string(REPLACE "/" "." label "${TELAR_PROCESS}.${domain}")
+  string(REPLACE "/" "::" alias "telar::${TELAR_PROCESS}::${domain}")
+  # A repeated LINK adds to the first, so the caller's own LINK keeps the domain.
+  telar_add_tests(${target} LABEL ${label} LINK ${alias} ${ARGN})
+endfunction()
+
 # telar_add_qml_sources(<target> [SOURCES <file>...] [QML_FILES <file>...]
 #                       [FP_CONTRACT_OFF <file>...] [REGISTERS])
 # Adds the files of the current folder to <target>, whose QML module an ancestor folder
