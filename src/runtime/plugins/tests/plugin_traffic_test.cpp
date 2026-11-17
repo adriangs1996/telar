@@ -445,6 +445,117 @@ return {}
     check(budget.liveBytes() == 0);
   }
 
+  // A registration as a traffic worker writes it into a reply, valid unless a field is changed.
+  struct ForgedRegistration {
+    std::uint32_t id = 1;
+    app::TrafficStage stage = app::TrafficStage::stream;
+    Byte selection = static_cast<Byte>(traffic::Selection::packets);
+    std::string filter;
+    std::string host = "example.test";
+    Byte directions = 3;
+    Byte visibility = 2;
+    std::uint32_t timeout_ms = 1000;
+    std::string request;
+  };
+
+  // A reply as a worker could write it, counts included, whatever they claim.
+  struct ForgedReply {
+    bool changed = true;
+    Byte registration_count = 1;
+    std::vector<ForgedRegistration> registrations{ForgedRegistration{}};
+    Byte decision_count = 0;
+    std::size_t decisions = 0;
+    std::size_t effect_bytes = 0;
+  };
+
+  std::vector<Byte> forge(const ForgedReply& forged) {
+    std::vector<Byte> output(app::TrafficLimits::reply_bytes + forged.effect_bytes);
+    app::FrameWriter writer{output};
+
+    writer.tag(app::FrameKind::traffic_reply);
+    writer.integer(std::uint64_t{9});
+    writer.boolean(forged.changed);
+    writer.integer(forged.registration_count);
+    for (const auto& registration : forged.registrations) {
+      writer.integer(registration.id);
+      writer.tag(registration.stage);
+      writer.integer(registration.selection);
+      writer.text(registration.filter);
+      writer.text(registration.host);
+      writer.integer(registration.directions);
+      writer.integer(registration.visibility);
+      writer.integer(registration.timeout_ms);
+      writer.boolean(false);
+      writer.text(registration.request);
+    }
+
+    writer.integer(forged.decision_count);
+    for (std::size_t index = 0; index < forged.decisions; ++index) {
+      writer.integer(std::uint32_t{1});
+      writer.bytes({});
+    }
+
+    writer.bytes(std::vector<Byte>(forged.effect_bytes));
+    const auto written = writer.finish();
+
+    return {written.begin(), written.end()};
+  }
+
+  bool rejected(std::span<const Byte> input) {
+    auto reply = std::make_unique<app::TrafficReply>();
+
+    try {
+      app::TrafficProtocol::readReply(input, *reply);
+      return false;
+    } catch (const std::exception&) {
+      return true;
+    }
+  }
+
+  // The host reads a traffic worker's reply into fixed tables: a reply whose counts, sizes
+  // or registrations a worker could not have sent honestly is refused whole.
+  void replyRejectsOutOfBounds() {
+    auto reply = std::make_unique<app::TrafficReply>();
+
+    check(app::TrafficProtocol::readReply(forge({}), *reply).decision_count == 0 && reply->registration_count == 1);
+    check(!rejected(forge({.effect_bytes = app::TrafficLimits::reply_bytes / 2})));
+    check(rejected(forge({.effect_bytes = app::TrafficLimits::reply_bytes})));
+
+    const auto past = static_cast<Byte>(app::TrafficLimits::registrations + 1);
+    ForgedReply too_many{.registration_count = past};
+
+    too_many.registrations.resize(past);
+    for (std::uint32_t index = 0; index < too_many.registrations.size(); ++index) {
+      too_many.registrations[index].id = index + 1;
+    }
+
+    check(rejected(forge(too_many)));
+    check(rejected(forge({.registration_count = 255})));
+    check(rejected(forge({.changed = false})));
+    check(rejected(forge({.decision_count = static_cast<Byte>(app::TrafficLimits::decisions + 1), .decisions = app::TrafficLimits::decisions + 1})));
+    check(rejected(forge({.decision_count = 255, .decisions = 255})));
+
+    const std::array<ForgedRegistration, 13> invalid{
+        ForgedRegistration{.id = 0},
+        ForgedRegistration{.selection = 0},
+        ForgedRegistration{.stage = app::TrafficStage::observe, .filter = std::string{"tcp\0port", 8}},
+        ForgedRegistration{.request = "x"},
+        ForgedRegistration{.filter = "tcp"},
+        ForgedRegistration{.host = "bad host"},
+        ForgedRegistration{.directions = 0},
+        ForgedRegistration{.directions = 4},
+        ForgedRegistration{.visibility = 0},
+        ForgedRegistration{.visibility = 4},
+        ForgedRegistration{.timeout_ms = 0},
+        ForgedRegistration{.timeout_ms = traffic::maximum_timeout_ms + 1},
+        ForgedRegistration{.stage = app::TrafficStage::http, .timeout_ms = 0},
+    };
+
+    for (std::size_t index = 0; index < invalid.size(); ++index) {
+      check(rejected(forge({.registrations = {invalid[index]}})), std::to_string(index));
+    }
+  }
+
   const telar::testing::Case case_host{
       "plugin_traffic.host",
       [] {
@@ -475,5 +586,6 @@ return {}
         datagramHost();
       },
   };
+  const telar::testing::Case case_reply_rejects_out_of_bounds{"plugin_traffic.reply_rejects_out_of_bounds", replyRejectsOutOfBounds};
 
 }
