@@ -1,0 +1,69 @@
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <sys/stat.h>
+#include <unistd.h>
+
+import std;
+import telar.testing;
+import telar.runtime.shell_integration.token;
+import telar.runtime.shell_integration.words;
+import telar.wire.editor;
+
+namespace {
+
+  using telar::testing::check;
+
+  using namespace telar;
+  using namespace telar::runtime;
+
+  void testReplyCap() {
+    std::array<char, 64> directory{};
+
+    std::strcpy(directory.data(), "/tmp/telar-word-cap-XXXXXX");
+    check(::mkdtemp(directory.data()) != nullptr);
+    const std::string root{directory.data()};
+
+    // More commands on PATH than one reply carries.
+    for (int index = 0; index < 300; ++index) {
+      const auto path = root + "/" + std::format("capcmd{:03}", index);
+      auto* file = std::fopen(path.c_str(), "w");
+
+      check(file != nullptr);
+      std::fclose(file);
+      check(::chmod(path.c_str(), 0700) == 0);
+    }
+
+    WordReader reader;
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.prefix.assign("capcmd");
+    request.path.assign(root);
+    request.names = std::make_shared<const std::string>();
+    const auto result = reader.observe(request);
+
+    check(result.words.size() == WordReader::maximum_words, "a reply carries more words than the wire allows");
+    check(result.truncated);
+    check(std::ranges::is_sorted(result.words) && result.words.front().text == "capcmd000");
+    std::filesystem::remove_all(root);
+  }
+
+  void testTokenParse() {
+    const auto valid = std::string(16, 'a') + "0123456789abcdef";
+    const auto token = ShellToken::parse(valid);
+
+    check(token && token->text() == valid && token->signs(valid));
+
+    // A remote shell announces the token: anything but 32 lowercase hexadecimal digits is refused.
+    check(!ShellToken::parse(valid.substr(1)), "a short token was accepted");
+    check(!ShellToken::parse(valid + "0"), "a long token was accepted");
+    check(!ShellToken::parse({}));
+    check(!ShellToken::parse(std::string(16, 'A') + "0123456789abcdef"), "uppercase digits were accepted");
+    check(!ShellToken::parse(std::string(31, 'a') + "g"), "a non-hexadecimal digit was accepted");
+    check(!ShellToken::parse(std::string(31, 'a') + "\x1b"), "a control byte was accepted");
+  }
+
+  const telar::testing::Case case_reply_cap{"shell_words.reply_cap", testReplyCap};
+  const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
+
+}
