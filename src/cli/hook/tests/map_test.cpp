@@ -16,7 +16,6 @@ import telar.cli.hook;
 import telar.platform.paths;
 import telar.platform.process;
 import telar.wire.vocabulary;
-import telar.wire.agents;
 import telar.cli.hooks.command;
 import telar.cli.hooks.session;
 
