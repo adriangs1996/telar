@@ -15,7 +15,6 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.links.path_expansion;
 import telar.gui.paths.label;
-import telar.gui.peek.screen;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;

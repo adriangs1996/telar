@@ -14,7 +14,6 @@ import telar.gui.layout.snapshots;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 import telar.gui.paths.label;
-import telar.gui.peek.screen;
 import telar.gui.presentation.application_mark;
 import telar.gui.suggestions.state;
 import telar.config.client;
@@ -54,14 +53,6 @@ namespace telar::gui::application {
   template <typename Request>
   void Session::sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id) {
     sendRegistered(kind, request, pane_id, [](Pending&, const Request&) {});
-  }
-
-  template <typename Request>
-    requires(std::same_as<Request, InterruptAgent> || std::same_as<Request, SendPaneText> || std::same_as<Request, LaunchWorktree>)
-  void Session::sendPeekAction(Request request, std::uint64_t pane_id) {
-    constexpr auto kind = std::same_as<Request, LaunchWorktree> ? RequestKind::peek_diff : RequestKind::peek_action;
-
-    sendRegistered(kind, request, pane_id);
   }
 
   void Session::selectTab(TabLocation location) {
@@ -1657,9 +1648,9 @@ namespace telar::gui::application {
     return Change::model;
   }
 
-  // The peek actions agents.cpp sends.
-  template void Session::sendPeekAction<InterruptAgent>(InterruptAgent request, std::uint64_t pane_id);
-  template void Session::sendPeekAction<SendPaneText>(SendPaneText request, std::uint64_t pane_id);
-  template void Session::sendPeekAction<LaunchWorktree>(LaunchWorktree request, std::uint64_t pane_id);
+  // The requests application::peek registers.
+  template void Session::sendRegistered<InterruptAgent>(RequestKind kind, InterruptAgent request, std::uint64_t pane_id);
+  template void Session::sendRegistered<SendPaneText>(RequestKind kind, SendPaneText request, std::uint64_t pane_id);
+  template void Session::sendRegistered<LaunchWorktree>(RequestKind kind, LaunchWorktree request, std::uint64_t pane_id);
 
 }

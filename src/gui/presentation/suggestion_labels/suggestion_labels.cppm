@@ -42,28 +42,6 @@ export {
   }
 }
 
-// Interface: presentation/peek_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct PeekGeometry {
-      static constexpr CellRectangle requested_size{.width = 96, .height = 24};
-      static constexpr std::uint16_t chrome_rows = 4;
-      static constexpr std::uint16_t field_rows_from_end = 2;
-
-      CellRectangle bounds;
-      CellRectangle title;
-      CellRectangle facts;
-      CellRectangle screen;
-      CellRectangle field;
-      CellRectangle footer;
-
-      [[nodiscard]] static PeekGeometry measure(CellRectangle host) noexcept;
-    };
-
-  }
-}
-
 // Interface: presentation/suggestion_labels.cppm
 export {
   namespace telar::gui {

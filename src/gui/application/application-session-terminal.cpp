@@ -10,7 +10,6 @@ import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
 import telar.gui.links.path_expansion;
 import telar.gui.paths.label;
-import telar.gui.peek.screen;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.prompt.line;
@@ -524,20 +523,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneText& message) {
-    if (!completeRequest(RequestKind::peek_screen, message.request_id)) {
-      return Change::none;
-    }
-
-    const auto dropped = peek_.store(message);
-    if (!dropped) {
-      return Change::none;
-    }
-
-    if (*dropped != 0) {
-      reportLimit({.name = "peek.text_bytes", .noun = "bytes", .value = PeekLimits::text_bytes, .requested = message.text.size()});
-    }
-
-    return Change::peek;
+    return peek::receive(*this, message);
   }
 
 }

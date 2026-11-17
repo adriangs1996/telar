@@ -48,26 +48,6 @@ namespace telar::gui {
     return result;
   }
 
-  PeekGeometry PeekGeometry::measure(CellRectangle host) noexcept {
-    const auto modal = NamePromptGeometry::measure(host, requested_size);
-    PeekGeometry result;
-
-    result.bounds = modal.bounds;
-    result.title = modal.title;
-    const auto content = result.bounds.width > 2 && result.bounds.height > 2 ? result.bounds.inner(1) : result.bounds;
-    if (content.height < chrome_rows) {
-      return result;
-    }
-
-    result.facts = content.row(0);
-    result.screen = content.row(1);
-    result.screen.height = content.height - chrome_rows;
-    result.field = content.row(content.height - field_rows_from_end);
-    result.footer = content.row(content.height - 1);
-
-    return result;
-  }
-
   std::string_view SuggestionLabels::heading(SuggestionPhase phase) noexcept {
     switch (phase) {
     case SuggestionPhase::idle:

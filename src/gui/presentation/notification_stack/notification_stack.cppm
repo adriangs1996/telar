@@ -6,10 +6,8 @@ export module telar.gui.presentation.notification_stack;
 import std;
 
 import telar.tbc;
-import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
-import telar.gui.foundation.model;
 import telar.gui.foundation.text;
 import telar.gui.presentation.notification_center;
 
@@ -260,33 +258,6 @@ export {
 
       std::array<Motion, NotificationCenter::capacity> motions_{};
     };
-
-  }
-}
-
-// Interface: presentation/peek_labels.cppm
-export {
-  namespace telar::gui {
-
-    struct PeekLabels {
-      static constexpr std::size_t facts_bytes = 256;
-      using Facts = BoundedText<facts_bytes>;
-
-      template <Allocator Memory>
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> title(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept;
-
-      template <Allocator Memory>
-      [[nodiscard]] static Facts facts(const Agent<Memory>& agent, const Worktree<Memory>* task);
-
-    private:
-      static void append(Facts& storage, std::string_view text);
-      static void decimal(Facts& storage, std::uint16_t value);
-    };
-
-    extern template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<Memory>(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept;
-    extern template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<ConcurrentMemory>(tbc::view<const Agent<ConcurrentMemory>&, tbc::lt::a> agent, tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> task) noexcept;
-    extern template PeekLabels::Facts PeekLabels::facts<Memory>(const Agent<Memory>& agent, const Worktree<Memory>* task);
-    extern template PeekLabels::Facts PeekLabels::facts<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent, const Worktree<ConcurrentMemory>* task);
 
   }
 }

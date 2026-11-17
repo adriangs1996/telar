@@ -1,14 +1,12 @@
 module telar.gui.application;
 
 import std;
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.agents;
 import telar.gui.text.notification_payload;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.links.path_expansion;
-import telar.gui.peek.screen;
 import telar.gui.presentation.application_mark;
 import telar.config.client;
 import telar.config.runtime;
@@ -18,13 +16,8 @@ import telar.base.text;
 import telar.gui.prompt.layout;
 import telar.wire.agents;
 import telar.wire.clients;
-import telar.wire.clipboard;
-import telar.wire.editor;
 import telar.wire.pane_io;
-import telar.wire.runtime;
 import telar.wire.vocabulary;
-import telar.wire.worktrees;
-import telar.base.memory.allocators;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
@@ -77,72 +70,6 @@ namespace telar::gui::application {
     }
 
     visitPane(pane_id, generation);
-
-    return true;
-  }
-
-  const PeekScreen<Memory>& Session::peek() const noexcept {
-    return peek_;
-  }
-
-  const Agent<Memory>* Session::peekAgent() const noexcept {
-    if (!peek_.target()) {
-      return nullptr;
-    }
-
-    return findPeekAgent(*peek_.target());
-  }
-
-  bool Session::openPeek(PeekTarget target) {
-    if (!ready_ || !presented_ || findPeekAgent(target) == nullptr) {
-      return false;
-    }
-
-    peek_.show(target);
-    try {
-      requestPeekScreen();
-    } catch (...) {
-      peek_.close();
-      throw;
-    }
-
-    return true;
-  }
-
-  void Session::closePeek() noexcept {
-    if (peek_.target()) {
-      peek_.close();
-    }
-  }
-
-  bool Session::submitPeek(std::string_view text) {
-    const auto* agent = ready_ && presented_ ? peekAgent() : nullptr;
-    if (agent == nullptr) {
-      closePeek();
-
-      return false;
-    }
-
-    if (text.size() > PeekLimits::message_bytes) {
-      throw std::length_error{"PeekMessageTooLong"};
-    }
-
-    switch (PeekInput::command(text)) {
-    case PeekCommand::open:
-      static_cast<void>(focusAgent(agent->pane_id, agent->pane_generation));
-      break;
-    case PeekCommand::stop:
-      sendPeekAction(InterruptAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation}, agent->pane_id);
-      break;
-    case PeekCommand::diff:
-      openPeekDiff(*agent);
-      break;
-    case PeekCommand::message:
-      sendPeekAction(SendPaneText{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .mode = PaneTextMode::prompt, .text = runtime::trimText(text, " \t"), .sender = {}}, agent->pane_id);
-      break;
-    }
-
-    closePeek();
 
     return true;
   }
@@ -222,65 +149,6 @@ namespace telar::gui::application {
     return target.kind == NotificationTarget::Kind::pane && tab != nullptr && tab->layout.contains(target.id);
   }
 
-  const Agent<Memory>* Session::findPeekAgent(const PeekTarget& target) const noexcept {
-    const auto found = std::ranges::find_if(agents_, [&](const auto& agent) {
-      return agent.pane_id == target.agent.pane_id && agent.pane_generation == target.agent.pane_generation && agent.session_id == target.session;
-    });
-
-    return found == agents_.end() ? nullptr : std::addressof(*found);
-  }
-
-  void Session::requestPeekScreen() {
-    if (!peek_.target() || peek_.reading()) {
-      return;
-    }
-
-    const auto request_id = pending(RequestKind::peek_screen);
-
-    try {
-      if (const auto request = peek_.request(request_id)) {
-        send(*request);
-      } else {
-        complete(request_id);
-      }
-    } catch (...) {
-      peek_.fail(request_id);
-      complete(request_id);
-      throw;
-    }
-  }
-
-  void Session::openPeekDiff(const Agent<Memory>& agent) {
-    const auto* row = AgentOrder::taskRow(workspaces_, agent);
-    if (row == nullptr) {
-      return;
-    }
-
-    constexpr std::string_view script = R"("$TELAR_BIN_PATH" worktree diff "$1" --stat; echo; "$TELAR_BIN_PATH" worktree diff "$1"; exec "${SHELL:-/bin/sh}")";
-    constexpr TerminalSize size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
-    const std::array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
-
-    sendPeekAction(LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
-  }
-
-  std::optional<Change> Session::failPeekRequest(const Pending& request, const RequestFailed& failure) {
-    if (request.kind == RequestKind::peek_screen) {
-      peek_.fail(failure.request_id);
-
-      return Change::none;
-    }
-
-    if (request.kind != RequestKind::peek_action && request.kind != RequestKind::peek_diff) {
-      return std::nullopt;
-    }
-
-    constexpr std::uint64_t duration_ns = 7'000'000'000;
-
-    publishNotification({.level = NotificationLevel::failure, .target = {.kind = NotificationTarget::Kind::pane, .id = request.pane_id}, .title = "The agent did not take it", .message = failure.message, .link = {}, .duration_ns = duration_ns});
-
-    return Change::notification;
-  }
-
   void Session::acknowledgeFocusedAgent() {
     if (!presented_) {
       return;
@@ -308,14 +176,7 @@ namespace telar::gui::application {
       return Change::none;
     }
 
-    if (peek_.target()) {
-      if (peekAgent() == nullptr) {
-        closePeek();
-      } else {
-        requestPeekScreen();
-      }
-    }
-
+    peek::follow(*this);
     acknowledgeFocusedAgent();
     AgentAlerts::publish(agents_.statusChanges(), [&](const AgentStatusChange& change) {
       const auto agent = std::ranges::find_if(agents_, [&](const auto& candidate) {

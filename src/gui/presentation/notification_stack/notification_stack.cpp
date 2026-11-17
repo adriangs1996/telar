@@ -2,10 +2,7 @@ module telar.gui.presentation.notification_stack;
 
 import std;
 
-import telar.tbc;
-import telar.gui.foundation.agents;
 import telar.gui.foundation.core;
-import telar.gui.foundation.model;
 
 namespace telar::gui {
 
@@ -132,61 +129,5 @@ namespace telar::gui {
 
     return static_cast<std::size_t>(vacant - motions_.begin());
   }
-
-  template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> PeekLabels::title(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept {
-    if (task == nullptr) {
-      return AgentCardLabels::title({}, agent.display_name);
-    }
-
-    return task->title.empty() ? std::string_view{task->branch} : std::string_view{task->title};
-  }
-
-  template <Allocator Memory>
-  PeekLabels::Facts PeekLabels::facts(const Agent<Memory>& agent, const Worktree<Memory>* task) {
-    Facts result;
-
-    append(result, AgentCardLabels::title({}, agent.display_name));
-    append(result, " · ");
-    constexpr std::array statuses{std::string_view{"unknown"}, std::string_view{"working"}, std::string_view{"blocked"}, std::string_view{"ready"}, std::string_view{"failed"}, std::string_view{"done"}};
-    const auto status = static_cast<std::size_t>(agent.status);
-
-    append(result, statuses[status < statuses.size() ? status : 0]);
-    if (task != nullptr) {
-      append(result, "  \u2387 ");
-      append(result, task->handle());
-    }
-
-    if (agent.plan_total != 0) {
-      append(result, "  ");
-      decimal(result, agent.plan_done);
-      append(result, "/");
-      decimal(result, agent.plan_total);
-      append(result, " ");
-      append(result, agent.plan_step);
-    } else if (!agent.detail.empty()) {
-      append(result, "  ");
-      append(result, agent.detail);
-    }
-
-    return result;
-  }
-
-  void PeekLabels::append(Facts& storage, std::string_view text) {
-    storage.append(text.substr(0, facts_bytes - storage.view().size()));
-  }
-
-  void PeekLabels::decimal(Facts& storage, std::uint16_t value) {
-    constexpr auto capacity = std::numeric_limits<std::uint16_t>::digits10 + 1;
-    std::array<char, capacity> digits{};
-    const auto result = std::to_chars(digits.data(), digits.data() + digits.size(), value);
-
-    append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
-  }
-
-  template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<Memory>(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept;
-  template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<ConcurrentMemory>(tbc::view<const Agent<ConcurrentMemory>&, tbc::lt::a> agent, tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> task) noexcept;
-  template PeekLabels::Facts PeekLabels::facts<Memory>(const Agent<Memory>& agent, const Worktree<Memory>* task);
-  template PeekLabels::Facts PeekLabels::facts<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent, const Worktree<ConcurrentMemory>* task);
 
 }

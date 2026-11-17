@@ -123,6 +123,58 @@ namespace telar::gui::application::history {
 - `ui` no puede nombrar `Access`: la sesión sigue opaca para ella aunque sus miembros salgan de la
   interfaz pública.
 
+## Convenciones de una feature
+
+`features/peek` fijó estas; las demás las copian.
+
+**Archivos.** `peek.cppm` es la interfaz primaria: `State`, los casos de uso y `export import` de
+sus particiones. Los tipos de valor y la presentación pura van en particiones exportadas por tema
+(`peek-target.cppm`, `peek-presentation.cppm`). Una clase con estado (`PeekScreen`) va en una
+partición de interfaz sin ninguna declaración `export` (`peek-screen.cppm`, `export module
+…peek:screen;`) que la primaria reexporta: el estándar exige exportar toda partición de interfaz,
+y clang avisa si una interfaz importa una partición de implementación (`module …:screen;`). Sus
+nombres siguen invisibles fuera del módulo. Las definiciones van en `peek.cpp` y `peek-<tema>.cpp`.
+
+**State y Access.** `Access` se declara sin `export` en la interfaz primaria antes de `State` y se
+define después: una partición no puede importar la primaria, así que `Access` vive junto a `State`.
+Así los casos de uso `inline` de la interfaz también lo usan, e importar la feature no lo hace
+visible.
+
+```cpp
+namespace telar::gui::features::peek { struct Access; }
+
+export namespace telar::gui::features::peek {
+  class State { friend struct Access; … PeekScreen<Memory> screen_; };
+  [[nodiscard]] std::optional<ReadPane> read(State& state, std::uint64_t request_id);
+}
+
+namespace telar::gui::features::peek {
+  struct Access { static constexpr PeekScreen<Memory>& screen(State& state) noexcept { … } };
+}
+```
+
+**Lo que hay que enviar.** Un caso de uso puro devuelve la petición del protocolo como valor
+(`read` devuelve el `ReadPane`) o lo que el usuario pidió (`submit` devuelve una `Submission`);
+recibe el id de la petición, no lo inventa. `application` pide el id (`Access::pending`), envía
+(`Access::send`, `Access::sendRegistered`) y, si el transporte falla, se lo dice a la feature
+(`fail`). Cada tipo de petición que `application::<feature>` registra tiene su instanciación de
+`Session::sendRegistered` en `application-session-layout.cpp`, como `send` en
+`application-session.cpp`.
+
+**En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
+nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
+
+**Namespaces de application.** `application::<feature>` usa el nombre de la carpeta; una feature
+anidada usa namespaces anidados, `features/terminal/links` es `application::terminal::links`, en
+`application-terminal_links.cppm` (`:terminal_links`). Los tipos de valor conservan su nombre y se
+reexportan con `using`: `ui` escribe `application::peek::PeekTarget`.
+
+**Mensajes del runtime.** `Session::consume` sigue enrutando a su sobrecarga `apply(const M&)`; la
+de un mensaje de una feature solo llama a `application::<feature>::receive(Session&, const M&)`.
+Esas funciones de enrutado (`receive`, `follow`, `readFailed`) se declaran sin `export` en la misma
+partición `application-<feature>.cppm`: las ven las unidades de `application`, no `ui`. Los
+fallos de peticiones pendientes los reparte `apply(const RequestFailed&)` por `RequestKind`.
+
 ## ui
 
 Los controladores Qt llaman a `application::<feature>::<caso_de_uso>(store_.session(), …)` dentro

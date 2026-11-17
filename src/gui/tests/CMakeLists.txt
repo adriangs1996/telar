@@ -136,7 +136,7 @@ telar_add_test(gui-worktree-actions-test SOURCES worktree_actions_test.cpp LIBRA
 telar_add_test(gui-workspace-navigation-test SOURCES workspace_navigation_test.cpp LIBRARIES gui-foundation-model gui-layout gui-prompt gui-application gui-test-fixtures
   TEST gui-workspace-navigation LABELS gui.application)
 
-telar_add_test(gui-agent-peek-test SOURCES agent_peek_test.cpp LIBRARIES gui-foundation-core gui-core gui-peek gui-presentation gui-application gui-test-fixtures
+telar_add_test(gui-agent-peek-test SOURCES agent_peek_test.cpp LIBRARIES gui-foundation-core gui-core gui-features-peek gui-presentation gui-application gui-test-fixtures
   TEST gui-agent-peek LABELS gui.peek)
 telar_add_test(gui-runtime-link-test SOURCES runtime_link_test.cpp LIBRARIES gui-machines gui-transport
   TEST gui-runtime-link LABELS gui.transport)

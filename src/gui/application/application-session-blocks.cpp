@@ -7,7 +7,6 @@ import telar.gui.graphics.texture_cache;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.paths.label;
-import telar.gui.peek.screen;
 import telar.gui.suggestions.state;
 import telar.config.client;
 import telar.config.runtime;

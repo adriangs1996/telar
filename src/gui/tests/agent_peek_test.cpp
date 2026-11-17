@@ -33,8 +33,7 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.peek.screen;
-import telar.gui.presentation.suggestion_labels;
+import telar.gui.features.peek;
 import telar.gui.presentation.notification_center;
 import telar.wire.agents;
 import telar.wire.content;
@@ -47,6 +46,10 @@ namespace {
   using namespace telar;
   using namespace telar::gui;
   using namespace telar::gui::test;
+  using features::peek::PeekCommand;
+  using features::peek::PeekGeometry;
+  using features::peek::PeekLimits;
+  using features::peek::PeekTarget;
 
   constexpr PeekTarget target{.agent = {.pane_id = 9, .pane_generation = 3}, .session = {1}};
   constexpr TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 2};
@@ -96,15 +99,14 @@ namespace {
     };
 
     for (const auto& [text, command] : cases) {
-      require(PeekInput::command(text) == command, "peek slash words retain exact case and only trim spaces and tabs");
+      require(features::peek::submit(text).command == command, "peek slash words retain exact case and only trim spaces and tabs");
     }
 
-    using Screen = PeekScreen<SystemAllocator>;
     constexpr std::uint16_t two_rows = 2;
 
-    require(Screen::lastLines("one\ntwo\nthree \r\n\t", two_rows) == "two\nthree", "peek clips its recent lines from the oldest visible row and trims only the tail");
-    require(Screen::lastLines("one\n\nthree", two_rows) == "\nthree", "empty interior rows retain their visual positions");
-    require(Screen::lastLines("text", 0).empty(), "a peek without screen rows must expose no pane text");
+    require(features::peek::lastLines("one\ntwo\nthree \r\n\t", two_rows) == "two\nthree", "peek clips its recent lines from the oldest visible row and trims only the tail");
+    require(features::peek::lastLines("one\n\nthree", two_rows) == "\nthree", "empty interior rows retain their visual positions");
+    require(features::peek::lastLines("text", 0).empty(), "a peek without screen rows must expose no pane text");
   }
 
   void retainedScreenOwnsItsReadAndUsesBoundedInjectedMemory() {
@@ -114,15 +116,15 @@ namespace {
     telar::MemoryAdapter adapter{memory};
 
     {
-      PeekScreen<telar::Memory> screen{adapter};
+      features::peek::State screen{adapter};
       const auto baseline = budget.allocations();
 
-      screen.show(target);
+      features::peek::open(screen, target);
       constexpr std::uint64_t first_request = 40;
-      const auto request = screen.request(first_request);
+      const auto request = features::peek::read(screen, first_request);
 
       require(request && request->source == PaneTextSource::recent && request->rows == PeekLimits::rows && request->pane_generation == target.agent.pane_generation, "peek reads recent rows with the complete source pane identity");
-      require(!screen.request(first_request + 1) && budget.allocations() == baseline, "opening and duplicate-read admission must not allocate");
+      require(!features::peek::read(screen, first_request + 1) && budget.allocations() == baseline, "opening and duplicate-read admission must not allocate");
       std::string text(PeekLimits::text_bytes + 1, 'x');
       constexpr std::string_view symbol = "\xf0\x9f\x8c\x8d";
 
@@ -131,43 +133,43 @@ namespace {
       bool refused = false;
 
       try {
-        static_cast<void>(screen.store({.request_id = first_request, .pane_id = target.agent.pane_id, .text = text, .exit_code = {}}));
+        static_cast<void>(features::peek::receive(screen, {.request_id = first_request, .pane_id = target.agent.pane_id, .text = text, .exit_code = {}}));
       } catch (const std::bad_alloc&) {
         refused = true;
       }
 
-      require(refused && screen.text().empty() && screen.target() && !screen.reading(), "allocation failure keeps the source identity and releases read admission for a later retry");
+      require(refused && features::peek::text(screen).empty() && features::peek::target(screen) && !features::peek::reading(screen), "allocation failure keeps the source identity and releases read admission for a later retry");
       memory.permit(std::nullopt);
-      const auto retry = screen.request(first_request + 1);
+      const auto retry = features::peek::read(screen, first_request + 1);
       if (!retry) {
         throw std::runtime_error{"A failed text allocation must admit a fresh retry request"};
       }
 
-      const auto dropped = screen.store({.request_id = retry.value().request_id, .pane_id = target.agent.pane_id, .text = text, .exit_code = {}});
+      const auto dropped = features::peek::receive(screen, {.request_id = retry.value().request_id, .pane_id = target.agent.pane_id, .text = text, .exit_code = {}});
 
-      require(dropped && *dropped == symbol.size() && screen.text().size() == text.size() - symbol.size(), "a bounded peek drops a complete leading UTF-8 character at its tail boundary");
-      const auto copied = std::string{screen.text()};
+      require(dropped && *dropped == symbol.size() && features::peek::text(screen).size() == text.size() - symbol.size(), "a bounded peek drops a complete leading UTF-8 character at its tail boundary");
+      const auto copied = std::string{features::peek::text(screen)};
 
       text.assign(text.size(), 'z');
-      require(screen.text() == copied, "peek text must outlive decoder storage reuse");
+      require(features::peek::text(screen) == copied, "peek text must outlive decoder storage reuse");
       const auto allocations = budget.allocations();
 
       memory.permit(0);
-      const auto next = screen.request(first_request + 2);
+      const auto next = features::peek::read(screen, first_request + 2);
       if (!next) {
         throw std::runtime_error{"A completed read must admit a later refresh"};
       }
 
-      require(screen.store({.request_id = next.value().request_id, .pane_id = target.agent.pane_id, .text = copied, .exit_code = {}}) == 0 && budget.allocations() == allocations, "steady-state recent reads reuse their injected storage");
-      screen.close();
-      screen.show(target);
-      const auto current = screen.request(first_request + 3);
+      require(features::peek::receive(screen, {.request_id = next.value().request_id, .pane_id = target.agent.pane_id, .text = copied, .exit_code = {}}) == 0 && budget.allocations() == allocations, "steady-state recent reads reuse their injected storage");
+      features::peek::close(screen);
+      features::peek::open(screen, target);
+      const auto current = features::peek::read(screen, first_request + 3);
       if (!current) {
         throw std::runtime_error{"A reopened peek must admit its own read"};
       }
 
-      require(!screen.store({.request_id = first_request, .pane_id = target.agent.pane_id, .text = "old", .exit_code = {}}) && screen.reading(), "a retired reply cannot complete a later peek's read");
-      require(!screen.fail(first_request) && screen.fail(current.value().request_id) && !screen.reading(), "failed reads release only their own request ownership");
+      require(!features::peek::receive(screen, {.request_id = first_request, .pane_id = target.agent.pane_id, .text = "old", .exit_code = {}}) && features::peek::reading(screen), "a retired reply cannot complete a later peek's read");
+      require(!features::peek::fail(screen, first_request) && features::peek::fail(screen, current.value().request_id) && !features::peek::reading(screen), "failed reads release only their own request ownership");
     }
 
     require(budget.liveBytes() == 0, "peek buffers must release all injected memory");
@@ -186,29 +188,29 @@ namespace {
     bool refused = false;
 
     try {
-      static_cast<void>(client.openPeek(target));
+      static_cast<void>(application::peek::open(client, target));
     } catch (const EncodingError&) {
       refused = true;
     }
 
-    require(refused && !client.peek().target() && !client.requestsPending(), "a rejected initial read must retire its unopened peek without retaining a correlation");
+    require(refused && !application::peek::target(client) && !client.requestsPending(), "a rejected initial read must retire its unopened peek without retaining a correlation");
     transport.reject = false;
-    require(client.openPeek(target), "a later accepted read remains available");
+    require(application::peek::open(client, target), "a later accepted read remains available");
     transport.reject = true;
     refused = false;
     try {
-      static_cast<void>(client.submitPeek("/stop"));
+      static_cast<void>(application::peek::submit(client, "/stop"));
     } catch (const EncodingError&) {
       refused = true;
     }
 
-    require(refused && client.peek().target() && client.requestsPending(), "a rejected stop must retain the existing read while releasing its own action correlation");
+    require(refused && application::peek::target(client) && client.requestsPending(), "a rejected stop must retain the existing read while releasing its own action correlation");
     const auto read = transport.recorded.last<ReadPane>();
 
     deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Recent rows", .exit_code = {}});
     require(!client.requestsPending(), "the surviving read must release its own correlation when its reply arrives");
     transport.reject = false;
-    require(client.submitPeek("/stop") && transport.recorded.count(ClientTag::interrupt_agent) == 1, "retrying a rejected action admits exactly one interrupt");
+    require(application::peek::submit(client, "/stop") && transport.recorded.count(ClientTag::interrupt_agent) == 1, "retrying a rejected action admits exactly one interrupt");
   }
 
   void peekRowsUseSaturatingOriginalCellCoordinates() {
@@ -234,25 +236,25 @@ namespace {
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     const auto openings = transport.count(ClientTag::open_pane);
 
-    require(client.openPeek(target), "a live agent may be inspected without selecting its tab");
+    require(application::peek::open(client, target), "a live agent may be inspected without selecting its tab");
     const auto read = transport.last<ReadPane>();
 
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
     require(transport.count(ClientTag::read_pane) == 1, "snapshots coalesce while the same peek read is in flight");
-    require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Owned recent text", .exit_code = {}}) == application::Change::peek && client.peek().text() == "Owned recent text", "a recent pane reply updates only peek presentation");
+    require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Owned recent text", .exit_code = {}}) == application::Change::peek && application::peek::text(client) == "Owned recent text", "a recent pane reply updates only peek presentation");
     require(client.focusedPane()->id == 1 && client.findPane(target.agent.pane_id) == nullptr && transport.count(ClientTag::open_pane) == openings, "a peek must retain the current tab and create no terminal screen or attachment");
     auto wrong = target;
 
     ++wrong.session.front();
-    require(!client.openPeek(wrong) && client.peek().text() == "Owned recent text", "an invalid replacement cannot erase a live peek");
+    require(!application::peek::open(client, wrong) && application::peek::text(client) == "Owned recent text", "an invalid replacement cannot erase a live peek");
     deliver(client, AgentSnapshot{.revision = 3, .entries = agents});
     const auto refresh = transport.last<ReadPane>();
 
     require(refresh.request_id != read.request_id, "a later accepted snapshot asks for fresh recent rows");
     ++agents.front().session_id.front();
     deliver(client, AgentSnapshot{.revision = 4, .entries = agents});
-    require(!client.peek().target() && !client.submitPeek("/stop"), "reused pane and generation values cannot retain a retired agent session");
-    require(deliver(client, PaneText{.request_id = refresh.request_id, .pane_id = read.pane_id, .text = "Retired data", .exit_code = {}}) == application::Change::none && client.peek().text().empty(), "a retired session's delayed pane text must stay invisible");
+    require(!application::peek::target(client) && !application::peek::submit(client, "/stop"), "reused pane and generation values cannot retain a retired agent session");
+    require(deliver(client, PaneText{.request_id = refresh.request_id, .pane_id = read.pane_id, .text = "Retired data", .exit_code = {}}) == application::Change::none && application::peek::text(client).empty(), "a retired session's delayed pane text must stay invisible");
   }
 
   void peekMessagesAndInterruptsKeepTheOriginalProtocol() {
@@ -264,16 +266,16 @@ namespace {
     const std::array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.openPeek(target) && client.submitPeek(" \tPlease continue \t"), "a peek may submit its field directly to the owned agent");
+    require(application::peek::open(client, target) && application::peek::submit(client, " \tPlease continue \t"), "a peek may submit its field directly to the owned agent");
     const auto message = transport.last<SendPaneText>();
 
     require(message.pane_id == target.agent.pane_id && message.pane_generation == target.agent.pane_generation && message.mode == PaneTextMode::prompt && message.text == "Please continue" && !message.sender, "peek messages preserve prompt delivery and trim only the field edges");
-    require(transport.count(ClientTag::pane_input) == 0 && !client.peek().target(), "peek prompt submission must not type into the focused local pane");
+    require(transport.count(ClientTag::pane_input) == 0 && !application::peek::target(client), "peek prompt submission must not type into the focused local pane");
     const auto read = transport.last<ReadPane>();
 
     require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Closed read", .exit_code = {}}) == application::Change::none, "closing the field must retain and safely retire a later read reply");
     deliver(client, RequestCompleted{.request_id = message.request_id});
-    require(!client.requestsPending() && client.openPeek(target) && client.submitPeek("/stop"), "an interrupt has its own releasable action correlation");
+    require(!client.requestsPending() && application::peek::open(client, target) && application::peek::submit(client, "/stop"), "an interrupt has its own releasable action correlation");
     const auto interrupt = transport.last<InterruptAgent>();
 
     require(interrupt.pane_id == target.agent.pane_id && interrupt.pane_generation == target.agent.pane_generation, "peek stop must address the original agent generation");
@@ -281,9 +283,9 @@ namespace {
 
     require(deliver(client, RequestFailed{.request_id = stopped_read.request_id, .code = FailureCode::pane_not_found, .message = "Read retired"}) == application::Change::none && client.error().empty(), "a read rejected after its peek closes must release quietly");
     deliver(client, RequestCompleted{.request_id = interrupt.request_id});
-    require(client.openPeek(target), "a completed action leaves later peeks available");
+    require(application::peek::open(client, target), "a completed action leaves later peeks available");
     client.setPresented(false);
-    require(!client.peek().target() && !client.submitPeek("Ignored") && !client.openPeek(target), "a hidden machine must discard peek interaction ownership");
+    require(!application::peek::target(client) && !application::peek::submit(client, "Ignored") && !application::peek::open(client, target), "a hidden machine must discard peek interaction ownership");
   }
 
   void diffLaunchQuotesItsBranchAsAnArgumentAndWaitsForHandoff() {
@@ -297,11 +299,11 @@ namespace {
 
     deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.openPeek(target), "a task-backed agent may be inspected");
+    require(application::peek::open(client, target), "a task-backed agent may be inspected");
     const auto read = transport.last<ReadPane>();
 
     deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Task rows", .exit_code = {}});
-    require(client.submitPeek("/diff"), "a task-backed peek may launch its diff command");
+    require(application::peek::submit(client, "/diff"), "a task-backed peek may launch its diff command");
     const auto launch = transport.last<LaunchWorktree>();
     constexpr TerminalSize original_size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
 
@@ -327,13 +329,13 @@ namespace {
     const std::array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.openPeek(target), "a task agent must admit its read");
+    require(application::peek::open(client, target), "a task agent must admit its read");
     const auto read = transport.last<ReadPane>();
 
     deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Task", .exit_code = {}});
     const auto first = transport.sent.size();
 
-    require(client.submitPeek("/open"), "the task peek must close after handing off its source");
+    require(application::peek::submit(client, "/open"), "the task peek must close after handing off its source");
     require(transport.count(ClientTag::detach_pane) == 1 && transport.detaching == std::vector<std::uint64_t>{1}, "the current workspace must release its input and attachment before entering another");
     const auto messages = std::span{transport.sent}.subspan(first);
     const auto detach = std::ranges::find_if(messages, [](const auto& bytes) {
@@ -362,11 +364,11 @@ namespace {
     const std::array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.openPeek(target), "a task peek read must remain tracked");
+    require(application::peek::open(client, target), "a task peek read must remain tracked");
     const auto read = transport.last<ReadPane>();
     const auto openings = transport.count(ClientTag::open_pane);
 
-    require(client.submitPeek("/open") && !client.peek().target(), "a busy open still closes its peek as the original does");
+    require(application::peek::submit(client, "/open") && !application::peek::target(client), "a busy open still closes its peek as the original does");
     require(transport.count(ClientTag::open_pane) == openings && transport.count(ClientTag::detach_pane) == 0 && client.focusedPane()->id == 1 && client.focusedPane()->attached, "an outstanding canonical reply must fence workspace departure");
     deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Late read", .exit_code = {}});
     require(!client.requestsPending(), "the closed peek's late reply must release its original correlation");
@@ -467,10 +469,10 @@ namespace {
 
     deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.openPeek(target), "the busy diff fixture must keep its real peek read pending");
+    require(application::peek::open(client, target), "the busy diff fixture must keep its real peek read pending");
     const auto read = transport.last<ReadPane>();
 
-    require(client.submitPeek("/diff"), "a diff may launch before its retained read finishes");
+    require(application::peek::submit(client, "/diff"), "a diff may launch before its retained read finishes");
     const auto launch = transport.last<LaunchWorktree>();
     const auto openings = transport.count(ClientTag::open_pane);
     constexpr std::uint64_t diff_pane = 77;
@@ -490,17 +492,17 @@ namespace {
     const std::array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.openPeek(target), "a live peek must admit its initial read");
+    require(application::peek::open(client, target), "a live peek must admit its initial read");
     const auto read = transport.last<ReadPane>();
 
-    require(deliver(client, RequestFailed{.request_id = read.request_id, .code = FailureCode::pane_not_found, .message = "Read rejected"}) == application::Change::none && !client.peek().reading() && client.peek().target(), "a failed recent read must quietly release ownership while keeping the open peek");
+    require(deliver(client, RequestFailed{.request_id = read.request_id, .code = FailureCode::pane_not_found, .message = "Read rejected"}) == application::Change::none && !application::peek::reading(client) && application::peek::target(client), "a failed recent read must quietly release ownership while keeping the open peek");
     require(client.error().empty() && client.notifications().items().empty() && !client.requestsPending(), "a recent-read failure must not turn into an unrelated diagnostic or notification");
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
     const auto retry = transport.last<ReadPane>();
 
     require(retry.request_id != read.request_id, "the next accepted agent snapshot retries a failed read");
     deliver(client, PaneText{.request_id = retry.request_id, .pane_id = retry.pane_id, .text = "Recent reply", .exit_code = {}});
-    require(client.submitPeek("Please continue"), "a peek may hand off its field and close before the action reply");
+    require(application::peek::submit(client, "Please continue"), "a peek may hand off its field and close before the action reply");
     const auto action = transport.last<SendPaneText>();
     constexpr std::string_view refusal = "the pane has the focus in an attached window";
 

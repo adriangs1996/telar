@@ -11,7 +11,7 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
 import telar.gui.paths.label;
-import telar.gui.peek.screen;
+import telar.gui.features.peek;
 import telar.gui.suggestions.state;
 import telar.config.client;
 import telar.config.runtime;
@@ -154,7 +154,7 @@ namespace telar::gui::application {
     presented_ = presented;
     leave_pending_ = !presented;
     if (!presented) {
-      closePeek();
+      peek::close(*this);
     }
 
     if (presented) {
@@ -206,7 +206,7 @@ namespace telar::gui::application {
     copy_search_request_ = 0;
     history_.suspend();
     path_picker_.close();
-    peek_.close();
+    features::peek::close(peek_);
     suggestion_.invalidate();
     pending_count_ = 0;
     editor_opening_.reset();
@@ -653,8 +653,14 @@ namespace telar::gui::application {
     }
 
     if (const auto request = complete(message.request_id)) {
-      if (const auto change = failPeekRequest(*request, message)) {
-        return *change;
+      if (request->kind == RequestKind::peek_screen) {
+        peek::readFailed(*this, message.request_id);
+
+        return Change::none;
+      }
+
+      if (request->kind == RequestKind::peek_action || request->kind == RequestKind::peek_diff) {
+        return peek::actionFailed(*this, request->pane_id, message.message);
       }
 
       if (recoverMissingWorkspacePane(*request, message)) {

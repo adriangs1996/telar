@@ -21,7 +21,7 @@ import telar.gui.layout.snapshots;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 import telar.gui.paths.label;
-import telar.gui.peek.screen;
+import telar.gui.features.peek;
 import telar.gui.foundation.system;
 import :client_view_state;
 import :sidebar;
@@ -46,7 +46,6 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
-import telar.wire.worktrees;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.gui.prompt.routing;
@@ -352,16 +351,6 @@ export {
 
       bool focusListedPane(std::uint64_t pane_id, std::uint64_t generation);
 
-      [[nodiscard]] const PeekScreen<Memory>& peek() const noexcept;
-
-      [[nodiscard]] const Agent<Memory>* peekAgent() const noexcept;
-
-      bool openPeek(PeekTarget target);
-
-      void closePeek() noexcept;
-
-      bool submitPeek(std::string_view text);
-
       void deleteHistory(std::uint64_t entry_id);
 
       void selectHistoryRow(std::size_t row);
@@ -603,18 +592,6 @@ export {
         TerminalSize existing;
         TerminalSize added;
       };
-
-      [[nodiscard]] const Agent<Memory>* findPeekAgent(const PeekTarget& target) const noexcept;
-
-      void requestPeekScreen();
-
-      template <typename Request>
-        requires(std::same_as<Request, InterruptAgent> || std::same_as<Request, SendPaneText> || std::same_as<Request, LaunchWorktree>)
-      void sendPeekAction(Request request, std::uint64_t pane_id);
-
-      void openPeekDiff(const Agent<Memory>& agent);
-
-      std::optional<Change> failPeekRequest(const Pending& request, const RequestFailed& failure);
 
       [[nodiscard]] TerminalSize launchSize() const;
 
@@ -1108,7 +1085,7 @@ export {
       std::uint64_t notification_revision_ = 0;
       std::uint64_t chrome_revision_ = 0;
       tbc::view<HistoryBrowser<Memory>, tbc::lt::a> history_;
-      tbc::view<PeekScreen<Memory>, tbc::lt::a> peek_;
+      tbc::view<features::peek::State, tbc::lt::a> peek_;
       PathPickerPage path_picker_;
 
       // The relative word before the line's caret when the path search opened over it.

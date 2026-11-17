@@ -1,21 +1,14 @@
-module telar.gui.peek.screen;
+module telar.gui.features.peek;
 
+import std;
+
+import :screen;
+import telar.base.memory.allocators;
 import telar.base.text;
+import telar.gui.foundation.model;
+import telar.wire.content;
 
-namespace telar::gui {
-
-  PeekCommand PeekInput::command(std::string_view text) noexcept {
-    text = runtime::trimText(text, " \t");
-    if (text.empty() || text == "/open") {
-      return PeekCommand::open;
-    }
-
-    if (text == "/stop") {
-      return PeekCommand::stop;
-    }
-
-    return text == "/diff" ? PeekCommand::diff : PeekCommand::message;
-  }
+namespace telar::gui::features::peek {
 
   template <Allocator Memory>
   PeekScreen<Memory>::PeekScreen(Memory& memory)
@@ -26,7 +19,6 @@ namespace telar::gui {
     target_ = target;
     text_.clear();
     request_id_ = 0;
-    ++revision_;
   }
 
   template <Allocator Memory>
@@ -34,7 +26,6 @@ namespace telar::gui {
     target_.reset();
     text_.clear();
     request_id_ = 0;
-    ++revision_;
   }
 
   template <Allocator Memory>
@@ -45,11 +36,6 @@ namespace telar::gui {
   template <Allocator Memory>
   std::string_view PeekScreen<Memory>::text() const noexcept {
     return text_;
-  }
-
-  template <Allocator Memory>
-  std::uint64_t PeekScreen<Memory>::revision() const noexcept {
-    return revision_;
   }
 
   template <Allocator Memory>
@@ -114,41 +100,80 @@ namespace telar::gui {
     }
 
     text_ = reply.text.substr(start);
-    ++revision_;
 
     return start;
   }
 
-  template <Allocator Memory>
-  std::string_view PeekScreen<Memory>::lastLines(std::string_view text, std::uint16_t count) noexcept {
-    const auto last = text.find_last_not_of(" \n\r\t");
-    if (last == std::string_view::npos) {
-      return {};
-    }
+  template class PeekScreen<telar::Memory>;
 
-    text.remove_suffix(text.size() - last - 1);
-    auto start = text.size();
-    std::uint16_t seen = 0;
+  State::State(Memory& memory)
+      : screen_(memory) {}
 
-    while (start > 0 && seen < count) {
-      --start;
-      if (text[start] == '\n') {
-        ++seen;
-        if (seen == count) {
-          ++start;
-          break;
-        }
-      }
-    }
-
-    text.remove_prefix(start);
-
-    return text;
+  const std::optional<PeekTarget>& target(const State& state) noexcept {
+    return Access::screen(state).target();
   }
 
-  template class PeekScreen<telar::Memory>;
-  template class PeekScreen<telar::ConcurrentMemory>;
-  // What the session tests pass, through Session<SystemAllocator>.
-  template class PeekScreen<telar::SystemAllocator>;
+  std::string_view text(const State& state) noexcept {
+    return Access::screen(state).text();
+  }
+
+  bool reading(const State& state) noexcept {
+    return Access::screen(state).reading();
+  }
+
+  const Agent<Memory>* find(std::span<const Agent<Memory>> agents, const PeekTarget& target) noexcept {
+    const auto found = std::ranges::find_if(agents, [&](const auto& agent) {
+      return agent.pane_id == target.agent.pane_id && agent.pane_generation == target.agent.pane_generation && agent.session_id == target.session;
+    });
+
+    return found == agents.end() ? nullptr : std::addressof(*found);
+  }
+
+  const Agent<Memory>* agent(const State& state, std::span<const Agent<Memory>> agents) noexcept {
+    const auto& opened = target(state);
+
+    return opened ? find(agents, *opened) : nullptr;
+  }
+
+  void open(State& state, PeekTarget target) noexcept {
+    Access::screen(state).show(target);
+  }
+
+  void close(State& state) noexcept {
+    Access::screen(state).close();
+  }
+
+  std::optional<ReadPane> read(State& state, std::uint64_t request_id) {
+    return Access::screen(state).request(request_id);
+  }
+
+  bool fail(State& state, std::uint64_t request_id) noexcept {
+    return Access::screen(state).fail(request_id);
+  }
+
+  std::optional<std::size_t> receive(State& state, const PaneText& reply) {
+    return Access::screen(state).store(reply);
+  }
+
+  Submission submit(std::string_view text) {
+    if (text.size() > PeekLimits::message_bytes) {
+      throw std::length_error{"PeekMessageTooLong"};
+    }
+
+    const auto trimmed = runtime::trimText(text, " \t");
+    if (trimmed.empty() || trimmed == "/open") {
+      return {.command = PeekCommand::open};
+    }
+
+    if (trimmed == "/stop") {
+      return {.command = PeekCommand::stop};
+    }
+
+    if (trimmed == "/diff") {
+      return {.command = PeekCommand::diff};
+    }
+
+    return {.command = PeekCommand::message, .message = trimmed};
+  }
 
 }
