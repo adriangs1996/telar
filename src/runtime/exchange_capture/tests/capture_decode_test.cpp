@@ -111,6 +111,25 @@ namespace {
     check(memory.liveBytes() == 0);
   }
 
+  void testZstdDeclaredSizeBelowBlocks() {
+    // A complete frame with a 128 KiB window declares 10 bytes of content but carries RLE blocks of
+    // 1 and 131072 bytes: a limit under 128 KiB sizes the storage by that declaration.
+    const auto input = decodeHexadecimal("28b52ffd80380a0000000a00004103001042");
+    ErasureCheckingAllocator system;
+    BudgetAllocator memory{system, 2 * 1024 * 1024};
+    MemoryAdapter adapter{memory};
+
+    {
+      CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
+      const auto body = decoder.decode(input, "zstd", 1024);
+
+      check(body.failed && !body.decoded && !body.truncated);
+      check(std::ranges::equal(body.bytes(), input));
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
   void testCapturePublication() {
     SystemAllocator system;
     BudgetAllocator budget{system, 8 * 1024 * 1024};
@@ -220,5 +239,6 @@ namespace {
   const telar::testing::Case case_decoded_capture_counters{"capture_decode.decoded_capture_counters", testDecodedCaptureCounters};
   const telar::testing::Case case_concurrent_capture_delivery{"capture_decode.concurrent_capture_delivery", testConcurrentCaptureDelivery};
   const telar::testing::Case case_capture_decoding{"capture_decode.capture_decoding", testCaptureDecoding};
+  const telar::testing::Case case_zstd_declared_size_below_blocks{"capture_decode.zstd_declared_size_below_blocks", testZstdDeclaredSizeBelowBlocks};
 
 }
