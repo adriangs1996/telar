@@ -204,14 +204,32 @@ de ui, y que se lee en un camino caliente, sigue exportada con sus métodos: el 
 un terminal (`ChildMouseGesture`), el enlace bajo el puntero (`LinkHover`), las texturas
 residentes de una ventana (`ImageResidency`), el `GraphicsStore` de cada pane, el catálogo de la
 estantería de adjuntos, el `FramePacer` de cada ventana, la pila de notificaciones y el
-`Machines` que el `Store` de la ventana guarda entre las sesiones de sus máquinas. Esconderla tras
-un `State` de la sesión añadiría una indirección por evento o por frame; `application::<feature>`
-la reexporta con `using` como un tipo de valor más.
+`Machines` que el `Store` de la ventana guarda entre las sesiones de sus máquinas, y el
+`KeyRouter` de `bindings`, por el que cada ventana pasa cada tecla con sus métodos `inline`.
+Esconderla tras un `State` de la sesión añadiría una indirección por evento o por frame;
+`application::<feature>` la reexporta con `using` como un tipo de valor más.
 
-**Una feature sin estado de la sesión.** `terminal/input`, `terminal/attachments`, `window` y
-`machines` no tienen `State`: su interfaz primaria solo reexporta sus particiones, y su partición
-de `application` reexporta sus tipos y, si hace falta, compone un caso de uso con la API pública de
-`Session` (`application::terminal::input::scroll`, `application::window::title`).
+**Una feature sin estado de la sesión.** `terminal/input`, `terminal/attachments`, `window`,
+`machines`, `bindings`, `components`, `configuration` y `plugins` no tienen `State`: su interfaz
+primaria solo reexporta sus particiones, y su partición de `application` reexporta sus tipos y, si
+hace falta, compone un caso de uso con la API pública de `Session` o con `Access`
+(`application::terminal::input::scroll`, `application::window::title`,
+`application::configuration::configure`).
+
+**El intérprete de la configuración.** Ninguna feature importa `telar.lua`. Cargar una
+configuración lee archivos (el `ConfigurationLoader` y el `ConfigurationSource` de ui) y ejecuta
+su intérprete (`ConfigurationGeneration`, en `application:configuration`). Lo que lee los valores
+del intérprete y guarda referencias en su registro también es de `application`, en
+`application:configuration_readers`: las acciones que nombra un atajo (`BindingActionReader`,
+`BindingReader`), el contenido que devuelve un render (`ContentReader`, `ComponentSnapshot`), las
+definiciones de barras, paneles y picks (`ComponentConfiguration::readDefinitions`, que llena
+`Definitions` con `defineSource`, `defineSlot`, `definePanel` y `definePick`), las opciones de un
+pick (`PickItemsReader`) y la llamada a un render (`ComponentInvocation`). La feature guarda una
+referencia del registro como un entero opaco; `components::no_reference` vale lo que `LUA_NOREF`,
+y `application` lo comprueba. Las features dan los tipos de valor y las consultas sobre una
+configuración cargada: `configuration` escribe cada sección como JSON, `plugins` decodifica y
+autoriza los efectos de un plugin. `application::configuration::query` elige la sección y compone
+la del cliente (`ClientQuery`, de `application`) con las de la feature.
 
 **Casos de uso en un camino caliente.** Un caso de uso que reenvía a la clase oculta y corre por
 tecla, por evento del puntero o por frame se define `inline` y `TBC_HOT_PATH` en la interfaz
