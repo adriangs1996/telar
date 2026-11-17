@@ -9,10 +9,8 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
-import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.links.path_expansion;
-import telar.gui.paths.label;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -294,180 +292,6 @@ namespace telar::gui::application {
     clipboard_ = history_.command(entry_id);
   }
 
-  bool Session::beginPathPicker() {
-    const auto* pane = focusedPane();
-    if (!ready_ || copy_mode_.active() || pane == nullptr || !pane->attached || pane->exited || !std::string_view{pane->cwd}.starts_with('/')) {
-      return false;
-    }
-
-    path_picker_.begin(pane->id, pane->cwd);
-    seedPathPicker(pane->id);
-    requestPaths(path_seed_.text.view());
-
-    return true;
-  }
-
-  std::string_view Session::pathSeed() const noexcept {
-    return path_seed_.text.view();
-  }
-
-  bool Session::requestPaths(std::string_view query) {
-    if (!ready_ || path_picker_.paneId() == 0) {
-      return false;
-    }
-
-    const FindPaths request{
-        .request_id = nextRequest(),
-        .root = path_picker_.root(),
-        .query = runtime::utf8Prefix(query, PathPickerLimits::query_bytes),
-        .kind = PathKindFilter::any,
-        .limit = static_cast<std::uint16_t>(PathPickerLimits::results),
-        .refresh = path_picker_.refreshRequested(),
-    };
-
-    try {
-      send(request);
-    } catch (const std::length_error&) {
-      path_picker_.setError("Path request queue is full; retry");
-
-      return false;
-    }
-
-    path_picker_.expect(request.request_id);
-
-    return true;
-  }
-
-  bool Session::descendPath(std::size_t selection) {
-    const auto matches = path_picker_.matches();
-    if (matches.empty()) {
-      return false;
-    }
-
-    const auto& match = matches[std::min(selection, matches.size() - 1)];
-    if (match.kind != PathKind::directory) {
-      return false;
-    }
-
-    auto relative = path_picker_.path(match);
-    const auto last = relative.find_last_not_of('/');
-
-    relative.remove_suffix(last == std::string_view::npos ? relative.size() : relative.size() - last - 1);
-    const auto directory = PathInsertion::join({.root = path_picker_.root(), .relative = relative});
-    if (directory.view().size() > PathPickerLimits::root_bytes) {
-      return false;
-    }
-
-    path_picker_.setRoot(directory.view());
-    requestPaths({});
-
-    return true;
-  }
-
-  bool Session::ascendPath() {
-    const auto root = path_picker_.root();
-    if (root.size() <= 1) {
-      return false;
-    }
-
-    const auto separator = root.rfind('/');
-    if (separator == std::string_view::npos) {
-      return false;
-    }
-
-    path_picker_.setRoot(separator == 0 ? root.substr(0, 1) : root.substr(0, separator));
-    requestPaths({});
-
-    return true;
-  }
-
-  void Session::closePathPicker() noexcept {
-    path_picker_.close();
-    path_seed_ = {};
-  }
-
-  bool Session::insertPath(std::size_t selection, bool absolute) {
-    if (path_picker_.matches().empty()) {
-      path_picker_.setError(path_picker_.phase() == PathPickerPhase::loading ? "Searching..." : "No path to insert");
-
-      return false;
-    }
-
-    const auto* pane = focusedPane();
-    if (!ready_ || pane == nullptr || !pane->attached || pane->exited || copy_mode_.active()) {
-      path_picker_.setError("Input is busy; retry");
-
-      return false;
-    }
-
-    const bool editor = editsPrompt(pane->id);
-    const auto paste = PathInsertion::prepare(path_picker_, {.selection = selection, .absolute = absolute, .bracketed = !editor && pane->screen.modes().bracketed_paste});
-    if (!paste) {
-      return false;
-    }
-
-    try {
-      if (editor && replacePathSeed(pane->id, paste->view())) {
-        prompt_written_ = pane->id;
-      } else if (editor) {
-        promptText(pane->id, paste->view());
-      } else {
-        input(pane->id, paste->view());
-      }
-    } catch (const std::length_error&) {
-      path_picker_.setError("Input is busy; retry");
-
-      return false;
-    }
-
-    closePathPicker();
-
-    return true;
-  }
-
-  const PathPickerPage& Session::pathPicker() const noexcept {
-    return path_picker_;
-  }
-
-  void Session::seedPathPicker(std::uint64_t pane_id) {
-    path_seed_ = {};
-    const auto found = lines_.find(pane_id);
-    if (promptSurface(pane_id) != prompt::Surface::editor || found == lines_.end()) {
-      return;
-    }
-
-    const auto& text = found->second.line.editor().text();
-    const auto before = text.view().substr(0, text.cursor());
-    const auto space = before.find_last_of(" \t\n");
-    const auto begin = space == std::string_view::npos ? 0 : space + 1;
-    const auto word = before.substr(begin);
-    if (word.empty() || word.size() > PathPickerLimits::query_bytes || word.front() == '/' || word.front() == '~' || !PathInsertion::plain(word)) {
-      return;
-    }
-
-    path_seed_.pane_id = pane_id;
-    path_seed_.begin = begin;
-    path_seed_.text.assign(word);
-  }
-
-  bool Session::replacePathSeed(std::uint64_t pane_id, std::string_view path) {
-    const auto word = path_seed_.text.view();
-    const auto found = lines_.find(pane_id);
-    if (path_seed_.pane_id != pane_id || word.empty() || found == lines_.end()) {
-      return false;
-    }
-
-    auto& line = found->second.line;
-    const auto& text = line.editor().text();
-    const auto end = path_seed_.begin + word.size();
-    if (text.cursor() != end || text.view().substr(path_seed_.begin, word.size()) != word) {
-      return false;
-    }
-
-    line.replaceText(path_seed_.begin, end, path);
-    return true;
-  }
-
   Change Session::apply(const CommandSpec& message) {
     const auto request = spec_requests_.find(message.request_id);
     if (request == spec_requests_.end()) {
@@ -597,7 +421,7 @@ namespace telar::gui::application {
       return Change::none;
     }
 
-    return path_picker_.receive(message) ? Change::paths : Change::none;
+    return paths::receive(*this, message);
   }
 
   Change Session::apply(const CommandSuggestion& message) {

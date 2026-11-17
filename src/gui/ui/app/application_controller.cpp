@@ -56,7 +56,6 @@ import telar.gui.application;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_pointer;
 import telar.gui.machines.picker;
-import telar.gui.paths.label;
 import telar.gui.presentation.history_inspection;
 import telar.wire.vocabulary;
 

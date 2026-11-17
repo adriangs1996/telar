@@ -36,18 +36,18 @@ namespace telar::gui::qt {
 
   bool PathPickerController::open() {
     auto& session = store_.session();
-    if (!session.beginPathPicker()) {
+    if (!application::paths::open(session)) {
       return false;
     }
 
-    query_ = toQString(session.pathSeed());
+    query_ = toQString(application::paths::seed(session));
     selection_ = 0;
 
     return true;
   }
 
   void PathPickerController::refresh() {
-    const auto count = store_.session().pathPicker().matches().size();
+    const auto count = application::paths::page(store_.session()).matches().size();
 
     selection_ = count == 0 ? 0 : std::min(selection_, count - 1);
     emit changed();
@@ -58,7 +58,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto measured = Utf16Prefix::fit(QStringView{text}, PathPickerLimits::query_bytes, utf16Encoding());
+    const auto measured = Utf16Prefix::fit(QStringView{text}, application::paths::PathPickerLimits::query_bytes, utf16Encoding());
 
     query_ = text.first(static_cast<qsizetype>(measured.units));
     if (!query_.isValidUtf16()) {
@@ -69,7 +69,7 @@ namespace telar::gui::qt {
     const auto query = query_.toUtf8();
 
     interact([&] {
-      store_.session().requestPaths({query.constData(), static_cast<std::size_t>(query.size())});
+      application::paths::search(store_.session(), {query.constData(), static_cast<std::size_t>(query.size())});
       refresh();
     });
 
@@ -79,14 +79,14 @@ namespace telar::gui::qt {
   }
 
   void PathPickerController::reportQueryLimit(qulonglong requested_bytes) {
-    if (isOpen() && requested_bytes > PathPickerLimits::query_bytes) {
-      store_.session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
+    if (isOpen() && requested_bytes > application::paths::PathPickerLimits::query_bytes) {
+      store_.session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = application::paths::PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
       store_.commit();
     }
   }
 
   void PathPickerController::move(int delta) {
-    const auto count = store_.session().pathPicker().matches().size();
+    const auto count = application::paths::page(store_.session()).matches().size();
 
     if (!isOpen()) {
       return;
@@ -103,7 +103,7 @@ namespace telar::gui::qt {
 
   void PathPickerController::descend() {
     interact([&] {
-      if (isOpen() && store_.session().descendPath(selection_)) {
+      if (isOpen() && application::paths::descend(store_.session(), selection_)) {
         query_.clear();
         selection_ = 0;
         refresh();
@@ -113,7 +113,7 @@ namespace telar::gui::qt {
 
   void PathPickerController::ascend() {
     interact([&] {
-      if (isOpen() && store_.session().ascendPath()) {
+      if (isOpen() && application::paths::ascend(store_.session())) {
         query_.clear();
         selection_ = 0;
         refresh();
@@ -127,7 +127,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      if (store_.session().insertPath(selection_, absolute)) {
+      if (application::paths::insert(store_.session(), selection_, absolute)) {
         emit closeRequested();
       }
 
@@ -136,7 +136,7 @@ namespace telar::gui::qt {
   }
 
   void PathPickerController::activate(const QVariantMap& choice) {
-    const auto& page = store_.session().pathPicker();
+    const auto page = application::paths::page(store_.session());
     if (!isOpen() || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
       return;
     }
@@ -155,20 +155,20 @@ namespace telar::gui::qt {
   }
 
   QVariantMap PathPickerController::state() const {
-    const auto& page = store_.session().pathPicker();
+    const auto page = application::paths::page(store_.session());
 
     return {
         {QStringLiteral("editorText"), query_},
         {QStringLiteral("root"), toQString(page.root())},
-        {QStringLiteral("rootLabel"), toQString(PathPickerLabels::root(page.root()))},
-        {QStringLiteral("countText"), toQString(PathPickerLabels::count(page).view())},
-        {QStringLiteral("status"), toQString(PathPickerLabels::status(page).view())},
-        {QStringLiteral("emptyText"), toQString(PathPickerLabels::empty(page))},
-        {QStringLiteral("failed"), page.phase() == PathPickerPhase::failed},
+        {QStringLiteral("rootLabel"), toQString(application::paths::PathPickerLabels::root(page.root()))},
+        {QStringLiteral("countText"), toQString(application::paths::PathPickerLabels::count(page).view())},
+        {QStringLiteral("status"), toQString(application::paths::PathPickerLabels::status(page).view())},
+        {QStringLiteral("emptyText"), toQString(application::paths::PathPickerLabels::empty(page))},
+        {QStringLiteral("failed"), page.phase() == application::paths::PathPickerPhase::failed},
         {QStringLiteral("count"), static_cast<qulonglong>(page.matches().size())},
         {QStringLiteral("selection"), static_cast<qulonglong>(selection_)},
         {QStringLiteral("revision"), QString::number(page.revision())},
-        {QStringLiteral("maximumQueryBytes"), static_cast<qulonglong>(PathPickerLimits::query_bytes)},
+        {QStringLiteral("maximumQueryBytes"), static_cast<qulonglong>(application::paths::PathPickerLimits::query_bytes)},
     };
   }
 

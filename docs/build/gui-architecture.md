@@ -161,6 +161,17 @@ recibe el id de la petición, no lo inventa. `application` pide el id (`Access::
 `Session::sendRegistered` en `application-session-layout.cpp`, como `send` en
 `application-session.cpp`.
 
+**Lo que ui lee.** Una consulta devuelve un valor: `palette::suggestion(session)` da una
+`Suggestion` con vistas al estado. Cuando ui lee mucho de una clase con estado, la feature exporta
+una vista de solo lectura con los métodos `const` de la clase (`PathPickerPage` sobre el
+`PathPicker` oculto), válida hasta el siguiente caso de uso.
+
+**Fuera de las features.** Una sección que hace I/O no es pura: va a `foundation/system`
+(`DirectoryCompletion` lista el sistema de archivos) o se queda en `application` (la reproducción
+de sonido). Lo que una feature compone con otra aún no migrada (el editor de la línea para
+`paths`) lo hace `application`, con accesores temporales en `Access` (`promptLine`,
+`notePromptWrite`) que desaparecen cuando esa otra feature exista.
+
 **En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
 nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
 

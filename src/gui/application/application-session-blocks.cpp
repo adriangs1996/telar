@@ -6,7 +6,6 @@ import telar.gui.foundation.terminal;
 import telar.gui.graphics.texture_cache;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
-import telar.gui.paths.label;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.prompt.line;

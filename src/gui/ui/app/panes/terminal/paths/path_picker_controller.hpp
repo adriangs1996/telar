@@ -15,9 +15,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.paths.label;
+import telar.gui.application;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.form_field_geometry;
 
 namespace telar::gui::qt {
 
@@ -70,7 +69,7 @@ namespace telar::gui::qt {
 
   private:
     [[nodiscard]] bool isOpen() const noexcept;
-    [[nodiscard]] PathPickerPlacement placement() const;
+    [[nodiscard]] application::paths::PathPickerPlacement placement() const;
 
     // Runs a user's mutation of the session and commits it to the store.
     template <std::invocable Mutation>

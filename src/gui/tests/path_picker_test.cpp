@@ -18,57 +18,57 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.core;
-import telar.gui.paths.label;
-import telar.gui.presentation.form_field_geometry;
+import telar.gui.features.paths;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::paths;
   using telar::gui::test::require;
 
   void pagesKeepOnlyTheCurrentRootAndRequest() {
     constexpr std::uint32_t partial_scanned = 12;
     constexpr std::uint32_t completed_scanned = 23;
-    PathPickerPage page;
+    features::paths::State state;
 
-    page.begin(1, "/work");
-    require(page.root() == "/work" && page.anchor() == "/work" && page.refreshRequested(), "opening must retain the pane directory and request an index rebuild");
-    page.expect(1);
-    page.expect(2);
+    features::paths::open(state, 1, "/work", {});
+    require(features::paths::page(state).root() == "/work" && features::paths::page(state).anchor() == "/work" && features::paths::search(state, {}, 1).refresh, "opening must retain the pane directory and request an index rebuild");
+    features::paths::wait(state, 1);
+    features::paths::wait(state, 2);
     const std::array highlights{std::uint16_t{1}};
     std::string path = "src/main.cpp";
     const std::array matches{PathMatch{.path = path, .positions = highlights}};
 
-    require(!page.receive({.request_id = 1, .root = "/work", .matches = matches}), "a late page must not replace the latest query");
-    require(!page.receive({.request_id = 2, .root = "/other", .matches = matches}), "a current request must still match the current root");
-    require(page.receive({.request_id = 2, .root = "/work", .scanned = partial_scanned, .complete = false, .matches = matches}), "an incomplete page must be publishable while the index grows");
+    require(!features::paths::receive(state, {.request_id = 1, .root = "/work", .matches = matches}), "a late page must not replace the latest query");
+    require(!features::paths::receive(state, {.request_id = 2, .root = "/other", .matches = matches}), "a current request must still match the current root");
+    require(features::paths::receive(state, {.request_id = 2, .root = "/work", .scanned = partial_scanned, .complete = false, .matches = matches}), "an incomplete page must be publishable while the index grows");
     path.assign("destroyed");
-    require(page.path(page.matches().front()) == "src/main.cpp" && page.matches().front().highlights().front() == 1, "retained pages must own path bytes and highlighting positions");
-    require(page.pendingRequest() == 2 && !page.complete() && !page.refreshRequested(), "partial results must retain the current request without another rebuild");
-    require(page.receive({.request_id = 2, .root = "/work", .scanned = completed_scanned, .complete = true, .truncated = true}), "the completed page must retire the current correlation");
-    require(page.matches().empty() && page.pendingRequest() == 0 && page.scanned() == completed_scanned && page.truncated(), "a final empty result must replace the preceding page and its metadata");
-    require(page.fail({.request_id = 1, .message = "old failure"}) && page.phase() == PathPickerPhase::ready, "tracked obsolete failures must be consumed without replacing the displayed state");
-    page.expect(3);
-    page.close();
-    require(!page.receive({.request_id = 3, .root = "/work", .complete = true}), "closing must reject late pages");
-    require(page.fail({.request_id = 3, .message = "late failure"}) && page.phase() == PathPickerPhase::idle, "closing must still recognize late failures without reopening the picker");
+    require(features::paths::page(state).path(features::paths::page(state).matches().front()) == "src/main.cpp" && features::paths::page(state).matches().front().highlights().front() == 1, "retained pages must own path bytes and highlighting positions");
+    require(features::paths::page(state).pendingRequest() == 2 && !features::paths::page(state).complete() && !features::paths::search(state, {}, 1).refresh, "partial results must retain the current request without another rebuild");
+    require(features::paths::receive(state, {.request_id = 2, .root = "/work", .scanned = completed_scanned, .complete = true, .truncated = true}), "the completed page must retire the current correlation");
+    require(features::paths::page(state).matches().empty() && features::paths::page(state).pendingRequest() == 0 && features::paths::page(state).scanned() == completed_scanned && features::paths::page(state).truncated(), "a final empty result must replace the preceding page and its metadata");
+    require(features::paths::fail(state, {.request_id = 1, .message = "old failure"}).has_value() && features::paths::page(state).phase() == PathPickerPhase::ready, "tracked obsolete failures must be consumed without replacing the displayed state");
+    features::paths::wait(state, 3);
+    features::paths::close(state);
+    require(!features::paths::receive(state, {.request_id = 3, .root = "/work", .complete = true}), "closing must reject late pages");
+    require(features::paths::fail(state, {.request_id = 3, .message = "late failure"}).has_value() && features::paths::page(state).phase() == PathPickerPhase::idle, "closing must still recognize late failures without reopening the picker");
   }
 
   void failuresKeepOnlyBoundedUtf8AndTrackedIdentities() {
-    PathPickerPage page;
+    features::paths::State state;
 
-    page.begin(1, "/work");
+    features::paths::open(state, 1, "/work", {});
     for (std::size_t index = 1; index <= PathPickerLimits::tracked_requests + 1; ++index) {
-      page.expect(index);
+      features::paths::wait(state, index);
     }
 
-    require(!page.fail({.request_id = 1, .message = "untracked"}), "an evicted request must not claim another failure");
+    require(!features::paths::fail(state, {.request_id = 1, .message = "untracked"}).has_value(), "an evicted request must not claim another failure");
     const std::string leading(PathPickerLimits::error_bytes - 1, 'x');
     const auto message = leading + "🧵";
 
-    require(page.fail({.request_id = PathPickerLimits::tracked_requests + 1, .message = message}), "the current request must own its failure");
-    require(page.phase() == PathPickerPhase::failed && page.error() == leading && page.pendingRequest() == 0, "failure text must stop at a complete UTF-8 scalar and retire the pending request");
+    require(features::paths::fail(state, {.request_id = PathPickerLimits::tracked_requests + 1, .message = message}).has_value(), "the current request must own its failure");
+    require(features::paths::page(state).phase() == PathPickerPhase::failed && features::paths::page(state).error() == leading && features::paths::page(state).pendingRequest() == 0, "failure text must stop at a complete UTF-8 scalar and retire the pending request");
   }
 
   void insertionsPreserveTheSelectedShellWord() {
@@ -81,17 +81,19 @@ namespace {
     require(plain && plain->view() == "file.cpp", "plain paths must not acquire unnecessary quotes");
     require(!PathInsertion::relativeTo("/work", "/worktree/file"), "a path sharing a name prefix must not become relative");
     require(PathInsertion::relativeTo("/", "/file") == std::optional<std::string_view>{"file"}, "the filesystem root must not require a second separator");
-    PathPickerPage page;
+    features::paths::State state;
+    const std::array directories{PathMatch{.path = "sub/", .kind = PathKind::directory}};
 
-    page.begin(1, "/work");
-    page.setRoot("/work/sub");
-    page.expect(1);
+    features::paths::open(state, 1, "/work", {});
+    features::paths::wait(state, 1);
+    require(features::paths::receive(state, {.request_id = 1, .root = "/work", .complete = true, .matches = directories}) && features::paths::descend(state, 0), "the insertion fixture must browse into its directory");
+    features::paths::wait(state, 2);
     const std::array matches{PathMatch{.path = "a b.txt"}};
 
-    require(page.receive({.request_id = 1, .root = "/work/sub", .complete = true, .matches = matches}), "the insertion fixture must adopt its result");
-    const auto relative = PathInsertion::prepare(page, {});
-    const auto absolute = PathInsertion::prepare(page, {.absolute = true});
-    const auto bracketed = PathInsertion::prepare(page, {.bracketed = true});
+    require(features::paths::receive(state, {.request_id = 2, .root = "/work/sub", .complete = true, .matches = matches}), "the insertion fixture must adopt its result");
+    const auto relative = features::paths::insertion(state, {});
+    const auto absolute = features::paths::insertion(state, {.absolute = true});
+    const auto bracketed = features::paths::insertion(state, {.bracketed = true});
 
     require(relative && relative->view() == "'sub/a b.txt'", "nested paths must remain relative to the opening directory");
     require(absolute && absolute->view() == "'/work/sub/a b.txt'", "alternate submission must preserve the absolute path");
@@ -146,17 +148,17 @@ namespace {
   }
 
   void labelsAndHintsReflectTheCurrentIndexState() {
-    PathPickerPage page;
+    features::paths::State state;
 
-    page.begin(1, "/work/sub");
-    page.expect(1);
-    require(PathPickerLabels::root(page.root()) == "sub" && PathPickerLabels::empty(page) == "Searching…", "the field must show only the current directory segment while a search is pending");
+    features::paths::open(state, 1, "/work/sub", {});
+    features::paths::wait(state, 1);
+    require(PathPickerLabels::root(features::paths::page(state).root()) == "sub" && PathPickerLabels::empty(features::paths::page(state)) == "Searching…", "the field must show only the current directory segment while a search is pending");
     constexpr std::uint32_t scanned = 123;
 
-    require(page.receive({.request_id = 1, .root = "/work/sub", .scanned = scanned, .complete = true, .truncated = true}), "the label fixture must adopt its completed index");
-    require(PathPickerLabels::count(page).view() == "0 of 123" && PathPickerLabels::status(page).view() == "123+ paths" && PathPickerLabels::empty(page) == "No paths match", "count, truncation and empty-state labels must retain their original wording");
-    page.setError("Index unavailable");
-    require(PathPickerLabels::status(page).view() == "Index unavailable" && PathPickerLabels::empty(page) == "No paths", "an index failure must use its bounded error and failed empty label");
+    require(features::paths::receive(state, {.request_id = 1, .root = "/work/sub", .scanned = scanned, .complete = true, .truncated = true}), "the label fixture must adopt its completed index");
+    require(PathPickerLabels::count(features::paths::page(state)).view() == "0 of 123" && PathPickerLabels::status(features::paths::page(state)).view() == "123+ paths" && PathPickerLabels::empty(features::paths::page(state)) == "No paths match", "count, truncation and empty-state labels must retain their original wording");
+    features::paths::report(state, "Index unavailable");
+    require(PathPickerLabels::status(features::paths::page(state)).view() == "Index unavailable" && PathPickerLabels::empty(features::paths::page(state)) == "No paths", "an index failure must use its bounded error and failed empty label");
     const CellRectangle footer{.width = PathPickerPlacement::maximum_width, .height = 1};
     const auto measure = [](std::string_view value) {
       return value.size();

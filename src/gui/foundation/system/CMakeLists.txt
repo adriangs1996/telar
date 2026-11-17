@@ -1,6 +1,7 @@
 telar_add_domain(gui foundation/system
   SOURCES
     system-awake_clock.cpp
+    system-directory_completion.cpp
     system-file_stamp.cpp
     system-private_file_stamp.cpp
     system-secure_random.cpp

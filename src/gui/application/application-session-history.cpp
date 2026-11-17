@@ -5,7 +5,6 @@ import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.links.path_expansion;
-import telar.gui.paths.label;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.prompt.layout;

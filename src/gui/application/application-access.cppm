@@ -5,7 +5,9 @@ module telar.gui.application:access;
 import std;
 
 import :session;
+import telar.gui.prompt.line;
 import telar.gui.features.palette;
+import telar.gui.features.paths;
 import telar.gui.features.peek;
 
 namespace telar::gui::application {
@@ -40,6 +42,28 @@ namespace telar::gui::application {
 
     [[nodiscard]] static constexpr const features::palette::State& palette(const Session& session) noexcept {
       return session.palette_;
+    }
+
+    [[nodiscard]] static constexpr features::paths::State& paths(Session& session) noexcept {
+      return session.paths_;
+    }
+
+    [[nodiscard]] static constexpr const features::paths::State& paths(const Session& session) noexcept {
+      return session.paths_;
+    }
+
+    // ---- telar's command editor, until the prompt is a feature -----------------------------
+
+    // The editor's line of pane `pane_id`, if it has one.
+    [[nodiscard]] static prompt::Line* promptLine(Session& session, std::uint64_t pane_id) noexcept {
+      const auto found = session.lines_.find(pane_id);
+
+      return found == session.lines_.end() ? nullptr : &found->second.line;
+    }
+
+    // The editor of pane `pane_id` took text from outside the keyboard, for its view to show it.
+    static void notePromptWrite(Session& session, std::uint64_t pane_id) noexcept {
+      session.prompt_written_ = pane_id;
     }
 
     // ---- the connection with the runtime ----------------------------------------------------

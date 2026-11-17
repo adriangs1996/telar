@@ -3,6 +3,7 @@ telar_add_domain(gui application
     application-configuration.cpp
     application-host_effects.cpp
     application-palette.cpp
+    application-paths.cpp
     application-peek.cpp
     application-session-agents.cpp
     application-session-blocks.cpp
@@ -18,5 +19,5 @@ telar_add_domain(gui application
     application-sound_playback.cpp
     application-workspace_replica.cpp
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
-       foundation/keys foundation/model foundation/agents features/peek features/palette core history layout
-       text prompt links input paths presentation graphics components config)
+       foundation/keys foundation/model foundation/agents features/peek features/palette features/paths core history layout
+       text prompt links input presentation graphics components config)

@@ -9,7 +9,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.gui.paths.label;
+import telar.gui.foundation.system;
 
 namespace {
 

@@ -47,7 +47,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.dialog().kind == Dialog::paths && kind != Dialog::paths) {
-      store_.session().closePathPicker();
+      application::paths::close(store_.session());
     }
 
     keys_.cancelSequence();

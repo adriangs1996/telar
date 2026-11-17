@@ -19,17 +19,16 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.paths.label;
-import telar.gui.presentation.form_field_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
   namespace {
 
-    QString pathRunColor(PathLabelTone tone) {
+    QString pathRunColor(application::paths::PathLabelTone tone) {
       switch (tone) {
-      case PathLabelTone::match:
+      case application::paths::PathLabelTone::match:
         return QStringLiteral("accent");
-      case PathLabelTone::name:
+      case application::paths::PathLabelTone::name:
         return QStringLiteral("text");
       default:
         return QStringLiteral("subtext0");
@@ -37,7 +36,7 @@ namespace telar::gui::qt {
     }
 
     template <typename MapBounds>
-    QVariantList pathRows(const PathPickerPage& page, const PathPickerGeometry& geometry, std::size_t selection, MapBounds local) {
+    QVariantList pathRows(const application::paths::PathPickerPage& page, const application::paths::PathPickerGeometry& geometry, std::size_t selection, MapBounds local) {
       constexpr std::uint16_t label_inset = 3;
       constexpr std::uint16_t icon_inset = 1;
       QVariantList rows;
@@ -51,7 +50,7 @@ namespace telar::gui::qt {
 
         available.x = static_cast<std::uint16_t>(available.x + label_offset);
         available.width = static_cast<std::uint16_t>(available.width - label_offset);
-        PathLabel label;
+        application::paths::PathLabel label;
 
         label.layout(page.path(match), match.highlights(), available.width);
         QVariantList runs;
@@ -67,7 +66,7 @@ namespace telar::gui::qt {
 
           run_bounds.width = columns;
 
-          runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("bounds"), local(run_bounds)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == PathLabelTone::match}});
+          runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("bounds"), local(run_bounds)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == application::paths::PathLabelTone::match}});
           available.x = static_cast<std::uint16_t>(available.x + columns);
           available.width = static_cast<std::uint16_t>(available.width - columns);
         }
@@ -93,7 +92,7 @@ namespace telar::gui::qt {
   }
 
   QVariantList PathPickerController::rows(int columns, int first, int count) const {
-    const auto& page = store_.session().pathPicker();
+    const auto page = application::paths::page(store_.session());
     const auto& matches = page.matches();
     const auto begin = std::min(static_cast<std::size_t>(std::max(0, first)), matches.size());
     const auto end = std::min(matches.size(), begin + static_cast<std::size_t>(std::max(0, count)));
@@ -103,14 +102,14 @@ namespace telar::gui::qt {
     rows.reserve(static_cast<qsizetype>(end - begin));
     for (auto index = begin; index < end; ++index) {
       const auto& match = matches[index];
-      PathLabel label;
+      application::paths::PathLabel label;
 
       label.layout(page.path(match), match.highlights(), width);
       QVariantList runs;
 
       runs.reserve(static_cast<qsizetype>(label.runs().size()));
       for (const auto& run : label.runs()) {
-        runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == PathLabelTone::match}});
+        runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == application::paths::PathLabelTone::match}});
       }
 
       rows.append(QVariantMap{
@@ -125,7 +124,7 @@ namespace telar::gui::qt {
     return rows;
   }
 
-  PathPickerPlacement PathPickerController::placement() const {
+  application::paths::PathPickerPlacement PathPickerController::placement() const {
     // Arranging the layout caches its placements, so the session is read through its mutable side.
     auto& session = store_.session();
     const auto& workbench = session.workbenchGeometry();
@@ -151,20 +150,20 @@ namespace telar::gui::qt {
       }
     }
 
-    return PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(session.pathPicker().matches().size()));
+    return application::paths::PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(application::paths::page(session).matches().size()));
   }
 
   QVariantMap PathPickerController::geometry() const {
     const auto& display = display_;
     const auto density = display.density;
     const auto& workbench = store_.session().workbenchGeometry();
-    const auto& page = store_.session().pathPicker();
+    const auto page = application::paths::page(store_.session());
     const auto placement = this->placement();
-    const auto count_text = PathPickerLabels::count(page);
-    const auto geometry = PathPickerGeometry::measure(placement, page.matches().size(), selection_, {
-                                                                                                        .root = static_cast<std::uint16_t>(cellTextColumns(PathPickerLabels::root(page.root()))),
-                                                                                                        .count = static_cast<std::uint16_t>(cellTextColumns(count_text.view())),
-                                                                                                    });
+    const auto count_text = application::paths::PathPickerLabels::count(page);
+    const auto geometry = application::paths::PathPickerGeometry::measure(placement, page.matches().size(), selection_, {
+                                                                                                                            .root = static_cast<std::uint16_t>(cellTextColumns(application::paths::PathPickerLabels::root(page.root()))),
+                                                                                                                            .count = static_cast<std::uint16_t>(cellTextColumns(count_text.view())),
+                                                                                                                        });
 
     auto bounds = workbench.pixels(placement.area);
 
@@ -180,7 +179,7 @@ namespace telar::gui::qt {
     };
 
     const auto fonts = ChromeFonts::shared();
-    const auto footer = PathPickerFooter::measure(geometry.footer, PathPickerLabels::status(page).view(), platform::usesCommandKey(), [&](std::string_view text) {
+    const auto footer = application::paths::PathPickerFooter::measure(geometry.footer, application::paths::PathPickerLabels::status(page).view(), platform::usesCommandKey(), [&](std::string_view text) {
       const auto advance = fonts->face(false).shape(text, display.chrome.body).advance();
 
       return static_cast<std::uint32_t>(std::ceil(static_cast<double>(std::max(0, advance)) / std::max<std::uint16_t>(1, workbench.grid.cell_width_px)));

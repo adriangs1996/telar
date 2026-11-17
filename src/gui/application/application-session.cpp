@@ -10,7 +10,7 @@ import telar.gui.graphics.texture_cache;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
-import telar.gui.paths.label;
+import telar.gui.features.paths;
 import telar.gui.features.peek;
 import telar.gui.features.palette;
 import telar.config.client;
@@ -205,7 +205,7 @@ namespace telar::gui::application {
     copy_mode_.reset();
     copy_search_request_ = 0;
     history_.suspend();
-    path_picker_.close();
+    features::paths::close(paths_);
     features::peek::close(peek_);
     features::palette::discard(palette_);
     pending_count_ = 0;
@@ -634,10 +634,8 @@ namespace telar::gui::application {
       }
     }
 
-    const auto paths_revision = path_picker_.revision();
-
-    if (path_picker_.fail(message)) {
-      return paths_revision != path_picker_.revision() ? Change::paths : Change::none;
+    if (const auto change = paths::fail(*this, message)) {
+      return *change;
     }
 
     if (history_.owns(message.request_id)) {

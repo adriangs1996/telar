@@ -3,6 +3,7 @@
 export module telar.gui.foundation.system;
 
 export import :awake_clock;
+export import :directory_completion;
 #ifdef __linux__
 export import :background_effect;
 #endif

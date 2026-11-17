@@ -13,7 +13,7 @@ import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
-import telar.gui.paths.label;
+import telar.gui.features.paths;
 import telar.gui.presentation.application_mark;
 import telar.gui.features.palette;
 import telar.config.client;
@@ -884,7 +884,7 @@ namespace telar::gui::application {
     copy_mode_.reset();
     copy_search_request_ = 0;
     history_.suspend();
-    path_picker_.close();
+    features::paths::close(paths_);
     features::palette::discard(palette_);
     graphics_pauses_.reset();
     editor_opening_.reset();
@@ -1482,9 +1482,7 @@ namespace telar::gui::application {
       copy_search_request_ = 0;
     }
 
-    if (path_seed_.pane_id == pane_id) {
-      path_seed_ = {};
-    }
+    features::paths::forget(paths_, pane_id);
 
     const auto owned = [pane_id](const auto& entry) {
       return entry.second.pane_id == pane_id;

@@ -20,7 +20,7 @@ import telar.gui.foundation.model;
 import telar.gui.layout.snapshots;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
-import telar.gui.paths.label;
+import telar.gui.features.paths;
 import telar.gui.features.peek;
 import telar.gui.foundation.system;
 import :client_view_state;
@@ -47,7 +47,6 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
@@ -316,23 +315,6 @@ export {
 
       void copyHistory(std::uint64_t entry_id);
 
-      bool beginPathPicker();
-
-      // The word the line's search for a path started from, which the path chosen replaces.
-      [[nodiscard]] std::string_view pathSeed() const noexcept;
-
-      bool requestPaths(std::string_view query);
-
-      bool descendPath(std::size_t selection);
-
-      bool ascendPath();
-
-      void closePathPicker() noexcept;
-
-      bool insertPath(std::size_t selection, bool absolute);
-
-      [[nodiscard]] const PathPickerPage& pathPicker() const noexcept;
-
       void reportHistoryError(std::string_view message);
 
       void visitHistory(std::uint64_t entry_id);
@@ -536,13 +518,6 @@ export {
 
       template <typename Message>
       void send(const Message& message);
-
-      // At the line's prompt, the search starts from the word before the caret when it is a
-      // plain relative path, as `src/ma` is; anything else starts empty and inserts at the caret.
-      void seedPathPicker(std::uint64_t pane_id);
-
-      // Writes `path` over the word the search started from, while the editor still holds it.
-      bool replacePathSeed(std::uint64_t pane_id, std::string_view path);
 
       enum class RequestKind : std::uint8_t {
         open_default,
@@ -1078,16 +1053,7 @@ export {
       std::uint64_t chrome_revision_ = 0;
       tbc::view<HistoryBrowser<Memory>, tbc::lt::a> history_;
       tbc::view<features::peek::State, tbc::lt::a> peek_;
-      PathPickerPage path_picker_;
-
-      // The relative word before the line's caret when the path search opened over it.
-      struct PathSeed {
-        std::uint64_t pane_id = 0;
-        std::size_t begin = 0;
-        runtime::FixedText<PathPickerLimits::query_bytes> text;
-      };
-
-      PathSeed path_seed_;
+      features::paths::State paths_;
       features::palette::State palette_;
       tbc::view<Vector<Byte, Memory>, tbc::lt::a> decode_;
       tbc::view<String<Memory>, tbc::lt::a> clipboard_;

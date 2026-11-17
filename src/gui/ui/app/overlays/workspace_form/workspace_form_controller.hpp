@@ -13,7 +13,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.paths.label;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 

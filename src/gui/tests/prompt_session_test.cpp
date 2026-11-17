@@ -792,23 +792,23 @@ void lineSearches() {
   require(client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::search_history, "Ctrl-R at the prompt searches the history");
   require(client.promptLine(1)->editor().text().view() == "cat src/ma", "opening the search keeps the line");
 
-  require(client.beginPathPicker(), "the path search opens over the line");
-  require(client.pathSeed() == "src/ma" && transport.last<FindPaths>().query == "src/ma", "the path search starts from the word before the caret");
+  require(application::paths::open(client), "the path search opens over the line");
+  require(application::paths::seed(client) == "src/ma" && transport.last<FindPaths>().query == "src/ma", "the path search starts from the word before the caret");
   auto request = transport.last<FindPaths>();
   std::array matches{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}};
 
   deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
   auto before = transport.sent.size();
 
-  require(client.insertPath(0, false), "a found path inserts");
+  require(application::paths::insert(client, 0, false), "a found path inserts");
   require(transport.inputSince(before).empty() && client.promptLine(1)->editor().text().view() == "cat src/main.cpp", "the path replaces the word in the line");
 
   typeKeys(client, " ~/x");
-  require(client.beginPathPicker() && client.pathSeed().empty() && transport.last<FindPaths>().query.empty(), "a word that is not a plain relative path starts the search empty");
+  require(application::paths::open(client) && application::paths::seed(client).empty() && transport.last<FindPaths>().query.empty(), "a word that is not a plain relative path starts the search empty");
   request = transport.last<FindPaths>();
   matches[0] = PathMatch{.path = "a.txt", .kind = PathKind::file};
   deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
-  require(client.insertPath(0, false) && client.promptLine(1)->editor().text().view() == "cat src/main.cpp ~/xa.txt", "without a word the path goes in at the caret");
+  require(application::paths::insert(client, 0, false) && client.promptLine(1)->editor().text().view() == "cat src/main.cpp ~/xa.txt", "without a word the path goes in at the caret");
 
   deliver(client, running(1));
   typeKeys(client, "x");

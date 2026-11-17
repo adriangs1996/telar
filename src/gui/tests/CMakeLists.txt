@@ -143,10 +143,10 @@ telar_add_test(gui-runtime-link-test SOURCES runtime_link_test.cpp LIBRARIES gui
 telar_add_test(gui-runtime-handshake-test SOURCES runtime_handshake_test.cpp LIBRARIES gui-machines gui-transport
   TEST gui-runtime-handshake LABELS gui.transport)
 
-telar_add_test(gui-path-picker-session-test SOURCES path_picker_session_test.cpp LIBRARIES gui-paths gui-application gui-test-fixtures
+telar_add_test(gui-path-picker-session-test SOURCES path_picker_session_test.cpp LIBRARIES gui-features-paths gui-application gui-test-fixtures
   TEST gui-path-picker-session LABELS gui.paths)
 
-telar_add_test(gui-path-picker-test SOURCES path_picker_test.cpp LIBRARIES gui-foundation-core gui-core gui-paths gui-presentation deps::ghostty_vt
+telar_add_test(gui-path-picker-test SOURCES path_picker_test.cpp LIBRARIES gui-foundation-core gui-core gui-features-paths gui-presentation deps::ghostty_vt
   TEST gui-path-picker LABELS gui.paths)
 
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-core gui-features-palette gui-input gui-presentation deps::ghostty_vt
@@ -199,7 +199,7 @@ telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-f
   TEST gui-key-encoder LABELS gui.input TIMEOUT 30)
 telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-input gui-test-fixtures
   TEST gui-copy-mode LABELS gui.input TIMEOUT 30)
-telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-paths
+telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
   TEST gui-directory-completion LABELS gui.paths TIMEOUT 30)
 telar_add_test(gui-links-test SOURCES links_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-links gui-test-fixtures
   TEST gui-links LABELS gui.links TIMEOUT 30)
