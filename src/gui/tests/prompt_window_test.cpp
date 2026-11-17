@@ -278,7 +278,7 @@ namespace {
       file.write("return {api_version=2,client={prompt={mode='telar'}}}");
       file.close();
       application.loadConfiguration(config, {}, {});
-      QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+      QVERIFY2(application.status()->error().isEmpty(), qPrintable(application.status()->error()));
 
       QLocalServer listener;
 
@@ -296,7 +296,7 @@ namespace {
       WireRuntime runtime{*socket};
 
       QVERIFY(waitForGuiCondition([&] {
-        return application.connected();
+        return application.status()->connected();
       },
           wait_ms));
       runtime.send(ClientLayoutSnapshot{});
@@ -504,7 +504,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       WireRuntime runtime{*socket};
 
       QVERIFY(waitForGuiCondition([&] {
-        return application.connected();
+        return application.status()->connected();
       },
           wait_ms));
       runtime.send(ClientLayoutSnapshot{});
@@ -548,7 +548,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       file.write("return {api_version=2,client={prompt={mode='telar'}}}");
       file.close();
       application.loadConfiguration(config, {}, {});
-      QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+      QVERIFY2(application.status()->error().isEmpty(), qPrintable(application.status()->error()));
 
       QLocalServer listener;
 
@@ -566,7 +566,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       WireRuntime runtime{*socket};
 
       QVERIFY(waitForGuiCondition([&] {
-        return application.connected();
+        return application.status()->connected();
       },
           wait_ms));
       runtime.send(ClientLayoutSnapshot{});
@@ -739,7 +739,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       file.write("return {api_version=2,client={prompt={mode='telar',keymap='vim'}}}");
       file.close();
       application.loadConfiguration(config, {}, {});
-      QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+      QVERIFY2(application.status()->error().isEmpty(), qPrintable(application.status()->error()));
 
       QLocalServer listener;
 
@@ -757,7 +757,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       WireRuntime runtime{*socket};
 
       QVERIFY(waitForGuiCondition([&] {
-        return application.connected();
+        return application.status()->connected();
       },
           wait_ms));
       runtime.send(ClientLayoutSnapshot{});

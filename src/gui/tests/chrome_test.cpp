@@ -329,7 +329,7 @@ namespace {
       ApplicationController application{memory};
 
       application.loadConfiguration(configuration.fileName(), {}, {});
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
       QQmlEngine engine;
       const QVariantMap properties{
           {QStringLiteral("controller"), QVariant::fromValue(application.attachments())},

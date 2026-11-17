@@ -138,6 +138,7 @@ namespace telar::gui::qt {
   ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         memory_(memory),
+        hostname_(platform::hostName()),
         history_(store_),
         configuration_source_(memory),
         display_(store_, configuration_source_),
@@ -168,7 +169,7 @@ namespace telar::gui::qt {
         workspace_form_(store_),
         key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
-        hostname_(platform::hostName()) {
+        status_(store_, copy_, key_bindings_, hostname_) {
     composeWindowAnimation();
     initializeMachines();
     initializeMachineProfiles();
@@ -182,7 +183,6 @@ namespace telar::gui::qt {
     palette_.setCommands(commands());
 
     connect(this, &ApplicationController::configurationChanged, &display_, &WindowDisplay::publish);
-    connect(&copy_, &CopyController::activeChanged, this, &ApplicationController::statusModeChanged);
     connect(&copy_, &CopyController::paneChanged, &terminals_, &TerminalController::terminalChanged);
     connect(&copy_, &CopyController::inputStarted, this, [this] {
       key_bindings_.cancelSequence();
@@ -196,13 +196,13 @@ namespace telar::gui::qt {
     connect(&copy_, &CopyController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&copy_, &CopyController::failed, this, &ApplicationController::reportFailure);
-    connect(&key_bindings_, &KeyBindings::failed, this, &ApplicationController::reportFailure);
-    connect(&pointer_dispatcher_, &PointerDispatcher::failed, this, &ApplicationController::reportFailure);
+    connect(&copy_, &CopyController::failed, &status_, &WindowStatus::report);
+    connect(&key_bindings_, &KeyBindings::failed, &status_, &WindowStatus::report);
+    connect(&pointer_dispatcher_, &PointerDispatcher::failed, &status_, &WindowStatus::report);
     // The search reads the command the dialog's line was opened on.
     connect(this, &ApplicationController::dialogChanged, &copy_, &CopyController::publishSearch);
     // The prefix mode lists the keymap's hints.
-    connect(this, &ApplicationController::configurationChanged, this, &ApplicationController::statusModeChanged);
+    connect(this, &ApplicationController::configurationChanged, &status_, &WindowStatus::modeChanged);
     connect(this, &ApplicationController::configurationChanged, this, [this] {
       palette_.setCommands(commands());
     });
@@ -211,23 +211,22 @@ namespace telar::gui::qt {
     connect(&store_, &Store::interacting, this, [this] {
       pending_activity_.reset();
     });
-    connect(this, &ApplicationController::prefixChanged, this, &ApplicationController::statusModeChanged);
     // After the workbench geometry, which the dialogs measured from the display are placed in.
     connect(&display_, &WindowDisplay::changed, this, &ApplicationController::measureDisplay);
     connect(&display_, &WindowDisplay::changed, this, [this] {
       history_.setMetrics(display_.historyMetrics());
     });
     connect(&history_, &HistoryController::submitted, this, [this] {
-      error_.clear();
+      status_.clear();
     });
     connect(&history_, &HistoryController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&history_, &HistoryController::failed, this, &ApplicationController::reportFailure);
+    connect(&history_, &HistoryController::failed, &status_, &WindowStatus::report);
     connect(&paths_, &PathPickerController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&paths_, &PathPickerController::failed, this, &ApplicationController::reportFailure);
+    connect(&paths_, &PathPickerController::failed, &status_, &WindowStatus::report);
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
@@ -243,8 +242,8 @@ namespace telar::gui::qt {
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       showDialog(Dialog::none);
     });
-    connect(&peek_, &PeekController::failed, this, &ApplicationController::reportFailure);
-    connect(&panes_, &PanesController::failed, this, &ApplicationController::reportFailure);
+    connect(&peek_, &PeekController::failed, &status_, &WindowStatus::report);
+    connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
     connect(this, &ApplicationController::machineChanged, &link_status_, &LinkStatusController::publish);
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
@@ -256,7 +255,7 @@ namespace telar::gui::qt {
       emit terminals_.terminalChanged(pane_id);
       requestTerminalFrame();
     });
-    connect(this, &ApplicationController::machineChanged, this, &ApplicationController::hostMetricsChanged);
+    connect(this, &ApplicationController::machineChanged, &status_, &WindowStatus::publishMetrics);
     connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
 
     const platform::login_shell::Command shell;
@@ -276,7 +275,7 @@ namespace telar::gui::qt {
     initializePrompt();
 
     connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
-      error_.clear();
+      status_.clear();
       key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
       configureClients();
       display_.measureFont();
@@ -291,8 +290,7 @@ namespace telar::gui::qt {
     });
 
     connect(&configuration_source_, &ConfigurationSource::failed, this, [this] {
-      error_ = configuration_source_.error();
-      publishStatus();
+      status_.report(configuration_source_.error());
     });
 
     connect(&configuration_source_, &ConfigurationSource::themeChanged, this, [this] {
@@ -342,7 +340,7 @@ namespace telar::gui::qt {
     }
 
     scheduleGraphicsRecovery();
-    emit hostMetricsChanged();
+    status_.publishMetrics();
     refresh_timer_.start();
   }
 
@@ -465,7 +463,7 @@ namespace telar::gui::qt {
       display_.publish();
       refreshPanes();
     } catch (const std::exception& error) {
-      fail(error);
+      status_.fail(error);
     }
   }
 
@@ -713,7 +711,7 @@ namespace telar::gui::qt {
         session().presented(identity.pane_id, identity.frame_id);
       }
     } catch (const std::exception& error) {
-      fail(error);
+      status_.fail(error);
     }
   }
 
@@ -772,7 +770,7 @@ namespace telar::gui::qt {
       presentChange(change);
     } catch (const std::exception& error) {
       if (client.key.machine.slot == store_.machines().active()) {
-        fail(error);
+        status_.fail(error);
         store_.touch();
       } else {
         client.connection.recover(error.what());
@@ -807,7 +805,7 @@ namespace telar::gui::qt {
       break;
     case Change::peek:
       peek_.synchronize();
-      publishStatus();
+      status_.publish();
       break;
     case Change::document:
       documents_.publish(session().changedPane());
@@ -817,7 +815,7 @@ namespace telar::gui::qt {
       break;
     case Change::copy_mode:
       copy_.publishSearch();
-      publishStatus();
+      status_.publish();
       if (const auto& copy = session().copyMode().state()) {
         emit terminals_.terminalChanged(copy->pane_id);
       }
@@ -832,7 +830,7 @@ namespace telar::gui::qt {
     case Change::notification:
       break;
     case Change::metrics:
-      emit hostMetricsChanged();
+      status_.publishMetrics();
       break;
     case Change::model:
       if (!refresh_timer_.isActive()) {
@@ -976,7 +974,7 @@ namespace telar::gui::qt {
     }
 
     scheduleGraphicsRecovery();
-    publishStatus();
+    status_.publish();
     attachments_.publishGeometry();
     notifications_.publishView();
     emit terminals_.refreshed();
@@ -1057,7 +1055,7 @@ namespace telar::gui::qt {
     if (store_.dialog().kind == Dialog::history) {
       history_.fail(error);
     } else {
-      fail(error);
+      status_.fail(error);
     }
   }
 
@@ -1151,7 +1149,7 @@ namespace telar::gui::qt {
         emit terminals_.terminalChanged(session().changedPane());
       } else if (store_.dialog().kind == Dialog::none) {
         static_cast<void>(session().enterCopyMode());
-        publishStatus();
+        status_.publish();
         if (const auto& copy = session().copyMode().state()) {
           emit terminals_.terminalChanged(copy->pane_id);
         }
@@ -1173,7 +1171,7 @@ namespace telar::gui::qt {
 
       session().leaveCopyMode();
       emit terminals_.terminalChanged(pane_id);
-      publishStatus();
+      status_.publish();
     }
 
     showDialog(Dialog::none);
@@ -1237,11 +1235,6 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::reportFailure(const QString& message) {
-    error_ = message;
-    publishStatus();
-  }
-
   AttachmentsController* ApplicationController::attachments() noexcept {
     return &attachments_;
   }
@@ -1263,7 +1256,7 @@ namespace telar::gui::qt {
         restoreTerminalFocus();
       }
     });
-    connect(&attachments_, &AttachmentsController::failed, this, &ApplicationController::reportFailure);
+    connect(&attachments_, &AttachmentsController::failed, &status_, &WindowStatus::report);
   }
 
   void ApplicationController::showPathPicker() {
@@ -1271,11 +1264,6 @@ namespace telar::gui::qt {
       showDialog(Dialog::paths);
       paths_.refresh();
     }
-  }
-
-  void ApplicationController::fail(const std::exception& error) {
-    error_ = QString::fromUtf8(error.what());
-    publishStatus();
   }
 
   void ApplicationController::publishConfiguration() {
@@ -1319,32 +1307,6 @@ namespace telar::gui::qt {
     return store_.dialog().line_search_pane == 0 ? QString{} : QString::number(store_.dialog().line_search_pane);
   }
 
-  bool ApplicationController::connected() const {
-    return connection().ready();
-  }
-
-  QString ApplicationController::title() const {
-    const auto title = session().windowTitle({hostname_.constData(), static_cast<std::size_t>(hostname_.size())});
-
-    return toQString(title.view());
-  }
-
-  bool ApplicationController::prefixPending() const noexcept {
-    return key_bindings_.prefixPending();
-  }
-
-  QVariantMap ApplicationController::statusMode() const {
-    if (prefixPending()) {
-      return statusModeRecord(StatusMode::prefix, key_bindings_.modeHints());
-    }
-
-    return statusModeRecord(copy_.active() ? StatusMode::copy : StatusMode::normal);
-  }
-
-  QVariantMap ApplicationController::hostMetrics() const {
-    return metricsRecord(session().hostMetrics());
-  }
-
   QVariantMap ApplicationController::machineContext() const {
     return {
         {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
@@ -1352,52 +1314,4 @@ namespace telar::gui::qt {
     };
   }
 
-  QString ApplicationController::tlsBadgeColor() const {
-    const auto& proxy = session().proxyStatus();
-    if (!proxy.active && !proxy.system_trusted) {
-      return {};
-    }
-
-    if (!proxy.active) {
-      return QStringLiteral("yellow");
-    }
-
-    return proxy.scope == ProxyScope::wildcard ? QStringLiteral("red") : QStringLiteral("peach");
-  }
-
-  void ApplicationController::dismissDiagnostic() {
-    error_.clear();
-    session().dismissDiagnostic();
-    connection().dismissError();
-    publishStatus();
-  }
-
-  void ApplicationController::publishStatus() {
-    auto& published = published_status_;
-    auto title = this->title();
-    if (title != published.title) {
-      published.title = std::move(title);
-      emit titleChanged();
-    }
-
-    auto error = this->error();
-    auto tls_badge_color = tlsBadgeColor();
-    const auto connected = this->connected();
-    if (error != published.error || tls_badge_color != published.tls_badge_color || connected != published.connected) {
-      published.error = std::move(error);
-      published.tls_badge_color = std::move(tls_badge_color);
-      published.connected = connected;
-      emit diagnosticChanged();
-    }
-
-    copy_.publish();
-  }
-
-  QString ApplicationController::error() const {
-    if (!error_.isEmpty()) {
-      return error_;
-    }
-
-    return toQString(session().error());
-  }
 }

@@ -59,6 +59,7 @@ static_assert(true);
 #include "ui/foundation/store/store.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include "window_display.hpp"
+#include "window_status.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFutureWatcher>
@@ -152,6 +153,7 @@ namespace telar::gui::qt {
     QML_UNCREATABLE("Use the running GUI controller")
     Q_PROPERTY(telar::gui::qt::AttachmentsController* attachments READ attachments CONSTANT)
     Q_PROPERTY(telar::gui::qt::WindowDisplay* display READ display CONSTANT)
+    Q_PROPERTY(telar::gui::qt::WindowStatus* status READ status CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -163,17 +165,10 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap colors READ colors NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap font READ font NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap machineContext READ machineContext NOTIFY machinesChanged)
-    Q_PROPERTY(QString title READ title NOTIFY titleChanged)
-    Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
-    Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
     Q_PROPERTY(telar::gui::qt::ComponentsController* components READ components CONSTANT)
-    Q_PROPERTY(QString error READ error NOTIFY diagnosticChanged)
-    Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY diagnosticChanged)
-    Q_PROPERTY(bool connected READ connected NOTIFY diagnosticChanged)
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
-    Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
     Q_PROPERTY(telar::gui::qt::Store::Dialog dialog READ dialog NOTIFY dialogChanged)
     // The history or path search the focused pane's prompt line hosts in place of the dialog.
     Q_PROPERTY(telar::gui::qt::Store::Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
@@ -232,6 +227,10 @@ namespace telar::gui::qt {
 
     WindowDisplay* display() noexcept {
       return &display_;
+    }
+
+    WindowStatus* status() noexcept {
+      return &status_;
     }
 
     TabsController* tabs() noexcept {
@@ -310,28 +309,14 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap font() const;
     [[nodiscard]] QVariantList commands() const;
     [[nodiscard]] QVariantMap machineContext() const;
-    [[nodiscard]] QString title() const;
-    [[nodiscard]] QVariantMap statusMode() const;
-    [[nodiscard]] QVariantMap hostMetrics() const;
     // A click on a mod element: runs its action, URL or Lua function.
     Q_INVOKABLE void activateElement(const QString& slot, const QString& key, const QString& revision, int element);
-    [[nodiscard]] bool prefixPending() const noexcept;
-    [[nodiscard]] QString error() const;
-    [[nodiscard]] QString tlsBadgeColor() const;
-    Q_INVOKABLE void dismissDiagnostic();
-    [[nodiscard]] bool connected() const;
     [[nodiscard]] Dialog dialog() const noexcept;
     [[nodiscard]] Dialog lineSearch() const noexcept;
     [[nodiscard]] QString lineSearchPane() const;
 
   signals:
-    void prefixChanged();
-    void titleChanged();
-    // The error, the TLS proxy badge or whether the runtime is connected moved.
-    void diagnosticChanged();
     // The attachment shelf's region or the attachment modal's layout moved.
-    void statusModeChanged();
-    void hostMetricsChanged();
     // A configuration was loaded or the theme changed: fonts, colors, keymap and mods.
     void configurationChanged();
     void dialogChanged();
@@ -410,8 +395,6 @@ namespace telar::gui::qt {
     void showPalette(PaletteMode mode);
     // Pushes the display the controllers measure what they draw in.
     void measureDisplay();
-    // A controller's interaction failed outside a dialog that shows it.
-    void reportFailure(const QString& message);
     void showPathPicker();
 
     struct PresentedPane {
@@ -469,9 +452,6 @@ namespace telar::gui::qt {
     void refresh();
     // Drops the theme and font QML reads and notifies a new configuration.
     void publishConfiguration();
-    // Notifies the title, diagnostic and copy mode properties whose value moved since they were
-    // last published.
-    void publishStatus();
     void selectActivity(const QString& identity, bool peek = false);
     void settleActivity();
     void openActivityPeek(const MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
@@ -479,7 +459,6 @@ namespace telar::gui::qt {
     void initializeAttachments();
     void refreshPanes();
     void showDialog(Dialog kind);
-    void fail(const std::exception& error);
     void present(const PresentedFrame& frame);
     void prepareFrame(PresentedFrame& frame);
     void prepareTerminalFrames(PresentedFrame& frame);
@@ -521,6 +500,7 @@ namespace telar::gui::qt {
     void synchronize();
 
     ApplicationAllocator& memory_;
+    QByteArray hostname_;
     Store store_;
     tbc::view<HistoryController, tbc::lt::self> history_;
 
@@ -580,23 +560,14 @@ namespace telar::gui::qt {
     // The routers come after every recipient they hold, so they never outlive one.
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
+    // After the copy mode and the keys, whose mode it reports.
+    tbc::view<WindowStatus, tbc::lt::self> status_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
-    QString error_;
 
-    // What the status properties last published, so publishStatus() notifies only what moved.
-    struct PublishedStatus {
-      QString title;
-      QString error;
-      QString tls_badge_color;
-      bool connected = false;
-    };
-
-    PublishedStatus published_status_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     QMetaObject::Connection screen_refresh_connection_;
-    QByteArray hostname_;
   };
 
 }

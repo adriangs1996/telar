@@ -173,7 +173,7 @@ namespace {
         const auto& source = MachineProfileWindow::profiles(application);
         const auto settled = expected == ProfileLoad::loaded ? source.loaded() : !source.error().isEmpty();
 
-        return settled && application.connected();
+        return settled && application.status()->connected();
       },
           wait_ms);
     }
@@ -305,7 +305,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, wait_ms);
       QVERIFY(MachineProfileWindow::client(application, slot)->named_launch);
       QCOMPARE(fixture.runtime->count(ClientTag::open_pane), std::size_t{0});
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
     }
 
     Q_SLOT static void requestedMachineLabelUsesItsSavedDestination() {

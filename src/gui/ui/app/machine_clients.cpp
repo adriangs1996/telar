@@ -183,8 +183,8 @@ namespace telar::gui::qt {
         source->session.connected(source->identity, RuntimeProtocol::readsRows(source->connection.schema()));
         summarizeMachine(source->key);
         if (key.machine.slot == store_.machines().active()) {
-          publishStatus();
-          emit hostMetricsChanged();
+          status_.publish();
+          status_.publishMetrics();
         }
       }
     });
@@ -232,7 +232,7 @@ namespace telar::gui::qt {
 
     connect(&client.connection, &RuntimeConnection::errorChanged, this, [this, key] {
       if (findClient(key) != nullptr && key.machine.slot == store_.machines().active()) {
-        publishStatus();
+        status_.publish();
       }
     });
   }
@@ -279,7 +279,7 @@ namespace telar::gui::qt {
     tabs_.forget();
     workspaces_.forget();
     activity_.forget();
-    error_.clear();
+    status_.clear();
     frame_pacer_.reset();
     if (window_) {
       frame_pacer_.emplace(*window_);

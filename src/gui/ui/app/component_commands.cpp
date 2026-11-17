@@ -22,7 +22,7 @@ namespace telar::gui::qt {
       }
     });
 
-    connect(&components_, &ComponentsController::failed, this, &ApplicationController::reportFailure);
+    connect(&components_, &ComponentsController::failed, &status_, &WindowStatus::report);
     connect(&components_, &ComponentsController::bindingRequested, this, [this](const BindingAction& action, const ConfigurationSource::Actions& actions, QPointF anchor) {
       try {
         const auto previous = std::exchange(component_action_anchor_, anchor);
@@ -32,7 +32,7 @@ namespace telar::gui::qt {
 
         static_cast<void>(runBinding(action, &actions));
       } catch (const std::exception& error) {
-        fail(error);
+        status_.fail(error);
       }
     });
 

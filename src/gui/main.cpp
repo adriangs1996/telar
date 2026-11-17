@@ -185,8 +185,8 @@ namespace {
         return;
       }
 
-      std::cout << "connected=" << client.connected() << " panes=" << client.panes()->rows()->rowCount() << " graphics_api=" << static_cast<int>(window.rendererInterface()->graphicsApi()) << " background_opacity=" << client.configuration().background_opacity << " clear_alpha=" << window.color().alphaF() << " alpha_buffer_bits=" << window.format().alphaBufferSize() << " error=" << client.error().toStdString() << '\n';
-      const auto healthy = client.connected() && client.panes()->rows()->rowCount() > 0 && client.error().isEmpty();
+      std::cout << "connected=" << client.status()->connected() << " panes=" << client.panes()->rows()->rowCount() << " graphics_api=" << static_cast<int>(window.rendererInterface()->graphicsApi()) << " background_opacity=" << client.configuration().background_opacity << " clear_alpha=" << window.color().alphaF() << " alpha_buffer_bits=" << window.format().alphaBufferSize() << " error=" << client.status()->error().toStdString() << '\n';
+      const auto healthy = client.status()->connected() && client.panes()->rows()->rowCount() > 0 && client.status()->error().isEmpty();
 
       QGuiApplication::exit(healthy ? EXIT_SUCCESS : EXIT_FAILURE);
     });

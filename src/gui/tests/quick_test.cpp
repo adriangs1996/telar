@@ -691,7 +691,7 @@ return {api_version = 2, client = {
       const auto image = window_->grabWindow();
 
       QVERIFY(!image.isNull());
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     // A program in a pane hands the window a document: it covers the pane while the program
@@ -753,7 +753,7 @@ return {api_version = 2, client = {
       QCoreApplication::sendEvent(terminal, &quit);
       QTRY_VERIFY_WITH_TIMEOUT(!firstPane()->document_shown, runtime_wait_ms);
       QTRY_VERIFY(!view->isVisible());
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     // A program prints a document's text between the sequences that begin and end it: the window
@@ -818,7 +818,7 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(firstPane()->inline_documents.empty() && terminal->property("documents").toList().isEmpty(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("SCREEN_CLEARED")), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(terminal->property("cursorRow").toInt(), static_cast<int>(firstPane()->screen.cursor().y), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void keyRestoresCursorBlinkPhase() {
@@ -1003,7 +1003,7 @@ return {api_version = 2, client = {
       client_->execute(window_actions::Action::rename_tab);
       client_->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), original_label, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void workspaceFormCompletesFoldersAndCreatesMissingOnes() {
@@ -1105,7 +1105,7 @@ return {api_version = 2, client = {
       client_->execute(window_actions::Action::close_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rows()->rowCount(), workspaces, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void qmlActionBindings() {
@@ -1258,7 +1258,7 @@ return {api_version = 2, client = {
       committed.setCommitString(QStringLiteral("q"));
       QCoreApplication::sendEvent(terminal, &committed);
       QVERIFY(!client_->copy()->active());
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void detectedLinkHoverAndCopy() {
@@ -1326,7 +1326,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://destination.test"));
       QTest::mouseMove(window_, cellCenter(*terminal, {.y = *blank_row}));
       QTRY_COMPARE(terminal->hoveredLink(), QString{});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void wheelReportingAndCopyOwnership() {
@@ -1380,7 +1380,7 @@ return {api_version = 2, client = {
 
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(pane->screen).remove(QLatin1Char('\n')).contains(expected_hex), qPrintable(QStringLiteral("Expected %1, columns %2, screen:\n%3").arg(expected_hex).arg(pane->screen.columns()).arg(screenText(pane->screen))), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!pane->screen.mouse().sgr, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
       restore.dismiss();
     }
@@ -1612,7 +1612,7 @@ return {api_version = 2, client = {
       QTest::keyRelease(window_, Qt::Key_Q);
       QTest::qWait(frame_settle_ms);
       QCOMPARE(screenText(pane->screen), before_repeat);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
 #ifdef TELAR_GUI_CUSTOM_LINK_HOST
@@ -1663,7 +1663,7 @@ return {api_version = 2, client = {
       QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
       QTest::mouseClick(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier | Qt::ShiftModifier, position);
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://pointer.test/x"), QStringLiteral("https://pointer.test/x")}), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void pointerLinkRevalidation() {
@@ -1705,7 +1705,7 @@ return {api_version = 2, client = {
       QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
       QTest::mouseClick(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://original.test")}), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void textualAndRoutedLinks() {
@@ -1747,7 +1747,7 @@ return {api_version = 2, client = {
       const auto clicked = terminal->mapToScene({cell.width() / 2, cell.height() / 2}).toPoint();
       QTest::mouseClick(window_, Qt::LeftButton, Qt::ControlModifier, clicked);
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{toQString(copy_uri), toQString(routed_uri), QStringLiteral("https://osc8.test")}), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredComponentUrlsAndActions() {
@@ -1777,7 +1777,7 @@ return {api_version = 2, client = {
     )";
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto click = [this](const QString& kind, const QString& caption) {
         if (!test::waitForSynchronizedFrame(*window_, runtime_wait_ms)) {
           return false;
@@ -1805,7 +1805,7 @@ return {api_version = 2, client = {
       const QStringList all_targets{QStringLiteral("https://bar-only.test"), QStringLiteral("https://panel-only.test")};
       QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), all_targets, runtime_wait_ms);
       QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
 #endif
@@ -1906,12 +1906,12 @@ return {api_version = 2, client = {
       peer.request(telar::ClientAction::client_open_link, 3, {missing_uri.constData(), static_cast<std::size_t>(missing_uri.size())});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
       QVERIFY2(peer.result().status == telar::ClientCommandStatus::admitted, qPrintable(peer.result().text));
-      QTRY_VERIFY2_WITH_TIMEOUT(!feedback.empty(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!feedback.empty(), qPrintable(client_->status()->error()), runtime_wait_ms);
       QVERIFY(!client_->notifications()->center().items().empty());
       QCOMPARE(client_->notifications()->center().items().front().title.view(), std::string_view{"Could not open link"});
       QCOMPARE(client_->notifications()->center().items().front().message.view(), std::string_view{"FileNotFound"});
       dismissNotification();
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->loadConfiguration({}, {}, {});
       closeTemporaryTab({.count = original_tabs, .pane_id = original_id});
       restore.dismiss();
@@ -1956,7 +1956,7 @@ return {api_version = 2, client = {
 
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).remove(QLatin1Char('\n')).contains(expected_hex), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane->screen.modes().kitty_keyboard_flags, telar::Byte{0}, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
       restore.dismiss();
     }
@@ -2141,7 +2141,7 @@ return {api_version = 2, client = {
       });
 
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       const auto commands = client_->commands();
 
       QVERIFY(std::ranges::any_of(commands, [](const auto& entry) {
@@ -2167,7 +2167,7 @@ return {api_version = 2, client = {
       const QSignalSpy focus_events{window_, &QQuickWindow::activeFocusItemChanged};
 
       QTest::keyClick(window_, Qt::Key_A, control);
-      QVERIFY(client_->prefixPending());
+      QVERIFY(client_->status()->prefixPending());
       const auto* mode_bar = window_->findChild<NativeModeLayout*>();
 
       QVERIFY(mode_bar != nullptr);
@@ -2176,11 +2176,11 @@ return {api_version = 2, client = {
       constexpr int prefix_wait_ms = 1100;
 
       QTest::qWait(prefix_wait_ms);
-      QVERIFY(client_->prefixPending());
+      QVERIFY(client_->status()->prefixPending());
       QTest::keyPress(window_, Qt::Key_S);
-      QVERIFY(!client_->prefixPending());
+      QVERIFY(!client_->status()->prefixPending());
       settleLua();
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QVERIFY2(client_->display()->sidebarVisible() == !visible, qPrintable(QStringLiteral("Configuration reloads: %1; focus changes: %2; dialog: %3; copy mode: %4").arg(configuration_events.count()).arg(focus_events.count()).arg(static_cast<int>(client_->dialog())).arg(static_cast<int>(client_->copy()->active()))));
       QKeyEvent repeated{QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), true};
 
@@ -2188,20 +2188,20 @@ return {api_version = 2, client = {
       QCOMPARE(client_->display()->sidebarVisible(), !visible);
       QTest::keyRelease(window_, Qt::Key_S);
       QTest::keyClick(window_, Qt::Key_A, control);
-      QVERIFY(client_->prefixPending());
+      QVERIFY(client_->status()->prefixPending());
       QTest::keyClick(window_, Qt::Key_S);
-      QVERIFY(!client_->prefixPending());
+      QVERIFY(!client_->status()->prefixPending());
       settleLua();
       QCOMPARE(client_->display()->sidebarVisible(), visible);
 
       QTest::keyClick(window_, Qt::Key_A, control);
-      QVERIFY(client_->prefixPending());
+      QVERIFY(client_->status()->prefixPending());
       QTest::keyClick(window_, Qt::Key_Escape);
-      QVERIFY(!client_->prefixPending());
+      QVERIFY(!client_->status()->prefixPending());
       QTest::keyClick(window_, Qt::Key_A, control);
-      QVERIFY(client_->prefixPending());
+      QVERIFY(client_->status()->prefixPending());
       client_->execute(window_actions::Action::palette);
-      QVERIFY(!client_->prefixPending());
+      QVERIFY(!client_->status()->prefixPending());
       client_->execute(window_actions::Action::cancel);
       terminal->forceActiveFocus();
 
@@ -2231,7 +2231,7 @@ return {api_version = 2, client = {
       const auto after_consume = screenText(pane->screen);
 
       QVERIFY2(after_consume == before_consume, qPrintable(QStringLiteral("Before consume:\n%1\nAfter consume:\n%2\n%3").arg(before_consume, after_consume, windowObservation(*window_))));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void bindingReloadOwnership() {
@@ -2266,7 +2266,7 @@ return {api_version = 2, client = {
       QCOMPARE(client_->display()->workspaceListCollapsed(), !collapsed);
       QTest::keyClick(window_, Qt::Key_S);
       QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void paneSurfacesShareTheChromeStyle() {
@@ -2337,7 +2337,7 @@ return {api_version = 2, client = {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       }
 
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void paneTransitionsResizeTheTerminalOnlyOnce() {
@@ -2379,7 +2379,7 @@ return {api_version = 2, client = {
       QVERIFY(terminal != nullptr);
       QCOMPARE(widths.size(), 2);
       QVERIFY(heights.size() <= 2);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void splitCloseAndTabs() {
@@ -2438,14 +2438,14 @@ return {api_version=2, client={keybindings={
       });
 
       client_->loadConfiguration(configuration_path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       // alt+h runs a Lua callback, whose result reaches the event loop after the Lua thread
       // returns; alt+l waits behind it.
       QTest::keyClick(window_, Qt::Key_H, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_L, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->execute(window_actions::Action::close_pane, split_id);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
 
@@ -2457,7 +2457,7 @@ return {api_version=2, client={keybindings={
 
       client_->execute(window_actions::Action::select_tab, first_tab);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     // One change of the dialog that moves the line search to another pane and another kind
@@ -2517,7 +2517,7 @@ return {api_version=2, client={keybindings={
       client_->execute(window_actions::Action::close_pane, second);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void kittyGraphicsRendering() {
@@ -2585,7 +2585,7 @@ return {api_version=2, client={keybindings={
       QVERIFY2(expected_pixel, qPrintable(diagnostic));
       client_->terminals()->input(pane->id, "printf '\\033_Ga=d,d=I,i=37,q=2;\\033\\\\'\r");
       QTRY_VERIFY_WITH_TIMEOUT(pane->graphics.placements().empty(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void paletteModesKeepQueriesAndRejectStaleChoices() {
@@ -2618,7 +2618,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
       client_->execute(window_actions::Action::cancel);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void suggestionPaletteKeepsUnavailableRequestsEditable() {
@@ -2653,7 +2653,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(search->text(), QStringLiteral("?new task"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT(suggestion().value(QStringLiteral("failed")).toBool(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void suggestionBackRestoresItsActionQueryAndEditorSelection() {
@@ -2688,7 +2688,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(search->selectionStart(), cursor);
       QCOMPARE(search->selectionEnd(), anchor);
       QVERIFY(!client_->palette()->suggestion().value(QStringLiteral("hasParent")).toBool());
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void paletteNavigationChoosesAnExistingTab() {
@@ -2726,7 +2726,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs, runtime_wait_ms);
       client_->execute(window_actions::Action::select_tab, QString::number(original_tab));
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void pathPickerBrowsesAndInsertsWithoutExecuting() {
@@ -2788,7 +2788,7 @@ return {api_version=2, client={keybindings={
       client_->terminals()->input(pane_id, "\x15");
       change_directory(original);
       QTRY_COMPARE_WITH_TIMEOUT(toQString(firstPane()->cwd), original, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void pathPickerQueryLimitPreservesCompleteUtf8() {
@@ -2854,7 +2854,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->dropSurface(client_->display()->chromeRatio()).count > 0, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* label = componentItem(QStringLiteral("label"), QStringLiteral("Configured action"));
@@ -2921,7 +2921,7 @@ return {api_version=2, client={keybindings={
           runtime_wait_ms));
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QCOMPARE(layout->property("dropMarker").toRectF(), QRectF{});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void tabDragEscapeRetiresHeldRelease() {
@@ -2983,7 +2983,7 @@ return {api_version=2, client={keybindings={
         return tabKeys() != before;
       },
           runtime_wait_ms));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void tabDragRetiresWhenTheCapturedSourceCloses() {
@@ -3020,7 +3020,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(layout->property("dropMarker").toRectF(), QRectF{});
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
       QCOMPARE(tabKeys(), expected);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void tabDragCancelsWhenViewportChanges() {
@@ -3107,7 +3107,7 @@ return {api_version=2, client={keybindings={
         return tabKeys() == expected;
       },
           runtime_wait_ms));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
@@ -3173,7 +3173,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(tab_keys(), original_order, runtime_wait_ms);
       QCOMPARE(client_->tabs()->rows()->rowCount(), original_count + 1);
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->execute(window_actions::Action::close_tab, QString::number(destination_tab));
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_count, runtime_wait_ms);
       client_->execute(window_actions::Action::select_tab, QString::number(original_tab));
@@ -3308,7 +3308,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(identity) == nullptr, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void dialogsAndHistory() {
@@ -3320,7 +3320,7 @@ return {api_version=2, client={keybindings={
       client_->execute(window_actions::Action::history);
       QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       client_->execute(window_actions::Action::cancel);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyKeyboardSubmission() {
@@ -3360,7 +3360,7 @@ return {api_version=2, client={keybindings={
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(has_output(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyPointerSelectionNeverSubmits() {
@@ -3574,8 +3574,8 @@ return {api_version=2, client={keybindings={
       const auto palette = client_->palette()->rebuilds();
       // The window refreshes, but no property of it moves, so QML reads none of them again.
       const QSignalSpy refreshes{client_->terminals(), &TerminalController::refreshed};
-      const QSignalSpy title{client_.get(), &ApplicationController::titleChanged};
-      const QSignalSpy diagnostic{client_.get(), &ApplicationController::diagnosticChanged};
+      const QSignalSpy title{client_->status(), &WindowStatus::titleChanged};
+      const QSignalSpy diagnostic{client_->status(), &WindowStatus::diagnosticChanged};
       const QSignalSpy copy_mode{client_->copy(), &CopyController::activeChanged};
       const QSignalSpy attachments{client_->attachments(), &AttachmentsController::geometryChanged};
       const QSignalSpy element_bars{client_->components(), &ComponentsController::elementBarsChanged};
@@ -3885,7 +3885,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(pane != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo GUI_HISTORY_DELIVERY_FIRST")), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyRowsRequireTheDeliveredContentRevision() {
@@ -4051,7 +4051,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(pane != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo GUI_HISTORY_RESTORE_SECOND")), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyFooterPastesInPasteMode() {
@@ -4193,7 +4193,7 @@ return {api_version=2, client={keybindings={
         QVERIFY(!screenText(pane->screen, ScreenTextLayout::logical).contains(output));
       }
 
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyPagesAndActions() {
@@ -4270,7 +4270,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QCOMPARE(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("pane"));
       client_->execute(window_actions::Action::cancel);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyScopeLabelsFollowTheFocusedContext() {
@@ -4817,7 +4817,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->rows()->rowCount(), 1);
       QCOMPARE(rows_changed.size(), 0);
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::history);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyEmptyReplyRetiresPendingDelegatesBeforeTheirRows() {
@@ -5033,7 +5033,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(command_area->property("text").toString(), toQString(*expected));
       captureHistoryArtifact(QStringLiteral("history-long-command"));
       client_->execute(window_actions::Action::cancel);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedGoto() {
@@ -5084,7 +5084,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(client_->copy()->active());
       QCOMPARE(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::none);
       QCOMPARE(peer.error(), QString{});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedHistory() {
@@ -5100,7 +5100,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       client_->execute(window_actions::Action::cancel);
       QCOMPARE(peer.error(), QString{});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedSidebarResize() {
@@ -5157,7 +5157,7 @@ return {api_version=2, client={keybindings={
 
         writeTestFile(path, source.constData());
         client_->loadConfiguration(path, {}, {});
-        QCOMPARE(client_->error(), QString{});
+        QCOMPARE(client_->status()->error(), QString{});
         QCOMPARE(window_->color(), QColor{Qt::transparent});
         const auto expected = client_->colors().value(QStringLiteral("workbenchBackground")).value<QColor>();
 
@@ -5184,7 +5184,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, "return {api_version=2,gui={window={background_opacity=1},opacity={topbar=0.2,sidebar=0.4,bottombar=0.6,workspace=0.8,pane=0.3}}}");
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto geometry = client_->display()->geometry();
       const auto sidebar = geometry.value(QStringLiteral("sidebar")).toRectF();
@@ -5227,7 +5227,7 @@ return {api_version=2, client={keybindings={
       });
 
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       telar::gui::test::AppearanceFixture::set(Qt::ColorScheme::Unknown);
       auto* terminal = terminalIn(window_->contentItem());
 
@@ -5255,7 +5255,7 @@ return {api_version=2, client={keybindings={
       telar::gui::test::AppearanceFixture::set(Qt::ColorScheme::Dark);
       QCOMPARE(client_->display()->sidebarVisible(), !visible);
       QCOMPARE(client_->display()->sidebarWidth(), before_width);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void sidebarLayoutLeavesTheConfigurationAlone() {
@@ -5350,7 +5350,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(firstPane()->screen).contains(expected), qPrintable(screenText(firstPane()->screen)), runtime_wait_ms);
       QCOMPARE(firstPane()->size.cell_width_px, full->cell_width_px);
       QCOMPARE(firstPane()->size.cell_height_px, full->cell_height_px);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void zoomCapsuleSwitchesHiddenPanesAndRestoresTiling() {
@@ -5407,7 +5407,7 @@ return {api_version=2, client={keybindings={
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene({button->width() / 2, button->height() / 2}).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(entries().isEmpty(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void attentionRingsFollowUnfocusedAttachedPanes() {
@@ -5509,7 +5509,7 @@ return {api_version=2, client={keybindings={
       client_->execute(window_actions::Action::fullscreen);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredCommandsOpenAndCloseTheirOwnTabs() {
@@ -5538,11 +5538,11 @@ return {api_version=2, client={keybindings={
       });
 
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
-      QTRY_VERIFY2_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, qPrintable(QStringLiteral("pane=%1 before=%2 tabs=%3 error=%4").arg(firstPane() == nullptr ? 0 : firstPane()->id).arg(before.pane_id).arg(client_->tabs()->rows()->rowCount()).arg(client_->error())), runtime_wait_ms);
-      QTRY_VERIFY2_WITH_TIMEOUT(!firstPane()->cwd.empty(), qPrintable(QStringLiteral("pane=%1 frame=%2 attached=%3 error=%4").arg(firstPane()->id).arg(firstPane()->screen.frameId()).arg(firstPane()->attached).arg(client_->error())), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, qPrintable(QStringLiteral("pane=%1 before=%2 tabs=%3 error=%4").arg(firstPane() == nullptr ? 0 : firstPane()->id).arg(before.pane_id).arg(client_->tabs()->rows()->rowCount()).arg(client_->status()->error())), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!firstPane()->cwd.empty(), qPrintable(QStringLiteral("pane=%1 frame=%2 attached=%3 error=%4").arg(firstPane()->id).arg(firstPane()->screen.frameId()).arg(firstPane()->attached).arg(client_->status()->error())), runtime_wait_ms);
       const auto source_id = firstPane()->id;
       const auto source_directory = toQString(firstPane()->cwd);
       const auto count = client_->tabs()->rows()->rowCount();
@@ -5593,7 +5593,7 @@ return {api_version=2, client={keybindings={
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == source_id, runtime_wait_ms);
       }
 
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedPluginOverrides() {
@@ -5631,7 +5631,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QString metadata;
       const auto wait_enabled = [&](bool expected) {
         std::optional<std::uint64_t> pending;
@@ -5683,7 +5683,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(retained.open(QIODevice::ReadOnly));
       QCOMPARE(retained.readAll(), QByteArray{configuration});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedPluginWorker() {
@@ -5708,7 +5708,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QTRY_VERIFY_WITH_TIMEOUT(client_->display()->sidebarVisible(), runtime_wait_ms);
       CommandPeer peer{memory_};
 
@@ -5724,8 +5724,8 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientCommand{.request_id = toggle_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("toggle"), .text = "sample"});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, toggle_request, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->status()->error()), runtime_wait_ms);
+      QCOMPARE(client_->status()->error(), QString{});
 
       const auto tabs = client_->tabs()->rows()->rowCount();
       const auto denied_request = static_cast<std::uint64_t>(Request::denied);
@@ -5733,17 +5733,17 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientCommand{.request_id = denied_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("denied"), .text = "example"});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, denied_request, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->status()->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
       QVERIFY(!client_->display()->sidebarVisible());
       QCOMPARE(client_->tabs()->rows()->rowCount(), tabs);
 
       QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
-      QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QString{}, runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->status()->error()), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->status()->error(), QString{}, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_C, Qt::AltModifier);
-      QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->status()->error()), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
-      QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->status()->error()), runtime_wait_ms);
       {
         auto& pool = *QThreadPool::globalInstance();
         const int previous_threads = pool.maxThreadCount();
@@ -5769,7 +5769,7 @@ return {api_version=2, client={keybindings={
         QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, stale_request, runtime_wait_ms);
         QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
         client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-        QCOMPARE(client_->error(), QString{});
+        QCOMPARE(client_->status()->error(), QString{});
         QVERIFY(client_->display()->sidebarVisible());
       }
 
@@ -5786,7 +5786,7 @@ return {api_version=2, client={keybindings={
         return false;
       })(),
           runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->status()->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
       QVERIFY(client_->display()->sidebarVisible());
       QCOMPARE(client_->tabs()->rows()->rowCount(), tabs);
       QFile retained{path};
@@ -5828,7 +5828,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto slot = [&](const char* name) {
         return client_->components()->bars().value(QString::fromLatin1(name)).toMap();
       };
@@ -5941,7 +5941,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTRY_VERIFY_WITH_TIMEOUT(componentGroup(QStringLiteral("Bar panel")) != nullptr, runtime_wait_ms);
       // The bar lays its groups out a frame after they appear. Pointing earlier hovers one spot and
       // clicks another, so Qt delivers the press right after a synthesized move and the open
@@ -6048,7 +6048,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("error")).toString().isEmpty() || componentItem(QStringLiteral("button"), QStringLiteral("Toggle sidebar")) != nullptr, runtime_wait_ms);
@@ -6099,7 +6099,7 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       verifyConfiguredPickReturnsKeyboardFocus();
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredAccessibleGroups() {
@@ -6134,7 +6134,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       verifyAccessibleComponentName(components::Kind::button, QStringLiteral("Named button"), "Named button");
       QVERIFY(!QTest::currentTestFailed());
@@ -6158,7 +6158,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(actions->actionNames().contains(QAccessibleActionInterface::pressAction()));
       actions->doAction(QAccessibleActionInterface::pressAction());
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredPluginCaptionRefresh() {
@@ -6208,7 +6208,7 @@ return {api_version=2, client={keybindings={
       for (const bool pointer : {false, true}) {
         client_->components()->closePanel();
         client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-        QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+        QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
         verifyPluginTargetMutation(pointer);
         QVERIFY(!QTest::currentTestFailed());
         client_->execute(window_actions::Action::toggle_workspace_list);
@@ -6247,7 +6247,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Validated plugin")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -6277,12 +6277,12 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
       QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->components()->closePanel();
       QVERIFY(!test::ComponentActions::run(*client_, saved));
-      QVERIFY(client_->error().contains(QStringLiteral("expired")));
-      client_->dismissDiagnostic();
-      QCOMPARE(client_->error(), QString{});
+      QVERIFY(client_->status()->error().contains(QStringLiteral("expired")));
+      client_->status()->dismiss();
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredDefinitionCaptionRefresh() {
@@ -6327,7 +6327,7 @@ return {api_version=2, client={keybindings={
       for (const bool pointer : {false, true}) {
         client_->components()->closePanel();
         client_->loadConfiguration(path, {}, {});
-        QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+        QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
         verifyDefinitionTargetMutation(pointer);
         QVERIFY(!QTest::currentTestFailed());
       }
@@ -6355,7 +6355,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Single resolution")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -6369,7 +6369,7 @@ return {api_version=2, client={keybindings={
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
       QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       const auto current = test::ComponentActions::retain(*client_);
       if (!current) {
         QFAIL("The mutated component has no current definition action");
@@ -6384,12 +6384,12 @@ return {api_version=2, client={keybindings={
       QVERIFY(test::ComponentActions::run(*client_, validated_definition));
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Validated target")) != nullptr, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QVERIFY(!test::ComponentActions::run(*client_, validated_definition));
       QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"));
-      QVERIFY(client_->error().contains(QStringLiteral("expired")));
-      client_->dismissDiagnostic();
-      QCOMPARE(client_->error(), QString{});
+      QVERIFY(client_->status()->error().contains(QStringLiteral("expired")));
+      client_->status()->dismiss();
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredActionCaptionRefresh() {
@@ -6421,7 +6421,7 @@ return {api_version=2, client={keybindings={
 
         writeTestFile(path, config.constData());
         client_->loadConfiguration(path, {}, {});
-        QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+        QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
         QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
         QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 1")) != nullptr, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -6471,7 +6471,7 @@ return {api_version=2, client={keybindings={
       }}}}
     )");
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto slot = [this] {
         return client_->components()->bars().value(QStringLiteral("left")).toMap();
       };
@@ -6537,7 +6537,7 @@ return {api_version=2, client={keybindings={
 
         writeTestFile(path, configuration.constData());
         client_->loadConfiguration(path, {}, {});
-        QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+        QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
         QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
         QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target")) != nullptr, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -6569,7 +6569,7 @@ return {api_version=2, client={keybindings={
       }),center=t.bar.tabs()}},panels={target=t.panel({title='Group keyboard target',render=function()return ui.text('Keyboard group activated')end})}}}
     )");
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->bars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(configuredKeyboardGroupsReady(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -6634,7 +6634,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration({}, {}, {});
       QTRY_VERIFY_WITH_TIMEOUT(componentGroup(QStringLiteral("First keyboard group")) == nullptr, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredOverflowKeyboardActions() {
@@ -6663,7 +6663,7 @@ return {api_version=2, client={keybindings={
       }}
     )");
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto controls = [this] {
         auto items = test::visualItems(*window_->contentItem(), QStringLiteral("componentOverflow"));
 
@@ -6710,7 +6710,7 @@ return {api_version=2, client={keybindings={
       chip->forceActiveFocus(Qt::TabFocusReason);
       QTest::keyClick(window_, Qt::Key_Escape);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void configuredBuiltinPriority() {
@@ -6735,7 +6735,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto nodes = [this](const char* name) {
         return client_->components()->bars().value(QString::fromLatin1(name)).toMap().value(QStringLiteral("nodes")).toList();
       };
@@ -6813,7 +6813,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->bars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 3, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* kept = componentItem(QStringLiteral("label"), QStringLiteral("Keep λ"));
@@ -6882,7 +6882,7 @@ return {api_version=2, client={keybindings={
       for (std::size_t index = 0; index < configurations.size(); ++index) {
         writeTestFile(path, configurations[index]);
         client_->loadConfiguration(path, {}, {});
-        QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+        QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         const auto* group = componentItem(QStringLiteral("group"));
 
@@ -6961,7 +6961,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto overflow_controls = [this] {
         auto items = test::visualItems(*window_->contentItem(), QStringLiteral("componentOverflow"));
 
@@ -7042,7 +7042,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto overflow_controls = [this] {
         auto items = test::visualItems(*window_->contentItem(), QStringLiteral("componentOverflow"));
 
@@ -7121,7 +7121,7 @@ return {api_version=2, client={keybindings={
       configuration.replace("CACHE_MARKER_HEX", marker_hex);
       writeTestFile(path, configuration.constData());
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto right = [this] {
         return client_->components()->bars().value(QStringLiteral("right")).toMap();
       };
@@ -7180,7 +7180,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       const auto right = [this] {
         return client_->components()->bars().value(QStringLiteral("right")).toMap();
       };
@@ -7256,7 +7256,7 @@ return {api_version=2, client={keybindings={
       configuration.replace("MARKER_HEX", marker_hex);
       writeTestFile(path, configuration.constData());
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
@@ -7377,7 +7377,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, plugin_catalog_configuration);
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       peer.request(telar::ClientAction::plugin_list, pluginCatalogRequestId(PluginCatalogRequest::disabled_list));
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::disabled_list), runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
@@ -7435,7 +7435,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().text, QStringLiteral("PluginNotConfigured"));
       verifyPluginCatalogReload(peer, path, generation, expected_digest);
       QCOMPARE(peer.error(), QString{});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     void verifyPluginCatalogReload(CommandPeer& peer, const QString& path, std::uint64_t generation, const QString& expected_digest) {
@@ -7443,7 +7443,7 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientAction::config_reload, pluginCatalogRequestId(PluginCatalogRequest::failed_reload));
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::failed_reload), runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->error().isEmpty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->status()->error().isEmpty(), runtime_wait_ms);
       peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::retained_catalog), .action = telar::ClientAction::plugin_get, .target_id = generation, .text = "sample"});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::retained_catalog), runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
@@ -7455,7 +7455,7 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientAction::config_reload, pluginCatalogRequestId(PluginCatalogRequest::recover_reload));
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::recover_reload), runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_VERIFY_WITH_TIMEOUT(adopted.count() > 0 && client_->error().isEmpty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(adopted.count() > 0 && client_->status()->error().isEmpty(), runtime_wait_ms);
       peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::old_generation), .action = telar::ClientAction::plugin_list, .target_id = generation});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::old_generation), runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
@@ -7476,7 +7476,7 @@ return {api_version=2, client={keybindings={
       });
 
       client_->loadConfiguration(path, QStringLiteral("chosen"), {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -7508,7 +7508,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(requiredJsonField(parsed, "sidebar_visible").boolean(), client_->display()->sidebarVisible());
       QCOMPARE(requiredJsonField(parsed, "workspace_list_collapsed").boolean(), client_->display()->workspaceListCollapsed());
       QCOMPARE(peer.error(), QString{});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedBindingConfigurationQuery() {
@@ -7521,7 +7521,7 @@ return {api_version=2, client={keybindings={
       });
 
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       const auto tab_count = client_->tabs()->rows()->rowCount();
       CommandPeer peer{memory_};
 
@@ -7546,7 +7546,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, negative_index_request, runtime_wait_ms);
       QCOMPARE(peer.result().text, QStringLiteral("InvalidIndex"));
       QCOMPARE(client_->tabs()->rows()->rowCount(), tab_count);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QCOMPARE(peer.error(), QString{});
     }
 
@@ -7560,7 +7560,7 @@ return {api_version=2, client={keybindings={
       });
 
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -7591,7 +7591,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(file.write(source), source.size());
       file.close();
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -7649,7 +7649,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(file.write(source), source.size());
       file.close();
       client_->loadConfiguration(path, {}, {});
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       peer.request(telar::ClientAction::config_show, 4, "runtime");
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{4}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
@@ -7709,7 +7709,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(client_->font().value(QStringLiteral("thicken")).toBool());
       QCOMPARE(client_->font().value(QStringLiteral("size")).toFloat(), configured_font_size);
       QCOMPARE(client_->colors(), telar::gui::qt::themeColors(client_->configuration()));
-      QTRY_COMPARE(window_->title(), client_->title());
+      QTRY_COMPARE(window_->title(), client_->status()->title());
       QVERIFY(window_->title().startsWith(QStringLiteral("configured ")));
       QVERIFY(!window_->title().contains(QStringLiteral("{hostname}")));
       const auto* pane = firstPane();
@@ -7733,7 +7733,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(window_->title().startsWith(QStringLiteral("configured ")));
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->configuration().font.thicken_strength, configured_strength);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
 
       QVERIFY(configuration_file.open(QIODevice::WriteOnly | QIODevice::Truncate));
       const QByteArray invalid_source{"return {api_version = 2, gui = {font = {size = 0}}}"};
@@ -7743,7 +7743,7 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientAction::config_reload, 4);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{4}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->error().isEmpty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->status()->error().isEmpty(), runtime_wait_ms);
       QCOMPARE(telar::gui::qt::WindowAnimationClock::forWindow(*window_).frameInterval(), capped_interval);
       QCOMPARE(client_->configuration().font.size, configured_font_size);
 
@@ -7755,7 +7755,7 @@ return {api_version=2, client={keybindings={
       peer.request(telar::ClientAction::config_reload, recovery_request);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, recovery_request, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QString{}, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->status()->error(), QString{}, runtime_wait_ms);
       QCOMPARE(client_->configuration().font.size, configured_font_size);
       client_->loadConfiguration({}, {}, {});
       QTRY_COMPARE(window_->title(), QStringLiteral("Telar"));
@@ -7812,7 +7812,7 @@ return {api_version=2, client={keybindings={
       },
                    wakeup_wait_ms),
           qPrintable(QStringLiteral("frame=%1 acknowledged=%2 pending=%3").arg(pane->screen.frameId()).arg(pane->acknowledged_frame).arg(telar::gui::test::FramePacing::pending(*client_))));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void replacingTheWindowReturnsItsDeferredUpdate() {
@@ -7845,7 +7845,7 @@ return {api_version=2, client={keybindings={
         return !prepared.isEmpty();
       },
           return_wait_ms));
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void terminalFramesWaitForSceneSynchronization() {
@@ -7923,7 +7923,7 @@ return {api_version=2, client={keybindings={
         client_->setWindow(*window_);
         window_->show();
         QTRY_VERIFY_WITH_TIMEOUT(pane->acknowledged_frame >= pending_frame, runtime_wait_ms);
-        QCOMPARE(client_->error(), QString{});
+        QCOMPARE(client_->status()->error(), QString{});
       }
     }
 
@@ -7943,7 +7943,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), previous_tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->id == previous_pane && firstPane()->screen.frameId() > 0, runtime_wait_ms);
       QTRY_VERIFY(client_->display()->workspaceListCollapsed());
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void cleanupTestCase() {
@@ -8008,7 +8008,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(!client_->tabs()->capturedTab().has_value());
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
       QCOMPARE(tabKeys(), before);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     [[nodiscard]] QStringList tabKeys() const {
@@ -8413,7 +8413,7 @@ return {api_version=2, client={keybindings={
       terminal->setFlag(QQuickItem::ItemHasContents, true);
       terminal->update();
       QTRY_VERIFY_WITH_TIMEOUT(pane->acknowledged_frame >= pending_frame, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     template <typename Gesture>
@@ -8472,7 +8472,7 @@ return {api_version=2, client={keybindings={
       QVERIFY2(captured.open(QIODevice::ReadOnly), qPrintable(captured.errorString()));
       QCOMPARE(captured.readAll(), expected_bytes);
       QTRY_VERIFY_WITH_TIMEOUT(!pane->screen.mouse().sgr && pane->screen.mouse().tracking == telar::MouseTracking::none, runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     [[nodiscard]] QString childMouseCapturePath(std::uint64_t pane_id) const {
@@ -8617,7 +8617,7 @@ return {api_version=2, client={keybindings={
       const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
 
       QTest::keyClick(window_, Qt::Key_B, control);
-      QVERIFY(client_->prefixPending());
+      QVERIFY(client_->status()->prefixPending());
       QTest::keyClick(window_, Qt::Key_C);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), tabs + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != pane, runtime_wait_ms);
@@ -8719,7 +8719,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, config.constData());
       client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable plugin 1")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -8756,7 +8756,7 @@ return {api_version=2, client={keybindings={
 
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
       QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     void verifyPluginTargetMutation(bool pointer) {
@@ -8785,7 +8785,7 @@ return {api_version=2, client={keybindings={
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
       QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       if (pointer) {
         QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
         pressed = false;
@@ -8798,7 +8798,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
       QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->components()->refreshPanel();
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
@@ -8809,7 +8809,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
       QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       client_->execute(window_actions::Action::toggle_sidebar);
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), sidebar, runtime_wait_ms);
     }
@@ -8841,7 +8841,7 @@ return {api_version=2, client={keybindings={
 
       writeTestFile(path, config.constData());
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 1")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -8883,7 +8883,7 @@ return {api_version=2, client={keybindings={
         QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"), runtime_wait_ms);
       }
 
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
     }
 
     void verifyDefinitionTargetMutation(bool pointer) {
@@ -8909,7 +8909,7 @@ return {api_version=2, client={keybindings={
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
       QCOMPARE(client_->components()->panel().value(QStringLiteral("revision")).toString(), revision);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       if (pointer) {
         QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
         pressed = false;
@@ -8920,7 +8920,7 @@ return {api_version=2, client={keybindings={
       // The rendered button keeps the destination it was resolved with; only a new render
       // picks up the mutated table.
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
-      QCOMPARE(client_->error(), QString{});
+      QCOMPARE(client_->status()->error(), QString{});
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
@@ -9015,7 +9015,7 @@ return {api_version=2, client={keybindings={
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = true;
       client_->loadConfiguration(path, {}, {});
-      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target")) != nullptr, runtime_wait_ms);

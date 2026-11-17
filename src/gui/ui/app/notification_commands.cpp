@@ -27,7 +27,7 @@ namespace telar::gui::qt {
     });
 
     connect(&notifications_, &NotificationsController::focusRestoreRequested, this, &ApplicationController::restoreTerminalFocus);
-    connect(&notifications_, &NotificationsController::failed, this, &ApplicationController::reportFailure);
+    connect(&notifications_, &NotificationsController::failed, &status_, &WindowStatus::report);
     connect(&notifications_, &NotificationsController::linkRequested, this, [this](const QString& uri) {
       const auto bytes = uri.toUtf8();
 

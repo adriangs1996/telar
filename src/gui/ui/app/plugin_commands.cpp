@@ -16,14 +16,14 @@ namespace telar::gui::qt {
   void ApplicationController::initializePlugins() {
     connect(&plugins_, &PluginRunner::finished, this, [this](const PluginEffects& effects) {
       try {
-        error_.clear();
+        status_.clear();
         applyPluginEffects(effects);
         refresh();
       } catch (const std::exception& error) {
-        fail(error);
+        status_.fail(error);
       }
     });
-    connect(&plugins_, &PluginRunner::failed, this, &ApplicationController::reportFailure);
+    connect(&plugins_, &PluginRunner::failed, &status_, &WindowStatus::report);
   }
 
   void ApplicationController::applyPluginEffects(const PluginEffects& effects) {

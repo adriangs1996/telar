@@ -20,7 +20,7 @@ namespace telar::gui::qt {
       try {
         session().resumeGraphics();
       } catch (const std::exception& error) {
-        fail(error);
+        status_.fail(error);
       }
 
       refreshPanes();

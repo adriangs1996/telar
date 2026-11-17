@@ -594,6 +594,7 @@
     "src/gui/ui/foundation/scene/ancestor_geometry.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/config/appearance.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/application_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/window_status.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/window_display.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/application_effects.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/attachments/attachment_image.hpp": "Qt moc/QML integration",

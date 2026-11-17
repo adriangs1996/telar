@@ -35,7 +35,7 @@ namespace telar::gui::qt {
     try {
       client->session.completeAgentSound();
     } catch (const std::exception& error) {
-      fail(error);
+      status_.fail(error);
     }
   }
 

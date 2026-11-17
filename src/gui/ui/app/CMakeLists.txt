@@ -22,6 +22,8 @@ telar_add_qml_sources(gui-quick
     window_animation.cpp
     window_display.cpp
     window_display.hpp
+    window_status.cpp
+    window_status.hpp
   QML_FILES
     CommandDialog.qml
     Main.qml

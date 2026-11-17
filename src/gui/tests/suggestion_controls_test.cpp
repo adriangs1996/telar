@@ -131,7 +131,7 @@ namespace {
       terminal_->forceActiveFocus();
       QVERIFY(terminal_->hasActiveFocus());
       QTest::keyClick(window_.get(), Qt::Key_B, NativeKeyAdapter::control_modifier);
-      QVERIFY2(client_->prefixPending(), qPrintable(client_->error()));
+      QVERIFY2(client_->status()->prefixPending(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_.get(), Qt::Key_Question);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::ApplicationController::Dialog::palette, wait_ms);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));

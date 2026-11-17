@@ -330,7 +330,7 @@ namespace telar::gui::qt {
     const auto prefix_pending = router_.prefixPending();
     if (prefix_shown_ != prefix_pending) {
       prefix_shown_ = prefix_pending;
-      emit application_.prefixChanged();
+      emit prefixChanged();
     }
 
     timeout_.stop();

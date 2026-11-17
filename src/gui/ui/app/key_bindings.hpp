@@ -70,6 +70,8 @@ namespace telar::gui::qt {
 
   signals:
     void failed(const QString& message);
+    // A prefix started waiting for its key, or stopped.
+    void prefixChanged();
 
   private:
     struct RoutedKey {

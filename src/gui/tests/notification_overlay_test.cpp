@@ -316,7 +316,7 @@ namespace {
       window.resize(window_width, window_height);
       client.setWindow(window);
       client.loadConfiguration(path, {}, {});
-      QCOMPARE(client.error(), QString{});
+      QCOMPARE(client.status()->error(), QString{});
       const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
 
       overlay->setParentItem(window.contentItem());
@@ -332,7 +332,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().size(), std::size_t{2}, wait_ms);
       QCOMPARE(client.notifications()->center().items().front().title.view(), std::string_view{"Callback notice"});
       QCOMPARE(client.notifications()->center().items().front().level, NotificationLevel::success);
-      QCOMPARE(client.error(), QString{});
+      QCOMPARE(client.status()->error(), QString{});
       QCOMPARE(window.activeFocusItem(), overlay.get());
     }
   };

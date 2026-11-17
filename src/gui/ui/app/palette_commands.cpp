@@ -20,7 +20,7 @@ namespace telar::gui::qt {
       showDialog(Dialog::none);
     });
 
-    connect(&palette_, &PaletteController::failed, this, &ApplicationController::reportFailure);
+    connect(&palette_, &PaletteController::failed, &status_, &WindowStatus::report);
     connect(&palette_, &PaletteController::machineRequested, this, [this](MachinePickerTarget target, bool alternate) {
       applyInteraction([&] {
         chooseMachine(target, alternate);

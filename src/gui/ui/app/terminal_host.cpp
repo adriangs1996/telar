@@ -18,7 +18,7 @@ namespace telar::gui::qt {
     connect(this, &ApplicationController::machineChanged, &terminals_, &TerminalController::machineChanged);
     connect(this, &ApplicationController::dialogChanged, &terminals_, &TerminalController::dialogChanged);
     connect(&terminals_, &TerminalController::notificationPublished, &notifications_, &NotificationsController::refresh);
-    connect(&terminals_, &TerminalController::failed, this, &ApplicationController::reportFailure);
+    connect(&terminals_, &TerminalController::failed, &status_, &WindowStatus::report);
   }
 
   void ApplicationController::pressKey(TerminalItem& terminal, QKeyEvent& event) {

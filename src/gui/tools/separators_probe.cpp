@@ -139,7 +139,7 @@ namespace {
     require(file.open(QIODevice::WriteOnly) && file.write("return {api_version=2,client={prompt={mode='telar'}}}") > 0, "Cannot write the configuration");
     file.close();
     client.loadConfiguration(configuration, {}, {});
-    require(client.error().isEmpty(), "The configuration did not load");
+    require(client.status()->error().isEmpty(), "The configuration did not load");
     QLocalServer listener;
 
     require(listener.listen(directory.filePath(QStringLiteral("runtime.sock"))), "Cannot listen");
@@ -157,7 +157,7 @@ namespace {
     WireRuntime runtime{*socket};
 
     require(waitForGuiCondition([&] {
-      return client.connected();
+      return client.status()->connected();
     },
                 wait_ms),
         "The handshake did not finish");

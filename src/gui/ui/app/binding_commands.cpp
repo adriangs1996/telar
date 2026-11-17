@@ -253,7 +253,7 @@ namespace telar::gui::qt {
 
       return true;
     } catch (const std::exception& error) {
-      fail(error);
+      status_.fail(error);
 
       return false;
     }
@@ -284,7 +284,7 @@ namespace telar::gui::qt {
         refresh();
       }
     } catch (const std::exception& failure) {
-      fail(failure);
+      status_.fail(failure);
     }
 
     key_bindings_.release(hold);

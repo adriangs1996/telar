@@ -409,7 +409,7 @@ namespace {
       local_socket_.reset(local_listener_.nextPendingConnection());
       local_runtime = std::make_unique<WireRuntime>(*local_socket_);
       if (!waitForGuiCondition([&] {
-            return application.connected();
+            return application.status()->connected();
           },
               wait_ms)) {
         return false;
@@ -464,18 +464,18 @@ namespace {
       MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation);
       MachineWindow::completePluginFailure(application, execution + 1);
       QVERIFY(MachineWindow::pendingPlugin(application));
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
 
       MachineWindow::select(application, fixture.remote.machine);
       MachineWindow::completePluginFailure(application, execution);
       QVERIFY(!MachineWindow::pendingPlugin(application));
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
       MachineWindow::select(application, local.key.machine);
 
       MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation + 1);
       MachineWindow::completePluginFailure(application, execution);
       QVERIFY(!MachineWindow::pendingPlugin(application));
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
 
       const auto& remote = MachineWindow::client(application, fixture.remote.machine.slot);
 
@@ -484,13 +484,13 @@ namespace {
 
       MachineWindow::completePluginFailure(application, execution);
       QVERIFY(!MachineWindow::pendingPlugin(application));
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
       QVERIFY(replacement != fixture.remote);
 
       MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation);
       MachineWindow::completePluginFailure(application, execution);
       QVERIFY(!MachineWindow::pendingPlugin(application));
-      QCOMPARE(application.error(), QStringLiteral("OwnedPluginFailure"));
+      QCOMPARE(application.status()->error(), QStringLiteral("OwnedPluginFailure"));
     }
 
 #ifdef __APPLE__
@@ -985,13 +985,13 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      const QSignalSpy changed{&application, &ApplicationController::hostMetricsChanged};
+      const QSignalSpy changed{application.status(), &WindowStatus::hostMetricsChanged};
       constexpr std::uint8_t local_cpu = 11;
       constexpr std::uint8_t remote_cpu = 92;
       constexpr std::uint8_t replacement_cpu = 37;
       constexpr std::uint64_t revision = 9;
       const auto percent = [&] {
-        return application.hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("percent")).toInt();
+        return application.status()->hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("percent")).toInt();
       };
 
       fixture.local_runtime->send(hostSample(revision, local_cpu));
@@ -1018,7 +1018,7 @@ namespace {
 
       QTRY_VERIFY_WITH_TIMEOUT(remote.session.ready(), wait_ms);
       QVERIFY(changed.size() > lost_changes);
-      QVERIFY(!application.hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("available")).toBool());
+      QVERIFY(!application.status()->hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("available")).toBool());
       fixture.remote_runtime->send(hostSample(1, replacement_cpu));
       QTRY_COMPARE_WITH_TIMEOUT(percent(), replacement_cpu, wait_ms);
       MachineWindow::select(application, MachineWindow::client(application, Machines::local_slot).key.machine);
@@ -1155,7 +1155,7 @@ namespace {
       QCOMPARE(theme_file.write(theme_source), theme_source.size());
       theme_file.close();
       application.loadConfiguration(theme_path, {}, {});
-      QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+      QVERIFY2(application.status()->error().isEmpty(), qPrintable(application.status()->error()));
       const auto default_ink = application.colors().value(QStringLiteral("green")).value<QColor>();
 
       QVERIFY(default_ink.alpha() > 0);
@@ -1261,19 +1261,19 @@ namespace {
 
       QTRY_VERIFY_WITH_TIMEOUT(remote_key() != retired, wait_ms);
       QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
-      QVERIFY(fixture.application.connected());
+      QVERIFY(fixture.application.status()->connected());
       QVERIFY(!MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
       layout->activate(retired);
-      QVERIFY(fixture.application.connected());
+      QVERIFY(fixture.application.status()->connected());
       QVERIFY(!MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
       fixture.application.setWindow(replacement);
       layout->activate(remote_key());
-      QVERIFY(fixture.application.connected());
+      QVERIFY(fixture.application.status()->connected());
       QVERIFY(!MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
       fixture.application.setWindow(window);
       layout->activate(remote_key());
       QVERIFY(MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
-      QVERIFY(!fixture.application.connected());
+      QVERIFY(!fixture.application.status()->connected());
     }
 
     Q_SLOT static void activityButtonsRoutePrimaryAndSecondaryOnPress() {
@@ -1572,7 +1572,7 @@ namespace {
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), hidden_remote ? 1 : 0);
       QCOMPARE(fixture.local_runtime->count(ClientTag::open_pane), 1);
       QCOMPARE(warnings.count(), 0);
-      QCOMPARE(application.error(), QString{});
+      QCOMPARE(application.status()->error(), QString{});
     }
 
     Q_SLOT static void activityHoverChangesOnlyDuringDeliveredPointerInput() {
@@ -1806,7 +1806,7 @@ namespace {
       QVERIFY(local.value(QStringLiteral("key")) != hidden.value(QStringLiteral("key")));
       QVERIFY2(activityNamed(application, QStringLiteral("Remote command")).isEmpty(), "another machine's tracked commands stay on that machine");
       QVERIFY(!activityNamed(application, QStringLiteral("Local command")).isEmpty());
-      QVERIFY(application.connected());
+      QVERIFY(application.status()->connected());
       QVERIFY(remote.session.panes().empty());
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::acknowledge_agent), 0);
@@ -1832,7 +1832,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("enabled")).toBool(), wait_ms);
       QCOMPARE(activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("statusWord")).toString(), QStringLiteral("offline"));
       application.execute(window_actions::Action::select_agent, identity.toString());
-      QVERIFY(application.connected());
+      QVERIFY(application.status()->connected());
       QCOMPARE(application.pane(pane_id)->attached, true);
     }
 

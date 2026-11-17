@@ -124,7 +124,7 @@ namespace {
       const std::unique_ptr<QLocalSocket> socket{listener.nextPendingConnection()};
       WireRuntime runtime{*socket};
 
-      QTRY_VERIFY_WITH_TIMEOUT(application.connected(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.status()->connected(), wait_ms);
       runtime.send(ClientLayoutSnapshot{});
       QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::open_pane), 1, wait_ms);
       const auto opening = runtime.last<OpenPane>();
@@ -177,7 +177,7 @@ namespace {
       QCOMPARE(runtime.count(ClientTag::request_graphics_snapshot), 3);
       ControlledAwakeClock::set(window_ns);
       QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::request_graphics_snapshot), 4, wait_ms);
-      QVERIFY(application.connected());
+      QVERIFY(application.status()->connected());
       QVERIFY(label->isVisible());
       const GraphicsHeader resumed{.pane_id = 1, .revision = 5};
 
@@ -186,10 +186,10 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!label->isVisible(), wait_ms);
       QVERIFY(!paneChrome(application).value(QStringLiteral("imagesPaused")).toBool());
 
-      const QSignalSpy connection_changes{&application, &ApplicationController::diagnosticChanged};
+      const QSignalSpy connection_changes{application.status(), &WindowStatus::diagnosticChanged};
 
       runtime.send(GraphicsImageChunk{.header = resumed, .key = {.image_id = 1, .generation = 1}, .bytes = std::array<Byte, pixel_bytes>{}});
-      QTRY_VERIFY_WITH_TIMEOUT(!application.connected(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!application.status()->connected(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(socket->state(), QLocalSocket::UnconnectedState, wait_ms);
       QVERIFY(connection_changes.count() > 0);
     }

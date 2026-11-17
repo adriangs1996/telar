@@ -9,7 +9,7 @@ Window {
     minimumWidth: 320
     minimumHeight: 200
     visible: true
-    title: telar.title
+    title: telar.status.title
     color: "transparent"
 
     readonly property real ratio: telar.display.chromeRatio
@@ -40,7 +40,7 @@ Window {
         workspace: telar.workspaces.context
         tabModel: telar.tabs.rows
         workspaceModel: telar.workspaces.rows
-        prefixPending: telar.prefixPending
+        prefixPending: telar.status.prefixPending
         controlsInset: telar.display.windowControls
         ratio: root.ratio
         textScale: telar.display.chromeTextScale
@@ -98,7 +98,7 @@ Window {
         dialog: telar.dialog
         // The kind and the pane in one value, read together on each dialogChanged.
         lineSearch: ({kind: telar.lineSearch, pane: telar.lineSearchPane})
-        prefixPending: telar.prefixPending
+        prefixPending: telar.status.prefixPending
         controlModifier: telar.controlModifier
         superModifier: telar.superModifier
         keyboardCovered: componentPanelPopup.visible || componentPickPopup.visible
@@ -128,14 +128,14 @@ Window {
         width: root.geometry.status.width
         height: root.geometry.status.height
         visible: height > 0
-        metrics: telar.hostMetrics
+        metrics: telar.status.hostMetrics
         colors: telar.colors
         typography: root.geometry.typography
-        diagnostic: telar.error
-        tlsColor: telar.tlsBadgeColor
-        mode: telar.statusMode
+        diagnostic: telar.status.error
+        tlsColor: telar.status.tlsBadgeColor
+        mode: telar.status.mode
         ratio: root.ratio
-        onDiagnosticDismissed: telar.dismissDiagnostic()
+        onDiagnosticDismissed: telar.status.dismiss()
         onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
     }
 
@@ -155,7 +155,7 @@ Window {
         id: componentPanelPopup
         parent: root.contentItem
         controller: telar.components
-        hostMetrics: telar.hostMetrics
+        hostMetrics: telar.status.hostMetrics
         machineChrome: telar.machineChrome
         colors: telar.colors
         typography: root.geometry.typography

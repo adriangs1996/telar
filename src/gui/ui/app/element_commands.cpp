@@ -35,7 +35,7 @@ namespace telar::gui::qt {
     });
 
     connect(&element_slots_, &ElementSlots::failed, this, [this](const QString& message) {
-      fail(std::runtime_error{message.toStdString()});
+      status_.fail(std::runtime_error{message.toStdString()});
     });
   }
 
@@ -78,7 +78,7 @@ namespace telar::gui::qt {
         }
       }
     } catch (const std::exception& error) {
-      fail(error);
+      status_.fail(error);
     }
   }
 
