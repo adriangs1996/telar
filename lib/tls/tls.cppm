@@ -57,6 +57,11 @@ export {
     using TlsContext = TlsHandle<SSL_CTX, SSL_CTX_free>;
     using TlsConnection = TlsHandle<SSL, SSL_free>;
 
+    // Frees a copy of a trust store's object list and the reference it holds on each object.
+    void freeTlsObjects(stack_st_X509_OBJECT* objects) noexcept;
+    // A copy of a trust store's object list, from X509_STORE_get1_objects.
+    using TlsObjects = TlsHandle<stack_st_X509_OBJECT, freeTlsObjects>;
+
   }
 }
 
@@ -494,7 +499,7 @@ export {
   using ::SSL_new;
   using ::SSL_pending;
   using ::SSL_read_ex;
-  using ::SSL_set1_host;
+  using ::SSL_set1_dnsname;
   using ::SSL_set_accept_state;
   using ::SSL_set_alpn_protos;
   using ::SSL_set_connect_state;
@@ -514,7 +519,7 @@ export {
   using ::X509_OBJECT_get_type;
   using ::X509_STORE_add_cert;
   using ::X509_STORE_free;
-  using ::X509_STORE_get0_objects;
+  using ::X509_STORE_get1_objects;
   using ::X509_STORE_new;
   using ::X509_VERIFY_PARAM_set1_ip_asc;
 

@@ -363,7 +363,7 @@ static void checkService(TlsTestMemory& memory, const TlsLibrary& library, Proxy
     SSL_set_app_data(server.get(), &server_selection);
   }
 
-  check(SSL_set1_host(client.get(), "origin.test") == 1);
+  check(SSL_set1_dnsname(client.get(), "origin.test") == 1);
   bool client_ready = false;
   bool server_ready = false;
 

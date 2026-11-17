@@ -324,10 +324,12 @@ namespace telar::runtime {
       return;
     }
 
-    const auto* objects = X509_STORE_get0_objects(store_.get());
+    // A copy of the store's object list, taken under its lock; get0 handed out the store's own list.
+    const TlsObjects objects{X509_STORE_get1_objects(store_.get())};
 
-    for (int index = 0; index < sk_X509_OBJECT_num(objects); ++index) {
-      const auto* object = sk_X509_OBJECT_value(objects, index);
+    requireTls(objects != nullptr, "Read TLS trust anchors");
+    for (int index = 0; index < sk_X509_OBJECT_num(objects.get()); ++index) {
+      const auto* object = sk_X509_OBJECT_value(objects.get(), index);
       if (X509_OBJECT_get_type(object) != X509_LU_X509) {
         continue;
       }
@@ -571,7 +573,7 @@ namespace telar::runtime {
     if (TlsHostname::numeric(hostname_.view())) {
       requireTls(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(origin_.get()), terminated.data()) == 1, "Set TLS origin IP verification");
     } else {
-      requireTls(SSL_set1_host(origin_.get(), terminated.data()) == 1, "Set TLS origin hostname verification");
+      requireTls(SSL_set1_dnsname(origin_.get(), terminated.data()) == 1, "Set TLS origin hostname verification");
       requireTls(SSL_set_tlsext_host_name(origin_.get(), terminated.data()) == 1, "Set TLS origin server name");
     }
 

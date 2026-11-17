@@ -34,6 +34,10 @@ namespace telar::runtime {
     return code_;
   }
 
+  void freeTlsObjects(stack_st_X509_OBJECT* objects) noexcept {
+    sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free);
+  }
+
   void requireTls(bool succeeded, const char* operation) {
     if (!succeeded) {
       throw TlsError{operation};

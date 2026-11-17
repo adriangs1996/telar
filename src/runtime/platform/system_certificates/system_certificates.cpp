@@ -73,7 +73,13 @@ namespace telar::runtime {
 
   void SystemCertificates::readKeychain(const char* path, void* target, void (*consume)(void*, std::span<const std::uint8_t>)) {
     SecKeychainRef opened = nullptr;
-    if (SecKeychainOpen(path, &opened) != errSecSuccess) {
+    // SecKeychain is deprecated with no successor that opens a given keychain file; the
+    // trust-settings API that replaces it reads which roots are trusted, not what a keychain holds.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    const auto opening = SecKeychainOpen(path, &opened);
+#pragma clang diagnostic pop
+    if (opening != errSecSuccess) {
       throw SystemError{"Open system certificate keychain", EACCES};
     }
 

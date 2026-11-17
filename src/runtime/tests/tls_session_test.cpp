@@ -177,7 +177,7 @@ static void checkSession(TlsTestMemory& memory, const TlsLibrary& library, Sessi
   }
 
   SSL_set_app_data(server.get(), &server_selection);
-  check(SSL_set1_host(client.get(), "origin.test") == 1);
+  check(SSL_set1_dnsname(client.get(), "origin.test") == 1);
   if (scenario != SessionCase::no_alpn) {
     const auto offered = scenario == SessionCase::other_alpn ? std::span<const unsigned char>{other_offer} : std::span<const unsigned char>{protocols};
 
@@ -316,7 +316,7 @@ static void checkAuthorityRotation(TlsTestMemory& memory, const TlsLibrary& libr
     auto client = createTlsPeer(client_context.get(), downstream.remote.get(), false);
     auto server = createTlsPeer(server_context.get(), upstream.remote.get(), true);
 
-    check(SSL_set1_host(client.get(), "origin.test") == 1);
+    check(SSL_set1_dnsname(client.get(), "origin.test") == 1);
     bool client_ready = false, server_ready = false, client_failed = false, server_failed = false;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 

@@ -3204,6 +3204,7 @@
     "<nghttp2/nghttp2.h>": "telar.native.nghttp2",
     "<openssl/crypto.h>": "telar.tls",
     "<openssl/err.h>": "telar.tls",
+    "<openssl/evp.h>": "telar.platform.sha256",
     "<openssl/md5.h>": "telar.platform.sha256",
     "<openssl/pem.h>": "telar.tls",
     "<openssl/sha.h>": "telar.platform.sha256",

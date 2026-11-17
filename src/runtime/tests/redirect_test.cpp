@@ -961,7 +961,7 @@ static void opaqueTls(TlsTestMemory& memory, const TlsLibrary& library) {
   auto client = createTlsPeer(client_context.get(), downstream.client.get(), false);
   auto server = createTlsPeer(server_context.get(), upstream.server.get(), true);
 
-  check(SSL_set1_host(client.get(), "origin.test") == 1);
+  check(SSL_set1_dnsname(client.get(), "origin.test") == 1);
   bool client_ready = false;
   bool server_ready = false;
   bool failed = false;
@@ -1256,7 +1256,7 @@ static void transparentTls(TlsTestMemory& memory, const TlsLibrary& library, Tra
     check(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(client.get()), hostname) == 1);
   } else {
     check(SSL_set_tlsext_host_name(client.get(), hostname) == 1);
-    check(SSL_set1_host(client.get(), hostname) == 1);
+    check(SSL_set1_dnsname(client.get(), hostname) == 1);
   }
 
   bool client_ready = false, server_ready = false, failed = false;

@@ -285,6 +285,12 @@ namespace telar::git {
     return FileDescriptor{::openat(directory, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
   }
 
+// SHA-1 goes through OpenSSL's low-level API, deprecated since 3.0 in favour of EVP: it keeps its
+// context inline, where an EVP_MD_CTX is a heap allocation and a provider lookup per hash, and
+// every object a worktree scan reads is hashed.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
   Sha1::Sha1() noexcept {
     SHA1_Init(&context_);
   }
@@ -299,6 +305,8 @@ namespace telar::git {
     SHA1_Final(digest.data(), &context_);
     return digest;
   }
+
+#pragma clang diagnostic pop
 
   Hasher::Hasher(ObjectFormat format) noexcept
       : format_(format) {}

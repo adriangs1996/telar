@@ -21,6 +21,9 @@ export {
       SHA256_CTX context_;
     };
 
+    // The MD5 digest of `bytes`, or nothing if OpenSSL could not compute it.
+    std::optional<std::array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept;
+
   }
 }
 
@@ -29,7 +32,6 @@ export {
 export {
   using ::SHA_CTX;
 
-  using ::MD5;
   using ::SHA1_Final;
   using ::SHA1_Init;
   using ::SHA1_Update;

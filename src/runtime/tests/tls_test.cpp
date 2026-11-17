@@ -104,6 +104,22 @@ static void testTlsMemory() {
   }
 }
 
+// Whether `leaf` verifies under `issuer` as a TLS server for `name`, a DNS name or, if `numeric`,
+// an IP address. OpenSSL 4.1 checks names only through verification.
+static bool covers(X509* issuer, X509* leaf, std::string_view name, bool numeric = false) {
+  TlsHandle<X509_STORE, X509_STORE_free> store{X509_STORE_new()};
+  TlsHandle<X509_STORE_CTX, X509_STORE_CTX_free> verification{X509_STORE_CTX_new()};
+
+  check(store != nullptr && verification != nullptr && X509_STORE_add_cert(store.get(), issuer) == 1);
+  check(X509_STORE_CTX_init(verification.get(), store.get(), leaf, nullptr) == 1);
+  check(X509_STORE_CTX_set_purpose(verification.get(), X509_PURPOSE_SSL_SERVER) == 1);
+  auto* parameters = X509_STORE_CTX_get0_param(verification.get());
+  const std::string terminated{name};
+
+  check((numeric ? X509_VERIFY_PARAM_set1_ip_asc(parameters, terminated.c_str()) : X509_VERIFY_PARAM_set1_host(parameters, terminated.data(), terminated.size())) == 1);
+  return X509_verify_cert(verification.get()) == 1;
+}
+
 static void testAuthorities(ConcurrentMemory& memory, const TlsLibrary& library) {
   AuthorityDirectory directory;
   const int descriptor = directory.descriptor.get();
@@ -134,8 +150,8 @@ static void testAuthorities(ConcurrentMemory& memory, const TlsLibrary& library)
     TlsKey issuer{X509_get_pubkey(authority.certificate())};
 
     check(X509_verify(leaf.certificate.get(), issuer.get()) == 1);
-    check(X509_check_host(leaf.certificate.get(), hostname.data(), hostname.size(), 0, nullptr) == 1);
-    check(X509_check_host(leaf.certificate.get(), "another.example.com", 19, 0, nullptr) == 0);
+    check(covers(authority.certificate(), leaf.certificate.get(), hostname));
+    check(!covers(authority.certificate(), leaf.certificate.get(), "another.example.com"));
     check(X509_check_ca(leaf.certificate.get()) == 0 && X509_check_private_key(leaf.certificate.get(), leaf.key.get()) == 1);
     check(i2d_X509(leaf.certificate.get(), nullptr) <= static_cast<int>(CertificatePair::maximum_der_bytes));
   }
@@ -226,8 +242,8 @@ static void numericCertificates() {
   for (const auto host : {"127.0.0.1", "::1", "2001:db8::1234"}) {
     const auto leaf = issuer.mint(host);
 
-    check(X509_check_ip_asc(leaf.certificate.get(), host, 0) == 1);
-    check(X509_check_ip_asc(leaf.certificate.get(), "192.0.2.1", 0) == 0);
+    check(covers(issuer.certificate.get(), leaf.certificate.get(), host, true));
+    check(!covers(issuer.certificate.get(), leaf.certificate.get(), "192.0.2.1", true));
   }
 }
 

@@ -956,12 +956,10 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
-      if (!input.workspace().empty()) {
-        std::array<unsigned char, MD5_DIGEST_LENGTH> digest;
-
-        MD5(reinterpret_cast<const unsigned char*>(input.workspace().data()), input.workspace().size(), digest.data());
+      const auto digest = input.workspace().empty() ? std::nullopt : md5(input.workspace());
+      if (digest) {
         std::array<char, 2 * MD5_DIGEST_LENGTH> encoded;
-        if (const auto path = cursorPath(*root, encodeLowerHex(digest, encoded), chat)) {
+        if (const auto path = cursorPath(*root, encodeLowerHex(*digest, encoded), chat)) {
           return *path;
         }
       }
