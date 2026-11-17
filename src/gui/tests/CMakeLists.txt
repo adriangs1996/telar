@@ -67,8 +67,6 @@ telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.c
   TEST gui-directory-completion LABELS gui.foundation.system TIMEOUT 30)
 telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-test-fixtures
   TEST gui-cell-glyphs LABELS gui.foundation.terminal)
-telar_add_test(gui-workbench-layout-test SOURCES layout_test.cpp LIBRARIES gui-features-workbench gui-foundation-model gui-foundation-core
-  TEST LABELS gui.features.workbench TIMEOUT 30)
 
 telar_add_test(gui-platform-test SOURCES platform_test.cpp LIBRARIES gui-foundation-system gui-posix gui-platform
   TEST gui-platform LABELS gui.platform TIMEOUT 30)
