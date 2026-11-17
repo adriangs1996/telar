@@ -59,270 +59,274 @@ import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.terminal.ghostty;
 
-using telar::testing::check;
+namespace {
 
-using namespace telar;
-using namespace telar::runtime;
+  using telar::testing::check;
 
-static constexpr TerminalSize size{80, 24, 0, 0};
-static constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
+  using namespace telar;
+  using namespace telar::runtime;
 
-template <typename Operation>
-static void expectFailure(Operation operation, FailureCode code, std::string_view message) {
-  bool rejected = false;
+  constexpr TerminalSize size{80, 24, 0, 0};
+  constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
 
-  try {
-    operation();
-  } catch (const RequestError& failure) {
-    rejected = failure.code() == code && failure.what() == message;
+  template <typename Operation>
+  void expectFailure(Operation operation, FailureCode code, std::string_view message) {
+    bool rejected = false;
+
+    try {
+      operation();
+    } catch (const RequestError& failure) {
+      rejected = failure.code() == code && failure.what() == message;
+    }
+
+    check(rejected);
   }
 
-  check(rejected);
-}
+  void testLaunchScopes(ConcurrentMemory& memory) {
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    ClientPeer owner{memory, model, clients, ClientRole::interactive};
+    ClientPeer outsider{memory, model, clients, ClientRole::interactive};
 
-static void testLaunchScopes(ConcurrentMemory& memory) {
-  RuntimeModel model{memory};
-  ClientStore clients{memory};
-  LimitService limits;
-  NativeEventLoop<ConcurrentMemory> poller{memory};
-  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<decltype(poller)> workspaces{memory};
-  ClientPeer owner{memory, model, clients, ClientRole::interactive};
-  ClientPeer outsider{memory, model, clients, ClientRole::interactive};
+    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
+    const auto opened = owner.receive<PaneOpened>();
+    auto& pane = panes.require(model.panes, opened.pane_id);
 
-  workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
-  const auto opened = owner.receive<PaneOpened>();
-  auto& pane = panes.require(model.panes, opened.pane_id);
+    pane.cwd.assign("/observed/directory");
+    const Launch launch{.cwd = "/explicit", .cwd_source = pane.id, .arguments = arguments};
+    LaunchDirectory directory;
 
-  pane.cwd.assign("/observed/directory");
-  const Launch launch{.cwd = "/explicit", .cwd_source = pane.id, .arguments = arguments};
-  LaunchDirectory directory;
+    for (const LaunchDirectoryScope scope : {LaunchDirectoryScope{}, LaunchDirectoryScope{pane.location.workspace}, LaunchDirectoryScope{pane.location}}) {
+      const auto resolved = resolveLaunchDirectory(model, owner.session(), launch, directory, scope);
 
-  for (const LaunchDirectoryScope scope : {LaunchDirectoryScope{}, LaunchDirectoryScope{pane.location.workspace}, LaunchDirectoryScope{pane.location}}) {
-    const auto resolved = resolveLaunchDirectory(model, owner.session(), launch, directory, scope);
+      check(resolved.cwd == pane.cwd && resolved.cwd_source == 0 && resolved.arguments.data() == arguments.data());
+    }
 
-    check(resolved.cwd == pane.cwd && resolved.cwd_source == 0 && resolved.arguments.data() == arguments.data());
+    check(resolveLaunchDirectory(model, outsider.session(), Launch{.cwd = "/explicit"}, directory).cwd == "/explicit");
+
+    constexpr std::string_view unavailable = "cwd source pane is unavailable";
+
+    expectFailure([&] {
+      resolveLaunchDirectory(model, outsider.session(), launch, directory);
+    },
+        FailureCode::invalid_request,
+        unavailable);
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory, WorkspaceLocation{.id = pane.location.workspace.id + 1});
+    },
+        FailureCode::invalid_request,
+        unavailable);
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory, TabLocation{pane.location.workspace, pane.location.tab_id + 1});
+    },
+        FailureCode::invalid_request,
+        unavailable);
+
+    pane.requestClose();
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory);
+    },
+        FailureCode::invalid_request,
+        unavailable);
+    pane.requestClose();
+    check(pane.close_requested);
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory);
+    },
+        FailureCode::invalid_request,
+        unavailable);
+    pane.close_requested = false;
+    pane.exit_status = 0;
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory);
+    },
+        FailureCode::invalid_request,
+        unavailable);
+    pane.exit_status.reset();
+    panes.detach(model, clients, owner.session().id, pane.id);
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory);
+    },
+        FailureCode::invalid_request,
+        unavailable);
+
+    owner.session().attachments.push_back(makeOwned<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
+    panes.remove(model, clients, pane.id);
+    expectFailure([&] {
+      resolveLaunchDirectory(model, owner.session(), launch, directory);
+    },
+        FailureCode::invalid_request,
+        unavailable);
   }
 
-  check(resolveLaunchDirectory(model, outsider.session(), Launch{.cwd = "/explicit"}, directory).cwd == "/explicit");
+  void testEmptyDefaultTab(ConcurrentMemory& memory) {
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    ClientPeer owner{memory, model, clients, ClientRole::interactive};
+    ClientPeer spectator{memory, model, clients, ClientRole::interactive};
+    const auto identity = model.workspaces.nextId();
+    auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
 
-  constexpr std::string_view unavailable = "cwd source pane is unavailable";
+    workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
+    workspace->tabs.emplace_back(memory, model.next_tab_id++, "Running");
+    auto& stored = *workspace;
 
-  expectFailure([&] {
-    resolveLaunchDirectory(model, outsider.session(), launch, directory);
-  },
-      FailureCode::invalid_request,
-      unavailable);
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory, WorkspaceLocation{.id = pane.location.workspace.id + 1});
-  },
-      FailureCode::invalid_request,
-      unavailable);
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory, TabLocation{pane.location.workspace, pane.location.tab_id + 1});
-  },
-      FailureCode::invalid_request,
-      unavailable);
+    model.workspaces.insert(identity, std::move(workspace));
+    const TabLocation empty{WorkspaceLocation{.id = identity}, stored.tabs.front().id};
+    const Launch launch{.cwd = "/", .arguments = arguments};
+    Command command{memory, launch};
+    auto& existing = panes.launch(model, nullptr, false, command, TabLocation{empty.workspace, stored.tabs.back().id}, size);
 
-  pane.requestClose();
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory);
-  },
-      FailureCode::invalid_request,
-      unavailable);
-  pane.requestClose();
-  check(pane.close_requested);
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory);
-  },
-      FailureCode::invalid_request,
-      unavailable);
-  pane.close_requested = false;
-  pane.exit_status = 0;
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory);
-  },
-      FailureCode::invalid_request,
-      unavailable);
-  pane.exit_status.reset();
-  panes.detach(model, clients, owner.session().id, pane.id);
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory);
-  },
-      FailureCode::invalid_request,
-      unavailable);
+    stored.tabs.back().panes.push_back(existing.id);
 
-  owner.session().attachments.push_back(makeOwned<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
-  panes.remove(model, clients, pane.id);
-  expectFailure([&] {
-    resolveLaunchDirectory(model, owner.session(), launch, directory);
-  },
-      FailureCode::invalid_request,
-      unavailable);
+    expectFailure([&] {
+      workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
+    },
+        FailureCode::pane_not_found,
+        "workspace has no running pane");
+    expectFailure([&] {
+      workspaces.createPane(model, panes, clients, owner.session().id, CreatePane{.request_id = 2, .location = empty, .size = size, .launch = launch});
+    },
+        FailureCode::pane_not_found,
+        "tab not found");
+
+    stored.geometry_client = spectator.session().id;
+    expectFailure([&] {
+      workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 3, .size = size, .launch = launch});
+    },
+        FailureCode::resource_limit,
+        "workspace geometry is leased by another client");
+    releaseAllGeometry(model.workspaces, clients, spectator.session().id);
+    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 4, .size = size, .launch = launch});
+    const auto created = owner.receive<PaneOpened>();
+
+    check(created.created && created.location.workspace.id == identity && created.location.tab_id == empty.tab_id);
+    check(stored.tabs.front().panes.size() == 1 && stored.tabs.back().panes.size() == 1);
+    check(stored.geometry_client == owner.session().id);
+
+    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 5, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
+    const auto reused = owner.receive<PaneOpened>();
+
+    check(!reused.created && reused.pane_id == created.pane_id);
+  }
+
+  void testFailedLaunchLease(ConcurrentMemory& memory) {
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    ClientPeer owner{memory, model, clients, ClientRole::interactive};
+    const auto identity = model.workspaces.nextId();
+    auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
+
+    workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
+    auto& stored = *workspace;
+
+    model.workspaces.insert(identity, std::move(workspace));
+    const CreateTab request{.request_id = 1, .workspace = {.id = identity}, .label = "Invalid", .size = size, .launch = {.cwd = "/", .cwd_source = 999, .arguments = arguments}};
+
+    expectFailure([&] {
+      workspaces.createTab(model, panes, clients, owner.session().id, request);
+    },
+        FailureCode::invalid_request,
+        "cwd source pane is unavailable");
+    check(stored.tabs.size() == 1 && stored.geometry_client == owner.session().id);
+    check(!owner.session().workspace);
+    releaseAllGeometry(model.workspaces, clients, owner.session().id);
+    check(!stored.geometry_client);
+  }
+
+  void testPaneReuseAndBackgroundColors(ConcurrentMemory& memory) {
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    ClientPeer owner{memory, model, clients, ClientRole::interactive};
+
+    owner.session().colors.foreground = std::array<Byte, 3>{17, 34, 51};
+    const Launch launch{.cwd = "/", .arguments = arguments};
+    const OpenPane request{.request_id = 1, .size = size, .launch = launch};
+
+    workspaces.open(model, panes, clients, owner.session().id, request);
+    const auto opened = owner.receive<PaneOpened>();
+    auto& pane = panes.require(model.panes, opened.pane_id);
+
+    pane.terminal.refresh();
+    const auto revision = pane.terminal.screen.revision;
+    const auto* attachment = owner.session().attachment(pane.id);
+
+    workspaces.open(model, panes, clients, owner.session().id, request);
+    const auto reused = owner.receive<PaneOpened>();
+
+    pane.terminal.refresh();
+    check(!reused.created && reused.pane_id == pane.id);
+    check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen.revision == revision);
+
+    const auto& background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
+    GhosttyColorRgb foreground;
+
+    checkGhostty(ghostty_terminal_get(background.terminal.handle(), GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND, &foreground));
+    check(foreground.r == 17 && foreground.g == 34 && foreground.b == 51);
+  }
+
+  void testExhaustedTabIdentities(ConcurrentMemory& memory) {
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    ClientPeer owner{memory, model, clients, ClientRole::interactive};
+    const Launch launch{.cwd = "/", .arguments = arguments};
+
+    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = launch});
+    const auto opened = owner.receive<PaneOpened>();
+
+    model.next_tab_id = 0;
+
+    expectFailure([&] {
+      workspaces.createWorkspace(model, panes, clients, owner.session().id, CreateWorkspace{.request_id = 2, .size = size, .launch = launch});
+    },
+        FailureCode::resource_limit,
+        "could not create workspace");
+    expectFailure([&] {
+      workspaces.createTab(model, panes, clients, owner.session().id, CreateTab{.request_id = 3, .workspace = opened.location.workspace, .size = size, .launch = launch});
+    },
+        FailureCode::spawn_failed,
+        "could not start the command");
+    expectFailure([&] {
+      workspaces.launchBackground(model, panes, nullptr, false, LaunchTab{.request_id = 4, .workspace = opened.location.workspace.id, .size = size, .launch = launch});
+    },
+        FailureCode::spawn_failed,
+        "could not start the command");
+    check(model.workspaces.size() == 1 && model.panes.size() == 1);
+    check(model.workspaces.find(opened.location.workspace.id)->tabs.size() == 1);
+  }
+
+  void testLaunchDirectory() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+
+    testLaunchScopes(memory);
+    testEmptyDefaultTab(memory);
+    testFailedLaunchLease(memory);
+    testPaneReuseAndBackgroundColors(memory);
+    testExhaustedTabIdentities(memory);
+  }
+
+  const telar::testing::Case case_launch_directory{"launch_directory.launch_directory", testLaunchDirectory};
+
 }
-
-static void testEmptyDefaultTab(ConcurrentMemory& memory) {
-  RuntimeModel model{memory};
-  ClientStore clients{memory};
-  LimitService limits;
-  NativeEventLoop<ConcurrentMemory> poller{memory};
-  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<decltype(poller)> workspaces{memory};
-  ClientPeer owner{memory, model, clients, ClientRole::interactive};
-  ClientPeer spectator{memory, model, clients, ClientRole::interactive};
-  const auto identity = model.workspaces.nextId();
-  auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
-
-  workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
-  workspace->tabs.emplace_back(memory, model.next_tab_id++, "Running");
-  auto& stored = *workspace;
-
-  model.workspaces.insert(identity, std::move(workspace));
-  const TabLocation empty{WorkspaceLocation{.id = identity}, stored.tabs.front().id};
-  const Launch launch{.cwd = "/", .arguments = arguments};
-  Command command{memory, launch};
-  auto& existing = panes.launch(model, nullptr, false, command, TabLocation{empty.workspace, stored.tabs.back().id}, size);
-
-  stored.tabs.back().panes.push_back(existing.id);
-
-  expectFailure([&] {
-    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
-  },
-      FailureCode::pane_not_found,
-      "workspace has no running pane");
-  expectFailure([&] {
-    workspaces.createPane(model, panes, clients, owner.session().id, CreatePane{.request_id = 2, .location = empty, .size = size, .launch = launch});
-  },
-      FailureCode::pane_not_found,
-      "tab not found");
-
-  stored.geometry_client = spectator.session().id;
-  expectFailure([&] {
-    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 3, .size = size, .launch = launch});
-  },
-      FailureCode::resource_limit,
-      "workspace geometry is leased by another client");
-  releaseAllGeometry(model.workspaces, clients, spectator.session().id);
-  workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 4, .size = size, .launch = launch});
-  const auto created = owner.receive<PaneOpened>();
-
-  check(created.created && created.location.workspace.id == identity && created.location.tab_id == empty.tab_id);
-  check(stored.tabs.front().panes.size() == 1 && stored.tabs.back().panes.size() == 1);
-  check(stored.geometry_client == owner.session().id);
-
-  workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 5, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
-  const auto reused = owner.receive<PaneOpened>();
-
-  check(!reused.created && reused.pane_id == created.pane_id);
-}
-
-static void testFailedLaunchLease(ConcurrentMemory& memory) {
-  RuntimeModel model{memory};
-  ClientStore clients{memory};
-  LimitService limits;
-  NativeEventLoop<ConcurrentMemory> poller{memory};
-  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<decltype(poller)> workspaces{memory};
-  ClientPeer owner{memory, model, clients, ClientRole::interactive};
-  const auto identity = model.workspaces.nextId();
-  auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
-
-  workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
-  auto& stored = *workspace;
-
-  model.workspaces.insert(identity, std::move(workspace));
-  const CreateTab request{.request_id = 1, .workspace = {.id = identity}, .label = "Invalid", .size = size, .launch = {.cwd = "/", .cwd_source = 999, .arguments = arguments}};
-
-  expectFailure([&] {
-    workspaces.createTab(model, panes, clients, owner.session().id, request);
-  },
-      FailureCode::invalid_request,
-      "cwd source pane is unavailable");
-  check(stored.tabs.size() == 1 && stored.geometry_client == owner.session().id);
-  check(!owner.session().workspace);
-  releaseAllGeometry(model.workspaces, clients, owner.session().id);
-  check(!stored.geometry_client);
-}
-
-static void testPaneReuseAndBackgroundColors(ConcurrentMemory& memory) {
-  RuntimeModel model{memory};
-  ClientStore clients{memory};
-  LimitService limits;
-  NativeEventLoop<ConcurrentMemory> poller{memory};
-  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<decltype(poller)> workspaces{memory};
-  ClientPeer owner{memory, model, clients, ClientRole::interactive};
-
-  owner.session().colors.foreground = std::array<Byte, 3>{17, 34, 51};
-  const Launch launch{.cwd = "/", .arguments = arguments};
-  const OpenPane request{.request_id = 1, .size = size, .launch = launch};
-
-  workspaces.open(model, panes, clients, owner.session().id, request);
-  const auto opened = owner.receive<PaneOpened>();
-  auto& pane = panes.require(model.panes, opened.pane_id);
-
-  pane.terminal.refresh();
-  const auto revision = pane.terminal.screen.revision;
-  const auto* attachment = owner.session().attachment(pane.id);
-
-  workspaces.open(model, panes, clients, owner.session().id, request);
-  const auto reused = owner.receive<PaneOpened>();
-
-  pane.terminal.refresh();
-  check(!reused.created && reused.pane_id == pane.id);
-  check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen.revision == revision);
-
-  const auto& background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
-  GhosttyColorRgb foreground;
-
-  checkGhostty(ghostty_terminal_get(background.terminal.handle(), GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND, &foreground));
-  check(foreground.r == 17 && foreground.g == 34 && foreground.b == 51);
-}
-
-static void testExhaustedTabIdentities(ConcurrentMemory& memory) {
-  RuntimeModel model{memory};
-  ClientStore clients{memory};
-  LimitService limits;
-  NativeEventLoop<ConcurrentMemory> poller{memory};
-  PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<decltype(poller)> workspaces{memory};
-  ClientPeer owner{memory, model, clients, ClientRole::interactive};
-  const Launch launch{.cwd = "/", .arguments = arguments};
-
-  workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = launch});
-  const auto opened = owner.receive<PaneOpened>();
-
-  model.next_tab_id = 0;
-
-  expectFailure([&] {
-    workspaces.createWorkspace(model, panes, clients, owner.session().id, CreateWorkspace{.request_id = 2, .size = size, .launch = launch});
-  },
-      FailureCode::resource_limit,
-      "could not create workspace");
-  expectFailure([&] {
-    workspaces.createTab(model, panes, clients, owner.session().id, CreateTab{.request_id = 3, .workspace = opened.location.workspace, .size = size, .launch = launch});
-  },
-      FailureCode::spawn_failed,
-      "could not start the command");
-  expectFailure([&] {
-    workspaces.launchBackground(model, panes, nullptr, false, LaunchTab{.request_id = 4, .workspace = opened.location.workspace.id, .size = size, .launch = launch});
-  },
-      FailureCode::spawn_failed,
-      "could not start the command");
-  check(model.workspaces.size() == 1 && model.panes.size() == 1);
-  check(model.workspaces.find(opened.location.workspace.id)->tabs.size() == 1);
-}
-
-static void testLaunchDirectory() {
-  SystemAllocator system;
-  MemoryAdapter adapter{system};
-  ConcurrentMemory& memory = adapter;
-
-  testLaunchScopes(memory);
-  testEmptyDefaultTab(memory);
-  testFailedLaunchLease(memory);
-  testPaneReuseAndBackgroundColors(memory);
-  testExhaustedTabIdentities(memory);
-}
-
-static const telar::testing::Case case_launch_directory{"launch_directory.launch_directory", testLaunchDirectory};

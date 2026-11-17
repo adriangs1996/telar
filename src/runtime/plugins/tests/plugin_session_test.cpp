@@ -68,213 +68,217 @@ import telar.runtime.platform.signals;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
 
-using telar::testing::check;
+namespace {
 
-using namespace telar;
-using namespace telar::runtime;
-namespace tap = telar::runtime::plugins;
+  using telar::testing::check;
 
-int runPluginSessionFixture(std::string_view mode) {
-  SystemAllocator system;
-  BudgetAllocator budget{system, 128 * 1024 * 1024};
-  MemoryAdapter adapter{budget};
-  Memory& memory = adapter;
+  using namespace telar;
+  using namespace telar::runtime;
+  namespace tap = telar::runtime::plugins;
 
-  if (mode.starts_with('/')) {
-    tap::runWorker(memory, mode.data());
-    return 0;
-  }
+  int runPluginSessionFixture(std::string_view mode) {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 128 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
 
-  if (mode == "blocked-write") {
-    ::pause();
-    return 0;
-  }
-
-  check(::getenv("HOME") == nullptr);
-  std::array<char, PATH_MAX> cwd;
-
-  check(::getcwd(cwd.data(), cwd.size()) != nullptr && std::string_view{cwd.data()} == "/");
-  tap::PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
-  tap::FrameChannel channel{stream};
-  std::array<Byte, tap::Limits::effect_bytes> output;
-  unsigned count = 0;
-
-  while (auto frame = channel.receive(memory, tap::Limits::frame_bytes)) {
-    ++count;
-    const auto exchange = tap::Protocol::decodeExchange(frame->bytes());
-    const auto event_id = exchange.identity.id;
-
-    if (mode == "closed") {
+    if (mode.starts_with('/')) {
+      tap::runWorker(memory, mode.data());
       return 0;
     }
 
-    if (mode == "timeout") {
+    if (mode == "blocked-write") {
       ::pause();
       return 0;
     }
 
-    if (mode == "oversized") {
-      const std::array<Byte, 4> prefix{1, 0, 1, 0};
+    check(::getenv("HOME") == nullptr);
+    std::array<char, PATH_MAX> cwd;
 
-      check(writeDescriptor(STDOUT_FILENO, prefix) == 0);
-      continue;
-    }
+    check(::getcwd(cwd.data(), cwd.size()) != nullptr && std::string_view{cwd.data()} == "/");
+    tap::PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
+    tap::FrameChannel channel{stream};
+    std::array<Byte, tap::Limits::effect_bytes> output;
+    unsigned count = 0;
 
-    if (mode == "invalid") {
-      channel.send(std::array<Byte, 1>{255});
-      continue;
-    }
+    while (auto frame = channel.receive(memory, tap::Limits::frame_bytes)) {
+      ++count;
+      const auto exchange = tap::Protocol::decodeExchange(frame->bytes());
+      const auto event_id = exchange.identity.id;
 
-    if (mode == "callback-error" && count == 1) {
-      channel.send(tap::Protocol::encodeError(output, event_id, "callback failed"));
-      continue;
-    }
-
-    if (mode == "stderr") {
-      std::array<Byte, 4096> bytes;
-
-      bytes.fill('e');
-      for (unsigned index = 0; index < 256; ++index) {
-        check(writeDescriptor(STDERR_FILENO, bytes) == 0);
+      if (mode == "closed") {
+        return 0;
       }
+
+      if (mode == "timeout") {
+        ::pause();
+        return 0;
+      }
+
+      if (mode == "oversized") {
+        const std::array<Byte, 4> prefix{1, 0, 1, 0};
+
+        check(writeDescriptor(STDOUT_FILENO, prefix) == 0);
+        continue;
+      }
+
+      if (mode == "invalid") {
+        channel.send(std::array<Byte, 1>{255});
+        continue;
+      }
+
+      if (mode == "callback-error" && count == 1) {
+        channel.send(tap::Protocol::encodeError(output, event_id, "callback failed"));
+        continue;
+      }
+
+      if (mode == "stderr") {
+        std::array<Byte, 4096> bytes;
+
+        bytes.fill('e');
+        for (unsigned index = 0; index < 256; ++index) {
+          check(writeDescriptor(STDERR_FILENO, bytes) == 0);
+        }
+      }
+
+      tap::EffectBatch effects;
+
+      effects.count = 1;
+      effects.notifications[0] = {.level = NotificationLevel::info, .duration_ms = 4000, .title = count == 1 ? "first" : "next", .message = "fixture"};
+      channel.send(tap::Protocol::encodeEffects(output, mode == "stale" ? event_id + 1 : event_id, effects));
     }
 
-    tap::EffectBatch effects;
-
-    effects.count = 1;
-    effects.notifications[0] = {.level = NotificationLevel::info, .duration_ms = 4000, .title = count == 1 ? "first" : "next", .message = "fixture"};
-    channel.send(tap::Protocol::encodeEffects(output, mode == "stale" ? event_id + 1 : event_id, effects));
+    return 0;
   }
 
-  return 0;
-}
+  void testRestartWindow() {
+    using namespace std::chrono_literals;
+    tap::RestartWindow burst;
 
-static void testRestartWindow() {
-  using namespace std::chrono_literals;
-  tap::RestartWindow burst;
-
-  for (unsigned index = 0; index < 4; ++index) {
-    check(!burst.record(0ms));
-  }
-
-  check(burst.record(10min));
-
-  tap::RestartWindow spread;
-
-  check(!spread.record(0ms));
-  for (unsigned index = 0; index < 4; ++index) {
-    check(!spread.record(10min + 1ms));
-  }
-
-  check(!spread.record(10min + 2ms));
-  check(spread.record(10min + 3ms));
-}
-
-static void testPluginSessions() {
-  SystemAllocator system;
-  BudgetAllocator budget{system, 4 * 1024 * 1024};
-  SynchronizedAllocator synchronized{budget};
-  MemoryAdapter adapter{synchronized};
-  ConcurrentMemory& memory = adapter;
-  const ExecutablePath executable;
-  const std::string executable_path{executable.view()};
-  CancellationSignal cancellation;
-  CaptureQuota quota{4096};
-  std::array<Byte, 4096> output;
-  CapturedExchange exchange{memory};
-  const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
-
-  exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
-  exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
-  const auto frame = tap::Protocol::encodeExchange(output, {73, 1}, exchange);
-  tap::ServiceSpec specification;
-
-  specification.plugin_id = 19;
-  specification.generation = 1;
-  specification.declared.insert(tap::Capability::proxy_tap);
-  specification.declared.insert(tap::Capability::notifications);
-  specification.granted = specification.declared;
-
-  for (const auto* mode : {"echo", "callback-error", "stderr"}) {
-    tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = mode, .cancellation = cancellation}};
-    const auto process = session.processId();
-    auto first = session.exchange(specification, 73, frame);
-
-    if (std::string_view{mode} == "callback-error") {
-      check(!first);
-    } else {
-      check(first && first->batch().notifications[0].title == "first");
-      check(first->authorized(specification));
-      auto stale = specification;
-
-      ++stale.generation;
-      check(!first->authorized(stale));
-      stale = specification;
-      stale.digest[0] ^= 1;
-      check(!first->authorized(stale));
+    for (unsigned index = 0; index < 4; ++index) {
+      check(!burst.record(0ms));
     }
 
-    if (std::string_view{mode} == "stderr") {
-      check(session.retainedError().size() == tap::Limits::stderr_bytes);
+    check(burst.record(10min));
+
+    tap::RestartWindow spread;
+
+    check(!spread.record(0ms));
+    for (unsigned index = 0; index < 4; ++index) {
+      check(!spread.record(10min + 1ms));
     }
 
-    const auto second = session.exchange(specification, 73, frame);
-
-    check(second && second->batch().notifications[0].title == "next" && session.processId() == process);
+    check(!spread.record(10min + 2ms));
+    check(spread.record(10min + 3ms));
   }
 
-  for (const auto* mode : {"closed", "oversized", "invalid", "stale", "timeout", "blocked-write"}) {
-    tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = mode, .cancellation = cancellation, .timeout = std::chrono::milliseconds{100}}};
-    const bool timed = std::string_view{mode} == "timeout" || std::string_view{mode} == "blocked-write";
-    bool rejected = false;
+  void testPluginSessions() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 4 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    const ExecutablePath executable;
+    const std::string executable_path{executable.view()};
+    CancellationSignal cancellation;
+    CaptureQuota quota{4096};
+    std::array<Byte, 4096> output;
+    CapturedExchange exchange{memory};
+    const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
-    try {
-      if (std::string_view{mode} == "blocked-write") {
-        SensitiveAllocation large{memory, 1024 * 1024};
+    exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
+    exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
+    const auto frame = tap::Protocol::encodeExchange(output, {73, 1}, exchange);
+    tap::ServiceSpec specification;
 
-        std::ranges::fill(large.bytes(), 0);
-        session.exchange(specification, 73, large.bytes());
+    specification.plugin_id = 19;
+    specification.generation = 1;
+    specification.declared.insert(tap::Capability::proxy_tap);
+    specification.declared.insert(tap::Capability::notifications);
+    specification.granted = specification.declared;
+
+    for (const auto* mode : {"echo", "callback-error", "stderr"}) {
+      tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = mode, .cancellation = cancellation}};
+      const auto process = session.processId();
+      auto first = session.exchange(specification, 73, frame);
+
+      if (std::string_view{mode} == "callback-error") {
+        check(!first);
       } else {
-        session.exchange(specification, 73, frame);
+        check(first && first->batch().notifications[0].title == "first");
+        check(first->authorized(specification));
+        auto stale = specification;
+
+        ++stale.generation;
+        check(!first->authorized(stale));
+        stale = specification;
+        stale.digest[0] ^= 1;
+        check(!first->authorized(stale));
       }
-    } catch (const SystemError& error) {
-      rejected = !timed || error.code() == ETIMEDOUT;
-    } catch (const EncodingError&) {
-      rejected = !timed;
+
+      if (std::string_view{mode} == "stderr") {
+        check(session.retainedError().size() == tap::Limits::stderr_bytes);
+      }
+
+      const auto second = session.exchange(specification, 73, frame);
+
+      check(second && second->batch().notifications[0].title == "next" && session.processId() == process);
     }
 
-    check(rejected);
-  }
+    for (const auto* mode : {"closed", "oversized", "invalid", "stale", "timeout", "blocked-write"}) {
+      tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = mode, .cancellation = cancellation, .timeout = std::chrono::milliseconds{100}}};
+      const bool timed = std::string_view{mode} == "timeout" || std::string_view{mode} == "blocked-write";
+      bool rejected = false;
 
-  {
-    tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = "timeout", .cancellation = cancellation}};
-    std::jthread cancel{[&] {
-      std::this_thread::sleep_for(std::chrono::milliseconds{20});
-      cancellation.request();
-    }};
+      try {
+        if (std::string_view{mode} == "blocked-write") {
+          SensitiveAllocation large{memory, 1024 * 1024};
 
-    bool cancelled = false;
+          std::ranges::fill(large.bytes(), 0);
+          session.exchange(specification, 73, large.bytes());
+        } else {
+          session.exchange(specification, 73, frame);
+        }
+      } catch (const SystemError& error) {
+        rejected = !timed || error.code() == ETIMEDOUT;
+      } catch (const EncodingError&) {
+        rejected = !timed;
+      }
 
-    try {
-      session.exchange(specification, 73, frame);
-    } catch (const SystemError& error) {
-      cancelled = error.code() == ECANCELED;
+      check(rejected);
     }
 
-    check(cancelled);
+    {
+      tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = "timeout", .cancellation = cancellation}};
+      std::jthread cancel{[&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        cancellation.request();
+      }};
+
+      bool cancelled = false;
+
+      try {
+        session.exchange(specification, 73, frame);
+      } catch (const SystemError& error) {
+        cancelled = error.code() == ECANCELED;
+      }
+
+      check(cancelled);
+    }
+
+    exchange.request.reset();
+    check(budget.liveBytes() == 0 && quota.used() == 0);
   }
 
-  exchange.request.reset();
-  check(budget.liveBytes() == 0 && quota.used() == 0);
+  const telar::testing::Case case_plugin_sessions{"plugin_session.plugin_sessions", testPluginSessions};
+  const telar::testing::Case case_restart_window{"plugin_session.restart_window", testRestartWindow};
+
+  // The plugin runtime starts its workers from this executable.
+  const telar::testing::Mode tap_worker{
+      "tap-worker",
+      [](int argc, char** argv) {
+        return argc == 3 ? runPluginSessionFixture(argv[2]) : 2;
+      },
+  };
+
 }
-
-static const telar::testing::Case case_plugin_sessions{"plugin_session.plugin_sessions", testPluginSessions};
-static const telar::testing::Case case_restart_window{"plugin_session.restart_window", testRestartWindow};
-
-// The plugin runtime starts its workers from this executable.
-static const telar::testing::Mode tap_worker{
-    "tap-worker",
-    [](int argc, char** argv) {
-      return argc == 3 ? runPluginSessionFixture(argv[2]) : 2;
-    },
-};

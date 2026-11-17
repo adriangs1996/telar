@@ -15,70 +15,74 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 
-using telar::testing::check;
+namespace {
 
-using namespace telar;
-using namespace telar::runtime;
+  using telar::testing::check;
 
-static void testFrameSync() {
-  SystemAllocator system;
-  BudgetAllocator budget{system, 16 * 1024 * 1024};
-  SynchronizedAllocator synchronized{budget};
-  MemoryAdapter adapter{synchronized};
-  ConcurrentMemory& memory = adapter;
-  Screen screen{memory};
+  using namespace telar;
+  using namespace telar::runtime;
 
-  screen.resize(80, 24);
-  screen.scroll.total_rows = 24;
-  FrameSync sync{memory, 7};
-  std::array<Byte, 128 * 1024> decoded{};
-  DecodeStorage storage{decoded};
+  void testFrameSync() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 16 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    Screen screen{memory};
 
-  auto payload = sync.prepare(screen);
-  auto frame = Codec::decode<PaneFrame>(payload, storage);
+    screen.resize(80, 24);
+    screen.scroll.total_rows = 24;
+    FrameSync sync{memory, 7};
+    std::array<Byte, 128 * 1024> decoded{};
+    DecodeStorage storage{decoded};
 
-  check(frame.frame_id == 1);
-  check(frame.base_frame_id == 0);
-  check(frame.spans.size() == 1);
-  check(frame.spans[0].count == 80 * 24);
-  check(!sync.acknowledge(0));
-  check(!sync.acknowledge(2));
-  check(sync.prepare(screen).empty());
+    auto payload = sync.prepare(screen);
+    auto frame = Codec::decode<PaneFrame>(payload, storage);
 
-  screen.cells[17].text[0] = 'X';
-  screen.row_revisions[0] = ++screen.revision;
-  check(sync.prepare(screen).empty());
-  check(sync.acknowledge(1));
-  check(!sync.acknowledge(1));
-  storage = DecodeStorage{decoded};
-  frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
-  check(frame.frame_id == 2);
-  check(frame.base_frame_id == 1);
-  check(frame.spans.size() == 1);
-  check(frame.spans[0].start == 17);
-  check(frame.spans[0].count == 1);
-  check(frame.spans[0].reader().next()->text[0] == 'X');
-  check(sync.acknowledge(2));
+    check(frame.frame_id == 1);
+    check(frame.base_frame_id == 0);
+    check(frame.spans.size() == 1);
+    check(frame.spans[0].count == 80 * 24);
+    check(!sync.acknowledge(0));
+    check(!sync.acknowledge(2));
+    check(sync.prepare(screen).empty());
 
-  const auto allocations = budget.allocations();
-
-  ++screen.revision;
-  check(sync.prepare(screen).empty());
-  sync.requestSnapshot();
-  storage = DecodeStorage{decoded};
-  frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
-  check(frame.base_frame_id == 0);
-  check(budget.allocations() == allocations);
-  check(sync.acknowledge(frame.frame_id));
-  for (const bool enabled : {true, false}) {
-    screen.input_modes.paste_events = enabled;
-    ++screen.revision;
+    screen.cells[17].text[0] = 'X';
+    screen.row_revisions[0] = ++screen.revision;
+    check(sync.prepare(screen).empty());
+    check(sync.acknowledge(1));
+    check(!sync.acknowledge(1));
     storage = DecodeStorage{decoded};
     frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
-    check(frame.input_modes.paste_events == enabled && frame.spans.empty());
-    check(sync.acknowledge(frame.frame_id));
-    check(sync.prepare(screen).empty());
-  }
-}
+    check(frame.frame_id == 2);
+    check(frame.base_frame_id == 1);
+    check(frame.spans.size() == 1);
+    check(frame.spans[0].start == 17);
+    check(frame.spans[0].count == 1);
+    check(frame.spans[0].reader().next()->text[0] == 'X');
+    check(sync.acknowledge(2));
 
-static const telar::testing::Case case_frame_sync{"frame_sync.frame_sync", testFrameSync};
+    const auto allocations = budget.allocations();
+
+    ++screen.revision;
+    check(sync.prepare(screen).empty());
+    sync.requestSnapshot();
+    storage = DecodeStorage{decoded};
+    frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
+    check(frame.base_frame_id == 0);
+    check(budget.allocations() == allocations);
+    check(sync.acknowledge(frame.frame_id));
+    for (const bool enabled : {true, false}) {
+      screen.input_modes.paste_events = enabled;
+      ++screen.revision;
+      storage = DecodeStorage{decoded};
+      frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
+      check(frame.input_modes.paste_events == enabled && frame.spans.empty());
+      check(sync.acknowledge(frame.frame_id));
+      check(sync.prepare(screen).empty());
+    }
+  }
+
+  const telar::testing::Case case_frame_sync{"frame_sync.frame_sync", testFrameSync};
+
+}

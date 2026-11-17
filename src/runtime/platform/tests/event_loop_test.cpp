@@ -42,172 +42,176 @@ import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.platform.event_loop;
 
-using telar::testing::check;
-
-using namespace telar;
-using namespace telar::runtime;
-
 namespace {
 
-  std::array<FileDescriptor, 2> socketPair() {
-    int descriptors[2];
+  using telar::testing::check;
 
-    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) == 0);
-    return {FileDescriptor{descriptors[0]}, FileDescriptor{descriptors[1]}};
-  }
+  using namespace telar;
+  using namespace telar::runtime;
 
-  void interestsAndTokens(SystemAllocator& memory) {
-    NativeEventLoop<SystemAllocator> poller{memory};
-    std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
-    auto sockets = socketPair();
-    constexpr std::uint64_t token = UINT64_MAX;
+  namespace {
 
-    poller.watch(sockets[0].get(), token);
-    poller.writeInterest(sockets[0].get(), token, true);
-    const auto writable = poller.wait(std::chrono::nanoseconds::zero(), ready);
+    std::array<FileDescriptor, 2> socketPair() {
+      int descriptors[2];
 
-    check(std::ranges::any_of(writable, [&](const Event& event) {
-      return event.descriptor == sockets[0].get() && event.token == token && event.kind == EventKind::writable;
-    }));
-
-    poller.writeInterest(sockets[0].get(), token, false);
-    check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
-    constexpr char payload = 'x';
-
-    check(::write(sockets[1].get(), &payload, sizeof(payload)) == sizeof(payload));
-    const auto readable = poller.wait(std::chrono::milliseconds{100}, ready);
-
-    check(std::ranges::any_of(readable, [&](const Event& event) {
-      return event.descriptor == sockets[0].get() && event.token == token && event.kind == EventKind::readable;
-    }));
-
-    poller.readInterest(sockets[0].get(), token, false);
-    check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
-    poller.readInterest(sockets[0].get(), token, true);
-    char received = 0;
-
-    check(::read(sockets[0].get(), &received, sizeof(received)) == sizeof(received));
-    check(received == payload);
-    sockets[1].reset();
-    const auto closed = poller.wait(std::chrono::milliseconds{100}, ready);
-
-    check(std::ranges::any_of(closed, [&](const Event& event) {
-      return event.descriptor == sockets[0].get() && event.closed;
-    }));
-
-    poller.remove(sockets[0].get());
-    check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
-  }
-
-  void replaceDescriptor(SystemAllocator& memory) {
-    NativeEventLoop<SystemAllocator> poller{memory};
-    std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
-    auto first = socketPair();
-    const auto descriptor = first[0].get();
-    constexpr std::uint64_t previous_token = UINT64_MAX;
-    constexpr std::uint64_t replacement_token = 1;
-
-    poller.watch(descriptor, previous_token);
-    FileDescriptor retained{::dup(descriptor)};
-
-    check(static_cast<bool>(retained));
-    first[0].reset();
-    auto replacement = socketPair();
-    if (replacement[0].get() != descriptor) {
-      check(::dup2(replacement[0].get(), descriptor) == descriptor);
-      replacement[0].reset(descriptor);
+      check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) == 0);
+      return {FileDescriptor{descriptors[0]}, FileDescriptor{descriptors[1]}};
     }
 
-    poller.watch(descriptor, replacement_token);
-    constexpr char payload = 'r';
-
-    check(::write(first[1].get(), &payload, sizeof(payload)) == sizeof(payload));
-    check(::write(replacement[1].get(), &payload, sizeof(payload)) == sizeof(payload));
-    const auto events = poller.wait(std::chrono::milliseconds{100}, ready);
-
-    check(events.size() == 1);
-    for (const auto& event : events) {
-      check(event.descriptor == descriptor && event.token == replacement_token);
-    }
-
-    char received = 0;
-
-    check(::read(replacement[0].get(), &received, sizeof(received)) == sizeof(received));
-    check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
-  }
-
-  void signals(SystemAllocator& memory) {
-    struct sigaction previous{};
-
-    check(::sigaction(SIGUSR1, nullptr, &previous) == 0);
-    {
+    void interestsAndTokens(SystemAllocator& memory) {
       NativeEventLoop<SystemAllocator> poller{memory};
       std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
+      auto sockets = socketPair();
+      constexpr std::uint64_t token = UINT64_MAX;
 
-      poller.watchSignal(SIGUSR1);
-      poller.watchSignal(SIGCHLD);
-      std::thread notifier{[] {
-        ::kill(::getpid(), SIGUSR1);
-      }};
+      poller.watch(sockets[0].get(), token);
+      poller.writeInterest(sockets[0].get(), token, true);
+      const auto writable = poller.wait(std::chrono::nanoseconds::zero(), ready);
 
-      notifier.join();
-      bool notified = false;
+      check(std::ranges::any_of(writable, [&](const Event& event) {
+        return event.descriptor == sockets[0].get() && event.token == token && event.kind == EventKind::writable;
+      }));
 
-      for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
-        notified |= event.kind == EventKind::signal && event.descriptor == SIGUSR1;
-      }
+      poller.writeInterest(sockets[0].get(), token, false);
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+      constexpr char payload = 'x';
 
-      check(notified);
+      check(::write(sockets[1].get(), &payload, sizeof(payload)) == sizeof(payload));
+      const auto readable = poller.wait(std::chrono::milliseconds{100}, ready);
 
-      const auto child = ::fork();
+      check(std::ranges::any_of(readable, [&](const Event& event) {
+        return event.descriptor == sockets[0].get() && event.token == token && event.kind == EventKind::readable;
+      }));
 
-      check(child >= 0);
-      if (child == 0) {
-        _exit(7);
-      }
+      poller.readInterest(sockets[0].get(), token, false);
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+      poller.readInterest(sockets[0].get(), token, true);
+      char received = 0;
 
-      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
-      bool reaped = false;
+      check(::read(sockets[0].get(), &received, sizeof(received)) == sizeof(received));
+      check(received == payload);
+      sockets[1].reset();
+      const auto closed = poller.wait(std::chrono::milliseconds{100}, ready);
 
-      while (!reaped && std::chrono::steady_clock::now() < deadline) {
-        for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
-          reaped |= event.kind == EventKind::signal && event.descriptor == SIGCHLD;
-        }
-      }
+      check(std::ranges::any_of(closed, [&](const Event& event) {
+        return event.descriptor == sockets[0].get() && event.closed;
+      }));
 
-      check(reaped);
-      int status = 0;
-
-      check(::waitpid(child, &status, 0) == child);
-      check(WIFEXITED(status) && WEXITSTATUS(status) == 7);
+      poller.remove(sockets[0].get());
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
     }
 
-    check(::sigaction(SIGUSR1, &previous, nullptr) == 0);
+    void replaceDescriptor(SystemAllocator& memory) {
+      NativeEventLoop<SystemAllocator> poller{memory};
+      std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
+      auto first = socketPair();
+      const auto descriptor = first[0].get();
+      constexpr std::uint64_t previous_token = UINT64_MAX;
+      constexpr std::uint64_t replacement_token = 1;
+
+      poller.watch(descriptor, previous_token);
+      FileDescriptor retained{::dup(descriptor)};
+
+      check(static_cast<bool>(retained));
+      first[0].reset();
+      auto replacement = socketPair();
+      if (replacement[0].get() != descriptor) {
+        check(::dup2(replacement[0].get(), descriptor) == descriptor);
+        replacement[0].reset(descriptor);
+      }
+
+      poller.watch(descriptor, replacement_token);
+      constexpr char payload = 'r';
+
+      check(::write(first[1].get(), &payload, sizeof(payload)) == sizeof(payload));
+      check(::write(replacement[1].get(), &payload, sizeof(payload)) == sizeof(payload));
+      const auto events = poller.wait(std::chrono::milliseconds{100}, ready);
+
+      check(events.size() == 1);
+      for (const auto& event : events) {
+        check(event.descriptor == descriptor && event.token == replacement_token);
+      }
+
+      char received = 0;
+
+      check(::read(replacement[0].get(), &received, sizeof(received)) == sizeof(received));
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+    }
+
+    void signals(SystemAllocator& memory) {
+      struct sigaction previous{};
+
+      check(::sigaction(SIGUSR1, nullptr, &previous) == 0);
+      {
+        NativeEventLoop<SystemAllocator> poller{memory};
+        std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
+
+        poller.watchSignal(SIGUSR1);
+        poller.watchSignal(SIGCHLD);
+        std::thread notifier{[] {
+          ::kill(::getpid(), SIGUSR1);
+        }};
+
+        notifier.join();
+        bool notified = false;
+
+        for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
+          notified |= event.kind == EventKind::signal && event.descriptor == SIGUSR1;
+        }
+
+        check(notified);
+
+        const auto child = ::fork();
+
+        check(child >= 0);
+        if (child == 0) {
+          _exit(7);
+        }
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+        bool reaped = false;
+
+        while (!reaped && std::chrono::steady_clock::now() < deadline) {
+          for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
+            reaped |= event.kind == EventKind::signal && event.descriptor == SIGCHLD;
+          }
+        }
+
+        check(reaped);
+        int status = 0;
+
+        check(::waitpid(child, &status, 0) == child);
+        check(WIFEXITED(status) && WEXITSTATUS(status) == 7);
+      }
+
+      check(::sigaction(SIGUSR1, &previous, nullptr) == 0);
+    }
+
   }
 
+  const telar::testing::Case case_interests_and_tokens{
+      "event_loop.interests_and_tokens",
+      [] {
+        SystemAllocator memory;
+
+        interestsAndTokens(memory);
+      },
+  };
+  const telar::testing::Case case_replace_descriptor{
+      "event_loop.replace_descriptor",
+      [] {
+        SystemAllocator memory;
+
+        replaceDescriptor(memory);
+      },
+  };
+  const telar::testing::Case case_signals{
+      "event_loop.signals",
+      [] {
+        SystemAllocator memory;
+
+        signals(memory);
+      },
+  };
+
 }
-
-static const telar::testing::Case case_interests_and_tokens{
-    "event_loop.interests_and_tokens",
-    [] {
-      SystemAllocator memory;
-
-      interestsAndTokens(memory);
-    },
-};
-static const telar::testing::Case case_replace_descriptor{
-    "event_loop.replace_descriptor",
-    [] {
-      SystemAllocator memory;
-
-      replaceDescriptor(memory);
-    },
-};
-static const telar::testing::Case case_signals{
-    "event_loop.signals",
-    [] {
-      SystemAllocator memory;
-
-      signals(memory);
-    },
-};

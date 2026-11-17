@@ -22,434 +22,438 @@ import telar.runtime.http1.head;
 import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.traffic.control_protocol;
 
-using telar::testing::check;
-
-using namespace telar;
-using namespace telar::runtime;
-using namespace telar::runtime::traffic;
-using telar::Byte;
-
 namespace {
-  struct HttpOwner final : HttpControl {
-    ConcurrentMemory& memory;
-    bool fail_closed = true;
-    bool observe_response = true;
-    std::vector<Byte> input, replacement;
-    std::vector<std::string> errors;
-    std::uint64_t next = 0, ticket = 0;
-    Verdict answer = Verdict::pending;
-    traffic::Direction direction = traffic::Direction::outbound;
 
-    explicit HttpOwner(ConcurrentMemory& memory)
-        : memory(memory) {}
+  using telar::testing::check;
 
-    HttpPolicy policy(const FlowEvent& event) noexcept override {
-      return {observe_response || event.direction == traffic::Direction::outbound, fail_closed};
-    }
+  using namespace telar;
+  using namespace telar::runtime;
+  using namespace telar::runtime::traffic;
+  using telar::Byte;
 
-    std::uint64_t interceptHttp(const FlowEvent& event) noexcept override {
-      check(ticket == 0);
-      input.assign(event.bytes.begin(), event.bytes.end());
-      direction = event.direction;
-      answer = Verdict::pending;
-      return ticket = ++next;
-    }
+  namespace {
+    struct HttpOwner final : HttpControl {
+      ConcurrentMemory& memory;
+      bool fail_closed = true;
+      bool observe_response = true;
+      std::vector<Byte> input, replacement;
+      std::vector<std::string> errors;
+      std::uint64_t next = 0, ticket = 0;
+      Verdict answer = Verdict::pending;
+      traffic::Direction direction = traffic::Direction::outbound;
 
-    FlowControl::Decision pollHttp(std::uint64_t id, std::span<Byte> bytes) noexcept override {
-      check(ticket == id);
-      if (answer == Verdict::pending) {
-        return {answer};
+      explicit HttpOwner(ConcurrentMemory& memory)
+          : memory(memory) {}
+
+      HttpPolicy policy(const FlowEvent& event) noexcept override {
+        return {observe_response || event.direction == traffic::Direction::outbound, fail_closed};
       }
 
-      check(replacement.size() <= bytes.size());
-      std::ranges::copy(replacement, bytes.begin());
-      ticket = 0;
-      return {answer, replacement.size()};
-    }
-
-    void cancelHttp(std::uint64_t id) noexcept override {
-      check(ticket == id);
-      ticket = 0;
-    }
-
-    auto httpDeadline(std::uint64_t) noexcept -> std::optional<FlowControl::Time> override {
-      return std::chrono::steady_clock::now() + std::chrono::seconds{1};
-    }
-
-    void httpUnavailable(const FlowEvent& event) noexcept override {
-      errors.emplace_back(event.reason);
-    }
-
-    void replace(std::span<const Byte> bytes, std::string_view target = {}, std::string_view method = {}) {
-      auto view = HttpMessageCodec::decode(input);
-
-      view.body = bytes;
-      if (!target.empty()) {
-        view.target = target;
+      std::uint64_t interceptHttp(const FlowEvent& event) noexcept override {
+        check(ticket == 0);
+        input.assign(event.bytes.begin(), event.bytes.end());
+        direction = event.direction;
+        answer = Verdict::pending;
+        return ticket = ++next;
       }
 
-      if (!method.empty()) {
-        view.method = method;
+      FlowControl::Decision pollHttp(std::uint64_t id, std::span<Byte> bytes) noexcept override {
+        check(ticket == id);
+        if (answer == Verdict::pending) {
+          return {answer};
+        }
+
+        check(replacement.size() <= bytes.size());
+        std::ranges::copy(replacement, bytes.begin());
+        ticket = 0;
+        return {answer, replacement.size()};
       }
 
-      SensitiveAllocation output{memory, HttpMessageLimits::message_bytes};
-      const auto encoded = HttpMessageCodec::encode(output.bytes(), view);
+      void cancelHttp(std::uint64_t id) noexcept override {
+        check(ticket == id);
+        ticket = 0;
+      }
 
-      replacement.assign(encoded.begin(), encoded.end());
-      answer = Verdict::replace;
-    }
-  };
+      auto httpDeadline(std::uint64_t) noexcept -> std::optional<FlowControl::Time> override {
+        return std::chrono::steady_clock::now() + std::chrono::seconds{1};
+      }
 
-  using Connection = Http1Connection<IgnoreHttp1Capture>;
+      void httpUnavailable(const FlowEvent& event) noexcept override {
+        errors.emplace_back(event.reason);
+      }
 
-  template <typename Predicate>
-  void pump(Connection& connection, TestByteStream& child, TestByteStream& origin, Predicate&& done, std::source_location location = std::source_location::current()) {
-    for (unsigned attempt = 0; attempt < 100000 && !done(); ++attempt) {
-      connection.advance(child, origin, TunnelReadiness::available());
-    }
+      void replace(std::span<const Byte> bytes, std::string_view target = {}, std::string_view method = {}) {
+        auto view = HttpMessageCodec::decode(input);
 
-    check(done(), location);
-  }
+        view.body = bytes;
+        if (!target.empty()) {
+          view.target = target;
+        }
 
-  struct Parsed {
-    std::vector<Byte> bytes;
-    std::vector<std::string> trailers;
+        if (!method.empty()) {
+          view.method = method;
+        }
 
-    void headStarted() noexcept {}
+        SensitiveAllocation output{memory, HttpMessageLimits::message_bytes};
+        const auto encoded = HttpMessageCodec::encode(output.bytes(), view);
 
-    void head(std::string_view) noexcept {}
+        replacement.assign(encoded.begin(), encoded.end());
+        answer = Verdict::replace;
+      }
+    };
 
-    void payload(std::span<const Byte> body) noexcept {
-      bytes.insert(bytes.end(), body.begin(), body.end());
-    }
+    using Connection = Http1Connection<IgnoreHttp1Capture>;
 
-    void trailer(std::string_view line) noexcept {
-      trailers.emplace_back(line);
-    }
+    template <typename Predicate>
+    void pump(Connection& connection, TestByteStream& child, TestByteStream& origin, Predicate&& done, std::source_location location = std::source_location::current()) {
+      for (unsigned attempt = 0; attempt < 100000 && !done(); ++attempt) {
+        connection.advance(child, origin, TunnelReadiness::available());
+      }
 
-    void lineTooLong(Http1Line) noexcept {
-      check(false);
-    }
-  };
-
-  void editing(ConcurrentMemory& memory) {
-    HttpOwner owner{memory};
-    ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 7, .host = "fixture.test"})}};
-    TestByteStream child, origin;
-
-    child.input = "POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\n\r\n" + std::string{"a\0b", 3};
-    child.read_limit = 1;
-    origin.visible = 0;
-    origin.write_limit = 3;
-    origin.alternating_writes = true;
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
-
-    check(origin.output.empty() && owner.direction == traffic::Direction::outbound);
-    check(HttpMessageCodec::decode(owner.input).body.size() == 3);
-    const std::array<Byte, 7> changed{'c', 'h', 0, 'a', 'n', 'g', 'e'};
-
-    owner.replace(changed, "/edited");
-    pump(connection, child, origin, [&] {
-      return origin.output.ends_with(std::string{"ch\0ange", 7});
-    });
-
-    check(origin.output.starts_with("POST /edited HTTP/1.1\r\n") && origin.output.contains("Content-Length: 7\r\n"));
-    origin.input = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nold";
-    origin.visible = origin.input.size();
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
-
-    check(child.output.empty() && owner.direction == traffic::Direction::inbound);
-    owner.replace(changed);
-    pump(connection, child, origin, [&] {
-      return child.output.ends_with(std::string{"ch\0ange", 7});
-    });
-
-    check(child.output.contains("Content-Length: 7\r\n") && owner.errors.empty());
-  }
-
-  void compressedTrailers(ConcurrentMemory& memory) {
-    HttpOwner owner{memory};
-    ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 8, .host = "fixture.test"})}};
-    HttpMessage message{memory};
-
-    message.method = "POST";
-    message.target = "/gzip";
-    message.headers.append("Host", "fixture.test");
-    message.headers.append("Content-Encoding", "gzip");
-    message.trailers.append("X-Checksum", "fixture");
-    const std::array<Byte, 3> before{'a', 0, 'b'};
-
-    message.body.assign(before.begin(), before.end());
-    const auto wire = message.serializeHttp1();
-    TestByteStream child, origin;
-
-    child.input.assign(reinterpret_cast<const char*>(wire.data()), wire.size());
-    child.read_limit = 1;
-    origin.visible = 0;
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
-
-    const auto view = HttpMessageCodec::decode(owner.input);
-
-    check(view.trailer_count == 1 && view.trailers[0].name == "X-Checksum" && std::ranges::equal(view.body, before));
-    const std::array<Byte, 9> after{'e', 'x', 'p', 0, 'a', 'n', 'd', 'e', 'd'};
-
-    owner.replace(after);
-    pump(connection, child, origin, [&] {
-      return connection.inflight() == 1 && owner.ticket == 0 && origin.output.ends_with("0\r\nX-Checksum: fixture\r\n\r\n");
-    });
-
-    TestByteStream source, sink;
-
-    source.input = origin.output;
-    Parsed parsed;
-    Http1MessageRelay relay;
-
-    for (unsigned attempt = 0; attempt < 4096 && relay.state() != Http1MessageRelay::State::complete; ++attempt) {
-      relay.advance(source, sink, parsed);
+      check(done(), location);
     }
 
-    check(relay.state() == Http1MessageRelay::State::complete && parsed.trailers.size() == 1);
-    check(std::ranges::equal(HttpContentCodec{memory}.decode(parsed.bytes, "gzip", 1024).bytes(), after));
-  }
+    struct Parsed {
+      std::vector<Byte> bytes;
+      std::vector<std::string> trailers;
 
-  void expectContinue(ConcurrentMemory& memory) {
-    HttpOwner owner{memory};
-    ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 9, .host = "fixture.test"})}};
-    TestByteStream child, origin;
+      void headStarted() noexcept {}
 
-    child.input = "POST /expect HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\nExpect: 100-continue\r\n\r\n";
-    child.write_limit = 1;
-    child.alternating_writes = true;
-    origin.visible = 0;
-    pump(connection, child, origin, [&] {
-      return child.output == "HTTP/1.1 100 Continue\r\n\r\n";
-    });
+      void head(std::string_view) noexcept {}
 
-    check(origin.output.empty() && owner.ticket == 0);
-    child.input += "abc";
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
+      void payload(std::span<const Byte> body) noexcept {
+        bytes.insert(bytes.end(), body.begin(), body.end());
+      }
 
-    owner.answer = Verdict::allow;
-    pump(connection, child, origin, [&] {
-      return origin.output.ends_with("\r\n\r\nabc");
-    });
+      void trailer(std::string_view line) noexcept {
+        trailers.emplace_back(line);
+      }
 
-    check(!origin.output.contains("Expect:") && owner.errors.empty());
-  }
+      void lineTooLong(Http1Line) noexcept {
+        check(false);
+      }
+    };
 
-  void headResponse(ConcurrentMemory& memory) {
-    HttpOwner owner{memory};
-    ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 11, .host = "fixture.test"})}};
-    TestByteStream child, origin;
+    void editing(ConcurrentMemory& memory) {
+      HttpOwner owner{memory};
+      ProxyCounters counters;
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 7, .host = "fixture.test"})}};
+      TestByteStream child, origin;
 
-    child.input = "HEAD /metadata HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
-    origin.visible = 0;
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
+      child.input = "POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\n\r\n" + std::string{"a\0b", 3};
+      child.read_limit = 1;
+      origin.visible = 0;
+      origin.write_limit = 3;
+      origin.alternating_writes = true;
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
 
-    owner.answer = Verdict::allow;
-    pump(connection, child, origin, [&] {
-      return origin.output == child.input;
-    });
+      check(origin.output.empty() && owner.direction == traffic::Direction::outbound);
+      check(HttpMessageCodec::decode(owner.input).body.size() == 3);
+      const std::array<Byte, 7> changed{'c', 'h', 0, 'a', 'n', 'g', 'e'};
 
-    origin.input = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 256\r\n\r\n";
-    origin.visible = origin.input.size();
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
+      owner.replace(changed, "/edited");
+      pump(connection, child, origin, [&] {
+        return origin.output.ends_with(std::string{"ch\0ange", 7});
+      });
 
-    const auto view = HttpMessageCodec::decode(owner.input);
+      check(origin.output.starts_with("POST /edited HTTP/1.1\r\n") && origin.output.contains("Content-Length: 7\r\n"));
+      origin.input = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nold";
+      origin.visible = origin.input.size();
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
 
-    check(view.response_to_head && view.body.empty());
-    owner.answer = Verdict::allow;
-    pump(connection, child, origin, [&] {
-      return child.output == origin.input;
-    });
+      check(child.output.empty() && owner.direction == traffic::Direction::inbound);
+      owner.replace(changed);
+      pump(connection, child, origin, [&] {
+        return child.output.ends_with(std::string{"ch\0ange", 7});
+      });
 
-    check(owner.errors.empty());
-  }
+      check(child.output.contains("Content-Length: 7\r\n") && owner.errors.empty());
+    }
 
-  void invalidFraming(ConcurrentMemory& memory) {
-    for (const std::string_view body : {"+0\r\n\r\n", "1_0\r\n0123456789abcdef\r\n0\r\n\r\n", "1\r\nx!!0\r\n\r\n", "0\r\r\n\r\n"}) {
+    void compressedTrailers(ConcurrentMemory& memory) {
+      HttpOwner owner{memory};
+      ProxyCounters counters;
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 8, .host = "fixture.test"})}};
+      HttpMessage message{memory};
+
+      message.method = "POST";
+      message.target = "/gzip";
+      message.headers.append("Host", "fixture.test");
+      message.headers.append("Content-Encoding", "gzip");
+      message.trailers.append("X-Checksum", "fixture");
+      const std::array<Byte, 3> before{'a', 0, 'b'};
+
+      message.body.assign(before.begin(), before.end());
+      const auto wire = message.serializeHttp1();
+      TestByteStream child, origin;
+
+      child.input.assign(reinterpret_cast<const char*>(wire.data()), wire.size());
+      child.read_limit = 1;
+      origin.visible = 0;
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
+
+      const auto view = HttpMessageCodec::decode(owner.input);
+
+      check(view.trailer_count == 1 && view.trailers[0].name == "X-Checksum" && std::ranges::equal(view.body, before));
+      const std::array<Byte, 9> after{'e', 'x', 'p', 0, 'a', 'n', 'd', 'e', 'd'};
+
+      owner.replace(after);
+      pump(connection, child, origin, [&] {
+        return connection.inflight() == 1 && owner.ticket == 0 && origin.output.ends_with("0\r\nX-Checksum: fixture\r\n\r\n");
+      });
+
+      TestByteStream source, sink;
+
+      source.input = origin.output;
+      Parsed parsed;
+      Http1MessageRelay relay;
+
+      for (unsigned attempt = 0; attempt < 4096 && relay.state() != Http1MessageRelay::State::complete; ++attempt) {
+        relay.advance(source, sink, parsed);
+      }
+
+      check(relay.state() == Http1MessageRelay::State::complete && parsed.trailers.size() == 1);
+      check(std::ranges::equal(HttpContentCodec{memory}.decode(parsed.bytes, "gzip", 1024).bytes(), after));
+    }
+
+    void expectContinue(ConcurrentMemory& memory) {
+      HttpOwner owner{memory};
+      ProxyCounters counters;
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 9, .host = "fixture.test"})}};
+      TestByteStream child, origin;
+
+      child.input = "POST /expect HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\nExpect: 100-continue\r\n\r\n";
+      child.write_limit = 1;
+      child.alternating_writes = true;
+      origin.visible = 0;
+      pump(connection, child, origin, [&] {
+        return child.output == "HTTP/1.1 100 Continue\r\n\r\n";
+      });
+
+      check(origin.output.empty() && owner.ticket == 0);
+      child.input += "abc";
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
+
+      owner.answer = Verdict::allow;
+      pump(connection, child, origin, [&] {
+        return origin.output.ends_with("\r\n\r\nabc");
+      });
+
+      check(!origin.output.contains("Expect:") && owner.errors.empty());
+    }
+
+    void headResponse(ConcurrentMemory& memory) {
+      HttpOwner owner{memory};
+      ProxyCounters counters;
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 11, .host = "fixture.test"})}};
+      TestByteStream child, origin;
+
+      child.input = "HEAD /metadata HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
+      origin.visible = 0;
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
+
+      owner.answer = Verdict::allow;
+      pump(connection, child, origin, [&] {
+        return origin.output == child.input;
+      });
+
+      origin.input = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 256\r\n\r\n";
+      origin.visible = origin.input.size();
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
+
+      const auto view = HttpMessageCodec::decode(owner.input);
+
+      check(view.response_to_head && view.body.empty());
+      owner.answer = Verdict::allow;
+      pump(connection, child, origin, [&] {
+        return child.output == origin.input;
+      });
+
+      check(owner.errors.empty());
+    }
+
+    void invalidFraming(ConcurrentMemory& memory) {
+      for (const std::string_view body : {"+0\r\n\r\n", "1_0\r\n0123456789abcdef\r\n0\r\n\r\n", "1\r\nx!!0\r\n\r\n", "0\r\r\n\r\n"}) {
+        HttpOwner owner{memory};
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 12, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /invalid HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string{body};
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return connection.finished();
+        });
+
+        check(origin.output.empty() && owner.ticket == 0 && !owner.errors.empty());
+      }
+    }
+
+    void incompleteMessage(ConcurrentMemory& memory) {
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 13, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /incomplete HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 8\r\n\r\nabc";
+        child.ended = true;
+        origin.visible = 0;
+        origin.write_limit = 3;
+        origin.alternating_writes = true;
+        pump(connection, child, origin, [&] {
+          return connection.finished();
+        });
+
+        check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_incomplete_message"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    void headMethods(ConcurrentMemory& memory) {
+      for (const bool original_head : {false, true}) {
+        for (const bool observe_response : {false, true}) {
+          HttpOwner owner{memory};
+
+          owner.observe_response = observe_response;
+          ProxyCounters counters;
+          Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 14, .host = "fixture.test"})}};
+          TestByteStream child, origin;
+
+          child.input = std::string{original_head ? "HEAD" : "GET"} + " /method HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
+          origin.visible = 0;
+          pump(connection, child, origin, [&] {
+            return owner.ticket != 0;
+          });
+
+          owner.replace({}, {}, original_head ? "GET" : "HEAD");
+          pump(connection, child, origin, [&] {
+            return origin.output.ends_with("\r\n\r\n");
+          });
+
+          origin.input = original_head ? "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc" : "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 256\r\n\r\n";
+          origin.visible = origin.input.size();
+          if (observe_response) {
+            pump(connection, child, origin, [&] {
+              return owner.ticket != 0;
+            });
+
+            owner.answer = Verdict::allow;
+          }
+
+          pump(connection, child, origin, [&] {
+            const auto boundary = child.output.find("\r\n\r\n");
+            if (boundary == std::string::npos) {
+              return false;
+            }
+
+            const auto head = Http1Head::analyze(std::string_view{child.output}.substr(0, boundary + 4), true, original_head);
+
+            return head && child.output.size() == boundary + 4 + head->framing.length;
+          });
+
+          TestByteStream source, sink;
+
+          source.input = child.output;
+          Parsed parsed;
+          Http1MessageRelay relay;
+
+          relay.reset(true, original_head);
+          for (unsigned attempt = 0; attempt < 4096 && relay.state() != Http1MessageRelay::State::complete; ++attempt) {
+            relay.advance(source, sink, parsed);
+          }
+
+          check(relay.state() == Http1MessageRelay::State::complete && source.offset == source.input.size());
+          if (original_head) {
+            check(parsed.bytes.empty());
+          } else {
+            check(HttpContentCodec{memory}.decode(parsed.bytes, "gzip", 1024).size == 0);
+          }
+        }
+      }
+    }
+
+    void limits(ConcurrentMemory& memory) {
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 10, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+        const std::string body(HttpMessageLimits::body_bytes + Http1Head::capacity + 1, 'x');
+
+        child.input = "POST /limit HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n";
+        std::array<char, 32> size;
+        const auto formatted = std::to_chars(size.data(), size.data() + size.size(), body.size(), 16);
+
+        child.input.append(size.data(), formatted.ptr);
+        child.input += "\r\n" + body + "\r\n0\r\n\r\n";
+        child.read_limit = 16384;
+        origin.visible = 0;
+        origin.write_limit = 4096;
+        origin.alternating_writes = true;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output.size() == child.input.size();
+        });
+
+        check(owner.ticket == 0 && !owner.errors.empty());
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // A hook's reject closes the exchange and is reported, as an HTTP/2 stream's is.
+    void rejected(ConcurrentMemory& memory) {
       HttpOwner owner{memory};
       ProxyCounters counters;
       Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 12, .host = "fixture.test"})}};
       TestByteStream child, origin;
 
-      child.input = "POST /invalid HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string{body};
-      origin.visible = 0;
+      child.input = "POST /reject HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
+
+      owner.answer = Verdict::reject;
       pump(connection, child, origin, [&] {
         return connection.finished();
       });
 
-      check(origin.output.empty() && owner.ticket == 0 && !owner.errors.empty());
+      check(owner.ticket == 0 && origin.output.empty());
+      check(owner.errors == std::vector<std::string>{"http_interception_rejected"});
     }
   }
 
-  void incompleteMessage(ConcurrentMemory& memory) {
-    for (const bool closed : {false, true}) {
-      HttpOwner owner{memory};
+  void testHttpInterception() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
 
-      owner.fail_closed = closed;
-      ProxyCounters counters;
-      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 13, .host = "fixture.test"})}};
-      TestByteStream child, origin;
-
-      child.input = "POST /incomplete HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 8\r\n\r\nabc";
-      child.ended = true;
-      origin.visible = 0;
-      origin.write_limit = 3;
-      origin.alternating_writes = true;
-      pump(connection, child, origin, [&] {
-        return connection.finished();
-      });
-
-      check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_incomplete_message"});
-      check(closed ? origin.output.empty() : origin.output == child.input);
-    }
+    rejected(memory);
+    editing(memory);
+    compressedTrailers(memory);
+    expectContinue(memory);
+    headResponse(memory);
+    invalidFraming(memory);
+    incompleteMessage(memory);
+    headMethods(memory);
+    limits(memory);
   }
 
-  void headMethods(ConcurrentMemory& memory) {
-    for (const bool original_head : {false, true}) {
-      for (const bool observe_response : {false, true}) {
-        HttpOwner owner{memory};
+  const telar::testing::Case case_http_interception{"http_interception.http_interception", testHttpInterception};
 
-        owner.observe_response = observe_response;
-        ProxyCounters counters;
-        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 14, .host = "fixture.test"})}};
-        TestByteStream child, origin;
-
-        child.input = std::string{original_head ? "HEAD" : "GET"} + " /method HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
-        origin.visible = 0;
-        pump(connection, child, origin, [&] {
-          return owner.ticket != 0;
-        });
-
-        owner.replace({}, {}, original_head ? "GET" : "HEAD");
-        pump(connection, child, origin, [&] {
-          return origin.output.ends_with("\r\n\r\n");
-        });
-
-        origin.input = original_head ? "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc" : "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 256\r\n\r\n";
-        origin.visible = origin.input.size();
-        if (observe_response) {
-          pump(connection, child, origin, [&] {
-            return owner.ticket != 0;
-          });
-
-          owner.answer = Verdict::allow;
-        }
-
-        pump(connection, child, origin, [&] {
-          const auto boundary = child.output.find("\r\n\r\n");
-          if (boundary == std::string::npos) {
-            return false;
-          }
-
-          const auto head = Http1Head::analyze(std::string_view{child.output}.substr(0, boundary + 4), true, original_head);
-
-          return head && child.output.size() == boundary + 4 + head->framing.length;
-        });
-
-        TestByteStream source, sink;
-
-        source.input = child.output;
-        Parsed parsed;
-        Http1MessageRelay relay;
-
-        relay.reset(true, original_head);
-        for (unsigned attempt = 0; attempt < 4096 && relay.state() != Http1MessageRelay::State::complete; ++attempt) {
-          relay.advance(source, sink, parsed);
-        }
-
-        check(relay.state() == Http1MessageRelay::State::complete && source.offset == source.input.size());
-        if (original_head) {
-          check(parsed.bytes.empty());
-        } else {
-          check(HttpContentCodec{memory}.decode(parsed.bytes, "gzip", 1024).size == 0);
-        }
-      }
-    }
-  }
-
-  void limits(ConcurrentMemory& memory) {
-    for (const bool closed : {false, true}) {
-      HttpOwner owner{memory};
-
-      owner.fail_closed = closed;
-      ProxyCounters counters;
-      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 10, .host = "fixture.test"})}};
-      TestByteStream child, origin;
-      const std::string body(HttpMessageLimits::body_bytes + Http1Head::capacity + 1, 'x');
-
-      child.input = "POST /limit HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n";
-      std::array<char, 32> size;
-      const auto formatted = std::to_chars(size.data(), size.data() + size.size(), body.size(), 16);
-
-      child.input.append(size.data(), formatted.ptr);
-      child.input += "\r\n" + body + "\r\n0\r\n\r\n";
-      child.read_limit = 16384;
-      origin.visible = 0;
-      origin.write_limit = 4096;
-      origin.alternating_writes = true;
-      pump(connection, child, origin, [&] {
-        return closed ? connection.finished() : origin.output.size() == child.input.size();
-      });
-
-      check(owner.ticket == 0 && !owner.errors.empty());
-      check(closed ? origin.output.empty() : origin.output == child.input);
-    }
-  }
-
-  // A hook's reject closes the exchange and is reported, as an HTTP/2 stream's is.
-  void rejected(ConcurrentMemory& memory) {
-    HttpOwner owner{memory};
-    ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 12, .host = "fixture.test"})}};
-    TestByteStream child, origin;
-
-    child.input = "POST /reject HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";
-    pump(connection, child, origin, [&] {
-      return owner.ticket != 0;
-    });
-
-    owner.answer = Verdict::reject;
-    pump(connection, child, origin, [&] {
-      return connection.finished();
-    });
-
-    check(owner.ticket == 0 && origin.output.empty());
-    check(owner.errors == std::vector<std::string>{"http_interception_rejected"});
-  }
 }
-
-static void testHttpInterception() {
-  SystemAllocator system;
-  MemoryAdapter adapter{system};
-  ConcurrentMemory& memory = adapter;
-
-  rejected(memory);
-  editing(memory);
-  compressedTrailers(memory);
-  expectContinue(memory);
-  headResponse(memory);
-  invalidFraming(memory);
-  incompleteMessage(memory);
-  headMethods(memory);
-  limits(memory);
-}
-
-static const telar::testing::Case case_http_interception{"http_interception.http_interception", testHttpInterception};

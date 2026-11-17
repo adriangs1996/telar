@@ -13,55 +13,59 @@ import telar.testing.erasure_checking_allocator;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 
-using telar::testing::check;
+namespace {
 
-using namespace telar;
+  using telar::testing::check;
 
-static void testRecyclingAllocator() {
-  ErasureCheckingAllocator upstream;
-  MemoryAdapter erased{upstream};
+  using namespace telar;
 
-  {
-    RecyclingAllocator<Memory> memory{erased};
+  void testRecyclingAllocator() {
+    ErasureCheckingAllocator upstream;
+    MemoryAdapter erased{upstream};
 
-    for (const auto alignment : {alignof(char), alignof(std::max_align_t), std::size_t{64}}) {
-      for (const std::size_t size : {1, 15, 16, 17, 31, 32, 4095, 4096, 4097}) {
-        auto* first = memory.allocate(size, alignment);
+    {
+      RecyclingAllocator<Memory> memory{erased};
 
-        check(first != nullptr && reinterpret_cast<std::uintptr_t>(first) % alignment == 0);
-        std::memset(first, 0x5a, size);
-        memory.deallocate(first, size, alignment);
-        const auto allocations = upstream.budget.allocations();
-        auto* second = memory.allocate(size, alignment);
+      for (const auto alignment : {alignof(char), alignof(std::max_align_t), std::size_t{64}}) {
+        for (const std::size_t size : {1, 15, 16, 17, 31, 32, 4095, 4096, 4097}) {
+          auto* first = memory.allocate(size, alignment);
 
-        check(second != nullptr && reinterpret_cast<std::uintptr_t>(second) % alignment == 0);
-        if (size <= 4096 && alignment <= alignof(std::max_align_t)) {
-          check(second == first && upstream.budget.allocations() == allocations);
+          check(first != nullptr && reinterpret_cast<std::uintptr_t>(first) % alignment == 0);
+          std::memset(first, 0x5a, size);
+          memory.deallocate(first, size, alignment);
+          const auto allocations = upstream.budget.allocations();
+          auto* second = memory.allocate(size, alignment);
+
+          check(second != nullptr && reinterpret_cast<std::uintptr_t>(second) % alignment == 0);
+          if (size <= 4096 && alignment <= alignof(std::max_align_t)) {
+            check(second == first && upstream.budget.allocations() == allocations);
+          }
+
+          std::memset(second, 0x6b, size);
+          memory.deallocate(second, size, alignment);
         }
-
-        std::memset(second, 0x6b, size);
-        memory.deallocate(second, size, alignment);
       }
+
+      std::array<void*, 200> blocks;
+
+      for (auto& block : blocks) {
+        block = memory.allocate(4096, alignof(std::max_align_t));
+        check(block != nullptr);
+        std::memset(block, 0x7c, 4096);
+      }
+
+      for (auto* block : blocks) {
+        memory.deallocate(block, 4096, alignof(std::max_align_t));
+      }
+
+      check(memory.retainedBytes() <= decltype(memory)::maximum_retained_bytes);
+      check(upstream.budget.liveBytes() == memory.retainedBytes());
+      check(memory.allocate(4 * 1024 * 1024, alignof(std::max_align_t)) == nullptr);
     }
 
-    std::array<void*, 200> blocks;
-
-    for (auto& block : blocks) {
-      block = memory.allocate(4096, alignof(std::max_align_t));
-      check(block != nullptr);
-      std::memset(block, 0x7c, 4096);
-    }
-
-    for (auto* block : blocks) {
-      memory.deallocate(block, 4096, alignof(std::max_align_t));
-    }
-
-    check(memory.retainedBytes() <= decltype(memory)::maximum_retained_bytes);
-    check(upstream.budget.liveBytes() == memory.retainedBytes());
-    check(memory.allocate(4 * 1024 * 1024, alignof(std::max_align_t)) == nullptr);
+    check(upstream.budget.liveBytes() == 0);
   }
 
-  check(upstream.budget.liveBytes() == 0);
-}
+  const telar::testing::Case case_recycling_allocator{"recycling_allocator.recycling_allocator", testRecyclingAllocator};
 
-static const telar::testing::Case case_recycling_allocator{"recycling_allocator.recycling_allocator", testRecyclingAllocator};
+}
