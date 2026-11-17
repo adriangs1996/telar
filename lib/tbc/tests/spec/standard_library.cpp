@@ -427,7 +427,7 @@ standard::node* movedIntoCallerOwner(std::unique_ptr<standard::node>& owner) {
 
 // CASE: std.moved_into_container
 // PAIR: std.moved_owner
-// SOURCE: src/gui/application/session/session.cppm :: Session::apply(TabCreated)
+// SOURCE: src/gui/application/application-session.cppm :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: A unique_ptr moved into a container keeps its object alive for as long as the container.
 // SCENARIO: A reference to the created object outlives the moved-from local; accept.
@@ -487,7 +487,7 @@ std::vector<std::string_view> emplacedViewParameter(const std::string& text) {
 
 // CASE: std.pointer_element_escape
 // PAIR: std.pointer_element
-// SOURCE: src/gui/platform/runtime_endpoint/runtime_endpoint.cpp :: spawn
+// SOURCE: src/gui/foundation/system/system-runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: A pointer element, pushed or emplaced, designates the object it points to.
 // SCENARIO: The stored pointers designate a local that dies before the returned vector.
@@ -503,7 +503,7 @@ std::vector<const int*> pointerElementEscape() {
 
 // CASE: std.pointer_element_position
 // PAIR: std.pointer_element
-// SOURCE: src/gui/platform/runtime_endpoint/runtime_endpoint.cpp :: spawn
+// SOURCE: src/gui/foundation/system/system-runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: The position an insertion or an emplacement takes is not stored as an element.
 // SCENARIO: The stored pointers designate the caller's object, inserted at a position of the local vector; accept.
@@ -518,7 +518,7 @@ std::vector<const int*> pointerElementPosition(const int& value) {
 
 // CASE: std.inserted_range_escape
 // PAIR: std.inserted_range
-// SOURCE: src/gui/fonts/row_text_layout/row_text_layout.cppm :: RowTextLayout::appendPrimary
+// SOURCE: src/gui/foundation/fonts/fonts-row_text_layout.cppm :: RowTextLayout::appendPrimary
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, with their dependencies.
 // SCENARIO: The copied views point into a local string that dies before the returned vector.
@@ -534,7 +534,7 @@ std::vector<std::string_view> insertedRangeEscape() {
 
 // CASE: std.inserted_range_parameter
 // PAIR: std.inserted_range
-// SOURCE: src/gui/fonts/row_text_layout/row_text_layout.cppm :: RowTextLayout::appendPrimary
+// SOURCE: src/gui/foundation/fonts/fonts-row_text_layout.cppm :: RowTextLayout::appendPrimary
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, not the source container's storage.
 // SCENARIO: The copied views point into the caller's string, while the local source vector dies; accept.
@@ -649,7 +649,7 @@ standard::scene_node& stdOptionalOwnerKept(standard::client_slots& slots) {
 
 // CASE: std.range_adaptor_view
 // PAIR: std.range_adaptor
-// SOURCE: src/gui/input/child_mouse/child_mouse.cppm :: TabDropSurface::at
+// SOURCE: src/gui/features/workbench/workbench-tabs.cppm :: TabDropSurface::at
 // STATUS: implemented
 // CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
 // SCENARIO: An element of a reversed span over the receiver's array is returned; accept.
@@ -673,7 +673,7 @@ namespace standard {
 
 // CASE: std.range_adaptor_owning
 // PAIR: std.range_adaptor
-// SOURCE: src/gui/input/child_mouse/child_mouse.cppm :: TabDropSurface::at
+// SOURCE: src/gui/features/workbench/workbench-tabs.cppm :: TabDropSurface::at
 // STATUS: implemented
 // CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
 // SCENARIO: A reversed temporary vector is owned by the adaptor, which dies with the loop.

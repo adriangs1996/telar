@@ -145,7 +145,7 @@ namespace places {
 
 // CASE: place.owned_object_mutation
 // PAIR: place.owned_object
-// SOURCE: src/gui/application/session/session.cppm :: Session::panes_
+// SOURCE: src/gui/application/application-session.cppm :: Session::panes_
 // STATUS: implemented
 // CONTRACT: Mutating an object owned through a container element does not invalidate the container's elements.
 // SCENARIO: Each owned pane is detached while the range loop keeps iterating the vector; accept.
@@ -159,7 +159,7 @@ void placeOwnedObjectMutation(std::vector<std::unique_ptr<places::pane>>& panes)
 
 // CASE: place.owned_object_destroyed
 // PAIR: place.owned_object
-// SOURCE: src/gui/application/session/session.cppm :: Session::panes_
+// SOURCE: src/gui/application/application-session.cppm :: Session::panes_
 // STATUS: implemented
 // CONTRACT: Clearing a container of owners destroys the objects they own.
 // SCENARIO: A pointer to an owned pane is read after the vector is cleared.
@@ -272,7 +272,7 @@ void placeDetachedElementGrowth(std::vector<std::unique_ptr<std::string>>& names
 
 // CASE: place.moved_owner_cleared
 // PAIR: place.moved_owner
-// SOURCE: src/gui/application/session/session.cppm :: Session::apply(TabCreated)
+// SOURCE: src/gui/application/application-session.cppm :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element is destroyed when the container is cleared.
 // SCENARIO: A pointer to the moved object is read after the vector is cleared.
@@ -288,7 +288,7 @@ void placeMovedOwnerCleared(std::vector<std::unique_ptr<places::pane>>& panes) {
 
 // CASE: place.moved_owner_survives_growth
 // PAIR: place.moved_owner
-// SOURCE: src/gui/application/session/session.cppm :: Session::apply(TabCreated)
+// SOURCE: src/gui/application/application-session.cppm :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element survives the container's reallocation.
 // SCENARIO: A pointer to the moved object is read after another element is appended; accept.
@@ -304,7 +304,7 @@ void placeMovedOwnerSurvivesGrowth(std::vector<std::unique_ptr<places::pane>>& p
 
 // CASE: place.sibling_field_mutation
 // PAIR: place.sibling_field
-// SOURCE: src/gui/application/session/session.cppm :: Session::launch_arguments_
+// SOURCE: src/gui/application/application-session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object leaves borrows of its other fields valid, including the object's views of itself.
 // SCENARIO: A closure reads views of the launcher's strings after its history field grows; accept.
@@ -323,7 +323,7 @@ void placeSiblingFieldMutation() {
 
 // CASE: place.viewed_field_growth
 // PAIR: place.sibling_field
-// SOURCE: src/gui/application/session/session.cppm :: Session::launch_arguments_
+// SOURCE: src/gui/application/application-session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: Growing the field that views borrow invalidates those views.
 // SCENARIO: The arguments are read after the strings they view are reallocated.
@@ -339,7 +339,7 @@ void placeViewedFieldGrowth() {
 
 // CASE: place.rebuilt_views
 // PAIR: place.sibling_field
-// SOURCE: src/gui/application/session/session.cppm :: Session::launch_arguments_
+// SOURCE: src/gui/application/application-session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: A method borrows its whole receiver, as `&mut self` does, so it may mutate any field.
 // SCENARIO: The arguments are read after a method that grows only the history; reject at the call.
@@ -547,7 +547,7 @@ void placeSiblingOverwrite(std::vector<int>& spans, std::string_view metadata) {
 
 // CASE: place.copied_field_overwrite
 // PAIR: place.copied_field
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: Reassigning one field of a copied aggregate replaces that field's borrow and keeps the others.
 // SCENARIO: The query's text is replaced by a copy, so the caller may reuse its string; accept.
@@ -564,7 +564,7 @@ void placeCopiedFieldOverwrite() {
 
 // CASE: place.copied_field_kept
 // PAIR: place.copied_field
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A field copied from an argument and not reassigned still borrows what the argument's field borrowed.
 // SCENARIO: The query still views the caller's scope string after it is reassigned.
@@ -581,7 +581,7 @@ void placeCopiedFieldKept() {
 
 // CASE: place.cleared_field
 // PAIR: place.cleared_field
-// SOURCE: src/gui/application/session/session.cppm :: Session::launch
+// SOURCE: src/gui/application/application-session.cppm :: Session::launch
 // STATUS: implemented
 // CONTRACT: Clearing a container field forgets only the borrows its elements held.
 // SCENARIO: The cleared names viewed the local string, which is then reassigned; accept.
@@ -599,7 +599,7 @@ void placeClearedField(std::string_view fallback) {
 
 // CASE: place.cleared_sibling
 // PAIR: place.cleared_field
-// SOURCE: src/gui/application/session/session.cppm :: Session::launch
+// SOURCE: src/gui/application/application-session.cppm :: Session::launch
 // STATUS: implemented
 // CONTRACT: Clearing one container field keeps the borrows held by the object's other fields.
 // SCENARIO: The defaults still view the local string after the names are cleared and the string is reassigned.
@@ -746,7 +746,7 @@ void placeReadStaleViews(std::vector<std::string>& names) {
 
 // CASE: place.variant_rebound
 // PAIR: place.variant_alternative
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A variant whose other alternatives cannot borrow holds nothing borrowed once a test rules out the one that can.
 // SCENARIO: The scope view is rebound to a copy when it holds a view and otherwise holds no view; accept.
@@ -768,7 +768,7 @@ void placeVariantRebound() {
 
 // CASE: place.variant_kept
 // PAIR: place.variant_alternative
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: Ruling out an alternative that cannot borrow says nothing about the one that can.
 // SCENARIO: Only an integer scope is cleared, so a scope view of the caller's string is returned.
@@ -786,7 +786,7 @@ void placeVariantKept() {
 
 // CASE: place.variant_negated
 // PAIR: place.variant_alternative
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A negated alternative test tells each branch which alternatives remain.
 // SCENARIO: The query is read early only when its scope holds no view, and is cleared otherwise; accept.
@@ -809,7 +809,7 @@ void placeVariantNegated(bool reuse) {
 
 // CASE: place.variant_bound_view
 // PAIR: place.variant_alternative
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A condition that declares `std::get_if` of an alternative tests that alternative.
 // SCENARIO: A scope view is copied and rebound inside the branch, and the other branch holds no view; accept.
@@ -829,7 +829,7 @@ void placeVariantBoundView() {
 
 // CASE: place.variant_other_condition
 // PAIR: place.variant_alternative
-// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/features/history/history-browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A branch on any other standard call, such as an operator, is not an alternative test.
 // SCENARIO: The query is read when an optional flag it comes with is set; accept.

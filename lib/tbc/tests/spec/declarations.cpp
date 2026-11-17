@@ -1249,7 +1249,7 @@ std::size_t declarationUnsharedReferenceResult(declarations::buffered_face& face
 
 // CASE: declaration.pinned_shared_field
 // PAIR: declaration.pinned_shared_field
-// SOURCE: src/gui/config/generation/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
+// SOURCE: src/gui/application/application-configuration.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
 // STATUS: implemented
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A value read from the owner's pinned machine is used after the owner records it; accept.
@@ -1288,7 +1288,7 @@ int declarationPinnedSharedField() {
 
 // CASE: declaration.movable_shared_field
 // PAIR: declaration.pinned_shared_field
-// SOURCE: src/gui/config/generation/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
+// SOURCE: src/gui/application/application-configuration.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
 // STATUS: pending
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A machine that can be assigned may be replaced by the call, dropping the value it lent; reject at the call.
