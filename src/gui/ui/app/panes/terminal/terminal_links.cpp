@@ -34,9 +34,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.links.cell_links;
-import telar.gui.links.link_hover;
-import telar.gui.links.path_expansion;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -59,7 +56,7 @@ namespace telar::gui::qt {
     return controller_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && controller_->dialog() == Store::Dialog::none && !controller_->copy().active();
   }
 
-  LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexcept {
+  application::terminal::links::LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexcept {
     return {.native = modifiers.testFlag(NativeKeyAdapter::link_modifier), .shift = modifiers.testFlag(Qt::ShiftModifier), .alt = modifiers.testFlag(Qt::AltModifier)};
   }
 
@@ -191,7 +188,7 @@ namespace telar::gui::qt {
     return CellPosition{.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(*row)};
   }
 
-  TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, LinkModifiers modifiers) const {
+  TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, application::terminal::links::LinkModifiers modifiers) const {
     const auto* current = pane();
     const auto local = visibleCellAt(position);
     if (!linkEligible() || current == nullptr || !local || link_hover_.covers({.x = static_cast<float>(position.x()), .y = static_cast<float>(position.y())})) {
@@ -202,13 +199,13 @@ namespace telar::gui::qt {
     const auto* drawn = view_rows_.empty() ? nullptr : drawnScreen();
     const auto& grid = drawn != nullptr ? *drawn : current->screen;
     const CellPosition cell{.x = local->x, .y = grid.scroll().offset + local->y};
-    const auto found = CellLinks::resolve(grid, cell);
+    const auto found = application::terminal::links::CellLinks::resolve(grid, cell);
     if (!found) {
       return {};
     }
 
-    const auto affordance = LinkPointerPolicy::hover(found->target.scheme(), modifiers);
-    if (affordance != LinkAffordance::link) {
+    const auto affordance = application::terminal::links::LinkPointerPolicy::hover(found->target.scheme(), modifiers);
+    if (affordance != application::terminal::links::LinkAffordance::link) {
       return {.affordance = affordance, .hit = {}};
     }
 
@@ -223,7 +220,7 @@ namespace telar::gui::qt {
 
     return {
         .affordance = affordance,
-        .hit = LinkHit{
+        .hit = application::terminal::links::LinkHit{
             .pane_id = pane_id_,
             .generation = current->attachment_generation,
             .location = current->location,
@@ -295,7 +292,7 @@ namespace telar::gui::qt {
     const auto changed = link_hover_.assign(std::move(resolved.hit), surface, presented_frame_id_ == current->screen.frameId());
 
     link_gesture_.validate(link_hover_.current(), stamp.version);
-    setCursor(resolved.affordance == LinkAffordance::text ? Qt::IBeamCursor : Qt::PointingHandCursor);
+    setCursor(resolved.affordance == application::terminal::links::LinkAffordance::text ? Qt::IBeamCursor : Qt::PointingHandCursor);
     if (changed || rebuild_preview) {
       link_preview_ = link_hover_.current() ? LinkPreview::layout(*link_hover_.current(), surface, font_.faces.front(), controller_->chromeRatio()) : std::nullopt;
       emit linkHoverChanged();
@@ -347,13 +344,13 @@ namespace telar::gui::qt {
     update();
   }
 
-  std::optional<PresentedLink> TerminalItem::prepareLinkPresentation() const {
+  std::optional<application::terminal::links::PresentedLink> TerminalItem::prepareLinkPresentation() const {
     const auto surface = terminalSurface();
     if (!link_hover_.needsPresentation(surface, preview_cover_)) {
       return {};
     }
 
-    return PresentedLink{.surface = surface, .link = shared_link_, .cover = preview_cover_};
+    return application::terminal::links::PresentedLink{.surface = surface, .link = shared_link_, .cover = preview_cover_};
   }
 
   void TerminalItem::presentFrame(const application::TerminalPreparation& preparation) {
@@ -382,16 +379,16 @@ namespace telar::gui::qt {
     const auto surface = terminalSurface();
     const auto forced = right ? resolveLink(event.position(), {.native = true, .shift = true}) : ResolvedLink{};
     const auto& hit = right ? forced.hit : link_hover_.current();
-    auto button = LinkButton::middle;
+    auto button = application::terminal::links::LinkButton::middle;
 
     if (right) {
-      button = LinkButton::right;
+      button = application::terminal::links::LinkButton::right;
     } else if (event.button() == Qt::LeftButton) {
-      button = LinkButton::left;
+      button = application::terminal::links::LinkButton::left;
     }
 
-    const auto plan = LinkPointerPolicy::press({.button = button, .modifiers = linkModifiers(event.modifiers()), .child_tracking = current != nullptr && current->screen.mouse().tracking != MouseTracking::none, .has_link = hit.has_value(), .openable = link_hover_.openable(surface), .frame_presented = current != nullptr && presented_frame_id_ == current->screen.frameId() && link_hover_.surfaceVisible(surface)});
-    if (plan == LinkPress::arm_shared || plan == LinkPress::arm_exclusive) {
+    const auto plan = application::terminal::links::LinkPointerPolicy::press({.button = button, .modifiers = linkModifiers(event.modifiers()), .child_tracking = current != nullptr && current->screen.mouse().tracking != MouseTracking::none, .has_link = hit.has_value(), .openable = link_hover_.openable(surface), .frame_presented = current != nullptr && presented_frame_id_ == current->screen.frameId() && link_hover_.surfaceVisible(surface)});
+    if (plan == application::terminal::links::LinkPress::arm_shared || plan == application::terminal::links::LinkPress::arm_exclusive) {
       if (hit && controller_ != nullptr) {
         link_gesture_.begin(*hit, controller_->viewVersion());
       }
@@ -399,11 +396,11 @@ namespace telar::gui::qt {
       link_gesture_.cancel();
     }
 
-    if (plan == LinkPress::copy && hit) {
+    if (plan == application::terminal::links::LinkPress::copy && hit) {
       QGuiApplication::clipboard()->setText(toQString(hit->match.target.text()));
     }
 
-    const auto consumed = plan == LinkPress::arm_exclusive || plan == LinkPress::discard || plan == LinkPress::copy;
+    const auto consumed = plan == application::terminal::links::LinkPress::arm_exclusive || plan == application::terminal::links::LinkPress::discard || plan == application::terminal::links::LinkPress::copy;
 
     captured_link_buttons_.setFlag(event.button(), consumed);
 

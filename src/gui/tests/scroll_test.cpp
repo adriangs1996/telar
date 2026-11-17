@@ -20,7 +20,6 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.terminal;
-import telar.gui.links.cell_links;
 import telar.wire.content;
 import telar.wire.vocabulary;
 
@@ -323,7 +322,7 @@ namespace {
 
     drawn.compose(columns, spans, drawn_flags, TextMetadata{.row_flags = drawn_flags, .links = links, .runs = drawn_runs, .uris = uri_bytes});
     require(drawn.rows() == rows && drawn.scroll().offset == 0 && drawn.linkAt(linked_column) == uri, "a composed screen holds its rows' links");
-    const auto found = CellLinks::resolve(drawn, CellPosition{.x = linked_column, .y = 0});
+    const auto found = application::terminal::links::CellLinks::resolve(drawn, CellPosition{.x = linked_column, .y = 0});
 
     require(found && found->start.x == linked_column && found->start.y == 0, "a link on a composed screen resolves where it is drawn");
   }

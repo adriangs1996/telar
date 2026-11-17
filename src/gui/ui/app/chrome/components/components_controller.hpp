@@ -28,7 +28,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.components.configuration;
-import telar.gui.links.cell_links;
+import telar.gui.application;
 
 namespace telar::gui::test {
   struct ComponentActions;
@@ -109,7 +109,7 @@ namespace telar::gui::qt {
     void failed(const QString& message);
     // A pressed node runs a binding, where it was pressed, or opens a link; the window does both.
     void bindingRequested(const telar::gui::BindingAction& action, const telar::gui::qt::ConfigurationSource::Actions& actions, QPointF anchor);
-    void linkRequested(const telar::gui::LinkTarget& target);
+    void linkRequested(const telar::gui::application::terminal::links::LinkTarget& target);
     // The pick closed with no panel to give the keyboard back to.
     void focusRestoreRequested();
 

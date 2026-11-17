@@ -46,6 +46,7 @@ import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
 import telar.gui.input.copy_pointer;
 import telar.gui.machines.picker;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -263,7 +264,7 @@ namespace telar::gui::qt {
     }
 
     const auto& action = pressed->action;
-    std::optional<LinkTarget> link;
+    std::optional<application::terminal::links::LinkTarget> link;
 
     try {
       const auto named = action && action->kind == BindingActionKind::extended ? configuration_.namedAction(*action, pressed->actions) : std::nullopt;
@@ -272,7 +273,7 @@ namespace telar::gui::qt {
       }
 
       if (!action && !pressed->url.empty()) {
-        link = LinkTarget::fromUri(pressed->url);
+        link = application::terminal::links::LinkTarget::fromUri(pressed->url);
       }
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));

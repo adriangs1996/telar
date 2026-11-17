@@ -34,7 +34,7 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-import telar.gui.links.cell_links;
+import telar.gui.application;
 
 namespace {
 
@@ -68,7 +68,7 @@ namespace {
     inline static QStringList started;
     inline static qint64 process_id = 0;
 
-    static void start(QProcess& process, const LinkTarget& target) {
+    static void start(QProcess& process, const application::terminal::links::LinkTarget& target) {
       const auto text = toQString(target.text());
 
       started.push_back(text);
@@ -113,8 +113,8 @@ printf '%s' "$1"
     static constexpr auto timeout = std::chrono::milliseconds{100};
   };
 
-  LinkTarget target(std::string_view text) {
-    const auto result = LinkTarget::fromUri(text);
+  application::terminal::links::LinkTarget target(std::string_view text) {
+    const auto result = application::terminal::links::LinkTarget::fromUri(text);
     if (!result) {
       throw std::runtime_error{"Invalid link-opening fixture"};
     }

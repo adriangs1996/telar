@@ -142,8 +142,6 @@ import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.graphics.placeholder;
 import telar.gui.input.copy_pointer;
-import telar.gui.links.path_expansion;
-import telar.gui.links.cell_links;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.json;
@@ -5775,7 +5773,7 @@ return {api_version=2, client={keybindings={
         client_->loadConfiguration({}, {}, {});
       });
 
-      QVERIFY(!LinkTarget::fromUri("https://").has_value());
+      QVERIFY(!application::terminal::links::LinkTarget::fromUri("https://").has_value());
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -6766,7 +6764,7 @@ return {api_version=2, client={keybindings={
         client_->loadConfiguration({}, {}, {});
       });
 
-      QVERIFY(!LinkTarget::fromUri("https://").has_value());
+      QVERIFY(!application::terminal::links::LinkTarget::fromUri("https://").has_value());
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());

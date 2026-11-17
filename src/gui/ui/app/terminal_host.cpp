@@ -8,7 +8,7 @@ static_assert(true);
 #include <QKeyEvent>
 #include <cstdint>
 
-import telar.gui.links.cell_links;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -42,7 +42,7 @@ namespace telar::gui::qt {
     pointer_dispatcher_.ungrab(terminal);
   }
 
-  void ApplicationController::openLink(const LinkTarget& target, std::uint64_t pane_id) {
+  void ApplicationController::openLink(const application::terminal::links::LinkTarget& target, std::uint64_t pane_id) {
     static_cast<void>(links_.open(target, pane_id));
   }
 

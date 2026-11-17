@@ -1,20 +1,112 @@
-export module telar.gui.links.cell_links;
+// A link in the terminal's cells: the text a URI, a path or a Markdown link spans, what it
+// targets, and the file and position a file link names.
+export module telar.gui.features.terminal.links:text;
 
 import std;
 import telar.tbc;
 
-import telar.gui.links.path_expansion;
-
-import telar.gui.foundation.text;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
+import telar.gui.foundation.text;
+import telar.wire.vocabulary;
+
+// Interface: links/link_text.cppm
+export {
+  namespace telar::gui::features::terminal::links {
+
+    enum class LinkScheme : std::uint8_t {
+      file,
+      http,
+      https,
+      external,
+      path,
+    };
+
+    struct TextRange {
+      std::size_t start = 0;
+      std::size_t end = 0;
+
+      [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> view(tbc::view<std::string_view, tbc::lt::a> text) const;
+
+      bool operator==(const TextRange&) const = default;
+    };
+
+    struct LinkTextMatch {
+      LinkScheme scheme = LinkScheme::external;
+      TextRange extent;
+      TextRange destination;
+    };
+
+    struct LinkText {
+      static constexpr std::size_t maximum_uri_bytes = 4096;
+      static constexpr std::size_t maximum_label_bytes = 512;
+      static constexpr std::size_t markdown_delimiter_bytes = 4;
+      static constexpr std::size_t maximum_span_bytes = maximum_uri_bytes + maximum_label_bytes + markdown_delimiter_bytes;
+      static constexpr unsigned first_non_ascii = 0x80;
+      static constexpr unsigned delete_control = 0x7f;
+
+      [[nodiscard]] static constexpr bool control(char byte) noexcept {
+        return static_cast<unsigned char>(byte) < ' ' || static_cast<unsigned char>(byte) == delete_control;
+      }
+
+      [[nodiscard]] static constexpr bool digit(char byte) noexcept {
+        return byte >= '0' && byte <= '9';
+      }
+
+      [[nodiscard]] static constexpr bool alphanumeric(char byte) noexcept {
+        return digit(byte) || (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z');
+      }
+
+      [[nodiscard]] static constexpr bool separator(char byte) noexcept {
+        return control(byte) || byte == ' ' || std::string_view{"\"'<>`"}.contains(byte);
+      }
+
+      [[nodiscard]] static bool validUtf8(std::string_view text) noexcept;
+    };
+
+  }
+}
+
+// Interface: links/link_grid.cppm
+export {
+  namespace telar::gui::features::terminal::links {
+
+    struct LinkGrid {
+      std::span<const CellValue> cells;
+      std::uint16_t columns = 0;
+      std::uint16_t rows = 0;
+      Scroll scroll{};
+      std::span<const Byte> row_flags;
+
+      [[nodiscard]] std::optional<std::size_t> cellIndex(CellPosition point) const noexcept;
+
+      [[nodiscard]] std::optional<std::size_t> previous(std::size_t index) const noexcept;
+
+      [[nodiscard]] std::optional<std::size_t> next(std::size_t index) const noexcept;
+
+      [[nodiscard]] CellPosition position(std::size_t index) const noexcept;
+
+      [[nodiscard]] CellPosition cellEnd(std::size_t index) const noexcept;
+
+      [[nodiscard]] bool complete(CellPosition first, CellPosition last) const noexcept;
+
+    private:
+      [[nodiscard]] bool flag(std::size_t row, RowFlag value) const noexcept;
+
+      [[nodiscard]] bool padding(std::size_t index) const noexcept;
+
+      [[nodiscard]] bool joins(std::size_t row) const noexcept;
+    };
+
+  }
+}
 
 // Interface: links/uri_view.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     // Every part views the parsed text, region `a`.
     struct UriView {
@@ -40,7 +132,7 @@ export {
 
 // Interface: links/uri_recognizer.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class UriRecognizer {
     public:
@@ -83,7 +175,7 @@ export {
 
 // Interface: links/link_target.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class LinkTarget {
     public:
@@ -109,7 +201,7 @@ export {
 
 // Interface: links/link_match.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     struct LinkMatch {
       LinkTarget target;
@@ -125,7 +217,7 @@ export {
 
 // Interface: links/markdown_links.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class MarkdownLinks {
     public:
@@ -140,7 +232,7 @@ export {
 
 // Interface: links/path_recognizer.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     struct PathLocation {
       std::string_view path;
@@ -179,7 +271,7 @@ export {
 
 // Interface: links/cell_links.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class CellLinks {
     public:
@@ -217,7 +309,7 @@ export {
 
 // Interface: links/file_path.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class FilePath {
     public:

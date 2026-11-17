@@ -1,6 +1,13 @@
-module telar.gui.links.path_expansion;
+module telar.gui.features.terminal.links;
 
-namespace telar::gui {
+import std;
+import telar.tbc;
+import telar.base.editors;
+import telar.gui.foundation.text;
+import telar.wire.editor;
+import telar.wire.vocabulary;
+
+namespace telar::gui::features::terminal::links {
 
   PathExpansion::PathText PathExpansion::expandWith(PathExpansionInput input, const Variables& environment) {
     try {
@@ -117,20 +124,6 @@ namespace telar::gui {
     normalized.assign(result.view().empty() ? "/" : result.view());
 
     return normalized;
-  }
-
-  tbc::view<std::string_view, tbc::lt::a> TextRange::view(tbc::view<std::string_view, tbc::lt::a> text) const {
-    return text.substr(start, end - start);
-  }
-
-  bool LinkText::validUtf8(std::string_view text) noexcept {
-    try {
-      validateUtf8(text);
-
-      return true;
-    } catch (const EncodingError&) {
-      return false;
-    }
   }
 
   std::span<const std::string_view> EditorLaunch::arguments(std::string_view executable, std::string_view path, std::uint32_t line, std::uint32_t column) {
@@ -257,120 +250,6 @@ namespace telar::gui {
 
   OpenEditor EditorRequest::message() const noexcept {
     return {.request_id = request_id, .pane_id = source.pane_id, .pane_generation = source.pane_generation, .editor = target.editor(), .path = target.path(), .line = target.line(), .column = target.column()};
-  }
-
-  void EditorOpening::begin(const EditorRequest& request) {
-    if (pending_) {
-      throw std::runtime_error{"EditorOpenBusy"};
-    }
-
-    pending_ = request;
-  }
-
-  std::optional<EditorRequest> EditorOpening::complete(std::uint64_t request_id) {
-    if (!owns(request_id)) {
-      return {};
-    }
-
-    return std::exchange(pending_, std::nullopt);
-  }
-
-  bool EditorOpening::owns(std::uint64_t request_id) const noexcept {
-    return pending_ && pending_->request_id == request_id;
-  }
-
-  void EditorOpening::reset() noexcept {
-    pending_.reset();
-  }
-
-  std::optional<std::size_t> LinkGrid::cellIndex(CellPosition point) const noexcept {
-    if (columns == 0 || cells.size() != static_cast<std::size_t>(columns) * rows || point.x >= columns || point.y < scroll.offset || point.y - scroll.offset >= rows) {
-      return {};
-    }
-
-    auto index = (static_cast<std::size_t>(point.y - scroll.offset) * columns) + point.x;
-    if (padding(index)) {
-      return {};
-    }
-
-    if (cells[index].width == CellWidth::continuation) {
-      if (point.x == 0 || cells[index - 1].width != CellWidth::wide) {
-        return {};
-      }
-
-      --index;
-    }
-
-    return index;
-  }
-
-  std::optional<std::size_t> LinkGrid::previous(std::size_t index) const noexcept {
-    while (index != 0) {
-      if (index % columns == 0 && !joins((index / columns) - 1)) {
-        return {};
-      }
-
-      --index;
-      if (!padding(index)) {
-        return index;
-      }
-    }
-
-    return {};
-  }
-
-  std::optional<std::size_t> LinkGrid::next(std::size_t index) const noexcept {
-    while (index + 1 < cells.size()) {
-      if ((index + 1) % columns == 0 && !joins(index / columns)) {
-        return {};
-      }
-
-      ++index;
-      if (!padding(index)) {
-        return index;
-      }
-    }
-
-    return {};
-  }
-
-  CellPosition LinkGrid::position(std::size_t index) const noexcept {
-    return {.x = static_cast<std::uint16_t>(index % columns), .y = scroll.offset + static_cast<std::uint32_t>(index / columns)};
-  }
-
-  CellPosition LinkGrid::cellEnd(std::size_t index) const noexcept {
-    auto result = position(index);
-
-    result.x = static_cast<std::uint16_t>(std::min<unsigned>(columns, result.x + std::max(1U, static_cast<unsigned>(cells[index].width))));
-
-    return result;
-  }
-
-  bool LinkGrid::complete(CellPosition first, CellPosition last) const noexcept {
-    if (row_flags.empty()) {
-      return true;
-    }
-
-    if (first.y == scroll.offset && first.x == 0 && flag(0, RowFlag::continuation)) {
-      return false;
-    }
-
-    const auto last_row = row_flags.size() - 1;
-    const auto last_column = columns - static_cast<unsigned>(flag(last_row, RowFlag::wide_padding));
-
-    return last.y - scroll.offset != last_row || last.x != last_column || !flag(last_row, RowFlag::wrap);
-  }
-
-  bool LinkGrid::flag(std::size_t row, RowFlag value) const noexcept {
-    return row < row_flags.size() && (row_flags[row] & static_cast<Byte>(value)) != 0;
-  }
-
-  bool LinkGrid::padding(std::size_t index) const noexcept {
-    return flag(index / columns, RowFlag::wide_padding) && index % columns == columns - 1;
-  }
-
-  bool LinkGrid::joins(std::size_t row) const noexcept {
-    return row + 1 < row_flags.size() && flag(row, RowFlag::wrap) && flag(row + 1, RowFlag::continuation);
   }
 
 }

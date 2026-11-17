@@ -209,7 +209,7 @@ namespace telar::gui::application {
     features::peek::close(peek_);
     features::palette::discard(palette_);
     pending_count_ = 0;
-    editor_opening_.reset();
+    features::terminal::links::suspend(links_);
     failPromptRequests();
     for (auto& pane : panes_) {
       pane->attached = false;
@@ -642,8 +642,8 @@ namespace telar::gui::application {
       return *change;
     }
 
-    if (editor_opening_.complete(message.request_id)) {
-      return reportLinkFailure(message.message);
+    if (const auto change = terminal::links::fail(*this, message.request_id, message.message)) {
+      return *change;
     }
 
     if (const auto request = complete(message.request_id)) {

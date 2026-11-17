@@ -1,16 +1,95 @@
-export module telar.gui.links.link_hover;
+// The pointer over a link: what hovering and pressing it does, the link under the pointer as a
+// frame presents it, and the cells it covers.
+export module telar.gui.features.terminal.links:pointer;
 
 import std;
 
+import :text;
 import telar.gui.foundation.core;
-import telar.gui.links.cell_links;
-
-import telar.gui.links.path_expansion;
 import telar.wire.vocabulary;
+
+// Interface: links/pointer_policy.cppm
+export {
+  namespace telar::gui::features::terminal::links {
+
+    struct LinkModifiers {
+      bool native = false;
+      bool shift = false;
+      bool alt = false;
+
+      bool operator==(const LinkModifiers&) const = default;
+    };
+
+    enum class LinkAffordance : std::uint8_t {
+      text,
+      pointer,
+      link,
+    };
+
+    enum class LinkButton : std::uint8_t {
+      left,
+      middle,
+      right,
+    };
+
+    enum class LinkPress : std::uint8_t {
+      passthrough,
+      arm_shared,
+      arm_exclusive,
+      copy,
+      discard,
+    };
+
+    struct LinkPressInput {
+      LinkButton button = LinkButton::left;
+      LinkModifiers modifiers{};
+      bool child_tracking = false;
+      bool has_link = false;
+      bool openable = false;
+      bool frame_presented = false;
+    };
+
+    class LinkPointerPolicy {
+    public:
+      [[nodiscard]] static constexpr LinkAffordance hover(std::optional<LinkScheme> scheme, LinkModifiers modifiers, bool eligible = true) noexcept {
+        if (!eligible || !scheme) {
+          return LinkAffordance::text;
+        }
+
+        if (modifiers.alt) {
+          return LinkAffordance::pointer;
+        }
+
+        return *scheme == LinkScheme::path && !modifiers.native ? LinkAffordance::text : LinkAffordance::link;
+      }
+
+      [[nodiscard]] static constexpr LinkPress press(LinkPressInput input) noexcept {
+        if (!input.has_link || input.button == LinkButton::middle) {
+          return LinkPress::passthrough;
+        }
+
+        if (input.button == LinkButton::right) {
+          return input.frame_presented ? LinkPress::copy : LinkPress::discard;
+        }
+
+        if (input.child_tracking && !input.modifiers.shift) {
+          return LinkPress::passthrough;
+        }
+
+        if (input.modifiers.native) {
+          return input.openable ? LinkPress::arm_exclusive : LinkPress::discard;
+        }
+
+        return input.openable ? LinkPress::arm_shared : LinkPress::passthrough;
+      }
+    };
+
+  }
+}
 
 // Interface: links/link_hit.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     struct LinkHit {
       std::uint64_t pane_id = 0;
@@ -29,7 +108,7 @@ export {
 
 // Interface: links/link_gesture.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class LinkGesture {
     public:
@@ -53,7 +132,7 @@ export {
 
 // Interface: links/link_hover.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     struct LinkPresentation {
       TerminalSurface surface;
@@ -93,7 +172,7 @@ export {
 
 // Interface: links/link_opening.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     class LinkOpening {
     public:
@@ -115,7 +194,7 @@ export {
 
 // Interface: links/link_regions.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     struct LinkRegion {
       std::uint16_t x;
@@ -156,7 +235,7 @@ export {
 
 // Interface: links/presented_link.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::links {
 
     struct PresentedLink {
       TerminalSurface surface;

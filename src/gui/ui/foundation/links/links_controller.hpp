@@ -15,7 +15,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-import telar.gui.links.cell_links;
+import telar.gui.application;
 import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
@@ -38,7 +38,7 @@ namespace telar::gui::qt {
 
     // A file link opens relative to the pane `source_id` when one is given. False when it could
     // not be opened.
-    bool open(const LinkTarget& target, std::optional<std::uint64_t> source_id = {});
+    bool open(const application::terminal::links::LinkTarget& target, std::optional<std::uint64_t> source_id = {});
     // Opens the link written at a cell of the pane's screen, if any.
     void openAt(std::uint64_t pane_id, CellPosition point);
     // The host's opener finished the link the client `source` asked for.

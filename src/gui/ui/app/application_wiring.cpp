@@ -19,7 +19,7 @@ static_assert(true);
 #include <optional>
 #include <stdexcept>
 
-import telar.gui.links.cell_links;
+import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;
 import telar.gui.machines.picker;
@@ -44,7 +44,7 @@ namespace telar::gui::qt {
       }
     });
 
-    connect(&components_, &ComponentsController::linkRequested, this, [this](const LinkTarget& target) {
+    connect(&components_, &ComponentsController::linkRequested, this, [this](const application::terminal::links::LinkTarget& target) {
       static_cast<void>(links_.open(target));
     });
 
@@ -159,7 +159,7 @@ namespace telar::gui::qt {
     connect(&notifications_, &NotificationsController::linkRequested, this, [this](const QString& uri) {
       const auto bytes = uri.toUtf8();
 
-      if (const auto link = LinkTarget::fromUri({bytes.constData(), static_cast<std::size_t>(bytes.size())})) {
+      if (const auto link = application::terminal::links::LinkTarget::fromUri({bytes.constData(), static_cast<std::size_t>(bytes.size())})) {
         static_cast<void>(links_.open(*link));
       }
     });

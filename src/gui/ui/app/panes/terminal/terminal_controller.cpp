@@ -151,8 +151,8 @@ namespace telar::gui::qt {
     }
   }
 
-  std::shared_ptr<const LinkHit> TerminalController::shareLinkHit(const LinkHit& hit) {
-    return std::allocate_shared<LinkHit>(AllocatorRef<LinkHit, ApplicationAllocator>{memory_}, hit);
+  std::shared_ptr<const application::terminal::links::LinkHit> TerminalController::shareLinkHit(const application::terminal::links::LinkHit& hit) {
+    return std::allocate_shared<application::terminal::links::LinkHit>(AllocatorRef<application::terminal::links::LinkHit, ApplicationAllocator>{memory_}, hit);
   }
 
   void TerminalController::prepareImagePlacements() {

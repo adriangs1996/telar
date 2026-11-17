@@ -123,7 +123,7 @@ telar_add_test(gui-session-test SOURCES session_test.cpp LIBRARIES gui-foundatio
   TEST gui-session LABELS gui.application TIMEOUT 30)
 telar_add_test(gui-document-session-test SOURCES document_session_test.cpp LIBRARIES gui-application gui-test-fixtures
   TEST gui-document-session LABELS gui.application)
-telar_add_test(gui-scroll-test SOURCES scroll_test.cpp LIBRARIES gui-foundation-terminal gui-links gui-application gui-test-fixtures
+telar_add_test(gui-scroll-test SOURCES scroll_test.cpp LIBRARIES gui-foundation-terminal gui-features-terminal-links gui-application gui-test-fixtures
   TEST gui-scroll LABELS gui.application)
 telar_add_test(gui-host-metrics-test SOURCES host_metrics_test.cpp LIBRARIES gui-foundation-core gui-core gui-presentation gui-application gui-test-fixtures
   TEST gui-host-metrics LABELS gui.application)
@@ -201,13 +201,13 @@ telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-found
   TEST gui-copy-mode LABELS gui.input TIMEOUT 30)
 telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
   TEST gui-directory-completion LABELS gui.paths TIMEOUT 30)
-telar_add_test(gui-links-test SOURCES links_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-links gui-test-fixtures
-  TEST gui-links LABELS gui.links TIMEOUT 30)
-telar_add_test(gui-file-links-test SOURCES file_links_test.cpp LIBRARIES gui-links
+telar_add_test(gui-links-test SOURCES links_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-features-terminal-links gui-test-fixtures
+  TEST gui-features-terminal-links LABELS gui.links TIMEOUT 30)
+telar_add_test(gui-file-links-test SOURCES file_links_test.cpp LIBRARIES gui-features-terminal-links
   TEST gui-file-links LABELS gui.links TIMEOUT 30)
-telar_add_test(gui-editor-session-test SOURCES editor_session_test.cpp LIBRARIES gui-foundation-model gui-layout gui-links gui-application gui-test-fixtures
+telar_add_test(gui-editor-session-test SOURCES editor_session_test.cpp LIBRARIES gui-foundation-model gui-layout gui-features-terminal-links gui-application gui-test-fixtures
   TEST gui-editor-session LABELS gui.application TIMEOUT 30)
-telar_add_test(gui-link-interaction-test SOURCES link_interaction_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-links gui-test-fixtures
+telar_add_test(gui-link-interaction-test SOURCES link_interaction_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-features-terminal-links gui-test-fixtures
   TEST gui-link-interaction LABELS gui.links TIMEOUT 30)
 telar_add_test(gui-child-mouse-test SOURCES child_mouse_test.cpp LIBRARIES gui-core gui-features-terminal-input
   TEST gui-child-mouse LABELS gui.input TIMEOUT 30)
@@ -438,7 +438,7 @@ if(TELAR_GUI_NATIVE)
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-key-adapter-test SOURCES key_adapter_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-foundation-system gui-keyboard gui-core gui-input gui-platform
     TEST gui-key-adapter LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-link-opener-test QT SOURCES link_opener_test.cpp LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-system gui-foundation-text gui-core gui-features-history gui-layout gui-links gui-platform gui-presentation gui-application deps::ghostty_vt Qt6::Gui Qt6::Test
+  telar_add_test(gui-link-opener-test QT SOURCES link_opener_test.cpp LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-system gui-foundation-text gui-core gui-features-history gui-layout gui-features-terminal-links gui-platform gui-presentation gui-application deps::ghostty_vt Qt6::Gui Qt6::Test
     TEST gui-link-opener LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-link-opener-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-input gui-config

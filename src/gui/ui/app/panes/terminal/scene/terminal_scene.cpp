@@ -44,8 +44,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.links.path_expansion;
-import telar.gui.links.link_hover;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -474,8 +473,8 @@ namespace telar::gui::qt {
     }
 
     const auto& screen = frame.link_screen != nullptr ? *frame.link_screen : frame.screen;
-    const LinkGrid grid{.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
-    LinkRegions regions{*frame.hovered_link, grid, screen.linkRuns(), {.columns = columns_, .rows = static_cast<std::uint16_t>(row_nodes_.size())}};
+    const application::terminal::links::LinkGrid grid{.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
+    application::terminal::links::LinkRegions regions{*frame.hovered_link, grid, screen.linkRuns(), {.columns = columns_, .rows = static_cast<std::uint16_t>(row_nodes_.size())}};
     constexpr qreal underline_inset_pixels = 2;
     constexpr qreal underline_thickness_pixels = 1;
 

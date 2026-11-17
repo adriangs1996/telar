@@ -4,26 +4,6 @@ import std;
 
 import telar.gui.foundation.core;
 
-// Interface: presentation/link_status_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct LinkStatusGeometry {
-      static constexpr float dim_alpha = 0.6F;
-      static constexpr float line_height_factor = 1.5F;
-      static constexpr float line_gap = 6;
-      static constexpr float inset = 24;
-
-      Rect bounds;
-      Rect headline;
-      Rect detail;
-
-      [[nodiscard]] static LinkStatusGeometry measure(Rect area, const ChromeMetrics& chrome, bool has_detail) noexcept;
-    };
-
-  }
-}
-
 // Interface: presentation/machine_chrome_geometry.cppm
 export {
   namespace telar::gui {

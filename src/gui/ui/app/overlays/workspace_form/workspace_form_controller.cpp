@@ -15,7 +15,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.links.path_expansion;
+import telar.gui.application;
 import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
@@ -136,7 +136,7 @@ namespace telar::gui::qt {
     const auto* pane = store_.session().focusedPane();
     const std::string_view base = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd};
     const auto typed = text.toUtf8();
-    const auto expanded = PathExpansion::expand({.text = view(typed), .base = base}, environment);
+    const auto expanded = application::terminal::links::PathExpansion::expand({.text = view(typed), .base = base}, environment);
 
     return QString::fromUtf8(expanded.view().data(), static_cast<qsizetype>(expanded.view().size()));
   }

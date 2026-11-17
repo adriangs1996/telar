@@ -6,7 +6,6 @@ import telar.gui.input.copy_pointer;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.core;
-import telar.gui.links.path_expansion;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.input.copy_mode;

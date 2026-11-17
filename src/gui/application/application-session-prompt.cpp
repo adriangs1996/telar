@@ -9,7 +9,6 @@ import telar.gui.foundation.actions;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
 import telar.gui.input.copy_pointer;
-import telar.gui.links.path_expansion;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;

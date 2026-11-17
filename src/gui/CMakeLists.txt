@@ -26,7 +26,7 @@ target_include_directories(gui-settings INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" 
 target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-harfbuzz deps::ghostty_vt)
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
-foreach(domain IN ITEMS foundation features core layout text prompt links
+foreach(domain IN ITEMS foundation features core layout text prompt
     input attachments platform machines presentation graphics components config transport
     application)
   add_subdirectory(${domain})
@@ -162,7 +162,7 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-core gui-layout
-    gui-text gui-prompt gui-links gui-input gui-attachments
+    gui-text gui-prompt gui-input gui-attachments
     gui-platform gui-machines gui-presentation gui-graphics gui-components gui-config gui-transport
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)

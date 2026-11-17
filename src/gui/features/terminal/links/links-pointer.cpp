@@ -1,6 +1,10 @@
-module telar.gui.links.link_hover;
+module telar.gui.features.terminal.links;
 
-namespace telar::gui {
+import std;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+
+namespace telar::gui::features::terminal::links {
 
   bool LinkHit::operator==(const LinkHit& other) const noexcept {
     return pane_id == other.pane_id && generation == other.generation && sameTab(location, other.location) && content == other.content && scroll_offset == other.scroll_offset && area == other.area && match == other.match;

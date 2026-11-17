@@ -9,12 +9,12 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.gui.links.path_expansion;
-import telar.gui.links.cell_links;
+import telar.gui.features.terminal.links;
 
 namespace {
 
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::links;
 
   void require(bool condition, const char* message) {
     if (!condition) {
@@ -167,22 +167,22 @@ namespace {
 
     editor.assign("different");
     path.assign("/changed");
-    EditorOpening opening;
+    State opening;
     const EditorRequest request{.request_id = 1, .source = {.pane_id = 2, .pane_generation = 3}, .target = target};
 
-    opening.begin(request);
+    static_cast<void>(open(opening, request));
     requireFailure([&] {
-      opening.begin(request);
+      static_cast<void>(open(opening, request));
     },
         "EditorOpenBusy");
-    require(!opening.complete(2) && opening.owns(1), "an unrelated reply must not consume a pending editor request");
-    const auto completed = opening.complete(1);
+    require(!complete(opening, 2) && pending(opening, 1), "an unrelated reply must not consume a pending editor request");
+    const auto completed = complete(opening, 1);
 
     require(completed && completed->message().editor == "nvim" && completed->message().path == "/tmp/original.cpp", "pending editor requests must own both strings independently of their producers");
-    require(!opening.complete(1), "duplicate editor replies must not complete an operation twice");
-    opening.begin(request);
-    opening.reset();
-    require(!opening.owns(1), "disconnect must release pending editor authority");
+    require(!complete(opening, 1), "duplicate editor replies must not complete an operation twice");
+    static_cast<void>(open(opening, request));
+    suspend(opening);
+    require(!pending(opening, 1), "disconnect must release pending editor authority");
     requireFailure([] {
       static_cast<void>(EditorTarget{"-unsafe", "/tmp/a", 0, 0});
     },

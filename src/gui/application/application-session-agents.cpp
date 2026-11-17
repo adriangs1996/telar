@@ -6,7 +6,6 @@ import telar.gui.text.notification_payload;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
-import telar.gui.links.path_expansion;
 import telar.gui.presentation.application_mark;
 import telar.config.client;
 import telar.config.runtime;

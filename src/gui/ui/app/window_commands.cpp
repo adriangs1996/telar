@@ -70,7 +70,6 @@ import telar.gui.config.gui_query;
 import telar.gui.presentation.notification_center;
 import telar.config.client;
 import telar.gui.config.plugin_effects;
-import telar.gui.links.cell_links;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.wire.vocabulary;
@@ -578,7 +577,7 @@ namespace telar::gui::qt {
 
       break;
     case ClientAction::client_open_link: {
-      const auto target = LinkTarget::fromUri(message.text);
+      const auto target = application::terminal::links::LinkTarget::fromUri(message.text);
       if (!target) {
         throw EncodingError{"InvalidLink"};
       }
@@ -851,7 +850,7 @@ namespace telar::gui::qt {
       } else if (node.action != components::Element::none && node.action < rendered->bindings.size()) {
         static_cast<void>(runBinding(rendered->bindings[node.action], &rendered->actions));
       } else if (const auto url = rendered->view(node.url); !url.empty()) {
-        if (const auto target = LinkTarget::fromUri(url)) {
+        if (const auto target = application::terminal::links::LinkTarget::fromUri(url)) {
           static_cast<void>(links_.open(*target));
         }
       }

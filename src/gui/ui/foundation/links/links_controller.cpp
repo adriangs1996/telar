@@ -10,7 +10,7 @@ static_assert(true);
 #include <exception>
 #include <string_view>
 
-import telar.gui.links.path_expansion;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -19,14 +19,14 @@ namespace telar::gui::qt {
         store_(store),
         opener_(*this) {}
 
-  bool LinksController::open(const LinkTarget& target, std::optional<std::uint64_t> source_id) {
+  bool LinksController::open(const application::terminal::links::LinkTarget& target, std::optional<std::uint64_t> source_id) {
     try {
-      if (target.scheme() == LinkScheme::file || target.scheme() == LinkScheme::path) {
+      if (target.scheme() == application::terminal::links::LinkScheme::file || target.scheme() == application::terminal::links::LinkScheme::path) {
         const platform::ProcessEnvironment environment;
         const auto configured = store_.session().configuration().editor.view();
         const auto executable = configured.empty() ? environment("EDITOR").value_or(std::string_view{}) : configured;
 
-        store_.session().openFile(FilePath::parse(target), executable, environment, source_id);
+        application::terminal::links::openFile(store_.session(), application::terminal::links::FilePath::parse(target), executable, environment, source_id);
       } else {
         opener_.request(target, store_.client(store_.machines().active()).key);
       }
@@ -45,7 +45,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto found = CellLinks::text(pane->screen, point);
+    const auto found = application::terminal::links::CellLinks::text(pane->screen, point);
     if (found) {
       static_cast<void>(open(found->target, pane_id));
     }

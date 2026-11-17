@@ -14,7 +14,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.links.path_expansion;
+import telar.gui.application;
 
 namespace telar::gui::test {
 
@@ -23,7 +23,7 @@ namespace telar::gui::test {
     logical,
   };
 
-  inline LinkGrid screenGrid(const Screen<Memory>& screen) {
+  inline application::terminal::links::LinkGrid screenGrid(const Screen<Memory>& screen) {
     return {.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
   }
 

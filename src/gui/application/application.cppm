@@ -16,3 +16,4 @@ export import :palette;
 export import :paths;
 export import :history;
 export import :terminal_input;
+export import :terminal_links;

@@ -10,6 +10,7 @@ import telar.gui.features.palette;
 import telar.gui.features.paths;
 import telar.gui.features.history;
 import telar.gui.features.peek;
+import telar.gui.features.terminal.links;
 
 namespace telar::gui::application {
 
@@ -61,6 +62,10 @@ namespace telar::gui::application {
       return session.history_;
     }
 
+    [[nodiscard]] static constexpr features::terminal::links::State& links(Session& session) noexcept {
+      return session.links_;
+    }
+
     // ---- what the session keeps for every feature -------------------------------------------
 
     [[nodiscard]] static constexpr Memory& memory(Session& session) noexcept {
@@ -93,6 +98,18 @@ namespace telar::gui::application {
     // The editor of pane `pane_id` took text from outside the keyboard, for its view to show it.
     static void notePromptWrite(Session& session, std::uint64_t pane_id) noexcept {
       session.prompt_written_ = pane_id;
+    }
+
+    // ---- the workbench, until it is a feature -----------------------------------------------
+
+    // Opens a tab, or the first pane, running `arguments`.
+    static void launchTab(Session& session, std::span<const std::string_view> arguments) {
+      session.launchTab(arguments);
+    }
+
+    // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
+    static void launchSplit(Session& session, std::uint64_t pane_id, std::span<const std::string_view> arguments) {
+      session.launchSplit(pane_id, arguments);
     }
 
     // ---- the connection with the runtime ----------------------------------------------------

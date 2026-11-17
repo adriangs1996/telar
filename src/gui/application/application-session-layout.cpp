@@ -11,14 +11,12 @@ import telar.gui.features.history;
 import telar.gui.input.copy_pointer;
 import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
-import telar.gui.links.path_expansion;
-import telar.gui.links.cell_links;
+import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
 import telar.gui.presentation.application_mark;
 import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
-import telar.gui.foundation.terminal;
 import telar.gui.prompt.line;
 import telar.base.text;
 import telar.gui.prompt.layout;
@@ -204,60 +202,6 @@ namespace telar::gui::application {
     }
 
     sendOpeningRequest(RequestKind::create_workspace, CreateWorkspace{.size = launchSize(), .name = draft.name, .create_cwd = draft.create_directory, .launch = launch});
-  }
-
-  std::optional<std::string_view> Session::fileBase(const FilePath& path, std::string_view executable, std::optional<std::uint64_t> source_id) const {
-    if (executable.empty()) {
-      throw std::runtime_error{"EditorUnavailable"};
-    }
-
-    if (!source_id) {
-      if (!path.text().starts_with('/')) {
-        throw std::invalid_argument{"RelativeFileLink"};
-      }
-
-      return std::nullopt;
-    }
-
-    const auto* source = findPane(*source_id);
-    if (source == nullptr || !active_tab_ || !sameTab(source->location, *active_tab_)) {
-      throw std::runtime_error{"PaneNotFound"};
-    }
-
-    if (path.text().starts_with('/')) {
-      return std::nullopt;
-    }
-
-    return std::string_view{source->cwd};
-  }
-
-  void Session::openAnchoredFile(const FilePath& path, std::string_view executable, std::string_view anchored, std::optional<std::uint64_t> source_id) {
-    if (!source_id) {
-      createEditorTab(EditorTarget{executable, path.text(), path.line(), path.column()});
-
-      return;
-    }
-
-    const auto* source = findPane(*source_id);
-    const EditorRequest request{
-        .request_id = source->generation == 0 ? 0 : nextRequest(),
-        .source = {.pane_id = source->id, .pane_generation = source->generation, .attachment_generation = source->attachment_generation, .location = source->location},
-        .target = EditorTarget{executable, path.text().starts_with('/') ? path.text() : anchored, path.line(), path.column()},
-    };
-
-    if (source->generation == 0) {
-      splitEditorPane(request);
-
-      return;
-    }
-
-    editor_opening_.begin(request);
-    try {
-      send(request.message());
-    } catch (...) {
-      static_cast<void>(editor_opening_.complete(request.request_id));
-      throw;
-    }
   }
 
   void Session::setWorkbenchGeometry(WorkbenchGeometry geometry) noexcept {
@@ -887,7 +831,7 @@ namespace telar::gui::application {
     features::paths::close(paths_);
     features::palette::discard(palette_);
     graphics_pauses_.reset();
-    editor_opening_.reset();
+    features::terminal::links::suspend(links_);
     ++view_version_.workspace;
     ++view_version_.tabs;
     ++view_version_.active_tab;
@@ -976,11 +920,10 @@ namespace telar::gui::application {
     saved_layouts_.forget(tab.location);
   }
 
-  void Session::createEditorTab(const EditorTarget& target) {
-    EditorLaunch command;
+  void Session::launchTab(std::span<const std::string_view> arguments) {
     auto launch = defaultLaunch();
 
-    launch.arguments = command.arguments(target.editor(), target.path(), target.line(), target.column());
+    launch.arguments = arguments;
     if (activeTab() != nullptr) {
       static_cast<void>(requestTabCreation({}, launch.arguments));
     } else {
@@ -988,13 +931,11 @@ namespace telar::gui::application {
     }
   }
 
-  void Session::splitEditorPane(const EditorRequest& request) {
-    EditorLaunch command;
+  void Session::launchSplit(std::uint64_t pane_id, std::span<const std::string_view> arguments) {
     auto launch = defaultLaunch();
-    const auto& target = request.target;
 
-    launch.arguments = command.arguments(target.editor(), target.path(), target.line(), target.column());
-    if (!requestPaneSplit(request.source.pane_id, ClientLayoutAxis::horizontal, launch)) {
+    launch.arguments = arguments;
+    if (!requestPaneSplit(pane_id, ClientLayoutAxis::horizontal, launch)) {
       throw std::runtime_error{"PaneSplitUnavailable"};
     }
   }
@@ -1560,49 +1501,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const EditorOpened& message) {
-    const auto request = editor_opening_.complete(message.request_id);
-    if (!request) {
-      return Change::none;
-    }
-
-    const auto& source = request->source;
-    const auto* pane = findPane(source.pane_id);
-    if (pane == nullptr || !active_tab_ || !sameTab(source.location, *active_tab_) || !sameTab(pane->location, source.location) || pane->generation != source.pane_generation || pane->attachment_generation != source.attachment_generation) {
-      return Change::none;
-    }
-
-    switch (message.outcome) {
-    case EditorOutcome::unavailable:
-      try {
-        splitEditorPane(*request);
-      } catch (const std::exception& error) {
-        return reportLinkFailure(error.what());
-      }
-
-      return Change::model;
-    case EditorOutcome::failed:
-      return reportLinkFailure("EditorOpenFailed");
-    case EditorOutcome::missing:
-      return reportLinkFailure("FileNotFound");
-    case EditorOutcome::opened: {
-      const auto* editor = findPane(message.pane_id);
-      if (editor == nullptr || !sameTab(editor->location, source.location) || editor->generation != message.pane_generation) {
-        return Change::none;
-      }
-
-      focusPane(editor->id);
-
-      return Change::model;
-    }
-    }
-
-    return Change::none;
-  }
-
-  Change Session::reportLinkFailure(std::string_view message) {
-    publishNotification({.level = NotificationLevel::failure, .title = "Could not open link", .message = message, .link = {}});
-
-    return Change::notification;
+    return terminal::links::receive(*this, message);
   }
 
   Change Session::apply(const ResyncRequired& message) {

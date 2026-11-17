@@ -60,8 +60,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.graphics.texture_cache;
-import telar.gui.links.link_hover;
-import telar.gui.links.cell_links;
+import telar.gui.application;
 
 namespace {
 
@@ -164,8 +163,8 @@ namespace {
     return {foreground, background};
   }
 
-  LinkTarget requireLinkTarget(std::string_view text) {
-    const auto target = LinkTarget::fromUri(text);
+  application::terminal::links::LinkTarget requireLinkTarget(std::string_view text) {
+    const auto target = application::terminal::links::LinkTarget::fromUri(text);
     if (!target) {
       throw std::runtime_error{"The scene fixture must contain a valid URI"};
     }
@@ -279,7 +278,7 @@ namespace {
       update();
     }
 
-    void hover(const LinkMatch* match) {
+    void hover(const application::terminal::links::LinkMatch* match) {
       frame_.hovered_link = match;
       update();
     }
@@ -606,7 +605,7 @@ namespace {
       item_.select(selection);
     }
 
-    void hover(const LinkMatch* match) {
+    void hover(const application::terminal::links::LinkMatch* match) {
       configuration_.theme.accent = cursor_text_color;
       item_.hover(match);
     }
@@ -1383,7 +1382,7 @@ namespace {
     Q_SLOT static void hoverUnderlineDoesNotChangeRetainedText() {
       SceneFixture fixture{CursorShape::block, false};
       const auto target = requireLinkTarget("https://underline.test");
-      const LinkMatch match{.target = target, .start = origin, .end = {.x = 1}};
+      const application::terminal::links::LinkMatch match{.target = target, .start = origin, .end = {.x = 1}};
       const auto original = fixture.capture();
 
       QCOMPARE(SceneFixture::bluePixels(original), 0);
@@ -1400,7 +1399,7 @@ namespace {
       constexpr float cell_height = 16;
       constexpr std::size_t long_path_size = 1000;
       const auto target = requireLinkTarget("https://preview.test/" + std::string(long_path_size, 'x'));
-      const LinkHit hit{.location = no_location, .content = {.width = pane_width, .height = pane_height}, .area = {.width = cell_width, .height = cell_height}, .match = {.target = target, .start = origin, .end = origin}};
+      const application::terminal::links::LinkHit hit{.location = no_location, .content = {.width = pane_width, .height = pane_height}, .area = {.width = cell_width, .height = cell_height}, .match = {.target = target, .start = origin, .end = origin}};
       const TerminalSurface surface{.content = hit.content, .cell = {.x = cell_width, .y = cell_height}};
       const TerminalFont font = TerminalFont::resolve(QVariantMap{}, 1);
       const auto preview = LinkPreview::layout(hit, surface, font.faces.front(), 1);

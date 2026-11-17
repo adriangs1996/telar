@@ -10,15 +10,14 @@ static_assert(true);
 import std;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.core;
-import telar.gui.links.link_hover;
-import telar.gui.links.path_expansion;
-import telar.gui.links.cell_links;
+import telar.gui.features.terminal.links;
 import telar.wire.vocabulary;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::links;
 
   void require(bool condition, const char* message) {
     if (!condition) {

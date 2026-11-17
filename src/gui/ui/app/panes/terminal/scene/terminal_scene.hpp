@@ -41,7 +41,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
-import telar.gui.links.cell_links;
+import telar.gui.application;
 import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
@@ -84,7 +84,7 @@ namespace telar::gui::qt {
     bool keyboard = false;
     bool cursor_on = true;
     std::optional<Cursor> cursor_override = std::nullopt;
-    const LinkMatch* hovered_link = nullptr;
+    const application::terminal::links::LinkMatch* hovered_link = nullptr;
     QQuickItem* owner = nullptr;
     bool background_provided = false;
     // Rows painted empty, one flag per row: the shell's own prompt while telar's editor stands

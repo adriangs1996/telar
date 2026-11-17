@@ -29,7 +29,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.links.link_hover;
 
 namespace telar::gui::qt {
 
@@ -121,7 +120,7 @@ namespace telar::gui::qt {
     void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
     // The modifiers held over the terminals, from the pointer or the keyboard.
     void observePointerModifiers(Qt::KeyboardModifiers modifiers);
-    [[nodiscard]] std::shared_ptr<const LinkHit> shareLinkHit(const LinkHit& hit);
+    [[nodiscard]] std::shared_ptr<const application::terminal::links::LinkHit> shareLinkHit(const application::terminal::links::LinkHit& hit);
     // Places the images of the panes the active tab shows in the window.
     void prepareImagePlacements();
     // The pane's keys and pointer are let go before its input goes away.

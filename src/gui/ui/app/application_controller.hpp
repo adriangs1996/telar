@@ -314,7 +314,7 @@ namespace telar::gui::qt {
     void interruptKeys() override;
     void focusPane(TerminalItem& terminal) override;
     void ungrabPointer(TerminalItem& terminal) override;
-    void openLink(const LinkTarget& target, std::uint64_t pane_id) override;
+    void openLink(const application::terminal::links::LinkTarget& target, std::uint64_t pane_id) override;
 
     void interacted();
     // Brings every projection that reads the store up to date, in the order they depend on each

@@ -18,11 +18,11 @@ static_assert(true);
 #include <optional>
 #include <utility>
 
-import telar.gui.links.link_hover;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  std::optional<LinkPreview> LinkPreview::layout(const LinkHit& hit, const TerminalSurface& surface, const QFont& font, qreal chrome_scale) {
+  std::optional<LinkPreview> LinkPreview::layout(const application::terminal::links::LinkHit& hit, const TerminalSurface& surface, const QFont& font, qreal chrome_scale) {
     if (surface.cell.x <= 0 || surface.cell.y <= 0 || !std::isfinite(chrome_scale) || chrome_scale <= 0) {
       return {};
     }

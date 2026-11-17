@@ -27,10 +27,8 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-import telar.gui.links.link_hover;
-import telar.gui.links.cell_links;
+import telar.gui.application;
 import telar.gui.foundation.system;
-import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
 
@@ -39,7 +37,7 @@ namespace telar::gui::qt {
   struct NativeLinkHost {
     static constexpr auto timeout = std::chrono::seconds{5};
 
-    static void start(QProcess& process, const LinkTarget& target) {
+    static void start(QProcess& process, const application::terminal::links::LinkTarget& target) {
       process.start(toQString(system::NativeExternalLinks::executable), {toQString(target.text())}, QIODevice::ReadOnly);
     }
   };
@@ -51,7 +49,7 @@ namespace telar::gui::qt {
   using ApplicationLinkHost = TELAR_GUI_LINK_HOST;
 
   template <typename Host>
-  concept ExternalLinkHost = CommandHost<Host, LinkTarget>;
+  concept ExternalLinkHost = CommandHost<Host, application::terminal::links::LinkTarget>;
 
   template <typename Observer, typename Context>
   concept LinkOpeningObserver = requires(Observer& observer, Context context, std::optional<LinkOpeningFailure> failure) {
@@ -61,7 +59,7 @@ namespace telar::gui::qt {
   template <ExternalLinkHost Host, typename Observer, std::semiregular Context = std::monostate>
   class ExternalLinkOpener final {
   public:
-    static constexpr std::size_t output_limit = CommandProcess<Host, LinkTarget, ExternalLinkOpener>::output_limit;
+    static constexpr std::size_t output_limit = CommandProcess<Host, application::terminal::links::LinkTarget, ExternalLinkOpener>::output_limit;
 
     explicit ExternalLinkOpener(Observer& observer)
         : observer_(observer),
@@ -75,8 +73,8 @@ namespace telar::gui::qt {
     ExternalLinkOpener(ExternalLinkOpener&&) = delete;
     ExternalLinkOpener& operator=(ExternalLinkOpener&&) = delete;
 
-    void request(const LinkTarget& target, Context context = {}) {
-      if (target.scheme() == LinkScheme::file || target.scheme() == LinkScheme::path) {
+    void request(const application::terminal::links::LinkTarget& target, Context context = {}) {
+      if (target.scheme() == application::terminal::links::LinkScheme::file || target.scheme() == application::terminal::links::LinkScheme::path) {
         throw std::invalid_argument{"File links require the editor flow"};
       }
 
@@ -105,11 +103,11 @@ namespace telar::gui::qt {
 
   private:
     Observer& observer_;
-    LinkOpening opening_;
+    application::terminal::links::LinkOpening opening_;
     Context current_context_{};
     Context pending_context_{};
     // The process reports back to this opener.
-    tbc::view<CommandProcess<Host, LinkTarget, ExternalLinkOpener>, tbc::lt::self> process_;
+    tbc::view<CommandProcess<Host, application::terminal::links::LinkTarget, ExternalLinkOpener>, tbc::lt::self> process_;
   };
 
 }

@@ -45,8 +45,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
-import telar.gui.links.link_hover;
-import telar.gui.links.path_expansion;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 
@@ -229,7 +227,7 @@ namespace telar::gui::qt {
       return rail_height_;
     }
 
-    [[nodiscard]] std::optional<PresentedLink> prepareLinkPresentation() const;
+    [[nodiscard]] std::optional<application::terminal::links::PresentedLink> prepareLinkPresentation() const;
 
     // What the window routes to the terminal, as its parent: the keys its bindings leave, the
     // frame it prepared and presents, and the pointer the window's dispatcher hands it.
@@ -390,14 +388,14 @@ namespace telar::gui::qt {
     void finishLinkRelease(const QMouseEvent& event);
     [[nodiscard]] TerminalSurface terminalSurface() const;
     [[nodiscard]] bool linkEligible() const noexcept;
-    [[nodiscard]] static LinkModifiers linkModifiers(Qt::KeyboardModifiers modifiers) noexcept;
+    [[nodiscard]] static application::terminal::links::LinkModifiers linkModifiers(Qt::KeyboardModifiers modifiers) noexcept;
 
     struct ResolvedLink {
-      LinkAffordance affordance = LinkAffordance::text;
-      std::optional<LinkHit> hit;
+      application::terminal::links::LinkAffordance affordance = application::terminal::links::LinkAffordance::text;
+      std::optional<application::terminal::links::LinkHit> hit;
     };
 
-    [[nodiscard]] ResolvedLink resolveLink(QPointF position, LinkModifiers modifiers) const;
+    [[nodiscard]] ResolvedLink resolveLink(QPointF position, application::terminal::links::LinkModifiers modifiers) const;
     [[nodiscard]] std::optional<CellPosition> visibleCellAt(QPointF position) const noexcept;
 
     struct LinkStamp {
@@ -529,9 +527,9 @@ namespace telar::gui::qt {
     QPointF selection_position_;
     QString preedit_;
     QRectF prompt_caret_;
-    LinkHover link_hover_;
-    std::shared_ptr<const LinkHit> shared_link_;
-    LinkGesture link_gesture_;
+    application::terminal::links::LinkHover link_hover_;
+    std::shared_ptr<const application::terminal::links::LinkHit> shared_link_;
+    application::terminal::links::LinkGesture link_gesture_;
     std::optional<QPointF> link_pointer_;
     std::optional<LinkStamp> link_stamp_;
     std::optional<LinkPreview> link_preview_;

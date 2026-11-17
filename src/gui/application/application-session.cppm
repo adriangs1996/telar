@@ -18,8 +18,7 @@ import telar.gui.presentation.tab_drop;
 import :sound_playback;
 import telar.gui.foundation.model;
 import telar.gui.layout.snapshots;
-import telar.gui.links.path_expansion;
-import telar.gui.links.cell_links;
+import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
 import telar.gui.foundation.system;
@@ -161,16 +160,6 @@ export {
 
       // Without a directory the workspace starts where the focused pane is.
       void createWorkspace(WorkspaceDraft draft);
-
-      // Opens `path` in an editor. A relative path is anchored at the cwd of pane `source_id`,
-      // after `environment` expands it.
-      template <PathEnvironment Environment>
-      TBC_GENERIC void openFile(const FilePath& path, std::string_view executable, const Environment& environment, std::optional<std::uint64_t> source_id = {}) {
-        const auto base = fileBase(path, executable, source_id);
-        const auto anchored = base ? PathExpansion::expand({.text = path.text(), .base = *base}, environment) : PathExpansion::PathText{};
-
-        openAnchoredFile(path, executable, anchored.view(), source_id);
-      }
 
       void setWorkbenchGeometry(WorkbenchGeometry geometry) noexcept;
 
@@ -477,12 +466,6 @@ export {
       [[nodiscard]] const ProxyStatus& proxyStatus() const noexcept;
 
     private:
-      // The cwd a relative `path` is anchored at, after checking that the file can be opened.
-      std::optional<std::string_view> fileBase(const FilePath& path, std::string_view executable, std::optional<std::uint64_t> source_id) const;
-
-      // Opens `path` once `fileBase` admitted it, with a relative path already `anchored`.
-      void openAnchoredFile(const FilePath& path, std::string_view executable, std::string_view anchored, std::optional<std::uint64_t> source_id);
-
       // Encodes `message` into the storage the transport lends.
       template <typename Message>
       std::span<const Byte> encode(const Message& message);
@@ -609,9 +592,11 @@ export {
 
       void restoreCanonicalLayout(Tab<Memory>& tab);
 
-      void createEditorTab(const EditorTarget& target);
+      // Opens a tab, or the first pane, running `arguments` from the default launch's directory.
+      void launchTab(std::span<const std::string_view> arguments);
 
-      void splitEditorPane(const EditorRequest& request);
+      // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
+      void launchSplit(std::uint64_t pane_id, std::span<const std::string_view> arguments);
 
       void confirmAttachment(Pane<Memory>& pane);
 
@@ -764,8 +749,6 @@ export {
       Change apply(const RequestFailed& message);
 
       Change apply(const EditorOpened& message);
-
-      Change reportLinkFailure(std::string_view message);
 
       Change apply(const RequestCompleted& message);
 
@@ -975,7 +958,7 @@ export {
       std::uint64_t prompt_written_ = 0;
       std::unordered_map<std::uint64_t, LineEntry> lines_;
       CopyMode copy_mode_;
-      EditorOpening editor_opening_;
+      features::terminal::links::State links_;
       std::uint64_t copy_search_request_ = 0;
 
       // The output a search begun from a command reads, and whether it reads only that.

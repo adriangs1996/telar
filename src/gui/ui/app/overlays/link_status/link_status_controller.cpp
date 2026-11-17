@@ -10,7 +10,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.machines.picker;
-import telar.gui.presentation.suggestion_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -22,7 +22,7 @@ namespace telar::gui::qt {
     const auto& link = store_.connection().link();
     const auto detail = link.failure().value_or(std::string_view{});
 
-    return {{QStringLiteral("visible"), link.phase != MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().has_value()}, {QStringLiteral("dimAlpha"), LinkStatusGeometry::dim_alpha}};
+    return {{QStringLiteral("visible"), link.phase != MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().has_value()}, {QStringLiteral("dimAlpha"), application::terminal::links::LinkStatusGeometry::dim_alpha}};
   }
 
   QVariantMap LinkStatusController::geometry() const {
@@ -32,7 +32,7 @@ namespace telar::gui::qt {
 
     area.x += display_.geometry.terminal.x;
     area.y += display_.geometry.terminal.y;
-    const auto geometry = LinkStatusGeometry::measure(area, display_.chrome, store_.connection().link().failure().has_value());
+    const auto geometry = application::terminal::links::LinkStatusGeometry::measure(area, display_.chrome, store_.connection().link().failure().has_value());
     const auto local = [&](Rect region) {
       region.x -= area.x;
       region.y -= area.y;

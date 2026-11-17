@@ -10,7 +10,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.links.cell_links;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -38,7 +38,7 @@ namespace telar::gui::qt {
     virtual void focusPane(TerminalItem& terminal) = 0;
     // The terminal lost the pointer it grabbed: the window cancels its pointer gestures.
     virtual void ungrabPointer(TerminalItem& terminal) = 0;
-    virtual void openLink(const LinkTarget& target, std::uint64_t pane_id) = 0;
+    virtual void openLink(const application::terminal::links::LinkTarget& target, std::uint64_t pane_id) = 0;
     // The configured font, at the density of the terminal's window.
     [[nodiscard]] virtual ResolvedFont resolveFont(qreal scale) = 0;
 

@@ -53,7 +53,7 @@ static void fill(PresentedFrame& frame, std::uint64_t seed, std::size_t panes, b
       pane.frame.links.emplace();
       pane.frame.links->surface = {.content = {1, 2, 3, 4}, .cell = {5, 6}, .attachment_generation = seed, .scale = 2};
       pane.frame.links->cover = Rect{7, 8, 9, 10};
-      auto link = std::make_shared<LinkHit>(LinkHit{.match = {.target = *LinkTarget::fromUri("https://snapshot.test"), .start = {}, .end = {}}});
+      auto link = std::make_shared<application::terminal::links::LinkHit>(application::terminal::links::LinkHit{.match = {.target = *application::terminal::links::LinkTarget::fromUri("https://snapshot.test"), .start = {}, .end = {}}});
       link->pane_id = seed + i;
       link->generation = seed;
       pane.frame.links->link = std::move(link);
@@ -135,14 +135,14 @@ public:
   bool verify = true;
   std::uint64_t digest = 0;
   std::size_t delivered = 0;
-  std::weak_ptr<const LinkHit> observed_link;
+  std::weak_ptr<const application::terminal::links::LinkHit> observed_link;
   std::deque<std::unique_ptr<PresentedFrame>> expected;
 
   void prepareImagePlacements() {}
 
   void prepareFrame(PresentedFrame& frame) {
     fill(frame, seed, panes, history, links);
-    observed_link = links && panes != 0 ? frame.panes[0].frame.links->link : std::shared_ptr<const LinkHit>{};
+    observed_link = links && panes != 0 ? frame.panes[0].frame.links->link : std::shared_ptr<const application::terminal::links::LinkHit>{};
   }
 
   void prepareTerminalFrames(PresentedFrame&) {}

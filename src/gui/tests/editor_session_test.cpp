@@ -25,7 +25,6 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.foundation.model;
 import telar.gui.application;
-import telar.gui.links.cell_links;
 import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.runtime;
@@ -42,13 +41,13 @@ namespace {
     }
   };
 
-  FilePath filePath(std::string_view text, bool prose = false) {
-    const auto target = prose ? LinkTarget::fromPath(text) : LinkTarget::fromUri(text);
+  application::terminal::links::FilePath filePath(std::string_view text, bool prose = false) {
+    const auto target = prose ? application::terminal::links::LinkTarget::fromPath(text) : application::terminal::links::LinkTarget::fromUri(text);
     if (!target) {
       throw std::runtime_error{"Editor fixture must be a valid link target"};
     }
 
-    return FilePath::parse(*target);
+    return application::terminal::links::FilePath::parse(*target);
   }
 
   struct Fixture {
@@ -60,7 +59,7 @@ namespace {
     }
 
     void open(std::string_view target = "file:/tmp/a%20b.cpp#L12C3", bool prose = false) {
-      client.openFile(filePath(target, prose), "nvim", environment, 1);
+      application::terminal::links::openFile(client, filePath(target, prose), "nvim", environment, 1);
     }
 
     static constexpr std::size_t allocation_budget = std::size_t{16} * 1024 * 1024;
@@ -239,7 +238,7 @@ namespace {
     deliver(fixture.client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
     const auto generation = fixture.client.findPane(2)->attachment_generation;
 
-    fixture.client.openFile(filePath("file:/tmp/a.cpp"), "nvim", fixture.environment, 2);
+    application::terminal::links::openFile(fixture.client, filePath("file:/tmp/a.cpp"), "nvim", fixture.environment, 2);
     const auto request_id = fixture.transport.last<OpenEditor>().request_id;
 
     deliver(fixture.client, PaneOpened{.request_id = attach.request_id, .pane_id = 2, .location = split.location, .pane_generation = 1});
@@ -256,7 +255,7 @@ namespace {
     const auto split = fixture.transport.last<CreatePane>();
 
     require(split.launch.arguments[2] == "/home/reader/src/a.cpp", "direct splits must still expand home paths");
-    fixture.client.openFile(filePath("file:/tmp/new.cpp"), "code", fixture.environment);
+    application::terminal::links::openFile(fixture.client, filePath("file:/tmp/new.cpp"), "code", fixture.environment);
     const auto tab = fixture.transport.last<CreateTab>();
 
     require(tab.launch.arguments.size() == 2 && tab.launch.arguments[0] == "code" && tab.launch.arguments[1] == "/tmp/new.cpp", "a sourceless absolute file must open in a new tab");
@@ -264,7 +263,7 @@ namespace {
     Transport transport;
     TestSession client{memory, transport};
 
-    client.openFile(filePath("file:/tmp/first.cpp"), "nvim", fixture.environment);
+    application::terminal::links::openFile(client, filePath("file:/tmp/first.cpp"), "nvim", fixture.environment);
     const auto opened = transport.last<OpenPane>();
 
     require(opened.launch && opened.launch->arguments[0] == "nvim" && opened.launch->arguments[1] == "/tmp/first.cpp", "an empty client must open its first tab with editor arguments");
@@ -315,7 +314,7 @@ namespace {
     bool rejected = false;
 
     try {
-      fixture.client.openFile(filePath("relative.cpp", true), "nvim", fixture.environment);
+      application::terminal::links::openFile(fixture.client, filePath("relative.cpp", true), "nvim", fixture.environment);
     } catch (const std::invalid_argument& error) {
       rejected = std::string_view{error.what()} == "RelativeFileLink";
     }
