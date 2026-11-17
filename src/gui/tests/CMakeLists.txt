@@ -225,6 +225,10 @@ if(TELAR_GUI_NATIVE)
     BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons"
     FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons/folder-small.png"
           "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons/unknown-status.png")
+  telar_add_tests(gui-ui-app-tests LABEL gui.ui.app DIRECTORY ../ui/app RECURSE QT MAIN gui-testing-main
+    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation TIMEOUT 30)
+  set_target_properties(gui-ui-app-tests PROPERTIES AUTOMOC ON)
+  target_include_directories(gui-ui-app-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.
   include("${TELAR_ROOT}/cmake/openssl.cmake")
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
