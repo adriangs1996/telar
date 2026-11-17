@@ -436,6 +436,112 @@ namespace {
       check(owner.ticket == 0 && origin.output.empty());
       check(owner.errors == std::vector<std::string>{"http_interception_rejected"});
     }
+
+    // A head the lax framing parser accepts but the strict one refuses is where smuggling lives:
+    // closed, nothing reaches the origin; open, the original bytes pass untouched.
+    void invalidHeadPolicy(ConcurrentMemory& memory) {
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 15, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "GET /duplicate HTTP/1.1\r\nHost: fixture.test\r\nHost: other.test\r\n\r\n";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output == child.input;
+        });
+
+        check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_invalid_head"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // A third-party plugin's replacement that does not decode, or that names a method no HTTP/1
+    // peer accepts, fails the exchange instead of reaching the origin in part.
+    void invalidDecision(ConcurrentMemory& memory) {
+      for (const bool truncated : {false, true}) {
+        HttpOwner owner{memory};
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 16, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /decision HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return owner.ticket != 0;
+        });
+
+        if (truncated) {
+          owner.replace({});
+          owner.replacement.pop_back();
+        } else {
+          owner.replace({}, {}, "BAD METHOD");
+        }
+
+        pump(connection, child, origin, [&] {
+          return connection.finished();
+        });
+
+        check(origin.output.empty() && owner.errors == std::vector<std::string>{"http_invalid_decision"});
+      }
+    }
+
+    // Chunk extensions cost wire bytes without adding body: a body far under its limit can still
+    // carry a wire past the buffer's bound, which is refused instead of buffered.
+    void chunkFramingAmplification(ConcurrentMemory& memory) {
+      const std::string chunk = "1;" + std::string(1000, 'e') + "\r\nx\r\n";
+      constexpr std::size_t wire_bound = HttpMessageLimits::body_bytes + 2 * Http1Head::capacity;
+      const auto chunks = wire_bound / chunk.size() + 16;
+
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 17, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /extensions HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n";
+        for (std::size_t index = 0; index < chunks; ++index) {
+          child.input += chunk;
+        }
+
+        child.input += "0\r\n\r\n";
+        check(chunks < HttpMessageLimits::body_bytes);
+        child.read_limit = 16384;
+        origin.visible = 0;
+        origin.write_limit = 4096;
+        origin.alternating_writes = true;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output.size() == child.input.size();
+        });
+
+        check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_wire_limit"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // Trailers come from the peer like any field: one without a colon or with an invalid name is
+    // refused, not written again unchecked.
+    void invalidTrailers(ConcurrentMemory& memory) {
+      for (const std::string_view trailer : {"NoColon", "Bad Name: x"}) {
+        HttpOwner owner{memory};
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 18, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /trailers HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n" + std::string{trailer} + "\r\n\r\n";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return connection.finished();
+        });
+
+        check(owner.ticket == 0 && origin.output.empty() && owner.errors == std::vector<std::string>{"http_invalid_trailer"});
+      }
+    }
   }
 
   void testHttpInterception() {
@@ -454,6 +560,18 @@ namespace {
     limits(memory);
   }
 
+  template <void (*body)(ConcurrentMemory&)>
+  void withMemory() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+
+    body(adapter);
+  }
+
   const telar::testing::Case case_http_interception{"http_interception.http_interception", testHttpInterception};
+  const telar::testing::Case case_invalid_head_policy{"http_interception.invalid_head_policy", withMemory<invalidHeadPolicy>};
+  const telar::testing::Case case_invalid_decision{"http_interception.invalid_decision", withMemory<invalidDecision>};
+  const telar::testing::Case case_chunk_framing_amplification{"http_interception.chunk_framing_amplification", withMemory<chunkFramingAmplification>};
+  const telar::testing::Case case_invalid_trailers{"http_interception.invalid_trailers", withMemory<invalidTrailers>};
 
 }
