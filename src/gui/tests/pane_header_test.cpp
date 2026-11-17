@@ -38,7 +38,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.application;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;
 
@@ -46,6 +46,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

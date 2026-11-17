@@ -21,9 +21,8 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.graphics.placeholder;
+import telar.gui.features.terminal.graphics;
 import telar.gui.foundation.drawing;
-import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.model;
@@ -32,6 +31,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::test;
 
   constexpr Byte quarter_percent = 25;

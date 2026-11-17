@@ -33,13 +33,12 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.graphics.placeholder;
-import telar.gui.graphics.texture_cache;
+import telar.gui.application;
 import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
-  void WindowImages::Resources::release(ImageTextureHandle handle) noexcept {
+  void WindowImages::Resources::release(application::terminal::graphics::ImageTextureHandle handle) noexcept {
     images[handle - 1].clear();
   }
 
@@ -122,14 +121,14 @@ namespace telar::gui::qt {
     retained_.fill(false);
   }
 
-  const ImagePlacementSelection& WindowImages::placements() const noexcept {
+  const application::terminal::graphics::ImagePlacementSelection& WindowImages::placements() const noexcept {
     return placements_;
   }
 
   WindowImages::PlacementSourceStamp WindowImages::placementStamp(const ImagePlacementSource& source) const noexcept {
     const Point cell{.x = static_cast<float>(source.cell.width()), .y = static_cast<float>(source.cell.height())};
 
-    return {.lifetime = source.store->lifetime(), .revision = source.store->revision(), .cell = ImageGeometry::physicalCell(cell, static_cast<float>(window_.effectiveDevicePixelRatio()))};
+    return {.lifetime = source.store->lifetime(), .revision = source.store->revision(), .cell = application::terminal::graphics::ImageGeometry::physicalCell(cell, static_cast<float>(window_.effectiveDevicePixelRatio()))};
   }
 
   bool WindowImages::placementSourcesChanged(std::span<const ImagePlacementSource> sources) noexcept {
@@ -153,7 +152,7 @@ namespace telar::gui::qt {
     return changed;
   }
 
-  bool WindowImages::placementHasExtent(GraphicsLifetime catalog, const GraphicsPlacement& placement, ImageSourceRect source, std::span<const ImagePlacementSource> views) const noexcept {
+  bool WindowImages::placementHasExtent(application::terminal::graphics::GraphicsLifetime catalog, const GraphicsPlacement& placement, application::terminal::graphics::ImageSourceRect source, std::span<const ImagePlacementSource> views) const noexcept {
     if (source.width == 0 || source.height == 0) {
       return false;
     }
@@ -167,7 +166,7 @@ namespace telar::gui::qt {
         return false;
       }
 
-      const auto box = ImageDisplayBox::resolve(placement, source, placementStamp(view).cell);
+      const auto box = application::terminal::graphics::ImageDisplayBox::resolve(placement, source, placementStamp(view).cell);
 
       return box.width != 0 && box.height != 0;
     });
@@ -186,8 +185,8 @@ namespace telar::gui::qt {
 
       for (const auto& placement : store.placements()) {
         const auto* image = store.findImage(placement.key);
-        if (image != nullptr && placementHasExtent(lifetime, placement, ImageSourceRect::resolve(placement, image->description()), sources)) {
-          placements_.keep({.identity = {.catalog = lifetime, .virtual_id = placement.virtual_id, .image_id = placement.key.image_id}, .layer = ImagePlacementSelection::layer(placement), .z_index = placement.z_index});
+        if (image != nullptr && placementHasExtent(lifetime, placement, application::terminal::graphics::ImageSourceRect::resolve(placement, image->description()), sources)) {
+          placements_.keep({.identity = {.catalog = lifetime, .virtual_id = placement.virtual_id, .image_id = placement.key.image_id}, .layer = application::terminal::graphics::ImagePlacementSelection::layer(placement), .z_index = placement.z_index});
         }
       }
     }
@@ -210,10 +209,10 @@ namespace telar::gui::qt {
       return std::nullopt;
     }
 
-    return LimitReach{.name = ImagePlacementSelection::limit_name, .noun = ImagePlacementSelection::limit_noun, .value = ImagePlacementSelection::capacity, .requested = placements_.selected().size() + placements_.dropped()};
+    return LimitReach{.name = application::terminal::graphics::ImagePlacementSelection::limit_name, .noun = application::terminal::graphics::ImagePlacementSelection::limit_noun, .value = application::terminal::graphics::ImagePlacementSelection::capacity, .requested = placements_.selected().size() + placements_.dropped()};
   }
 
-  void WindowImages::observeCatalog(const GraphicsStore<Memory>& store) noexcept {
+  void WindowImages::observeCatalog(const application::terminal::graphics::GraphicsStore<Memory>& store) noexcept {
     if (global_retained_bytes_ != store.globalRetainedBytes()) {
       global_retained_bytes_ = store.globalRetainedBytes();
       wakeWaitingScenes();
@@ -237,7 +236,7 @@ namespace telar::gui::qt {
     }
   }
 
-  std::size_t WindowImages::catalogBucket(GraphicsLifetime lifetime) const noexcept {
+  std::size_t WindowImages::catalogBucket(application::terminal::graphics::GraphicsLifetime lifetime) const noexcept {
     static_assert(std::has_single_bit(catalog_bucket_capacity));
     constexpr auto bucket_mask = catalog_bucket_capacity - 1;
     auto bucket = static_cast<std::size_t>(lifetime.value & bucket_mask);
@@ -274,7 +273,7 @@ namespace telar::gui::qt {
 
   void WindowImages::prepare() {
     now_ns_ = std::max(now_ns_, system::AwakeClock::nowNanoseconds());
-    observeVisibleTextures([this](ImageTextureHandle handle) noexcept {
+    observeVisibleTextures([this](application::terminal::graphics::ImageTextureHandle handle) noexcept {
       residency_.keepWarm({.handle = handle, .now_ns = now_ns_});
     });
 
@@ -302,7 +301,7 @@ namespace telar::gui::qt {
 
         const auto& texture = *resolved.texture;
         const auto* state = residency_.state(texture.handle);
-        if (state != nullptr && state->stage == ImageTextureStage::ready && state->identity.catalog == scene->graphics_lifetime_ && state->identity.image_id == resolved.image_id && state->identity.generation == texture.generation) {
+        if (state != nullptr && state->stage == application::terminal::graphics::ImageTextureStage::ready && state->identity.catalog == scene->graphics_lifetime_ && state->identity.image_id == resolved.image_id && state->identity.generation == texture.generation) {
           use(texture.handle);
         }
       }
@@ -317,7 +316,7 @@ namespace telar::gui::qt {
 
     std::array<bool, Residency::capacity> visible{};
 
-    visitVisibleTextures([&](ImageTextureHandle handle) noexcept {
+    visitVisibleTextures([&](application::terminal::graphics::ImageTextureHandle handle) noexcept {
       visible[handle - 1] = true;
       use(handle);
     });
@@ -336,7 +335,7 @@ namespace telar::gui::qt {
 
   void WindowImages::finish() {
     admitDraws();
-    observeVisibleTextures([this](ImageTextureHandle handle) noexcept {
+    observeVisibleTextures([this](application::terminal::graphics::ImageTextureHandle handle) noexcept {
       residency_.markNeeded(handle);
     });
 
@@ -350,7 +349,7 @@ namespace telar::gui::qt {
 
     for (const auto row : residency_.rows()) {
       const auto* state = residency_.state(Residency::handleOf(row));
-      if (state != nullptr && state->stage == ImageTextureStage::spare) {
+      if (state != nullptr && state->stage == application::terminal::graphics::ImageTextureStage::spare) {
         resources_.images[row].detachNodes();
       }
     }
@@ -404,11 +403,11 @@ namespace telar::gui::qt {
       }
     }
 
-    if (candidates > ImageDrawBudget::capacity) {
+    if (candidates > application::terminal::graphics::ImageDrawBudget::capacity) {
       orderScenes();
     }
 
-    ImageDrawBudget budget;
+    application::terminal::graphics::ImageDrawBudget budget;
 
     for (const auto* scene = first_scene_; scene != nullptr; scene = scene->next_) {
       if (scene->owner_ == nullptr || !scene->owner_->isVisible()) {
@@ -423,7 +422,7 @@ namespace telar::gui::qt {
     image_draws_ = budget.used();
   }
 
-  void WindowImages::admitLayer(const QSGNode& layer, ImageDrawBudget& budget) {
+  void WindowImages::admitLayer(const QSGNode& layer, application::terminal::graphics::ImageDrawBudget& budget) {
     for (auto* node = layer.firstChild(); node != nullptr; node = node->nextSibling()) {
       if (const auto handle = ImageResource::admit(*node, budget); handle != 0) {
         residency_.noteDrawn(handle);
@@ -525,7 +524,7 @@ namespace telar::gui::qt {
     return residency_.size() == 0;
   }
 
-  bool WindowImages::upload(ImageTextureHandle handle, const Image& image) {
+  bool WindowImages::upload(application::terminal::graphics::ImageTextureHandle handle, const Image& image) {
     const auto& description = image.description();
     const auto format = description.format == ImageFormat::rgba ? QImage::Format_RGBA8888 : QImage::Format_RGB888;
     constexpr int rgb_channels = 3;
@@ -550,18 +549,18 @@ namespace telar::gui::qt {
 
     std::array<bool, Residency::capacity> visible{};
 
-    visitVisibleTextures([&visible](ImageTextureHandle handle) noexcept {
+    visitVisibleTextures([&visible](application::terminal::graphics::ImageTextureHandle handle) noexcept {
       visible[handle - 1] = true;
     });
 
     return std::ranges::any_of(residency_.rows(), [this, &visible](auto row) {
       const auto* state = residency_.state(Residency::handleOf(row));
 
-      return !visible[row] && state != nullptr && state->stage == ImageTextureStage::ready && state->used_frame + 1 == residency_.frame();
+      return !visible[row] && state != nullptr && state->stage == application::terminal::graphics::ImageTextureStage::ready && state->used_frame + 1 == residency_.frame();
     });
   }
 
-  std::optional<WindowImage> WindowImages::newest(ImageTextureIdentity identity) const noexcept {
+  std::optional<WindowImage> WindowImages::newest(application::terminal::graphics::ImageTextureIdentity identity) const noexcept {
     const auto handle = residency_.newestReady(identity);
     const auto* state = residency_.state(handle);
     if (state == nullptr || resources_.images[handle - 1].empty()) {
@@ -571,7 +570,7 @@ namespace telar::gui::qt {
     return WindowImage{.handle = handle, .generation = state->identity.generation, .bounds = {.width = static_cast<float>(state->size.width), .height = static_cast<float>(state->size.height)}};
   }
 
-  void WindowImages::notifyReady(const GraphicsScene& scene, ImageTextureIdentity identity) noexcept {
+  void WindowImages::notifyReady(const GraphicsScene& scene, application::terminal::graphics::ImageTextureIdentity identity) noexcept {
     wakeWaitingScenes();
     for (auto* other = first_scene_; other != nullptr; other = other->next_) {
       if (other == &scene || other->graphics_lifetime_ != identity.catalog) {
@@ -587,9 +586,9 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowImages::requestImage(GraphicsScene& scene, const GraphicsStore<Memory>& store, const Image& image) {
+  void WindowImages::requestImage(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, const Image& image) {
     const auto& description = image.description();
-    const ImageTextureIdentity identity{.catalog = store.lifetime(), .image_id = description.key.image_id, .generation = description.key.generation};
+    const application::terminal::graphics::ImageTextureIdentity identity{.catalog = store.lifetime(), .image_id = description.key.image_id, .generation = description.key.generation};
     const auto admission = residency_.request({.identity = identity, .size = {.width = description.width, .height = description.height}, .retained_bytes = store.globalRetainedBytes(), .now_ns = now_ns_});
     if (admission.handle != 0) {
       retained_[admission.handle - 1] = !image.retired();
@@ -612,7 +611,7 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<WindowImage> WindowImages::resolve(GraphicsScene& scene, const GraphicsStore<Memory>& store, ImageKey key) {
+  std::optional<WindowImage> WindowImages::resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key) {
     if (const auto* image = store.readyImage(key)) {
       requestImage(scene, store, *image);
     }
@@ -620,7 +619,7 @@ namespace telar::gui::qt {
     return newest({.catalog = store.lifetime(), .image_id = key.image_id, .generation = key.generation});
   }
 
-  void WindowImages::append(GraphicsScene& scene, QSGNode& parent, ImageTextureHandle handle, const ImageGeometry& geometry) {
+  void WindowImages::append(GraphicsScene& scene, QSGNode& parent, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry) {
     resources_.images[handle - 1].append(window_, parent, scene, handle, geometry);
   }
 

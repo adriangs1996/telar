@@ -11,6 +11,7 @@ import telar.gui.features.paths;
 import telar.gui.features.history;
 import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
+import telar.gui.features.terminal.graphics;
 import telar.gui.features.terminal.links;
 
 namespace telar::gui::application {
@@ -69,6 +70,14 @@ namespace telar::gui::application {
 
     [[nodiscard]] static constexpr const features::terminal::copy_mode::State& copyMode(const Session& session) noexcept {
       return session.copy_mode_;
+    }
+
+    [[nodiscard]] static constexpr features::terminal::graphics::State& graphics(Session& session) noexcept {
+      return session.graphics_;
+    }
+
+    [[nodiscard]] static constexpr const features::terminal::graphics::State& graphics(const Session& session) noexcept {
+      return session.graphics_;
     }
 
     [[nodiscard]] static constexpr features::terminal::links::State& links(Session& session) noexcept {
@@ -131,7 +140,43 @@ namespace telar::gui::application {
       session.launchSplit(pane_id, arguments);
     }
 
+    // The tab at `location`, if the session holds it.
+    [[nodiscard]] static Tab<Memory>* findTab(const Session& session, TabLocation location) noexcept {
+      return session.findTab(location);
+    }
+
+    // The session's clock, monotonic and in nanoseconds.
+    [[nodiscard]] static std::uint64_t now(const Session& session) noexcept {
+      return session.now_();
+    }
+
+    // ---- the limits the session reports, shared by the features that reach one -------------
+
+    static constexpr std::uint64_t limit_notice_duration_ns = Session::limit_notice_duration_ns;
+
+    static LimitReports::Recorded countLimitReach(Session& session, LimitReach reach) {
+      return session.countLimitReach(reach);
+    }
+
+    [[nodiscard]] static constexpr const LimitReports& limitReports(const Session& session) noexcept {
+      return session.limit_reports_;
+    }
+
     // ---- the connection with the runtime ----------------------------------------------------
+
+    // Whether the transport hands images over in shared memory.
+    [[nodiscard]] static bool sharesImages(const Session& session) noexcept {
+      return session.supportsSharedGraphics();
+    }
+
+    [[nodiscard]] static system::SharedImageSource sharedImage(Session& session, std::string_view name) {
+      return session.transport_.sharedImage(name);
+    }
+
+    // The connection failed under a request: the session recovers it.
+    static void recoverRuntime(Session& session, std::string_view reason) {
+      session.recoverRuntime(reason);
+    }
 
     [[nodiscard]] static std::uint64_t nextRequest(Session& session) noexcept {
       return session.nextRequest();

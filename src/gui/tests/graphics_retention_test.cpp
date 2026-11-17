@@ -22,13 +22,14 @@ static_assert(true);
 #include <type_traits>
 #include <utility>
 
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using telar::gui::test::require;
 
   constexpr std::uint32_t image_side = 2;

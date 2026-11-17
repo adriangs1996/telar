@@ -10,7 +10,7 @@ static_assert(true);
 
 import std;
 import telar.gui.foundation.core;
-import telar.gui.graphics.pauses;
+import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
@@ -23,6 +23,8 @@ import telar.gui.presentation.notification_stack;
 import telar.gui.foundation.model;
 
 namespace {
+
+  using namespace telar::gui::features::terminal::graphics;
 
   using telar::gui::WindowTitle;
 

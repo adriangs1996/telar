@@ -6,7 +6,7 @@ import telar.gui.foundation.model;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.tbc;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
 import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
@@ -714,7 +714,7 @@ namespace telar::gui::application {
       throw std::length_error{"GUI pane capacity reached"};
     }
 
-    panes_.push_back(makeOwned<Pane<Memory>>(memory_, memory_, pane_id, graphics_budget_));
+    panes_.push_back(makeOwned<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics_)));
     panes_.back()->location = location;
     ++view_version_.panes;
 
@@ -727,9 +727,7 @@ namespace telar::gui::application {
       ++view_version_.panes;
     }
 
-    graphics_pauses_.focus({.pane_id = pane_id, .now_ns = now_()}, [this](std::uint64_t paused_pane) {
-      requestGraphicsSnapshot(paused_pane);
-    });
+    terminal::graphics::focus(*this, pane_id);
   }
 
   void Session::openDefault() {
@@ -827,7 +825,7 @@ namespace telar::gui::application {
     features::history::suspend(history_);
     features::paths::close(paths_);
     features::palette::discard(palette_);
-    graphics_pauses_.reset();
+    features::terminal::graphics::suspend(graphics_);
     features::terminal::links::suspend(links_);
     ++view_version_.workspace;
     ++view_version_.tabs;
@@ -1098,7 +1096,7 @@ namespace telar::gui::application {
     tab->layout.add(message.root_pane_id, ClientLayoutAxis::horizontal, tab->focused_pane);
     tab->focused_pane = message.root_pane_id;
     tab->loaded = true;
-    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, message.root_pane_id, graphics_budget_);
+    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, message.root_pane_id, features::terminal::graphics::budget(graphics_));
 
     pane->generation = message.pane_generation;
     pane->location = message.location;
@@ -1381,7 +1379,7 @@ namespace telar::gui::application {
       return removed(*pane);
     });
 
-    forgetClosedGraphics();
+    terminal::graphics::forgetClosed(*this);
   }
 
   Change Session::apply(const PaneExited& message) {

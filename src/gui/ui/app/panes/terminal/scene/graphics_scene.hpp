@@ -33,8 +33,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.graphics.texture_cache;
-import telar.gui.graphics.placeholder;
+import telar.gui.application;
 
 class QQuickWindow;
 
@@ -92,7 +91,7 @@ namespace telar::gui::qt {
     GraphicsScene& operator=(const GraphicsScene&) = delete;
     GraphicsScene(GraphicsScene&&) = delete;
     GraphicsScene& operator=(GraphicsScene&&) = delete;
-    void synchronize(QQuickItem& owner, const GraphicsStore<Memory>& store, const ImageRows& rows, QSizeF cell, qreal scale);
+    void synchronize(QQuickItem& owner, const application::terminal::graphics::GraphicsStore<Memory>& store, const ImageRows& rows, QSizeF cell, qreal scale);
     void invalidate() noexcept;
     void clearNodes() noexcept;
 
@@ -106,22 +105,22 @@ namespace telar::gui::qt {
     };
 
     [[nodiscard]] std::span<const ResolvedImage> resolvedImages() const noexcept;
-    [[nodiscard]] const WindowImage* texture(const GraphicsStore<Memory>& store, ImageKey key);
+    [[nodiscard]] const WindowImage* texture(const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key);
     [[nodiscard]] QSGTransformNode& layer(std::int32_t z_index) const noexcept;
-    void drawPlacements(const GraphicsStore<Memory>& store, std::span<const GraphicsPlacement> placements, const ImageRows& rows);
-    void append(QSGNode& parent, ImageTextureHandle handle, const ImageGeometry& geometry);
-    void drawPlaceholder(const GraphicsStore<Memory>& store, const PlaceholderRun& run, std::uint16_t row);
-    void placeholders(const GraphicsStore<Memory>& store, const ImageRows& rows);
-    void placeholderRow(const GraphicsStore<Memory>& store, std::span<const CellValue> row, std::uint16_t row_index);
+    void drawPlacements(const application::terminal::graphics::GraphicsStore<Memory>& store, std::span<const GraphicsPlacement> placements, const ImageRows& rows);
+    void append(QSGNode& parent, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry);
+    void drawPlaceholder(const application::terminal::graphics::GraphicsStore<Memory>& store, const application::terminal::graphics::PlaceholderRun& run, std::uint16_t row);
+    void placeholders(const application::terminal::graphics::GraphicsStore<Memory>& store, const ImageRows& rows);
+    void placeholderRow(const application::terminal::graphics::GraphicsStore<Memory>& store, std::span<const CellValue> row, std::uint16_t row_index);
 
     ImageLayers layers_;
     QPointer<WindowImages> images_;
     QPointer<QQuickItem> owner_;
     GraphicsScene* previous_ = nullptr;
     GraphicsScene* next_ = nullptr;
-    std::array<ResolvedImage, GraphicsStore<Memory>::image_capacity> resolved_;
+    std::array<ResolvedImage, application::terminal::graphics::GraphicsStore<Memory>::image_capacity> resolved_;
     std::size_t resolved_count_ = 0;
-    GraphicsLifetime graphics_lifetime_;
+    application::terminal::graphics::GraphicsLifetime graphics_lifetime_;
     std::uint64_t graphics_revision_ = 0;
     std::uint64_t placement_revision_ = 0;
     std::uint64_t rows_revision_ = 0;

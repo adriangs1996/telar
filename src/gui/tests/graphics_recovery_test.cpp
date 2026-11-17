@@ -21,8 +21,7 @@ static_assert(true);
 
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
-import telar.gui.graphics.pauses;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.notification_center;
 import telar.wire.graphics;
 import telar.wire.runtime;
@@ -31,6 +30,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using telar::gui::test::deliver;
   using telar::gui::test::openFirstPane;
   using telar::gui::test::require;
@@ -96,7 +96,7 @@ namespace {
     Clock::now_ns = application::LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
     client.reportLimit(reach);
     require(transport.last<ReportLimit>().hits == 2, "the next runtime report must include reaches collected during its interval");
-    require(client.ready() && !client.graphicsPaused(1), "a presentation limit must preserve the runtime link and image stream");
+    require(client.ready() && !application::terminal::graphics::paused(client, 1), "a presentation limit must preserve the runtime link and image stream");
   }
 
   ImageDescription description(std::uint32_t id, std::uint64_t generation = 1) {
@@ -201,7 +201,7 @@ namespace {
     openFirstPane(client, transport);
     deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
     failedSnapshot(client, 1);
-    require(client.graphicsPaused(1), "the marker must start with the first failed transfer");
+    require(application::terminal::graphics::paused(client, 1), "the marker must start with the first failed transfer");
     const auto& notice = client.notifications().items().front();
 
     require(notice.title.view() == "Images paused in pane 1: nvim", "a pause must name the pane by its displayed index and foreground");
@@ -216,13 +216,13 @@ namespace {
     constexpr GraphicsHeader resumed{.pane_id = 1, .revision = 2};
 
     deliver(client, GraphicsSnapshot{.header = resumed, .phase = SnapshotPhase::begin});
-    require(client.graphicsPaused(1), "a snapshot begin alone must retain the paused marker");
+    require(application::terminal::graphics::paused(client, 1), "a snapshot begin alone must retain the paused marker");
     const auto image = description(1, 2);
 
     deliver(client, GraphicsImage{.header = resumed, .image = image});
     deliver(client, GraphicsImageChunk{.header = resumed, .key = image.key, .bytes = pixels});
     deliver(client, GraphicsSnapshot{.header = resumed, .phase = SnapshotPhase::end});
-    require(!client.graphicsPaused(1) && !client.graphicsResumeDeadline(), "only an applied complete snapshot ends the pause");
+    require(!application::terminal::graphics::paused(client, 1) && !application::terminal::graphics::resumeDeadline(client), "only an applied complete snapshot ends the pause");
   }
 
   void resumeDeadlineAndFocusKeepTheBackoff() {
@@ -236,15 +236,15 @@ namespace {
       failedSnapshot(client, revision);
     }
 
-    constexpr auto window = GraphicsPauses::healthy_window_ns;
+    constexpr auto window = GraphicsPauseLimits::healthy_window_ns;
 
-    require(client.graphicsResumeDeadline() == window, "the first exhausted window must wait sixty awake seconds");
+    require(application::terminal::graphics::resumeDeadline(client) == window, "the first exhausted window must wait sixty awake seconds");
     Clock::now_ns = window - 1;
-    client.resumeGraphics();
+    application::terminal::graphics::resume(client);
     require(transport.count(ClientTag::request_graphics_snapshot) == 3, "a retry must not run before its deadline");
     Clock::now_ns = window;
-    client.resumeGraphics();
-    require(transport.count(ClientTag::request_graphics_snapshot) == 4 && !client.graphicsResumeDeadline(), "a timer must request recovery without receiving a runtime message");
+    application::terminal::graphics::resume(client);
+    require(transport.count(ClientTag::request_graphics_snapshot) == 4 && !application::terminal::graphics::resumeDeadline(client), "a timer must request recovery without receiving a runtime message");
     constexpr std::uint64_t first_retry_revision = 5;
     constexpr std::uint64_t last_retry_revision = 7;
 
@@ -252,10 +252,10 @@ namespace {
       failedSnapshot(client, revision);
     }
 
-    require(client.graphicsResumeDeadline() == 3 * window, "the next exhausted window must double its delay");
+    require(application::terminal::graphics::resumeDeadline(client) == 3 * window, "the next exhausted window must double its delay");
     Clock::now_ns = 2 * window;
     client.focusPane(1);
-    require(transport.count(ClientTag::request_graphics_snapshot) == last_retry_revision && !client.graphicsResumeDeadline(), "focusing a pane must accelerate a doubled wait after one healthy window");
+    require(transport.count(ClientTag::request_graphics_snapshot) == last_retry_revision && !application::terminal::graphics::resumeDeadline(client), "focusing a pane must accelerate a doubled wait after one healthy window");
   }
 
   void failedReportsRetainHitsAndNeverDropTheLink() {
@@ -313,7 +313,7 @@ namespace {
     deliver(client, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin});
     deliver(client, GraphicsImage{.header = {.pane_id = 1, .revision = 2}, .image = description(1)});
     require(client.ready() && transport.count(ClientTag::request_graphics_snapshot) == 1, "a revision mismatch must request a graphics snapshot");
-    require(!client.graphicsPaused(1) && client.notifications().items().empty(), "revision drift must not be reported as a resource limit");
+    require(!application::terminal::graphics::paused(client, 1) && client.notifications().items().empty(), "revision drift must not be reported as a resource limit");
   }
 
 }

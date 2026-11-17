@@ -1,16 +1,15 @@
 module;
 #include "graphics/placeholder_diacritics.hpp"
 
-module telar.gui.graphics.placeholder;
+module telar.gui.features.terminal.graphics;
 
 import std;
-
-import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
+import telar.wire.vocabulary;
 
-namespace telar::gui {
+namespace telar::gui::features::terminal::graphics {
 
   ImageSourceRect ImageSourceRect::resolve(const GraphicsPlacement& placement, const ImageDescription& image) noexcept {
     const auto left = std::min(placement.source_x, image.width);

@@ -98,7 +98,7 @@ namespace telar::gui::qt {
         .configuration = view.configuration,
         .chrome = session.chromeRevision(),
         .agents = session.agentRevision(),
-        .graphics = session.graphicsRecoveryRevision(),
+        .graphics = application::terminal::graphics::recoveryRevision(session),
         .elements = elements_.revision(),
         .viewport = view.viewport,
         .scale = scale_,
@@ -167,7 +167,7 @@ namespace telar::gui::qt {
           record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
         }
 
-        auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session.agents()}, placement.display_index, session.graphicsPaused(pane->id));
+        auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session.agents()}, placement.display_index, application::terminal::graphics::paused(session, pane->id));
 
         if (elements_.active()) {
           chrome.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::pane_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));

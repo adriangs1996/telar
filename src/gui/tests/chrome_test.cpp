@@ -62,7 +62,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.frame_pacer;
@@ -72,6 +72,8 @@ import telar.gui.presentation.notification_stack;
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
   using telar::CellColor;
   using test::createChrome;

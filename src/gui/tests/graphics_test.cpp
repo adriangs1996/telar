@@ -11,8 +11,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
-import telar.gui.graphics.placeholder;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
 
@@ -20,6 +19,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
 
   void require(bool condition, const char* message) {
     if (!condition) {

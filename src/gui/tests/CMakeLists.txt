@@ -52,13 +52,13 @@ telar_add_test(gui-notification-stack-test SOURCES notification_stack_test.cpp L
   TEST gui-notification-stack LABELS gui.presentation)
 target_compile_options(gui-notification-stack-test PRIVATE -ffp-contract=off)
 
-telar_add_test(gui-graphics-retention-test SOURCES graphics_retention_test.cpp LIBRARIES gui-graphics
+telar_add_test(gui-graphics-retention-test SOURCES graphics_retention_test.cpp LIBRARIES gui-features-terminal-graphics
   TEST gui-graphics-retention LABELS gui.graphics)
-telar_add_test(gui-image-residency-test SOURCES image_residency_test.cpp LIBRARIES gui-graphics
+telar_add_test(gui-image-residency-test SOURCES image_residency_test.cpp LIBRARIES gui-features-terminal-graphics
   TEST gui-image-residency LABELS gui.graphics)
-telar_add_test(gui-graphics-recovery-test SOURCES graphics_recovery_test.cpp LIBRARIES gui-presentation gui-graphics gui-application gui-test-fixtures
+telar_add_test(gui-graphics-recovery-test SOURCES graphics_recovery_test.cpp LIBRARIES gui-presentation gui-features-terminal-graphics gui-application gui-test-fixtures
   TEST gui-graphics-recovery LABELS gui.graphics)
-telar_add_test(gui-shared-image-test SOURCES shared_image_test.cpp LIBRARIES gui-foundation-system gui-posix gui-test-fixtures gui-platform gui-graphics gui-application
+telar_add_test(gui-shared-image-test SOURCES shared_image_test.cpp LIBRARIES gui-foundation-system gui-posix gui-test-fixtures gui-platform gui-features-terminal-graphics gui-application
   TEST gui-shared-image LABELS gui.platform)
 
 telar_add_test(gui-session-notifications-test SOURCES session_notifications_test.cpp LIBRARIES gui-presentation gui-application gui-test-fixtures
@@ -80,7 +80,7 @@ telar_add_test(gui-theme-test SOURCES theme_test.cpp LIBRARIES gui-foundation-co
   TEST gui-theme LABELS gui.config)
 telar_add_test(gui-config-query-test SOURCES configuration_query_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-core gui-input gui-config gui-test-fixtures
   TEST gui-config-query LABELS gui.config)
-telar_add_test(gui-presentation-test SOURCES presentation_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-text gui-core gui-layout gui-presentation gui-graphics gui-application
+telar_add_test(gui-presentation-test SOURCES presentation_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-text gui-core gui-layout gui-presentation gui-features-terminal-graphics gui-application
   TEST gui-presentation LABELS gui.presentation)
 telar_add_test(gui-text-fit-test SOURCES text_fit_test.cpp LIBRARIES gui-foundation-text gui-text deps::ghostty_vt gui-test-fixtures
   TEST gui-text-fit LABELS gui.text)
@@ -109,7 +109,7 @@ gui_add_wall_clock_test(gui-wall-clock-line-islands LINT-14 840)
 gui_add_wall_clock_test(gui-wall-clock-baker-island IDLW12 -720)
 telar_add_test(gui-agent-replica-test SOURCES agent_replica_test.cpp LIBRARIES gui-foundation-model gui-presentation gui-application gui-test-fixtures
   TEST gui-agent-replica LABELS gui.application TIMEOUT 30)
-telar_add_test(gui-tab-activity-test SOURCES tab_activity_test.cpp LIBRARIES gui-foundation-model gui-foundation-drawing gui-foundation-core gui-core gui-presentation gui-graphics gui-application gui-test-fixtures
+telar_add_test(gui-tab-activity-test SOURCES tab_activity_test.cpp LIBRARIES gui-foundation-model gui-foundation-drawing gui-foundation-core gui-core gui-presentation gui-features-terminal-graphics gui-application gui-test-fixtures
   TEST gui-tab-activity LABELS gui.presentation)
 target_compile_options(gui-tab-activity-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-project-activity-test SOURCES project_activity_test.cpp LIBRARIES gui-foundation-model gui-foundation-text gui-text gui-presentation gui-application gui-test-fixtures
@@ -215,8 +215,8 @@ telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-f
   TEST gui-cell-glyphs LABELS gui.foundation.terminal)
 telar_add_test(gui-layout-test SOURCES layout_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-core gui-layout
   TEST gui-layout LABELS gui.layout TIMEOUT 30)
-telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-graphics gui-test-fixtures
-  TEST gui-graphics LABELS gui.graphics TIMEOUT 30)
+telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-core gui-features-terminal-graphics gui-test-fixtures
+  TEST gui-features-terminal-graphics LABELS gui.graphics TIMEOUT 30)
 telar_add_test(gui-config-test SOURCES configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-core gui-input gui-config gui-application
   TEST gui-config LABELS gui.config TIMEOUT 30)
 telar_add_test(gui-component-config-test SOURCES component_configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-core gui-input gui-presentation gui-components gui-config gui-application
@@ -299,7 +299,7 @@ if(TELAR_GUI_NATIVE)
     target_include_directories(gui-clipboard-wayland-probe PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     set_target_properties(gui-clipboard-wayland-provider gui-clipboard-wayland-probe PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
   endif()
-  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-attachments gui-graphics Qt6::Gui
+  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-attachments gui-features-terminal-graphics gui-application Qt6::Gui
     TEST gui-attachment-preview LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-attachment-preview-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
 

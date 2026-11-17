@@ -9,8 +9,7 @@ import telar.tbc;
 import :host_effects;
 import :workspace_replica;
 import telar.gui.foundation.core;
-import telar.gui.graphics.texture_cache;
-import telar.gui.graphics.pauses;
+import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.presentation.tab_drop;
@@ -47,7 +46,6 @@ import telar.base.memory.allocators;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.editor;
 import telar.gui.presentation.notification_center;
-import telar.gui.foundation.text;
 import telar.shell.syntax;
 import telar.gui.prompt.completion;
 
@@ -349,14 +347,6 @@ export {
       // these out on purpose: they never move a link under the pointer.
       [[nodiscard]] std::uint64_t chromeRevision() const noexcept;
 
-      [[nodiscard]] bool graphicsPaused(std::uint64_t pane_id) const noexcept;
-
-      [[nodiscard]] std::uint64_t graphicsRecoveryRevision() const noexcept;
-
-      [[nodiscard]] std::optional<std::uint64_t> graphicsResumeDeadline() const noexcept;
-
-      void resumeGraphics();
-
       void publishNotification(NotificationInput input);
 
       void reportLimit(LimitReach reach);
@@ -570,25 +560,9 @@ export {
       template <typename Message>
       Change dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, const ClientCommandHandler& handler);
 
-      template <typename Message, typename Source = std::nullptr_t>
-      Change applyGraphics(const Message& message, Source source = nullptr);
-
       void recoverRuntime(std::string_view reason);
 
-      template <typename Message>
-      void sendGraphics(const Message& message);
-
-      void requestGraphicsSnapshot(std::uint64_t pane_id);
-
       LimitReports::Recorded countLimitReach(LimitReach reach);
-
-      void pauseGraphics(std::uint64_t pane_id, const GraphicsLimitError& error);
-
-      void showGraphicsPause(LimitReports::Slot slot, std::uint64_t pane_id);
-
-      [[nodiscard]] BoundedText<max_notification_title_bytes> graphicsPauseTitle(std::uint64_t pane_id) const;
-
-      void forgetClosedGraphics();
 
       Change apply(const GraphicsSnapshot& message);
 
@@ -911,8 +885,7 @@ export {
       // A session built without effects points `effects_` here.
       DiscardHostEffects discard_effects_;
       SoundPlayback sound_playback_;
-      GraphicsBudget graphics_budget_;
-      GraphicsPauses graphics_pauses_;
+      features::terminal::graphics::State graphics_;
       LimitReports limit_reports_;
       static constexpr std::uint64_t limit_notice_duration_ns = 8'000'000'000;
       tbc::view<Vector<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;

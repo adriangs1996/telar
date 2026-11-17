@@ -59,13 +59,14 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.application;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
 
   constexpr CellStyle plain_style;

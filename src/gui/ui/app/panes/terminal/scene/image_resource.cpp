@@ -47,8 +47,7 @@ static_assert(true);
 #include <arm_neon.h>
 #endif
 
-import telar.gui.graphics.texture_cache;
-import telar.gui.graphics.placeholder;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -253,7 +252,7 @@ namespace telar::gui::qt {
 
   class ImageDrawNode final : public QSGOpacityNode {
   public:
-    ImageDrawNode(QQuickWindow& window, ImageResource& resource, GraphicsScene& scene, ImageTextureHandle handle, const ImageGeometry& geometry)
+    ImageDrawNode(QQuickWindow& window, ImageResource& resource, GraphicsScene& scene, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry)
         : resource_(&resource),
           scene_(scene),
           handle_(handle),
@@ -305,7 +304,7 @@ namespace telar::gui::qt {
       scene_.invalidate();
     }
 
-    [[nodiscard]] ImageTextureHandle admit(ImageDrawBudget& budget) noexcept {
+    [[nodiscard]] application::terminal::graphics::ImageTextureHandle admit(application::terminal::graphics::ImageDrawBudget& budget) noexcept {
       const auto admitted = budget.take();
 
       setOpacity(admitted ? 1 : 0);
@@ -317,7 +316,7 @@ namespace telar::gui::qt {
     friend class ImageResource;
     ImageResource* resource_;
     GraphicsScene& scene_;
-    ImageTextureHandle handle_;
+    application::terminal::graphics::ImageTextureHandle handle_;
     ImageDrawNode* previous_ = nullptr;
     ImageDrawNode* next_;
   };
@@ -372,11 +371,11 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void ImageResource::append(QQuickWindow& window, QSGNode& parent, GraphicsScene& scene, ImageTextureHandle handle, const ImageGeometry& geometry) {
+  void ImageResource::append(QQuickWindow& window, QSGNode& parent, GraphicsScene& scene, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry) {
     adoptSceneNode(parent, std::make_unique<ImageDrawNode>(window, *this, scene, handle, geometry));
   }
 
-  ImageTextureHandle ImageResource::admit(QSGNode& node, ImageDrawBudget& budget) noexcept {
+  application::terminal::graphics::ImageTextureHandle ImageResource::admit(QSGNode& node, application::terminal::graphics::ImageDrawBudget& budget) noexcept {
     auto* draw = dynamic_cast<ImageDrawNode*>(&node);
 
     return draw != nullptr ? draw->admit(budget) : 0;

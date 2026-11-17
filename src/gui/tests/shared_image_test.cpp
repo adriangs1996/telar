@@ -55,7 +55,7 @@ static_assert(true);
 
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.foundation.system;
 import telar.platform.graphics;
 import telar.wire.graphics;
@@ -64,6 +64,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using test::require;
   using test::TestSession;
 

@@ -12,11 +12,13 @@ static_assert(true);
 #include <limits>
 #include <span>
 
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::terminal::graphics;
   using telar::gui::test::require;
 
   struct Releases {

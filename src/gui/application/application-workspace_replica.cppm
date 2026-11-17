@@ -3,7 +3,7 @@ export module telar.gui.application:workspace_replica;
 import std;
 import telar.tbc;
 
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.render.document;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
@@ -48,7 +48,7 @@ export {
 
     template <Allocator Memory>
     struct Pane {
-      explicit Pane(Memory& memory, std::uint64_t identity, GraphicsBudget& budget);
+      explicit Pane(Memory& memory, std::uint64_t identity, features::terminal::graphics::GraphicsBudget& budget);
 
       std::uint64_t id;
       std::uint64_t generation = 0;
@@ -66,7 +66,7 @@ export {
       // Counts the views the client asked the runtime for, so a view can tell a move it asked for
       // from a frame that still shows an older view.
       std::uint64_t viewport_requests = 0;
-      GraphicsStore<Memory> graphics;
+      features::terminal::graphics::GraphicsStore<Memory> graphics;
       String<Memory> title;
       String<Memory> cwd;
       String<Memory> foreground;

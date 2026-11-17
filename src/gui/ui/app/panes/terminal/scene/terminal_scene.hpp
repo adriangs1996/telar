@@ -40,7 +40,6 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.graphics.texture_cache;
 import telar.gui.application;
 import telar.gui.foundation.terminal;
 
@@ -69,7 +68,7 @@ namespace telar::gui::qt {
 
   struct TerminalPresentation {
     const Screen<Memory>& screen;
-    const GraphicsStore<Memory>& graphics;
+    const application::terminal::graphics::GraphicsStore<Memory>& graphics;
     const Configuration& configuration;
     const TerminalFont& font;
     const QString& preedit;

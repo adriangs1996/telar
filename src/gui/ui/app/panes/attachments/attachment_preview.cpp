@@ -28,7 +28,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.attachments.marker_input;
-import telar.gui.graphics.pauses;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -82,13 +82,13 @@ namespace telar::gui::qt {
     };
 
     QImage resampled(ApplicationAllocator& memory, const QImage& source, AttachmentPreviewSize size) {
-      const auto byte_count = static_cast<std::size_t>(size.width) * size.height * RgbaImageView::channels;
+      const auto byte_count = static_cast<std::size_t>(size.width) * size.height * application::terminal::graphics::RgbaImageView::channels;
       auto pixels = makeOwned<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
 
-      pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(AttachmentPreviewSize::full_pixels) * RgbaImageView::channels);
+      pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
       const auto view = pixels->bytes.unsignedBytes();
       auto* const rgba = view.data();
-      const RgbaImageView input{
+      const application::terminal::graphics::RgbaImageView input{
           .pixels = std::as_bytes(std::span{source.constBits(), static_cast<std::size_t>(source.sizeInBytes())}),
           .stride = static_cast<std::size_t>(source.bytesPerLine()),
           .width = static_cast<std::size_t>(source.width()),
@@ -96,13 +96,13 @@ namespace telar::gui::qt {
       };
 
       const std::span output{rgba, byte_count};
-      if (!ArtworkResize::rectangle(input, output, size.width, size.height)) {
+      if (!application::terminal::graphics::ArtworkResize::rectangle(input, output, size.width, size.height)) {
         throw std::invalid_argument{"InvalidClipboardImage"};
       }
 
-      ArtworkResize::premultiply(output);
+      application::terminal::graphics::ArtworkResize::premultiply(output);
       const auto* const owner = pixels.get();
-      QImage image{rgba, static_cast<int>(size.width), static_cast<int>(size.height), static_cast<qsizetype>(size.width) * static_cast<qsizetype>(RgbaImageView::channels), QImage::Format_RGBA8888_Premultiplied, ImagePixels::release, pixels.get()};
+      QImage image{rgba, static_cast<int>(size.width), static_cast<int>(size.height), static_cast<qsizetype>(size.width) * static_cast<qsizetype>(application::terminal::graphics::RgbaImageView::channels), QImage::Format_RGBA8888_Premultiplied, ImagePixels::release, pixels.get()};
       if (image.isNull()) {
         throw std::bad_alloc{};
       }

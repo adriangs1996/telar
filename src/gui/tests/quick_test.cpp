@@ -140,7 +140,7 @@ static_assert(true);
 import telar.gui.tests.json_fixture;
 import telar.gui.application;
 import telar.gui.components.configuration;
-import telar.gui.graphics.placeholder;
+import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.json;
@@ -198,6 +198,8 @@ namespace {
   using telar::gui::test::ScreenTextLayout;
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
 
   bool visibleWindowText(const QString& text) {

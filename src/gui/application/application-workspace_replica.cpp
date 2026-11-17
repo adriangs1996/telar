@@ -4,14 +4,14 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 
 namespace telar::gui::application {
 
   template <Allocator Memory>
-  Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, GraphicsBudget& budget)
+  Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, features::terminal::graphics::GraphicsBudget& budget)
       : id(identity),
         screen(memory),
         rows(memory),

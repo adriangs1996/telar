@@ -27,7 +27,7 @@ target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-h
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS foundation features core layout text prompt
-    input attachments platform machines presentation graphics components config transport
+    input attachments platform machines presentation components config transport
     application)
   add_subdirectory(${domain})
 endforeach()
@@ -149,7 +149,7 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-keyboard PUBLIC gui-foundation-core Qt6::Gui)
 
   add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-attachments gui-machines gui-graphics Qt6::Concurrent)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-attachments gui-machines gui-application Qt6::Concurrent)
 
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
@@ -163,7 +163,7 @@ if(TELAR_GUI_NATIVE)
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-core gui-layout
     gui-text gui-prompt gui-input gui-attachments
-    gui-platform gui-machines gui-presentation gui-graphics gui-components gui-config gui-transport
+    gui-platform gui-machines gui-presentation gui-components gui-config gui-transport
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Most of a gui-quick compilation parses the same Qt headers again; the ones

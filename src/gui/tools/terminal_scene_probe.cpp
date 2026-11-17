@@ -53,7 +53,7 @@ static_assert(true);
 #include <vector>
 
 import telar.config.gui;
-import telar.gui.graphics.texture_cache;
+import telar.gui.application;
 
 namespace {
 
@@ -377,8 +377,8 @@ namespace {
     ApplicationAllocator& memory_ = application_memory_.memory();
     Configuration configuration_;
     Screen<Memory> screen_;
-    GraphicsBudget graphics_budget_;
-    GraphicsStore<Memory> graphics_;
+    application::terminal::graphics::GraphicsBudget graphics_budget_;
+    application::terminal::graphics::GraphicsStore<Memory> graphics_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ResolvedFont resolved_;

@@ -1,18 +1,19 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.graphics.placeholder;
+// Where an image is drawn: the part of it a placement shows, the box it fills in the cells, and
+// the Unicode placeholders that place it in the text.
+export module telar.gui.features.terminal.graphics:placement;
 
 import std;
 
 import telar.gui.foundation.core;
-
 import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
 
 // Interface: graphics/source_rect.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::graphics {
 
     struct ImageSourceRect {
       std::uint32_t x = 0;
@@ -29,7 +30,7 @@ export {
 
 // Interface: graphics/display_box.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::graphics {
 
     struct ImageDisplayBox {
       struct Cell {
@@ -56,7 +57,7 @@ export {
 
 // Interface: graphics/placement.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::graphics {
 
     struct ImageGeometry {
       Rect source;
@@ -79,7 +80,7 @@ export {
 
 // Interface: graphics/placeholder.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::graphics {
 
     struct PlaceholderCell {
       std::uint32_t image_low = 0;

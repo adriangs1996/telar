@@ -6,7 +6,7 @@ import telar.platform.events;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
 import telar.gui.foundation.keys;
 import telar.gui.features.paths;
@@ -197,7 +197,7 @@ namespace telar::gui::application {
   void Session::disconnected() noexcept {
     ++view_version_.host;
     ready_ = false;
-    graphics_pauses_.reset();
+    features::terminal::graphics::suspend(graphics_);
     agents_.resetSource();
     pane_list_.resetSource();
     workspaces_.resetSource();
@@ -566,7 +566,7 @@ namespace telar::gui::application {
       try {
         const auto change = apply(Codec::decode<Message>(payload, storage));
 
-        resumeGraphics();
+        terminal::graphics::resume(*this);
 
         return change;
       } catch (const std::exception& error) {

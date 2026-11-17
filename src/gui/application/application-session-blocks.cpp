@@ -3,7 +3,7 @@ module telar.gui.application;
 import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.prompt.line;

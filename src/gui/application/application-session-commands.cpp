@@ -5,7 +5,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.foundation.core;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.layout.snapshots;
 import telar.config.client;
 import telar.config.runtime;

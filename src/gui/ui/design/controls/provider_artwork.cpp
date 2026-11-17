@@ -22,7 +22,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.foundation.core;
-import telar.gui.graphics.pauses;
+import telar.gui.application;
 import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
@@ -31,7 +31,7 @@ namespace telar::gui::qt {
 
     constexpr int source_side = 64;
     constexpr std::array providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
-    constexpr auto source_stride = providers.size() * source_side * RgbaImageView::channels;
+    constexpr auto source_stride = providers.size() * source_side * application::terminal::graphics::RgbaImageView::channels;
     constexpr auto sheet_bytes = source_stride * source_side;
 
     const QByteArray& providerSheet() {
@@ -94,19 +94,19 @@ namespace telar::gui::qt {
       return {};
     }
 
-    const auto offset = static_cast<std::size_t>(std::distance(providers.begin(), found)) * source_side * RgbaImageView::channels;
-    const RgbaImageView source{.pixels = std::as_bytes(std::span{sheet.constData(), static_cast<std::size_t>(sheet.size())}).subspan(offset), .stride = source_stride, .width = source_side, .height = source_side};
+    const auto offset = static_cast<std::size_t>(std::distance(providers.begin(), found)) * source_side * application::terminal::graphics::RgbaImageView::channels;
+    const application::terminal::graphics::RgbaImageView source{.pixels = std::as_bytes(std::span{sheet.constData(), static_cast<std::size_t>(sheet.size())}).subspan(offset), .stride = source_stride, .width = source_side, .height = source_side};
     QImage output{side, side, QImage::Format_RGBA8888_Premultiplied};
     if (output.isNull()) {
       return {};
     }
 
     const auto destination = std::span{output.bits(), static_cast<std::size_t>(output.sizeInBytes())};
-    if (!ArtworkResize::square(source, destination, static_cast<std::size_t>(side))) {
+    if (!application::terminal::graphics::ArtworkResize::square(source, destination, static_cast<std::size_t>(side))) {
       return {};
     }
 
-    ArtworkResize::premultiply(destination);
+    application::terminal::graphics::ArtworkResize::premultiply(destination);
 
     return output;
   }

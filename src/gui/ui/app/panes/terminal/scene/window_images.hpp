@@ -30,8 +30,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.graphics.placeholder;
-import telar.gui.graphics.texture_cache;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -39,12 +38,12 @@ namespace telar::gui::qt {
 
   struct ImagePlacementSource {
     QQuickItem* owner = nullptr;
-    const GraphicsStore<Memory>* store = nullptr;
+    const application::terminal::graphics::GraphicsStore<Memory>* store = nullptr;
     QSizeF cell;
   };
 
   struct WindowImage {
-    ImageTextureHandle handle = 0;
+    application::terminal::graphics::ImageTextureHandle handle = 0;
     std::uint64_t generation = 0;
     Rect bounds;
   };
@@ -69,12 +68,12 @@ namespace telar::gui::qt {
     void attach(GraphicsScene& scene) noexcept;
     void detach(GraphicsScene& scene) noexcept;
     void beginCatalogSnapshot() noexcept;
-    void observeCatalog(const GraphicsStore<Memory>& store) noexcept;
+    void observeCatalog(const application::terminal::graphics::GraphicsStore<Memory>& store) noexcept;
     // The reach names the selection's declared limit.
     [[nodiscard]] tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
-    [[nodiscard]] const ImagePlacementSelection& placements() const noexcept;
-    [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene& scene, const GraphicsStore<Memory>& store, ImageKey key);
-    void append(GraphicsScene& scene, QSGNode& parent, ImageTextureHandle handle, const ImageGeometry& geometry);
+    [[nodiscard]] const application::terminal::graphics::ImagePlacementSelection& placements() const noexcept;
+    [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key);
+    void append(GraphicsScene& scene, QSGNode& parent, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry);
     void requestUpdate(const GraphicsScene& scene);
     [[nodiscard]] WindowImageStatistics statistics() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
@@ -82,37 +81,37 @@ namespace telar::gui::qt {
 
   private:
     struct Resources {
-      std::array<ImageResource, image_texture_capacity> images;
-      void release(ImageTextureHandle handle) noexcept;
+      std::array<ImageResource, application::terminal::graphics::image_texture_capacity> images;
+      void release(application::terminal::graphics::ImageTextureHandle handle) noexcept;
     };
 
-    using Residency = ImageResidency<Resources>;
-    using Image = GraphicsStore<Memory>::Image;
+    using Residency = application::terminal::graphics::ImageResidency<Resources>;
+    using Image = application::terminal::graphics::GraphicsStore<Memory>::Image;
 
     struct CatalogRows {
-      GraphicsLifetime lifetime;
-      ImageTextureHandle first_row = 0;
+      application::terminal::graphics::GraphicsLifetime lifetime;
+      application::terminal::graphics::ImageTextureHandle first_row = 0;
     };
 
     struct PlacementSourceStamp {
-      GraphicsLifetime lifetime;
+      application::terminal::graphics::GraphicsLifetime lifetime;
       std::uint64_t revision = 0;
-      ImageDisplayBox::Cell cell;
+      application::terminal::graphics::ImageDisplayBox::Cell cell;
 
       bool operator==(const PlacementSourceStamp&) const noexcept = default;
     };
 
     static constexpr std::size_t cached_source_capacity = 64;
-    static constexpr std::size_t catalog_bucket_capacity = image_texture_capacity * 2;
+    static constexpr std::size_t catalog_bucket_capacity = application::terminal::graphics::image_texture_capacity * 2;
 
     [[nodiscard]] PlacementSourceStamp placementStamp(const ImagePlacementSource& source) const noexcept;
     [[nodiscard]] bool placementSourcesChanged(std::span<const ImagePlacementSource> sources) noexcept;
     void selectPlacements(std::span<const ImagePlacementSource> sources) noexcept;
-    [[nodiscard]] bool placementHasExtent(GraphicsLifetime catalog, const GraphicsPlacement& placement, ImageSourceRect source, std::span<const ImagePlacementSource> views) const noexcept;
+    [[nodiscard]] bool placementHasExtent(application::terminal::graphics::GraphicsLifetime catalog, const GraphicsPlacement& placement, application::terminal::graphics::ImageSourceRect source, std::span<const ImagePlacementSource> views) const noexcept;
     void prepare();
     void finish();
     void admitDraws();
-    void admitLayer(const QSGNode& layer, ImageDrawBudget& budget);
+    void admitLayer(const QSGNode& layer, application::terminal::graphics::ImageDrawBudget& budget);
     void orderScenes();
     template <typename Use>
     void visitVisibleTextures(const Use& use) const noexcept;
@@ -123,19 +122,19 @@ namespace telar::gui::qt {
     void scheduleTimer(std::uint32_t delay_ms);
     void cancelTimer();
     void wakeWaitingScenes() noexcept;
-    void notifyReady(const GraphicsScene& scene, ImageTextureIdentity identity) noexcept;
-    void requestImage(GraphicsScene& scene, const GraphicsStore<Memory>& store, const Image& image);
+    void notifyReady(const GraphicsScene& scene, application::terminal::graphics::ImageTextureIdentity identity) noexcept;
+    void requestImage(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, const Image& image);
     void indexCatalogs() noexcept;
-    [[nodiscard]] std::size_t catalogBucket(GraphicsLifetime lifetime) const noexcept;
-    [[nodiscard]] bool upload(ImageTextureHandle handle, const Image& image);
+    [[nodiscard]] std::size_t catalogBucket(application::terminal::graphics::GraphicsLifetime lifetime) const noexcept;
+    [[nodiscard]] bool upload(application::terminal::graphics::ImageTextureHandle handle, const Image& image);
     [[nodiscard]] bool canRetry(const Image& image, std::size_t retained_bytes) const noexcept;
-    [[nodiscard]] std::optional<WindowImage> newest(ImageTextureIdentity identity) const noexcept;
+    [[nodiscard]] std::optional<WindowImage> newest(application::terminal::graphics::ImageTextureIdentity identity) const noexcept;
 
     QQuickWindow& window_;
     QTimer timer_;
     Resources resources_;
     tbc::view<Residency, tbc::lt::self> residency_{resources_};
-    ImagePlacementSelection placements_;
+    application::terminal::graphics::ImagePlacementSelection placements_;
     std::array<PlacementSourceStamp, cached_source_capacity> placement_sources_{};
     std::size_t placement_source_count_ = 0;
     bool placement_sources_cached_ = false;
@@ -143,7 +142,7 @@ namespace telar::gui::qt {
     std::array<bool, Residency::capacity> retained_{};
     std::array<bool, Residency::capacity> visible_rows_{};
     std::array<CatalogRows, catalog_bucket_capacity> catalogs_{};
-    std::array<ImageTextureHandle, Residency::capacity> next_catalog_row_{};
+    std::array<application::terminal::graphics::ImageTextureHandle, Residency::capacity> next_catalog_row_{};
     std::array<std::uint16_t, Residency::capacity> occupied_catalog_buckets_{};
     std::size_t catalog_count_ = 0;
     GraphicsScene* first_scene_ = nullptr;

@@ -11,8 +11,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.graphics.texture_cache;
-import telar.gui.graphics.placeholder;
+import telar.gui.application;
 
 class QQuickWindow;
 
@@ -38,8 +37,8 @@ namespace telar::gui::qt {
     ImageResource& operator=(ImageResource&&) = delete;
 
     [[nodiscard]] bool upload(QQuickWindow& window, const QImage& pixels);
-    void append(QQuickWindow& window, QSGNode& parent, GraphicsScene& scene, ImageTextureHandle handle, const ImageGeometry& geometry);
-    [[nodiscard]] static ImageTextureHandle admit(QSGNode& node, ImageDrawBudget& budget) noexcept;
+    void append(QQuickWindow& window, QSGNode& parent, GraphicsScene& scene, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry);
+    [[nodiscard]] static application::terminal::graphics::ImageTextureHandle admit(QSGNode& node, application::terminal::graphics::ImageDrawBudget& budget) noexcept;
     void detachNodes() noexcept;
     void clear() noexcept;
     [[nodiscard]] bool empty() const noexcept;

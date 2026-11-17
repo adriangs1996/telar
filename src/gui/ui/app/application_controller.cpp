@@ -519,7 +519,7 @@ namespace telar::gui::qt {
       const bool active = client.key.machine.slot == store_.machines().active();
       const WindowCommands::HostCommands handler{commands_, active};
       const auto notification_revision = client.session.notificationRevision();
-      const auto graphics_revision = client.session.graphicsRecoveryRevision();
+      const auto graphics_revision = application::terminal::graphics::recoveryRevision(client.session);
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
       // Terminal frames and documents reach their panes directly, and are the bulk of the
       // traffic; every other change may move what the projections read.
@@ -553,7 +553,7 @@ namespace telar::gui::qt {
         notifications_.refresh();
       }
 
-      if (graphics_revision != session().graphicsRecoveryRevision()) {
+      if (graphics_revision != application::terminal::graphics::recoveryRevision(session())) {
         refreshPanes();
         scheduleGraphicsRecovery();
       }
@@ -666,7 +666,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::scheduleGraphicsRecovery() {
-    scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, system::AwakeClock::nowNanoseconds());
+    scheduleDeadline(graphics_resume_timer_, session().ready() ? application::terminal::graphics::resumeDeadline(session()) : std::nullopt, system::AwakeClock::nowNanoseconds());
   }
 
   void ApplicationController::refresh() {

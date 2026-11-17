@@ -39,8 +39,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.graphics.pauses;
-import telar.gui.graphics.texture_cache;
+import telar.gui.features.terminal.graphics;
 import telar.gui.presentation.notification_center;
 import telar.wire.graphics;
 import telar.wire.layout;
@@ -49,6 +48,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::graphics;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 
@@ -143,7 +143,7 @@ namespace {
       QCOMPARE(application.notifications()->center().items().front().title.view(), std::string_view{"Images paused in pane 1: nvim"});
       QCOMPARE(runtime.count(ClientTag::report_limit), 1);
 
-      constexpr auto window_ns = GraphicsPauses::healthy_window_ns;
+      constexpr auto window_ns = GraphicsPauseLimits::healthy_window_ns;
 
       ControlledAwakeClock::set(window_ns - NotificationInput::nanoseconds_per_millisecond);
       failedSnapshot(runtime, 4);
