@@ -1,6 +1,6 @@
 #include "wayland_clipboard_image_monitor.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_file.h"
 #include "platform/clipboard_image_source.hpp"
 #include "telar_base/memory/allocator.hpp"

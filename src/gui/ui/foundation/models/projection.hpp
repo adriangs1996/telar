@@ -3,8 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_config/graphics/limits.hpp"
@@ -12,7 +11,6 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/foundation/models/progress_value.hpp"
 #include <QChar>

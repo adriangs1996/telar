@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "machine_profiles_source.hpp"
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <QFuture>
 #include <QString>

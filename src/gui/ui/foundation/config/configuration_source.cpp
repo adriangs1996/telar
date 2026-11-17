@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "configuration_source.hpp"
 #include "appearance.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_config/terminal/control/policy.hpp"

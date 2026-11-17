@@ -1,7 +1,6 @@
 #include "assertions.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "terminal/screen.hpp"
+#include "features/terminal/attachments/sensitive_bytes.hpp"
+#include "features/terminal/attachments/types.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -15,6 +14,7 @@
 
 import telar.gui.features.terminal.attachments;
 import telar.gui.tests.erasure_allocator;
+import telar.gui.foundation.terminal;
 
 namespace {
 

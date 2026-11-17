@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
 #include "assertions.hpp"
-#include "attachments/capture.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
+#include "features/terminal/attachments/capture.hpp"
+#include "features/terminal/attachments/sensitive_bytes.hpp"
+#include "features/terminal/attachments/types.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "ui/app/panes/attachments/attachment_preview.hpp"
 #include <QBuffer>
 #include <QByteArray>

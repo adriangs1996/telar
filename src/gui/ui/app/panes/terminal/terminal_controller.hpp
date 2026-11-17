@@ -3,10 +3,9 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
 #include "copy_controller.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "terminal_host.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_controller.hpp"
 #include "ui/foundation/input/mouse_buttons.hpp"

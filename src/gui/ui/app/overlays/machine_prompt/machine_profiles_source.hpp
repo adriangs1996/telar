@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QObject>

@@ -4,10 +4,10 @@ static_assert(true);
 #endif
 
 #include "attachment_shelf.hpp"
-#include "application/dependencies.hpp"
 #include "attachment_preview.hpp"
-#include "attachments/types.hpp"
 #include "clipboard_images.hpp"
+#include "features/terminal/attachments/types.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include <QImage>
 #include <QObject>

@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "path_picker_controller.hpp"
 #include "platform/window.hpp"
-#include "terminal/cell_position.hpp"
 #include "ui/foundation/fonts/chrome_fonts.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QVariantList>
@@ -19,6 +18,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 namespace telar::gui::qt {

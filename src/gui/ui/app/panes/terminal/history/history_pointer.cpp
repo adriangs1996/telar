@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "history_controller.hpp"
 #include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"

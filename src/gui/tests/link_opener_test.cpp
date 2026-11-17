@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "platform/environment.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/process/environment.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QProcess>
@@ -265,24 +265,24 @@ printf '%s' "$1"
       });
 
       QVERIFY(qunsetenv(name));
-      const platform::ProcessEnvironment missing;
+      const qt::ProcessEnvironment missing;
 
       QVERIFY(!missing(name));
       QVERIFY(qputenv(name, QByteArray{""}));
-      const platform::ProcessEnvironment empty;
+      const qt::ProcessEnvironment empty;
       const auto empty_value = empty(name);
 
       QVERIFY(empty_value && empty_value->empty());
       constexpr std::string_view raw_byte = "\xff";
 
       QVERIFY(qputenv(name, QByteArray{raw_byte.data(), static_cast<qsizetype>(raw_byte.size())}));
-      const platform::ProcessEnvironment captured;
+      const qt::ProcessEnvironment captured;
       const auto retained = captured(name);
 
       QVERIFY(retained && *retained == raw_byte);
       QVERIFY(qputenv(name, QByteArray{"changed"}));
       QVERIFY(captured(name) == retained && retained == std::optional{raw_byte});
-      const platform::ProcessEnvironment replacement;
+      const qt::ProcessEnvironment replacement;
 
       QVERIFY(replacement(name) == std::optional{std::string_view{"changed"}});
     }

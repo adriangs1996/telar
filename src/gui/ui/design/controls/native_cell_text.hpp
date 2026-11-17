@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "cell_text_grid.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"

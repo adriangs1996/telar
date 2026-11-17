@@ -3,13 +3,10 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "graphics/placeholder_diacritics.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/fold_map.hpp"
-#include "terminal/screen.hpp"
 #include "window_images.hpp"
 #include <QPointer>
 #include <QQuickItem>
@@ -33,6 +30,7 @@ static_assert(true);
 
 #pragma once
 
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 class QQuickWindow;
@@ -46,7 +44,7 @@ namespace telar::gui::qt {
   struct ImageRows {
     std::uint64_t live_top = 0;
     std::uint64_t top = 0;
-    const FoldMap<>* folds = nullptr;
+    const application::FoldMap<>* folds = nullptr;
     std::span<const std::span<const CellValue>> rows;
     std::uint64_t revision = 0;
 

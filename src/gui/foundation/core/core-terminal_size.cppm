@@ -1,14 +1,10 @@
-#pragma once
+export module telar.gui.foundation.core:terminal_size;
 
-#include "telar_wire/serializers/telar_messages.hpp"
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <optional>
+import std;
 
-namespace telar::gui::inline foundation::inline core {
+import telar.wire.vocabulary;
+
+export namespace telar::gui::inline foundation::inline core {
 
   inline constexpr TerminalSize default_terminal_size{
       .cols = 80,
@@ -27,7 +23,7 @@ namespace telar::gui::inline foundation::inline core {
 
     bool operator==(const TerminalGrid&) const = default;
 
-    [[nodiscard]] std::optional<TerminalSize> fit(double width, double height) const noexcept {
+    [[nodiscard]] inline std::optional<TerminalSize> fit(double width, double height) const noexcept {
       if (!std::isfinite(width) || !std::isfinite(height) || !std::isfinite(scale) || width <= 0 || height <= 0 || scale <= 0 || cell_width_px == 0 || cell_height_px == 0) {
         return std::nullopt;
       }

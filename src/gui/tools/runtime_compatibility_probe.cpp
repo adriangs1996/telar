@@ -1,4 +1,4 @@
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include <QCoreApplication>

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "application/dependencies.hpp"
 #include "attachment_preview.hpp"
-#include "attachments/capture.hpp"
-#include "attachments/types.hpp"
+#include "features/terminal/attachments/capture.hpp"
+#include "features/terminal/attachments/types.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_monitor.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "tbc/view.hpp"

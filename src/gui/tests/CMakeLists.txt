@@ -91,7 +91,7 @@ telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-mode
   TEST LABELS gui.core TIMEOUT 30)
 telar_add_test(gui-color-test SOURCES color_test.cpp LIBRARIES gui-foundation-core
   TEST gui-color LABELS gui.core)
-telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core
+telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core gui-foundation-terminal
   CHECKS lint lifetime blank_lines)
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
   CHECKS lint lifetime blank_lines)

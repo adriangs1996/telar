@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/local_runtime_endpoint.hpp"

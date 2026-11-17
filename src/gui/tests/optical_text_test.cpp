@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "glyph_rasterizer.h"
 #include "platform/font.h"
 #include "ui/foundation/fonts/bundled_fonts.hpp"

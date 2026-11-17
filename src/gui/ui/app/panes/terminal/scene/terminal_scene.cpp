@@ -4,14 +4,11 @@ static_assert(true);
 #endif
 
 #include "terminal_scene.hpp"
-#include "core/terminal_size.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "terminal_decorations.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/scene/cell_glyphs.hpp"
@@ -44,6 +41,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
+import telar.gui.foundation.core;
 import telar.gui.application;
 
 namespace telar::gui::qt {

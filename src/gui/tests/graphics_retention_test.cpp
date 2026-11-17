@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"

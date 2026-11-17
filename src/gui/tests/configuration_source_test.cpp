@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "appearance_fixture.hpp"
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cerrno>

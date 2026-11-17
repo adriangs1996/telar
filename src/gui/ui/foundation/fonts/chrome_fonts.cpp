@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "chrome_fonts.hpp"
-#include "core/memory.hpp"
 #include "font_source.hpp"
+#include "foundation/core/memory.hpp"
 #include <QByteArray>
 #include <QtCore/qstringliteral.h>
 #include <cstdint>

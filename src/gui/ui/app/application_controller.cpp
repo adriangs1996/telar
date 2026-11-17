@@ -4,13 +4,11 @@ static_assert(true);
 #endif
 
 #include "application_controller.hpp"
-#include "application/dependencies.hpp"
 #include "application_effects.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
-#include "terminal/cell_position.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/fonts/window_font_catalog.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
@@ -52,6 +50,7 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.wire.vocabulary;
 

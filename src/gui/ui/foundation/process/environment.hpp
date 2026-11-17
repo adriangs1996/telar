@@ -7,7 +7,7 @@
 #include <optional>
 #include <string_view>
 
-namespace telar::gui::platform {
+namespace telar::gui::qt {
 
   class ProcessEnvironment {
   public:

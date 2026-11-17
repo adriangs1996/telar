@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "external_link_opener.hpp"
-#include "terminal/cell_position.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QObject>
 #include <QString>
@@ -15,6 +14,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 namespace telar::gui::qt {

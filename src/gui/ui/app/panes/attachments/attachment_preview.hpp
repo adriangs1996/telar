@@ -1,7 +1,7 @@
 #pragma once
 
-#include "application/dependencies.hpp"
-#include "attachments/capture.hpp"
+#include "features/terminal/attachments/capture.hpp"
+#include "foundation/core/application_memory.hpp"
 #include <QImage>
 #include <cstdint>
 

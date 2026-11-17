@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
 #include "component_surface_state.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "pick_controller.hpp"
 #include "surface_command.hpp"
 #include "tbc/view.hpp"

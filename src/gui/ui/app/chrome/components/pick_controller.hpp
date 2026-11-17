@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "surface_command.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"

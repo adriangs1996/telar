@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"

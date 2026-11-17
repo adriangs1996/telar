@@ -2,8 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "../terminal/fold_map.hpp"
 #include "../ui/app/panes/terminal/scroll_motion.hpp"
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -170,10 +168,10 @@ namespace {
     constexpr std::uint64_t after_later = later_fold + later_rows + 1;
     constexpr std::uint64_t indexes = 40;
     constexpr std::uint64_t total = 50;
-    FoldMap<> folds;
+    application::FoldMap<> folds;
 
     require(folds.display(any_row) == any_row && folds.row(any_row) == any_row, "without folds rows are their own display index");
-    const std::array<FoldMap<>::Span, 3> spans{{{.first = later_fold, .count = later_rows}, {.first = first_fold, .count = fold_rows}, {.first = overlapping, .count = fold_rows}}};
+    const std::array<application::FoldMap<>::Span, 3> spans{{{.first = later_fold, .count = later_rows}, {.first = first_fold, .count = fold_rows}, {.first = overlapping, .count = fold_rows}}};
 
     folds.assign(spans);
     require(folds.spans().size() == 2 && folds.spans()[0].first == first_fold && folds.spans()[0].count == joined_rows, "overlapping folds join, in order");
@@ -222,8 +220,8 @@ namespace {
   // A document shows its rows in display rows of its own, more or fewer than it stands for,
   // beside folds that hide theirs.
   void documentsShowTheirOwnRows() {
-    FoldMap<> folds;
-    const std::array<FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
+    application::FoldMap<> folds;
+    const std::array<application::FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
 
     folds.assign(spans);
     require(folds.display(9) == 9 && folds.display(12) == 10 && folds.display(15) == 10, "a fold still hides its rows");
@@ -234,7 +232,7 @@ namespace {
     require(folds.showing(16) == &folds.spans()[1] && folds.showing(30) == nullptr && folds.showing(10) == nullptr, "a display row knows the document it shows");
     require(!folds.hides(23) && folds.hides(12) && folds.hides(46) && !folds.hides(41), "rows past what a document shows are hidden");
 
-    const std::array<FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
+    const std::array<application::FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
 
     folds.assign(covered);
     require(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == 10, "a fold over a document hides it");

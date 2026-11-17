@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "attachments/types.hpp"
+#include "features/terminal/attachments/types.hpp"
 #include <cstdint>
 #include <exception>
 #include <initializer_list>

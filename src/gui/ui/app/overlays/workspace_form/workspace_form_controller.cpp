@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "workspace_form_controller.hpp"
-#include "platform/environment.hpp"
+#include "ui/foundation/process/environment.hpp"
 #include <QByteArray>
 #include <QFileInfo>
 #include <QStringList>
@@ -131,7 +131,7 @@ namespace telar::gui::qt {
   }
 
   QString WorkspaceFormController::expand(const QString& text) const {
-    const platform::ProcessEnvironment environment;
+    const ProcessEnvironment environment;
     const auto* pane = store_.session().focusedPane();
     const std::string_view base = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd};
     const auto typed = text.toUtf8();

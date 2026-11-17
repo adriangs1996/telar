@@ -6,7 +6,6 @@ static_assert(true);
 #include "machine_roster.hpp"
 #include "dialogs.hpp"
 #include "machines_coordinator.hpp"
-#include "platform/environment.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
@@ -15,6 +14,7 @@ static_assert(true);
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/machines/window_identity.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/process/environment.hpp"
 #include "ui/foundation/process/launch_arguments.hpp"
 #include "window_display.hpp"
 #include <QByteArray>
@@ -86,7 +86,7 @@ namespace telar::gui::qt {
       throw std::logic_error{"Open the local machine before loading profiles"};
     }
 
-    const platform::ProcessEnvironment environment;
+    const ProcessEnvironment environment;
 
     try {
       const auto runtime = application::machines::MachineRuntimeLocation::resolve(environment, system::currentUserId());

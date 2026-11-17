@@ -2,11 +2,8 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "../core/terminal_size.hpp"
-#include "../terminal/screen.hpp"
 #include "assertions.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_config/graphics/limits.hpp"

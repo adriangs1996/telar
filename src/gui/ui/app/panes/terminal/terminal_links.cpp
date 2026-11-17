@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
@@ -34,6 +32,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 namespace telar::gui::qt {

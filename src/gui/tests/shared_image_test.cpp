@@ -3,12 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../core/wheel_accumulator.hpp"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
 #include "assertions.hpp"
+#include "foundation/core/memory.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"

@@ -3,15 +3,14 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
 #include "assertions.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/app/panes/terminal/scene/graphics_scene.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
@@ -53,6 +52,7 @@ static_assert(true);
 
 import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
+import telar.gui.foundation.terminal;
 
 namespace {
 
@@ -393,8 +393,8 @@ namespace {
       constexpr std::uint64_t top = 4;
       constexpr std::int64_t above = 6;
       constexpr std::int64_t below = 20;
-      FoldMap<> folds;
-      const std::array spans{FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
+      application::FoldMap<> folds;
+      const std::array spans{application::FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
 
       folds.assign(spans);
       const ImageRows plain{.top = top};

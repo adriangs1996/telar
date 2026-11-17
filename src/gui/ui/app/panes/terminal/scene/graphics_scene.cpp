@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "graphics_scene.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include "window_images.hpp"
 #include <QQuickWindow>
@@ -22,6 +21,7 @@ static_assert(true);
 #include <span>
 #include <stdexcept>
 
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 namespace telar::gui::qt {

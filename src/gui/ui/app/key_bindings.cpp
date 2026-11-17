@@ -4,11 +4,9 @@ static_assert(true);
 #endif
 
 #include "key_bindings.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/app/chrome/components/components_controller.hpp"
 #include "ui/app/panes/attachments/attachments_controller.hpp"
 #include "ui/app/panes/terminal/copy_controller.hpp"

@@ -1,5 +1,5 @@
 #include "platform/clipboard_image_monitor.hpp"
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include <QClipboard>
 #include <QGuiApplication>

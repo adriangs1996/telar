@@ -2,8 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "terminal/cell_position.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QElapsedTimer>
 #include <QKeyEvent>

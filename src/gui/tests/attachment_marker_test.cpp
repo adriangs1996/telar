@@ -1,6 +1,4 @@
 #include "assertions.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +9,7 @@
 #include <string_view>
 
 import telar.gui.features.terminal.attachments;
+import telar.gui.foundation.terminal;
 
 namespace {
 

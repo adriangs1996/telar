@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "agent_report_fixture.hpp"
 #include "appearance_fixture.hpp"
-#include "application/dependencies.hpp"
 #include "clipboard_fixture.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "frame_fixture.hpp"
 #include "frame_pacing_fixture.hpp"
 #include "gui_wait.hpp"
@@ -30,8 +29,6 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "terminal_cursor_fixture.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
@@ -138,6 +135,8 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.tests.json_fixture;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.gui.features.components;
 import telar.gui.features.terminal.graphics;

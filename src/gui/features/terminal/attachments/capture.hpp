@@ -1,8 +1,8 @@
 #pragma once
 
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
+#include "features/terminal/attachments/sensitive_bytes.hpp"
+#include "features/terminal/attachments/types.hpp"
+#include "foundation/core/memory.hpp"
 #include <cstdint>
 
 namespace telar::gui {

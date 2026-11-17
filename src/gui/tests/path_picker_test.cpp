@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "assertions.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +17,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 import telar.gui.features.paths;
 
 namespace {

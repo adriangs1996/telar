@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "key_bindings.hpp"
 #include "telar_wire/protocol/clients.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"

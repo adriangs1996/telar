@@ -3,14 +3,12 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
@@ -60,6 +58,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.features.terminal.graphics;
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 namespace {

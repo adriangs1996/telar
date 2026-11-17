@@ -4,11 +4,10 @@ static_assert(true);
 #endif
 
 #include "frame_presenter.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/window.hpp"
 #include "pointer_dispatcher.hpp"
-#include "terminal/screen.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
 #include "ui/app/panes/terminal/terminal_controller.hpp"

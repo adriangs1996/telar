@@ -1,6 +1,6 @@
 #include "native_pointer_events.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include <QEvent>
 #include <QtGui/qpa/qwindowsysteminterface_p.h>

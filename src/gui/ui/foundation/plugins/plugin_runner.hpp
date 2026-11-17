@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "plugin_worker.hpp"
 #include "tbc/view.hpp"
 #include "ui/foundation/config/configuration_source.hpp"

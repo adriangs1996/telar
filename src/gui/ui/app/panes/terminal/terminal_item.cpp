@@ -4,10 +4,9 @@ static_assert(true);
 #endif
 
 #include "terminal_item.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "platform/font.h"
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
@@ -16,8 +15,6 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_keys.hpp"
 #include "ui/app/panes/terminal/scene/graphics_scene.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
@@ -75,6 +72,8 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -735,7 +734,7 @@ namespace telar::gui::qt {
 
         const auto id = static_cast<qulonglong>(document.id);
         const auto first = document.first_row - current->scrollback_trimmed;
-        const auto placed = mapped && document.view_rows != 0 && std::ranges::any_of(folds.spans(), [&](const FoldMap<>::Span& span) {
+        const auto placed = mapped && document.view_rows != 0 && std::ranges::any_of(folds.spans(), [&](const application::FoldMap<>::Span& span) {
           return span.first == first && span.shown != 0;
         });
 

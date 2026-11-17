@@ -1,5 +1,5 @@
 module;
-#include "attachments/capture.hpp"
+#include "features/terminal/attachments/capture.hpp"
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 

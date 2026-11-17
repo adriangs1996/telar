@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 
 #ifndef TELAR_GUI_ALLOCATOR
 #define TELAR_GUI_ALLOCATOR ::telar::gui::SystemAllocator

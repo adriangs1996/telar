@@ -1,5 +1,5 @@
 #include "assertions.hpp"
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "platform/scroll_event.hpp"
 #include <AppKit/AppKit.h>
 #include <QGuiApplication>

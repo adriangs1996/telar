@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "configuration_loader.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstddef>

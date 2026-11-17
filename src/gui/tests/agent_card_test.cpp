@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "qml_fixture.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"

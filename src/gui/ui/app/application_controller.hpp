@@ -4,9 +4,9 @@ static_assert(true);
 #endif
 
 #include "activity_selection.hpp"
-#include "application/dependencies.hpp"
 #include "application_effects.hpp"
 #include "dialogs.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "frame_presenter.hpp"
 #include "key_bindings.hpp"
 #include "machine_roster.hpp"

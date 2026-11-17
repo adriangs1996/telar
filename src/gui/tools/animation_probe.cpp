@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "animation_presentation.hpp"
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
 #include "ui/app/application_controller.hpp"

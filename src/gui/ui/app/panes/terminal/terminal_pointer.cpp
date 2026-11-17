@@ -3,9 +3,8 @@
 static_assert(true);
 #endif
 
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/input/mouse_buttons.hpp"

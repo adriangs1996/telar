@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/memory.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"

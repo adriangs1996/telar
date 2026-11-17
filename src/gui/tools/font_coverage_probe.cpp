@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "tbc/view.hpp"
 #include <array>

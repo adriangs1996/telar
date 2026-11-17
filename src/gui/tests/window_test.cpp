@@ -1,4 +1,4 @@
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"

@@ -3,14 +3,12 @@
 static_assert(true);
 #endif
 
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/fold_map.hpp"
 #include "terminal_controller.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/app/panes/terminal/scroll_motion.hpp"
@@ -341,11 +339,11 @@ namespace telar::gui::qt {
     bool anchorFolds();
     void followRuntimeView(bool following);
     // A fold opened or closed under a shown separator: what is below it moves into place.
-    void startFoldMotion(FoldMap<>::Span span, bool closed);
+    void startFoldMotion(application::FoldMap<>::Span span, bool closed);
     void advanceFoldMotion();
     void placeFoldMotion();
     // The folds the view draws: the pane's, or while one moves, those it moves through.
-    [[nodiscard]] const FoldMap<>& viewFolds() const noexcept;
+    [[nodiscard]] const application::FoldMap<>& viewFolds() const noexcept;
 
     [[nodiscard]] bool animating() const noexcept {
       return motion_.moving() || fold_motion_.has_value();
@@ -466,12 +464,12 @@ namespace telar::gui::qt {
 
     std::optional<FoldMotion> fold_motion_;
     // The folds as drawn while one moves: its output shown down to the moving edge.
-    FoldMap<> transit_folds_;
+    application::FoldMap<> transit_folds_;
     std::size_t fold_shown_ = 0;
     double fold_height_ = 0;
     int fold_fade_row_ = -1;
     float fold_fade_ = 1;
-    std::vector<FoldMap<>::Span> shown_folds_;
+    std::vector<application::FoldMap<>::Span> shown_folds_;
     // The row at the view's top, counted from the top of the scrollback, as the view last placed
     // itself: what stays in place when folds change.
     std::optional<std::uint64_t> top_anchor_;

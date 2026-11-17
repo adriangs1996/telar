@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
 #include "font_source.hpp"
+#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include <cstdint>
 #include <span>

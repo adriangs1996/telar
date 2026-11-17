@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "application/dependencies.hpp"
 #include "assertions.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "gui_wait.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"

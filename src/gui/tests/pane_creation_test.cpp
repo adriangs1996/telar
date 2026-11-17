@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "core/terminal_size.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_wire/protocol/clients.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
@@ -27,6 +26,7 @@ static_assert(true);
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
+import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.wire.layout;
 import telar.wire.runtime;

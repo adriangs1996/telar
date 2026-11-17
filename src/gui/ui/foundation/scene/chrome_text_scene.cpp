@@ -8,7 +8,7 @@ static_assert(true);
 #include "alpha_mask_material.hpp"
 #include "alpha_mask_vertex.hpp"
 #include "chrome_glyph_images.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "scene_nodes.hpp"
 #include "tbc/view.hpp"

@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../attachments/secure_erase.hpp"
-#include "../attachments/sensitive_bytes.hpp"
-#include "../attachments/types.hpp"
-#include "../core/memory.hpp"
-#include "application/dependencies.hpp"
+#include "features/terminal/attachments/secure_erase.hpp"
+#include "features/terminal/attachments/sensitive_bytes.hpp"
+#include "features/terminal/attachments/types.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "platform/linux/wayland_clipboard_image_monitor.hpp"
 #include <QCoreApplication>

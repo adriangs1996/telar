@@ -1,5 +1,5 @@
 module;
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 
 export module telar.gui.foundation.core:wheel;
 

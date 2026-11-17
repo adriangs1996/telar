@@ -1,7 +1,7 @@
 #pragma once
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #ifdef __linux__
 #include "platform/linux/wayland_clipboard_image_monitor.hpp"

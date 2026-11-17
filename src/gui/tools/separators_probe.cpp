@@ -8,10 +8,10 @@ static_assert(true);
 // the QML separators it drives, on the GUI thread's CPU clock. The separators' records and the
 // final rendered window are the oracle a candidate must reproduce.
 
-#include "../application/dependencies.hpp"
 #include "../tests/gui_wait.hpp"
 #include "../tests/qml_fixture.hpp"
 #include "../tests/wire_runtime.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/protocol/pane_io.hpp"

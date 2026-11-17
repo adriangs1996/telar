@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
 #include "attachment_shelf.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QKeyEvent>
 #include <QObject>

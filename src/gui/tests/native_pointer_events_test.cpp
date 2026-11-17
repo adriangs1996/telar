@@ -1,5 +1,5 @@
-#include "application/dependencies.hpp"
 #include "assertions.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "ui/foundation/input/native_pointer_events.hpp"
 #include <QCoreApplication>
 #include <QEvent>

@@ -2,7 +2,7 @@ export module telar.gui.foundation.core:geometry;
 
 import std;
 
-import :primitives;
+import :terminal_size;
 import :configuration;
 
 // Interface: core/geometry.cppm

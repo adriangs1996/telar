@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../attachments/sensitive_bytes.hpp"
-#include "../core/memory.hpp"
 #include "assertions.hpp"
+#include "features/terminal/attachments/sensitive_bytes.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_file.h"
 #include "platform/clipboard_image_source.hpp"
 #include "platform/clipboard_pipe_status.h"

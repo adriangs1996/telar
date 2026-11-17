@@ -27,7 +27,7 @@ static_assert(true);
 #include <span>
 #include <utility>
 #if (defined(Q_OS_MACOS))
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #endif
 #if (defined(Q_OS_MACOS))
 #include "platform/font.h"
@@ -56,7 +56,7 @@ static_assert(true);
 #pragma once
 
 #ifdef Q_OS_MACOS
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #endif
 
 #if (defined(Q_OS_MACOS))

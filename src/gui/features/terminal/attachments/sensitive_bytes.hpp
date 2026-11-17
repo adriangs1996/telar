@@ -1,7 +1,7 @@
 #pragma once
 
-#include "attachments/secure_erase.hpp"
-#include "core/memory.hpp"
+#include "features/terminal/attachments/secure_erase.hpp"
+#include "foundation/core/memory.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>

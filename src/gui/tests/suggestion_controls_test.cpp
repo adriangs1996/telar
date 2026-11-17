@@ -1,4 +1,4 @@
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"

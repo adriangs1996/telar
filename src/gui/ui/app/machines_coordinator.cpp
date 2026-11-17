@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "machines_coordinator.hpp"
-#include "core/memory.hpp"
 #include "dialogs.hpp"
+#include "foundation/core/memory.hpp"
 #include "frame_presenter.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"

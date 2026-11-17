@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

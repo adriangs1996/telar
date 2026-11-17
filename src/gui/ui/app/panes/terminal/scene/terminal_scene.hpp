@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "graphics_scene.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -12,8 +12,6 @@ static_assert(true);
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "ui/foundation/fonts/terminal_font.hpp"
 #include "ui/foundation/scene/cell_glyphs.hpp"
 #include "ui/foundation/scene/text_scene.hpp"
@@ -104,7 +102,7 @@ namespace telar::gui::qt {
     // screen's own top, as the screen shows its rows.
     std::uint64_t top_row = 0;
     std::uint64_t live_top = 0;
-    const FoldMap<>* folds = nullptr;
+    const application::FoldMap<>* folds = nullptr;
     std::uint64_t view_revision = 0;
     // While a fold opens or closes, how far below its place each drawn row is; empty otherwise.
     std::span<const float> row_offsets;

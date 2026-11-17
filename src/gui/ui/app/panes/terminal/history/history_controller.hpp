@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/store/store.hpp"

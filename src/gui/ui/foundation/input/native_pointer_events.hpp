@@ -1,7 +1,7 @@
 #pragma once
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 
 namespace telar::gui::qt {
 

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
+#include "foundation/core/memory.hpp"
 #include <QLocalSocket>
 #include <QString>
 #include <QtCore/qtypes.h>

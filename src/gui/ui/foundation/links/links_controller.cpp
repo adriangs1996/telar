@@ -4,9 +4,9 @@ static_assert(true);
 #endif
 
 #include "links_controller.hpp"
-#include "platform/environment.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "ui/foundation/process/environment.hpp"
 #include <exception>
 #include <string_view>
 
@@ -22,7 +22,7 @@ namespace telar::gui::qt {
   bool LinksController::open(const application::terminal::links::LinkTarget& target, std::optional<std::uint64_t> source_id) {
     try {
       if (target.scheme() == application::terminal::links::LinkScheme::file || target.scheme() == application::terminal::links::LinkScheme::path) {
-        const platform::ProcessEnvironment environment;
+        const ProcessEnvironment environment;
         const auto configured = store_.session().configuration().editor.view();
         const auto executable = configured.empty() ? environment("EDITOR").value_or(std::string_view{}) : configured;
 

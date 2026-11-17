@@ -3,10 +3,9 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "machine_effects.hpp"
 #include "runtime_connection.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -19,8 +18,6 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>

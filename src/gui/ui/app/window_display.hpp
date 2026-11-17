@@ -2,8 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "core/terminal_size.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
 #include "ui/foundation/fonts/font_resolver.hpp"
 #include "ui/foundation/store/store.hpp"

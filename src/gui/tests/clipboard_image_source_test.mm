@@ -1,6 +1,6 @@
-#include "application/dependencies.hpp"
 #include "assertions.hpp"
-#include "attachments/types.hpp"
+#include "features/terminal/attachments/types.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include <AppKit/AppKit.h>
 #include <CoreFoundation/CoreFoundation.h>

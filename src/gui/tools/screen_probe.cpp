@@ -1,9 +1,7 @@
-#include "core/terminal_size.hpp"
 #include "tbc/view.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "terminal/screen.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -18,6 +16,9 @@
 #include <string_view>
 #include <system_error>
 #include <vector>
+
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
 
 namespace {
 

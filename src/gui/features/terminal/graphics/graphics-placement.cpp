@@ -1,6 +1,3 @@
-module;
-#include "graphics/placeholder_diacritics.hpp"
-
 module telar.gui.features.terminal.graphics;
 
 import std;
@@ -8,6 +5,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import :placeholder_diacritics;
 
 namespace telar::gui::features::terminal::graphics {
 

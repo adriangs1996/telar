@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "window_display.hpp"
-#include "core/terminal_size.hpp"
 #include "platform/window.hpp"
 #include "ui/foundation/fonts/typography_projection.hpp"
 #include "ui/foundation/models/projection.hpp"
@@ -21,6 +20,7 @@ static_assert(true);
 #include <optional>
 #include <utility>
 
+import telar.gui.foundation.core;
 import telar.gui.application;
 
 namespace telar::gui::qt {

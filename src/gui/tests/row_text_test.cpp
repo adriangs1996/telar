@@ -4,8 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "core/memory.hpp"
-#include "terminal/screen.hpp"
+#include "foundation/core/memory.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -23,8 +22,10 @@ static_assert(true);
 #include <utility>
 #include <vector>
 
+import telar.wire.vocabulary;
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.font_fixture;
+import telar.gui.foundation.terminal;
 import telar.gui.foundation.fonts;
 
 namespace {

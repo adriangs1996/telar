@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "runtime_connection.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"

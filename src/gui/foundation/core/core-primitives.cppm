@@ -1,6 +1,5 @@
 module;
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/memory.hpp"
 
 export module telar.gui.foundation.core:primitives;
 
@@ -10,12 +9,10 @@ export namespace telar::gui::inline foundation::inline core {
   using telar::gui::Allocator;
   using telar::gui::AllocatorRef;
   using telar::gui::BudgetAllocator;
-  using telar::gui::default_terminal_size;
   using telar::gui::makeOwned;
   using telar::gui::Owned;
   using telar::gui::String;
   using telar::gui::SynchronizedAllocator;
   using telar::gui::SystemAllocator;
-  using telar::gui::TerminalGrid;
   using telar::gui::Vector;
 }

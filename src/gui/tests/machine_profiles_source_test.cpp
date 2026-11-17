@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
 #include "assertions.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include <QElapsedTimer>

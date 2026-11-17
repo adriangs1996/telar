@@ -3,6 +3,7 @@
 export module telar.gui.foundation.core;
 
 export import :primitives;
+export import :terminal_size;
 export import :unicode_scalar;
 export import :time;
 export import :view_version;

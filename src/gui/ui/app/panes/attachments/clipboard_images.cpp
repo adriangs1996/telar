@@ -1,6 +1,6 @@
 #include "clipboard_images.hpp"
-#include "application/dependencies.hpp"
 #include "attachment_preview.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <QFuture>

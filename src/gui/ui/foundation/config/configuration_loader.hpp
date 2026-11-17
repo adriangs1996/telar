@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
+#include "foundation/core/application_memory.hpp"
+#include "foundation/core/memory.hpp"
 #include "plugin_packages.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"

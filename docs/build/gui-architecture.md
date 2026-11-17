@@ -20,8 +20,9 @@ Qt de Linux que los implementan y un módulo, `telar.gui.platform`, que exporta 
 `telar::gui::platform` lo que esos fuentes comparten en C++ (el tubo de imágenes del portapapeles
 y la transferencia que completa una declaración adelantada de Objective-C++). Importa solo
 `telar.gui.foundation` y su propio módulo, e incluye textualmente los encabezados que una feature
-comparte con Objective-C++ (`attachments/*.hpp`). Nadie fuera de los tests y las
-herramientas importa `telar.gui.platform`; `ui` y `main.cpp` incluyen sus encabezados.
+comparte con Objective-C++ (`features/terminal/attachments/*.hpp`). Fuera de
+`platform`, solo los tests y las herramientas importan `telar.gui.platform`; `ui` y `main.cpp`
+incluyen sus encabezados.
 
 ## Carpeta = módulo = namespace
 
@@ -201,8 +202,15 @@ informa son de `notifications`; otra parte de `application` los cuenta y los des
 `notifications::countLimitReach` y `describeLimit`, que la partición no exporta. La conexión se
 alcanza por `Access` (`sharesImages`, `sharedImage`, `recoverRuntime`, `report`).
 
-Un encabezado textual que Objective-C++ o Qt incluyen (`core/wheel_accumulator.hpp`) declara sus
-nombres en el namespace inline del módulo de `foundation` que lo posee
+Fuera de `ui`, un encabezado sigue textual solo si un fuente en C, Objective-C u Objective-C++ lo
+incluye: los fuentes de Qt importan los módulos como cualquier otro, así que lo que solo ellos
+leían es una partición de su módulo (`core:terminal_size`, `terminal:screen`,
+`application:fold_map`). El encabezado que queda vive en la carpeta del módulo que lo posee
+(`foundation/core/memory.hpp`, `features/terminal/attachments/types.hpp`), y `header_owners` y
+`textual_boundaries` de `modules.json` dicen quién lo posee y por qué sigue textual.
+
+Un encabezado textual de `foundation` (`foundation/core/wheel_accumulator.hpp`) declara sus
+nombres en el namespace inline del módulo que lo posee
 (`telar::gui::inline foundation::inline core`), y ese módulo los reexporta con `using` desde su
 fragmento global (`core-wheel.cppm`). Así un fuente de Qt que incluye el encabezado después de
 importar el módulo nombra una sola entidad. Reexportar desde el namespace inline nombres que el
@@ -247,9 +255,9 @@ llamada a la clase oculta que costaba el método de `Session`. Uno genérico sob
 llamador (`graphics::pause`, `resume`) es una plantilla de la interfaz que reenvía a la de la clase.
 
 **Encabezados textuales de una feature.** El encabezado que Objective-C++ comparte
-(`attachments/capture.hpp`) declara en `telar::gui`; la partición que lo incluye en su fragmento
-global reexporta sus nombres con `using` en el namespace de la feature, y ui, que lo incluye, los
-nombra como antes. Una sección que hace I/O de la plataforma (`ClipboardImagePipe` lee un
+(`features/terminal/attachments/capture.hpp`) declara en `telar::gui`; la partición que lo incluye
+en su fragmento global reexporta sus nombres con `using` en el namespace de la feature, y ui, que
+lo incluye, los nombra como antes. Una sección que hace I/O de la plataforma (`ClipboardImagePipe` lee un
 descriptor) se queda en `platform`, que reexporta lo que entrega en vez de importar la feature.
 
 **Estado por pane en un camino caliente.** `prompt` guarda una línea por pane, y una tecla compone

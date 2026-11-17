@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "ui/foundation/config/lua_host.hpp"
 #include <QByteArray>
 #include <QHash>

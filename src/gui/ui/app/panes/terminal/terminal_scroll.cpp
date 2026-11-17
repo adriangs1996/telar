@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/wheel_accumulator.hpp"
+#include "foundation/core/memory.hpp"
+#include "foundation/core/wheel_accumulator.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
 #include "ui/app/panes/terminal/scroll_motion.hpp"
@@ -237,17 +236,17 @@ namespace telar::gui::qt {
     // One fold opened or closed, its first row the same before and after, moves what is below
     // its separator; several at once, or one that only grew, simply show their rows.
     // Only folds move; documents drawn in place of their rows simply show them.
-    std::vector<FoldMap<>::Span> spans;
+    std::vector<application::FoldMap<>::Span> spans;
 
-    std::ranges::copy_if(current->folds.spans(), std::back_inserter(spans), [](const FoldMap<>::Span& span) {
+    std::ranges::copy_if(current->folds.spans(), std::back_inserter(spans), [](const application::FoldMap<>::Span& span) {
       return span.shown == 0;
     });
 
-    std::optional<FoldMap<>::Span> changed;
+    std::optional<application::FoldMap<>::Span> changed;
     bool closed = false;
     std::size_t changes = 0;
-    const auto has = [](std::span<const FoldMap<>::Span> list, std::uint32_t first) {
-      return std::ranges::any_of(list, [first](const FoldMap<>::Span& span) {
+    const auto has = [](std::span<const application::FoldMap<>::Span> list, std::uint32_t first) {
+      return std::ranges::any_of(list, [first](const application::FoldMap<>::Span& span) {
         return span.first == first;
       });
     };
@@ -303,14 +302,14 @@ namespace telar::gui::qt {
     return changes != 0;
   }
 
-  const FoldMap<>& TerminalItem::viewFolds() const noexcept {
+  const application::FoldMap<>& TerminalItem::viewFolds() const noexcept {
     return fold_motion_ ? transit_folds_ : pane()->folds;
   }
 
   // The output under a separator in view folds or unfolds as a body that shrinks or grows: its
   // rows go under, or come out from, the edge that moves, and the rows below follow the edge. Only
   // the part in view moves, so a long output takes no longer than a short one.
-  void TerminalItem::startFoldMotion(FoldMap<>::Span span, bool closed) {
+  void TerminalItem::startFoldMotion(application::FoldMap<>::Span span, bool closed) {
     const auto* current = pane();
     const auto cell = rowHeight();
     if (span.first == 0 || span.count == 0 || cell <= 0) {
@@ -368,7 +367,7 @@ namespace telar::gui::qt {
     const auto rows = std::min<std::size_t>(fold_motion_->count, static_cast<std::size_t>(std::ceil((shown / cell) - whole)));
 
     // The pane's folds, this one hiding only what is past the edge.
-    std::vector<FoldMap<>::Span> spans;
+    std::vector<application::FoldMap<>::Span> spans;
 
     for (const auto& span : current->folds.spans()) {
       if (span.first != fold_motion_->first) {
@@ -377,7 +376,7 @@ namespace telar::gui::qt {
     }
 
     const auto count = fold_motion_->closing ? [&] {
-      const auto found = std::ranges::find(current->folds.spans(), fold_motion_->first, &FoldMap<>::Span::first);
+      const auto found = std::ranges::find(current->folds.spans(), fold_motion_->first, &application::FoldMap<>::Span::first);
 
       return found == current->folds.spans().end() ? fold_motion_->count : found->count;
     }()

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
+#include "foundation/core/application_memory.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include <QFont>

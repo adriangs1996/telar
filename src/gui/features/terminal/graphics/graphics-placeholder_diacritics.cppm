@@ -1,9 +1,10 @@
-#pragma once
+// The combining marks that number the rows and columns of a Unicode placeholder, in the order
+// kitty's graphics protocol gives them. Only the placement unit reads them.
+module telar.gui.features.terminal.graphics:placeholder_diacritics;
 
-#include <array>
-#include <cstdint>
+import std;
 
-namespace telar::gui {
+namespace telar::gui::features::terminal::graphics {
 
   inline constexpr std::array<std::uint32_t, 297> placeholder_diacritics{
       0x0305,

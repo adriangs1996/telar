@@ -4,16 +4,13 @@ static_assert(true);
 #endif
 
 #include "pointer_dispatcher.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
+#include "foundation/core/memory.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
 #include "ui/app/chrome/activity/activity_controller.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/panes/attachments/attachment_shelf.hpp"
