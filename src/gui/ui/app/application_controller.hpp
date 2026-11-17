@@ -542,7 +542,7 @@ namespace telar::gui::qt {
 
     ApplicationAllocator& memory_;
     Store store_;
-    HistoryController history_;
+    tbc::view<HistoryController, tbc::lt::self> history_;
 
     struct PendingActivity {
       MachineActivityTarget target;
@@ -564,7 +564,7 @@ namespace telar::gui::qt {
     // Where the pressed component action that is running was pressed, for a panel it opens.
     std::optional<QPointF> component_action_anchor_;
     MachineProfilesSource machine_profiles_;
-    AttachmentsController attachments_;
+    tbc::view<AttachmentsController, tbc::lt::self> attachments_;
     std::optional<RemoteLaunch> remote_launch_;
     QTimer machine_retry_;
     QString machine_control_endpoint_;
@@ -575,27 +575,27 @@ namespace telar::gui::qt {
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     // What every client's MachineEffects reaches on the desktop.
     tbc::view<ApplicationEffects, tbc::lt::self> effects_;
-    WorkspacesController workspaces_;
-    TabsController tabs_;
-    PanesController panes_;
-    ActivityController activity_;
-    SidebarController sidebar_;
-    PaletteController palette_;
-    PathPickerController paths_;
-    MachinePromptController machine_prompt_;
-    MachineChromeController machine_chrome_;
-    PeekController peek_;
-    PromptController prompt_;
-    DocumentsController documents_;
-    LinkStatusController link_status_;
-    LinksController links_;
-    CopyController copy_;
+    tbc::view<WorkspacesController, tbc::lt::self> workspaces_;
+    tbc::view<TabsController, tbc::lt::self> tabs_;
+    tbc::view<PanesController, tbc::lt::self> panes_;
+    tbc::view<ActivityController, tbc::lt::self> activity_;
+    tbc::view<SidebarController, tbc::lt::self> sidebar_;
+    tbc::view<PaletteController, tbc::lt::self> palette_;
+    tbc::view<PathPickerController, tbc::lt::self> paths_;
+    tbc::view<MachinePromptController, tbc::lt::self> machine_prompt_;
+    tbc::view<MachineChromeController, tbc::lt::self> machine_chrome_;
+    tbc::view<PeekController, tbc::lt::self> peek_;
+    tbc::view<PromptController, tbc::lt::self> prompt_;
+    tbc::view<DocumentsController, tbc::lt::self> documents_;
+    tbc::view<LinkStatusController, tbc::lt::self> link_status_;
+    tbc::view<LinksController, tbc::lt::self> links_;
+    tbc::view<CopyController, tbc::lt::self> copy_;
     // After the copy mode and the prompt, which the terminals read.
-    TerminalController terminals_;
-    NotificationsController notifications_;
-    ComponentsController components_;
-    PluginRunner plugins_;
-    WorkspaceFormController workspace_form_;
+    tbc::view<TerminalController, tbc::lt::self> terminals_;
+    tbc::view<NotificationsController, tbc::lt::self> notifications_;
+    tbc::view<ComponentsController, tbc::lt::self> components_;
+    tbc::view<PluginRunner, tbc::lt::self> plugins_;
+    tbc::view<WorkspaceFormController, tbc::lt::self> workspace_form_;
     // The routers come after every recipient they hold, so they never outlive one.
     tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
     tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
