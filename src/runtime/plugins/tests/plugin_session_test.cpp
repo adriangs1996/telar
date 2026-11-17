@@ -75,14 +75,14 @@ namespace {
   using namespace telar::runtime;
   namespace tap = telar::runtime::plugins;
 
-  int runPluginSessionFixture(std::string_view mode) {
+  int runPluginSessionFixture(std::string_view mode, bool traffic) {
     SystemAllocator system;
     BudgetAllocator budget{system, 128 * 1024 * 1024};
     MemoryAdapter adapter{budget};
     Memory& memory = adapter;
 
     if (mode.starts_with('/')) {
-      tap::runWorker(memory, mode.data());
+      tap::runWorker(memory, mode.data(), traffic);
       return 0;
     }
 
@@ -272,11 +272,19 @@ namespace {
   const telar::testing::Case case_plugin_sessions{"plugin_session.plugin_sessions", testPluginSessions};
   const telar::testing::Case case_restart_window{"plugin_session.restart_window", testRestartWindow};
 
-  // The plugin runtime starts its workers from this executable.
+  // The plugin runtime starts its workers from this executable, with the words
+  // TapWorkerOptions::arguments writes: an entry path runs the real worker, traffic
+  // included, and any other entry names a fixture mode.
   const telar::testing::Mode tap_worker{
       "tap-worker",
       [](int argc, char** argv) {
-        return argc == 3 ? runPluginSessionFixture(argv[2]) : 2;
+        if (argc < 3) {
+          return 2;
+        }
+
+        const auto options = tap::TapWorkerOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
+
+        return runPluginSessionFixture(options.entry, options.traffic);
       },
   };
 

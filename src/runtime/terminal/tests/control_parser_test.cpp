@@ -101,6 +101,73 @@ namespace {
       check(memory.liveBytes() == 0);
     }
 
+    // A CSI past the header limit is dropped up to its final byte, and what follows reaches
+    // the consumer, whether the pty delivers it whole or byte by byte.
+    void oversizedCsiRecovery() {
+      SystemAllocator upstream;
+      BudgetAllocator memory{upstream, 8 * 1024 * 1024};
+      std::string input{"\x1b["};
+
+      for (std::size_t index = 0; index < 9000; ++index) {
+        input.append("1;");
+      }
+
+      input.append("mok\x1b[6n");
+      const std::vector<std::string> expected{"text:ok", "1:6n:0"};
+
+      {
+        Parser parser{memory};
+        Consumer consumer;
+
+        check(parser.feed(bytes(input), consumer) == input.size());
+        check(consumer.events == expected && parser.ground());
+      }
+
+      {
+        Parser parser{memory};
+        Consumer consumer;
+
+        for (const auto& byte : input) {
+          check(parser.feed(bytes({&byte, 1}), consumer) == 1);
+        }
+
+        check(consumer.events == expected && parser.ground());
+      }
+
+      check(memory.liveBytes() == 0);
+    }
+
+    std::string repeat(std::string_view text, std::size_t count) {
+      std::string result;
+
+      for (std::size_t index = 0; index < count; ++index) {
+        result.append(text);
+      }
+
+      return result;
+    }
+
+    // Each bound of a CSI's parameters holds at its limit and refuses one past it.
+    void parameterBounds() {
+      const auto full = Parameters::parse(repeat("1;", Parameters::capacity - 1) + "1n");
+
+      check(full && full->count == Parameters::capacity && full->values.back() == 1);
+      check(!Parameters::parse(repeat("1;", Parameters::capacity) + "1n"));
+      check(!Parameters::parse(repeat("1;", Parameters::capacity + 1) + "n"));
+
+      const auto digits = Parameters::parse(std::string(Parameters::maximum_digits, '1') + "n");
+
+      check(digits && digits->count == 1 && digits->values[0] == Parameters::maximum_value);
+      check(!Parameters::parse(std::string(Parameters::maximum_digits + 1, '1') + "n"));
+
+      const auto modifiers = std::string(Parameters::intermediate_capacity, '$');
+      const auto intermediates = Parameters::parse("1" + modifiers + "p");
+
+      check(intermediates && intermediates->modifiers() == modifiers);
+      check(!Parameters::parse("1" + modifiers + "$p"));
+      check(!Parameters::parse("1$2p"));
+    }
+
     void parameterFallback() {
       struct Case {
         std::string_view body;
@@ -517,5 +584,7 @@ namespace {
   const telar::testing::Case case_bounded_fuzz{"control_parser.bounded_fuzz", boundedFuzz};
   const telar::testing::Case case_oversized_recovery{"control_parser.oversized_recovery", oversizedRecovery};
   const telar::testing::Case case_parameter_fallback{"control_parser.parameter_fallback", parameterFallback};
+  const telar::testing::Case case_oversized_csi_recovery{"control_parser.oversized_csi_recovery", oversizedCsiRecovery};
+  const telar::testing::Case case_parameter_bounds{"control_parser.parameter_bounds", parameterBounds};
 
 }

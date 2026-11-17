@@ -23,6 +23,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.ghostty;
+import telar.base.text.utf8;
 
 namespace {
 
@@ -33,6 +34,67 @@ namespace {
 
   std::span<const Byte> bytes(std::string_view text) {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
+  }
+
+  std::string drain(Terminal& terminal) {
+    std::string result;
+
+    while (!terminal.responses().empty()) {
+      const auto pending = terminal.responses();
+
+      result.append(reinterpret_cast<const char*>(pending.data()), pending.size());
+      terminal.consumeResponses(pending.size());
+    }
+
+    return result;
+  }
+
+  bool validUtf8(std::string_view text) {
+    try {
+      validateUtf8(text);
+      return true;
+    } catch (const EncodingError&) {
+      return false;
+    }
+  }
+
+  // A title the pane sets reaches clients as bounded UTF-8 text with no controls: DEL and C0
+  // bytes are dropped, and a long title is cut between code points.
+  void testTitleSanitized() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
+    std::string title{"a\x7f"
+                      "b\x01"};
+
+    for (std::size_t index = 0; index < 100; ++index) {
+      title.append("\xe7\x95\x8c");
+    }
+
+    terminal.feed(bytes("\x1b]2;" + title + "\x1b\\"));
+    terminal.refresh();
+    const auto shown = terminal.effects.title();
+
+    check(shown.starts_with("ab\xe7\x95\x8c") && shown.size() <= 256 && validUtf8(shown));
+    check(std::ranges::none_of(shown, [](char byte) {
+      return static_cast<Byte>(byte) < 0x20 || byte == 0x7f;
+    }));
+  }
+
+  // A title report answers into the program's input, so it carries no control, 8-bit ones
+  // (U+0080-U+009F) included: a title holding CSI cannot inject a sequence through it.
+  void testTitleReportStripsControls() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
+
+    terminal.controlPolicy().title_report = true;
+    terminal.feed(bytes("\x1b]2;a\xc2\x9b"
+                        "31m\x7f\xc2\x85"
+                        "b\xc2\xa0"
+                        "c\x1b\\\x1b[21t"));
+    check(drain(terminal) == "\x1b]la31mb\xc2\xa0"
+                             "c\x1b\\");
   }
 
   void testTerminalStorage() {
@@ -290,5 +352,7 @@ namespace {
   const telar::testing::Case case_terminal_storage{"terminal.terminal_storage", testTerminalStorage};
   const telar::testing::Case case_clear_at_prompt{"terminal.clear_at_prompt", testClearAtPrompt};
   const telar::testing::Case case_scrollback_origin{"terminal.scrollback_origin", testScrollbackOrigin};
+  const telar::testing::Case case_title_sanitized{"terminal.title_sanitized", testTitleSanitized};
+  const telar::testing::Case case_title_report_strips_controls{"terminal.title_report_strips_controls", testTitleReportStripsControls};
 
 }

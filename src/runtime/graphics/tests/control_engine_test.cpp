@@ -1035,14 +1035,20 @@ namespace {
     }
 
     void noForeignQueries(ConcurrentMemory& memory) {
-      for (const auto purpose : {TerminalPurpose::separate_media, TerminalPurpose::observation}) {
+      for (const auto purpose : {TerminalPurpose::interactive, TerminalPurpose::separate_media, TerminalPurpose::observation}) {
         Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, purpose};
 
         terminal.controlPolicy().clipboard_write = control::Access::deny;
         checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void*>(&foreignReply)));
         checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE, reinterpret_cast<const void*>(&foreignClipboard)));
-        const std::array<std::string_view, 5> requests{
+        const std::array<std::string_view, 11> requests{
             "\x1b[5n\x1b[c\x1b]10;?\x1b\\\x1bP+q544E\x1b\\",
+            "\x1b_Ga=q,i=1,s=1,v=1;AAAAAA==\x1b\\",
+            "\x1b_Gab=1,a=q,i=1,s=1,v=1;AAAAAA==\x1b\\",
+            "\x1b_Gi=123456789012,a=q,s=1,v=1;AAAAAA==\x1b\\",
+            "\x1b]052;c;aGVsbG8=\x1b\\",
+            "\x1b]010;?\x1b\\",
+            "\x1b]65588;c;aGVsbG8=\x1b\\",
             "\x1bP+\x00q544E\x1b\\"sv,
             "\x1b]5\x00"
             "2;c;aGVsbG8=\x1b\\"sv,
