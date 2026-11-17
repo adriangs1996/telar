@@ -171,8 +171,9 @@ def module_tree(root):
         (13, "          delivery.collect(clients_, plugins);\n", "          "),
     ))
 
-    tests = runtime / "cmake/tests.cmake"
-    replace_once(tests, "add_executable(checkpoint-probe tests/checkpoint_probe.cpp)\n", f"add_executable(checkpoint-probe tests/checkpoint_probe.cpp)\nadd_executable(pane-traffic-probe \"{HERE / 'pane_traffic_probe.cpp'}\")\ntarget_link_libraries(pane-traffic-probe PRIVATE runtime-core runtime-test-fixtures)\n")
+    tests = runtime / "tests/CMakeLists.txt"
+    probe = "telar_add_test(checkpoint-probe NO_TEST SOURCES checkpoint_probe.cpp LIBRARIES runtime-test-fixtures)\n"
+    replace_once(tests, probe, probe + f"telar_add_test(pane-traffic-probe NO_TEST SOURCES \"{HERE / 'pane_traffic_probe.cpp'}\" LIBRARIES runtime-test-fixtures)\n")
     return runtime
 
 

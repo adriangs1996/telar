@@ -34,7 +34,7 @@ Build one tree at a time and measure on a machine at rest. Then, for each scenar
 load:
 
 ```sh
-H=../queue-head/out/release M=/tmp/main-release C=src/runtime/tools/check_server_cli.py
+H=../queue-head/out/release/src/runtime M=/tmp/main-release C=src/runtime/tools/check_server_cli.py
 tools/client_queue/measure.py server-cli --side head:$H/telar:$H/checkpoint-probe \
   --side main:$M/telar-runtime:$M/checkpoint-probe --check $C --blocks 10 --per-block 20 [--load 20] --out runs/cli
 tools/client_queue/measure.py traffic --side head:$H/telar:$H/pane-traffic-probe \
