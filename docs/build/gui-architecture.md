@@ -178,8 +178,11 @@ y a la vista (`Browser` en `history_test.cpp`), sin tocar lo que afirman.
 **Fuera de las features.** Una sección que hace I/O no es pura: va a `foundation/system`
 (`DirectoryCompletion` lista el sistema de archivos) o se queda en `application` (la reproducción
 de sonido). Lo que una feature compone con otra aún no migrada (el editor de la línea para
-`paths`) lo hace `application`, con accesores temporales en `Access` (`promptLine`,
-`notePromptWrite`) que desaparecen cuando esa otra feature exista.
+`paths`, el workbench para `links`) lo hace `application`, con accesores temporales en `Access`
+(`promptLine`, `notePromptWrite`, `launchTab`, `launchSplit`, `findTab`) que desaparecen cuando esa
+otra feature exista. Lo que la sesión guarda para varias features se alcanza igual: los límites que
+informa (`countLimitReach`, `limitReports`) y la conexión (`sharesImages`, `sharedImage`,
+`recoverRuntime`).
 
 Un encabezado textual que Objective-C++ o Qt incluyen (`core/wheel_accumulator.hpp`) declara sus
 nombres en el namespace inline del módulo de `foundation` que lo posee
@@ -187,6 +190,30 @@ nombres en el namespace inline del módulo de `foundation` que lo posee
 fragmento global (`core-wheel.cppm`). Así un fuente de Qt que incluye el encabezado después de
 importar el módulo nombra una sola entidad. Reexportar desde el namespace inline nombres que el
 encabezado declara en `telar::gui` los deja ambiguos en ese mismo fuente.
+
+**Estado que ui sostiene.** Una clase con estado que no guarda la sesión sino cada ítem o ventana
+de ui, y que se lee en un camino caliente, sigue exportada con sus métodos: el gesto del ratón de
+un terminal (`ChildMouseGesture`), el enlace bajo el puntero (`LinkHover`), las texturas
+residentes de una ventana (`ImageResidency`), el `GraphicsStore` de cada pane y el catálogo de la
+estantería de adjuntos. Esconderla tras un `State` de la sesión añadiría una indirección por evento
+o por frame; `application::<feature>` la reexporta con `using` como un tipo de valor más.
+
+**Una feature sin estado de la sesión.** `terminal/input` y `terminal/attachments` no tienen
+`State`: su interfaz primaria solo reexporta sus particiones, y su partición de `application`
+reexporta sus tipos y, si hace falta, compone un caso de uso con la API pública de `Session`
+(`application::terminal::input::scroll`).
+
+**Casos de uso en un camino caliente.** Un caso de uso que reenvía a la clase oculta y corre por
+tecla, por evento del puntero o por frame se define `inline` y `TBC_HOT_PATH` en la interfaz
+primaria (`copy_mode::key`, `commit`, `clearPointer`, `follow`; `graphics::paused`), y cuesta la
+llamada a la clase oculta que costaba el método de `Session`. Uno genérico sobre el llamable del
+llamador (`graphics::pause`, `resume`) es una plantilla de la interfaz que reenvía a la de la clase.
+
+**Encabezados textuales de una feature.** El encabezado que Objective-C++ comparte
+(`attachments/capture.hpp`) declara en `telar::gui`; la partición que lo incluye en su fragmento
+global reexporta sus nombres con `using` en el namespace de la feature, y ui, que lo incluye, los
+nombra como antes. Una sección que hace I/O de la plataforma (`ClipboardImagePipe` lee un
+descriptor) se queda en `platform`, que reexporta lo que entrega en vez de importar la feature.
 
 **En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
 nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
