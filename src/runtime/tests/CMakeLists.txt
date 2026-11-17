@@ -3,8 +3,7 @@
 # libraries and the domains it imports itself. runtime-test-fixtures holds the fixtures that
 # import no domain, and compiles and links as the domains do.
 set(runtime_test_client_peer client_peer/client_peer.cppm)
-set(runtime_test_http2 http2_fixture/http2_fixture.cppm http2_oracle/http2_oracle.cppm
-  http2_oracle_stream/http2_oracle_stream.cppm)
+set(runtime_test_http2 http2_fixture/http2_fixture.cppm)
 file(GLOB runtime_test_fixtures CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
 list(REMOVE_ITEM runtime_test_fixtures ${runtime_test_client_peer} ${runtime_test_http2})
 telar_process_settings(runtime_settings)
