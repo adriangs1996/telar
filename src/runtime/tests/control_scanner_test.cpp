@@ -23,7 +23,7 @@ static std::size_t styledLength(std::span<const std::uint8_t> input, std::size_t
 
 template <Isa Set>
 static void retainedControlBoundaries() {
-  for (const auto boundary : {std::string{"\x05"}, std::string{"\x1b[5n"}}) {
+  for (const auto& boundary : {std::string{"\x05"}, std::string{"\x1b[5n"}}) {
     const std::string input = "ab\x1b[0m" + boundary + std::string(32, 'x');
     styled_detail::ControlScanner<Set> scanner{bytes(input)};
 

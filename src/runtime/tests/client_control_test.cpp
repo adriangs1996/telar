@@ -360,7 +360,7 @@ static void testPluginDelivery(ConcurrentMemory& memory) {
   closing.session().connection.closing = true;
   PluginEventsFixture events;
 
-  for (const auto invalid : {NotificationBody{.duration_ms = 499, .title = "invalid"}, NotificationBody{.duration_ms = 60001, .title = "invalid"}, NotificationBody{.title = ""}, NotificationBody{.title = "line\nbreak"}, NotificationBody{.title = "\xff"}}) {
+  for (const auto& invalid : {NotificationBody{.duration_ms = 499, .title = "invalid"}, NotificationBody{.duration_ms = 60001, .title = "invalid"}, NotificationBody{.title = ""}, NotificationBody{.title = "line\nbreak"}, NotificationBody{.title = "\xff"}}) {
     events.batch.count = 1;
     events.batch.notifications[0] = invalid;
     delivery.collect(clients, events);

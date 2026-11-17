@@ -47,7 +47,7 @@ namespace telar::runtime {
       auto provider = describeProvider(agent->provider);
       const auto* manifest = model.manifests.find(agent->provider);
       if (manifest != nullptr) {
-        provider = {manifest->name.view(), manifest->displayName(), manifest->placeholderTitle(placeholders[count]), manifest->attachments};
+        provider = {.name = manifest->name.view(), .display_name = manifest->displayName(), .placeholder = manifest->placeholderTitle(placeholders[count]), .attachments = manifest->attachments};
       }
 
       std::string_view cwd = pane->cwd;

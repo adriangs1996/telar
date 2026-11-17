@@ -461,7 +461,7 @@ namespace telar::gui::qt {
     const auto& theme = frame.configuration.theme;
 
     for (const auto& match : frame.matches) {
-      if (match.row >= row_nodes_.size() || frame.hidden(match.row)) {
+      if (match.row >= static_cast<std::size_t>(row_nodes_.size()) || frame.hidden(match.row)) {
         continue;
       }
 

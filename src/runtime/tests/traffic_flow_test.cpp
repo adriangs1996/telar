@@ -168,9 +168,9 @@ static void gates(ConcurrentMemory& memory) {
   Interception broker{memory};
 
   broker.configure({.host = "*.fixture.test", .timeout_ms = 1, .fail_closed = true});
-  check(broker.begin({.host = "fixture.test", .visibility = Visibility::plaintext}) == 0);
+  check(broker.begin({.visibility = Visibility::plaintext, .host = "fixture.test"}) == 0);
   std::array<Byte, FlowControl::chunk_bytes> bytes;
-  const auto ticket = broker.begin({.host = "a.fixture.test", .visibility = Visibility::plaintext});
+  const auto ticket = broker.begin({.visibility = Visibility::plaintext, .host = "a.fixture.test"});
 
   check(ticket != 0 && broker.poll(ticket, bytes).verdict == Verdict::pending);
   std::this_thread::sleep_for(std::chrono::milliseconds{3});

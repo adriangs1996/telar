@@ -657,7 +657,7 @@ namespace telar::gui {
 
   auto Session::lineEntry(std::uint64_t pane_id) -> LineEntry& {
     const auto keymap = configuration_.prompt.keymap == PromptKeymap::vim ? prompt::Keymap::vim : prompt::Keymap::emacs;
-    auto [found, inserted] = lines_.try_emplace(pane_id, LineEntry{prompt::Line{keymap}});
+    auto [found, inserted] = lines_.try_emplace(pane_id, LineEntry{.line = prompt::Line{keymap}});
 
     found->second.line.setKeymap(keymap);
     if (inserted && prompt_history_.empty()) {

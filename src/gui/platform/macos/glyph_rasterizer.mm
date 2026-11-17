@@ -17,9 +17,9 @@ enum NativeGlyphOptions {
   synthetic_bold_style = 1,
   synthetic_italic_style = 2,
   maximum_glyph_style = synthetic_bold_style | synthetic_italic_style,
-  synthetic_bold_divisor = 24,
 };
 
+static const CGFloat synthetic_bold_divisor = 24;
 static const CGFloat synthetic_italic_slant = 0.21256;
 
 // Each owned reference is released with the rasterizer.

@@ -470,12 +470,10 @@ namespace {
     Configuration configuration;
     const Viewport viewport{.width = 1200, .height = 800, .scale = 1};
     const CellMetrics cells;
-    const auto initial = WindowGeometry::measure(configuration, viewport, cells);
     const auto original_chrome = ChromeMetrics::resolve(configuration, viewport, cells);
     constexpr float increased_chrome_scale = 1.5F;
 
     configuration.chrome_scale = increased_chrome_scale;
-    const auto scaled = WindowGeometry::measure(configuration, viewport, cells);
     const auto scaled_chrome = ChromeMetrics::resolve(configuration, viewport, cells);
 
     require(original_chrome.top_bar < scaled_chrome.top_bar && original_chrome.title < scaled_chrome.title, "chrome scale must scale text and bands together");
