@@ -90,7 +90,7 @@ Popup {
     closePolicy: customMode ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     onClosed: {
         if (telar.dialogs.kind !== Store.Dialog.none && !root.lineHosted)
-            telar.execute(WindowActions.Action.cancel);
+            telar.commands.execute(WindowActions.Action.cancel);
     }
 
     // The inspector opens and closes over the prompt line's search.
@@ -174,7 +174,7 @@ Popup {
                 colors: telar.colors
                 typography: telar.display.geometry.typography
                 ratio: root.ratio
-                onCancelled: telar.execute(WindowActions.Action.cancel)
+                onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             }
         }
 
@@ -187,7 +187,7 @@ Popup {
                 colors: telar.colors
                 typography: telar.display.geometry.typography
                 ratio: root.ratio
-                onCancelled: telar.execute(WindowActions.Action.cancel)
+                onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             }
         }
 
@@ -201,7 +201,7 @@ Popup {
                 typography: telar.display.geometry.typography
                 controlModifier: telar.controlModifier
                 ratio: root.ratio
-                onCancelled: telar.execute(WindowActions.Action.cancel)
+                onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             }
         }
 
@@ -215,8 +215,8 @@ Popup {
                 typography: telar.display.geometry.typography
                 controlModifier: telar.controlModifier
                 ratio: root.ratio
-                onCancelled: telar.execute(WindowActions.Action.cancel)
-                onMachineEdited: (choice, action) => telar.editMachineResult(choice, action)
+                onCancelled: telar.commands.execute(WindowActions.Action.cancel)
+                onMachineEdited: (choice, action) => telar.commands.editMachineResult(choice, action)
             }
         }
 
@@ -232,7 +232,7 @@ Popup {
             controlModifier: telar.controlModifier
             superModifier: telar.superModifier
             ratio: root.ratio
-            onCancelled: telar.execute(WindowActions.Action.cancel)
+            onCancelled: telar.commands.execute(WindowActions.Action.cancel)
         }
 
         FormTextField {
@@ -274,8 +274,8 @@ Popup {
             searchScope: telar.copy.searchScope
             searchScopes: telar.copy.searchScopes
             ratio: root.ratio
-            onSubmitted: input => telar.submitDialog(input)
-            onCancelled: telar.execute(WindowActions.Action.cancel)
+            onSubmitted: input => telar.commands.submitDialog(input)
+            onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             onSearchScopeToggled: telar.copy.toggleSearchScope()
         }
 
@@ -287,8 +287,8 @@ Popup {
             colors: telar.colors
             typography: telar.display.geometry.typography
             ratio: root.ratio
-            onSubmitted: input => telar.submitDialog(input)
-            onCancelled: telar.execute(WindowActions.Action.cancel)
+            onSubmitted: input => telar.commands.submitDialog(input)
+            onCancelled: telar.commands.execute(WindowActions.Action.cancel)
         }
     }
 }

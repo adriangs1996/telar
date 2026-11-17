@@ -4,12 +4,17 @@ static_assert(true);
 #endif
 
 #include "key_bindings.hpp"
-#include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
+#include "ui/app/chrome/components/components_controller.hpp"
+#include "ui/app/panes/attachments/attachments_controller.hpp"
+#include "ui/app/panes/terminal/copy_controller.hpp"
+#include "ui/app/panes/terminal/terminal_controller.hpp"
+#include "ui/foundation/store/store.hpp"
+#include "window_commands.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -58,9 +63,8 @@ namespace telar::gui::qt {
 
   }
 
-  KeyBindings::KeyBindings(ApplicationController& application, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals)
-      : QObject(&application),
-        application_(application),
+  KeyBindings::KeyBindings(WindowCommands& commands, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals)
+      : commands_(commands),
         store_(store),
         copy_(copy),
         components_(components),
@@ -226,7 +230,7 @@ namespace telar::gui::qt {
 
       return true;
     case Outcome::action:
-      if (application_.runBinding(decision.action)) {
+      if (commands_.runBinding(decision.action)) {
         router_.actionCompleted(decision, repeat(decision.action));
       } else {
         router_.eventFailed(decision.event);
@@ -476,14 +480,6 @@ namespace telar::gui::qt {
     terminals_.input(pane_id, encodeKey(key, modes));
     key.phase = KeyPhase::release;
     terminals_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
-  }
-
-  int ApplicationController::controlModifier() {
-    return static_cast<int>(NativeKeyAdapter::control_modifier);
-  }
-
-  int ApplicationController::superModifier() {
-    return static_cast<int>(NativeKeyAdapter::super_modifier);
   }
 
 }

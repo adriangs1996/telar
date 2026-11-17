@@ -63,6 +63,7 @@ static_assert(true);
 #include "ui/foundation/plugins/plugin_runner.hpp"
 #include "ui/foundation/store/store.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
+#include "window_commands.hpp"
 #include "window_display.hpp"
 #include "window_status.hpp"
 #include <QByteArray>
@@ -116,12 +117,10 @@ static_assert(true);
 #include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
 
-import telar.gui.components.builtin_content;
 import telar.gui.core.metrics;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.prompt.line;
-import telar.gui.prompt.editor;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::test {
@@ -142,7 +141,7 @@ namespace telar::gui::qt {
   //
   // Each feature's state lives in its own controller, which reads the store and never calls
   // back here; this controller synchronizes them in order and runs what they ask of the window.
-  class ApplicationController final : public QObject, private TerminalHost, private MachinesHost {
+  class ApplicationController final : public QObject, private TerminalHost, private MachinesHost, private CommandsHost {
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 
@@ -154,6 +153,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::WindowStatus* status READ status CONSTANT)
     Q_PROPERTY(telar::gui::qt::Dialogs* dialogs READ dialogs CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachinesCoordinator* machines READ machines CONSTANT)
+    Q_PROPERTY(telar::gui::qt::WindowCommands* commands READ commands CONSTANT)
     Q_PROPERTY(telar::gui::qt::WorkspacesController* workspaces READ workspaces CONSTANT)
     Q_PROPERTY(telar::gui::qt::TabsController* tabs READ tabs CONSTANT)
     Q_PROPERTY(telar::gui::qt::PanesController* panes READ panes CONSTANT)
@@ -168,7 +168,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
-    Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
@@ -180,9 +179,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::WorkspaceFormController* workspaceForm READ workspaceForm CONSTANT)
 
   public:
-    Q_INVOKABLE void editMachineResult(const QVariantMap& choice, telar::gui::qt::window_actions::MachineEditAction action);
-    Q_INVOKABLE void peekActivity(const QString& identity);
-
     using Dialog = Store::Dialog;
 
     explicit ApplicationController(ApplicationAllocator& memory, QObject* parent = nullptr);
@@ -201,16 +197,8 @@ namespace telar::gui::qt {
     [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
     void soundPlaybackFinished(std::optional<CommandFailure> failure);
 
-    Q_INVOKABLE void execute(telar::gui::qt::window_actions::Action action, const QString& target = {});
-    Q_INVOKABLE void submitDialog(const QVariantMap& input);
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
-
-    bool handleBindingKey(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
-    void interruptBindings();
-    // Runs a binding's action. `resolved` describes actions a Lua render or callback returned;
-    // configured bindings need none.
-    bool runBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
 
     WorkspacesController* workspaces() noexcept {
       return &workspaces_;
@@ -234,6 +222,10 @@ namespace telar::gui::qt {
 
     MachineRoster* roster() noexcept {
       return &roster_;
+    }
+
+    WindowCommands* commands() noexcept {
+      return &commands_;
     }
 
     TabsController* tabs() noexcept {
@@ -310,9 +302,6 @@ namespace telar::gui::qt {
 
     [[nodiscard]] QVariantMap colors() const;
     [[nodiscard]] QVariantMap font() const;
-    [[nodiscard]] QVariantList commands() const;
-    // A click on a mod element: runs its action, URL or Lua function.
-    Q_INVOKABLE void activateElement(const QString& slot, const QString& key, const QString& revision, int element);
 
   signals:
     // The attachment shelf's region or the attachment modal's layout moved.
@@ -326,60 +315,30 @@ namespace telar::gui::qt {
     friend struct test::FramePacing;
     friend struct test::ComponentActions;
 
-    [[nodiscard]] BindingContext bindingContext() const;
-    void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
-    void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply);
-    void applyEffects(const ResolvedEffects<ApplicationAllocator>& effects);
-    void executeNamedAction(const NamedActionDescription& named);
-    void executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved);
-    void executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
     void initializeComponents();
     void initializeElements();
     // The mod content a record carries for its slots, keyed by slot name.
     void refreshElementBars();
     void initializePicks();
-    void openComponentPick(std::size_t index);
     void initializePlugins();
     void initializePrompt();
     void initializeTerminals();
-    void applyPluginEffects(const PluginEffects& effects);
-    void applyExpression(const InputExpression& expression);
-    void scrollBinding(ScrollDirection direction);
-    [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
 
-    bool executeMachineAction(window_actions::Action action);
     [[nodiscard]] GuiSession& session() noexcept;
     [[nodiscard]] const GuiSession& session() const noexcept;
     [[nodiscard]] RuntimeConnection& connection() noexcept;
     [[nodiscard]] const RuntimeConnection& connection() const noexcept;
     void runtimeDisconnected(MachineClient& client);
-    void cancelCurrentInteraction();
     void initializePalette();
     // Pushes the display the controllers measure what they draw in.
     void measureDisplay();
 
-    // Answers the commands of the active machine's client. A configuration reply views the
-    // application's buffers, region `a`, until the client encodes it.
-    struct HostCommands final : ClientCommandHandler {
-      HostCommands(tbc::view<ApplicationController&, tbc::lt::a> owner, bool is_active) noexcept
-          : application(owner),
-            active(is_active) {}
-
-      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const override;
-
-      tbc::view<ApplicationController&, tbc::lt::a> application;
-      bool active = false;
-    };
-
     void consume(MachineClient& client, QByteArrayView payload);
-    [[nodiscard]] static bool answerConfiguration(tbc::view<ApplicationController&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply);
-    void executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply);
     void synchronizeDisplay();
     void synchronizeScreen();
     void synchronizeWindowSize();
     // Names the animated item types, in the order every window samples them.
     static void composeWindowAnimation() noexcept;
-    void refresh();
     // Drops the theme and font QML reads and notifies a new configuration.
     void publishConfiguration();
     void presentChange(Change change);
@@ -391,9 +350,9 @@ namespace telar::gui::qt {
     void initializeGraphicsRecovery();
     void scheduleGraphicsRecovery();
     void restoreTerminalFocus();
-    bool executeNavigation(window_actions::Action action, const QString& target);
-    bool executePane(window_actions::Action action, std::uint64_t identity);
-    void executeWindowAction(window_actions::Action action);
+    // What a command asks of the window.
+    void refresh() override;
+    void closeWindow() override;
     // What the machines ask of the window.
     void attend(MachineClient& client) override;
     void dismiss(MachineClient& client) override;
@@ -408,17 +367,7 @@ namespace telar::gui::qt {
     void ungrabPointer(TerminalItem& terminal) override;
     void openLink(const LinkTarget& target, std::uint64_t pane_id) override;
 
-    // Runs a user's mutation of the session, then commits it to the store, whose interacted()
-    // publishes what the mutation wrote and refreshes the window.
-    template <std::invocable Mutation>
-    void applyInteraction(Mutation mutate) {
-      store_.interact(mutate, [this](const std::exception& error) {
-        interactionFailed(error);
-      });
-    }
-
     void interacted();
-    void interactionFailed(const std::exception& error);
     // Brings every projection that reads the store up to date, in the order they depend on each
     // other; each one rebuilds only what moved since its last pass.
     void synchronize();
@@ -436,8 +385,6 @@ namespace telar::gui::qt {
                                                             return components_.context();
                                                           },
         this};
-    // Where the pressed component action that is running was pressed, for a panel it opens.
-    std::optional<QPointF> component_action_anchor_;
     MachineProfilesSource machine_profiles_;
     tbc::view<AttachmentsController, tbc::lt::self> attachments_;
     tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
@@ -477,6 +424,8 @@ namespace telar::gui::qt {
     tbc::view<MachinesCoordinator, tbc::lt::self> machines_;
     tbc::view<MachineRoster, tbc::lt::self> roster_;
     tbc::view<ActivitySelection, tbc::lt::self> activity_selection_;
+    // After everything a command acts on; the key bindings hold it before it is built.
+    tbc::view<WindowCommands, tbc::lt::self> commands_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
 

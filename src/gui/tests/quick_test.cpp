@@ -205,7 +205,7 @@ namespace telar::gui::test {
     }
 
     static bool run(qt::ApplicationController& application, const Action& action) {
-      return application.runBinding(action.action, &action.rendered->actions);
+      return application.commands()->runBinding(action.action, &action.rendered->actions);
     }
 
     [[nodiscard]] static bool luaIdle(const qt::ApplicationController& application) {
@@ -900,12 +900,12 @@ return {api_version = 2, client = {
       QString temporary_tab;
       const auto restore = qScopeGuard([&] {
         if (!temporary_tab.isEmpty()) {
-          client_->execute(window_actions::Action::select_tab, temporary_tab);
+          client_->commands()->execute(window_actions::Action::select_tab, temporary_tab);
           closeTemporaryTab({.count = tab_count, .pane_id = original_id});
         }
       });
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_id, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       temporary_tab = QString::number(firstPane()->location.tab_id);
@@ -914,7 +914,7 @@ return {api_version = 2, client = {
       constexpr int repetitions = 7;
 
       for (int index = 0; index < repetitions; ++index) {
-        client_->execute(window_actions::Action::select_tab, original_tab);
+        client_->commands()->execute(window_actions::Action::select_tab, original_tab);
         QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
         const auto* pane = client_->pane(original_id);
 
@@ -927,7 +927,7 @@ return {api_version = 2, client = {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
 
-        client_->execute(window_actions::Action::select_tab, temporary_tab);
+        client_->commands()->execute(window_actions::Action::select_tab, temporary_tab);
         QCOMPARE(client_->terminals()->viewVersion().viewport, viewport);
         QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_id, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -955,7 +955,7 @@ return {api_version = 2, client = {
 
       const auto original_label = tab_label();
       const auto cleanup = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       auto* motion = window_->findChild<ModalRevealLayout*>(QStringLiteral("promptModalMotion"));
@@ -970,7 +970,7 @@ return {api_version = 2, client = {
         QObject::disconnect(connection);
       });
 
-      client_->execute(window_actions::Action::rename_tab);
+      client_->commands()->execute(window_actions::Action::rename_tab);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::rename_tab);
       const auto* field = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
       const auto* submit = window_->findChild<QQuickItem*>(QStringLiteral("promptSubmit"));
@@ -993,15 +993,15 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), renamed, runtime_wait_ms);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
 
-      client_->execute(window_actions::Action::rename_tab);
+      client_->commands()->execute(window_actions::Action::rename_tab);
       QTRY_VERIFY_WITH_TIMEOUT(field->hasActiveFocus(), runtime_wait_ms);
       typeText(QStringLiteral("discarded"));
       QTest::keyClick(window_, Qt::Key_Escape);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QCOMPARE(tab_label(), renamed);
 
-      client_->execute(window_actions::Action::rename_tab);
-      client_->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
+      client_->commands()->execute(window_actions::Action::rename_tab);
+      client_->commands()->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), original_label, runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
     }
@@ -1021,7 +1021,7 @@ return {api_version = 2, client = {
       const auto original_workspace = client_->workspaces()->context().value(QStringLiteral("key")).toString();
       const auto original_workspace_id = firstPane()->location.workspace.id;
       const auto cleanup = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       const auto entries = [this] {
@@ -1032,7 +1032,7 @@ return {api_version = 2, client = {
         return window_->activeFocusItem() == nullptr ? QString{} : window_->activeFocusItem()->objectName();
       };
 
-      client_->execute(window_actions::Action::new_workspace);
+      client_->commands()->execute(window_actions::Action::new_workspace);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::new_workspace);
       QTRY_COMPARE_WITH_TIMEOUT(focused(), QStringLiteral("commandSearch"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Tab);
@@ -1102,7 +1102,7 @@ return {api_version = 2, client = {
       }
 
       captureArtifact(QStringLiteral("project-switcher"));
-      client_->execute(window_actions::Action::close_tab);
+      client_->commands()->execute(window_actions::Action::close_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->workspaces()->rows()->rowCount(), workspaces, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
@@ -1119,13 +1119,13 @@ return {api_version = 2, client = {
         QFAIL("The GUI window must have its QML context");
       }
 
-      QQmlExpression open{context, window_, QStringLiteral("telar.execute(WindowActions.Action.palette)")};
+      QQmlExpression open{context, window_, QStringLiteral("telar.commands.execute(WindowActions.Action.palette)")};
 
       static_cast<void>(open.evaluate());
       QVERIFY2(!open.hasError(), qPrintable(open.error().toString()));
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
 
-      QQmlExpression cancel{context, window_, QStringLiteral("telar.execute(WindowActions.Action.cancel)")};
+      QQmlExpression cancel{context, window_, QStringLiteral("telar.commands.execute(WindowActions.Action.cancel)")};
 
       static_cast<void>(cancel.evaluate());
       QVERIFY2(!cancel.hasError(), qPrintable(cancel.error().toString()));
@@ -1137,18 +1137,18 @@ return {api_version = 2, client = {
 
       const auto original_label = tab_label();
 
-      client_->execute(window_actions::Action::rename_tab);
-      QQmlExpression rename{context, window_, QStringLiteral("telar.submitDialog({text: 'QML renamed tab', path: ''})")};
+      client_->commands()->execute(window_actions::Action::rename_tab);
+      QQmlExpression rename{context, window_, QStringLiteral("telar.commands.submitDialog({text: 'QML renamed tab', path: ''})")};
 
       static_cast<void>(rename.evaluate());
       QVERIFY2(!rename.hasError(), qPrintable(rename.error().toString()));
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), QStringLiteral("QML renamed tab"), runtime_wait_ms);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
-      client_->execute(window_actions::Action::rename_tab);
-      client_->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
+      client_->commands()->execute(window_actions::Action::rename_tab);
+      client_->commands()->submitDialog({{QStringLiteral("text"), original_label}, {QStringLiteral("path"), QString{}}});
       QTRY_COMPARE_WITH_TIMEOUT(tab_label(), original_label, runtime_wait_ms);
 
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::palette);
       client_->palette()->search(QStringLiteral(">New tab"));
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (search == nullptr) {
@@ -1162,7 +1162,7 @@ return {api_version = 2, client = {
       QCoreApplication::sendEvent(search, &activate);
       QTRY_COMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
-      client_->execute(window_actions::Action::close_tab);
+      client_->commands()->execute(window_actions::Action::close_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
     }
@@ -1189,14 +1189,14 @@ return {api_version = 2, client = {
       QTRY_VERIFY(projects->isVisible());
       QCOMPARE(firstPane()->id, focused_pane);
 
-      client_->execute(window_actions::Action::toggle_workspace_list);
+      client_->commands()->execute(window_actions::Action::toggle_workspace_list);
       QVERIFY(!client_->display()->workspaceListCollapsed());
       QTRY_VERIFY(projects->isVisible());
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QTRY_COMPARE(client_->display()->geometry().value(QStringLiteral("sidebar")).toRectF().width(), qreal{0});
       QTRY_VERIFY(projects->isVisible());
       QCOMPARE(firstPane()->id, focused_pane);
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
     }
 
     Q_SLOT void pointerSelection() {
@@ -1252,7 +1252,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_X);
       client_->terminals()->input(pane->id, "\x15");
-      client_->execute(window_actions::Action::copy_mode);
+      client_->commands()->execute(window_actions::Action::copy_mode);
       QInputMethodEvent committed;
 
       committed.setCommitString(QStringLiteral("q"));
@@ -1336,7 +1336,7 @@ return {api_version = 2, client = {
       QVERIFY(original_pane != nullptr);
       const auto original_identity = original_pane->id;
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       auto restore = qScopeGuard([this, original_tabs, original_identity] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
@@ -1354,7 +1354,7 @@ return {api_version = 2, client = {
 
       client_->terminals()->input(pane->id, capture.toUtf8());
       QTRY_VERIFY_WITH_TIMEOUT(pane->screen.mouse().sgr && pane->screen.mouse().tracking == telar::MouseTracking::normal, runtime_wait_ms);
-      client_->execute(window_actions::Action::copy_mode);
+      client_->commands()->execute(window_actions::Action::copy_mode);
       QVERIFY(client_->copy()->active());
       constexpr int wheel_notch = 120;
       const QPointF local{1, 1};
@@ -1363,7 +1363,7 @@ return {api_version = 2, client = {
       QCoreApplication::sendEvent(terminal, &owned);
       QTest::qWait(frame_settle_ms);
       QVERIFY(pane->screen.mouse().sgr && client_->copy()->active());
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::ShiftModifier, terminal->mapToScene(local).toPoint());
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, terminal->mapToScene(local).toPoint());
       const auto moved = terminal->mapToScene({terminal->cellSize().width() + 1, 1}).toPoint();
@@ -1442,7 +1442,7 @@ return {api_version = 2, client = {
 
         sendMouse(window, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, first);
         sendMouse(window, QEvent::MouseButtonPress, Qt::MiddleButton, held, first);
-        client_->execute(window_actions::Action::split_horizontal);
+        client_->commands()->execute(window_actions::Action::split_horizontal);
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         QVERIFY(retained != nullptr);
         QTRY_VERIFY_WITH_TIMEOUT(!retained->hasActiveFocus(), runtime_wait_ms);
@@ -1458,7 +1458,7 @@ return {api_version = 2, client = {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<32;2;2M\x1b[<0;2;2m";
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
-        client_->execute(window_actions::Action::split_horizontal);
+        client_->commands()->execute(window_actions::Action::split_horizontal);
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
 
@@ -1487,7 +1487,7 @@ return {api_version = 2, client = {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<0;1;1m";
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
-        client_->execute(window_actions::Action::split_horizontal);
+        client_->commands()->execute(window_actions::Action::split_horizontal);
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
 
@@ -1532,7 +1532,7 @@ return {api_version = 2, client = {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<32;2;2M\x1b[<0;2;2m";
 
       verifyChildMouse(expected, [this, expected](QQuickWindow& window, TerminalItem& terminal) {
-        client_->execute(window_actions::Action::split_horizontal);
+        client_->commands()->execute(window_actions::Action::split_horizontal);
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
 
@@ -1544,7 +1544,7 @@ return {api_version = 2, client = {
         QTRY_VERIFY_WITH_TIMEOUT(!terminal.prepareLinkPresentation(), runtime_wait_ms);
         sendMouse(window, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, cellCenter(terminal, {}));
         sendMouse(window, QEvent::MouseButtonPress, Qt::MiddleButton, Qt::LeftButton | Qt::MiddleButton, cellCenter(*other, {}));
-        client_->execute(window_actions::Action::close_pane, QString::number(other_id));
+        client_->commands()->execute(window_actions::Action::close_pane, QString::number(other_id));
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(client_->pane(other_id) == nullptr, runtime_wait_ms);
         const auto* remaining = terminalIn(window.contentItem());
@@ -1587,7 +1587,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(modeTitle(*mode_bar), QStringLiteral("COPY"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Slash);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::copy_search);
-      client_->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
+      client_->commands()->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
       // The match found holds the cursor, nothing selected; y copies the match.
       QTRY_VERIFY_WITH_TIMEOUT(client_->copy()->state() && !client_->copy()->state()->anchor.has_value() && client_->copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Y);
@@ -1696,8 +1696,8 @@ return {api_version = 2, client = {
 
       QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
       QTest::mousePress(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
-      client_->execute(window_actions::Action::toggle_sidebar);
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QTest::qWait(frame_settle_ms);
       QTest::mouseRelease(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
       QTest::qWait(frame_settle_ms);
@@ -1718,7 +1718,7 @@ return {api_version = 2, client = {
       client_->terminals()->input(pane->id, "printf '\\033[2J\\033[Hhttps://copy.test/x\\nLINK_COPY_READY\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("https://copy.test/x")) && screenText(pane->screen).contains(QLatin1StringView("LINK_COPY_READY")), runtime_wait_ms);
       terminal->forceActiveFocus();
-      client_->execute(window_actions::Action::copy_mode);
+      client_->commands()->execute(window_actions::Action::copy_mode);
       QTest::keyClick(window_, Qt::Key_Home);
       QTest::keyClick(window_, Qt::Key_Up);
       QTest::keyClick(window_, Qt::Key_Up);
@@ -1817,7 +1817,7 @@ return {api_version = 2, client = {
       QVERIFY(original != nullptr);
       const auto original_id = original->id;
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       auto restore = qScopeGuard([this, original_tabs, original_id] {
         client_->loadConfiguration({}, {}, {});
@@ -1845,7 +1845,7 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(peer.ready(), runtime_wait_ms);
       const auto uri = QUrl::fromLocalFile(file_path).toEncoded();
 
-      client_->execute(window_actions::Action::copy_mode);
+      client_->commands()->execute(window_actions::Action::copy_mode);
       QVERIFY(client_->copy()->active());
       peer.request(telar::ClientAction::client_open_link, 1, {uri.constData(), static_cast<std::size_t>(uri.size())});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
@@ -1899,7 +1899,7 @@ return {api_version = 2, client = {
 
       QTRY_COMPARE_WITH_TIMEOUT(positioned_arguments(), QByteArray{"+call cursor(12, 3)\n"} + file_path.toUtf8() + '\n', runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
-      client_->execute(window_actions::Action::focus_pane, QString::number(source_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(source_id));
       const QSignalSpy feedback{client_->notifications(), &NotificationsController::changed};
       const auto missing_uri = uri + ".missing";
 
@@ -1924,7 +1924,7 @@ return {api_version = 2, client = {
       QVERIFY(original_pane != nullptr);
       const auto original_identity = original_pane->id;
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       auto restore = qScopeGuard([this, original_tabs, original_identity] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
@@ -2142,7 +2142,7 @@ return {api_version = 2, client = {
 
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->status()->error(), QString{});
-      const auto commands = client_->commands();
+      const auto commands = client_->commands()->list();
 
       QVERIFY(std::ranges::any_of(commands, [](const auto& entry) {
         const auto record = entry.toMap();
@@ -2200,9 +2200,9 @@ return {api_version = 2, client = {
       QVERIFY(!client_->status()->prefixPending());
       QTest::keyClick(window_, Qt::Key_A, control);
       QVERIFY(client_->status()->prefixPending());
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::palette);
       QVERIFY(!client_->status()->prefixPending());
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       terminal->forceActiveFocus();
 
       const auto collapsed = client_->display()->workspaceListCollapsed();
@@ -2270,9 +2270,9 @@ return {api_version = 2, client = {
     }
 
     Q_SLOT void paneSurfacesShareTheChromeStyle() {
-      client_->execute(window_actions::Action::split_horizontal);
+      client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
-      client_->execute(window_actions::Action::split_vertical);
+      client_->commands()->execute(window_actions::Action::split_vertical);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
       // A new pane grows from zero size while the layout animates; a loaded machine can still be
       // on the first animation frame after any fixed wait.
@@ -2332,7 +2332,7 @@ return {api_version = 2, client = {
         // Model projections can arrive before the acknowledgement releases the
         // preceding pane operation. Wait for that operation before closing again.
         QTRY_VERIFY_WITH_TIMEOUT(!test::FramePacing::requestsPending(*client_), runtime_wait_ms);
-        client_->execute(window_actions::Action::close_pane, key);
+        client_->commands()->execute(window_actions::Action::close_pane, key);
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), count - 1, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       }
@@ -2348,7 +2348,7 @@ return {api_version = 2, client = {
       const QSignalSpy widths{terminal, &QQuickItem::widthChanged};
       const QSignalSpy heights{terminal, &QQuickItem::heightChanged};
 
-      client_->execute(window_actions::Action::split_horizontal);
+      client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       const auto split_id = client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
       auto* layout = window_->findChild<PaneMotionLayout*>();
@@ -2372,7 +2372,7 @@ return {api_version = 2, client = {
       QVERIFY(terminal != nullptr);
       QCOMPARE(widths.size(), 1);
       QVERIFY(heights.size() <= 1);
-      client_->execute(window_actions::Action::close_pane, split_id);
+      client_->commands()->execute(window_actions::Action::close_pane, split_id);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
@@ -2420,7 +2420,7 @@ return {api_version = 2, client = {
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, (workbench_origin + frame_origin + bottom_band.center()).toPoint());
       QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(first_index, ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, (workbench_origin + frame_origin + bottom_band.center()).toPoint());
-      client_->execute(window_actions::Action::focus_pane, split_id);
+      client_->commands()->execute(window_actions::Action::focus_pane, split_id);
 
       const QTemporaryDir configuration_directory;
 
@@ -2446,16 +2446,16 @@ return {api_version=2, client={keybindings={
       QTest::keyClick(window_, Qt::Key_L, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
-      client_->execute(window_actions::Action::close_pane, split_id);
+      client_->commands()->execute(window_actions::Action::close_pane, split_id);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
       const auto first_tab = client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
 
-      client_->execute(window_actions::Action::select_tab, first_tab);
+      client_->commands()->execute(window_actions::Action::select_tab, first_tab);
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
     }
@@ -2494,7 +2494,7 @@ return {api_version=2, client={keybindings={
 
       // The search leaves the first pane, which has no focus, so its line hosts nothing before
       // or after.
-      client_->execute(window_actions::Action::focus_pane, second);
+      client_->commands()->execute(window_actions::Action::focus_pane, second);
       QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(line(first) != nullptr && line(second) != nullptr, runtime_wait_ms);
       auto* first_line = line(first);
@@ -2514,7 +2514,7 @@ return {api_version=2, client={keybindings={
 
       test::HistoryPresentation::showLineSearch(*client_, Store::Dialog::none, 0);
       QVERIFY(!second_line->property("searching").toBool());
-      client_->execute(window_actions::Action::close_pane, second);
+      client_->commands()->execute(window_actions::Action::close_pane, second);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
@@ -2591,7 +2591,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteModesKeepQueriesAndRejectStaleChoices() {
       const auto original_panes = client_->panes()->rows()->rowCount();
 
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::palette);
       client_->palette()->search(QStringLiteral(">Split right"));
       QCOMPARE(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1);
       const auto state = client_->palette()->state();
@@ -2611,20 +2611,20 @@ return {api_version=2, client={keybindings={
       client_->palette()->search(QStringLiteral(">Split right"));
       const auto previous = client_->palette()->state();
 
-      client_->execute(window_actions::Action::cancel);
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::palette);
       client_->palette()->search(QStringLiteral(">Split right"));
       client_->palette()->activate({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void suggestionPaletteKeepsUnavailableRequestsEditable() {
-      client_->execute(window_actions::Action::suggest_command);
+      client_->commands()->execute(window_actions::Action::suggest_command);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
@@ -2657,10 +2657,10 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void suggestionBackRestoresItsActionQueryAndEditorSelection() {
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::palette);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       const auto query = QStringLiteral(">Suggest a command");
@@ -2697,15 +2697,15 @@ return {api_version=2, client={keybindings={
       const auto original_tab = firstPane()->location.tab_id;
       const auto original_tabs = client_->tabs()->rows()->rowCount();
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_pane, runtime_wait_ms);
       const auto destination = firstPane()->id;
       const auto destination_tab = firstPane()->location.tab_id;
 
-      client_->execute(window_actions::Action::rename_tab);
-      client_->submitDialog({{QStringLiteral("text"), QStringLiteral("PALETTE_DESTINATION")}});
-      client_->execute(window_actions::Action::select_tab, QString::number(original_tab));
+      client_->commands()->execute(window_actions::Action::rename_tab);
+      client_->commands()->submitDialog({{QStringLiteral("text"), QStringLiteral("PALETTE_DESTINATION")}});
+      client_->commands()->execute(window_actions::Action::select_tab, QString::number(original_tab));
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
       terminalIn(window_->contentItem())->forceActiveFocus();
       QTest::keyClick(window_, Qt::Key_B, NativeKeyAdapter::control_modifier);
@@ -2722,9 +2722,9 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == destination, runtime_wait_ms);
       QCOMPARE(client_->tabs()->rows()->rowCount(), original_tabs + 1);
-      client_->execute(window_actions::Action::close_tab, QString::number(destination_tab));
+      client_->commands()->execute(window_actions::Action::close_tab, QString::number(destination_tab));
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs, runtime_wait_ms);
-      client_->execute(window_actions::Action::select_tab, QString::number(original_tab));
+      client_->commands()->execute(window_actions::Action::select_tab, QString::number(original_tab));
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
     }
@@ -2748,7 +2748,7 @@ return {api_version=2, client={keybindings={
       };
 
       const auto restore = qScopeGuard([&] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         change_directory(original);
       });
 
@@ -2793,9 +2793,9 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void pathPickerQueryLimitPreservesCompleteUtf8() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && !firstPane()->cwd.empty(), runtime_wait_ms);
-      client_->execute(window_actions::Action::path_picker);
+      client_->commands()->execute(window_actions::Action::path_picker);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::paths);
@@ -3006,7 +3006,7 @@ return {api_version=2, client={keybindings={
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
       sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
       QVERIFY(client_->tabs()->capturedTab().has_value());
-      client_->execute(window_actions::Action::close_tab, created.front());
+      client_->commands()->execute(window_actions::Action::close_tab, created.front());
       expected.removeOne(created.front());
       QVERIFY(test::waitForGuiCondition([&] {
         return tabKeys() == expected;
@@ -3111,7 +3111,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
-      const auto commands = client_->commands();
+      const auto commands = client_->commands()->list();
 
       QCOMPARE(commands.size(), qsizetype{29});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
@@ -3126,18 +3126,18 @@ return {api_version=2, client={keybindings={
       const auto original_tab = firstPane()->location.tab_id;
       const auto original_count = client_->tabs()->rows()->rowCount();
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_pane, runtime_wait_ms);
       const auto destination_tab = firstPane()->location.tab_id;
       auto restore = qScopeGuard([this, original_tab, destination_tab] {
-        client_->execute(window_actions::Action::cancel);
-        client_->execute(window_actions::Action::close_tab, QString::number(destination_tab));
-        client_->execute(window_actions::Action::select_tab, QString::number(original_tab));
+        client_->commands()->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::close_tab, QString::number(destination_tab));
+        client_->commands()->execute(window_actions::Action::select_tab, QString::number(original_tab));
       });
 
       const auto run = [this](const QString& label) {
-        client_->execute(window_actions::Action::palette);
+        client_->commands()->execute(window_actions::Action::palette);
         client_->palette()->search(QLatin1Char('>') + label);
         const auto state = client_->palette()->state();
 
@@ -3174,9 +3174,9 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->tabs()->rows()->rowCount(), original_count + 1);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QCOMPARE(client_->status()->error(), QString{});
-      client_->execute(window_actions::Action::close_tab, QString::number(destination_tab));
+      client_->commands()->execute(window_actions::Action::close_tab, QString::number(destination_tab));
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_count, runtime_wait_ms);
-      client_->execute(window_actions::Action::select_tab, QString::number(original_tab));
+      client_->commands()->execute(window_actions::Action::select_tab, QString::number(original_tab));
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
       restore.dismiss();
     }
@@ -3192,12 +3192,12 @@ return {api_version=2, client={keybindings={
       QVERIFY(profiles.setPermissions(QFile::ReadOwner | QFile::WriteOwner));
       profiles.close();
       const auto cleanup = qScopeGuard([this, path] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         static_cast<void>(QFile::remove(path));
       });
 
       client_->roster()->openProfiles(path);
-      client_->execute(window_actions::Action::machine_picker);
+      client_->commands()->execute(window_actions::Action::machine_picker);
       client_->palette()->search(QStringLiteral(":Offline"));
       QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
       auto* search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
@@ -3219,7 +3219,7 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(search, &commit);
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), runtime_wait_ms);
-      client_->execute(window_actions::Action::machine_picker);
+      client_->commands()->execute(window_actions::Action::machine_picker);
       client_->palette()->search(QStringLiteral(":Renamed"));
       QTRY_COMPARE_WITH_TIMEOUT(client_->palette()->state().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
       search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
@@ -3231,9 +3231,9 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void machinePromptKeepsCompositionAndByteBounds() {
-      client_->execute(window_actions::Action::add_machine);
+      client_->commands()->execute(window_actions::Action::add_machine);
       const auto cleanup = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       auto* search = window_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
@@ -3273,7 +3273,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void paletteCompositionAndUtf8LimitsKeepTheEditorOwned() {
-      client_->execute(window_actions::Action::goto_picker);
+      client_->commands()->execute(window_actions::Action::goto_picker);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
@@ -3312,14 +3312,14 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void dialogsAndHistory() {
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::palette);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QTest::qWait(frame_settle_ms);
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(client_->status()->error(), QString{});
     }
 
@@ -3327,7 +3327,7 @@ return {api_version=2, client={keybindings={
       const auto* pane = firstPane();
 
       QVERIFY(pane != nullptr);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
       if (search == nullptr) {
         QFAIL("Required history search fixture is missing");
@@ -3343,7 +3343,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo GUI_HISTORY_FIXTURE")), qPrintable(QStringLiteral("columns=%1 contents=%2").arg(pane->screen.columns()).arg(screenText(pane->screen))), runtime_wait_ms);
       client_->terminals()->input(pane->id, "\x15");
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       search->forceActiveFocus();
@@ -3371,13 +3371,13 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, "gui-history-pointer");
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         if (const auto* pane = firstPane()) {
           client_->terminals()->input(pane->id, "\x15");
         }
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_POINTER"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       if (!window_->isActive()) {
@@ -3444,10 +3444,10 @@ return {api_version=2, client={keybindings={
     Q_SLOT void historyCardActionsSurviveSelectionChanges() {
       importRetainedHistory();
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       const auto selected_copy = [this] {
@@ -3503,8 +3503,8 @@ return {api_version=2, client={keybindings={
       release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
       held = true;
       QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
-      client_->execute(window_actions::Action::cancel);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
@@ -3561,10 +3561,10 @@ return {api_version=2, client={keybindings={
     Q_SLOT void historySelectionLeavesTheWorkbenchProjectionsAlone() {
       importRetainedHistory();
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       const auto workspaces = client_->workspaces()->rebuilds();
@@ -3609,10 +3609,10 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, "gui-reuse-press");
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_REUSE_PRESS_A_"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       const auto selected_copy = [this] {
@@ -3673,10 +3673,10 @@ return {api_version=2, client={keybindings={
 
       importRetainedHistory();
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QVERIFY(test::waitForGuiCondition([this] {
         return !client_->history()->loading() && client_->history()->rows()->rowCount() == 2;
@@ -3746,10 +3746,10 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyFooterHintsUseCurrentActions() {
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         if (const auto* pane = firstPane()) {
           client_->terminals()->input(pane->id, "\x15");
         }
@@ -3806,7 +3806,7 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, "gui-history-delivery");
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         client_->setWindow(*window_);
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
         if (const auto* pane = firstPane()) {
@@ -3814,7 +3814,7 @@ return {api_version=2, client={keybindings={
         }
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       window_->hide();
@@ -3854,8 +3854,8 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       window_->beforeSynchronizing();
       window_->frameSwapped();
-      client_->execute(window_actions::Action::cancel);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_DELIVERY_FIRST"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(activate(QStringLiteral("submit")));
@@ -3898,12 +3898,12 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, "gui-row-presentation");
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         client_->setWindow(*window_);
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_ROW_PRESENTATION_A_"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       auto* results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
@@ -3998,7 +3998,7 @@ return {api_version=2, client={keybindings={
 
       importHistory(entries, "gui-history-restore");
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         window_->showNormal();
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
         if (const auto* pane = firstPane()) {
@@ -4006,7 +4006,7 @@ return {api_version=2, client={keybindings={
         }
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RESTORE_FIRST"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(waitForHistoryPresentation());
@@ -4086,7 +4086,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(original != nullptr);
       const auto original_pane = original->id;
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       const auto restore_tab = qScopeGuard([this, original_tabs, original_pane] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_pane});
@@ -4104,7 +4104,7 @@ return {api_version=2, client={keybindings={
       writeTestFile(initial_path, enter_runs ? paste_configuration : run_configuration);
       writeTestFile(final_path, enter_runs ? run_configuration : paste_configuration);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
         if (const auto* pane = firstPane()) {
           client_->terminals()->input(pane->id, "\x15");
@@ -4121,7 +4121,7 @@ return {api_version=2, client={keybindings={
       const auto source = QByteArray{"gui-history-render-"} + tag.toUtf8();
 
       importHistory(entries, source.constData());
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       const auto action = alternate ? QStringLiteral("alternate") : QStringLiteral("submit");
@@ -4198,7 +4198,7 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyPagesAndActions() {
       seedHistoryPages();
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_BROWSER_PAGE"));
       constexpr auto page_entries = static_cast<int>(HistoryBrowser<telar::Memory>::page_entries);
 
@@ -4269,7 +4269,7 @@ return {api_version=2, client={keybindings={
       client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("pane")}, {QStringLiteral("failedOnly"), false}});
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QCOMPARE(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("pane"));
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(client_->status()->error(), QString{});
     }
 
@@ -4288,10 +4288,10 @@ return {api_version=2, client={keybindings={
 
       const auto restore = qScopeGuard([&] {
         change_directory(original_directory);
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("cwd")}});
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QCOMPARE(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("cwd"));
@@ -4315,9 +4315,9 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyControllerUpdatesKeepTheVisibleQuerySynchronized() {
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       const auto query = QStringLiteral("!  GUI_HISTORY_FIXTURE");
@@ -4347,9 +4347,9 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyQueryOverflowPublishesTheExistingLimitNotice() {
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
@@ -4390,7 +4390,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyMalformedUtf16UsesTheEncodedByteLimit() {
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         const auto notices = client_->notifications()->center().items();
         const auto found = std::ranges::find_if(notices, [](const auto& notice) {
@@ -4402,7 +4402,7 @@ return {api_version=2, client={keybindings={
           client_->notifications()->dismiss(client_->notifications()->identity(identity));
         }
 
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       const auto maximum = client_->history()->state().value(QStringLiteral("maximumQueryBytes")).toInt();
@@ -4427,9 +4427,9 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyShiftTabCyclesAuthorsForBothQtKeyForms() {
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("global")}, {QStringLiteral("author"), QStringLiteral("human")}});
@@ -4450,9 +4450,9 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyEmptyRecoveryPreservesQueryAndFocus() {
       seedHistoryScroll();
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       const auto query = QStringLiteral("GUI_SCROLL_HISTORY_NO_MATCH");
@@ -4487,9 +4487,9 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyWheelMovesSelectionAcrossTheWholeModal() {
       seedHistoryScroll();
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_A_"));
@@ -4553,9 +4553,9 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyWheelKeepsFractionThroughAnEmptyPresentedPage() {
       seedHistoryScroll();
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_NO_MATCH"));
@@ -4591,9 +4591,9 @@ return {api_version=2, client={keybindings={
       const std::array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = command}};
 
       importHistory(entries, "gui-wheel-inspection");
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       client_->history()->search(QStringLiteral("GUI_SCROLL_INSPECTION_"));
@@ -4641,9 +4641,9 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyWheelWaitsForPresentedRowsAndDialogGeneration() {
       seedHistoryScroll();
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         QVERIFY(test::showWindow(*window_, runtime_wait_ms));
       });
 
@@ -4677,8 +4677,8 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
       window_->hide();
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-      client_->execute(window_actions::Action::cancel);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_SCROLL_HISTORY_B_"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == count, runtime_wait_ms);
       QVERIFY(sendHistoryWheel(position, {}, {0, notch}, Qt::ScrollBegin));
@@ -4701,9 +4701,9 @@ return {api_version=2, client={keybindings={
       }
 
       importHistory(entries, "gui-wheel-page");
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       client_->history()->search(QStringLiteral("GUI_SCROLL_PAGE_"));
@@ -4743,13 +4743,13 @@ return {api_version=2, client={keybindings={
       QVERIFY(original != nullptr);
       const auto original_identity = original->id;
       const auto restore = qScopeGuard([this, original_tabs, original_identity] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         if (client_->tabs()->rows()->rowCount() > original_tabs) {
           closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
         }
       });
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == original_tabs + 1 && terminalReady() && firstPane()->id != original_identity, runtime_wait_ms);
       const auto pane_id = firstPane()->id;
 
@@ -4764,7 +4764,7 @@ return {api_version=2, client={keybindings={
 
       QTRY_VERIFY_WITH_TIMEOUT(printed(), runtime_wait_ms);
       client_->terminals()->input(pane_id, "\x15");
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_LIVE_METADATA"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
       QVERIFY(client_->history()->state().value(QStringLiteral("paneOpen")).toBool());
@@ -4806,7 +4806,7 @@ return {api_version=2, client={keybindings={
 
       QTRY_VERIFY_WITH_TIMEOUT(tab_renamed(), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane_fact(), QString::number(pane_id) + QStringLiteral("  ·  tab Live history tab"), runtime_wait_ms);
-      client_->execute(window_actions::Action::close_tab);
+      client_->commands()->execute(window_actions::Action::close_tab);
       QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == original_tabs && client_->pane(pane_id) == nullptr, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(pane_fact(), QString::number(pane_id) + QStringLiteral("  ·  closed"), runtime_wait_ms);
       QVERIFY(!inspector->property("browserState").toMap().value(QStringLiteral("paneOpen")).toBool());
@@ -4845,11 +4845,11 @@ return {api_version=2, client={keybindings={
     Q_SLOT void historyGeometryAndFocusSurviveInspection() {
       const auto previous_size = window_->size();
       const auto restore = qScopeGuard([this, previous_size] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         window_->resize(previous_size);
       });
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
@@ -4913,7 +4913,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyValidationFeedback() {
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
@@ -4969,7 +4969,7 @@ return {api_version=2, client={keybindings={
       }
 
       importHistory(entries, "gui-long-command");
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_LONG_COMMAND"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == static_cast<int>(entry_count), runtime_wait_ms);
       const auto last = client_->history()->rows()->data(client_->history()->rows()->index(static_cast<int>(cached_entries), 0), ListModel::record_role).toMap();
@@ -5032,19 +5032,19 @@ return {api_version=2, client={keybindings={
       QVERIFY(command_area != nullptr);
       QCOMPARE(command_area->property("text").toString(), toQString(*expected));
       captureHistoryArtifact(QStringLiteral("history-long-command"));
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void routedGoto() {
       const auto cleanup = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto stale_query = QStringLiteral("> stale query before routed goto");
 
-      client_->execute(window_actions::Action::palette);
+      client_->commands()->execute(window_actions::Action::palette);
       client_->palette()->search(stale_query);
       CommandPeer peer{memory_};
 
@@ -5058,7 +5058,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), stale_query);
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
 
       peer.request(telar::ClientAction::client_open_goto, 2);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
@@ -5074,8 +5074,8 @@ return {api_version=2, client={keybindings={
       QVERIFY(search != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
       QCOMPARE(search->text(), QStringLiteral("@"));
-      client_->execute(window_actions::Action::cancel);
-      client_->execute(window_actions::Action::copy_mode);
+      client_->commands()->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::copy_mode);
       QVERIFY(client_->copy()->active());
       peer.request(telar::ClientAction::client_open_goto, 3);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
@@ -5098,7 +5098,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().text, QString{});
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->status()->error(), QString{});
     }
@@ -5264,18 +5264,18 @@ return {api_version=2, client={keybindings={
       const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto restore = qScopeGuard([this, visible, width, collapsed] {
         if (client_->display()->sidebarVisible() != visible) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
 
         if (client_->display()->workspaceListCollapsed() != collapsed) {
-          client_->execute(window_actions::Action::toggle_workspace_list);
+          client_->commands()->execute(window_actions::Action::toggle_workspace_list);
         }
 
         client_->display()->setSidebarWidth(width);
       });
 
       if (!visible) {
-        client_->execute(window_actions::Action::toggle_sidebar);
+        client_->commands()->execute(window_actions::Action::toggle_sidebar);
       }
 
       // The fonts, the theme and the mods stay; only what is laid out around the sidebar moves.
@@ -5289,9 +5289,9 @@ return {api_version=2, client={keybindings={
 
       client_->display()->setSidebarWidth(client_->display()->sidebarWidth() + widened);
       QVERIFY(terminal() < terminal_width);
-      client_->execute(window_actions::Action::toggle_workspace_list);
+      client_->commands()->execute(window_actions::Action::toggle_workspace_list);
       QCOMPARE(client_->display()->workspaceListCollapsed(), !collapsed);
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QVERIFY(!client_->display()->sidebarVisible());
       QVERIFY(terminal() > terminal_width);
       QVERIFY(sidebar.count() >= 3);
@@ -5305,7 +5305,7 @@ return {api_version=2, client={keybindings={
         closeExtraTabs(before.count);
       });
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
       const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
@@ -5324,7 +5324,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.rows(), single_rows, runtime_wait_ms);
       const auto source_id = firstPane()->id;
 
-      client_->execute(window_actions::Action::split_horizontal);
+      client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       const auto gutter = static_cast<std::uint16_t>(client_->configuration().pane_gaps);
       const auto first_outer_columns = (full->cols - gutter) / 2;
@@ -5337,9 +5337,9 @@ return {api_version=2, client={keybindings={
 
       QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.columns(), second_outer_columns - border_cells, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->pane(second_id)->screen.rows(), full->rows - vertical_chrome, runtime_wait_ms);
-      client_->execute(window_actions::Action::split_vertical);
+      client_->commands()->execute(window_actions::Action::split_vertical);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != source_id, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->screen.columns(), single_columns, runtime_wait_ms);
@@ -5360,14 +5360,14 @@ return {api_version=2, client={keybindings={
         closeTemporaryTab(before);
       });
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto source_id = firstPane()->id;
 
-      client_->execute(window_actions::Action::split_horizontal);
+      client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
-      client_->execute(window_actions::Action::fullscreen);
+      client_->commands()->execute(window_actions::Action::fullscreen);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       const auto entries = [&] {
         return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("fullscreenPaneEntry"));
@@ -5419,7 +5419,7 @@ return {api_version=2, client={keybindings={
         closeTemporaryTab(before);
       });
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
       const auto source_id = firstPane()->id;
@@ -5427,7 +5427,7 @@ return {api_version=2, client={keybindings={
       const QPointer<TerminalItem> source_terminal{terminalIn(window_->contentItem())};
 
       QVERIFY(source_terminal != nullptr);
-      client_->execute(window_actions::Action::split_horizontal);
+      client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       const QPointer<TerminalItem> other_terminal{focusedTerminalBeside(*window_, *source_terminal)};
 
@@ -5460,12 +5460,12 @@ return {api_version=2, client={keybindings={
       captureArtifact(QStringLiteral("chrome-attention"));
       const QPointer<QQuickItem> retired{rings().front()};
 
-      client_->execute(window_actions::Action::focus_pane, QString::number(source_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(source_id));
       QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty() && retired.isNull(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       captureArtifact(QStringLiteral("question-focused"));
-      client_->execute(window_actions::Action::focus_pane, QString::number(other_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(other_id));
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
       QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::PaneAttentionKey{}), attachment);
 
@@ -5482,14 +5482,14 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       captureArtifact(QStringLiteral("ready-unfocused"));
-      client_->execute(window_actions::Action::focus_pane, QString::number(source_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(source_id));
       QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus(), runtime_wait_ms);
       captureArtifact(QStringLiteral("ready-focused"));
       window_->resize(1600, original_window_size.height());
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(source_terminal != nullptr && other_terminal != nullptr);
       captureArtifact(QStringLiteral("ready-focused-wide"));
-      client_->execute(window_actions::Action::focus_pane, QString::number(other_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(other_id));
       QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
       captureArtifact(QStringLiteral("ready-unfocused-wide"));
       client_->terminals()->input(source_id, "question\r");
@@ -5498,15 +5498,15 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("question-unfocused-wide"));
-      client_->execute(window_actions::Action::focus_pane, QString::number(source_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(source_id));
       QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus() && rings().isEmpty(), runtime_wait_ms);
       captureArtifact(QStringLiteral("question-focused-wide"));
-      client_->execute(window_actions::Action::focus_pane, QString::number(other_id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(other_id));
       QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
-      client_->execute(window_actions::Action::fullscreen);
+      client_->commands()->execute(window_actions::Action::fullscreen);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
-      client_->execute(window_actions::Action::fullscreen);
+      client_->commands()->execute(window_actions::Action::fullscreen);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
@@ -5539,7 +5539,7 @@ return {api_version=2, client={keybindings={
 
       client_->loadConfiguration(path, {}, {});
       QCOMPARE(client_->status()->error(), QString{});
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, qPrintable(QStringLiteral("pane=%1 before=%2 tabs=%3 error=%4").arg(firstPane() == nullptr ? 0 : firstPane()->id).arg(before.pane_id).arg(client_->tabs()->rows()->rowCount()).arg(client_->status()->error())), runtime_wait_ms);
       QTRY_VERIFY2_WITH_TIMEOUT(!firstPane()->cwd.empty(), qPrintable(QStringLiteral("pane=%1 frame=%2 attached=%3 error=%4").arg(firstPane()->id).arg(firstPane()->screen.frameId()).arg(firstPane()->attached).arg(client_->status()->error())), runtime_wait_ms);
@@ -5908,9 +5908,9 @@ return {api_version=2, client={keybindings={
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_center);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history, runtime_wait_ms);
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
     }
 
@@ -6024,7 +6024,7 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
       });
 
@@ -6109,7 +6109,7 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
 
         QAccessible::setActive(accessibility);
@@ -6182,11 +6182,11 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
 
         if (client_->display()->workspaceListCollapsed() != collapsed) {
-          client_->execute(window_actions::Action::toggle_workspace_list);
+          client_->commands()->execute(window_actions::Action::toggle_workspace_list);
         }
       });
 
@@ -6211,7 +6211,7 @@ return {api_version=2, client={keybindings={
         QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
         verifyPluginTargetMutation(pointer);
         QVERIFY(!QTest::currentTestFailed());
-        client_->execute(window_actions::Action::toggle_workspace_list);
+        client_->commands()->execute(window_actions::Action::toggle_workspace_list);
         QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), collapsed, runtime_wait_ms);
       }
     }
@@ -6223,11 +6223,11 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
 
         if (client_->display()->workspaceListCollapsed() != collapsed) {
-          client_->execute(window_actions::Action::toggle_workspace_list);
+          client_->commands()->execute(window_actions::Action::toggle_workspace_list);
         }
       });
 
@@ -6398,7 +6398,7 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
       });
 
@@ -6441,7 +6441,7 @@ return {api_version=2, client={keybindings={
         QTRY_VERIFY_WITH_TIMEOUT(after->hasActiveFocus(), runtime_wait_ms);
         QTest::keyClick(window_, Qt::Key_Space);
         QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
-        client_->execute(window_actions::Action::toggle_sidebar);
+        client_->commands()->execute(window_actions::Action::toggle_sidebar);
         QCOMPARE(client_->display()->sidebarVisible(), sidebar);
         verifyComponentCaptionMouseRefresh(kind, sidebar);
         QVERIFY(!QTest::currentTestFailed());
@@ -6453,7 +6453,7 @@ return {api_version=2, client={keybindings={
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
       });
 
@@ -6505,11 +6505,11 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
 
         if (client_->display()->workspaceListCollapsed() != collapsed) {
-          client_->execute(window_actions::Action::toggle_workspace_list);
+          client_->commands()->execute(window_actions::Action::toggle_workspace_list);
         }
       });
 
@@ -6552,7 +6552,7 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
       });
 
@@ -6580,7 +6580,7 @@ return {api_version=2, client={keybindings={
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, first->mapToScene(first->boundingRect().center()).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(first->hasActiveFocus(), runtime_wait_ms);
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), sidebar, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(!first.isNull() && !second.isNull());
@@ -7231,7 +7231,7 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
       });
 
@@ -7267,7 +7267,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(query != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
       for (const auto visible : {!sidebar, sidebar}) {
-        client_->execute(window_actions::Action::toggle_sidebar);
+        client_->commands()->execute(window_actions::Action::toggle_sidebar);
         QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), visible, runtime_wait_ms);
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
@@ -7471,7 +7471,7 @@ return {api_version=2, client={keybindings={
       const auto restore = qScopeGuard([this, original_collapsed] {
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->workspaceListCollapsed() != original_collapsed) {
-          client_->execute(window_actions::Action::toggle_workspace_list);
+          client_->commands()->execute(window_actions::Action::toggle_workspace_list);
         }
       });
 
@@ -7496,8 +7496,8 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
       const auto expected_width = std::to_string(peer.result().value);
 
-      client_->execute(window_actions::Action::toggle_sidebar);
-      client_->execute(window_actions::Action::toggle_workspace_list);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_workspace_list);
       peer.request(telar::ClientAction::config_show, 4, "client", -1);
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{4}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
@@ -7715,7 +7715,7 @@ return {api_version=2, client={keybindings={
       const auto* pane = firstPane();
 
       QVERIFY(pane != nullptr);
-      client_->execute(window_actions::Action::focus_pane, QString::number(pane->id));
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(pane->id));
       client_->terminals()->input(pane->id, "printf '\\033]0;cpp-title-fixture\\007'\n");
       QTRY_COMPARE_WITH_TIMEOUT(toQString(pane->title), QStringLiteral("cpp-title-fixture"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(window_->title().startsWith(QStringLiteral("configured cpp-title-fixture @ ")), runtime_wait_ms);
@@ -7931,7 +7931,7 @@ return {api_version=2, client={keybindings={
       const auto previous_tabs = client_->tabs()->rows()->rowCount();
       const auto previous_pane = firstPane()->id;
 
-      client_->execute(window_actions::Action::toggle_workspace_list);
+      client_->commands()->execute(window_actions::Action::toggle_workspace_list);
       QVERIFY(client_->display()->workspaceListCollapsed());
       QTest::qWait(frame_settle_ms);
       engine_.reset();
@@ -7971,7 +7971,7 @@ return {api_version=2, client={keybindings={
       const auto restore = qScopeGuard([&] {
         window_->show();
         test::activateWindow(*window_);
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
         window_->resize(size);
         cleanupGestureTabs(created, original);
       });
@@ -7993,7 +7993,7 @@ return {api_version=2, client={keybindings={
         window_->resize(size.width() + 1, size.height());
         break;
       case TabDragInterruption::modal:
-        client_->execute(window_actions::Action::palette);
+        client_->commands()->execute(window_actions::Action::palette);
         break;
       case TabDragInterruption::focus:
         test::hideWindow(*window_);
@@ -8037,7 +8037,7 @@ return {api_version=2, client={keybindings={
       for (int index = 0; index < added_tabs; ++index) {
         const auto count = client_->tabs()->rows()->rowCount();
 
-        client_->execute(window_actions::Action::new_tab);
+        client_->commands()->execute(window_actions::Action::new_tab);
         if (!test::waitForGuiCondition([&] {
               return client_->tabs()->rows()->rowCount() == count + 1 && terminalReady();
             },
@@ -8066,7 +8066,7 @@ return {api_version=2, client={keybindings={
     void cleanupGestureTabs(const QStringList& created, const QString& original) {
       for (const auto& key : created) {
         if (tabKeys().contains(key)) {
-          client_->execute(window_actions::Action::close_tab, key);
+          client_->commands()->execute(window_actions::Action::close_tab, key);
           static_cast<void>(test::waitForGuiCondition([&] {
             return !tabKeys().contains(key);
           },
@@ -8074,7 +8074,7 @@ return {api_version=2, client={keybindings={
         }
       }
 
-      client_->execute(window_actions::Action::select_tab, original);
+      client_->commands()->execute(window_actions::Action::select_tab, original);
     }
 
     void openWindow() {
@@ -8122,11 +8122,11 @@ return {api_version=2, client={keybindings={
       QQmlIncubationController deferred;
       const auto restore = qScopeGuard([&] {
         engine_->setIncubationController(previous_controller);
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       engine_->setIncubationController(&deferred);
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_BROWSER_PAGE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
       auto* const results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
@@ -8188,9 +8188,9 @@ return {api_version=2, client={keybindings={
     void verifyHistoryCompositionEscape(HistoryView view) {
       const auto inspecting = view == HistoryView::inspector;
 
-      client_->execute(window_actions::Action::history);
+      client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
-        client_->execute(window_actions::Action::cancel);
+        client_->commands()->execute(window_actions::Action::cancel);
       });
 
       const auto query = QStringLiteral("GUI_HISTORY_FIXTURE");
@@ -8424,7 +8424,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(original != nullptr);
       const auto original_identity = original->id;
 
-      client_->execute(window_actions::Action::new_tab);
+      client_->commands()->execute(window_actions::Action::new_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), original_tabs + 1, runtime_wait_ms);
       const auto restore = qScopeGuard([this, original_tabs, original_identity] {
         closeTemporaryTab({.count = original_tabs, .pane_id = original_identity});
@@ -8502,7 +8502,7 @@ return {api_version=2, client={keybindings={
       while (client_->tabs()->rows()->rowCount() > kept_count) {
         const auto count = client_->tabs()->rows()->rowCount();
 
-        client_->execute(window_actions::Action::close_tab);
+        client_->commands()->execute(window_actions::Action::close_tab);
         const auto closed = QTest::qWaitFor([this, count] {
           return client_->tabs()->rows()->rowCount() < count;
         },
@@ -8518,7 +8518,7 @@ return {api_version=2, client={keybindings={
       QVERIFY2(source != nullptr, "Temporary tab cleanup must retain its source pane");
       const auto source_tab = source->location.tab_id;
 
-      client_->execute(window_actions::Action::close_tab);
+      client_->commands()->execute(window_actions::Action::close_tab);
       const auto closed = QTest::qWaitFor([this, destination] {
         return client_->tabs()->rows()->rowCount() == destination.count;
       },
@@ -8526,7 +8526,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY2(closed, "The temporary tab must close before restoring its source");
       // Closing selects an adjacent tab; this fixture may have started elsewhere.
-      client_->execute(window_actions::Action::select_tab, QString::number(source_tab));
+      client_->commands()->execute(window_actions::Action::select_tab, QString::number(source_tab));
       const auto restored = QTest::qWaitFor([this, destination] {
         return client_->tabs()->rows()->rowCount() == destination.count && terminalReady() && firstPane()->id == destination.pane_id;
       },
@@ -8622,7 +8622,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), tabs + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != pane, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
-      client_->execute(window_actions::Action::close_tab);
+      client_->commands()->execute(window_actions::Action::close_tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), tabs, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == pane, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
@@ -8633,7 +8633,7 @@ return {api_version=2, client={keybindings={
       std::optional<std::uint64_t> created;
       const auto cleanup = qScopeGuard([this, &created] {
         if (created.has_value() && client_->panes()->rows()->rowCount() > 1) {
-          client_->execute(window_actions::Action::close_pane, QString::number(*created));
+          client_->commands()->execute(window_actions::Action::close_pane, QString::number(*created));
           static_cast<void>(test::waitForGuiCondition([this] {
             return client_->panes()->rows()->rowCount() == 1;
           },
@@ -8641,7 +8641,7 @@ return {api_version=2, client={keybindings={
         }
       });
 
-      client_->execute(window_actions::Action::split_horizontal);
+      client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       created = client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString().toULongLong();
       const auto focused = [this, &created] {
@@ -8666,7 +8666,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(label->isVisible() && label->width() > 0);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, label->mapToScene(label->boundingRect().center()).toPoint());
       QTRY_VERIFY_WITH_TIMEOUT(target != nullptr && target->hasActiveFocus(), runtime_wait_ms);
-      client_->execute(window_actions::Action::close_pane, QString::number(*created));
+      client_->commands()->execute(window_actions::Action::close_pane, QString::number(*created));
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
     }
@@ -8695,7 +8695,7 @@ return {api_version=2, client={keybindings={
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
         if (client_->display()->sidebarVisible() != sidebar) {
-          client_->execute(window_actions::Action::toggle_sidebar);
+          client_->commands()->execute(window_actions::Action::toggle_sidebar);
         }
       });
 
@@ -8810,7 +8810,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
       QCOMPARE(client_->display()->sidebarVisible(), !sidebar);
       QCOMPARE(client_->status()->error(), QString{});
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), sidebar, runtime_wait_ms);
     }
 
@@ -8956,7 +8956,7 @@ return {api_version=2, client={keybindings={
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QCOMPARE(client_->display()->sidebarVisible(), sidebar);
     }
 
@@ -8988,7 +8988,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, center);
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
-      client_->execute(window_actions::Action::toggle_workspace_list);
+      client_->commands()->execute(window_actions::Action::toggle_workspace_list);
       QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
@@ -8998,7 +8998,7 @@ return {api_version=2, client={keybindings={
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
       pressed = false;
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
-      client_->execute(window_actions::Action::toggle_workspace_list);
+      client_->commands()->execute(window_actions::Action::toggle_workspace_list);
       QCOMPARE(client_->display()->workspaceListCollapsed(), collapsed);
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
@@ -9027,7 +9027,7 @@ return {api_version=2, client={keybindings={
       target = componentActionItem(kind, QStringLiteral("Stable target"));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, target->mapToScene(target->boundingRect().center()).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
-      client_->execute(window_actions::Action::toggle_sidebar);
+      client_->commands()->execute(window_actions::Action::toggle_sidebar);
       QCOMPARE(client_->display()->sidebarVisible(), sidebar);
     }
 

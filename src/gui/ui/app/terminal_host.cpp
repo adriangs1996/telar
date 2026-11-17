@@ -22,7 +22,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::pressKey(TerminalItem& terminal, QKeyEvent& event) {
-    if (handleBindingKey(event, terminal, terminal.composing())) {
+    if (commands_.handleKey(event, terminal, terminal.composing())) {
       return;
     }
 
@@ -36,7 +36,7 @@ namespace telar::gui::qt {
   }
 
   bool ApplicationController::releaseKey(TerminalItem& terminal, QKeyEvent& event) {
-    return handleBindingKey(event, terminal, terminal.composing());
+    return commands_.handleKey(event, terminal, terminal.composing());
   }
 
   void ApplicationController::interruptKeys() {
@@ -44,7 +44,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::focusPane(TerminalItem& terminal) {
-    execute(window_actions::Action::focus_pane, terminal.paneId());
+    commands_.execute(window_actions::Action::focus_pane, terminal.paneId());
   }
 
   void ApplicationController::ungrabPointer(TerminalItem& terminal) {

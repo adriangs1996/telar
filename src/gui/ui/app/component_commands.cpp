@@ -25,12 +25,7 @@ namespace telar::gui::qt {
     connect(&components_, &ComponentsController::failed, &status_, &WindowStatus::report);
     connect(&components_, &ComponentsController::bindingRequested, this, [this](const BindingAction& action, const ConfigurationSource::Actions& actions, QPointF anchor) {
       try {
-        const auto previous = std::exchange(component_action_anchor_, anchor);
-        const auto restore = qScopeGuard([&] {
-          component_action_anchor_ = previous;
-        });
-
-        static_cast<void>(runBinding(action, &actions));
+        commands_.runComponentBinding(action, actions, anchor);
       } catch (const std::exception& error) {
         status_.fail(error);
       }
@@ -51,20 +46,6 @@ namespace telar::gui::qt {
         components_.closePick();
       }
     });
-  }
-
-  void ApplicationController::openComponentPick(std::size_t index) {
-    if (attachments_.modalOpen()) {
-      return;
-    }
-
-    if (store_.dialog().kind != Dialog::none) {
-      execute(window_actions::Action::cancel);
-    }
-
-    components_.rememberPickFocus();
-    interruptBindings();
-    components_.openPick(index);
   }
 
 }

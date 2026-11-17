@@ -36,12 +36,12 @@ import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
 
-  class ApplicationController;
   class AttachmentsController;
   class ComponentsController;
   class CopyController;
   class Store;
   class TerminalController;
+  class WindowCommands;
 
   // Routes the window's keys: a binding runs the window's action, the rest reach the item that has
   // the focus, or the pane copy mode reads. It holds every recipient a key can have.
@@ -49,7 +49,7 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    KeyBindings(ApplicationController& application, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals);
+    KeyBindings(WindowCommands& commands, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals);
     void setWindow(QQuickWindow& window);
     void configure(const InputConfiguration& configuration, const BindingMap<BindingAction>& map);
     bool route(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
@@ -113,7 +113,7 @@ namespace telar::gui::qt {
     void expire();
     void drain();
 
-    ApplicationController& application_;
+    WindowCommands& commands_;
     Store& store_;
     CopyController& copy_;
     ComponentsController& components_;

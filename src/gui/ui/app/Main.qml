@@ -45,16 +45,16 @@ Window {
         ratio: root.ratio
         textScale: telar.display.chromeTextScale
         rail: root.geometry.rail
-        onSidebarToggled: telar.execute(WindowActions.Action.toggle_sidebar)
-        onWorkspaceSelected: key => telar.execute(WindowActions.Action.select_workspace, key)
-        onWorkspacePickerRequested: telar.execute(WindowActions.Action.goto_picker)
-        onTabSelected: key => telar.execute(WindowActions.Action.select_tab, key)
-        onTabClosed: key => telar.execute(WindowActions.Action.close_tab, key)
-        onTabRenamed: telar.execute(WindowActions.Action.rename_tab)
-        onTabCreated: telar.execute(WindowActions.Action.new_tab)
-        onPaletteRequested: telar.execute(WindowActions.Action.palette)
-        onMachinePickerRequested: telar.execute(WindowActions.Action.machine_picker)
-        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
+        onSidebarToggled: telar.commands.execute(WindowActions.Action.toggle_sidebar)
+        onWorkspaceSelected: key => telar.commands.execute(WindowActions.Action.select_workspace, key)
+        onWorkspacePickerRequested: telar.commands.execute(WindowActions.Action.goto_picker)
+        onTabSelected: key => telar.commands.execute(WindowActions.Action.select_tab, key)
+        onTabClosed: key => telar.commands.execute(WindowActions.Action.close_tab, key)
+        onTabRenamed: telar.commands.execute(WindowActions.Action.rename_tab)
+        onTabCreated: telar.commands.execute(WindowActions.Action.new_tab)
+        onPaletteRequested: telar.commands.execute(WindowActions.Action.palette)
+        onMachinePickerRequested: telar.commands.execute(WindowActions.Action.machine_picker)
+        onElementActivated: (slot, key, revision, element) => telar.commands.activateElement(slot, key, revision, element)
     }
 
     Sidebar {
@@ -76,10 +76,10 @@ Window {
         agentModel: telar.activity.rows
         preferredWidth: telar.display.sidebarWidth
         textScale: telar.display.chromeTextScale
-        onAgentSelected: key => telar.execute(WindowActions.Action.select_agent, key)
-        onAgentPeekRequested: key => telar.peekActivity(key)
+        onAgentSelected: key => telar.commands.execute(WindowActions.Action.select_agent, key)
+        onAgentPeekRequested: key => telar.commands.peekActivity(key)
         onSidebarResized: requestedWidth => telar.display.setSidebarWidth(requestedWidth)
-        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
+        onElementActivated: (slot, key, revision, element) => telar.commands.activateElement(slot, key, revision, element)
     }
 
     PaneArea {
@@ -107,8 +107,8 @@ Window {
         width: root.geometry.terminal.width
         height: root.geometry.terminal.height
         ratio: root.ratio
-        onActionRequested: (action, target) => telar.execute(action, target)
-        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
+        onActionRequested: (action, target) => telar.commands.execute(action, target)
+        onElementActivated: (slot, key, revision, element) => telar.commands.activateElement(slot, key, revision, element)
     }
 
     // Once the panes read the new dialog, the focused one takes the keyboard back if none is open.
@@ -136,7 +136,7 @@ Window {
         mode: telar.status.mode
         ratio: root.ratio
         onDiagnosticDismissed: telar.status.dismiss()
-        onElementActivated: (slot, key, revision, element) => telar.activateElement(slot, key, revision, element)
+        onElementActivated: (slot, key, revision, element) => telar.commands.activateElement(slot, key, revision, element)
     }
 
     LinkStatus {
@@ -186,6 +186,6 @@ Window {
 
     Shortcut {
         sequences: ["Ctrl+Shift+P", "Meta+Shift+P"]
-        onActivated: telar.execute(WindowActions.Action.palette)
+        onActivated: telar.commands.execute(WindowActions.Action.palette)
     }
 }

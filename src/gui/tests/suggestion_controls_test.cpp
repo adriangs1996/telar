@@ -138,7 +138,7 @@ namespace {
       query()->forceActiveFocus();
       QTRY_VERIFY_WITH_TIMEOUT(query()->hasActiveFocus(), wait_ms);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
     }
 
     Q_SLOT void replacementRequestsDiscardTheEarlierCommandAndPasteOnlyOnConfirmation() {
@@ -196,7 +196,7 @@ namespace {
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
       QVERIFY(!QFileInfo::exists(marker_));
-      client_->execute(window_actions::Action::cancel);
+      client_->commands()->execute(window_actions::Action::cancel);
     }
 
     Q_SLOT void shortenedPreviewsKeepTheEntirePaste() {
@@ -257,7 +257,7 @@ namespace {
     }
 
     void open(const QString& task) {
-      client_->execute(window_actions::Action::suggest_command);
+      client_->commands()->execute(window_actions::Action::suggest_command);
       client_->palette()->search(task);
       QVERIFY(query() != nullptr);
       query()->forceActiveFocus();

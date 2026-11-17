@@ -21,7 +21,7 @@ namespace telar::gui::qt {
 
     connect(&palette_, &PaletteController::failed, &status_, &WindowStatus::report);
     connect(&palette_, &PaletteController::machineRequested, this, [this](MachinePickerTarget target, bool alternate) {
-      applyInteraction([&] {
+      commands_.interact([&] {
         roster_.choose(target, alternate);
       });
     });
@@ -29,11 +29,9 @@ namespace telar::gui::qt {
     connect(&palette_, &PaletteController::actionRequested, this, [this](PaletteAction chosen) {
       const auto action = static_cast<window_actions::Action>(chosen.value);
 
-      applyInteraction([&] {
+      commands_.interact([&] {
         dialogs_.show(Dialog::none);
-        if (!executeNavigation(action, {}) && !executePane(action, 0)) {
-          executeWindowAction(action);
-        }
+        commands_.perform(action);
       });
     });
   }

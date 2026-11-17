@@ -211,7 +211,7 @@ namespace {
         lineSearch: ({kind: application.dialogs.lineSearch, pane: application.dialogs.lineSearchPane})
         controlModifier: application.controlModifier
         superModifier: application.superModifier
-        onCancelled: application.execute(WindowActions.Action.cancel)
+        onCancelled: application.commands.execute(WindowActions.Action.cancel)
       }
     )",
         QUrl{});
@@ -638,7 +638,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QVERIFY(application.prompt()->line(pane_id)->editor().text().view() == "git s");
 
       // The path search starts from the word before the caret and writes the path over it.
-      application.execute(window_actions::Action::path_picker);
+      application.commands()->execute(window_actions::Action::path_picker);
       QCOMPARE(application.dialogs()->lineSearch(), telar::gui::qt::ApplicationController::Dialog::paths);
       QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::find_paths) != 0, wait_ms);
       const auto find = runtime.last<FindPaths>();

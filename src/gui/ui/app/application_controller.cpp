@@ -23,6 +23,7 @@ static_assert(true);
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/fonts/terminal_font.hpp"
 #include "ui/foundation/fonts/window_font_catalog.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/models/tab_leaves.hpp"
@@ -77,60 +78,14 @@ import telar.gui.config.gui_query;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_pointer;
-import telar.gui.links.cell_links;
 import telar.gui.platform.login_shell;
 import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
 import telar.gui.presentation.history_inspection;
-import telar.base.text.utf8;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
-
-  namespace {
-
-    auto parseLocation(const QString& key) -> WorkspaceLocation {
-      return {
-          .kind = key.startsWith(QLatin1StringView("worktree:")) ? WorkspaceLocation::Kind::worktree : WorkspaceLocation::Kind::workspace,
-          .id = key.section(QLatin1Char(':'), 1).toULongLong(),
-      };
-    }
-
-    auto paneDirection(window_actions::Action action) noexcept -> PaneDirection {
-      switch (action) {
-      case window_actions::Action::focus_left:
-      case window_actions::Action::resize_left:
-        return PaneDirection::left;
-      case window_actions::Action::focus_right:
-      case window_actions::Action::resize_right:
-        return PaneDirection::right;
-      case window_actions::Action::focus_up:
-      case window_actions::Action::resize_up:
-        return PaneDirection::up;
-      default:
-        return PaneDirection::down;
-      }
-    }
-
-    auto dialogFor(window_actions::Action action) -> ApplicationController::Dialog {
-      using Dialog = ApplicationController::Dialog;
-
-      switch (action) {
-      case window_actions::Action::palette:
-        return Dialog::palette;
-      case window_actions::Action::new_workspace:
-        return Dialog::new_workspace;
-      case window_actions::Action::rename_tab:
-        return Dialog::rename_tab;
-      case window_actions::Action::rename_workspace:
-        return Dialog::rename_workspace;
-      default:
-        return Dialog::none;
-      }
-    }
-
-  }
 
   ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
@@ -163,14 +118,38 @@ namespace telar::gui::qt {
         components_(store_, configuration_source_, element_slots_, memory),
         plugins_(store_, configuration_source_, memory),
         workspace_form_(store_),
-        key_bindings_(*this, store_, copy_, components_, attachments_, terminals_),
+        key_bindings_(commands_, store_, copy_, components_, attachments_, terminals_),
         pointer_dispatcher_(display_, memory, store_, tabs_, history_, activity_, attachments_, terminals_),
         status_(store_, copy_, key_bindings_, platform::hostName()),
         frames_(memory, store_, display_, tabs_, history_, terminals_, pointer_dispatcher_, status_),
         dialogs_(store_, peek_, machine_prompt_, palette_, paths_, history_, workspace_form_, key_bindings_, pointer_dispatcher_),
         machines_(memory, store_, configuration_source_, effects_, frames_, display_, status_, dialogs_, *this, platform::hostName()),
         roster_(store_, machines_, machine_profiles_, display_, dialogs_, notifications_, platform::hostName()),
-        activity_selection_(store_, activity_, peek_, dialogs_, machines_) {
+        activity_selection_(store_, activity_, peek_, dialogs_, machines_),
+        commands_({
+            .store = store_,
+            .configuration = configuration_source_,
+            .keys = key_bindings_,
+            .dialogs = dialogs_,
+            .machines = machines_,
+            .machine_profiles = machine_profiles_,
+            .activity_selection = activity_selection_,
+            .display = display_,
+            .status = status_,
+            .palette = palette_,
+            .history = history_,
+            .workspace_form = workspace_form_,
+            .copy = copy_,
+            .prompt = prompt_,
+            .terminals = terminals_,
+            .components = components_,
+            .attachments = attachments_,
+            .plugins = plugins_,
+            .notifications = notifications_,
+            .links = links_,
+            .element_slots = element_slots_,
+            .host = *this,
+        }) {
     composeWindowAnimation();
     machines_.initialize();
     connect(&machines_, &MachinesCoordinator::listChanged, &palette_, &PaletteController::refreshMachines);
@@ -181,7 +160,7 @@ namespace telar::gui::qt {
     initializePalette();
     initializePlugins();
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
-    palette_.setCommands(commands());
+    palette_.setCommands(commands_.list());
 
     connect(this, &ApplicationController::configurationChanged, &display_, &WindowDisplay::publish);
     connect(&copy_, &CopyController::paneChanged, &terminals_, &TerminalController::terminalChanged);
@@ -205,7 +184,7 @@ namespace telar::gui::qt {
     // The prefix mode lists the keymap's hints.
     connect(this, &ApplicationController::configurationChanged, &status_, &WindowStatus::modeChanged);
     connect(this, &ApplicationController::configurationChanged, this, [this] {
-      palette_.setCommands(commands());
+      palette_.setCommands(commands_.list());
     });
     connect(&store_, &Store::interacted, this, &ApplicationController::interacted);
     connect(&store_, &Store::changed, this, &ApplicationController::synchronize);
@@ -230,10 +209,10 @@ namespace telar::gui::qt {
     });
     connect(&machines_, &MachinesCoordinator::listChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
-      execute(window_actions::Action::machine_picker);
+      commands_.execute(window_actions::Action::machine_picker);
     });
     connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](MachineToken token) {
-      applyInteraction([this, token] {
+      commands_.interact([this, token] {
         machines_.select(token);
       });
     });
@@ -245,9 +224,10 @@ namespace telar::gui::qt {
     connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
     connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
     connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
+    connect(&commands_, &WindowCommands::notified, this, &ApplicationController::notification);
     connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
     connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
-      execute(window_actions::Action::select_tab, QString::number(tab_id));
+      commands_.execute(window_actions::Action::select_tab, QString::number(tab_id));
       restoreTerminalFocus();
     });
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
@@ -343,7 +323,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::releaseInput() {
-    interruptBindings();
+    commands_.interrupt();
     for (const auto& pane : session().panes()) {
       terminals_.releaseInput(pane->id);
     }
@@ -409,10 +389,18 @@ namespace telar::gui::qt {
     machines_.soundFinished(failure);
   }
 
-  void ApplicationController::peekActivity(const QString& identity) {
-    applyInteraction([&] {
-      activity_selection_.select(identity, true);
-    });
+  void ApplicationController::closeWindow() {
+    if (window_ != nullptr) {
+      window_->close();
+    }
+  }
+
+  int ApplicationController::controlModifier() {
+    return static_cast<int>(NativeKeyAdapter::control_modifier);
+  }
+
+  int ApplicationController::superModifier() {
+    return static_cast<int>(NativeKeyAdapter::super_modifier);
   }
 
   void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
@@ -557,7 +545,7 @@ namespace telar::gui::qt {
   void ApplicationController::consume(MachineClient& client, QByteArrayView payload) {
     try {
       const bool active = client.key.machine.slot == store_.machines().active();
-      const HostCommands handler{*this, active};
+      const WindowCommands::HostCommands handler{commands_, active};
       const auto notification_revision = client.session.notificationRevision();
       const auto graphics_revision = client.session.graphicsRecoveryRevision();
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
@@ -681,106 +669,6 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const {
-    if (!active) {
-      UnsupportedClientCommand{}(message, reply);
-    } else if (!answerConfiguration(application, message, reply)) {
-      application.executeHostCommand(message, reply);
-    }
-  }
-
-  bool ApplicationController::answerConfiguration(tbc::view<ApplicationController&, tbc::lt::a> application, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
-    switch (message.action) {
-    case ClientAction::config_show: {
-      // The query rewrites the source's buffer, so the state views a copy of the title, not the session.
-      const auto title = application.configuration().window_title;
-      auto state = application.session().clientViewState();
-
-      state.window_title = title.view();
-      reply.text = application.configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), state);
-
-      return true;
-    }
-    case ClientAction::plugin_list:
-    case ClientAction::plugin_get: {
-      const auto page = application.configuration_source_.queryPlugins(message);
-
-      reply.text = page.text;
-      reply.value = page.next;
-
-      return true;
-    }
-    default:
-      return false;
-    }
-  }
-
-  void ApplicationController::executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply) {
-    switch (message.action) {
-    case ClientAction::plugin_enable:
-    case ClientAction::plugin_disable:
-      configuration_source_.setPluginEnabled(message, message.action == ClientAction::plugin_enable);
-      reply.status = ClientCommandStatus::admitted;
-      break;
-    case ClientAction::plugin_run:
-      plugins_.start(configuration_source_.pluginInvocation(message, bindingContext()));
-      reply.status = ClientCommandStatus::admitted;
-      break;
-    case ClientAction::config_reload:
-      configuration_source_.requestReload();
-      reply.status = ClientCommandStatus::admitted;
-      break;
-    // Name prompts: none opens over copy mode or another prompt, and
-    // copy mode does not start over a prompt.
-    case ClientAction::client_open_goto:
-      if (copy_.active() || store_.dialog().kind != Dialog::none) {
-        throw EncodingError{"ClientPromptUnavailable"};
-      }
-
-      executeWindowAction(window_actions::Action::goto_picker);
-      break;
-    case ClientAction::client_open_history:
-      if (copy_.active() || store_.dialog().kind != Dialog::none) {
-        throw EncodingError{"ClientPromptUnavailable"};
-      }
-
-      executeWindowAction(window_actions::Action::history);
-      reply.status = ClientCommandStatus::admitted;
-      break;
-    case ClientAction::client_copy_mode:
-      if (!copy_.active()) {
-        if (store_.dialog().kind != Dialog::none) {
-          throw EncodingError{"CopyModeUnavailable"};
-        }
-
-        executeWindowAction(window_actions::Action::copy_mode);
-        if (!copy_.active()) {
-          throw EncodingError{"CopyModeUnavailable"};
-        }
-      }
-
-      break;
-    case ClientAction::client_open_link: {
-      const auto target = LinkTarget::fromUri(message.text);
-      if (!target) {
-        throw EncodingError{"InvalidLink"};
-      }
-
-      const auto* focused = session().focusedPane();
-      if (!links_.open(*target, focused == nullptr ? std::nullopt : std::optional{focused->id})) {
-        throw EncodingError{"LinkOpeningUnavailable"};
-      }
-
-      reply.text = {};
-      reply.status = ClientCommandStatus::admitted;
-      break;
-    }
-    default:
-      UnsupportedClientCommand{}(message, reply);
-      break;
-    }
-  }
-
   void ApplicationController::measureDisplay() {
     const auto display = display_.metrics(display_.density());
 
@@ -818,41 +706,6 @@ namespace telar::gui::qt {
     panes_.synchronize();
   }
 
-  void ApplicationController::execute(window_actions::Action action, const QString& target) {
-    key_bindings_.cancelSequence();
-    applyInteraction([&] {
-      if (action != window_actions::Action::copy_mode && (action != window_actions::Action::cancel || store_.dialog().kind == Dialog::none)) {
-        copy_.leaveKeyboard();
-      }
-
-      if (!executeNavigation(action, target) && !executePane(action, target.toULongLong())) {
-        executeWindowAction(action);
-      }
-    });
-  }
-
-  void ApplicationController::submitDialog(const QVariantMap& input) {
-    applyInteraction([&] {
-      const auto name = input.value(QStringLiteral("text")).toString().toUtf8();
-      const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
-      const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
-
-      if (store_.dialog().kind == Dialog::new_workspace) {
-        if (!workspace_form_.submit(input)) {
-          return;
-        }
-      } else if (store_.dialog().kind == Dialog::rename_tab) {
-        session().renameTab(text);
-      } else if (store_.dialog().kind == Dialog::rename_workspace) {
-        session().renameWorkspace(text);
-      } else if (store_.dialog().kind == Dialog::copy_search) {
-        session().searchCopy(text);
-      }
-
-      dialogs_.show(Dialog::none);
-    });
-  }
-
   void ApplicationController::interacted() {
     // Exceptions stay on this side of the signal that delivered the interaction.
     try {
@@ -862,7 +715,7 @@ namespace telar::gui::qt {
 
       refresh();
     } catch (const std::exception& error) {
-      interactionFailed(error);
+      commands_.fail(error);
     }
   }
 
@@ -880,132 +733,6 @@ namespace telar::gui::qt {
     refreshPanes();
     history_.synchronize();
     palette_.synchronize();
-  }
-
-  void ApplicationController::interactionFailed(const std::exception& error) {
-    if (store_.dialog().kind == Dialog::history) {
-      history_.fail(error);
-    } else {
-      status_.fail(error);
-    }
-  }
-
-  bool ApplicationController::executeNavigation(window_actions::Action action, const QString& target) {
-    const auto identity = target.toULongLong();
-
-    if (action == window_actions::Action::new_tab) {
-      session().createTab();
-    } else if (action == window_actions::Action::select_tab) {
-      if (const auto* active = session().activeTab()) {
-        session().selectTab({.workspace = active->location.workspace, .tab_id = identity});
-      }
-    } else if (action == window_actions::Action::select_tab_index) {
-      session().selectTabIndex(static_cast<std::size_t>(identity));
-    } else if (action == window_actions::Action::next_tab || action == window_actions::Action::previous_tab) {
-      session().selectTabOffset(action == window_actions::Action::next_tab ? 1 : -1);
-    } else if (action == window_actions::Action::move_tab_next || action == window_actions::Action::move_tab_previous) {
-      session().moveTab(action == window_actions::Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
-    } else if (action == window_actions::Action::close_tab) {
-      if (const auto* active = session().activeTab()) {
-        session().closeTab({.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
-      }
-    } else if (action == window_actions::Action::select_workspace) {
-      session().selectWorkspace(parseLocation(target));
-    } else if (action == window_actions::Action::leave_worktree) {
-      session().leaveWorktree();
-    } else if (action == window_actions::Action::forget_gone_worktrees) {
-      session().forgetGoneWorktrees();
-    } else if (action == window_actions::Action::select_agent) {
-      activity_selection_.select(target);
-    } else {
-      return false;
-    }
-
-    return true;
-  }
-
-  bool ApplicationController::executePane(window_actions::Action action, std::uint64_t identity) {
-    if (action == window_actions::Action::focus_left || action == window_actions::Action::focus_right || action == window_actions::Action::focus_up || action == window_actions::Action::focus_down) {
-      session().focusDirection(paneDirection(action));
-    } else if (action == window_actions::Action::resize_left || action == window_actions::Action::resize_right || action == window_actions::Action::resize_up || action == window_actions::Action::resize_down) {
-      session().resizeDirection(paneDirection(action));
-    } else if (action == window_actions::Action::focus_pane) {
-      session().focusPane(identity);
-    } else if (action == window_actions::Action::split_horizontal) {
-      session().split(ClientLayoutAxis::horizontal);
-    } else if (action == window_actions::Action::split_vertical) {
-      session().split(ClientLayoutAxis::vertical);
-    } else if (action == window_actions::Action::close_pane) {
-      if (const auto* pane = session().focusedPane()) {
-        session().closePane(identity == 0 ? pane->id : identity);
-      }
-    } else if (action == window_actions::Action::fullscreen) {
-      session().toggleFullscreen();
-    } else {
-      return false;
-    }
-
-    return true;
-  }
-
-  void ApplicationController::executeWindowAction(window_actions::Action action) {
-    if (executeMachineAction(action)) {
-      return;
-    }
-
-    if (action == window_actions::Action::detach) {
-      if (window_ != nullptr) {
-        window_->close();
-      }
-    } else if (action == window_actions::Action::toggle_sidebar) {
-      session().setSidebarVisible(!session().configuration().sidebar_visible);
-      display_.publish();
-    } else if (action == window_actions::Action::toggle_workspace_list) {
-      session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
-      display_.publish();
-    } else if (action == window_actions::Action::history) {
-      dialogs_.show(Dialog::history);
-      history_.open();
-    } else if (action == window_actions::Action::palette || action == window_actions::Action::goto_picker) {
-      dialogs_.showPalette(action == window_actions::Action::palette ? PaletteMode::actions : PaletteMode::navigate);
-    } else if (action == window_actions::Action::path_picker) {
-      dialogs_.showPaths();
-    } else if (action == window_actions::Action::suggest_command) {
-      dialogs_.showPalette(PaletteMode::suggest);
-    } else if (action == window_actions::Action::new_workspace || action == window_actions::Action::rename_tab || action == window_actions::Action::rename_workspace) {
-      dialogs_.show(dialogFor(action));
-    } else if (action == window_actions::Action::copy_mode) {
-      if (store_.dialog().kind == Dialog::none && session().enterBlocks()) {
-        prompt_.publish(session().changedPane());
-        emit terminals_.terminalChanged(session().changedPane());
-      } else if (store_.dialog().kind == Dialog::none) {
-        static_cast<void>(session().enterCopyMode());
-        status_.publish();
-        if (const auto& copy = session().copyMode().state()) {
-          emit terminals_.terminalChanged(copy->pane_id);
-        }
-      }
-    } else if (action == window_actions::Action::cancel) {
-      cancelCurrentInteraction();
-    }
-  }
-
-  void ApplicationController::cancelCurrentInteraction() {
-    session().invalidateSuggestion();
-    if (palette_.restoreParent()) {
-      return;
-    }
-
-    const auto& copy = session().copyMode().state();
-    if (store_.dialog().kind == Dialog::none && copy && !copy->pointer) {
-      const auto pane_id = copy->pane_id;
-
-      session().leaveCopyMode();
-      emit terminals_.terminalChanged(pane_id);
-      status_.publish();
-    }
-
-    dialogs_.show(Dialog::none);
   }
 
   void ApplicationController::synchronizeWindowSize() {
@@ -1036,7 +763,7 @@ namespace telar::gui::qt {
       if (open) {
         components_.closePick();
         components_.closePanel();
-        interruptBindings();
+        commands_.interrupt();
         for (const auto& pane : session().panes()) {
           terminals_.releaseInput(pane->id);
         }
