@@ -219,11 +219,11 @@ telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundat
   TEST gui-features-terminal-graphics LABELS gui.graphics TIMEOUT 30)
 telar_add_test(gui-config-test SOURCES configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-config gui-application
   TEST gui-config LABELS gui.config TIMEOUT 30)
-telar_add_test(gui-component-config-test SOURCES component_configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-components gui-config gui-application
+telar_add_test(gui-component-config-test SOURCES component_configuration_test.cpp LIBRARIES gui-foundation-actions gui-foundation-core gui-features-components gui-config gui-application
   TEST gui-component-config LABELS gui.components TIMEOUT 30)
 target_compile_definitions(gui-component-config-test PRIVATE TELAR_GUI_EXAMPLES_DIR="${TELAR_ROOT}/docs/examples")
 
-telar_add_test(gui-pick-items-test SOURCES pick_items_test.cpp LIBRARIES gui-foundation-core gui-components
+telar_add_test(gui-pick-items-test SOURCES pick_items_test.cpp LIBRARIES gui-application gui-foundation-core gui-features-components
   TEST gui-pick-items LABELS gui.components TIMEOUT 30)
 telar_add_test(gui-platform-test SOURCES platform_test.cpp LIBRARIES gui-foundation-system gui-posix gui-platform
   TEST gui-platform LABELS gui.platform TIMEOUT 30)
@@ -444,7 +444,7 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-config
     TEST gui-plugin-worker LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-plugin-worker-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
-  telar_add_test(gui-pick-controller-test SOURCES pick_controller_test.cpp LIBRARIES gui-features-machines gui-components gui-config gui-surface-command gui-application
+  telar_add_test(gui-pick-controller-test SOURCES pick_controller_test.cpp LIBRARIES gui-features-machines gui-features-components gui-config gui-surface-command gui-application
     TEST gui-pick-controller LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-host-effects-test QT SOURCES host_effects_test.cpp LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-text gui-features-history gui-platform gui-application deps::ghostty_vt Qt6::Core Qt6::Gui Qt6::Test gui-test-fixtures
     TEST gui-host-effects LABELS gui.ui TIMEOUT 30)

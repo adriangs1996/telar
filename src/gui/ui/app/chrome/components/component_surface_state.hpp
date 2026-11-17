@@ -18,16 +18,14 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.configuration;
-import telar.gui.components.builtin_content;
 import telar.gui.application;
 
 namespace telar::gui::qt {
 
   struct ComponentSlotState {
     using Clock = std::chrono::steady_clock;
-    using Bar = RenderedContent<components::BarContent::capacity, ApplicationAllocator>;
-    using Panel = RenderedContent<components::PanelContent::capacity, ApplicationAllocator>;
+    using Bar = application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>;
+    using Panel = application::components::RenderedContent<application::components::PanelContent::capacity, ApplicationAllocator>;
     // The last content the Lua thread rendered; the window reads only this copy.
     std::shared_ptr<const Bar> bar;
     std::shared_ptr<const Panel> panel;
@@ -41,7 +39,7 @@ namespace telar::gui::qt {
   };
 
   struct ComponentSurfaceState {
-    static constexpr std::size_t bar_slots = components::Definitions::positions;
+    static constexpr std::size_t bar_slots = application::components::Definitions::positions;
     std::array<ComponentSlotState, bar_slots> bars;
     ComponentSlotState panel;
     std::optional<std::size_t> open_panel = std::nullopt;

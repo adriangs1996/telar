@@ -62,7 +62,6 @@ static_assert(true);
 #include <QtQuick/qquickitem.h>
 
 import telar.gui.application;
-import telar.gui.components.configuration;
 
 import telar.gui.config.gui_query;
 import telar.config.client;
@@ -336,7 +335,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowCommands::applyEffects(const ResolvedEffects<ApplicationAllocator>& effects) {
+  void WindowCommands::applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects) {
     const auto actions = std::span{effects.effects.actions}.first(effects.effects.length);
     if (std::ranges::any_of(actions, [&](const auto& effect) {
           return !supported(configuration_source_, effect, &effects.actions);
@@ -831,7 +830,7 @@ namespace telar::gui::qt {
     const auto& node = rendered->elements[static_cast<std::size_t>(element)];
 
     try {
-      if (node.callback != components::Element::none) {
+      if (node.callback != application::components::Element::none) {
         const auto hold = key_bindings_.hold();
 
         configuration_source_.invokeElement(instance->id, node.callback, components_.context(), instance->item, [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
@@ -842,7 +841,7 @@ namespace telar::gui::qt {
           // The function may have changed state any slot reads.
           element_slots_.invalidate();
         });
-      } else if (node.action != components::Element::none && node.action < rendered->bindings.size()) {
+      } else if (node.action != application::components::Element::none && node.action < rendered->bindings.size()) {
         static_cast<void>(runBinding(rendered->bindings[node.action], &rendered->actions));
       } else if (const auto url = rendered->view(node.url); !url.empty()) {
         if (const auto target = application::terminal::links::LinkTarget::fromUri(url)) {

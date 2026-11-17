@@ -28,4 +28,5 @@ export import :status_bar;
 export import :window;
 export import :activity;
 export import :bindings;
+export import :components;
 export import :workbench;

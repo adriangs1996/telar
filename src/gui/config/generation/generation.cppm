@@ -5,11 +5,8 @@ export module telar.gui.config.generation;
 
 import std;
 
-
-
 import telar.gui.foundation.core;
 
-import telar.gui.components.configuration;
 import telar.wire.vocabulary;
 import telar.config.gui;
 import telar.config.client;

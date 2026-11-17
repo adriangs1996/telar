@@ -36,8 +36,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.builtin_content;
-import telar.gui.components.configuration;
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.gui.foundation.actions;
@@ -62,14 +60,14 @@ namespace telar::gui::qt {
     return componentColor(role == nullptr ? theme.resolve(std::get<CellColor>(*value), fallback) : theme.chromeColor(*role));
   }
 
-  inline components::Icon componentIcon(const components::Node& node) {
+  inline application::components::Icon componentIcon(const application::components::Node& node) {
     if (node.mark) {
       constexpr std::array names{"provider_claude", "provider_codex", "provider_pi", "telar_mark"};
 
-      return components::Icon::find(names[static_cast<std::size_t>(*node.mark)]);
+      return application::components::Icon::find(names[static_cast<std::size_t>(*node.mark)]);
     }
 
-    return components::Icon::find(node.icon ? node.icon->view() : std::string_view{});
+    return application::components::Icon::find(node.icon ? node.icon->view() : std::string_view{});
   }
 
   inline QString componentActionIdentity(const std::optional<BindingAction>& action, std::string_view url, std::optional<NamedActionDescription> named = std::nullopt) {
@@ -98,9 +96,9 @@ namespace telar::gui::qt {
     name += text;
   }
 
-  template <components::Capacity Bounds, typename Resolve>
+  template <application::components::Capacity Bounds, typename Resolve>
     requires std::invocable<const Resolve&, BindingAction>
-  QVariantList componentRecords(const components::Content<Bounds>& content, const Theme& theme, const components::Time& time, const Resolve& resolve) {
+  QVariantList componentRecords(const application::components::Content<Bounds>& content, const Theme& theme, const application::components::Time& time, const Resolve& resolve) {
     constexpr std::array names{"label", "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
     constexpr std::array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
     std::array<QString, Bounds.nodes> group_names;
@@ -111,8 +109,8 @@ namespace telar::gui::qt {
       const auto& node = content.nodes()[index];
       const auto icon = componentIcon(node);
       const auto ink = theme.chromeColor(tones[static_cast<std::size_t>(node.tone)]);
-      const auto text = node.kind == components::Kind::clock ? componentText(components::Clock::format(content.text(node.text), time).view()) : componentText(content.text(node.text));
-      if (!node.tooltip && node.parent < index && content.nodes()[node.parent].kind == components::Kind::group && !text.isEmpty()) {
+      const auto text = node.kind == application::components::Kind::clock ? componentText(application::components::Clock::format(content.text(node.text), time).view()) : componentText(content.text(node.text));
+      if (!node.tooltip && node.parent < index && content.nodes()[node.parent].kind == application::components::Kind::group && !text.isEmpty()) {
         appendComponentAccessibleName(group_names.at(node.parent), text);
       }
 
@@ -127,7 +125,7 @@ namespace telar::gui::qt {
       const auto named = action && action->kind == BindingActionKind::extended ? resolve(*action) : std::nullopt;
       const QVariantMap record{
           {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("parent"), node.parent == components::Node::no_parent ? -1 : static_cast<int>(node.parent)},
+          {QStringLiteral("parent"), node.parent == application::components::Node::no_parent ? -1 : static_cast<int>(node.parent)},
           {QStringLiteral("kind"), QString::fromLatin1(names[static_cast<std::size_t>(node.kind)])},
           {QStringLiteral("tooltip"), node.tooltip},
           {QStringLiteral("text"), text},
@@ -145,11 +143,11 @@ namespace telar::gui::qt {
           {QStringLiteral("underline"), node.style.underline},
           {QStringLiteral("strikethrough"), node.style.strikethrough},
           {QStringLiteral("primary"), node.primary},
-          {QStringLiteral("value"), static_cast<qreal>(node.value) / components::Node::full_scale},
-          {QStringLiteral("marker"), node.marker ? QVariant{static_cast<qreal>(*node.marker) / components::Node::full_scale} : QVariant{}},
+          {QStringLiteral("value"), static_cast<qreal>(node.value) / application::components::Node::full_scale},
+          {QStringLiteral("marker"), node.marker ? QVariant{static_cast<qreal>(*node.marker) / application::components::Node::full_scale} : QVariant{}},
           {QStringLiteral("samples"), samples},
           {QStringLiteral("priority"), node.effectivePriority()},
-          {QStringLiteral("glyph"), node.kind == components::Kind::icon && glyph.isEmpty() ? text : glyph},
+          {QStringLiteral("glyph"), node.kind == application::components::Kind::icon && glyph.isEmpty() ? text : glyph},
           {QStringLiteral("providerMark"), static_cast<int>(icon.provider)},
           {QStringLiteral("telarMark"), icon.telar},
           {QStringLiteral("metric"), static_cast<int>(node.metric)},
@@ -159,7 +157,7 @@ namespace telar::gui::qt {
     }
 
     for (std::size_t index = 0; index < content.nodes().size(); ++index) {
-      if (content.nodes()[index].kind == components::Kind::group) {
+      if (content.nodes()[index].kind == application::components::Kind::group) {
         auto record = result.at(static_cast<qsizetype>(index)).toMap();
 
         record.insert(QStringLiteral("accessibleName"), std::move(group_names.at(index)));

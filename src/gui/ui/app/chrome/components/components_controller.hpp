@@ -27,7 +27,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.configuration;
 import telar.gui.application;
 
 namespace telar::gui::test {
@@ -74,7 +73,7 @@ namespace telar::gui::qt {
 
     // What the surfaces render with: the session's binding context, the time, the host's
     // metrics and the focused pane's title.
-    [[nodiscard]] components::Context context() const;
+    [[nodiscard]] application::components::Context context() const;
     // A configuration loaded: a new Lua generation retires the surfaces; a theme projects them.
     void configure();
     // The surfaces start over, as the active machine changed or the configuration replaced them.
@@ -135,7 +134,7 @@ namespace telar::gui::qt {
     void project();
     void projectSource(std::size_t index, bool panel);
     void render(std::size_t index, bool panel);
-    void applyRender(std::size_t index, bool panel, const components::Context& context, bool truncated = false);
+    void applyRender(std::size_t index, bool panel, const application::components::Context& context, bool truncated = false);
     void commandFinished(const ComponentCommandOwner& owner, SurfaceCommandResult result);
     [[nodiscard]] const ComponentSlotState::Bar* bar(std::size_t index) const;
     [[nodiscard]] bool commandCurrent(std::uint64_t generation, application::machines::MachineClientKey source, std::uint64_t runtime) const;
@@ -143,7 +142,7 @@ namespace telar::gui::qt {
     // What PickController asks of its host.
     [[nodiscard]] PickOwner pickOwner() const;
     [[nodiscard]] bool pickOwnerCurrent(const PickOwner& owner) const;
-    [[nodiscard]] components::Context pickContext() const;
+    [[nodiscard]] application::components::Context pickContext() const;
     void pickCommitted();
     void pickFailed(const QString& message);
 

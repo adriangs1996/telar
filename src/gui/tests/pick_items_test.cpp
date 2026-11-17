@@ -10,14 +10,15 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
-import telar.gui.components.builtin_content;
 import telar.config.core;
 import telar.lua;
+import telar.gui.features.components;
+import telar.gui.application;
 
 namespace {
 
   using namespace telar::gui;
-  using namespace telar::gui::components;
+  using namespace telar::gui::features::components;
 
   void require(bool condition, const char* message) {
     if (!condition) {
@@ -46,7 +47,7 @@ namespace {
           "@pick-items.lua");
       const telar::runtime::lua::Value root{machine.state(), -1, "fixture"};
 
-      PickItemsReader::read(root.field("valid"), items, limits);
+      application::PickItemsReader::read(root.field("valid"), items, limits);
       require(items.size() == 2 && items.at(1).selected && items.at(1).swatch.has_value(), "a pick must retain selection and swatch metadata");
 
       struct Failure {
@@ -59,9 +60,9 @@ namespace {
       for (const auto failure : {Failure{.name = "invalid", .read = 1}, Failure{.name = "bad_metadata", .read = 0}}) {
         bool rejected = false;
 
-        PickItemsReader::read(root.field("valid"), failed, limits);
+        application::PickItemsReader::read(root.field("valid"), failed, limits);
         try {
-          PickItemsReader::read(root.field(failure.name), failed, limits);
+          application::PickItemsReader::read(root.field(failure.name), failed, limits);
         } catch (const std::exception&) {
           rejected = true;
         }
@@ -89,7 +90,7 @@ namespace {
       return entry.name == "picks.max_items";
     }),
         "count overflow must keep a complete bounded prefix and report its bound");
-    PickItemsReader::lines(" \r\n  low \n a\tb \n", items, limits);
+    application::PickItemsReader::lines(" \r\n  low \n a\tb \n", items, limits);
     require(items.size() == 2 && items.at(1).label == "a b" && items.at(1).value == "a\tb", "raw line labels must show tabs as spaces while values retain their original bytes");
     input.label = "unchanged";
     const std::string oversized(PickItems::maximum_value_bytes + 1, 'v');

@@ -22,8 +22,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.builtin_content;
-import telar.gui.components.configuration;
+import telar.gui.application;
 import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
@@ -37,11 +36,11 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    using Rendered = RenderedElements<ApplicationAllocator>;
-    using Context = std::function<components::Context()>;
+    using Rendered = application::components::RenderedElements<ApplicationAllocator>;
+    using Context = std::function<application::components::Context()>;
 
     struct Instance {
-      components::Slot slot = components::Slot::count;
+      application::components::Slot slot = application::components::Slot::count;
       QString key;
       std::uint64_t id = 0;
       QByteArray item;
@@ -57,25 +56,25 @@ namespace telar::gui::qt {
 
     static constexpr unsigned failure_limit = 3;
     // The slot families, each projected by its own pass.
-    static constexpr std::array tab_slots{components::Slot::tab, components::Slot::tab_cards, components::Slot::tab_title, components::Slot::tab_path, components::Slot::tab_activity};
-    static constexpr std::array pane_slots{components::Slot::pane_header, components::Slot::pane_mark, components::Slot::pane_program, components::Slot::pane_context, components::Slot::pane_status, components::Slot::pane_progress, components::Slot::pane_actions};
-    static constexpr std::array agent_slots{components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status};
-    static constexpr std::array bar_slots{components::Slot::top_bar, components::Slot::bottom_bar};
+    static constexpr std::array tab_slots{application::components::Slot::tab, application::components::Slot::tab_cards, application::components::Slot::tab_title, application::components::Slot::tab_path, application::components::Slot::tab_activity};
+    static constexpr std::array pane_slots{application::components::Slot::pane_header, application::components::Slot::pane_mark, application::components::Slot::pane_program, application::components::Slot::pane_context, application::components::Slot::pane_status, application::components::Slot::pane_progress, application::components::Slot::pane_actions};
+    static constexpr std::array agent_slots{application::components::Slot::agent_card, application::components::Slot::agent_mark, application::components::Slot::agent_title, application::components::Slot::agent_project, application::components::Slot::agent_status};
+    static constexpr std::array bar_slots{application::components::Slot::top_bar, application::components::Slot::bottom_bar};
 
     ElementSlots(ConfigurationSource& source, Context context, QObject* parent = nullptr);
-    [[nodiscard]] bool configured(components::Slot slot) const noexcept;
+    [[nodiscard]] bool configured(application::components::Slot slot) const noexcept;
     [[nodiscard]] bool active() const noexcept;
     // Forgets every instance when `generation` is new: it owns new functions.
     void adopt(std::uint64_t generation);
     // A pass over one family: begin() before it attaches, finish() after; finish() drops the
     // family's instances the pass did not attach. Other families keep theirs.
-    void begin(std::span<const components::Slot> family);
+    void begin(std::span<const application::components::Slot> family);
     // The content a record carries for `slot`; empty while QML should draw the piece.
-    [[nodiscard]] QVariantMap attach(components::Slot slot, const QString& key, const QVariantMap& item);
+    [[nodiscard]] QVariantMap attach(application::components::Slot slot, const QString& key, const QVariantMap& item);
     // The content of every slot in `family` a mod draws for one record, by slot name; empty when
     // no mod draws any.
-    [[nodiscard]] QVariantMap elements(std::span<const components::Slot> family, const QString& key, const QVariantMap& item);
-    void finish(std::span<const components::Slot> family);
+    [[nodiscard]] QVariantMap elements(std::span<const application::components::Slot> family, const QString& key, const QVariantMap& item);
+    void finish(std::span<const application::components::Slot> family);
     // Changes whenever what the instances draw may have changed: a render settled, or the
     // instances were forgotten or invalidated. A pass that saw this revision has nothing new.
     [[nodiscard]] std::uint64_t revision() const noexcept;
@@ -83,13 +82,13 @@ namespace telar::gui::qt {
     // Reruns every instance, after a click function may have changed what the mod draws.
     void invalidate();
 
-    [[nodiscard]] bool owns(const ResolvedActions<ApplicationAllocator>& actions) const noexcept;
+    [[nodiscard]] bool owns(const application::components::ResolvedActions<ApplicationAllocator>& actions) const noexcept;
 
     // The item each family of slots receives, built from the record QML already gets.
     [[nodiscard]] static QVariantMap tabItem(const QVariantMap& record, int position);
     [[nodiscard]] static QVariantMap paneItem(const QVariantMap& pane, const QVariantMap& chrome);
     [[nodiscard]] static QVariantMap agentItem(const QVariantMap& record);
-    [[nodiscard]] static std::uint64_t identity(components::Slot slot, const QString& key) noexcept;
+    [[nodiscard]] static std::uint64_t identity(application::components::Slot slot, const QString& key) noexcept;
     [[nodiscard]] static QVariantList project(const Rendered& rendered, const Theme& theme);
 
   signals:

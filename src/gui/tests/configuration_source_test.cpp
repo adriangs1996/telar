@@ -49,7 +49,7 @@ static_assert(true);
 
 import telar.gui.tests.json_fixture;
 import telar.gui.application;
-import telar.gui.components.configuration;
+import telar.gui.features.components;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
 import telar.gui.config.generation;
@@ -301,7 +301,7 @@ namespace {
       fixture.open(source);
       QCOMPARE(source.error(), QString{});
       const auto action = [&] {
-        const auto& bar = source.fixedBar(components::Position::bottom_left)->content;
+        const auto& bar = source.fixedBar(features::components::Position::bottom_left)->content;
         const auto retained = bar.action(bar.nodes().front());
         if (!retained) {
           throw std::runtime_error{"Static bar did not retain its action"};
@@ -311,7 +311,7 @@ namespace {
       };
 
       const auto plugin_action = [&] {
-        const auto retained = source.pluginAction(action(), &source.fixedBar(components::Position::bottom_left)->actions);
+        const auto retained = source.pluginAction(action(), &source.fixedBar(features::components::Position::bottom_left)->actions);
         if (!retained) {
           throw std::runtime_error{"Static bar action is not a plugin action"};
         }
@@ -756,7 +756,7 @@ namespace {
       QElapsedTimer clock;
 
       clock.start();
-      source.renderBar(components::Position::bottom_left, {}, [&](LuaOutcome<ConfigurationSource::BarRender> outcome) {
+      source.renderBar(features::components::Position::bottom_left, {}, [&](LuaOutcome<ConfigurationSource::BarRender> outcome) {
         result.emplace(std::move(outcome));
       });
 

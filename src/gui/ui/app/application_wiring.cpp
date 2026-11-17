@@ -20,7 +20,6 @@ static_assert(true);
 #include <stdexcept>
 
 import telar.gui.application;
-import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;
 
 namespace telar::gui::qt {

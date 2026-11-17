@@ -27,8 +27,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.configuration;
-import telar.gui.components.builtin_content;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -46,7 +44,7 @@ namespace telar::gui::qt {
         : host_(host),
           memory_(memory),
           source_(source),
-          items_(nullptr, AllocationDeleter<components::PickItems, Memory>{memory}) {}
+          items_(nullptr, AllocationDeleter<application::components::PickItems, Memory>{memory}) {}
 
     [[nodiscard]] bool isOpen() const noexcept {
       return index_.has_value();
@@ -67,13 +65,13 @@ namespace telar::gui::qt {
     }
 
     void open(std::size_t index) {
-      const components::Definitions* definitions = source_.definitions();
+      const application::components::Definitions* definitions = source_.definitions();
       if (definitions == nullptr || index >= definitions->picks().size()) {
         throw std::invalid_argument{"Pick is no longer configured"};
       }
 
       close();
-      items_ = makeOwned<components::PickItems>(memory_);
+      items_ = makeOwned<application::components::PickItems>(memory_);
       const auto& definition = definitions->picks()[index];
 
       title_ = text(definition.heading.title.view());
@@ -303,8 +301,8 @@ namespace telar::gui::qt {
     Host& host_;
     Memory& memory_;
     Source& source_;
-    Owned<components::PickItems, Memory> items_;
-    components::PickMatches matches_;
+    Owned<application::components::PickItems, Memory> items_;
+    application::components::PickMatches matches_;
     QVariantList rows_;
     QByteArray query_;
     QString title_;

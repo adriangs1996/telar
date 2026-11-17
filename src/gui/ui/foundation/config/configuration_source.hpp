@@ -61,8 +61,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.builtin_content;
-import telar.gui.components.configuration;
 import telar.gui.application;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
@@ -82,11 +80,11 @@ namespace telar::gui::qt {
 
   public:
     using BarRender = ConfigurationSnapshot::BarRender;
-    using PanelRender = Owned<RenderedContent<components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
-    using PickRender = Owned<components::PickItems, ApplicationAllocator>;
-    using Effects = Owned<ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
-    using Actions = ResolvedActions<ApplicationAllocator>;
-    using ElementsRender = Owned<RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
+    using PanelRender = Owned<application::components::RenderedContent<application::components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+    using PickRender = Owned<application::components::PickItems, ApplicationAllocator>;
+    using Effects = Owned<application::components::ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
+    using Actions = application::components::ResolvedActions<ApplicationAllocator>;
+    using ElementsRender = Owned<application::components::RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
     template <typename Value>
     using Done = std::function<void(LuaOutcome<Value>)>;
 
@@ -112,14 +110,14 @@ namespace telar::gui::qt {
     [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action, const Actions* resolved = nullptr) const;
     [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action, const Actions* resolved = nullptr) const;
     [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action, const Actions* resolved = nullptr) const;
-    [[nodiscard]] const components::Definitions* definitions() const noexcept;
-    [[nodiscard]] const RenderedContent<components::BarContent::capacity, ApplicationAllocator>* fixedBar(components::Position position) const noexcept;
-    void renderBar(components::Position position, const components::Context& context, Done<BarRender> done);
-    void renderPanel(std::size_t index, const components::Context& context, Done<PanelRender> done);
-    void renderPick(std::size_t index, const components::Context& context, Done<PickRender> done);
+    [[nodiscard]] const application::components::Definitions* definitions() const noexcept;
+    [[nodiscard]] const application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>* fixedBar(application::components::Position position) const noexcept;
+    void renderBar(application::components::Position position, const application::components::Context& context, Done<BarRender> done);
+    void renderPanel(std::size_t index, const application::components::Context& context, Done<PanelRender> done);
+    void renderPick(std::size_t index, const application::components::Context& context, Done<PickRender> done);
     void closePanel();
-    void renderElements(components::Slot slot, std::uint64_t instance, const components::Context& context, const QByteArray& item, Done<ElementsRender> done);
-    void invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context& context, const QByteArray& item, Done<Effects> done);
+    void renderElements(application::components::Slot slot, std::uint64_t instance, const application::components::Context& context, const QByteArray& item, Done<ElementsRender> done);
+    void invokeElement(std::uint64_t instance, std::uint32_t callback, const application::components::Context& context, const QByteArray& item, Done<Effects> done);
     void forgetElements(std::uint64_t instance);
     [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char* field) const;
     [[nodiscard]] std::string_view query(ConfigurationQuery query, const application::ClientViewState& view = {});
@@ -168,7 +166,7 @@ namespace telar::gui::qt {
     tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
     tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
     tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
-    tbc::view<std::array<std::optional<BarRender>, components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
+    tbc::view<std::array<std::optional<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
     ConfigurationSnapshot::CommandArguments arguments_;
     tbc::view<std::optional<PluginPackages>, tbc::lt::a> plugins_;
     PluginOverrides plugin_overrides_;

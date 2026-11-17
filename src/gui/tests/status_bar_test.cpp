@@ -39,6 +39,7 @@ import telar.gui.application;
 import telar.gui.features.machines;
 import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
+import telar.gui.features.components;
 
 namespace {
 
@@ -69,10 +70,10 @@ namespace {
     };
   }
 
-  using BarContent = components::BarContent;
+  using BarContent = features::components::BarContent;
 
-  void appendNode(BarContent& content, components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
-    components::Input input{};
+  void appendNode(BarContent& content, features::components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
+    features::components::Input input{};
 
     input.node = node;
     input.text = text;
@@ -214,9 +215,9 @@ namespace {
       const auto detail_bytes = detail.toUtf8();
       const std::string_view value_text{detail_bytes.constData(), static_cast<std::size_t>(detail_bytes.size())};
 
-      appendNode(content, {.kind = components::Kind::group});
-      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = components::Node::full_scale}, labelled ? "5h" : "", value_text);
-      appendNode(content, {.kind = components::Kind::meter, .parent = 0}, labelled ? "7d" : "", value_text);
+      appendNode(content, {.kind = features::components::Kind::group});
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .value = features::components::Node::full_scale}, labelled ? "5h" : "", value_text);
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0}, labelled ? "7d" : "", value_text);
       auto properties = treeProperties(content);
 
       properties.insert(QStringLiteral("ratio"), ratio);
@@ -274,9 +275,9 @@ namespace {
       std::array<std::uint8_t, 60> samples{};
 
       samples.back() = 100;
-      components::Input input{};
+      features::components::Input input{};
 
-      input.node.kind = components::Kind::sparkline;
+      input.node.kind = features::components::Kind::sparkline;
       input.samples = samples;
       content.append(input);
       const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
@@ -303,10 +304,10 @@ namespace {
       QQmlEngine engine;
       BarContent content;
 
-      appendNode(content, {.kind = components::Kind::group});
-      appendNode(content, {.kind = components::Kind::label, .parent = 0}, "Clock");
-      appendNode(content, {.kind = components::Kind::group}, {}, {}, "https://example.com");
-      appendNode(content, {.kind = components::Kind::meter, .parent = 2, .tone = components::Tone::warning, .value = 600}, "7d");
+      appendNode(content, {.kind = features::components::Kind::group});
+      appendNode(content, {.kind = features::components::Kind::label, .parent = 0}, "Clock");
+      appendNode(content, {.kind = features::components::Kind::group}, {}, {}, "https://example.com");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 2, .tone = features::components::Tone::warning, .value = 600}, "7d");
       const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
 
       tree->setParentItem(window.contentItem());
@@ -326,10 +327,10 @@ namespace {
       QQmlEngine engine;
       BarContent content;
 
-      appendNode(content, {.kind = components::Kind::group}, "system");
-      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = 300}, "disk");
-      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::warning, .value = 920}, "net");
-      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::danger, .value = 990}, "gpu");
+      appendNode(content, {.kind = features::components::Kind::group}, "system");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .value = 300}, "disk");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .tone = features::components::Tone::warning, .value = 920}, "net");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .tone = features::components::Tone::danger, .value = 990}, "gpu");
       const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
 
       tree->setParentItem(window.contentItem());

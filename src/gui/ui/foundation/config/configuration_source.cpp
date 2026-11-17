@@ -47,8 +47,6 @@ static_assert(true);
 #include <limits.h>
 
 import telar.gui.application;
-import telar.gui.components.configuration;
-import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
@@ -118,13 +116,13 @@ namespace telar::gui::qt {
 
     // A render context whose borrowed text is copied so it can cross to the Lua thread.
     struct ContextCopy {
-      explicit ContextCopy(const components::Context& source)
+      explicit ContextCopy(const application::components::Context& source)
           : context(source),
             output(source.output ? QByteArray{source.output->data(), static_cast<qsizetype>(source.output->size())} : QByteArray{}),
             pane_title(source.pane_title.data(), static_cast<qsizetype>(source.pane_title.size())),
             has_output(source.output.has_value()) {}
 
-      [[nodiscard]] components::Context view() const {
+      [[nodiscard]] application::components::Context view() const {
         auto result = context;
 
         result.output = has_output ? std::optional{std::string_view{output.constData(), static_cast<std::size_t>(output.size())}} : std::nullopt;
@@ -133,7 +131,7 @@ namespace telar::gui::qt {
         return result;
       }
 
-      components::Context context;
+      application::components::Context context;
       QByteArray output;
       QByteArray pane_title;
       bool has_output = false;
@@ -212,24 +210,24 @@ namespace telar::gui::qt {
     return generation_ ? generation_->input() : default_input_;
   }
 
-  const components::Definitions* ConfigurationSource::definitions() const noexcept {
+  const application::components::Definitions* ConfigurationSource::definitions() const noexcept {
     return generation_ ? &generation_->components().definitions() : nullptr;
   }
 
-  const RenderedContent<components::BarContent::capacity, ApplicationAllocator>* ConfigurationSource::fixedBar(components::Position position) const noexcept {
+  const application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>* ConfigurationSource::fixedBar(application::components::Position position) const noexcept {
     const auto& bar = fixed_bars_.at(static_cast<std::size_t>(position));
 
     return bar ? bar->get() : nullptr;
   }
 
-  void ConfigurationSource::renderBar(components::Position position, const components::Context& context, Done<BarRender> done) {
+  void ConfigurationSource::renderBar(application::components::Position position, const application::components::Context& context, Done<BarRender> done) {
     run<BarRender>([position, context = ContextCopy{context}](Generation& generation) {
       return generation.renderedBar(position, context.view());
     },
         std::move(done));
   }
 
-  void ConfigurationSource::renderPanel(std::size_t index, const components::Context& context, Done<PanelRender> done) {
+  void ConfigurationSource::renderPanel(std::size_t index, const application::components::Context& context, Done<PanelRender> done) {
     run<PanelRender>([index, context = ContextCopy{context}](Generation& generation) {
       return generation.renderedPanel(index, context.view());
     },
@@ -247,14 +245,14 @@ namespace telar::gui::qt {
     }
   }
 
-  void ConfigurationSource::renderElements(components::Slot slot, std::uint64_t instance, const components::Context& context, const QByteArray& item, Done<ElementsRender> done) {
+  void ConfigurationSource::renderElements(application::components::Slot slot, std::uint64_t instance, const application::components::Context& context, const QByteArray& item, Done<ElementsRender> done) {
     run<ElementsRender>([slot, instance, item, context = ContextCopy{context}](Generation& generation) {
       return generation.renderElements(slot, instance, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
     },
         std::move(done));
   }
 
-  void ConfigurationSource::invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context& context, const QByteArray& item, Done<Effects> done) {
+  void ConfigurationSource::invokeElement(std::uint64_t instance, std::uint32_t callback, const application::components::Context& context, const QByteArray& item, Done<Effects> done) {
     run<Effects>([instance, callback, item, context = ContextCopy{context}](Generation& generation) {
       return generation.invokeElement(instance, callback, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
     },
@@ -272,9 +270,9 @@ namespace telar::gui::qt {
     }
   }
 
-  void ConfigurationSource::renderPick(std::size_t index, const components::Context& context, Done<PickRender> done) {
+  void ConfigurationSource::renderPick(std::size_t index, const application::components::Context& context, Done<PickRender> done) {
     run<PickRender>([this, index, context = ContextCopy{context}](Generation& generation) {
-      auto items = makeOwned<components::PickItems>(memory_);
+      auto items = makeOwned<application::components::PickItems>(memory_);
 
       generation.renderPick(index, context.view(), *items);
 

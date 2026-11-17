@@ -22,12 +22,10 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.plugins;
-import telar.gui.components.configuration;
 import telar.config.client;
 import telar.gui.application;
 
@@ -68,14 +66,14 @@ namespace telar::gui::qt {
 
   // Read before the Lua thread owns the VM: the window keeps these instead of reading it.
   struct ConfigurationSnapshot {
-    using BarRender = Owned<RenderedContent<components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+    using BarRender = Owned<application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
     using CommandArguments = QMap<std::pair<int, QByteArray>, QList<QByteArray>>;
 
     explicit ConfigurationSnapshot(ApplicationAllocator& memory)
         : commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {}
 
     Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
-    std::array<std::optional<BarRender>, components::Definitions::positions> fixed_bars{};
+    std::array<std::optional<BarRender>, application::components::Definitions::positions> fixed_bars{};
     CommandArguments arguments;
   };
 

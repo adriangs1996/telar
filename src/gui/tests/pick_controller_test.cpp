@@ -41,8 +41,7 @@ static_assert(true);
 #include <iostream>
 #include <limits.h>
 
-import telar.gui.components.configuration;
-import telar.gui.components.builtin_content;
+import telar.gui.features.components;
 import telar.gui.config.generation;
 
 import telar.gui.config.gui_query;
@@ -95,7 +94,7 @@ namespace {
       return candidate.source == owner.source && candidate.runtime == owner.runtime && candidate.generation == owner.generation;
     }
 
-    [[nodiscard]] static components::Context pickContext() {
+    [[nodiscard]] static features::components::Context pickContext() {
       return {};
     }
 
@@ -121,17 +120,17 @@ namespace {
         : memory(memory),
           generation(memory, application::ConfigurationSourceText{.source = script, .directory = {}, .profile = {}}) {}
 
-    [[nodiscard]] const components::Definitions* definitions() const noexcept {
+    [[nodiscard]] const features::components::Definitions* definitions() const noexcept {
       return &generation.components().definitions();
     }
 
     // Answers at once, as the Lua thread would after its queue drains.
     template <typename Done>
-    void renderPick(std::size_t index, const components::Context& context, Done done) {
-      LuaOutcome<Owned<components::PickItems, Memory>> outcome;
+    void renderPick(std::size_t index, const features::components::Context& context, Done done) {
+      LuaOutcome<Owned<features::components::PickItems, Memory>> outcome;
 
       try {
-        auto items = makeOwned<components::PickItems>(memory);
+        auto items = makeOwned<features::components::PickItems>(memory);
 
         generation.renderPick(index, context, *items);
         outcome.value.emplace(std::move(items));

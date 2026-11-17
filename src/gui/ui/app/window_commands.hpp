@@ -168,7 +168,7 @@ namespace telar::gui::qt {
     [[nodiscard]] BindingContext context() const;
     void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
     void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply);
-    void applyEffects(const ResolvedEffects<ApplicationAllocator>& effects);
+    void applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects);
     void executeNamedAction(const NamedActionDescription& named);
     void executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved);
     void executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions* resolved);

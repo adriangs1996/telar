@@ -167,18 +167,18 @@ namespace telar::gui::qt {
 
     const auto& definitions = generation.components().definitions();
 
-    for (std::size_t index = 0; index < components::Definitions::positions; ++index) {
-      const auto position = static_cast<components::Position>(index);
+    for (std::size_t index = 0; index < application::components::Definitions::positions; ++index) {
+      const auto position = static_cast<application::components::Position>(index);
       const auto& source = definitions.source(position);
-      if (source.kind == components::SourceKind::fixed) {
+      if (source.kind == application::components::SourceKind::fixed) {
         result.fixed_bars.at(index).emplace(generation.copied(memory, generation.components().bar(position)));
-      } else if (source.kind == components::SourceKind::command) {
+      } else if (source.kind == application::components::SourceKind::command) {
         store(source.reference, "command");
       }
     }
 
     for (const auto& panel : definitions.panels()) {
-      if (panel.source.kind == components::SourceKind::command) {
+      if (panel.source.kind == application::components::SourceKind::command) {
         store(panel.source.reference, "command");
       }
     }

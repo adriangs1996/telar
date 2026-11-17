@@ -42,8 +42,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.components.builtin_content;
-import telar.gui.components.configuration;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -76,9 +74,9 @@ namespace telar::gui::qt {
       return panel ? state.panel : state.bars.at(index);
     }
 
-    const components::Source& surfaceSource(const components::Definitions& definitions, std::size_t index, bool panel) {
+    const application::components::Source& surfaceSource(const application::components::Definitions& definitions, std::size_t index, bool panel) {
       if (!panel) {
-        return definitions.source(static_cast<components::Position>(index));
+        return definitions.source(static_cast<application::components::Position>(index));
       }
 
       const auto panels = definitions.panels();
@@ -106,17 +104,17 @@ namespace telar::gui::qt {
       return {};
     }
 
-    template <components::Capacity Bounds>
-    Clock::time_point nextClock(const components::Content<Bounds>& content) {
+    template <application::components::Capacity Bounds>
+    Clock::time_point nextClock(const application::components::Content<Bounds>& content) {
       constexpr auto second = std::chrono::milliseconds{1000};
       constexpr auto minute = second * 60;
       auto period = minute;
       bool found = false;
 
       for (const auto& node : content.nodes()) {
-        if (node.kind == components::Kind::clock) {
+        if (node.kind == application::components::Kind::clock) {
           found = true;
-          if (components::Clock::showsSeconds(content.text(node.text))) {
+          if (application::components::Clock::showsSeconds(content.text(node.text))) {
             period = second;
             break;
           }
@@ -228,7 +226,7 @@ namespace telar::gui::qt {
     return commandCurrent(owner.generation, owner.source, owner.runtime);
   }
 
-  components::Context ComponentsController::pickContext() const {
+  application::components::Context ComponentsController::pickContext() const {
     return context();
   }
 
@@ -368,12 +366,12 @@ namespace telar::gui::qt {
     }
   }
 
-  components::Context ComponentsController::context() const {
+  application::components::Context ComponentsController::context() const {
     const auto local = QDateTime::currentDateTime();
     const auto date = local.date();
     const auto time = local.time();
     constexpr int days_per_week = 7;
-    components::Context context;
+    application::components::Context context;
 
     context.client = sessionBindingContext(store_.session());
     context.time = {
@@ -412,8 +410,8 @@ namespace telar::gui::qt {
 
         state.revision = ++next_revision_;
         state.identity = state.revision;
-        const auto kind = definitions->source(static_cast<components::Position>(index)).kind;
-        if (kind == components::SourceKind::fixed || components::builtinSource(kind)) {
+        const auto kind = definitions->source(static_cast<application::components::Position>(index)).kind;
+        if (kind == application::components::SourceKind::fixed || application::components::builtinSource(kind)) {
           projectSource(index, false);
         }
       }
@@ -441,7 +439,7 @@ namespace telar::gui::qt {
       state.clock_next = nextClock(content);
     };
 
-    const auto kind = panel ? components::SourceKind::dynamic : definitions->source(static_cast<components::Position>(index)).kind;
+    const auto kind = panel ? application::components::SourceKind::dynamic : definitions->source(static_cast<application::components::Position>(index)).kind;
 
     if (panel) {
       if (state.panel) {
@@ -450,10 +448,10 @@ namespace telar::gui::qt {
         state.nodes.clear();
         state.clock_next = Clock::time_point::max();
       }
-    } else if (components::builtinSource(kind)) {
+    } else if (application::components::builtinSource(kind)) {
       const ConfigurationSource::Actions none{memory_};
 
-      state.nodes = componentRecords(components::builtinContent(kind), theme, time, [&](BindingAction action) {
+      state.nodes = componentRecords(application::components::builtinContent(kind), theme, time, [&](BindingAction action) {
         return configuration_.namedAction(action, &none);
       });
 
@@ -470,8 +468,8 @@ namespace telar::gui::qt {
 
   const ComponentSlotState::Bar* ComponentsController::bar(std::size_t index) const {
     const auto* definitions = configuration_.definitions();
-    const auto position = static_cast<components::Position>(index);
-    if (definitions != nullptr && definitions->source(position).kind == components::SourceKind::fixed) {
+    const auto position = static_cast<application::components::Position>(index);
+    if (definitions != nullptr && definitions->source(position).kind == application::components::SourceKind::fixed) {
       return configuration_.fixedBar(position);
     }
 
@@ -518,15 +516,15 @@ namespace telar::gui::qt {
 
     const auto& source = surfaceSource(*definitions, index, panel);
     auto& state = surfaceState(surfaces_, index, panel);
-    if (state.rendering || (source.kind == components::SourceKind::command && command_.active())) {
+    if (state.rendering || (source.kind == application::components::SourceKind::command && command_.active())) {
       return;
     }
 
     state.next = source.interval ? Clock::now() + *source.interval : Clock::time_point::max();
     try {
-      if (source.kind == components::SourceKind::dynamic) {
+      if (source.kind == application::components::SourceKind::dynamic) {
         applyRender(index, panel, context());
-      } else if (source.kind == components::SourceKind::command) {
+      } else if (source.kind == application::components::SourceKind::command) {
         const auto& client = store_.client(store_.machines().active());
         const ComponentCommandOwner owner{
             .index = index,
@@ -556,7 +554,7 @@ namespace telar::gui::qt {
 
   // The render runs on the Lua thread; its result replaces the surface only if nothing that
   // owned the surface changed meanwhile.
-  void ComponentsController::applyRender(std::size_t index, bool panel, const components::Context& context, bool truncated) {
+  void ComponentsController::applyRender(std::size_t index, bool panel, const application::components::Context& context, bool truncated) {
     auto& state = surfaceState(surfaces_, index, panel);
     const auto epoch = surfaces_.epoch;
     const auto identity = surfaces_.panel_identity;
@@ -595,7 +593,7 @@ namespace telar::gui::qt {
     if (panel) {
       configuration_.renderPanel(index, context, finish);
     } else {
-      configuration_.renderBar(static_cast<components::Position>(index), context, finish);
+      configuration_.renderBar(static_cast<application::components::Position>(index), context, finish);
     }
   }
 
@@ -650,8 +648,8 @@ namespace telar::gui::qt {
       }
 
       const auto& state = surfaceState(surfaces_, index, panel);
-      const bool live = source.kind == components::SourceKind::dynamic || source.kind == components::SourceKind::command;
-      if (!rendered && live && !state.rendering && state.next <= now && (source.kind != components::SourceKind::command || !command_.active())) {
+      const bool live = source.kind == application::components::SourceKind::dynamic || source.kind == application::components::SourceKind::command;
+      if (!rendered && live && !state.rendering && state.next <= now && (source.kind != application::components::SourceKind::command || !command_.active())) {
         rendered = true;
         render(index, panel);
       }
@@ -680,8 +678,8 @@ namespace telar::gui::qt {
       const auto& source = surfaceSource(*definitions, index, panel);
 
       next = std::min(next, state.clock_next);
-      const bool live = source.kind == components::SourceKind::dynamic || source.kind == components::SourceKind::command;
-      if (live && !state.rendering && (source.kind != components::SourceKind::command || !command_.active())) {
+      const bool live = source.kind == application::components::SourceKind::dynamic || source.kind == application::components::SourceKind::command;
+      if (live && !state.rendering && (source.kind != application::components::SourceKind::command || !command_.active())) {
         next = std::min(next, state.next);
       }
     };
@@ -704,7 +702,7 @@ namespace telar::gui::qt {
   QVariantMap ComponentsController::bars() const {
     constexpr std::array names{"left", "center", "right", "top", "footerLeft", "footerCenter", "footerRight"};
     constexpr std::array kinds{"empty", "tabs", "metrics", "machines", "content", "content", "content"};
-    const components::Definitions defaults;
+    const application::components::Definitions defaults;
     const auto* configured = configuration_.definitions();
     const auto& definitions = configured == nullptr ? defaults : *configured;
     QVariantMap result;
@@ -713,7 +711,7 @@ namespace telar::gui::qt {
       const auto& state = surfaces_.bars[index];
 
       result.insert(QString::fromLatin1(names[index]), QVariantMap{
-                                                           {QStringLiteral("kind"), QString::fromLatin1(kinds[static_cast<std::size_t>(definitions.source(static_cast<components::Position>(index)).kind)])},
+                                                           {QStringLiteral("kind"), QString::fromLatin1(kinds[static_cast<std::size_t>(definitions.source(static_cast<application::components::Position>(index)).kind)])},
                                                            {QStringLiteral("source"), static_cast<int>(index)},
                                                            {QStringLiteral("nodes"), state.nodes},
                                                            {QStringLiteral("error"), state.error},

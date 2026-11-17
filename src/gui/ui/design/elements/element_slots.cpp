@@ -25,7 +25,7 @@ namespace telar::gui::qt {
       return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
     }
 
-    QVariant paint(const components::ElementColor& color, const Theme& theme, std::optional<Color> fallback = std::nullopt) {
+    QVariant paint(const application::components::ElementColor& color, const Theme& theme, std::optional<Color> fallback = std::nullopt) {
       if (!color.value && !fallback) {
         return {};
       }
@@ -66,7 +66,7 @@ namespace telar::gui::qt {
     });
   }
 
-  bool ElementSlots::configured(components::Slot slot) const noexcept {
+  bool ElementSlots::configured(application::components::Slot slot) const noexcept {
     const auto* definitions = source_.definitions();
 
     return definitions != nullptr && definitions->slot(slot) != LUA_NOREF;
@@ -89,7 +89,7 @@ namespace telar::gui::qt {
     instances_.clear();
   }
 
-  void ElementSlots::begin(std::span<const components::Slot> family) {
+  void ElementSlots::begin(std::span<const application::components::Slot> family) {
     for (auto& instance : instances_) {
       if (std::ranges::find(family, instance.slot) != family.end()) {
         instance.seen = false;
@@ -101,11 +101,11 @@ namespace telar::gui::qt {
     return revision_;
   }
 
-  std::uint64_t ElementSlots::identity(components::Slot slot, const QString& key) noexcept {
+  std::uint64_t ElementSlots::identity(application::components::Slot slot, const QString& key) noexcept {
     return qHash(key, static_cast<std::size_t>(slot) + 1);
   }
 
-  QVariantMap ElementSlots::attach(components::Slot slot, const QString& key, const QVariantMap& item) {
+  QVariantMap ElementSlots::attach(application::components::Slot slot, const QString& key, const QVariantMap& item) {
     if (!configured(slot)) {
       return {};
     }
@@ -135,7 +135,7 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("slot"), QString::fromLatin1(components::slot_names[static_cast<std::size_t>(slot)].data(), static_cast<qsizetype>(components::slot_names[static_cast<std::size_t>(slot)].size()))},
+        {QStringLiteral("slot"), QString::fromLatin1(application::components::slot_names[static_cast<std::size_t>(slot)].data(), static_cast<qsizetype>(application::components::slot_names[static_cast<std::size_t>(slot)].size()))},
         {QStringLiteral("key"), key},
         {QStringLiteral("revision"), QString::number(current.revision)},
         {QStringLiteral("nodes"), current.nodes},
@@ -143,7 +143,7 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantMap ElementSlots::elements(std::span<const components::Slot> family, const QString& key, const QVariantMap& item) {
+  QVariantMap ElementSlots::elements(std::span<const application::components::Slot> family, const QString& key, const QVariantMap& item) {
     if (!active()) {
       return {};
     }
@@ -153,7 +153,7 @@ namespace telar::gui::qt {
     for (const auto slot : family) {
       auto content = attach(slot, key, item);
       if (!content.isEmpty()) {
-        const auto name = components::slot_names[static_cast<std::size_t>(slot)];
+        const auto name = application::components::slot_names[static_cast<std::size_t>(slot)];
 
         result.insert(QString::fromLatin1(name.data(), static_cast<qsizetype>(name.size())), std::move(content));
       }
@@ -162,7 +162,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  void ElementSlots::finish(std::span<const components::Slot> family) {
+  void ElementSlots::finish(std::span<const application::components::Slot> family) {
     for (auto iterator = instances_.begin(); iterator != instances_.end();) {
       if (iterator->seen || std::ranges::find(family, iterator->slot) == family.end()) {
         ++iterator;
@@ -175,19 +175,19 @@ namespace telar::gui::qt {
   }
 
   const ElementSlots::Instance* ElementSlots::find(const QString& slot, const QString& key) const {
-    const auto* const found = std::ranges::find_if(components::slot_names, [&](std::string_view name) {
+    const auto* const found = std::ranges::find_if(application::components::slot_names, [&](std::string_view name) {
       return slot == QLatin1StringView{name.data(), static_cast<qsizetype>(name.size())};
     });
-    if (found == components::slot_names.end()) {
+    if (found == application::components::slot_names.end()) {
       return nullptr;
     }
 
-    const auto entry = instances_.constFind(identity(static_cast<components::Slot>(found - components::slot_names.begin()), key));
+    const auto entry = instances_.constFind(identity(static_cast<application::components::Slot>(found - application::components::slot_names.begin()), key));
 
     return entry == instances_.cend() ? nullptr : &*entry;
   }
 
-  bool ElementSlots::owns(const ResolvedActions<ApplicationAllocator>& actions) const noexcept {
+  bool ElementSlots::owns(const application::components::ResolvedActions<ApplicationAllocator>& actions) const noexcept {
     return std::ranges::any_of(instances_, [&](const Instance& instance) {
       return instance.rendered && &instance.rendered->actions == &actions;
     });
@@ -233,7 +233,7 @@ namespace telar::gui::qt {
         if (!outcome.value) {
           current.error = outcome.error;
           if (++current.failures == failure_limit) {
-            emit failed(QStringLiteral("components.%1 failed %2 times and fell back to the built-in piece: %3").arg(text(components::slot_names[static_cast<std::size_t>(current.slot)])).arg(failure_limit).arg(outcome.error));
+            emit failed(QStringLiteral("components.%1 failed %2 times and fell back to the built-in piece: %3").arg(text(application::components::slot_names[static_cast<std::size_t>(current.slot)])).arg(failure_limit).arg(outcome.error));
           }
         } else {
           current.failures = 0;
@@ -268,8 +268,8 @@ namespace telar::gui::qt {
       const auto ink = theme.chromeColor(tones[static_cast<std::size_t>(element.tone)]);
       QVariantMap record{
           {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("parent"), element.parent == components::Element::none ? -1 : static_cast<int>(element.parent)},
-          {QStringLiteral("kind"), QString::fromLatin1(components::element_kind_names[static_cast<std::size_t>(kind)])},
+          {QStringLiteral("parent"), element.parent == application::components::Element::none ? -1 : static_cast<int>(element.parent)},
+          {QStringLiteral("kind"), QString::fromLatin1(application::components::element_kind_names[static_cast<std::size_t>(kind)])},
           {QStringLiteral("key"), text(rendered.view(element.key))},
           {QStringLiteral("text"), text(rendered.view(element.text))},
           {QStringLiteral("tooltip"), text(rendered.view(element.tooltip))},
@@ -303,13 +303,13 @@ namespace telar::gui::qt {
           {QStringLiteral("maxLines"), element.max_lines},
           {QStringLiteral("clip"), element.clip},
           {QStringLiteral("shadow"), element.shadow},
-          {QStringLiteral("action"), element.action == components::Element::none ? -1 : static_cast<int>(element.action)},
-          {QStringLiteral("callback"), element.callback == components::Element::none ? -1 : static_cast<int>(element.callback)},
+          {QStringLiteral("action"), element.action == application::components::Element::none ? -1 : static_cast<int>(element.action)},
+          {QStringLiteral("callback"), element.callback == application::components::Element::none ? -1 : static_cast<int>(element.callback)},
           {QStringLiteral("url"), text(rendered.view(element.url))},
           {QStringLiteral("since"), static_cast<qint64>(element.since)},
       };
 
-      record.insert(QStringLiteral("clickable"), element.action != components::Element::none || element.callback != components::Element::none || element.url.length != 0);
+      record.insert(QStringLiteral("clickable"), element.action != application::components::Element::none || element.callback != application::components::Element::none || element.url.length != 0);
       if (element.max_width >= 0) {
         record.insert(QStringLiteral("maxWidth"), element.max_width);
       }
@@ -322,25 +322,25 @@ namespace telar::gui::qt {
         record.insert(QStringLiteral("alignSelf"), *element.align_self);
       }
 
-      if (kind == components::ElementKind::icon) {
-        const auto glyph = element.named ? components::Icon::find(normalizedIcon(rendered.view(element.text)).toStdString()).glyph : rendered.view(element.text);
+      if (kind == application::components::ElementKind::icon) {
+        const auto glyph = element.named ? application::components::Icon::find(normalizedIcon(rendered.view(element.text)).toStdString()).glyph : rendered.view(element.text);
 
         record.insert(QStringLiteral("glyph"), text(glyph));
-      } else if (kind == components::ElementKind::mark) {
+      } else if (kind == application::components::ElementKind::mark) {
         const auto name = rendered.view(element.text);
-        const auto icon = components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (QStringLiteral("provider_") + text(name)).toStdString());
+        const auto icon = application::components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (QStringLiteral("provider_") + text(name)).toStdString());
 
         record.insert(QStringLiteral("glyph"), text(icon.glyph));
         record.insert(QStringLiteral("providerMark"), static_cast<int>(icon.provider));
         record.insert(QStringLiteral("telarMark"), icon.telar);
-      } else if (kind == components::ElementKind::tile) {
+      } else if (kind == application::components::ElementKind::tile) {
         const auto mark = application::activity::ApplicationMark::forApplication(rendered.view(element.text));
 
         record.insert(QStringLiteral("glyph"), text(mark.glyph));
         record.insert(QStringLiteral("tile"), text(mark.tile));
         record.insert(QStringLiteral("ink"), text(mark.ink));
         record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
-      } else if (kind == components::ElementKind::canvas) {
+      } else if (kind == application::components::ElementKind::canvas) {
         QVariantList operations;
 
         operations.reserve(static_cast<qsizetype>(element.steps_count));

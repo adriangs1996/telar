@@ -139,7 +139,7 @@ static_assert(true);
 
 import telar.gui.tests.json_fixture;
 import telar.gui.application;
-import telar.gui.components.configuration;
+import telar.gui.features.components;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.workbench;
 import telar.base.text.json;
@@ -6113,18 +6113,18 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      verifyAccessibleComponentName(components::Kind::button, QStringLiteral("Named button"), "Named button");
+      verifyAccessibleComponentName(features::components::Kind::button, QStringLiteral("Named button"), "Named button");
       QVERIFY(!QTest::currentTestFailed());
-      verifyAccessibleComponentName(components::Kind::group, QStringLiteral("Named group 1"), "Named group 1 Ready");
+      verifyAccessibleComponentName(features::components::Kind::group, QStringLiteral("Named group 1"), "Named group 1 Ready");
       QVERIFY(!QTest::currentTestFailed());
-      const QPointer<QQuickItem> before{componentActionItem(components::Kind::group, QStringLiteral("Named group 1"))};
+      const QPointer<QQuickItem> before{componentActionItem(features::components::Kind::group, QStringLiteral("Named group 1"))};
       const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       client_->components()->refreshPanel();
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
-      verifyAccessibleComponentName(components::Kind::group, QStringLiteral("Named group 2"), "Named group 2 Ready");
+      verifyAccessibleComponentName(features::components::Kind::group, QStringLiteral("Named group 2"), "Named group 2 Ready");
       QVERIFY(!QTest::currentTestFailed());
-      QCOMPARE(componentActionItem(components::Kind::group, QStringLiteral("Named group 2")), before.data());
+      QCOMPARE(componentActionItem(features::components::Kind::group, QStringLiteral("Named group 2")), before.data());
       auto* interface = QAccessible::queryAccessibleInterface(before.data());
       if (interface == nullptr || interface->actionInterface() == nullptr) {
         QFAIL("The retained group has no accessible action interface");
@@ -6139,14 +6139,14 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredPluginCaptionRefresh() {
-      for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         verifyPluginCaptionRefresh(kind, false);
         QVERIFY(!QTest::currentTestFailed());
       }
     }
 
     Q_SLOT void configuredPluginCaptureRefresh() {
-      for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         verifyPluginCaptionRefresh(kind, true);
         QVERIFY(!QTest::currentTestFailed());
       }
@@ -6226,7 +6226,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
       QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Validated plugin")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(features::components::Kind::button, QStringLiteral("Validated plugin")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto retained = test::ComponentActions::retain(*client_);
       if (!retained) {
@@ -6263,7 +6263,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredDefinitionCaptionRefresh() {
-      for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         for (const bool picker : {false, true}) {
           verifyDefinitionCaptionRefresh(kind, picker, false);
           QVERIFY(!QTest::currentTestFailed());
@@ -6272,7 +6272,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void configuredDefinitionCaptureRefresh() {
-      for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         for (const bool picker : {false, true}) {
           verifyDefinitionCaptionRefresh(kind, picker, true);
           QVERIFY(!QTest::currentTestFailed());
@@ -6334,7 +6334,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Single resolution")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(features::components::Kind::button, QStringLiteral("Single resolution")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto validated = test::ComponentActions::retain(*client_);
       if (!validated) {
@@ -6384,9 +6384,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
-      for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         client_->components()->closePanel();
-        const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=t.action.toggle_sidebar()})") : QStringLiteral("ui.group({on_click=t.action.toggle_sidebar(),ui.label(caption)})");
+        const auto element = kind == features::components::Kind::button ? QStringLiteral("ui.button({text=caption,action=t.action.toggle_sidebar()})") : QStringLiteral("ui.group({on_click=t.action.toggle_sidebar(),ui.label(caption)})");
         const auto config = QStringLiteral(R"(
         local t=require('telar');local ui=t.ui;local renders=0
         return {api_version=2,client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('target'))},panels={target=t.panel({title='Refreshed focus',render=function()
@@ -6495,9 +6495,9 @@ return {api_version=2, client={keybindings={
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
-      for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         client_->components()->closePanel();
-        const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text='Stable target',action=action})") : QStringLiteral("ui.group({on_click=action,ui.label('Stable target')})");
+        const auto element = kind == features::components::Kind::button ? QStringLiteral("ui.button({text='Stable target',action=action})") : QStringLiteral("ui.group({on_click=action,ui.label('Stable target')})");
         const auto configuration = QStringLiteral(R"(
         local t=require('telar');local ui=t.ui;local renders=0
         return {api_version=2,client={
@@ -8648,7 +8648,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
     }
 
-    void verifyAccessibleComponentName(components::Kind kind, const QString& caption, std::string_view name) {
+    void verifyAccessibleComponentName(features::components::Kind kind, const QString& caption, std::string_view name) {
       QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, caption) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* interface = QAccessible::queryAccessibleInterface(componentActionItem(kind, caption));
@@ -8666,7 +8666,7 @@ return {api_version=2, client={keybindings={
       writeTestFile(directory.filePath(QStringLiteral("example/main.lua")), "local t=require('telar');return {actions={sidebar=function()return t.action.toggle_sidebar()end,workspaces=function()return t.action.toggle_workspace_list()end}}");
     }
 
-    void verifyPluginCaptionRefresh(components::Kind kind, bool pointer) {
+    void verifyPluginCaptionRefresh(features::components::Kind kind, bool pointer) {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
@@ -8682,7 +8682,7 @@ return {api_version=2, client={keybindings={
       writeComponentPlugin(directory);
       QVERIFY(!QTest::currentTestFailed());
       const auto path = directory.filePath(QStringLiteral("config.lua"));
-      const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=action})") : QStringLiteral("ui.group({on_click=action,ui.label(caption)})");
+      const auto element = kind == features::components::Kind::button ? QStringLiteral("ui.button({text=caption,action=action})") : QStringLiteral("ui.group({on_click=action,ui.label(caption)})");
       const auto config = QStringLiteral(R"(
       local t=require('telar');local ui=t.ui;local renders=0
       return {api_version=2,plugins={{path='example'}},client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('source'))},
@@ -8741,9 +8741,9 @@ return {api_version=2, client={keybindings={
       const auto collapsed = client_->display()->workspaceListCollapsed();
 
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(features::components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      auto* button = componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin"));
+      auto* button = componentActionItem(features::components::Kind::button, QStringLiteral("Mutable plugin"));
 
       button->forceActiveFocus(Qt::TabFocusReason);
       const auto center = button->mapToScene(button->boundingRect().center()).toPoint();
@@ -8778,9 +8778,9 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
       client_->components()->refreshPanel();
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(features::components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      const auto* fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin"));
+      const auto* fresh = componentActionItem(features::components::Kind::button, QStringLiteral("Mutable plugin"));
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
@@ -8791,7 +8791,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), sidebar, runtime_wait_ms);
     }
 
-    void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {
+    void verifyDefinitionCaptionRefresh(features::components::Kind kind, bool picker, bool pointer) {
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePick();
         client_->components()->closePanel();
@@ -8803,7 +8803,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("config.lua"));
       const auto action = picker ? QStringLiteral("t.action.pick('destination')") : QStringLiteral("t.action.open_panel('destination')");
-      const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=action})") : QStringLiteral("ui.group({on_click=action,ui.label(caption)})");
+      const auto element = kind == features::components::Kind::button ? QStringLiteral("ui.button({text=caption,action=action})") : QStringLiteral("ui.group({on_click=action,ui.label(caption)})");
       const auto config = QStringLiteral(R"(
       local t=require('telar');local ui=t.ui;local renders=0
       return {api_version=2,client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('source'))},
@@ -8865,9 +8865,9 @@ return {api_version=2, client={keybindings={
 
     void verifyDefinitionTargetMutation(bool pointer) {
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(features::components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      auto* button = componentActionItem(components::Kind::button, QStringLiteral("Mutable target"));
+      auto* button = componentActionItem(features::components::Kind::button, QStringLiteral("Mutable target"));
 
       button->forceActiveFocus(Qt::TabFocusReason);
       const auto center = button->mapToScene(button->boundingRect().center()).toPoint();
@@ -8900,15 +8900,15 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(features::components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      const auto* fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable target"));
+      const auto* fresh = componentActionItem(features::components::Kind::button, QStringLiteral("Mutable target"));
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Second destination"), runtime_wait_ms);
     }
 
-    void verifyComponentCaptionMouseRefresh(components::Kind kind, bool sidebar) {
+    void verifyComponentCaptionMouseRefresh(features::components::Kind kind, bool sidebar) {
       const QPointer<QQuickItem> before{componentActionItem(kind, QStringLiteral("Stable target 2"))};
 
       QVERIFY(!before.isNull());
@@ -8937,7 +8937,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->display()->sidebarVisible(), sidebar);
     }
 
-    void verifyConfiguredActionCapture(components::Kind kind, const QString& path, bool sidebar, bool collapsed) {
+    void verifyConfiguredActionCapture(features::components::Kind kind, const QString& path, bool sidebar, bool collapsed) {
       const auto* target = componentActionItem(kind, QStringLiteral("Stable target"));
       const auto center = target->mapToScene(target->boundingRect().center()).toPoint();
       bool pressed = false;
@@ -9008,8 +9008,8 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->display()->sidebarVisible(), sidebar);
     }
 
-    [[nodiscard]] QQuickItem* componentActionItem(components::Kind kind, const QString& caption) const {
-      if (kind == components::Kind::group) {
+    [[nodiscard]] QQuickItem* componentActionItem(features::components::Kind kind, const QString& caption) const {
+      if (kind == features::components::Kind::group) {
         return componentGroup(caption);
       }
 
