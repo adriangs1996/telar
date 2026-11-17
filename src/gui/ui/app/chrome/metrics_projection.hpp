@@ -14,7 +14,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_filter_geometry;
@@ -25,7 +25,7 @@ namespace telar::gui::qt {
     return QString::fromLatin1(palette_names[static_cast<std::size_t>(role)]);
   }
 
-  inline QVariantMap metricRecord(BarMetric metric, const HostMetrics& metrics) {
+  inline QVariantMap metricRecord(BarMetric metric, const application::HostMetrics& metrics) {
     constexpr std::array names{"cpu", "memory", "battery"};
     const auto& sample = metrics.sample();
     const auto severity = metrics.severity(metric);
@@ -45,7 +45,7 @@ namespace telar::gui::qt {
     };
   }
 
-  inline QVariantMap metricsRecord(const HostMetrics& metrics) {
+  inline QVariantMap metricsRecord(const application::HostMetrics& metrics) {
     CpuHistory::Samples buffer;
     QVariantList history;
 

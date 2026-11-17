@@ -38,7 +38,7 @@ import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.config.client;
-import telar.gui.application.session;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 

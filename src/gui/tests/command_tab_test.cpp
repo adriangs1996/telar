@@ -32,8 +32,7 @@ static_assert(true);
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
@@ -149,7 +148,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
           local command=telar.action.command_tab{command={'echo','fixed'},label='fixed'}
           local n=0
@@ -163,7 +162,7 @@ namespace {
           .profile = {},
       };
 
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       const auto fixed = generation.input().configured[0].action;
       const auto callback = generation.input().configured[1].action;
       const auto first = generation.invoke(callback, {}).actions[0];
@@ -195,7 +194,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
         local arguments={};for i=1,32 do arguments[i]=string.rep('x',128) end
         local bindings={}
@@ -214,7 +213,7 @@ namespace {
         .profile = {},
     };
 
-    ConfigurationGeneration generation{memory, source};
+    application::ConfigurationGeneration generation{memory, source};
     constexpr std::size_t callback_index = 20;
     const auto batch = generation.invoke(generation.input().configured[callback_index].action, {});
 
@@ -235,7 +234,7 @@ namespace {
     TestSession client{memory, transport};
     const auto command = sampleCommand();
 
-    require(client.createCommandTab(command) == TabCreationOutcome::unavailable, "a command requires an attached focused launch source");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::unavailable, "a command requires an attached focused launch source");
     openFirstPane(client, transport);
     transport.reject_create_tab = true;
     bool rejected = false;
@@ -247,17 +246,17 @@ namespace {
     }
 
     transport.reject_create_tab = false;
-    require(rejected && client.createCommandTab(command) == TabCreationOutcome::requested, "failed delivery must release tab-operation ownership for retry");
+    require(rejected && client.createCommandTab(command) == application::TabCreationOutcome::requested, "failed delivery must release tab-operation ownership for retry");
     const auto request = transport.last<CreateTab>();
 
     require(request.launch.cwd_source == 1 && request.label == "echo", "a command tab must inherit its focused pane's cwd and resolve its label");
     require(request.launch.arguments.size() == command.count && request.launch.arguments[1] == command.arguments[1] && request.launch.arguments[2] == command.arguments[2], "tab requests must preserve argv boundaries without shell interpretation");
-    require(client.createCommandTab(command) == TabCreationOutcome::busy && transport.count(ClientTag::create_tab) == 1, "a pending tab operation must refuse a second command");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::busy && transport.count(ClientTag::create_tab) == 1, "a pending tab operation must refuse a second command");
     const TabLocation created{.workspace = request.workspace, .tab_id = 2};
 
     deliver(client, TabCreated{.request_id = request.request_id, .location = created, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
     require(sameTab(client.activeTab()->location, created) && client.focusedPane()->id == 2, "a confirmed command tab must become active");
-    require(client.createCommandTab(command) == TabCreationOutcome::requested, "confirmation must release tab-operation ownership");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::requested, "confirmation must release tab-operation ownership");
   }
 
   std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, bool discover_before_confirmation) {
@@ -304,12 +303,12 @@ namespace {
       if (budget) {
         require(rejected && client.tabs().size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
         if (discover_before_confirmation) {
-          require(tabApplicationName(*client.tabs().back(), nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
+          require(application::tabApplicationName(*client.tabs().back(), nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
         }
       } else {
         require(!rejected && client.tabs().size() == 2 && client.focusedPane()->id == 2, "a complete allocation budget must adopt the confirmed command");
         if (discover_before_confirmation) {
-          require(tabApplicationName(*client.activeTab(), client.focusedPane()) == discovered_application, "confirmation must preserve the discovered foreground for the newly adopted pane");
+          require(application::tabApplicationName(*client.activeTab(), client.focusedPane()) == discovered_application, "confirmation must preserve the discovered foreground for the newly adopted pane");
         }
       }
     }
@@ -339,7 +338,7 @@ namespace {
     openFirstPane(client, transport);
     const auto command = sampleCommand();
 
-    require(client.createCommandTab(command) == TabCreationOutcome::requested, "a command must start its correlated tab operation");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::requested, "a command must start its correlated tab operation");
     const auto request = transport.last<CreateTab>();
     const std::array descriptors{
         TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1, .label = "source"},
@@ -348,7 +347,7 @@ namespace {
 
     deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
     require(client.tabs().size() == 2 && client.focusedPane()->id == 1, "discovery may expose a tab's metadata without adopting its pane or focus");
-    require(client.createCommandTab(command) == TabCreationOutcome::busy, "discovery must not complete the creation request");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "discovery must not complete the creation request");
     deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = 2}, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
     require(client.tabs().size() == 2 && client.focusedPane()->id == 2, "confirmation must adopt an unloaded discovered tab without duplication");
   }
@@ -374,7 +373,7 @@ namespace {
     require(rejected && client.tabs().size() == 1 && client.focusedPane()->id == 1, "a correlated reply must not replace an already adopted tab");
   }
 
-  void openThreeTabs(Session& client, Transport& transport) {
+  void openThreeTabs(application::Session& client, Transport& transport) {
     openFirstPane(client, transport);
     for (std::uint16_t position = 1; position <= 2; ++position) {
       client.createTab();
@@ -398,12 +397,12 @@ namespace {
     client.renameTab("renamed");
     const auto rename = transport.last<RenameTab>();
 
-    require(client.createCommandTab(command) == TabCreationOutcome::busy, "rename and command creation must share tab-operation ownership");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "rename and command creation must share tab-operation ownership");
     deliver(client, TabRenamed{.request_id = rename.request_id, .location = rename.location, .label = "renamed"});
     client.moveTab(TabMoveDirection::previous);
     const auto move = transport.last<MoveTab>();
 
-    require(client.createCommandTab(command) == TabCreationOutcome::busy, "moving a tab must retain ownership until its confirmation");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "moving a tab must retain ownership until its confirmation");
     deliver(client, TabMoved{.request_id = move.request_id, .location = move.location, .position = 1});
     require(client.activeTab()->position == 1, "the runtime's confirmed position must be adopted");
     for (const auto& tab : client.tabs()) {
@@ -415,9 +414,9 @@ namespace {
     client.closeTab(client.activeTab()->location);
     const auto close = transport.last<CloseTab>();
 
-    require(client.createCommandTab(command) == TabCreationOutcome::busy, "closing a tab must retain the same operation owner");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::busy, "closing a tab must retain the same operation owner");
     deliver(client, RequestFailed{.request_id = close.request_id, .code = FailureCode::invalid_request, .message = "close failed"});
-    require(client.createCommandTab(command) == TabCreationOutcome::requested, "a rejected operation must allow the next command tab");
+    require(client.createCommandTab(command) == application::TabCreationOutcome::requested, "a rejected operation must allow the next command tab");
   }
 
   void draggingRetainsTheExplicitSourceAndCanonicalOperationOwner() {

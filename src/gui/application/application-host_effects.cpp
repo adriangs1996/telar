@@ -1,12 +1,19 @@
-module telar.gui.application.host_effects;
+module telar.gui.application;
 
 import std;
 import telar.gui.foundation.text;
 import telar.gui.foundation.system;
 import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
+import telar.tbc;
+import telar.gui.presentation.frame_pacer;
+import telar.gui.text.notification_payload;
+import telar.base.diagnostics;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.vocabulary;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   std::optional<AcknowledgeAgent> AgentAcknowledgement::take(std::optional<FocusedAgent> agent) noexcept {
     if (!agent) {

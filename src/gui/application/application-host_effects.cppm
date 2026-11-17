@@ -1,4 +1,4 @@
-export module telar.gui.application.host_effects;
+export module telar.gui.application:host_effects;
 
 import std;
 import telar.tbc;
@@ -20,7 +20,7 @@ import telar.wire.vocabulary;
 
 // Interface: application/agent_acknowledgement.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     // The agent of the focused pane, as the session's agent list has it.
     struct FocusedAgent {
@@ -42,7 +42,7 @@ export {
 
 // Interface: application/command_handler.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     // Runs the client commands the session leaves to its host, and completes `reply`.
     class ClientCommandHandler {
@@ -63,7 +63,7 @@ export {
 
 // Interface: application/host_effects.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     struct HostEffectLimits {
       static constexpr std::size_t maximum_system_notifications = 240;
@@ -119,7 +119,7 @@ export {
 
 // Interface: application/host_metrics.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     class HostMetrics {
     public:
@@ -142,7 +142,7 @@ export {
 
 // Interface: application/limit_reports.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     class LimitReports {
     public:

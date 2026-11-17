@@ -16,6 +16,7 @@ static_assert(true);
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.suggestion_geometry;
+import telar.gui.application;
 import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
@@ -60,10 +61,10 @@ namespace telar::gui::qt {
     };
   }
 
-  inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics& display, std::size_t count, SidebarMachines machines = {}) {
+  inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics& display, std::size_t count, application::SidebarMachines machines = {}) {
     const auto& chrome = display.chrome;
     const auto density = display.density;
-    const auto geometry = SidebarGeometry::measure(area, chrome, count, machines);
+    const auto geometry = application::SidebarGeometry::measure(area, chrome, count, machines);
 
     return {
         {QStringLiteral("machinesHeader"), toQRectF(geometry.machines_header, density)},
@@ -72,8 +73,8 @@ namespace telar::gui::qt {
         {QStringLiteral("projects"), toQRectF(geometry.projects, density)},
         {QStringLiteral("activityHeader"), toQRectF(geometry.activity_header, density)},
         {QStringLiteral("activity"), toQRectF(geometry.activity, density)},
-        {QStringLiteral("workspaceHeight"), SidebarGeometry::workspaceHeight(chrome) / density},
-        {QStringLiteral("sectionGap"), SidebarGeometry::sectionGap(chrome) / density},
+        {QStringLiteral("workspaceHeight"), application::SidebarGeometry::workspaceHeight(chrome) / density},
+        {QStringLiteral("sectionGap"), application::SidebarGeometry::sectionGap(chrome) / density},
         {QStringLiteral("cards"), agentCardGeometryRecord(display, geometry.activity.width)},
         {QStringLiteral("activitySeparatorY"), (std::floor(geometry.activity_header.y + (geometry.activity_header.height / 2)) - geometry.activity_header.y) / density},
     };

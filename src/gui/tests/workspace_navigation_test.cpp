@@ -24,8 +24,7 @@ static_assert(true);
 
 import telar.gui.tests.session_fixture;
 import telar.gui.layout.snapshots;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.prompt.layout;
 import telar.wire.layout;
 import telar.wire.runtime;
@@ -397,7 +396,7 @@ namespace {
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
-    require(client.createTab("Pending") == TabCreationOutcome::requested, "The fixture must own an outstanding tab request");
+    require(client.createTab("Pending") == application::TabCreationOutcome::requested, "The fixture must own an outstanding tab request");
     const auto messages = transport.sent.size();
 
     client.selectWorkspace(second_workspace);

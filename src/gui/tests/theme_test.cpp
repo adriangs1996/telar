@@ -28,6 +28,7 @@ import telar.gui.config.gui_query;
 import telar.gui.foundation.core;
 import telar.gui.input.copy_pointer;
 import telar.gui.presentation.suggestion_geometry;
+import telar.gui.application;
 
 namespace {
 
@@ -43,7 +44,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
         return {api_version=2,theme={base='vesper',colors={text='#010203',mauve='#040506',panel_bg='default'},
           syntax={keyword={italic=true}},terminal={foreground='#102030',background='#112233'}},
@@ -55,7 +56,7 @@ namespace {
         .profile = "selected",
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
     const auto& themes = generation.configuration().themes;
 
     require(themes.base.base == ThemeName::catppuccin, "a profile base must replace the complete root theme");
@@ -88,7 +89,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
           local theme={base='vesper',colors={text='#010203'},syntax={plain='#00007f'}}
           return {api_version=2,theme=theme,client={keybindings={telar.bind({'s'},function()
@@ -99,7 +100,7 @@ namespace {
           .profile = {},
       };
 
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
       const auto allocations = budget.allocations();
       const std::string before{ThemeQuery::write(generation.configuration().themes, output)};

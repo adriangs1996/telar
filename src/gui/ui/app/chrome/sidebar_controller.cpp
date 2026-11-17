@@ -52,7 +52,7 @@ namespace telar::gui::qt {
     return static_cast<int>(store_.machines().count());
   }
 
-  SidebarMachines SidebarController::machines() const noexcept {
+  application::SidebarMachines SidebarController::machines() const noexcept {
     const auto count = store_.machines().count();
 
     return {.shown = count > 1, .rows = count > 1 && !machine_list_collapsed_ ? count - 1 : 0};
@@ -182,7 +182,7 @@ namespace telar::gui::qt {
     }
 
     const auto scale = display.viewport.scale;
-    const auto content = std::max(card.listWidth(card_width), machines_width) + (2 * std::round(chrome.textPx(SidebarGeometry::margin)));
+    const auto content = std::max(card.listWidth(card_width), machines_width) + (2 * std::round(chrome.textPx(application::SidebarGeometry::margin)));
     const auto third = static_cast<float>(display.viewport.width) / scale / 3;
 
     return std::clamp(std::ceil(content / scale), Configuration::minimum_sidebar_width, std::max(Configuration::minimum_sidebar_width, third));

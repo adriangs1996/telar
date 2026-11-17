@@ -1,13 +1,13 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.application.session;
+export module telar.gui.application:session;
 
 import std;
 import telar.tbc;
 
-import telar.gui.application.host_effects;
-import telar.gui.application.workspace_replica;
+import :host_effects;
+import :workspace_replica;
 import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
 import telar.gui.graphics.pauses;
@@ -15,7 +15,7 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
 import telar.gui.presentation.tab_drop;
-import telar.gui.application.sound_playback;
+import :sound_playback;
 import telar.gui.foundation.model;
 import telar.gui.layout.snapshots;
 import telar.gui.links.path_expansion;
@@ -23,8 +23,8 @@ import telar.gui.links.cell_links;
 import telar.gui.paths.label;
 import telar.gui.peek.screen;
 import telar.gui.foundation.system;
-import telar.gui.presentation.client_view_state;
-import telar.gui.presentation.display_metrics;
+import :client_view_state;
+import :sidebar;
 import telar.gui.presentation.application_mark;
 import telar.gui.suggestions.state;
 import telar.config.client;
@@ -58,7 +58,7 @@ import telar.gui.prompt.completion;
 
 // Interface: application/session.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     enum class Change : std::uint8_t {
       none,
@@ -92,6 +92,9 @@ export {
     using MonotonicNow = std::uint64_t (*)() noexcept;
 
     class Session {
+      // The use cases of application::<feature> reach the members below through it.
+      friend struct Access;
+
     public:
       static constexpr std::size_t decode_capacity = std::size_t{2} * 1024 * 1024;
       static constexpr std::size_t maximum_tabs = 256;

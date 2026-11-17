@@ -18,8 +18,7 @@ static_assert(true);
 
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.host_effects;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.wire.agents;
 
 namespace {
@@ -39,13 +38,13 @@ namespace {
     }));
   }
 
-  FocusedAgent focused(const AgentSnapshotEntry& agent) {
+  application::FocusedAgent focused(const AgentSnapshotEntry& agent) {
     return {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .status = agent.status};
   }
 
   void eachFocusedCompletionIsTakenOnce() {
     auto agent = agentSnapshotEntry();
-    AgentAcknowledgement acknowledgement;
+    application::AgentAcknowledgement acknowledgement;
 
     require(!acknowledgement.take(focused(agent)), "working agents must not consume an acknowledgement");
     agent.status = AgentStatus::done;

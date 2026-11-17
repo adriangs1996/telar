@@ -49,7 +49,7 @@ import telar.gui.foundation.keys;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
 import telar.gui.foundation.terminal;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 
 namespace telar::gui::test {
   class TerminalCursor;
@@ -244,11 +244,11 @@ namespace telar::gui::qt {
     // The cursor shows at once after a key, and blinks again from there.
     void wakeCursor();
 
-    [[nodiscard]] const TerminalPreparation& preparedFrame() const noexcept {
+    [[nodiscard]] const application::TerminalPreparation& preparedFrame() const noexcept {
       return prepared_frame_;
     }
 
-    void presentFrame(const TerminalPreparation& preparation);
+    void presentFrame(const application::TerminalPreparation& preparation);
     [[nodiscard]] ChildMouseView childMouseView() const;
     void releaseMouse();
     [[nodiscard]] static unsigned mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept;
@@ -308,7 +308,7 @@ namespace telar::gui::qt {
     void synchronizeFocus();
     void releaseKeys();
     void invalidateMachine();
-    bool send(const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
+    bool send(const QByteArray& bytes, application::PaneInputSource source = application::PaneInputSource::keyboard);
     [[nodiscard]] ChildMouseSample childMouseSample(const QMouseEvent& event, MousePhase phase, MouseButton button) const;
     void mousePacket(unsigned button, QPointF position, bool released);
     std::optional<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
@@ -373,7 +373,7 @@ namespace telar::gui::qt {
     [[nodiscard]] std::uint32_t runtimeOffset(std::uint64_t top) const;
     // The screen row drawn at `drawn`, the row under a pointer counted from the view's top.
     [[nodiscard]] std::optional<std::size_t> screenRowAt(double drawn) const noexcept;
-    [[nodiscard]] std::uint64_t viewRevision(const Pane<Memory>& current) const noexcept;
+    [[nodiscard]] std::uint64_t viewRevision(const application::Pane<Memory>& current) const noexcept;
     // The rows a scrolled or folded view draws, put together as a screen with their links, for
     // the links under the pointer; nothing while the view draws the screen's own rows.
     [[nodiscard]] const Screen<Memory>* drawnScreen() const;
@@ -381,10 +381,10 @@ namespace telar::gui::qt {
     void appendDrawnRow(std::size_t index) const;
     [[nodiscard]] int indexAt(QPointF position) const noexcept;
     [[nodiscard]] CopyPointerInput pointerInput(QPointF position, CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
-    [[nodiscard]] Pane<Memory>* pane() const noexcept;
+    [[nodiscard]] application::Pane<Memory>* pane() const noexcept;
     // The first command of the remote session the pane is in, counting the ssh that opened it;
     // past the last command when the pane's shell is its own. Its separators name the host.
-    [[nodiscard]] static std::size_t liveSession(const Pane<Memory>& pane) noexcept;
+    [[nodiscard]] static std::size_t liveSession(const application::Pane<Memory>& pane) noexcept;
     void refreshLinkHover();
     void clearLinkHover();
     bool beginLinkPress(const QMouseEvent& event);
@@ -540,7 +540,7 @@ namespace telar::gui::qt {
     Qt::MouseButtons captured_link_buttons_;
     std::uint64_t presented_frame_id_ = 0;
     std::uint64_t presented_revision_ = 0;
-    TerminalPreparation prepared_frame_;
+    application::TerminalPreparation prepared_frame_;
     std::uint64_t link_presentation_revision_ = 0;
   };
 

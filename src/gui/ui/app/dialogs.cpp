@@ -16,7 +16,7 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.prompt.routing;
 
 namespace telar::gui::qt {

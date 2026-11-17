@@ -7,8 +7,7 @@ export module telar.gui.tests.session_fixture;
 
 import std;
 import telar.base.memory.allocators;
-import telar.gui.application.host_effects;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.wire.clients;
 import telar.wire.clipboard;
 import telar.wire.editor;
@@ -23,7 +22,7 @@ import telar.gui.foundation.system;
 export {
   namespace telar::gui::test {
 
-    class Transport : public RuntimeTransport {
+    class Transport : public application::RuntimeTransport {
     public:
       std::span<Byte> buffer(std::size_t size) override {
         buffer_.resize(size);
@@ -150,20 +149,20 @@ export {
 
     // A session over a test's allocator, which it puts behind Memory.
     template <Allocator Upstream>
-    class TestSession : private AdaptedMemory<Upstream>, public Session {
+    class TestSession : private AdaptedMemory<Upstream>, public application::Session {
     public:
-      TestSession(Upstream& memory, RuntimeTransport& transport, MonotonicNow now = &system::AwakeClock::nowNanoseconds)
+      TestSession(Upstream& memory, application::RuntimeTransport& transport, application::MonotonicNow now = &system::AwakeClock::nowNanoseconds)
           : AdaptedMemory<Upstream>{MemoryAdapter<Upstream>{memory}},
-            Session(this->adapter, transport, now) {}
+            application::Session(this->adapter, transport, now) {}
 
-      TestSession(Upstream& memory, RuntimeTransport& transport, HostEffects& effects, MonotonicNow now = &system::AwakeClock::nowNanoseconds)
+      TestSession(Upstream& memory, application::RuntimeTransport& transport, application::HostEffects& effects, application::MonotonicNow now = &system::AwakeClock::nowNanoseconds)
           : AdaptedMemory<Upstream>{MemoryAdapter<Upstream>{memory}},
-            Session(this->adapter, transport, effects, now) {}
+            application::Session(this->adapter, transport, effects, now) {}
     };
 
     // Runs a test's callable as the session's command handler.
     template <typename Handler>
-    class CommandHandler final : public ClientCommandHandler {
+    class CommandHandler final : public application::ClientCommandHandler {
     public:
       explicit CommandHandler(Handler& handler)
           : handler_(handler) {}
@@ -181,7 +180,7 @@ export {
       std::vector<Byte> bytes(Codec::encodedSize(message));
 
       Codec::encode(message, bytes);
-      if constexpr (std::derived_from<Handler, ClientCommandHandler>) {
+      if constexpr (std::derived_from<Handler, application::ClientCommandHandler>) {
         return client.consume(bytes, handler);
       } else {
         const CommandHandler<Handler> adapter{handler};
@@ -192,7 +191,7 @@ export {
 
     template <typename Message, typename Client>
     auto deliver(Client& client, const Message& message) {
-      UnsupportedClientCommand handler;
+      application::UnsupportedClientCommand handler;
 
       return deliver(client, message, handler);
     }

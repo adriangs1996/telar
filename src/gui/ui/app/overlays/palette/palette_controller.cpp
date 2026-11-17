@@ -257,7 +257,7 @@ namespace telar::gui::qt {
       NavigationLabel label;
 
       label.append(NavigationLabel::tab_prefix);
-      label.append(tab->label.empty() ? tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label});
+      label.append(tab->label.empty() ? application::tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label});
       matches.add(NavigationTarget{tab->location}, label.view(), query);
     }
 
@@ -389,7 +389,7 @@ namespace telar::gui::qt {
       });
       if (found != session.tabs().end()) {
         label.append(NavigationLabel::tab_prefix);
-        label.append((*found)->label.empty() ? tabApplicationName(*(*found), session.findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
+        label.append((*found)->label.empty() ? application::tabApplicationName(*(*found), session.findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
       }
 
       return navigationRecord(navigation, label, PaletteRowKind::tab, queried);

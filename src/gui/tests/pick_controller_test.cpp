@@ -46,6 +46,7 @@ import telar.gui.components.builtin_content;
 import telar.gui.config.generation;
 
 import telar.gui.config.gui_query;
+import telar.gui.application;
 
 namespace {
 
@@ -114,11 +115,11 @@ namespace {
   template <typename Memory>
   struct Source {
     Memory& memory;
-    ConfigurationGeneration<Memory> generation;
+    application::ConfigurationGeneration<Memory> generation;
 
     Source(Memory& memory, std::string_view script)
         : memory(memory),
-          generation(memory, ConfigurationSourceText{.source = script, .directory = {}, .profile = {}}) {}
+          generation(memory, application::ConfigurationSourceText{.source = script, .directory = {}, .profile = {}}) {}
 
     [[nodiscard]] const components::Definitions* definitions() const noexcept {
       return &generation.components().definitions();

@@ -1,12 +1,45 @@
-module telar.gui.application.session;
+module telar.gui.application;
 
 import std;
 import telar.gui.presentation.frame_pacer;
 import telar.platform.events;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.tbc;
+import telar.gui.graphics.texture_cache;
+import telar.gui.history.browser;
+import telar.gui.input.copy_pointer;
+import telar.gui.foundation.keys;
+import telar.gui.paths.label;
+import telar.gui.peek.screen;
+import telar.gui.suggestions.state;
+import telar.config.client;
+import telar.config.runtime;
+import telar.gui.foundation.terminal;
+import telar.gui.prompt.line;
+import telar.base.diagnostics;
+import telar.base.text;
+import telar.gui.prompt.layout;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.editor;
+import telar.wire.graphics;
+import telar.wire.history;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
+import telar.wire.worktrees;
+import telar.base.memory.allocators;
+import telar.gui.prompt.routing;
+import telar.gui.prompt.editor;
+import telar.gui.presentation.notification_center;
+import telar.shell.syntax;
+import telar.gui.prompt.completion;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   template <typename Message>
   std::span<const Byte> Session::encode(const Message& message) {

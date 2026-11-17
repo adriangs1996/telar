@@ -26,7 +26,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.input.child_mouse;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
@@ -65,7 +65,7 @@ namespace telar::gui::qt {
     MouseEncoder encoder;
     const auto packet = encoder.encode(button, x, y, released, current->screen.mouse().sgr);
 
-    send(QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, PaneInputSource::mouse);
+    send(QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, application::PaneInputSource::mouse);
   }
 
   unsigned TerminalItem::mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept {

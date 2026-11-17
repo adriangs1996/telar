@@ -1,4 +1,4 @@
-module telar.gui.application.session;
+module telar.gui.application;
 
 import std;
 import telar.gui.input.configuration;
@@ -6,8 +6,27 @@ import telar.gui.foundation.keys;
 import telar.gui.input.wheel_accumulator;
 import telar.gui.foundation.terminal;
 import telar.render.document;
+import telar.gui.foundation.core;
+import telar.gui.graphics.texture_cache;
+import telar.gui.links.path_expansion;
+import telar.gui.paths.label;
+import telar.gui.peek.screen;
+import telar.config.client;
+import telar.config.runtime;
+import telar.gui.prompt.line;
+import telar.base.text;
+import telar.gui.prompt.layout;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.editor;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.gui.prompt.routing;
+import telar.gui.prompt.editor;
+import telar.shell.syntax;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   void Session::input(std::uint64_t pane_id, std::string_view bytes, PaneInputSource source) {
     auto* pane = findPane(pane_id);

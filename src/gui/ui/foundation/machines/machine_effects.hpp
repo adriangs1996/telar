@@ -12,7 +12,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.text.notification_payload;
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.machines.picker;
 import telar.gui.presentation.frame_pacer;
 
@@ -25,7 +25,7 @@ namespace telar::gui::qt {
 
   // What one machine's session asks of the desktop. Only the client the window holds for the
   // active machine reaches it: the others' notifications, sounds and input are dropped.
-  class MachineEffects final : public HostEffects {
+  class MachineEffects final : public application::HostEffects {
   public:
     // What the window lends the effects of every client it holds.
     struct Sinks {

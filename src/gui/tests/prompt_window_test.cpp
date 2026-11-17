@@ -390,7 +390,7 @@ namespace {
 
       // The block ran git, so git exists. Any other command word, once typed, is asked of the
       // runtime; one it does not find is missing.
-      QCOMPARE(application.prompt()->commandPresence(pane_id, "git"), CommandPresence::found);
+      QCOMPARE(application.prompt()->commandPresence(pane_id, "git"), application::CommandPresence::found);
       const auto asked = runtime.count(ClientTag::complete_words);
 
       type(terminal, "gti s");
@@ -398,11 +398,11 @@ namespace {
       const auto presence = runtime.last<CompleteWords>();
 
       QCOMPARE(presence.prefix, std::string_view{"gti"});
-      QCOMPARE(application.prompt()->commandPresence(pane_id, "gti"), CommandPresence::pending);
+      QCOMPARE(application.prompt()->commandPresence(pane_id, "gti"), application::CommandPresence::pending);
       const QSignalSpy relaid{editor, &PromptEditorItem::layoutChanged};
 
       runtime.send(CompletionWords{.request_id = presence.request_id, .truncated = false, .words = {}});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), CommandPresence::missing, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::CommandPresence::missing, wait_ms);
       // The answer reaches the line as its pane's change and marks the word: it is laid out again.
       QTRY_VERIFY_WITH_TIMEOUT(relaid.count() > 0, wait_ms);
       // Output that changes nothing the line draws keeps its layout.
@@ -440,7 +440,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       const std::array ran{blocks[0], CommandBlock{.row = 2, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 20, .command = "gti status"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = ran});
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), CommandPresence::found, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::CommandPresence::found, wait_ms);
 
       // Back at the prompt before the frame that draws it, the last prompt on screen is the
       // command's own: its output is not prompt, and the line waits under the cursor.
@@ -922,8 +922,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QCOMPARE(terminal.rail().size(), 2);
       // The runtime finds the commands the shell runs, and only those.
       type(terminal, "gti x && ls ./");
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "gti"), CommandPresence::missing, runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "ls"), CommandPresence::found, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "gti"), application::CommandPresence::missing, runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane, "ls"), application::CommandPresence::found, runtime_wait_ms);
       const auto blocks = qEnvironmentVariable("TELAR_GUI_TEST_PROMPT_BLOCKS_SCREENSHOT");
       if (!blocks.isEmpty()) {
         QTest::qWait(900);
@@ -978,10 +978,10 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
         run("seq 60");
         QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
-        application.terminals()->scroll(PaneScrollDelta{.pane_id = pane, .rows = 3});
+        application.terminals()->scroll(application::PaneScrollDelta{.pane_id = pane, .rows = 3});
         QTRY_VERIFY_WITH_TIMEOUT(!at_bottom(), runtime_wait_ms);
         QTRY_VERIFY2_WITH_TIMEOUT(line->property("docked").toBool() && terminal.rowsBelow() == 3, qPrintable(QStringLiteral("docked %1 below %2 offset %3 total %4 rows %5").arg(line->property("docked").toBool()).arg(terminal.rowsBelow()).arg(application.pane(pane)->screen.scroll().offset).arg(application.pane(pane)->screen.scroll().total_rows).arg(application.pane(pane)->screen.rows())), runtime_wait_ms);
-        application.terminals()->scroll(PaneScrollDelta{.pane_id = pane, .rows = -3});
+        application.terminals()->scroll(application::PaneScrollDelta{.pane_id = pane, .rows = -3});
         QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(!line->property("docked").toBool(), runtime_wait_ms);
         const auto where = [&] {

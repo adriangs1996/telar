@@ -37,7 +37,7 @@ static_assert(true);
 #include <limits>
 #include <span>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;
@@ -115,7 +115,7 @@ namespace {
       telar::MemoryAdapter adapter{system};
       telar::Memory& memory = adapter;
       GraphicsBudget budget;
-      Pane pane{memory, 1, budget};
+      application::Pane pane{memory, 1, budget};
 
       pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
       pane.generation = 2;
@@ -151,7 +151,7 @@ namespace {
       telar::MemoryAdapter adapter{system};
       telar::Memory& memory = adapter;
       GraphicsBudget budget;
-      Pane pane{memory, 1, budget};
+      application::Pane pane{memory, 1, budget};
 
       pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
       pane.generation = 2;

@@ -41,7 +41,7 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
 

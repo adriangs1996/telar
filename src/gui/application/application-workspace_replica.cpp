@@ -1,10 +1,14 @@
-module telar.gui.application.workspace_replica;
+module telar.gui.application;
 
 import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.tbc;
+import telar.gui.graphics.texture_cache;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   template <Allocator Memory>
   Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, GraphicsBudget& budget)

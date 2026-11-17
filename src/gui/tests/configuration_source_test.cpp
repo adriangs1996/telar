@@ -48,7 +48,7 @@ static_assert(true);
 #include <memory>
 
 import telar.gui.tests.json_fixture;
-import telar.gui.presentation.client_view_state;
+import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
@@ -428,7 +428,7 @@ namespace {
       source.open({.path = path, .profile = QStringLiteral("chosen"), .theme = QString{}});
       QCOMPARE(source.error(), QString{});
       constexpr std::uint16_t sidebar_columns = 61;
-      const ClientViewState view{.sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .pane_gaps = false, .window_title = "{tab}"};
+      const application::ClientViewState view{.sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .pane_gaps = false, .window_title = "{tab}"};
       const ConfigurationQuery query{.section = ConfigurationQuery::Section::client, .index = -1};
       const std::string before{source.query(query, view)};
       const auto parsed = telar::runtime::JsonValue::parse(before);

@@ -27,8 +27,7 @@ static_assert(true);
 
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.application_mark;
 import telar.gui.foundation.model;

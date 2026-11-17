@@ -63,7 +63,7 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
-import telar.gui.presentation.client_view_state;
+import telar.gui.application;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.plugin_effects;
@@ -71,13 +71,6 @@ import telar.gui.config.gui_query;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.config.client;
-
-namespace telar::gui {
-
-  template <Allocator Memory>
-  class ConfigurationGeneration;
-
-}
 
 namespace telar::gui::qt {
 
@@ -129,7 +122,7 @@ namespace telar::gui::qt {
     void invokeElement(std::uint64_t instance, std::uint32_t callback, const components::Context& context, const QByteArray& item, Done<Effects> done);
     void forgetElements(std::uint64_t instance);
     [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char* field) const;
-    [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState& view = {});
+    [[nodiscard]] std::string_view query(ConfigurationQuery query, const application::ClientViewState& view = {});
     [[nodiscard]] PluginPage queryPlugins(const ClientCommand& request);
     void setPluginEnabled(const ClientCommand& request, bool enabled);
     [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
@@ -146,7 +139,7 @@ namespace telar::gui::qt {
     void failed();
 
   private:
-    using Generation = ConfigurationGeneration<ApplicationAllocator>;
+    using Generation = application::ConfigurationGeneration<ApplicationAllocator>;
 
     // Runs `work` with the current generation on the Lua thread and marks results that
     // arrive after that generation was replaced.

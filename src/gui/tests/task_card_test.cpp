@@ -50,7 +50,7 @@ static_assert(true);
 
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;

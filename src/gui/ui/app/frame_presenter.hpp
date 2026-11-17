@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.gui.foundation.model;
 import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 import telar.gui.presentation.tab_drop;
 
 namespace telar::gui::test {
@@ -82,7 +83,7 @@ namespace telar::gui::qt {
 
   private:
     struct PresentedPane {
-      TerminalPreparation frame;
+      application::TerminalPreparation frame;
       QPointer<TerminalItem> terminal;
     };
 

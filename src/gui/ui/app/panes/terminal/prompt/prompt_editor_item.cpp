@@ -566,8 +566,8 @@ namespace telar::gui::qt {
       }
 
       const auto presence = controller_->commandPresence(pane_id_, std::string_view{display_}.substr(start, end - start));
-      if (presence == CommandPresence::missing || presence == CommandPresence::pending) {
-        std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(start), styles_.begin() + static_cast<std::ptrdiff_t>(end), presence == CommandPresence::missing ? prompt::Style::missing : prompt::Style::pending);
+      if (presence == application::CommandPresence::missing || presence == application::CommandPresence::pending) {
+        std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(start), styles_.begin() + static_cast<std::ptrdiff_t>(end), presence == application::CommandPresence::missing ? prompt::Style::missing : prompt::Style::pending);
       }
 
       start = end;

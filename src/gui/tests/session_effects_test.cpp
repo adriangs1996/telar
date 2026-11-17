@@ -24,9 +24,7 @@ static_assert(true);
 
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.host_effects;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.presentation.frame_pacer;
@@ -47,7 +45,7 @@ namespace {
     bool throw_notification = false;
   };
 
-  struct Effects final : HostEffects {
+  struct Effects final : application::HostEffects {
     explicit Effects(Recorder& recorded)
         : recorder(recorded) {}
 
@@ -82,7 +80,7 @@ namespace {
   // A session that keeps its effects.
   template <typename Host>
   struct EffectsClient : private HostedEffects<Host>, TestSession<SystemAllocator> {
-    EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, MonotonicNow now = &system::AwakeClock::nowNanoseconds)
+    EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, application::MonotonicNow now = &system::AwakeClock::nowNanoseconds)
         : HostedEffects<Host>{effects},
           TestSession(memory, transport, this->effects, now) {}
   };
@@ -112,7 +110,7 @@ namespace {
     std::size_t count = 0;
   };
 
-  struct InputEffects : DiscardHostEffects {
+  struct InputEffects : application::DiscardHostEffects {
     Transport& transport;
     InputObservations& observations;
 
@@ -147,8 +145,8 @@ namespace {
     client.findPane(pane->id)->graphics.detach();
     require(pane->graphics.revision() != 0, "input observation must exercise a nonzero graphics revision");
     client.input(pane->id, "a");
-    client.input(pane->id, "b", PaneInputSource::mouse);
-    client.input(pane->id, "c", PaneInputSource::key_release);
+    client.input(pane->id, "b", application::PaneInputSource::mouse);
+    client.input(pane->id, "c", application::PaneInputSource::key_release);
     client.paste(pane->id, "d");
     constexpr std::size_t accepted_inputs = 4;
 
@@ -181,7 +179,7 @@ namespace {
     pane->exited = true;
     client.input(pane->id, "exited");
     pane->exited = false;
-    client.input(pane->id, "report", PaneInputSource::terminal_report);
+    client.input(pane->id, "report", application::PaneInputSource::terminal_report);
     transport.reject_input_after = transport.count(ClientTag::pane_input);
     bool rejected = false;
 

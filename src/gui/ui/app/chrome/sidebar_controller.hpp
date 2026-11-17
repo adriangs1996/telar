@@ -16,7 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.suggestion_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -65,7 +65,7 @@ namespace telar::gui::qt {
 
   private:
     // The active machine is named in the top bar; the sidebar lists the others.
-    [[nodiscard]] SidebarMachines machines() const noexcept;
+    [[nodiscard]] application::SidebarMachines machines() const noexcept;
     [[nodiscard]] float naturalWidth() const;
 
     Store& store_;
@@ -73,7 +73,7 @@ namespace telar::gui::qt {
     ActivityController& activity_;
     DisplayMetrics display_;
     QPointer<QQuickWindow> window_;
-    SidebarMachines machines_{};
+    application::SidebarMachines machines_{};
     bool machine_list_collapsed_ = false;
     bool fit_pending_ = true;
   };

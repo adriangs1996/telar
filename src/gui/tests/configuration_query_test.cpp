@@ -28,6 +28,7 @@ import telar.gui.tests.json_fixture;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
 import telar.gui.config.generation;
+import telar.gui.application;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
@@ -120,7 +121,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
           local runtime = {history={path='history.db',output='bounded'}, session={persist=false},
             proxy={enabled=true,intercept_hosts={'Z.test','a.test','z.test'},capture={enabled=true}},
@@ -134,7 +135,7 @@ namespace {
           .profile = "selected",
       };
 
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
       const auto before = budget.allocations();
       const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output);
@@ -164,8 +165,8 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{.source = "return {api_version=2}", .directory = {}, .profile = {}};
-      const ConfigurationGeneration generation{memory, source};
+      const application::ConfigurationSourceText source{.source = "return {api_version=2}", .directory = {}, .profile = {}};
+      const application::ConfigurationGeneration generation{memory, source};
       std::array<char, 1> tiny{};
       bool failed = false;
 
@@ -187,7 +188,7 @@ namespace {
     bool rejected = false;
 
     try {
-      const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = "return {api_version=2,runtime={graphics={pane_mib=0}}}", .directory = {}, .profile = {}}};
+      const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = "return {api_version=2,runtime={graphics={pane_mib=0}}}", .directory = {}, .profile = {}}};
     } catch (const std::exception&) {
       rejected = true;
     }
@@ -202,13 +203,13 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = "local p=string.rep(string.char(92),1024); return {api_version=2,runtime={history={path=p},session={path=p},proxy={ca_dir=p}}}",
           .directory = {},
           .profile = {},
       };
 
-      const ConfigurationGeneration generation{memory, source};
+      const application::ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
       bool rejected = false;
 
@@ -231,13 +232,13 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = "local agents={};for i=1,27 do agents[i]={name='fixture-'..i,icon='a'} end;return {api_version=2,runtime={agents=agents}}",
           .directory = {},
           .profile = {},
       };
 
-      const ConfigurationGeneration generation{memory, source};
+      const application::ConfigurationGeneration generation{memory, source};
       const auto agents = generation.runtimeValues().manifests.entries();
 
       require(agents.size() == telar::max_agent_provider_index, "the retained snapshot must include every builtin and custom agent slot");
@@ -248,7 +249,7 @@ namespace {
     bool rejected = false;
 
     try {
-      const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = "return {api_version=2,runtime={agents={{name='wide-icon',icon='中'}}}}", .directory = {}, .profile = {}}};
+      const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = "return {api_version=2,runtime={agents={{name='wide-icon',icon='中'}}}}", .directory = {}, .profile = {}}};
     } catch (const std::exception&) {
       rejected = true;
     }
@@ -260,13 +261,13 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = "local p=string.rep(string.char(10),512); return {api_version=2,runtime={history={path=p},session={path=p},proxy={ca_dir=p}}}",
         .directory = {},
         .profile = {},
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
     std::array<char, ConfigurationQuery::capacity> output{};
     const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output);
     const auto parsed = telar::runtime::JsonValue::parse(encoded);
@@ -287,7 +288,7 @@ namespace {
     bool rejected = false;
 
     try {
-      const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = "return {api_version=2}", .directory = {}, .profile = {}}};
+      const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = "return {api_version=2}", .directory = {}, .profile = {}}};
     } catch (const std::bad_alloc&) {
       rejected = true;
     }
@@ -302,7 +303,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
           local gui={font={family='Fixture "中',style='Italic',size=15.1,line_height=1.1,letter_spacing=-0.5},
             window={padding={x=-0.0,y=2.5}},cursor={style='hollow',blink=false},chrome={scale=1.25}}
@@ -315,7 +316,7 @@ namespace {
           .profile = "selected",
       };
 
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
       const auto allocations = budget.allocations();
       const auto gui = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output, false));
@@ -386,7 +387,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
           local client={sound={enabled=false,ready=false},notifications={delivery='system'},
             history={show_agent_commands=true,enter='run',match='fts'},window_title='{tab}',
@@ -403,8 +404,8 @@ namespace {
           .generation = std::numeric_limits<std::uint64_t>::max(),
       };
 
-      ConfigurationGeneration generation{memory, source};
-      const ClientQueryContext context{
+      application::ConfigurationGeneration generation{memory, source};
+      const application::ClientQueryContext context{
           .source = "relative/config.lua",
           .profile = "chosen",
           .generation = generation.number(),
@@ -413,7 +414,7 @@ namespace {
 
       std::array<char, ConfigurationQuery::capacity> output{};
       const auto allocations = budget.allocations();
-      const std::string before{ClientQuery::write(generation.configuration(), context, output)};
+      const std::string before{application::ClientQuery::write(generation.configuration(), context, output)};
       const auto parsed = telar::runtime::JsonValue::parse(before);
 
       require(requiredJsonField(parsed, "generation").encoded() == "18446744073709551615", "client queries must preserve the adopted generation's complete identifier");
@@ -424,7 +425,7 @@ namespace {
       require(!requiredJsonField(parsed, "history_enter_runs").boolean() && requiredJsonField(parsed, "history_match_fts").boolean(), "history query flags must retain independent profile overrides");
       require(budget.allocations() == allocations, "client serialization must not allocate through the application allocator");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
-      require(ClientQuery::write(generation.configuration(), context, output) == before, "Lua mutation must not change adopted client policies");
+      require(application::ClientQuery::write(generation.configuration(), context, output) == before, "Lua mutation must not change adopted client policies");
     }
 
     require(budget.liveBytes() == 0, "client policy snapshots must release their generation's allocations");
@@ -432,9 +433,9 @@ namespace {
 
   void clientMetadataAndResponseBounds() {
     const Configuration configuration;
-    ClientQueryContext context;
+    application::ClientQueryContext context;
     std::array<char, ConfigurationQuery::capacity> output{};
-    const auto defaults = telar::runtime::JsonValue::parse(ClientQuery::write(configuration, context, output));
+    const auto defaults = telar::runtime::JsonValue::parse(application::ClientQuery::write(configuration, context, output));
 
     require(requiredJsonField(defaults, "source").encoded() == "null", "an absent source must remain null");
     require(requiredJsonField(defaults, "sound").encoded() == R"({"enabled":true,"ready":true,"needs_input":true})", "sound defaults must match the original policy");
@@ -442,7 +443,7 @@ namespace {
 
     context.source = std::string_view{source.data(), source.size()};
     context.profile = std::string_view{};
-    const std::string complete{ClientQuery::write(configuration, context, output)};
+    const std::string complete{application::ClientQuery::write(configuration, context, output)};
 
     require(complete.contains(R"("source":[120,255],"profile":"")"), "optional byte metadata must distinguish absence, empty text and invalid UTF-8");
     constexpr char guard = 'g';
@@ -452,7 +453,7 @@ namespace {
       bool failed = false;
 
       try {
-        require(ClientQuery::write(configuration, context, std::span{output}.first(capacity)) == complete, "successful client replies must preserve every byte");
+        require(application::ClientQuery::write(configuration, context, std::span{output}.first(capacity)) == complete, "successful client replies must preserve every byte");
       } catch (const std::length_error& error) {
         failed = std::string_view{error.what()} == "WriteFailed";
       }
@@ -479,7 +480,7 @@ namespace {
       bool rejected = false;
 
       try {
-        const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = source, .directory = {}, .profile = {}}};
+        const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = source, .directory = {}, .profile = {}}};
       } catch (const std::exception&) {
         rejected = true;
       }
@@ -487,13 +488,13 @@ namespace {
       require(rejected && budget.liveBytes() == 0, "an invalid unselected profile must reject the generation and release partial construction");
     }
 
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = "return {api_version=2,runtime={history={path='root.db'}},profiles={unused={runtime={history={path='unused.db'}}}}}",
         .directory = {},
         .profile = {},
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
 
     require(generation.runtimeValues().history_path == "root.db", "validation of an unselected profile must not adopt its runtime values");
   }

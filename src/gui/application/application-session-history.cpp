@@ -1,8 +1,24 @@
-module telar.gui.application.session;
+module telar.gui.application;
 
 import std;
+import telar.tbc;
+import telar.gui.foundation.core;
+import telar.gui.history.browser;
+import telar.gui.links.path_expansion;
+import telar.gui.paths.label;
+import telar.gui.peek.screen;
+import telar.config.client;
+import telar.config.runtime;
+import telar.gui.prompt.layout;
+import telar.wire.editor;
+import telar.wire.history;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.gui.prompt.routing;
+import telar.gui.prompt.editor;
+import telar.shell.syntax;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   void Session::reportHistoryError(std::string_view message) {
     history_.setError(message);

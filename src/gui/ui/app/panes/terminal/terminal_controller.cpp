@@ -72,7 +72,7 @@ namespace telar::gui::qt {
     return *terminal;
   }
 
-  bool TerminalController::input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source) {
+  bool TerminalController::input(std::uint64_t pane_id, const QByteArray& bytes, application::PaneInputSource source) {
     auto& session = store_.session();
     const auto* const current = session.findPane(pane_id);
     if (current == nullptr || !current->attached || current->exited || bytes.isEmpty()) {
@@ -117,7 +117,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void TerminalController::scroll(PaneScrollDelta delta) {
+  void TerminalController::scroll(application::PaneScrollDelta delta) {
     try {
       store_.session().scroll(delta);
     } catch (const std::exception& error) {
@@ -255,7 +255,7 @@ namespace telar::gui::qt {
     MouseEncoder encoder;
     const auto packet = encoder.encode(report->button, report->x, report->y, report->released, true);
 
-    input(pane_id, QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, PaneInputSource::mouse);
+    input(pane_id, QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, application::PaneInputSource::mouse);
   }
 
   void TerminalController::cancelPane(std::uint64_t pane_id) {

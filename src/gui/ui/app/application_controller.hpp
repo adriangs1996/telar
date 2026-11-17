@@ -70,6 +70,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.suggestion_geometry;
+import telar.gui.application;
 import telar.gui.prompt.line;
 import telar.gui.presentation.history_filter_geometry;
 
@@ -144,7 +145,7 @@ namespace telar::gui::qt {
     void loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path = {});
     void setWindow(QQuickWindow& window);
     bool eventFilter(QObject* watched, QEvent* event) override;
-    [[nodiscard]] Pane<Memory>* pane(std::uint64_t identity) const noexcept;
+    [[nodiscard]] application::Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
     void soundPlaybackFinished(std::optional<CommandFailure> failure);
@@ -292,7 +293,7 @@ namespace telar::gui::qt {
     static void composeWindowAnimation() noexcept;
     // Drops the theme and font QML reads and notifies a new configuration.
     void publishConfiguration();
-    void presentChange(Change change);
+    void presentChange(application::Change change);
     void initializeAttachments();
     void refreshPanes();
     void configureWindow();

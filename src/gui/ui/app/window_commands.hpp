@@ -30,7 +30,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -118,7 +118,7 @@ namespace telar::gui::qt {
 
     // Answers the commands of the active machine's client. A configuration reply views the
     // commands' buffers, region `a`, until the client encodes it.
-    struct HostCommands final : ClientCommandHandler {
+    struct HostCommands final : application::ClientCommandHandler {
       HostCommands(tbc::view<WindowCommands&, tbc::lt::a> owner, bool is_active) noexcept
           : commands(owner),
             active(is_active) {}
@@ -174,7 +174,7 @@ namespace telar::gui::qt {
     void executeNotificationBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
     void openComponentPick(std::size_t index);
     void applyExpression(const InputExpression& expression);
-    void scrollBinding(ScrollDirection direction);
+    void scrollBinding(application::ScrollDirection direction);
     [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
     bool executeNavigation(window_actions::Action action, const QString& target);
     bool executePane(window_actions::Action action, std::uint64_t identity);

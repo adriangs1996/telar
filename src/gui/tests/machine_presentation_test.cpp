@@ -24,7 +24,7 @@ static_assert(true);
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.foundation.model;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.runtime;

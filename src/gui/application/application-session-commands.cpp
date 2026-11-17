@@ -1,10 +1,30 @@
-module telar.gui.application.session;
+module telar.gui.application;
 
 import std;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.model;
+import telar.tbc;
+import telar.gui.foundation.core;
+import telar.gui.graphics.texture_cache;
+import telar.gui.history.browser;
+import telar.gui.layout.snapshots;
+import telar.gui.links.path_expansion;
+import telar.gui.paths.label;
+import telar.gui.peek.screen;
+import telar.gui.suggestions.state;
+import telar.config.client;
+import telar.config.runtime;
+import telar.gui.prompt.layout;
+import telar.wire.clients;
+import telar.wire.layout;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.gui.prompt.routing;
+import telar.gui.prompt.editor;
+import telar.gui.presentation.notification_center;
+import telar.shell.syntax;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   Change Session::apply(const ClientCommand& message, const ClientCommandHandler& handler) {
     CompleteClientCommand reply;

@@ -21,7 +21,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.paths.label;
 import telar.wire.editor;
 import telar.wire.runtime;
@@ -56,7 +56,7 @@ namespace {
     const auto request = transport.last<FindPaths>();
     const std::array matches{PathMatch{.path = path, .kind = kind}};
 
-    require(deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches}) == Change::paths, "the current wire page must update the picker");
+    require(deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches}) == application::Change::paths, "the current wire page must update the picker");
   }
 
   void searchesUseTheRuntimeAndRetainOnlyCurrentResults() {
@@ -80,8 +80,8 @@ namespace {
     require(query.query == prefix && !query.refresh, "wire queries must stop before an incomplete UTF-8 scalar without rebuilding the index");
     const std::array stale{PathMatch{.path = "stale"}};
 
-    require(deliver(client, PathResults{.request_id = initial.request_id, .root = "/work", .complete = true, .matches = stale}) == Change::none, "a superseded wire response must leave the current page untouched");
-    require(deliver(client, RequestFailed{.request_id = initial.request_id, .code = FailureCode::invalid_request, .message = "obsolete"}) == Change::none && client.error().empty(), "a tracked obsolete failure must not produce a notification or repaint");
+    require(deliver(client, PathResults{.request_id = initial.request_id, .root = "/work", .complete = true, .matches = stale}) == application::Change::none, "a superseded wire response must leave the current page untouched");
+    require(deliver(client, RequestFailed{.request_id = initial.request_id, .code = FailureCode::invalid_request, .message = "obsolete"}) == application::Change::none && client.error().empty(), "a tracked obsolete failure must not produce a notification or repaint");
     publishPaths(client, transport, "src/main.cpp");
     require(client.pathPicker().path(client.pathPicker().matches().front()) == "src/main.cpp", "retained paths must survive destruction of the decoder buffer");
     client.closePathPicker();

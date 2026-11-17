@@ -32,7 +32,7 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.presentation.notification_center;
 

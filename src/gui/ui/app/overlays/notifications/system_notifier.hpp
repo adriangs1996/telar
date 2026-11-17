@@ -30,7 +30,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.platform.notification_commands;
 import telar.gui.text.notification_payload;
 
@@ -56,7 +56,7 @@ namespace telar::gui::qt {
 
   using ApplicationNotificationHost = TELAR_GUI_NOTIFICATION_HOST;
 
-  template <typename Host, Allocator Memory, std::size_t Capacity = HostEffectLimits::maximum_system_notifications>
+  template <typename Host, Allocator Memory, std::size_t Capacity = application::HostEffectLimits::maximum_system_notifications>
     requires CommandHost<Host, NotificationPayload>
   class SystemNotifier {
     static_assert(Capacity > 0);

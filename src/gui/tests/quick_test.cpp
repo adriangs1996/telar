@@ -138,7 +138,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.tests.json_fixture;
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.graphics.placeholder;
 import telar.gui.history.browser;
@@ -9109,7 +9109,7 @@ return {api_version=2, client={keybindings={
       return nullptr;
     }
 
-    [[nodiscard]] Pane<telar::Memory>* firstPane() const {
+    [[nodiscard]] application::Pane<telar::Memory>* firstPane() const {
       if (client_->panes()->rows()->rowCount() == 0) {
         return nullptr;
       }

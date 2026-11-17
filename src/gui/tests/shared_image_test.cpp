@@ -54,7 +54,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.graphics.texture_cache;
 import telar.gui.foundation.system;
 import telar.platform.graphics;

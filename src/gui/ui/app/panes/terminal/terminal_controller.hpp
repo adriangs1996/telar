@@ -27,7 +27,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.input.child_mouse;
 import telar.gui.links.link_hover;
@@ -61,7 +61,7 @@ namespace telar::gui::qt {
       return store_.session();
     }
 
-    [[nodiscard]] Pane<Memory>* pane(std::uint64_t pane_id) const noexcept {
+    [[nodiscard]] application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept {
       return store_.session().findPane(pane_id);
     }
 
@@ -111,10 +111,10 @@ namespace telar::gui::qt {
     [[nodiscard]] TerminalItem* visible(std::uint64_t pane_id) const;
 
     // What the terminals write to the session. A failure goes up as failed().
-    bool input(std::uint64_t pane_id, const QByteArray& bytes, PaneInputSource source = PaneInputSource::keyboard);
+    bool input(std::uint64_t pane_id, const QByteArray& bytes, application::PaneInputSource source = application::PaneInputSource::keyboard);
     void paste(std::uint64_t pane_id, const QString& text);
     void resize(std::uint64_t pane_id, TerminalSize size);
-    void scroll(PaneScrollDelta delta);
+    void scroll(application::PaneScrollDelta delta);
     // Shows the pane's scrollback from `row`, counted from its top.
     void scrollToRow(std::uint64_t pane_id, std::uint32_t row);
     // Selects a command block of the pane, by index among its blocks, or none to go back to the

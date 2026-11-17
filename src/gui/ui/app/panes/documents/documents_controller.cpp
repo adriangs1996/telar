@@ -12,7 +12,7 @@ namespace telar::gui::qt {
       : QObject(parent),
         store_(store) {}
 
-  const Pane<Memory>* DocumentsController::pane(std::uint64_t pane_id) const noexcept {
+  const application::Pane<Memory>* DocumentsController::pane(std::uint64_t pane_id) const noexcept {
     return store_.session().findPane(pane_id);
   }
 

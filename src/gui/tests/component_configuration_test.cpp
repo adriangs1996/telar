@@ -35,6 +35,7 @@ import telar.gui.input.copy_pointer;
 import telar.gui.presentation.history_filter_geometry;
 
 import telar.gui.config.gui_query;
+import telar.gui.application;
 import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
 
@@ -130,7 +131,7 @@ return {api_version = 2, client = {
 }}
 )";
 
-  ConfigurationSourceText selection(std::string_view profile = {}) {
+  application::ConfigurationSourceText selection(std::string_view profile = {}) {
     return {.source = source, .directory = {}, .profile = profile, .generation = Fixture::generation};
   }
 
@@ -148,7 +149,7 @@ return {api_version = 2, client = {
 
   template <typename Memory>
   void profilesAndDefinitions(Memory& memory) {
-    const ConfigurationGeneration base{memory, selection("inherited")};
+    const application::ConfigurationGeneration base{memory, selection("inherited")};
     const auto& configuration = base.components();
     const auto& definitions = configuration.definitions();
 
@@ -174,12 +175,12 @@ return {api_version = 2, client = {
 
     require(argument == expected.size(), "all command arguments must be retained");
 
-    const ConfigurationGeneration replaced{memory, selection("replaced")};
+    const application::ConfigurationGeneration replaced{memory, selection("replaced")};
     const auto& overlay = replaced.components();
 
     require(overlay.definitions().source(components::Position::bottom_left).kind == components::SourceKind::tabs && overlay.definitions().source(components::Position::bottom_center).kind == components::SourceKind::empty, "a declared bottom bar must replace omitted slots");
     require(overlay.bar(components::Position::bottom_left).empty() && overlay.bar(components::Position::bottom_right).text(overlay.bar(components::Position::bottom_right).nodes()[0].text) == "override", "inherited static content must not leak into replaced slots");
-    const ConfigurationGeneration reindexed{memory, selection("reindexed")};
+    const application::ConfigurationGeneration reindexed{memory, selection("reindexed")};
     const auto inherited_binding = reindexed.definitionAction(reindexed.input().configured[0].action);
 
     require(inherited_binding && inherited_binding->index == 0 && reindexed.components().definitions().panels().size() == 1, "inherited bindings must resolve panel names against the selected profile rather than reuse base indices");
@@ -204,7 +205,7 @@ return {api_version = 2, client = {
       bool rejected = false;
 
       try {
-        const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = example.source, .directory = {}, .profile = example.profile}};
+        const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = example.source, .directory = {}, .profile = example.profile}};
       } catch (const std::exception& error) {
         if (error.what() != example.diagnostic) {
           std::cerr << "Unexpected footer diagnostic: " << error.what() << '\n';
@@ -229,7 +230,7 @@ return {api_version = 2, client = {
     constexpr std::array positions{components::Position::footer_left, components::Position::footer_center, components::Position::footer_right};
 
     {
-      const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = valid, .directory = {}, .profile = "inherited"}};
+      const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = valid, .directory = {}, .profile = "inherited"}};
       constexpr std::array kinds{components::SourceKind::metrics, components::SourceKind::machines, components::SourceKind::fixed};
 
       for (std::size_t index = 0; index < positions.size(); ++index) {
@@ -242,7 +243,7 @@ return {api_version = 2, client = {
     }
 
     for (const auto* const profile : {"empty", "shorter"}) {
-      const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = valid, .directory = {}, .profile = profile}};
+      const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = valid, .directory = {}, .profile = profile}};
       const bool empty = std::string_view{profile} == "empty";
 
       for (std::size_t index = 0; index < positions.size(); ++index) {
@@ -266,7 +267,7 @@ return {api_version = 2, client = {
 
   template <typename Memory>
   void renderLifetime(Memory& memory) {
-    ConfigurationGeneration generation{memory, selection()};
+    application::ConfigurationGeneration generation{memory, selection()};
     auto snapshot = context();
     constexpr auto position = components::Position::bottom_right;
 
@@ -327,7 +328,7 @@ return {api_version = 2, client = {
       end,on_select={'helper','{}'}}),
     }}}
   )";
-    ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
+    application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
     components::PickItems items;
     auto invocation = context();
 
@@ -386,7 +387,7 @@ return {api_version = 2, client = {
       },
     }}
   )";
-    ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
+    application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
 
     require(generation.components().definitions().slot(components::Slot::tab) != LUA_NOREF && generation.components().definitions().slot(components::Slot::pane_header) == LUA_NOREF, "component slots must keep only the functions a configuration names");
     const auto invocation = context();
@@ -466,7 +467,7 @@ return {api_version = 2, client = {
 
     for (const auto* const name : {"stack-tabs", "default-tab", "default-pane-header", "default-card", "default-top-bar", "default-bottom-bar"}) {
       const auto source = std::string{"return {api_version=2,client={components=require('mods."} + name + "')}}";
-      ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = source, .directory = directory.data(), .profile = {}}};
+      application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = source, .directory = directory.data(), .profile = {}}};
 
       for (const auto& sample : samples) {
         if (generation.components().definitions().slot(sample.slot) == LUA_NOREF) {

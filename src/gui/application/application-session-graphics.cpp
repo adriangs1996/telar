@@ -1,10 +1,26 @@
-module telar.gui.application.session;
+module telar.gui.application;
 
 import std;
 import telar.base.text.utf8;
 import telar.gui.foundation.text;
+import telar.tbc;
+import telar.gui.foundation.core;
+import telar.gui.graphics.texture_cache;
+import telar.gui.links.path_expansion;
+import telar.gui.paths.label;
+import telar.gui.peek.screen;
+import telar.config.client;
+import telar.config.runtime;
+import telar.gui.prompt.line;
+import telar.base.text;
+import telar.gui.prompt.layout;
+import telar.wire.graphics;
+import telar.wire.vocabulary;
+import telar.gui.prompt.routing;
+import telar.gui.prompt.editor;
+import telar.shell.syntax;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   bool Session::graphicsPaused(std::uint64_t pane_id) const noexcept {
     return graphics_pauses_.contains(pane_id);

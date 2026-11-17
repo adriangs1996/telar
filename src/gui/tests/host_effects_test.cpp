@@ -31,7 +31,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.tests.allocation_gate;
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.platform.notification_commands;
 
 namespace {

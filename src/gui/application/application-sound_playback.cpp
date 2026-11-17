@@ -1,9 +1,10 @@
-module telar.gui.application.sound_playback;
+module telar.gui.application;
 
 import std;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
-namespace telar::gui {
+namespace telar::gui::application {
 
   SoundPlayback::SoundPlayback(SoundPolicy configuration) noexcept
       : configuration_(configuration) {}

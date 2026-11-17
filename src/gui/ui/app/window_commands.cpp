@@ -61,7 +61,7 @@ static_assert(true);
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
@@ -69,7 +69,6 @@ import telar.gui.input.key_encoder;
 import telar.gui.config.gui_query;
 import telar.gui.presentation.notification_center;
 import telar.config.client;
-import telar.gui.application.session;
 import telar.gui.config.plugin_effects;
 import telar.gui.links.cell_links;
 import telar.gui.machines.picker;
@@ -406,7 +405,7 @@ namespace telar::gui::qt {
       break;
     case BindingActionKind::scroll_pane_up:
     case BindingActionKind::scroll_pane_down:
-      scrollBinding(action.kind == BindingActionKind::scroll_pane_up ? ScrollDirection::up : ScrollDirection::down);
+      scrollBinding(action.kind == BindingActionKind::scroll_pane_up ? application::ScrollDirection::up : application::ScrollDirection::down);
       break;
     case BindingActionKind::resize_sidebar_left:
     case BindingActionKind::resize_sidebar_right: {
@@ -462,7 +461,7 @@ namespace telar::gui::qt {
     const auto command = configuration_source_.commandTab(action, resolved);
     if (!command) {
       emit notified(QStringLiteral("That command tab expired"));
-    } else if (store_.session().createCommandTab(*command) == TabCreationOutcome::busy) {
+    } else if (store_.session().createCommandTab(*command) == application::TabCreationOutcome::busy) {
       emit notified(QStringLiteral("tabs.one_operation_in_flight: limit 1 tab operation reached"));
     }
   }
@@ -487,7 +486,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowCommands::scrollBinding(ScrollDirection direction) {
+  void WindowCommands::scrollBinding(application::ScrollDirection direction) {
     store_.session().scrollFocused(direction);
     if (const auto* pane = store_.session().focusedPane()) {
       emit terminals_.terminalChanged(pane->id);
@@ -496,7 +495,7 @@ namespace telar::gui::qt {
 
   void WindowCommands::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const {
     if (!active) {
-      UnsupportedClientCommand{}(message, reply);
+      application::UnsupportedClientCommand{}(message, reply);
     } else if (!answerConfiguration(commands, message, reply)) {
       commands.executeHostCommand(message, reply);
     }
@@ -595,7 +594,7 @@ namespace telar::gui::qt {
       break;
     }
     default:
-      UnsupportedClientCommand{}(message, reply);
+      application::UnsupportedClientCommand{}(message, reply);
       break;
     }
   }

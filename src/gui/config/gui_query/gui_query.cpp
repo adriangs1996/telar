@@ -16,62 +16,6 @@ namespace telar::gui {
     throw std::invalid_argument{"UnknownConfigurationSection"};
   }
 
-  tbc::view<std::string_view, tbc::lt::a> ClientQuery::write(const Configuration& configuration, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output) {
-    JsonWriter writer{output};
-
-    writer.object([&](JsonWriter& object) {
-      object.member("source", [&](JsonWriter& value) {
-        writeOptionalBytes(value, context.source);
-      });
-
-      object.member("profile", [&](JsonWriter& value) {
-        writeOptionalBytes(value, context.profile);
-      });
-
-      object.member("generation", context.generation);
-      object.member("sidebar_visible", context.view.sidebar_visible);
-      object.member("sidebar_width", context.view.sidebar_width);
-      object.member("workspace_list_collapsed", context.view.workspace_list_collapsed);
-      object.member("pane_gaps", context.view.pane_gaps);
-      object.member("window_title", context.view.window_title);
-      object.member("sound", [&](JsonWriter& value) {
-        writeSound(value, configuration.sound);
-      });
-
-      object.member("notification_delivery", configuration.notification_delivery == NotificationDelivery::system ? "system" : "telar");
-      object.member("history_show_agent_commands", configuration.history.show_agent_commands);
-      object.member("history_enter_runs", configuration.history.enter_runs);
-      object.member("history_match_fts", configuration.history.match_fts);
-      object.member("sections", writeSections);
-    });
-
-    return writer.view();
-  }
-
-  void ClientQuery::writeOptionalBytes(JsonWriter& writer, std::optional<std::string_view> text) {
-    if (text) {
-      writer.bytes(byteView(*text));
-    } else {
-      writer.value(nullptr);
-    }
-  }
-
-  void ClientQuery::writeSound(JsonWriter& writer, SoundPolicy policy) {
-    writer.object([&](JsonWriter& object) {
-      object.member("enabled", policy.enabled);
-      object.member("ready", policy.ready);
-      object.member("needs_input", policy.needs_input);
-    });
-  }
-
-  void ClientQuery::writeSections(JsonWriter& writer) {
-    writer.array([](JsonWriter& sections) {
-      for (const auto& [name, section] : ConfigurationQuery::sections) {
-        sections.element(name);
-      }
-    });
-  }
-
   tbc::view<std::string_view, tbc::lt::a> GuiQuery::write(const Configuration& configuration, tbc::view<std::span<char>, tbc::lt::a> output, bool default_titlebar) {
     JsonWriter writer{output};
 

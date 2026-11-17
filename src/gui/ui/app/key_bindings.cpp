@@ -47,7 +47,7 @@ static_assert(true);
 #include <QtQuick/qquickwindow.h>
 #include <cstring>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.input.copy_pointer;
 import telar.gui.presentation.history_inspection;
 
@@ -477,7 +477,7 @@ namespace telar::gui::qt {
 
     terminals_.input(pane_id, encodeKey(key, modes));
     key.phase = KeyPhase::release;
-    terminals_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);
+    terminals_.input(pane_id, encodeKey(key, modes), application::PaneInputSource::key_release);
   }
 
 }

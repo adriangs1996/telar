@@ -75,7 +75,7 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -200,7 +200,7 @@ namespace telar::gui::qt {
         releaseKeys();
         releaseMouse();
         if (const auto* current = pane(); current != nullptr && keyboard_ && current->screen.modes().focus_events) {
-          send("\x1b[O", PaneInputSource::terminal_report);
+          send("\x1b[O", application::PaneInputSource::terminal_report);
         }
 
         keyboard_ = false;
@@ -256,7 +256,7 @@ namespace telar::gui::qt {
     emit paneIdChanged();
   }
 
-  Pane<Memory>* TerminalItem::pane() const noexcept {
+  application::Pane<Memory>* TerminalItem::pane() const noexcept {
     return controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
   }
 
@@ -520,7 +520,7 @@ namespace telar::gui::qt {
     return QStringLiteral("interrupted");
   }
 
-  std::size_t TerminalItem::liveSession(const Pane<Memory>& pane) noexcept {
+  std::size_t TerminalItem::liveSession(const application::Pane<Memory>& pane) noexcept {
     const auto& blocks = pane.blocks;
     auto first = blocks.size();
 
@@ -954,7 +954,7 @@ namespace telar::gui::qt {
 
   // Changes whenever the rows drawn do: the screen's, the view's top, its folds, or a row drawn
   // from beyond the screen.
-  std::uint64_t TerminalItem::viewRevision(const Pane<Memory>& current) const noexcept {
+  std::uint64_t TerminalItem::viewRevision(const application::Pane<Memory>& current) const noexcept {
     constexpr std::uint64_t prime = 0x100000001b3;
     auto revision = current.screen.revision();
 
@@ -1085,7 +1085,7 @@ namespace telar::gui::qt {
     if (current != nullptr && entry != pressed_keys_.end() && !event->isAutoRepeat()) {
       const auto released = std::exchange(*entry, PressedKey{});
 
-      send(released.release(current->screen.modes()), PaneInputSource::key_release);
+      send(released.release(current->screen.modes()), application::PaneInputSource::key_release);
     }
 
     event->accept();
@@ -1172,7 +1172,7 @@ namespace telar::gui::qt {
     if (keyboard != keyboard_) {
       keyboard_ = keyboard;
       if (current != nullptr && current->screen.modes().focus_events) {
-        send(keyboard ? "\x1b[I" : "\x1b[O", PaneInputSource::terminal_report);
+        send(keyboard ? "\x1b[I" : "\x1b[O", application::PaneInputSource::terminal_report);
       }
 
       if (!keyboard) {
@@ -1215,7 +1215,7 @@ namespace telar::gui::qt {
       const auto held = std::exchange(key, PressedKey{});
 
       if (current != nullptr) {
-        send(held.release(current->screen.modes()), PaneInputSource::key_release);
+        send(held.release(current->screen.modes()), application::PaneInputSource::key_release);
       }
     }
   }
@@ -1234,7 +1234,7 @@ namespace telar::gui::qt {
     return encodeKey(release, modes);
   }
 
-  bool TerminalItem::send(const QByteArray& bytes, PaneInputSource source) {
+  bool TerminalItem::send(const QByteArray& bytes, application::PaneInputSource source) {
     return controller_ != nullptr && !bytes.isEmpty() && controller_->input(pane_id_, bytes, source);
   }
 

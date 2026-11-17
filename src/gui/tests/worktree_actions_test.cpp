@@ -22,7 +22,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
@@ -91,8 +91,8 @@ namespace {
 
       require(first.worktree == checkout_id && second.worktree == second_checkout_id && first.request_id != second.request_id, "cleanup requests must preserve snapshot order and own distinct correlations");
       require(client.workspaceList().worktrees().size() == worktrees.size(), "cleanup must await runtime snapshots instead of mutating its replica");
-      require(deliver(client, RequestFailed{.request_id = first.request_id, .code = FailureCode::worktree_not_found, .message = "Already forgotten"}) == Change::none && client.error().empty(), "a concurrently forgotten row must release its correlation without an error");
-      require(deliver(client, RequestCompleted{.request_id = second.request_id}) == Change::none, "a successful cleanup must only release request ownership");
+      require(deliver(client, RequestFailed{.request_id = first.request_id, .code = FailureCode::worktree_not_found, .message = "Already forgotten"}) == application::Change::none && client.error().empty(), "a concurrently forgotten row must release its correlation without an error");
+      require(deliver(client, RequestCompleted{.request_id = second.request_id}) == application::Change::none, "a successful cleanup must only release request ownership");
       require(client.workspaceList().worktrees().size() == worktrees.size(), "request completion must not substitute for an authoritative snapshot");
       client.disconnected();
       require(client.forgetGoneWorktrees() == 0, "disconnected cleanup must not queue requests against stale state");
@@ -136,7 +136,7 @@ namespace {
     requests.back() = transport.last<ForgetWorktree>().request_id;
     require(client.forgetGoneWorktrees() == 0 && transport.count(ClientTag::forget_worktree) == capacity, "a full tracker must leave remaining cleanup for the next invocation");
     for (const auto request : requests) {
-      require(deliver(client, RequestCompleted{.request_id = request}) == Change::none, "each admitted cleanup must retain an independently releasable correlation");
+      require(deliver(client, RequestCompleted{.request_id = request}) == application::Change::none, "each admitted cleanup must retain an independently releasable correlation");
     }
 
     require(client.forgetGoneWorktrees() == final_rows.size(), "completion must release the entire bounded tracker for later requests");

@@ -29,13 +29,7 @@ import telar.gui.foundation.system;
 import telar.plugins;
 import telar.gui.components.configuration;
 import telar.config.client;
-
-namespace telar::gui {
-
-  template <Allocator Memory>
-  class ConfigurationGeneration;
-
-}
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -103,7 +97,7 @@ namespace telar::gui::qt {
     ConfigurationWatch::Modules modules;
     Configuration configuration;
     std::optional<ThemeValues> locked_theme;
-    Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
+    Owned<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
     ConfigurationSnapshot snapshot;
     std::optional<PluginPackages> plugins;
     runtime::plugins::TrustStore trust;
@@ -119,13 +113,13 @@ namespace telar::gui::qt {
   public:
     // The preparation is allocated from memory.
     [[nodiscard]] static tbc::view<PreparedConfiguration, tbc::lt::a> prepare(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request);
-    static void trackModules(const ConfigurationGeneration<ApplicationAllocator>& generation, const QString& root, ConfigurationWatch::Modules& modules);
+    static void trackModules(const application::ConfigurationGeneration<ApplicationAllocator>& generation, const QString& root, ConfigurationWatch::Modules& modules);
     static void trackModuleNames(const QStringList& names, const QString& root, ConfigurationWatch::Modules& modules);
 
   private:
     // The preparation keeps what it allocates from memory, region `a`.
     static void load(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request, tbc::view<ConfigurationPreparation&, tbc::lt::a> result);
-    static void snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result);
+    static void snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result);
   };
 
 }

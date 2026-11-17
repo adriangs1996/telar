@@ -80,6 +80,49 @@ export namespace telar::gui::features::history {
 5. Reexporta a `ui` los tipos de valor que muestra, uno a uno: `export using features::history::Page;`
    dentro de `application::history`.
 
+Un caso de uso de `application` es una función libre, no un método de `Session`. Llega a los
+miembros de la sesión por `Access`, que `Session` declara amiga y que vive en la partición
+`:access`, que el módulo no exporta: solo las unidades de `application` la importan.
+
+```cpp
+// application-access.cppm
+module telar.gui.application:access;
+
+import :session;
+
+namespace telar::gui::application {
+
+  struct Access {
+    // One accessor per member a use case reaches; constexpr, so inline like the method it replaces.
+    [[nodiscard]] static constexpr features::history::State& history(Session& session) noexcept {
+      return session.history_;
+    }
+  };
+
+}
+
+// application-history.cpp
+module telar.gui.application;
+
+import :access;
+
+namespace telar::gui::application::history {
+
+  void search(Session& session, const features::history::Query& query) {
+    auto& state = Access::history(session);
+
+    send(session, features::history::search(state, query));
+  }
+
+}
+```
+
+- La partición `application-<feature>.cppm` declara los casos de uso exportados en
+  `telar::gui::application::<feature>`; `application-<feature>.cpp`, una unidad de implementación
+  del módulo, los define e importa `:access`.
+- `ui` no puede nombrar `Access`: la sesión sigue opaca para ella aunque sus miembros salgan de la
+  interfaz pública.
+
 ## ui
 
 Los controladores Qt llaman a `application::<feature>::<caso_de_uso>(store_.session(), …)` dentro

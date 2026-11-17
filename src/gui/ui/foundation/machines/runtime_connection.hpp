@@ -36,7 +36,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.machines.discovery;
 import telar.gui.foundation.system;
 import telar.client;
@@ -44,7 +44,7 @@ import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 
-  class RuntimeConnection final : public QObject, public RuntimeTransport {
+  class RuntimeConnection final : public QObject, public application::RuntimeTransport {
     Q_OBJECT
 
   public:

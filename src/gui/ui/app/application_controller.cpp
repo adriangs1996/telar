@@ -52,8 +52,7 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.config.gui_query;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_pointer;
@@ -512,7 +511,7 @@ namespace telar::gui::qt {
     display_.publish();
   }
 
-  Pane<Memory>* ApplicationController::pane(std::uint64_t identity) const noexcept {
+  application::Pane<Memory>* ApplicationController::pane(std::uint64_t identity) const noexcept {
     return session().findPane(identity);
   }
 
@@ -529,26 +528,26 @@ namespace telar::gui::qt {
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
       // Terminal frames and documents reach their panes directly, and are the bulk of the
       // traffic; every other change may move what the projections read.
-      if (change != Change::none && change != Change::terminal && change != Change::document) {
+      if (change != application::Change::none && change != application::Change::terminal && change != application::Change::document) {
         store_.touch();
       }
-      if (change == Change::stopped || change == Change::closed) {
+      if (change == application::Change::stopped || change == application::Change::closed) {
         client.connection.finishSession();
-        if (change == Change::closed) {
+        if (change == application::Change::closed) {
           client.session.disconnected();
         }
       }
 
       static_cast<void>(client.session.settlePresentation());
       machines_.summarize(client.key);
-      if (active && client.key.machine.slot != Machines::local_slot && (change == Change::stopped || change == Change::closed)) {
+      if (active && client.key.machine.slot != Machines::local_slot && (change == application::Change::stopped || change == application::Change::closed)) {
         machines_.select(store_.machines().token(Machines::local_slot));
         return;
       }
 
       activity_selection_.settle();
       if (!active) {
-        if (change == Change::model || change == Change::stopped) {
+        if (change == application::Change::model || change == application::Change::stopped) {
           refresh_timer_.start();
         }
 
@@ -575,13 +574,13 @@ namespace telar::gui::qt {
     }
   }
 
-  void ApplicationController::presentChange(Change change) {
+  void ApplicationController::presentChange(application::Change change) {
     switch (change) {
-    case Change::sidebar:
+    case application::Change::sidebar:
       display_.publish();
       refresh();
       break;
-    case Change::terminal:
+    case application::Change::terminal:
       attachments_.reconcileFrame(session().changedPane());
       emit terminals_.terminalChanged(session().changedPane());
       if (session().takeChromeChange() && !refresh_timer_.isActive()) {
@@ -594,23 +593,23 @@ namespace telar::gui::qt {
 
       frames_.request();
       break;
-    case Change::paths:
+    case application::Change::paths:
       paths_.refresh();
       break;
-    case Change::suggestion:
+    case application::Change::suggestion:
       palette_.publish();
       break;
-    case Change::peek:
+    case application::Change::peek:
       peek_.synchronize();
       status_.publish();
       break;
-    case Change::document:
+    case application::Change::document:
       documents_.publish(session().changedPane());
       // Inline documents take rows of the view, or give them back.
       emit terminals_.terminalChanged(session().changedPane());
       frames_.request();
       break;
-    case Change::copy_mode:
+    case application::Change::copy_mode:
       copy_.publishSearch();
       status_.publish();
       if (const auto& copy = session().copyMode().state()) {
@@ -618,31 +617,31 @@ namespace telar::gui::qt {
       }
 
       break;
-    case Change::clipboard:
+    case application::Change::clipboard:
       QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
       break;
-    case Change::history:
+    case application::Change::history:
       // The store was touched when the payload arrived; the dialog synchronizes on its flush.
       break;
-    case Change::notification:
+    case application::Change::notification:
       break;
-    case Change::metrics:
+    case application::Change::metrics:
       status_.publishMetrics();
       break;
-    case Change::model:
+    case application::Change::model:
       if (!refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
 
       break;
-    case Change::stopped:
-    case Change::closed:
+    case application::Change::stopped:
+    case application::Change::closed:
       if (window_ != nullptr) {
         window_->close();
       }
 
       break;
-    case Change::none:
+    case application::Change::none:
       break;
     }
   }

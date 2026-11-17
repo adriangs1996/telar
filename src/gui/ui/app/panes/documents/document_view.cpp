@@ -130,7 +130,7 @@ namespace telar::gui::qt {
         return &pane->document;
       }
 
-      using Inline = Pane<Memory>::InlineDocument;
+      using Inline = application::Pane<Memory>::InlineDocument;
       const auto found = std::ranges::find(pane->inline_documents, document_id, &Inline::id);
       if (found == pane->inline_documents.end()) {
         return nullptr;

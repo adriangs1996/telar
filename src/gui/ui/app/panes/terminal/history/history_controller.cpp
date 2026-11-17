@@ -17,7 +17,7 @@ static_assert(true);
 #include <utility>
 
 import telar.base.text.utf8;
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
@@ -229,12 +229,12 @@ namespace telar::gui::qt {
     rows_.replaceRows(std::move(records));
   }
 
-  std::string_view HistoryController::tabName(const Pane<Memory>* pane) const {
+  std::string_view HistoryController::tabName(const application::Pane<Memory>* pane) const {
     const auto& session = store_.session();
     if (pane != nullptr) {
       for (const auto& tab : session.tabs()) {
         if (sameTab(tab->location, pane->location)) {
-          return tab->label.empty() ? tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label};
+          return tab->label.empty() ? application::tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label};
         }
       }
     }

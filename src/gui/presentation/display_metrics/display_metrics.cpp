@@ -239,16 +239,4 @@ namespace telar::gui {
     return std::clamp(from_ + ((to_ - from_) * eased), 0.0F, 1.0F);
   }
 
-  std::uint16_t SidebarColumns::clamp(std::uint16_t host_width, std::int64_t requested_width) {
-    if (requested_width <= 0 || std::cmp_greater(requested_width, std::numeric_limits<std::uint16_t>::max())) {
-      throw std::invalid_argument{"InvalidWidth"};
-    }
-
-    if (host_width < minimum_width + minimum_workbench) {
-      return minimum_width;
-    }
-
-    return std::clamp(static_cast<std::uint16_t>(requested_width), minimum_width, static_cast<std::uint16_t>(host_width - minimum_workbench));
-  }
-
 }

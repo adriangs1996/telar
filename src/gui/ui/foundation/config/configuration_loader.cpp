@@ -36,6 +36,7 @@ import telar.gui.config.generation;
 import telar.gui.presentation.suggestion_geometry;
 
 import telar.gui.config.gui_query;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -50,7 +51,7 @@ namespace telar::gui::qt {
   }
 
   ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator& memory)
-      : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
+      : generation(nullptr, AllocationDeleter<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
         snapshot(memory) {
   }
 
@@ -119,7 +120,7 @@ namespace telar::gui::qt {
       result.directory = information.canonicalPath();
       const auto directory = result.directory.toUtf8();
       const auto profile = request.selection.profile.toUtf8();
-      const ConfigurationSourceText generation_source{
+      const application::ConfigurationSourceText generation_source{
           .source = {source.constData(), static_cast<std::size_t>(source.size())},
           .directory = {directory.constData(), static_cast<std::size_t>(directory.size())},
           .profile = {profile.constData(), static_cast<std::size_t>(profile.size())},
@@ -127,7 +128,7 @@ namespace telar::gui::qt {
           .plugin_overrides = &request.plugin_overrides,
       };
 
-      result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
+      result.generation = makeOwned<application::ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
       const auto& generation = *result.generation;
       const auto& configured = generation.runtimeValues().plugins.configured();
 
@@ -153,7 +154,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result) {
+  void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result) {
     result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
     const auto store = [&](int reference, const char* field) {
       QList<QByteArray> arguments;
@@ -191,7 +192,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ConfigurationLoader::trackModules(const ConfigurationGeneration<ApplicationAllocator>& generation, const QString& root, ConfigurationWatch::Modules& modules) {
+  void ConfigurationLoader::trackModules(const application::ConfigurationGeneration<ApplicationAllocator>& generation, const QString& root, ConfigurationWatch::Modules& modules) {
     QStringList names;
 
     generation.visitLocalModules([&](std::string_view name) {

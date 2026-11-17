@@ -18,7 +18,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.machines.picker;
 
 namespace telar::gui::test {
@@ -73,7 +73,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap context READ context NOTIFY listChanged)
 
   public:
-    MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent = nullptr);
+    MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, application::HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent = nullptr);
     ~MachinesCoordinator() override = default;
     MachinesCoordinator(const MachinesCoordinator&) = delete;
     MachinesCoordinator& operator=(const MachinesCoordinator&) = delete;
@@ -126,7 +126,7 @@ namespace telar::gui::qt {
     ApplicationAllocator& memory_;
     Store& store_;
     ConfigurationSource& configuration_source_;
-    HostEffects& desktop_;
+    application::HostEffects& desktop_;
     FramePresenter& frames_;
     WindowDisplay& display_;
     WindowStatus& status_;

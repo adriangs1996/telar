@@ -19,8 +19,7 @@ static_assert(true);
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.graphics.placeholder;
 import telar.gui.foundation.drawing;
@@ -48,7 +47,7 @@ namespace {
     Tab tab{memory, location};
 
     tab.layout.add(1, ClientLayoutAxis::horizontal, 0);
-    Pane pane{memory, 1, budget};
+    application::Pane pane{memory, 1, budget};
 
     pane.location = location;
     std::array agents{Agent{memory}, Agent{memory}};
@@ -120,11 +119,11 @@ namespace {
     gate.permit(0);
     const PaneProgress report{.pane_id = 1, .state = PaneProgressState::set, .percent = quarter_percent};
 
-    require(deliver(client, report) == Change::model, "progress must invalidate the projected tab");
+    require(deliver(client, report) == application::Change::model, "progress must invalidate the projected tab");
     require(client.findPane(1)->progress_state == PaneProgressState::set && client.findPane(1)->progress_percent == quarter_percent, "the pane must retain the runtime-owned fact");
-    require(deliver(client, report) == Change::none, "repeated progress must not rebuild the GUI");
-    require(deliver(client, PaneProgress{.pane_id = 2, .state = PaneProgressState::indeterminate}) == Change::none, "progress must not create an unknown pane");
-    require(deliver(client, PaneProgress{.pane_id = 1, .state = PaneProgressState::remove}) == Change::model && !client.findPane(1)->progress_percent, "removal must clear the retained percentage");
+    require(deliver(client, report) == application::Change::none, "repeated progress must not rebuild the GUI");
+    require(deliver(client, PaneProgress{.pane_id = 2, .state = PaneProgressState::indeterminate}) == application::Change::none, "progress must not create an unknown pane");
+    require(deliver(client, PaneProgress{.pane_id = 1, .state = PaneProgressState::remove}) == application::Change::model && !client.findPane(1)->progress_percent, "removal must clear the retained percentage");
     require(budget.allocations() == allocations, "semantic progress updates must not allocate through the injected allocator");
   }
 

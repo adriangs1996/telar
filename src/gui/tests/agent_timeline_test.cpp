@@ -52,7 +52,7 @@ static_assert(true);
 #include <thread>
 
 import telar.gui.tests.agent_fixture;
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.application_mark;

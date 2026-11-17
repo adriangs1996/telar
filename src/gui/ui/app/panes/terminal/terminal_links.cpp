@@ -37,7 +37,7 @@ static_assert(true);
 import telar.gui.links.cell_links;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
-import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -356,7 +356,7 @@ namespace telar::gui::qt {
     return PresentedLink{.surface = surface, .link = shared_link_, .cover = preview_cover_};
   }
 
-  void TerminalItem::presentFrame(const TerminalPreparation& preparation) {
+  void TerminalItem::presentFrame(const application::TerminalPreparation& preparation) {
     if (presented_revision_ == preparation.revision) {
       return;
     }

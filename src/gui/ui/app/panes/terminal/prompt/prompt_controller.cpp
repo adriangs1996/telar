@@ -40,11 +40,11 @@ namespace telar::gui::qt {
     return line == nullptr ? std::string_view{} : line->suggestion(session.promptHistory());
   }
 
-  CommandPresence PromptController::commandPresence(std::uint64_t pane_id, std::string_view word) {
+  application::CommandPresence PromptController::commandPresence(std::uint64_t pane_id, std::string_view word) {
     try {
       return store_.session().commandPresence(pane_id, word);
     } catch (const std::exception&) {
-      return CommandPresence::unknown;
+      return application::CommandPresence::unknown;
     }
   }
 
@@ -52,7 +52,7 @@ namespace telar::gui::qt {
     return store_.session().selectedBlock(pane_id);
   }
 
-  const Pane<Memory>* PromptController::pane(std::uint64_t pane_id) const noexcept {
+  const application::Pane<Memory>* PromptController::pane(std::uint64_t pane_id) const noexcept {
     return store_.session().findPane(pane_id);
   }
 

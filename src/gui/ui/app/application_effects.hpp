@@ -10,7 +10,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.text.notification_payload;
-import telar.gui.application.host_effects;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -18,7 +18,7 @@ namespace telar::gui::qt {
 
   // The desktop the window's clients reach through their MachineEffects: its notifications and
   // its one sound at a time.
-  struct ApplicationEffects final : HostEffects {
+  struct ApplicationEffects final : application::HostEffects {
     using Notifier = SystemNotifier<ApplicationNotificationHost, ApplicationAllocator>;
     using Player = SoundPlayer<ApplicationSoundHost, ApplicationController>;
 

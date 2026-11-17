@@ -12,7 +12,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -36,7 +36,7 @@ namespace telar::gui::qt {
     DocumentsController(DocumentsController&&) = delete;
     DocumentsController& operator=(DocumentsController&&) = delete;
 
-    [[nodiscard]] const Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;
     // While the pane shows a document, its scroll keys move the document; every other key, as
     // q or Ctrl-C, reaches the program that shows it.
     bool key(std::uint64_t pane_id, const QKeyEvent& event);

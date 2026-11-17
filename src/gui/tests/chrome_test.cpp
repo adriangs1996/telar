@@ -61,7 +61,7 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
@@ -739,7 +739,7 @@ namespace {
       GraphicsBudget budget;
       const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
       Tab tab{memory, location};
-      Pane pane{memory, 1, budget};
+      application::Pane pane{memory, 1, budget};
 
       pane.location = location;
       pane.cwd = "/work/telar";
@@ -755,7 +755,7 @@ namespace {
       agents.back().title = "Session title";
       for (const auto state : {telar::AgentTitleState::placeholder, telar::AgentTitleState::pending, telar::AgentTitleState::ready, telar::AgentTitleState::failed}) {
         agents.back().title_state = state;
-        const auto record = tabRecord(tab, &pane, std::array<const Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true);
+        const auto record = tabRecord(tab, &pane, std::array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true);
 
         QCOMPARE(record.value(QStringLiteral("label")).toString(), state == telar::AgentTitleState::placeholder ? QStringLiteral("telar · Python") : QStringLiteral("Session title"));
         QCOMPARE(record.value(QStringLiteral("application")).toString(), QStringLiteral("Python"));
@@ -763,10 +763,10 @@ namespace {
 
       agents.front().location = location;
       agents.front().title_state = telar::AgentTitleState::placeholder;
-      QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
+      QCOMPARE(tabRecord(tab, &pane, std::array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
       tab.label = "Review";
       tab.fullscreen = true;
-      QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
+      QCOMPARE(tabRecord(tab, &pane, std::array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
     }
 
     Q_SLOT static void unloadedTabsShowTheirListedPanes() {
@@ -783,7 +783,7 @@ namespace {
       agents.front().pane_id = 5;
       agents.front().location = location;
       agents.front().status = telar::AgentStatus::blocked;
-      const auto record = tabRecord(tab, static_cast<const Pane<telar::Memory>*>(nullptr), std::array<const Pane<telar::Memory>*, 0>{}, std::span<const Agent<telar::Memory>>{agents}, false);
+      const auto record = tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::array<const application::Pane<telar::Memory>*, 0>{}, std::span<const Agent<telar::Memory>>{agents}, false);
 
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("zsh"));
       QCOMPARE(record.value(QStringLiteral("path")).toString(), QStringLiteral("/work/telar"));
@@ -796,7 +796,7 @@ namespace {
       QVERIFY(!cards[1].toMap().value(QStringLiteral("attentionColor")).toString().isEmpty());
 
       tab.loaded = true;
-      QVERIFY(tabRecord(tab, static_cast<const Pane<telar::Memory>*>(nullptr), std::array<const Pane<telar::Memory>*, 0>{}, std::span<const Agent<telar::Memory>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
+      QVERIFY(tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::array<const application::Pane<telar::Memory>*, 0>{}, std::span<const Agent<telar::Memory>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
     }
 
     Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {

@@ -31,7 +31,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.input.child_mouse;
@@ -224,7 +224,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap buildInspection() const;
     void buildRows();
     [[nodiscard]] QString scopeValue();
-    [[nodiscard]] std::string_view tabName(const Pane<Memory>* pane) const;
+    [[nodiscard]] std::string_view tabName(const application::Pane<Memory>* pane) const;
     [[nodiscard]] bool isOpen() const noexcept;
     // Whether a search is pending or loading now; actions refuse to run while it is.
     [[nodiscard]] bool busy() const;

@@ -1,4 +1,4 @@
-export module telar.gui.application.workspace_replica;
+export module telar.gui.application:workspace_replica;
 
 import std;
 import telar.tbc;
@@ -9,13 +9,13 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
-export import :fold_map;
+import :fold_map;
 import telar.base.memory.allocators;
 import telar.gui.foundation.model;
 
 // Interface: application/records.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     enum class PaneInputSource : std::uint8_t {
       keyboard,

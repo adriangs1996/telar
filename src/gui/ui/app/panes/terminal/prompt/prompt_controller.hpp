@@ -15,7 +15,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.input.copy_mode;
 import telar.gui.prompt.editor;
@@ -52,12 +52,12 @@ namespace telar::gui::qt {
     [[nodiscard]] const prompt::Line* line(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] std::string_view suggestion(std::uint64_t pane_id) const noexcept;
     // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
-    [[nodiscard]] CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
+    [[nodiscard]] application::CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
     // The command block selected in the pane, by index among its blocks.
     [[nodiscard]] std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
     // What an editor shows around the line: its pane, the configuration and copy mode.
-    [[nodiscard]] const Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] const std::optional<CopyState>& copy() const noexcept;
 

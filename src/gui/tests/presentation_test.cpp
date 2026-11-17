@@ -17,6 +17,7 @@ import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
 import telar.gui.presentation.frame_pacer;
+import telar.gui.application;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.notification_stack;
 import telar.gui.foundation.model;
@@ -69,7 +70,7 @@ namespace {
   }
 
   void sidebarColumnBounds() {
-    using telar::gui::SidebarColumns;
+    using telar::gui::application::SidebarColumns;
     constexpr std::uint16_t host_columns = 120;
     constexpr std::uint16_t preferred_columns = 70;
     constexpr auto maximum_columns = std::numeric_limits<std::uint16_t>::max();
@@ -160,29 +161,29 @@ namespace {
     using namespace telar::gui;
     const ChromeMetrics chrome;
     constexpr Rect sidebar{.width = 280, .height = 932};
-    const auto geometry = SidebarGeometry::measure(sidebar, chrome, 1);
+    const auto geometry = application::SidebarGeometry::measure(sidebar, chrome, 1);
     constexpr Rect expected_heading{.x = 8, .y = 8, .width = 264, .height = 32};
     constexpr Rect expected_activity{.x = 8, .y = 40, .width = 264, .height = 884};
 
     require(geometry.projects_header.empty() && geometry.projects.empty(), "project navigation must reserve no sidebar space");
     require(geometry.activity_header == expected_heading, "activity must start at the top of the sidebar");
     require(geometry.activity == expected_activity, "activity must receive the remaining sidebar height");
-    const auto crowded = SidebarGeometry::measure(sidebar, chrome, 128);
+    const auto crowded = application::SidebarGeometry::measure(sidebar, chrome, 128);
 
     require(crowded.activity == geometry.activity, "project count must not reduce the activity viewport");
-    const auto machines = SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 2});
+    const auto machines = application::SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 2});
     constexpr Rect expected_rows{.x = 8, .y = 40, .width = 264, .height = 86};
 
     require(machines.machines_header == expected_heading && machines.machines == expected_rows && machines.activity_header.y == 142 && machines.activity.y == 174, "the other machines must list above the activity section, a section gap apart");
-    const auto collapsed = SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 0});
+    const auto collapsed = application::SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 0});
 
     require(collapsed.machines_header == expected_heading && collapsed.machines.empty() && collapsed.activity_header.y == 56, "a collapsed machine list keeps only its header and the gap under it");
     constexpr Rect cramped_area{.width = sidebar.width, .height = 180};
-    const auto cramped = SidebarGeometry::measure(cramped_area, chrome, 1, {.shown = true, .rows = 4});
+    const auto cramped = application::SidebarGeometry::measure(cramped_area, chrome, 1, {.shown = true, .rows = 4});
 
     require(cramped.machines.height == 43 && cramped.activity.height >= 32, "machine rows that do not fit stay out whole, so activity keeps its room");
     constexpr Rect short_area{.width = sidebar.width, .height = 60};
-    const auto short_sidebar = SidebarGeometry::measure(short_area, chrome, 1);
+    const auto short_sidebar = application::SidebarGeometry::measure(short_area, chrome, 1);
 
     require(short_sidebar.projects.empty() && !short_sidebar.activity_header.empty(), "short sidebars must give room to activity and leave project navigation to the top bar");
   }

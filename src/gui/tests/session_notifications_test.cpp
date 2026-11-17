@@ -20,8 +20,7 @@ static_assert(true);
 
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.presentation.notification_center;
 import telar.wire.agents;
 import telar.wire.layout;
@@ -69,7 +68,7 @@ namespace {
     message.title = title;
     message.message = body;
     message.link = link;
-    require(deliver(client, message) == Change::notification, "a wire notification must publish a dedicated view change");
+    require(deliver(client, message) == application::Change::notification, "a wire notification must publish a dedicated view change");
     title.assign("modified");
     body.assign("modified");
     link.assign("https://other.example");
@@ -119,7 +118,7 @@ namespace {
     const auto id = client.notifications().items().front().id;
     ClientCommand command{.request_id = 1, .route = {.id = 2, .generation = 3}, .action = ClientAction::notification_dismiss, .target_id = id.value};
 
-    require(deliver(client, command) == Change::notification, "routed dismissal must notify the host scheduler");
+    require(deliver(client, command) == application::Change::notification, "routed dismissal must notify the host scheduler");
     const auto completed = transport.last<CompleteClientCommand>();
 
     require(completed.status == ClientCommandStatus::applied && completed.target_id == id.value && completed.route.id == command.route.id && completed.route.generation == command.route.generation, "successful dismissal must preserve the routed reply identity");
@@ -127,7 +126,7 @@ namespace {
     const auto revision = client.notificationRevision();
 
     ++command.request_id;
-    require(deliver(client, command) == Change::none, "a repeated dismissal must not restart its transition");
+    require(deliver(client, command) == application::Change::none, "a repeated dismissal must not restart its transition");
     const auto repeated = transport.last<CompleteClientCommand>();
 
     require(repeated.status == ClientCommandStatus::failed && repeated.text == "NotificationNotFound" && client.notificationRevision() == revision, "a stale routed action must return the original bounded failure");

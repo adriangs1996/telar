@@ -1,4 +1,4 @@
-export module telar.gui.application.sound_playback;
+export module telar.gui.application:sound_playback;
 
 import std;
 
@@ -7,7 +7,7 @@ import telar.wire.vocabulary;
 
 // Interface: application/sound_playback.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     struct SoundRequestOutcome {
       enum class State : std::uint8_t {

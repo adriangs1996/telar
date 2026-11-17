@@ -1,12 +1,12 @@
-export module telar.gui.presentation.client_view_state;
+export module telar.gui.application:client_view_state;
 
 import std;
 
-import telar.gui.presentation.display_metrics;
+import :sidebar;
 
 // Interface: application/client_view_state.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::application {
 
     struct ClientViewState {
       bool sidebar_visible = true;

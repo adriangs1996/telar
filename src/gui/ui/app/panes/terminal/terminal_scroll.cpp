@@ -21,7 +21,7 @@ static_assert(true);
 #include <limits>
 #include <optional>
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.input.copy_mode;
 
 namespace telar::gui::qt {

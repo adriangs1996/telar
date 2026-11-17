@@ -20,9 +20,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.host_effects;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.graphics.pauses;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.notification_center;
@@ -95,7 +93,7 @@ namespace {
     require(notice.message.view() == "gui.images.placements_per_frame: 2049 image placements; limit 2048", "the warning must include requested and available placements");
     client.reportLimit(reach);
     require(client.notifications().items().size() == 1 && transport.count(ClientTag::report_limit) == 1, "repeated reaches must respect the notification and runtime reporting intervals");
-    Clock::now_ns = LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
+    Clock::now_ns = application::LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
     client.reportLimit(reach);
     require(transport.last<ReportLimit>().hits == 2, "the next runtime report must include reaches collected during its interval");
     require(client.ready() && !client.graphicsPaused(1), "a presentation limit must preserve the runtime link and image stream");
@@ -275,7 +273,7 @@ namespace {
     require(transport.last<ReportLimit>().hits == 2, "the next report must recover hits from an unsent report");
     failedSnapshot(client, 3);
     require(transport.count(ClientTag::report_limit) == 1, "a delivered limit report must be paced independently of snapshot retries");
-    Clock::now_ns = LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
+    Clock::now_ns = application::LimitReports::report_interval_ms * NotificationInput::nanoseconds_per_millisecond;
     failedSnapshot(client, 4);
     require(transport.last<ReportLimit>().hits == 2 && transport.count(ClientTag::report_limit) == 2, "the next reporting interval must include the accumulated reaches");
   }

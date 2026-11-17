@@ -37,7 +37,7 @@ static_assert(true);
 import telar.gui.machines.picker;
 import telar.gui.presentation.activity_order;
 import telar.platform.process;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -61,7 +61,7 @@ namespace telar::gui::qt {
 
   }
 
-  MachinesCoordinator::MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent)
+  MachinesCoordinator::MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, application::HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent)
       : QObject(parent),
         memory_(memory),
         store_(store),

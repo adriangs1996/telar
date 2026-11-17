@@ -19,8 +19,7 @@ static_assert(true);
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.host_effects;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_filter_geometry;
@@ -38,7 +37,7 @@ namespace {
   constexpr std::uint8_t invalid_cpu = 101;
 
   void revisionsKeepTheLatestSampleAndHistory() {
-    HostMetrics metrics;
+    application::HostMetrics metrics;
     CpuHistory::Samples buffer;
 
     require(!BarMetrics::available(BarMetric::cpu, metrics.sample()), "Missing metrics must stay hidden");
@@ -60,7 +59,7 @@ namespace {
   }
 
   void historyKeepsOnlyTheLastSamplesInOrder() {
-    HostMetrics metrics;
+    application::HostMetrics metrics;
     CpuHistory::Samples buffer;
     constexpr std::uint64_t sample_count = (3 * CpuHistory::capacity) + 7;
     constexpr std::uint64_t percent_count = 101;
@@ -87,11 +86,11 @@ namespace {
     session.connected(1);
     constexpr std::uint64_t previous_revision = 9;
 
-    require(telar::gui::test::deliver(session, hostSample(previous_revision, initial_cpu)) == Change::metrics, "Metrics must publish their own change category");
-    require(telar::gui::test::deliver(session, hostSample(previous_revision, old_cpu)) == Change::none, "Duplicate wire messages must not invalidate the UI");
+    require(telar::gui::test::deliver(session, hostSample(previous_revision, initial_cpu)) == application::Change::metrics, "Metrics must publish their own change category");
+    require(telar::gui::test::deliver(session, hostSample(previous_revision, old_cpu)) == application::Change::none, "Duplicate wire messages must not invalidate the UI");
     const ProxyStatus proxy{.active = true, .scope = ProxyScope::wildcard, .system_trusted = true};
 
-    require(telar::gui::test::deliver(session, proxy) == Change::model, "Proxy status must join the same runtime session");
+    require(telar::gui::test::deliver(session, proxy) == application::Change::model, "Proxy status must join the same runtime session");
     session.disconnected();
     CpuHistory::Samples buffer;
 
@@ -102,13 +101,13 @@ namespace {
     session.connected(2);
     require(session.metrics().revision == 0 && session.hostMetrics().history().ordered(buffer).empty(), "Adopting the replacement runtime must clear the old metric replica and history");
     require(!session.proxyStatus().active && session.proxyStatus().scope == ProxyScope::exact && !session.proxyStatus().system_trusted, "Adopting the replacement runtime must reset its proxy status");
-    require(telar::gui::test::deliver(session, hostSample(1, initial_cpu)) == Change::metrics, "A replacement runtime may restart its revision counter");
+    require(telar::gui::test::deliver(session, hostSample(1, initial_cpu)) == application::Change::metrics, "A replacement runtime may restart its revision counter");
   }
 
 }
 
 void alertsDebouncePeaksAndReleaseWithAMargin() {
-  HostMetrics metrics;
+  application::HostMetrics metrics;
   std::uint64_t revision = 0;
   const auto cpu = [&](std::uint8_t percent, std::optional<std::uint8_t> battery = std::nullopt) {
     require(metrics.update(hostSample(++revision, percent, 0, battery)), "Each sample must be accepted");

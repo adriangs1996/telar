@@ -22,7 +22,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.application_mark;
@@ -60,7 +60,7 @@ namespace telar::gui::qt {
 
   // A shell `ssh` reached: its host, and the link the last command took to reach it.
   template <Allocator Memory>
-  QString remoteSummary(const Pane<Memory>& pane) {
+  QString remoteSummary(const application::Pane<Memory>& pane) {
     if (!pane.shell.remote) {
       return {};
     }
@@ -75,7 +75,7 @@ namespace telar::gui::qt {
   }
 
   template <Allocator Memory>
-  QVariantMap paneChromeRecord(const Pane<Memory>& pane, std::span<const Agent<Memory>> agents, std::uint16_t index, bool images_paused = false) {
+  QVariantMap paneChromeRecord(const application::Pane<Memory>& pane, std::span<const Agent<Memory>> agents, std::uint16_t index, bool images_paused = false) {
     QVariantMap agent_record;
     std::string_view context;
     bool needs_attention = false;
@@ -125,7 +125,7 @@ namespace telar::gui::qt {
   }
 
   template <Allocator Memory>
-  QVariantMap fullscreenPaneRecord(const Pane<Memory>* pane, std::span<const Agent<Memory>> agents, FullscreenPaneEntry entry) {
+  QVariantMap fullscreenPaneRecord(const application::Pane<Memory>* pane, std::span<const Agent<Memory>> agents, FullscreenPaneEntry entry) {
     auto record = pane == nullptr ? QVariantMap{} : paneChromeRecord(*pane, agents, entry.index);
     const auto program = pane == nullptr || pane->foreground.empty() ? std::string_view{"shell"} : std::string_view{pane->foreground};
 

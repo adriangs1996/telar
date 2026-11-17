@@ -31,8 +31,7 @@ static_assert(true);
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.session;
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.peek.screen;
 import telar.gui.presentation.suggestion_labels;
@@ -42,7 +41,6 @@ import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
-import telar.gui.application.host_effects;
 
 namespace {
 
@@ -58,7 +56,7 @@ namespace {
     return {.pane_id = target.agent.pane_id, .pane_generation = target.agent.pane_generation, .location = location, .pane_index = 1, .session_id = target.session, .workspace_label = "Other", .session_title = "Owned agent", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .status = AgentStatus::working, .sequence = 1};
   }
 
-  struct PeekTransport final : RuntimeTransport {
+  struct PeekTransport final : application::RuntimeTransport {
     Transport recorded;
     bool reject = false;
     bool reject_open = false;
@@ -241,7 +239,7 @@ namespace {
 
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
     require(transport.count(ClientTag::read_pane) == 1, "snapshots coalesce while the same peek read is in flight");
-    require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Owned recent text", .exit_code = {}}) == Change::peek && client.peek().text() == "Owned recent text", "a recent pane reply updates only peek presentation");
+    require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Owned recent text", .exit_code = {}}) == application::Change::peek && client.peek().text() == "Owned recent text", "a recent pane reply updates only peek presentation");
     require(client.focusedPane()->id == 1 && client.findPane(target.agent.pane_id) == nullptr && transport.count(ClientTag::open_pane) == openings, "a peek must retain the current tab and create no terminal screen or attachment");
     auto wrong = target;
 
@@ -254,7 +252,7 @@ namespace {
     ++agents.front().session_id.front();
     deliver(client, AgentSnapshot{.revision = 4, .entries = agents});
     require(!client.peek().target() && !client.submitPeek("/stop"), "reused pane and generation values cannot retain a retired agent session");
-    require(deliver(client, PaneText{.request_id = refresh.request_id, .pane_id = read.pane_id, .text = "Retired data", .exit_code = {}}) == Change::none && client.peek().text().empty(), "a retired session's delayed pane text must stay invisible");
+    require(deliver(client, PaneText{.request_id = refresh.request_id, .pane_id = read.pane_id, .text = "Retired data", .exit_code = {}}) == application::Change::none && client.peek().text().empty(), "a retired session's delayed pane text must stay invisible");
   }
 
   void peekMessagesAndInterruptsKeepTheOriginalProtocol() {
@@ -273,7 +271,7 @@ namespace {
     require(transport.count(ClientTag::pane_input) == 0 && !client.peek().target(), "peek prompt submission must not type into the focused local pane");
     const auto read = transport.last<ReadPane>();
 
-    require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Closed read", .exit_code = {}}) == Change::none, "closing the field must retain and safely retire a later read reply");
+    require(deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Closed read", .exit_code = {}}) == application::Change::none, "closing the field must retain and safely retire a later read reply");
     deliver(client, RequestCompleted{.request_id = message.request_id});
     require(!client.requestsPending() && client.openPeek(target) && client.submitPeek("/stop"), "an interrupt has its own releasable action correlation");
     const auto interrupt = transport.last<InterruptAgent>();
@@ -281,7 +279,7 @@ namespace {
     require(interrupt.pane_id == target.agent.pane_id && interrupt.pane_generation == target.agent.pane_generation, "peek stop must address the original agent generation");
     const auto stopped_read = transport.last<ReadPane>();
 
-    require(deliver(client, RequestFailed{.request_id = stopped_read.request_id, .code = FailureCode::pane_not_found, .message = "Read retired"}) == Change::none && client.error().empty(), "a read rejected after its peek closes must release quietly");
+    require(deliver(client, RequestFailed{.request_id = stopped_read.request_id, .code = FailureCode::pane_not_found, .message = "Read retired"}) == application::Change::none && client.error().empty(), "a read rejected after its peek closes must release quietly");
     deliver(client, RequestCompleted{.request_id = interrupt.request_id});
     require(client.openPeek(target), "a completed action leaves later peeks available");
     client.setPresented(false);
@@ -495,7 +493,7 @@ namespace {
     require(client.openPeek(target), "a live peek must admit its initial read");
     const auto read = transport.last<ReadPane>();
 
-    require(deliver(client, RequestFailed{.request_id = read.request_id, .code = FailureCode::pane_not_found, .message = "Read rejected"}) == Change::none && !client.peek().reading() && client.peek().target(), "a failed recent read must quietly release ownership while keeping the open peek");
+    require(deliver(client, RequestFailed{.request_id = read.request_id, .code = FailureCode::pane_not_found, .message = "Read rejected"}) == application::Change::none && !client.peek().reading() && client.peek().target(), "a failed recent read must quietly release ownership while keeping the open peek");
     require(client.error().empty() && client.notifications().items().empty() && !client.requestsPending(), "a recent-read failure must not turn into an unrelated diagnostic or notification");
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
     const auto retry = transport.last<ReadPane>();
@@ -506,7 +504,7 @@ namespace {
     const auto action = transport.last<SendPaneText>();
     constexpr std::string_view refusal = "the pane has the focus in an attached window";
 
-    require(deliver(client, RequestFailed{.request_id = action.request_id, .code = FailureCode::pane_focused, .message = refusal}) == Change::notification, "a refused peek action must publish the original failure notification");
+    require(deliver(client, RequestFailed{.request_id = action.request_id, .code = FailureCode::pane_focused, .message = refusal}) == application::Change::notification, "a refused peek action must publish the original failure notification");
     require(client.notifications().items().size() == 1 && !client.requestsPending(), "a refusal must retain one notice and release the action correlation");
     const auto& notice = client.notifications().items().front();
     constexpr std::uint64_t original_duration_ns = 7'000'000'000;

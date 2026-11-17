@@ -25,7 +25,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.prompt.line;
 import telar.wire.clipboard;
 import telar.wire.content;
@@ -80,7 +80,7 @@ namespace {
     frame.input_modes.bracketed_paste = true;
     deliverSingleCell(client, frame);
 
-    require(deliver(client, atPrompt()) == Change::terminal, "the shell's state must repaint its pane");
+    require(deliver(client, atPrompt()) == application::Change::terminal, "the shell's state must repaint its pane");
     require(client.promptSurface(1) == prompt::Surface::none, "classic mode keeps the terminal");
     require(transport.count(ClientTag::configure_shell_prompt) == 1 && !transport.last<ConfigureShellPrompt>().bare, "a classic client keeps the prompt of the shells it opens");
     auto configuration = client.configuration();
@@ -209,21 +209,21 @@ namespace {
 
     openFirstPane(client, transport);
     deliver(client, atPrompt());
-    require(client.commandPresence(1, "g") == CommandPresence::pending, "the first letter asks the runtime");
+    require(client.commandPresence(1, "g") == application::CommandPresence::pending, "the first letter asks the runtime");
     const auto asked = transport.last<CompleteWords>();
     const auto requests = transport.count(ClientTag::complete_words);
     const std::array words{CompletionWord{.text = "git"}, CompletionWord{.text = "gzip"}};
 
     deliver(client, CompletionWords{.request_id = asked.request_id, .truncated = false, .words = words});
-    require(client.commandPresence(1, "g") == CommandPresence::missing, "no command is named g");
-    require(client.commandPresence(1, "gi") == CommandPresence::missing && client.commandPresence(1, "git") == CommandPresence::found && client.commandPresence(1, "gzx") == CommandPresence::missing, "longer words settle from the listing");
+    require(client.commandPresence(1, "g") == application::CommandPresence::missing, "no command is named g");
+    require(client.commandPresence(1, "gi") == application::CommandPresence::missing && client.commandPresence(1, "git") == application::CommandPresence::found && client.commandPresence(1, "gzx") == application::CommandPresence::missing, "longer words settle from the listing");
     require(transport.count(ClientTag::complete_words) == requests, "without asking again");
 
-    require(client.commandPresence(1, "m") == CommandPresence::pending, "another prefix asks");
+    require(client.commandPresence(1, "m") == application::CommandPresence::pending, "another prefix asks");
     const auto cut = transport.last<CompleteWords>();
 
     deliver(client, CompletionWords{.request_id = cut.request_id, .truncated = true, .words = {}});
-    require(client.commandPresence(1, "ma") == CommandPresence::pending && transport.count(ClientTag::complete_words) == requests + 2, "a cut listing settles nothing longer");
+    require(client.commandPresence(1, "ma") == application::CommandPresence::pending && transport.count(ClientTag::complete_words) == requests + 2, "a cut listing settles nothing longer");
   }
 
   template <typename Client>
@@ -251,22 +251,22 @@ namespace {
     client.configure(configuration);
     deliver(client, atPrompt());
 
-    require(client.commandPresence(1, "g") == CommandPresence::pending, "the first letter asks the runtime");
+    require(client.commandPresence(1, "g") == application::CommandPresence::pending, "the first letter asks the runtime");
     const auto checked = transport.last<CompleteWords>();
 
-    require(deliver(client, RequestFailed{.request_id = checked.request_id, .code = FailureCode::pane_not_found, .message = "Check failed"}) == Change::terminal && client.error().empty(), "a failed command check repaints its pane without an error");
-    require(client.commandPresence(1, "g") == CommandPresence::unknown, "the word stops waiting");
+    require(deliver(client, RequestFailed{.request_id = checked.request_id, .code = FailureCode::pane_not_found, .message = "Check failed"}) == application::Change::terminal && client.error().empty(), "a failed command check repaints its pane without an error");
+    require(client.commandPresence(1, "g") == application::CommandPresence::unknown, "the word stops waiting");
 
     typeKeys(client, "cat sr");
     tab(client);
     const auto spec = transport.last<RequestCommandSpec>();
 
-    require(deliver(client, RequestFailed{.request_id = spec.request_id, .code = FailureCode::pane_not_found, .message = "Spec failed"}) == Change::none && client.error().empty(), "a failed spec is no error");
+    require(deliver(client, RequestFailed{.request_id = spec.request_id, .code = FailureCode::pane_not_found, .message = "Spec failed"}) == application::Change::none && client.error().empty(), "a failed spec is no error");
     tab(client);
     const auto find = transport.last<FindPaths>();
 
     require(find.request_id > spec.request_id && client.promptLine(1)->pending(find.request_id), "Tab completes without the spec it could not get");
-    require(deliver(client, RequestFailed{.request_id = find.request_id, .code = FailureCode::pane_not_found, .message = "Paths failed"}) == Change::terminal && client.error().empty(), "a failed path search repaints the line without an error");
+    require(deliver(client, RequestFailed{.request_id = find.request_id, .code = FailureCode::pane_not_found, .message = "Paths failed"}) == application::Change::terminal && client.error().empty(), "a failed path search repaints the line without an error");
     require(!client.promptLine(1)->pending(find.request_id), "the menu stops waiting for it");
 
     tab(client);
@@ -325,7 +325,7 @@ namespace {
     client.configure(configuration);
     deliver(client, atPrompt());
 
-    require(client.commandPresence(1, "g") == CommandPresence::pending, "the first letter asks the runtime");
+    require(client.commandPresence(1, "g") == application::CommandPresence::pending, "the first letter asks the runtime");
     const auto checked = transport.last<CompleteWords>();
 
     typeKeys(client, "ls");
@@ -335,7 +335,7 @@ namespace {
     require(client.promptLine(1) == nullptr, "the line goes with its pane");
     const std::array words{CompletionWord{.text = "git"}};
 
-    require(deliver(client, CompletionWords{.request_id = checked.request_id, .words = words}) == Change::none, "an answer for a pane that left finds nothing waiting");
+    require(deliver(client, CompletionWords{.request_id = checked.request_id, .words = words}) == application::Change::none, "an answer for a pane that left finds nothing waiting");
   }
 
   void lineCompletes() {
@@ -367,7 +367,7 @@ namespace {
     constexpr std::string_view git_spec = R"(git = [ command ] ;
 command = "switch" : "Switch branches" , { @branch } | "status" : "Show the working tree status" | "stash" : "Stash the changes" ;)";
 
-    require(deliver(client, CommandSpec{.request_id = asked.request_id, .command = "git", .state = CommandSpecState::available, .digest = 7, .source = git_spec}) == Change::terminal, "the spec completes the waiting Tab");
+    require(deliver(client, CommandSpec{.request_id = asked.request_id, .command = "git", .state = CommandSpecState::available, .digest = 7, .source = git_spec}) == application::Change::terminal, "the spec completes the waiting Tab");
     require(client.promptLine(1)->editor().text().view() == "git switch ", "one choice from the spec is written with a space");
 
     client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -422,7 +422,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     require(find.root.starts_with("/") && find.query == "sr" && client.promptLine(1)->pending(find.request_id), "paths are asked from the runtime");
     const std::array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
 
-    require(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == Change::terminal, "the answer repaints the line");
+    require(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
     require(client.promptLine(1)->editor().text().view() == "cat src/", "the only child that matches is written, a directory without a space");
 
     typeKeys(client, "my file");
@@ -489,7 +489,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     require(query.distinct && query.author == HistoryAuthorFilter::human, "the line loads the commands people typed");
     const std::array entries{HistoryEntry{.id = 2, .pane_id = 1, .command = "make test-runtime", .cwd = "/"}, HistoryEntry{.id = 1, .pane_id = 1, .command = "make install", .cwd = "/"}};
 
-    require(deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries}) == Change::none, "the editor's history does not touch the history panel");
+    require(deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries}) == application::Change::none, "the editor's history does not touch the history panel");
     client.promptKey(1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
     typeKeys(client, "make t");
     require(client.promptLine(1)->suggestion(client.promptHistory()) == "est-runtime", "the newest command that extends the line is suggested");

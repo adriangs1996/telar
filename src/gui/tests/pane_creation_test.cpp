@@ -26,8 +26,7 @@ static_assert(true);
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.wire.layout;
 import telar.wire.runtime;
@@ -38,7 +37,7 @@ namespace {
   using namespace telar::gui;
   using namespace telar::gui::test;
 
-  const Tab<Memory>* tabIn(const Session& client, TabLocation location) {
+  const Tab<Memory>* tabIn(const application::Session& client, TabLocation location) {
     for (const auto& tab : client.tabs()) {
       if (sameTab(tab->location, location)) {
         return tab.get();
@@ -247,7 +246,7 @@ namespace {
     require(transport.count(ClientTag::create_pane) == 2, "runtime rejection must release the pane operation");
   }
 
-  TabLocation openAnotherTab(Session& client, const Transport& transport) {
+  TabLocation openAnotherTab(application::Session& client, const Transport& transport) {
     client.createTab();
     const auto request = transport.last<CreateTab>();
     const TabLocation location{.workspace = request.workspace, .tab_id = 2};

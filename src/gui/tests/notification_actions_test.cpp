@@ -25,6 +25,7 @@ import telar.gui.config.generation;
 import telar.gui.input.copy_pointer;
 
 import telar.gui.config.gui_query;
+import telar.gui.application;
 
 namespace {
 
@@ -32,7 +33,7 @@ namespace {
   using namespace telar::gui;
   using telar::gui::test::require;
 
-  constexpr ConfigurationSourceText source{
+  constexpr application::ConfigurationSourceText source{
       .source = R"(
       local fixed = telar.action.notification{
         title='Retained notice',body='original body',level='warning',duration_ms=750,pane_id=99
@@ -81,7 +82,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       const auto binding = generation.input().configured[0].action;
       const auto expected = generation.notificationAction(binding);
 
@@ -111,7 +112,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    ConfigurationGeneration generation{memory, source};
+    application::ConfigurationGeneration generation{memory, source};
     const auto callback = generation.input().configured[1].action;
     const auto first = generation.invoke(callback, {});
 

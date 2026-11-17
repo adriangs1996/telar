@@ -8,8 +8,7 @@ static_assert(true);
 
 import std;
 import telar.gui.tests.session_fixture;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.render.markdown;
 import telar.wire.content;
 import telar.wire.vocabulary;
@@ -54,13 +53,13 @@ namespace {
     const auto bytes = encoded("# Title\n\nSome *text*.\n\n- one\n- two\n");
     const auto half = bytes.size() / 2;
 
-    require(deliver(client, part(1, bytes, 0, half)) == Change::none && !pane->document_shown, "half a document shows nothing");
-    require(deliver(client, part(1, bytes, half, bytes.size() - half)) == Change::document, "the last part completes the document");
+    require(deliver(client, part(1, bytes, 0, half)) == application::Change::none && !pane->document_shown, "half a document shows nothing");
+    require(deliver(client, part(1, bytes, half, bytes.size() - half)) == application::Change::document, "the last part completes the document");
     require(pane->document_shown && pane->document.blocks.size() == 4, "the whole document shows");
     const auto shown = pane->document_version;
 
-    require(deliver(client, part(2, bytes, half, bytes.size() - half)) == Change::none && pane->document_shown, "a part out of order is dropped");
-    require(deliver(client, PaneDocument{.pane_id = 1, .revision = 3}) == Change::document, "the runtime withdraws the document");
+    require(deliver(client, part(2, bytes, half, bytes.size() - half)) == application::Change::none && pane->document_shown, "a part out of order is dropped");
+    require(deliver(client, PaneDocument{.pane_id = 1, .revision = 3}) == application::Change::document, "the runtime withdraws the document");
     require(!pane->document_shown && pane->document.blocks.empty() && pane->document_version > shown, "a withdrawn document no longer shows");
   }
 

@@ -24,6 +24,7 @@ import telar.gui.tests.json_fixture;
 import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
 import telar.gui.config.gui_query;
+import telar.gui.application;
 import telar.gui.input.copy_pointer;
 import telar.base.text.json;
 import telar.plugins;
@@ -40,7 +41,7 @@ namespace {
   }
 
   template <Allocator Memory>
-  std::string query(const ConfigurationGeneration<Memory>& generation, std::size_t index) {
+  std::string query(const application::ConfigurationGeneration<Memory>& generation, std::size_t index) {
     std::array<char, ConfigurationQuery::capacity> output{};
 
     return std::string{BindingQuery::write(generation.input(), index, generation.actionDescriptions(), generation.commandTabs(), output)};
@@ -50,7 +51,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
         return {api_version=2,client={keybindings={telar.bind({'z'},function() return telar.action.new_tab() end)}},
           profiles={chosen={client={prefix='alt+中',keybindings={
@@ -63,7 +64,7 @@ namespace {
         .generation = 42,
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
     const auto first = query(generation, 0);
 
     require(first.contains(R"("index":0,"prefixed":false)") && first.contains(R"("action":{"type":"select_tab","value":255})"), "binding queries must use configured order and zero-based semantic indices");
@@ -82,7 +83,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
           local command=telar.action.command_tab{command={'echo','quoted "中'},label='kept'}
           local plugin=telar.action.plugin{plugin='fixture',action='run'}
@@ -95,7 +96,7 @@ namespace {
           .profile = {},
       };
 
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       const auto command = query(generation, 0);
       const auto plugin = query(generation, 1);
 
@@ -120,7 +121,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
         local panels={};for i=1,18 do panels[string.format('p%02d',i)]=telar.panel{command={'true'}} end
         return {api_version=2,client={panels=panels,keybindings={
@@ -132,7 +133,7 @@ namespace {
         .profile = {},
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
     const auto encoded = query(generation, 0);
     const auto value = requiredJsonField(requiredJsonField(telar::runtime::JsonValue::parse(encoded), "action"), "value");
 
@@ -150,13 +151,13 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = "return {api_version=2,client={keybindings={telar.bind({'x'},telar.action.command_tab{command={'echo',string.char(255)}})}}}",
         .directory = {},
         .profile = {},
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
 
     require(query(generation, 0).contains(R"("argv":["echo",[255]])"), "non-UTF-8 command bytes must retain their numeric-array representation");
   }
@@ -165,7 +166,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
         return {api_version=2,client={keybindings={
           telar.bind({'a'},telar.action.command_tab{command={'/usr/bin/echo///'}}),
@@ -177,7 +178,7 @@ namespace {
         .profile = {},
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
 
     require(query(generation, 0).contains(R"("label":"echo")"), "implicit labels must ignore trailing POSIX separators");
     require(query(generation, 1).contains(R"("label":"")"), "a POSIX root has no basename");
@@ -189,7 +190,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
         local too_many={};for i=1,33 do too_many[i]='x' end
         return {api_version=2,client={keybindings={telar.bind({'a'},telar.action.command_tab{command=too_many}),
@@ -200,7 +201,7 @@ namespace {
         .profile = {},
     };
 
-    const ConfigurationGeneration generation{memory, source};
+    const application::ConfigurationGeneration generation{memory, source};
 
     require(generation.input().length == 2, "actions past their argument limit must be omitted without leaving query holes");
     bool oversized = false;

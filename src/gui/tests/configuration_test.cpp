@@ -28,6 +28,7 @@ import telar.lua;
 
 import telar.config.snapshot;
 import telar.gui.config.gui_query;
+import telar.gui.application;
 import telar.config.runtime;
 
 namespace {
@@ -61,7 +62,7 @@ namespace {
       const auto values = telar::makeOwned<telar::runtime::config::RuntimeValues<telar::Memory>>(memory, memory);
 
       telar::runtime::config::SnapshotReader{memory, *values}.read(root, example.profile);
-      result = ConfigurationReader::read(root, example.profile);
+      result = application::ConfigurationReader::read(root, example.profile);
     }
 
     if (budget.liveBytes() != 0) {
@@ -221,7 +222,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      const ConfigurationSourceText source{
+      const application::ConfigurationSourceText source{
           .source = R"(
       local calls = 0
       return {api_version = 2, client = {
@@ -240,7 +241,7 @@ namespace {
           .profile = "other",
       };
 
-      ConfigurationGeneration generation{memory, source};
+      application::ConfigurationGeneration generation{memory, source};
       const auto& input = generation.input();
       constexpr auto control = static_cast<unsigned>(KeyChord::Modifier::control);
 
@@ -263,7 +264,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
     return {api_version = 2, client = {keybindings = {
       telar.bind_expr({'a'}, function() return telar.input.forward() end),
@@ -276,7 +277,7 @@ namespace {
         .profile = "",
     };
 
-    ConfigurationGeneration generation{memory, source};
+    application::ConfigurationGeneration generation{memory, source};
     const auto& bindings = generation.input().configured;
     const auto forward = generation.expression(bindings[0].action, {});
 
@@ -294,7 +295,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    const ConfigurationSourceText source{
+    const application::ConfigurationSourceText source{
         .source = R"(
     return {api_version = 2, client = {keybindings = {
       telar.bind({'a'}, function(context) context.sidebar_visible = false return {} end),
@@ -307,7 +308,7 @@ namespace {
         .profile = "",
     };
 
-    ConfigurationGeneration generation{memory, source};
+    application::ConfigurationGeneration generation{memory, source};
     const auto& bindings = generation.input().configured;
 
     for (std::size_t index = 0; index < 3; ++index) {

@@ -27,8 +27,8 @@ target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-h
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS foundation core history layout suggestions text palette peek prompt links
-    input attachments paths platform machines presentation graphics application components config
-    transport)
+    input attachments paths platform machines presentation graphics components config transport
+    application)
   add_subdirectory(${domain})
 endforeach()
 
@@ -163,8 +163,8 @@ if(TELAR_GUI_NATIVE)
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-core gui-history gui-layout
     gui-suggestions gui-text gui-palette gui-peek gui-prompt gui-links gui-input gui-attachments gui-paths
-    gui-platform gui-machines gui-presentation gui-graphics gui-application gui-components gui-config
-    gui-transport gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
+    gui-platform gui-machines gui-presentation gui-graphics gui-components gui-config gui-transport
+    gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Most of a gui-quick compilation parses the same Qt headers again; the ones
   # that at least two in five Qt adapters include are parsed once per build.

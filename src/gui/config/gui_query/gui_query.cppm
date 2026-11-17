@@ -3,7 +3,6 @@ export module telar.gui.config.gui_query;
 import std;
 import telar.tbc;
 
-import telar.gui.presentation.client_view_state;
 import telar.gui.foundation.core;
 
 import telar.config.gui;
@@ -39,31 +38,6 @@ export {
       });
 
       [[nodiscard]] static ConfigurationQuery parse(std::string_view name, std::int64_t index);
-    };
-
-  }
-}
-
-// Interface: config/client_query.cppm
-export {
-  namespace telar::gui {
-
-    struct ClientQueryContext {
-      std::optional<std::string_view> source;
-      std::optional<std::string_view> profile;
-      std::uint64_t generation = 0;
-      ClientViewState view;
-    };
-
-    class ClientQuery {
-    public:
-      // Each query is written into the output, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const Configuration& configuration, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
-
-    private:
-      static void writeOptionalBytes(JsonWriter& writer, std::optional<std::string_view> text);
-      static void writeSound(JsonWriter& writer, SoundPolicy policy);
-      static void writeSections(JsonWriter& writer);
     };
 
   }

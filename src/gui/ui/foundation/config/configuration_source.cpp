@@ -46,13 +46,12 @@ static_assert(true);
 #include <fcntl.h>
 #include <limits.h>
 
-import telar.gui.presentation.client_view_state;
+import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
-import telar.gui.config.generation;
 import telar.gui.input.copy_pointer;
 import telar.gui.presentation.suggestion_geometry;
 import telar.config.client;
@@ -79,7 +78,7 @@ namespace telar::gui::qt {
         memory_(memory),
         fonts_(memory),
         default_keymap_(default_input_.compile()),
-        generation_(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
+        generation_(nullptr, AllocationDeleter<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
         commands_(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {
     debounce_.setSingleShot(true);
     constexpr int reload_debounce_ms = 100;
@@ -510,7 +509,7 @@ namespace telar::gui::qt {
     return error_;
   }
 
-  std::string_view ConfigurationSource::query(ConfigurationQuery query, const ClientViewState& view) {
+  std::string_view ConfigurationSource::query(ConfigurationQuery query, const application::ClientViewState& view) {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
@@ -521,14 +520,14 @@ namespace telar::gui::qt {
 
     switch (query.section) {
     case ConfigurationQuery::Section::client: {
-      const ClientQueryContext context{
+      const application::ClientQueryContext context{
           .source = optionalText(source_path_),
           .profile = optionalText(profile_name_),
           .generation = generation_->number(),
           .view = view,
       };
 
-      return ClientQuery::write(generation_->configuration(), context, query_buffer_);
+      return application::ClientQuery::write(generation_->configuration(), context, query_buffer_);
     }
     case ConfigurationQuery::Section::binding:
       if (!std::in_range<std::size_t>(query.index)) {

@@ -47,14 +47,14 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
-  using GuiSession = Session;
+  using GuiSession = application::Session;
 
   struct MachineClient {
     MachineClientKey key;

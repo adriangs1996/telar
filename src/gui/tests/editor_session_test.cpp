@@ -24,7 +24,7 @@ static_assert(true);
 
 import telar.gui.tests.session_fixture;
 import telar.gui.foundation.model;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.links.cell_links;
 import telar.wire.editor;
 import telar.wire.layout;
@@ -88,7 +88,7 @@ namespace {
     constexpr std::uint32_t column = 3;
 
     require(request.pane_id == 1 && request.pane_generation == 1 && request.editor == "nvim" && request.path == "/work/src/a.cpp" && request.line == line && request.column == column, "file requests must anchor at their source pane and preserve its runtime identity");
-    require(deliver(client, EditorOpened{.request_id = request.request_id + 1, .outcome = EditorOutcome::unavailable}) == Change::none, "an unrelated reply must leave the current editor operation pending");
+    require(deliver(client, EditorOpened{.request_id = request.request_id + 1, .outcome = EditorOutcome::unavailable}) == application::Change::none, "an unrelated reply must leave the current editor operation pending");
     bool busy = false;
 
     try {
@@ -98,7 +98,7 @@ namespace {
     }
 
     require(busy, "concurrent file clicks must report busy without replacing the retained target");
-    require(deliver(client, EditorOpened{.request_id = request.request_id, .outcome = EditorOutcome::opened, .pane_id = 2, .pane_generation = editor_generation}) == Change::model && client.focusedPane()->id == 2, "a matching editor reply must focus the reused pane");
+    require(deliver(client, EditorOpened{.request_id = request.request_id, .outcome = EditorOutcome::opened, .pane_id = 2, .pane_generation = editor_generation}) == application::Change::model && client.focusedPane()->id == 2, "a matching editor reply must focus the reused pane");
     const auto count = transport.count(ClientTag::create_pane);
 
     deliver(client, EditorOpened{.request_id = request.request_id, .outcome = EditorOutcome::unavailable});
@@ -109,7 +109,7 @@ namespace {
     const auto fallback_id = transport.last<OpenEditor>().request_id;
 
     deliver(client, PaneCwd{.pane_id = 1, .cwd = "/changed/after/click"});
-    require(deliver(client, EditorOpened{.request_id = fallback_id, .outcome = EditorOutcome::unavailable}) == Change::model, "unavailable editor reuse must fall back to a split");
+    require(deliver(client, EditorOpened{.request_id = fallback_id, .outcome = EditorOutcome::unavailable}) == application::Change::model, "unavailable editor reuse must fall back to a split");
     const auto fallback = transport.last<CreatePane>();
 
     require(fallback.launch.cwd_source == 1 && fallback.launch.arguments.size() == 3 && fallback.launch.arguments[0] == "nvim" && fallback.launch.arguments[1] == "+call cursor(12, 3)" && fallback.launch.arguments[2] == "/work/src/pinned.cpp", "fallback must use the retained literal path and the source pane's directory");
@@ -125,7 +125,7 @@ namespace {
       fixture.open();
       const auto request_id = transport.last<OpenEditor>().request_id;
 
-      require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = outcome}) == Change::notification, "failed and missing replies must publish link feedback");
+      require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = outcome}) == application::Change::notification, "failed and missing replies must publish link feedback");
       const auto expected = outcome == EditorOutcome::missing ? std::string_view{"FileNotFound"} : std::string_view{"EditorOpenFailed"};
 
       require(std::ranges::any_of(fixture.client.notifications().items(), [&](const auto& notice) {
@@ -137,7 +137,7 @@ namespace {
     fixture.open();
     const auto failed_id = transport.last<OpenEditor>().request_id;
 
-    require(deliver(fixture.client, RequestFailed{.request_id = failed_id, .code = FailureCode::resource_limit, .message = "editor busy"}) == Change::notification, "a failed runtime request must release editor ownership");
+    require(deliver(fixture.client, RequestFailed{.request_id = failed_id, .code = FailureCode::resource_limit, .message = "editor busy"}) == application::Change::notification, "a failed runtime request must release editor ownership");
     transport.reject_editor = true;
     bool rejected = false;
 
@@ -153,7 +153,7 @@ namespace {
     const auto retry_id = transport.last<OpenEditor>().request_id;
 
     transport.reject_create_pane = true;
-    require(deliver(fixture.client, EditorOpened{.request_id = retry_id, .outcome = EditorOutcome::unavailable}) == Change::notification, "a failed fallback send must publish feedback and release request storage");
+    require(deliver(fixture.client, EditorOpened{.request_id = retry_id, .outcome = EditorOutcome::unavailable}) == application::Change::notification, "a failed fallback send must publish feedback and release request storage");
     transport.reject_create_pane = false;
     fixture.open();
     const auto recovered_id = transport.last<OpenEditor>().request_id;
@@ -197,7 +197,7 @@ namespace {
 
       const auto count = fixture.transport.count(ClientTag::create_pane);
 
-      require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::unavailable}) == Change::none && fixture.transport.count(ClientTag::create_pane) == count, "a stale source identity must never launch a fallback editor");
+      require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::unavailable}) == application::Change::none && fixture.transport.count(ClientTag::create_pane) == count, "a stale source identity must never launch a fallback editor");
     }
   }
 
@@ -218,12 +218,12 @@ namespace {
 
     deliver(fixture.client, PaneOpened{.request_id = attach.request_id, .pane_id = 1, .location = location, .pane_generation = 1});
     require(fixture.client.findPane(1)->attachment_generation > generation, "restoring a pane must allocate a new attachment generation");
-    require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::unavailable}) == Change::none, "restoring the same tab must not revive an old file click");
+    require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::unavailable}) == application::Change::none, "restoring the same tab must not revive an old file click");
     fixture.open();
     const auto current_id = fixture.transport.last<OpenEditor>().request_id;
 
     deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::missing});
-    require(deliver(fixture.client, EditorOpened{.request_id = current_id, .outcome = EditorOutcome::missing}) == Change::notification, "a delayed old reply must leave a newer request intact");
+    require(deliver(fixture.client, EditorOpened{.request_id = current_id, .outcome = EditorOutcome::missing}) == application::Change::notification, "a delayed old reply must leave a newer request intact");
   }
 
   void duplicateAttachmentPreservesPendingEditor() {
@@ -244,7 +244,7 @@ namespace {
 
     deliver(fixture.client, PaneOpened{.request_id = attach.request_id, .pane_id = 2, .location = split.location, .pane_generation = 1});
     require(fixture.client.findPane(2)->attachment_generation == generation, "a duplicate attachment confirmation must preserve the already attached view's identity");
-    require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::missing}) == Change::notification, "a duplicate attachment must not invalidate an otherwise matching editor reply");
+    require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::missing}) == application::Change::notification, "a duplicate attachment must not invalidate an otherwise matching editor reply");
   }
 
   void directLaunches() {
@@ -276,7 +276,7 @@ namespace {
     fixture.open();
     const auto request_id = fixture.transport.last<OpenEditor>().request_id;
 
-    require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::opened, .pane_id = 1, .pane_generation = 2}) == Change::none, "an editor reply must not focus a mismatched runtime generation");
+    require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = EditorOutcome::opened, .pane_id = 1, .pane_generation = 2}) == application::Change::none, "an editor reply must not focus a mismatched runtime generation");
 
     auto geometry = fixture.client.workbenchGeometry();
     const auto minimum_extent = geometry.layout_metrics.minimumPaneExtent();
@@ -307,7 +307,7 @@ namespace {
     const auto full_request = fixture.transport.last<OpenEditor>().request_id;
     const auto count = fixture.transport.count(ClientTag::create_pane);
 
-    require(deliver(fixture.client, EditorOpened{.request_id = full_request, .outcome = EditorOutcome::unavailable}) == Change::notification && std::ranges::any_of(fixture.client.notifications().items(), [](const auto& notice) {
+    require(deliver(fixture.client, EditorOpened{.request_id = full_request, .outcome = EditorOutcome::unavailable}) == application::Change::notification && std::ranges::any_of(fixture.client.notifications().items(), [](const auto& notice) {
       return notice.message.view() == "PaneSplitUnavailable";
     }),
         "a full tab must report its unavailable split without creating a pane");

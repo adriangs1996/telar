@@ -46,7 +46,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.foundation.core;
 import telar.gui.history.browser;
@@ -149,12 +149,12 @@ namespace telar::gui::qt {
     QVariantList cards;
 
     for (const auto& owned : panes) {
-      const Pane<Memory>& candidate = *owned;
+      const application::Pane<Memory>& candidate = *owned;
       if (!sameTab(candidate.location, tab.location)) {
         continue;
       }
 
-      cards.append(tabCard(candidate.id, tabApplicationName(tab, &candidate), candidate.id == tab.focused_pane, agents, [&](const Agent<Memory>& agent) {
+      cards.append(tabCard(candidate.id, application::tabApplicationName(tab, &candidate), candidate.id == tab.focused_pane, agents, [&](const Agent<Memory>& agent) {
         return agent.pane_id == candidate.id && agent.pane_generation == candidate.generation;
       }));
     }
@@ -173,7 +173,7 @@ namespace telar::gui::qt {
   }
 
   template <Allocator Memory, typename Panes>
-  QVariantMap tabRecord(const Tab<Memory>& tab, const Pane<Memory>* pane, const Panes& panes, std::span<const Agent<Memory>> agents, bool selected) {
+  QVariantMap tabRecord(const Tab<Memory>& tab, const application::Pane<Memory>* pane, const Panes& panes, std::span<const Agent<Memory>> agents, bool selected) {
     std::string_view session_title;
 
     if (pane != nullptr) {
@@ -190,7 +190,7 @@ namespace telar::gui::qt {
       }
     }
 
-    const auto application = tabApplicationName(tab, pane);
+    const auto application = application::tabApplicationName(tab, pane);
     TabCaption::Buffer storage;
     const auto caption = TabCaption::resolve({.manual = tab.label, .application = application, .directory = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd}, .session_title = session_title}, storage);
     auto label = toQString(caption);
@@ -270,7 +270,7 @@ namespace telar::gui::qt {
   }
 
   template <Allocator Memory>
-  QVariantMap paneRecord(const Pane<Memory>& pane, const PaneLayout::Placement& placement, const WorkbenchGeometry& workbench, bool focused, qreal density) {
+  QVariantMap paneRecord(const application::Pane<Memory>& pane, const PaneLayout::Placement& placement, const WorkbenchGeometry& workbench, bool focused, qreal density) {
     const auto geometry = PaneDecorationGeometry::derive(placement, workbench);
     const auto local = [&](Rect area) {
       area.x -= geometry.outer.x;

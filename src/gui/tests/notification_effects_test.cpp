@@ -14,7 +14,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.text.notification_payload;
-import telar.gui.application.sound_playback;
+import telar.gui.application;
 
 namespace {
 
@@ -23,11 +23,11 @@ namespace {
   using telar::gui::test::require;
 
   void soundsCoalesceIntoOnePrioritizedSuccessor() {
-    SoundPlayback playback;
+    application::SoundPlayback playback;
 
-    require(playback.request(AgentSound::ready).state == SoundRequestOutcome::State::start && playback.active(), "an idle permitted sound must reserve one worker");
-    require(playback.request(AgentSound::ready).state == SoundRequestOutcome::State::queued, "an active worker must retain one successor");
-    require(playback.request(AgentSound::needs_input).state == SoundRequestOutcome::State::queued, "input attention must coalesce with queued completion sounds");
+    require(playback.request(AgentSound::ready).state == application::SoundRequestOutcome::State::start && playback.active(), "an idle permitted sound must reserve one worker");
+    require(playback.request(AgentSound::ready).state == application::SoundRequestOutcome::State::queued, "an active worker must retain one successor");
+    require(playback.request(AgentSound::needs_input).state == application::SoundRequestOutcome::State::queued, "input attention must coalesce with queued completion sounds");
     static_cast<void>(playback.request(AgentSound::ready));
     require(playback.queued() == AgentSound::needs_input, "later completion sounds must not replace pending input attention");
     require(playback.complete() == AgentSound::needs_input && playback.active() && !playback.queued(), "completion must transfer its reservation to the coalesced successor");
@@ -35,19 +35,19 @@ namespace {
   }
 
   void policyChangesLeaveRunningWorkAndRemoveDisallowedSuccessors() {
-    SoundPlayback playback;
+    application::SoundPlayback playback;
 
     static_cast<void>(playback.request(AgentSound::ready));
     static_cast<void>(playback.request(AgentSound::needs_input));
     playback.configure({.needs_input = false});
     require(playback.active() && !playback.queued(), "reconfiguration must remove only disallowed queued work");
-    require(playback.request(AgentSound::needs_input).state == SoundRequestOutcome::State::ignored, "disabled sound kinds must not reserve a successor");
+    require(playback.request(AgentSound::needs_input).state == application::SoundRequestOutcome::State::ignored, "disabled sound kinds must not reserve a successor");
     require(!playback.complete() && !playback.active(), "a removed successor must not start after the active command ends");
     static_cast<void>(playback.request(AgentSound::ready));
     playback.schedulingFailed();
-    require(!playback.active() && playback.request(AgentSound::ready).state == SoundRequestOutcome::State::start, "a failed background schedule must release its reservation for retry");
+    require(!playback.active() && playback.request(AgentSound::ready).state == application::SoundRequestOutcome::State::start, "a failed background schedule must release its reservation for retry");
     playback.configure({.enabled = false});
-    require(playback.active() && playback.request(AgentSound::ready).state == SoundRequestOutcome::State::ignored, "global disabling must let existing work finish without admitting new work");
+    require(playback.active() && playback.request(AgentSound::ready).state == application::SoundRequestOutcome::State::ignored, "global disabling must let existing work finish without admitting new work");
     static_cast<void>(playback.complete());
   }
 

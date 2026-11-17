@@ -200,17 +200,3 @@ export {
 
   }
 }
-
-// Interface: presentation/sidebar_columns.cppm
-export {
-  namespace telar::gui {
-
-    struct SidebarColumns {
-      static constexpr std::uint16_t minimum_width = 42;
-      static constexpr std::uint16_t minimum_workbench = 20;
-
-      [[nodiscard]] static std::uint16_t clamp(std::uint16_t host_width, std::int64_t requested_width);
-    };
-
-  }
-}

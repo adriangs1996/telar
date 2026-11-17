@@ -19,7 +19,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.suggestions.state;
 import telar.wire.editor;
 
@@ -64,12 +64,12 @@ namespace {
     require(first.pane_id == 1 && first.text == "describe the files", "the request must retain the focused pane and the entire task");
     require(!client.submitSuggestion("duplicate") && transport.count(ClientTag::suggest_command) == 1 && transport.count(ClientTag::pane_input) == 0, "repeated Enter while waiting must not queue another provider request");
     client.invalidateSuggestion();
-    require(deliver(client, CommandSuggestion{.request_id = first.request_id, .text = "obsolete"}) == Change::none, "editing must retire the old request before its wire response arrives");
+    require(deliver(client, CommandSuggestion{.request_id = first.request_id, .text = "obsolete"}) == application::Change::none, "editing must retire the old request before its wire response arrives");
     require(!client.submitSuggestion("new task"), "an edited task must request a replacement instead of pasting the old command");
     const auto second = transport.last<SuggestCommand>();
 
     require(second.request_id != first.request_id, "a replacement must own another request identity");
-    require(deliver(client, CommandSuggestion{.request_id = second.request_id, .text = "printf 'review first'"}) == Change::suggestion, "the current wire response must publish the suggestion");
+    require(deliver(client, CommandSuggestion{.request_id = second.request_id, .text = "printf 'review first'"}) == application::Change::suggestion, "the current wire response must publish the suggestion");
     const auto before_input = transport.sent.size();
 
     require(client.submitSuggestion("new task") && transport.inputSince(before_input) == "printf 'review first'", "the second submit must paste the landed command without Enter");
@@ -103,7 +103,7 @@ namespace {
       require(!client.submitSuggestion("task"), "a rejected request must be retryable");
       const auto request = transport.last<SuggestCommand>();
 
-      require(deliver(client, CommandSuggestion{.request_id = request.request_id, .text = "echo review"}) == Change::suggestion, "the admitted retry must own its response");
+      require(deliver(client, CommandSuggestion{.request_id = request.request_id, .text = "echo review"}) == application::Change::suggestion, "the admitted retry must own its response");
       FrameBody frame;
 
       frame.pane_id = 1;

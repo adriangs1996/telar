@@ -37,8 +37,7 @@ static_assert(true);
 
 import telar.gui.tests.session_fixture;
 import telar.gui.layout.snapshots;
-import telar.gui.application.workspace_replica;
-import telar.gui.application.session;
+import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
@@ -161,11 +160,11 @@ namespace {
       require(entry != client.tabs().end() && client.findPane(remembered_detached_pane) == nullptr, "workspace metadata must not instantiate detached panes");
       const auto* detached = entry->get();
 
-      require(tabApplicationName(*client.activeTab(), client.focusedPane()) == "Python", "foreground snapshots must honor this client's focused pane");
-      require(tabApplicationName(*detached, nullptr) == "nvim", "detached tabs must retain the first reported application until focus is known");
+      require(application::tabApplicationName(*client.activeTab(), client.focusedPane()) == "Python", "foreground snapshots must honor this client's focused pane");
+      require(application::tabApplicationName(*detached, nullptr) == "nvim", "detached tabs must retain the first reported application until focus is known");
       deliver(client, PaneForeground{.pane_id = remembered_detached_pane, .name = "vim"});
       deliver(client, PaneForeground{.pane_id = other_detached_pane, .name = "lazygit"});
-      require(tabApplicationName(*detached, nullptr) == "vim", "detached reports must update only the remembered foreground pane");
+      require(application::tabApplicationName(*detached, nullptr) == "vim", "detached reports must update only the remembered foreground pane");
       require(std::string_view{detached->directory} == "/projects/detached", "detached tabs must show the listed directory of their foreground pane");
       require(detached->members.size() == 2 && detached->members[0].foreground.view() == "vim" && detached->members[1].foreground.view() == "lazygit", "detached tabs must list every pane and follow its foreground reports");
       const std::array agents{AgentSnapshotEntry{.pane_id = 1, .pane_generation = 1, .location = location, .pane_index = 1, .workspace_label = "Copied workspace metadata", .session_title = "Working session", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Custom display name", .icon = "?", .status = AgentStatus::blocked, .blocked_reason = AgentBlockedReason::permission, .sequence = 1}};
@@ -328,7 +327,7 @@ namespace {
     const auto new_request = transport.last<QueryHistory>().request_id;
     const std::array<HistoryEntry, 1> rows{{{.id = 1, .pane_id = 1, .command = "echo result", .cwd = "/tmp"}}};
 
-    require(deliver(client, HistoryResults{.request_id = old_request, .snapshot_id = 1, .has_more = false, .entries = rows}) == Change::none, "stale search results must not replace the current query");
+    require(deliver(client, HistoryResults{.request_id = old_request, .snapshot_id = 1, .has_more = false, .entries = rows}) == application::Change::none, "stale search results must not replace the current query");
     deliver(client, HistoryResults{.request_id = new_request, .snapshot_id = 1, .has_more = false, .entries = rows});
     require(client.history().size() == 1 && client.history().front().command == "echo result", "history results must own command bytes");
   }
@@ -344,7 +343,7 @@ namespace {
     command.request_id = 1;
     command.route = {.id = 1, .generation = 1};
     command.action = ClientAction::sidebar_hide;
-    require(deliver(client, command) == Change::sidebar && !client.configuration().sidebar_visible, "routed sidebar commands must update window state");
+    require(deliver(client, command) == application::Change::sidebar && !client.configuration().sidebar_visible, "routed sidebar commands must update window state");
     constexpr std::uint16_t expected_sidebar_columns = 42;
     const auto hidden = transport.last<CompleteClientCommand>();
 
@@ -406,23 +405,23 @@ namespace {
     const auto logical_width = client.configuration().sidebar_width;
     ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::sidebar_resize, .value = preferred_columns};
 
-    require(deliver(client, command) == Change::sidebar, "an exact sidebar column request must update semantic layout state");
+    require(deliver(client, command) == application::Change::sidebar, "an exact sidebar column request must update semantic layout state");
     const auto resized = transport.last<CompleteClientCommand>();
 
     require(resized.status == ClientCommandStatus::applied && resized.value == command.value && resized.text == "hidden", "a resize must report the clamped width without changing visibility");
     require(std::cmp_equal(transport.last<UpdateClientLayout>().sidebar_width, command.value), "a changed semantic sidebar width must reach runtime-retained layout state");
     const auto layouts = transport.count(ClientTag::update_client_layout);
 
-    require(deliver(client, command) == Change::none && transport.count(ClientTag::update_client_layout) == layouts, "repeating a sidebar width must preserve layout ownership without another retention request");
+    require(deliver(client, command) == application::Change::none && transport.count(ClientTag::update_client_layout) == layouts, "repeating a sidebar width must preserve layout ownership without another retention request");
     constexpr auto maximum_columns = std::numeric_limits<std::uint16_t>::max();
 
     command.value = maximum_columns;
     deliver(client, command);
-    require(transport.last<CompleteClientCommand>().value == host_columns - SidebarColumns::minimum_workbench, "an exact width must preserve twenty workbench columns");
-    client.setHostColumns(SidebarColumns::minimum_workbench);
+    require(transport.last<CompleteClientCommand>().value == host_columns - application::SidebarColumns::minimum_workbench, "an exact width must preserve twenty workbench columns");
+    client.setHostColumns(application::SidebarColumns::minimum_workbench);
     command.value = 1;
     deliver(client, command);
-    require(std::cmp_equal(transport.last<CompleteClientCommand>().value, SidebarColumns::minimum_width), "a temporarily narrow host must retain the semantic minimum width");
+    require(std::cmp_equal(transport.last<CompleteClientCommand>().value, application::SidebarColumns::minimum_width), "a temporarily narrow host must retain the semantic minimum width");
     for (const auto invalid : {std::int64_t{-1}, std::int64_t{0}, std::int64_t{maximum_columns} + 1, std::numeric_limits<std::int64_t>::max()}) {
       command.value = invalid;
       const auto before = transport.count(ClientTag::update_client_layout);
@@ -480,7 +479,7 @@ namespace {
 
     const std::array<Byte, 4> clipboard{'c', 'o', 'p', 'y'};
 
-    require(deliver(client, PaneClipboard{.pane_id = 1, .bytes = clipboard}) == Change::clipboard && client.clipboard() == "copy", "asynchronous runtime clipboard data must be exposed to the platform");
+    require(deliver(client, PaneClipboard{.pane_id = 1, .bytes = clipboard}) == application::Change::clipboard && client.clipboard() == "copy", "asynchronous runtime clipboard data must be exposed to the platform");
   }
 
   void pointerSelectionLifecycle() {
@@ -510,11 +509,11 @@ namespace {
     require(rejected && owner && !owner->dragging && client.copyMode().state(), "copy failure must preserve highlighting and finish physical capture");
     transport.reject_copy = false;
     require(client.copySelection(1), "retained selection must remain copyable after transport recovery");
-    client.input(1, "mouse", PaneInputSource::mouse);
+    client.input(1, "mouse", application::PaneInputSource::mouse);
     require(client.copyMode().state().has_value(), "mouse reports must preserve highlighting");
-    client.input(1, "\x1b[O", PaneInputSource::terminal_report);
+    client.input(1, "\x1b[O", application::PaneInputSource::terminal_report);
     require(client.copyMode().state().has_value(), "focus reports must preserve highlighting");
-    client.input(1, "release", PaneInputSource::key_release);
+    client.input(1, "release", application::PaneInputSource::key_release);
     require(!client.copyMode().state() && client.focusedPane()->screen.scroll().offset == 0, "key releases must clear highlighting without changing the viewport");
     require(client.beginSelection({.pane_id = 1, .now_ns = 2}), "a new pointer gesture must be available after typing");
     client.input(1, "text");
@@ -585,7 +584,7 @@ namespace {
     Transport transport;
     TestSession client{memory, transport};
 
-    client.scrollFocused(ScrollDirection::up);
+    client.scrollFocused(application::ScrollDirection::up);
     require(transport.sent.empty(), "focused scrolling without a pane must have no effects");
     openFirstPane(client, transport);
     constexpr std::uint32_t history_rows = 10;
@@ -594,12 +593,12 @@ namespace {
     FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = history_rows, .offset = initial_offset}};
 
     deliverSingleCell(client, frame);
-    client.scrollFocused(ScrollDirection::up);
+    client.scrollFocused(application::ScrollDirection::up);
     require(transport.last<SetPaneViewport>().offset == previous_offset, "an untracked scroll action must move three history rows");
-    client.scrollFocused(ScrollDirection::down);
+    client.scrollFocused(application::ScrollDirection::down);
     require(transport.last<SetPaneViewport>().offset == initial_offset, "opposite focused scroll actions must restore the viewport");
-    client.scrollFocused(ScrollDirection::down);
-    client.scrollFocused(ScrollDirection::down);
+    client.scrollFocused(application::ScrollDirection::down);
+    client.scrollFocused(application::ScrollDirection::down);
     require(transport.last<SetPaneViewport>().offset == std::numeric_limits<std::uint32_t>::max() && client.focusedPane()->screen.scroll().offset == history_rows - 1, "scrolling to the bottom asks the runtime to follow the output");
 
     ++frame.frame_id;
@@ -612,8 +611,8 @@ namespace {
     const auto viewport_requests = transport.count(ClientTag::set_pane_viewport);
     auto first_message = transport.sent.size();
 
-    client.scrollFocused(ScrollDirection::up);
-    client.scrollFocused(ScrollDirection::down);
+    client.scrollFocused(application::ScrollDirection::up);
+    client.scrollFocused(application::ScrollDirection::down);
     require(transport.inputSince(first_message) == "\x1b[<64;1;1M\x1b[<65;1;1M", "tracked scroll actions must report one SGR packet at the pane origin");
     require(client.copyMode().state() && client.focusedPane()->screen.scroll().offset == initial_offset && transport.count(ClientTag::set_pane_viewport) == viewport_requests, "mouse reports must preserve highlighting and the scrolled viewport");
 
@@ -623,8 +622,8 @@ namespace {
     frame.scroll.offset = history_rows - 1;
     deliverSingleCell(client, frame);
     first_message = transport.sent.size();
-    client.scrollFocused(ScrollDirection::up);
-    client.scrollFocused(ScrollDirection::down);
+    client.scrollFocused(application::ScrollDirection::up);
+    client.scrollFocused(application::ScrollDirection::down);
     require(transport.inputSince(first_message) == "\x1b[A\x1b[A\x1b[A\x1b[B\x1b[B\x1b[B", "alternate scrolling must use literal arrows independently of Kitty mode");
     require(client.copyMode().state() && client.focusedPane()->screen.scroll().offset == frame.scroll.offset, "alternate scrolling must preserve highlighting and the bottom viewport");
 
@@ -632,13 +631,13 @@ namespace {
     frame.scroll.offset = initial_offset;
     deliverSingleCell(client, frame);
     first_message = transport.sent.size();
-    client.scrollFocused(ScrollDirection::up);
+    client.scrollFocused(application::ScrollDirection::up);
     require(transport.inputSince(first_message).empty() && transport.last<SetPaneViewport>().offset == previous_offset, "alternate scrolling away from the bottom must scroll history without child input");
     ++frame.frame_id;
     frame.mouse = {.tracking = MouseTracking::normal};
     deliverSingleCell(client, frame);
     first_message = transport.sent.size();
-    client.scrollFocused(ScrollDirection::up);
+    client.scrollFocused(application::ScrollDirection::up);
     require(transport.inputSince(first_message).empty() && transport.last<SetPaneViewport>().offset == previous_offset, "a tracking mode without SGR must retain the original viewport fallback");
     client.scroll({.pane_id = 1, .rows = std::numeric_limits<std::int64_t>::min()});
     require(client.focusedPane()->screen.scroll().offset == history_rows - 1, "the largest downward scroll must clamp without signed overflow");
@@ -654,7 +653,7 @@ namespace {
     require(transport.count(ClientTag::set_pane_viewport) == bounded_requests && client.focusedPane()->screen.scroll().offset == 0, "keyboard copy mode must retain exclusive viewport ownership");
     client.disconnected();
     first_message = transport.sent.size();
-    client.scrollFocused(ScrollDirection::down);
+    client.scrollFocused(application::ScrollDirection::down);
     require(transport.sent.size() == first_message, "detached panes must not receive scroll effects");
   }
 
@@ -677,7 +676,7 @@ namespace {
     command.request_id = 1;
     command.route = {.id = 1, .generation = 1};
     command.action = ClientAction::layout_get;
-    require(deliver(client, command) == Change::none, "exporting a layout must not refresh or mutate the window");
+    require(deliver(client, command) == application::Change::none, "exporting a layout must not refresh or mutate the window");
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::applied, "layout export must return an applied reply");
     const std::string token{transport.last<CompleteClientCommand>().text};
     const auto preset = LayoutToken::read(token);
@@ -691,7 +690,7 @@ namespace {
     command.request_id = 2;
     command.action = ClientAction::layout_apply;
     command.text = token;
-    require(deliver(client, command) == Change::model, "importing a layout must invalidate the window projection");
+    require(deliver(client, command) == application::Change::model, "importing a layout must invalidate the window projection");
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::applied, "a matching live layout must apply");
     const auto* tab = client.activeTab();
 
@@ -781,7 +780,7 @@ namespace {
     const auto attachments = transport.count(ClientTag::open_pane);
     ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::workspace_list_collapse};
 
-    require(deliver(client, command) == Change::sidebar && client.workspaceListCollapsed(), "routed collapse must update the projection preference");
+    require(deliver(client, command) == application::Change::sidebar && client.workspaceListCollapsed(), "routed collapse must update the projection preference");
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::applied, "collapse command must complete as applied");
     require(transport.last<UpdateClientLayout>().workspace_list_collapsed, "collapse preference must be retained by the runtime");
 
@@ -793,11 +792,11 @@ namespace {
 
     command.action = ClientAction::workspace_list_expand;
     command.status = ClientCommandStatus::applied;
-    require(deliver(client, command) == Change::none && client.workspaceListCollapsed(), "invalid command status must preserve the collapse preference");
+    require(deliver(client, command) == application::Change::none && client.workspaceListCollapsed(), "invalid command status must preserve the collapse preference");
     require(transport.last<CompleteClientCommand>().status == ClientCommandStatus::failed, "invalid status must receive a failed completion");
 
     command.status = ClientCommandStatus::request;
-    require(deliver(client, command) == Change::sidebar && !client.workspaceListCollapsed(), "routed expand must reveal workspaces again");
+    require(deliver(client, command) == application::Change::sidebar && !client.workspaceListCollapsed(), "routed expand must reveal workspaces again");
     require(!transport.last<UpdateClientLayout>().workspace_list_collapsed, "expanded preference must be retained too");
   }
 
@@ -909,7 +908,7 @@ namespace {
     const auto deletion = transport.last<DeleteHistory>();
 
     require(client.history().size() == entries.size(), "queued deletion must preserve rows until confirmation");
-    require(deliver(client, HistoryPruned{.request_id = deletion.request_id, .removed = 1}) == Change::history, "deletion confirmation must refresh the history projection");
+    require(deliver(client, HistoryPruned{.request_id = deletion.request_id, .removed = 1}) == application::Change::history, "deletion confirmation must refresh the history projection");
     const auto refreshed = transport.last<QueryHistory>();
 
     require(refreshed.request_id != query.request_id && refreshed.offset == 0 && refreshed.snapshot_id == 0 && refreshed.scope == HistoryScope::pane, "confirmed deletion must refresh current filters from a new insertion boundary");
@@ -1105,7 +1104,7 @@ namespace {
 
     const auto completions = transport.count(ClientTag::complete_client_command);
 
-    require(deliver(client, command, handler) == Change::none && calls == 1, "unhandled core commands must reach the injected host handler");
+    require(deliver(client, command, handler) == application::Change::none && calls == 1, "unhandled core commands must reach the injected host handler");
     const auto reply = transport.last<CompleteClientCommand>();
 
     require(reply.request_id == command.request_id && reply.route.id == command.route.id && reply.route.generation == command.route.generation, "host replies must preserve request and routing correlation");
@@ -1145,10 +1144,10 @@ namespace {
 
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = created.workspace, .name = "Project", .tabs = tabs});
     require(client.tabs().size() == 1 && client.activeTab()->location.tab_id == 2 && client.findPane(1) == nullptr, "canonical workspace snapshots must remove vanished tabs and their screens");
-    require(deliver(client, PaneOpened{.request_id = late_attach.request_id, .pane_id = 1, .location = {.workspace = created.workspace, .tab_id = 1}, .created = false, .pane_generation = 1}) == Change::none && client.findPane(1) == nullptr, "late attachment replies must not resurrect a closed tab");
+    require(deliver(client, PaneOpened{.request_id = late_attach.request_id, .pane_id = 1, .location = {.workspace = created.workspace, .tab_id = 1}, .created = false, .pane_generation = 1}) == application::Change::none && client.findPane(1) == nullptr, "late attachment replies must not resurrect a closed tab");
 
-    require(deliver(client, ResyncRequired{.workspace = created.workspace, .workspace_closed = true, .previous_workspace = {}}) == Change::closed && client.tabs().empty(), "closing the final workspace must release the client projection and "
-                                                                                                                                                                            "close its window");
+    require(deliver(client, ResyncRequired{.workspace = created.workspace, .workspace_closed = true, .previous_workspace = {}}) == application::Change::closed && client.tabs().empty(), "closing the final workspace must release the client projection and "
+                                                                                                                                                                                         "close its window");
   }
 
   void linkContextRevisions() {

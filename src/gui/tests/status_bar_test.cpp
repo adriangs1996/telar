@@ -35,7 +35,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.tests.metrics_fixture;
-import telar.gui.application.host_effects;
+import telar.gui.application;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
 
@@ -54,7 +54,7 @@ namespace {
   constexpr std::uint8_t low_battery = 7;
   constexpr std::uint8_t full_battery = 100;
 
-  QVariantMap barProperties(const HostMetrics& metrics) {
+  QVariantMap barProperties(const application::HostMetrics& metrics) {
     return {
         {QStringLiteral("width"), bar_width},
         {QStringLiteral("height"), bar_height},
@@ -106,7 +106,7 @@ namespace {
 
     Q_SLOT static void missingMetricsStayHiddenWithoutAController() {
       QQmlEngine engine;
-      const auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(HostMetrics{}));
+      const auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(application::HostMetrics{}));
 
       QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
       for (const auto* name : {"cpuMetric", "memoryMetric", "batteryMetric"}) {
@@ -119,7 +119,7 @@ namespace {
 
     Q_SLOT static void metricsUseTheRuntimeValuesAndHideAnAbsentBattery() {
       QQmlEngine engine;
-      HostMetrics metrics;
+      application::HostMetrics metrics;
 
       QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory, low_battery)));
       auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
@@ -140,7 +140,7 @@ namespace {
 
     Q_SLOT static void modesReplaceMetricsAndDiagnosticsReserveSpace() {
       QQmlEngine engine;
-      HostMetrics metrics;
+      application::HostMetrics metrics;
 
       QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
       auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
@@ -158,7 +158,7 @@ namespace {
     Q_SLOT static void diagnosticShowsThePointingCursor() {
       QQuickWindow window;
       QQmlEngine engine;
-      HostMetrics metrics;
+      application::HostMetrics metrics;
 
       QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
       auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
@@ -354,7 +354,7 @@ namespace {
     Q_SLOT static void liveMetricsAndResizesRenderWithoutQmlErrors() {
       QQuickWindow window;
       QQmlEngine engine;
-      HostMetrics metrics;
+      application::HostMetrics metrics;
 
       QVERIFY(metrics.update(hostSample(1, BarMetrics::cpu_danger, updated_memory, full_battery)));
       auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));

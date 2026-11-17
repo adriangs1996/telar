@@ -59,7 +59,7 @@ static_assert(true);
 
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
-import telar.gui.application.workspace_replica;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
