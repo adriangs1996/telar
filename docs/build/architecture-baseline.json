@@ -927,7 +927,9 @@
       "startup": "src/gui/tools/measure_startup.py on a copy of gui-startup-probe in a directory without a Telar/ folder, 3 warm-up rounds and 40 measured ones. Milliseconds from the spawn: main, root (Main.qml's window exists), frame (its first frame presented); qml is root minus the instant the controller was ready. median_interval is the distribution-free 95% interval of the median. Peak resident MiB from wait4.",
       "cold_build": "From an empty out/<preset>, timed and memory-sampled as tools/module-metrics.py does: configure; dependencies builds every library gui-quick links outside ui/ (unchanged by the experiment); qml_set builds telar-gui and gui-startup-probe, that is gui-quick, the QML module set and the two links.",
       "incremental": "Touch src/gui/ui/app/overlays/peek/peek_controller.cpp and rebuild, twice, after a build that brought the targets up to date. Debug builds every executable that links gui-quick (39); Release builds telar-gui and gui-startup-probe. Counts come from the build output.",
-      "module_set": "From build.ninja: the static libraries, plugins, init and resource object libraries of gui-quick and every gui-ui-* target, their qmlcache and batch units, and the sizes of their archives and of telar-gui."
+      "module_set": "From build.ninja: the static libraries, plugins, init and resource object libraries of gui-quick and every gui-ui-* target, their qmlcache and batch units, and the sizes of their archives and of telar-gui.",
+      "cold_build_alternated": "The same steps as cold_build in out/fu5-cold-<preset>, with CPU time (user plus system of the whole build). Each campaign alternates the baseline and one variant, Debug then Release, for two rounds; campaign 1 compares peek, campaign 2 the middle option.",
+      "startup_comparison": "measure_startup.py with the baseline probe first: rotating rounds, against_baseline is the median of the per-round differences (variant minus baseline, milliseconds or MiB) with its distribution-free 95% interval and the rounds in which the variant was faster."
     },
     "baseline": {
       "commit": "c052689f4 (4fefd3727 with the probe)",
@@ -1165,6 +1167,1038 @@
         "units": 10,
         "sources": 114
       }
-    }
+    },
+    "cold_build_alternated": [
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "dev",
+        "round": 1,
+        "configure": {
+          "seconds": 13.7,
+          "cpu_seconds": 11.7,
+          "peak_memory_mib": 141,
+          "load_average": 4.6
+        },
+        "dependencies": {
+          "seconds": 29.1,
+          "cpu_seconds": 111.1,
+          "peak_memory_mib": 1430,
+          "load_average": 4.9
+        },
+        "qml_set": {
+          "seconds": 72.9,
+          "cpu_seconds": 279.0,
+          "peak_memory_mib": 2335,
+          "load_average": 7.3
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "release",
+        "round": 1,
+        "configure": {
+          "seconds": 11.4,
+          "cpu_seconds": 7.2,
+          "peak_memory_mib": 115,
+          "load_average": 7.2
+        },
+        "dependencies": {
+          "seconds": 29.4,
+          "cpu_seconds": 114.7,
+          "peak_memory_mib": 1408,
+          "load_average": 6.9
+        },
+        "qml_set": {
+          "seconds": 65.0,
+          "cpu_seconds": 324.1,
+          "peak_memory_mib": 2852,
+          "load_average": 8.7
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "peek",
+        "commit": "f716b740b",
+        "preset": "dev",
+        "round": 1,
+        "configure": {
+          "seconds": 13.4,
+          "cpu_seconds": 12.2,
+          "peak_memory_mib": 143,
+          "load_average": 14.6
+        },
+        "dependencies": {
+          "seconds": 28.3,
+          "cpu_seconds": 109.7,
+          "peak_memory_mib": 1438,
+          "load_average": 11.9
+        },
+        "qml_set": {
+          "seconds": 76.5,
+          "cpu_seconds": 283.0,
+          "peak_memory_mib": 2446,
+          "load_average": 10.1
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "peek",
+        "commit": "f716b740b",
+        "preset": "release",
+        "round": 1,
+        "configure": {
+          "seconds": 8.9,
+          "cpu_seconds": 6.9,
+          "peak_memory_mib": 116,
+          "load_average": 7.6
+        },
+        "dependencies": {
+          "seconds": 29.2,
+          "cpu_seconds": 114.5,
+          "peak_memory_mib": 1505,
+          "load_average": 7.1
+        },
+        "qml_set": {
+          "seconds": 69.0,
+          "cpu_seconds": 335.5,
+          "peak_memory_mib": 2643,
+          "load_average": 8.3
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "dev",
+        "round": 2,
+        "configure": {
+          "seconds": 12.9,
+          "cpu_seconds": 11.5,
+          "peak_memory_mib": 142,
+          "load_average": 11.5
+        },
+        "dependencies": {
+          "seconds": 28.7,
+          "cpu_seconds": 111.6,
+          "peak_memory_mib": 1620,
+          "load_average": 10.4
+        },
+        "qml_set": {
+          "seconds": 70.4,
+          "cpu_seconds": 275.0,
+          "peak_memory_mib": 2367,
+          "load_average": 9.2
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "release",
+        "round": 2,
+        "configure": {
+          "seconds": 9.4,
+          "cpu_seconds": 7.0,
+          "peak_memory_mib": 116,
+          "load_average": 3.1
+        },
+        "dependencies": {
+          "seconds": 29.7,
+          "cpu_seconds": 115.7,
+          "peak_memory_mib": 1475,
+          "load_average": 3.8
+        },
+        "qml_set": {
+          "seconds": 68.4,
+          "cpu_seconds": 338.1,
+          "peak_memory_mib": 2701,
+          "load_average": 7.7
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "peek",
+        "commit": "f716b740b",
+        "preset": "dev",
+        "round": 2,
+        "configure": {
+          "seconds": 14.0,
+          "cpu_seconds": 12.0,
+          "peak_memory_mib": 150,
+          "load_average": 13.1
+        },
+        "dependencies": {
+          "seconds": 28.3,
+          "cpu_seconds": 110.6,
+          "peak_memory_mib": 1508,
+          "load_average": 10.9
+        },
+        "qml_set": {
+          "seconds": 75.1,
+          "cpu_seconds": 284.7,
+          "peak_memory_mib": 2564,
+          "load_average": 9.2
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "peek",
+        "commit": "f716b740b",
+        "preset": "release",
+        "round": 2,
+        "configure": {
+          "seconds": 8.7,
+          "cpu_seconds": 7.0,
+          "peak_memory_mib": 116,
+          "load_average": 7.0
+        },
+        "dependencies": {
+          "seconds": 29.2,
+          "cpu_seconds": 114.8,
+          "peak_memory_mib": 1392,
+          "load_average": 6.4
+        },
+        "qml_set": {
+          "seconds": 69.3,
+          "cpu_seconds": 334.6,
+          "peak_memory_mib": 2645,
+          "load_average": 8.5
+        },
+        "campaign": 1
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "dev",
+        "round": 1,
+        "configure": {
+          "seconds": 14.6,
+          "cpu_seconds": 11.8,
+          "peak_memory_mib": 142,
+          "load_average": 4.9
+        },
+        "dependencies": {
+          "seconds": 30.9,
+          "cpu_seconds": 119.1,
+          "peak_memory_mib": 1515,
+          "load_average": 5.2
+        },
+        "qml_set": {
+          "seconds": 70.2,
+          "cpu_seconds": 275.1,
+          "peak_memory_mib": 2300,
+          "load_average": 5.6
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "release",
+        "round": 1,
+        "configure": {
+          "seconds": 7.9,
+          "cpu_seconds": 6.5,
+          "peak_memory_mib": 142,
+          "load_average": 5.5
+        },
+        "dependencies": {
+          "seconds": 30.6,
+          "cpu_seconds": 119.0,
+          "peak_memory_mib": 1438,
+          "load_average": 5.5
+        },
+        "qml_set": {
+          "seconds": 65.8,
+          "cpu_seconds": 324.7,
+          "peak_memory_mib": 2724,
+          "load_average": 9.2
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "middle",
+        "commit": "709d784cc",
+        "preset": "dev",
+        "round": 1,
+        "configure": {
+          "seconds": 14.2,
+          "cpu_seconds": 12.1,
+          "peak_memory_mib": 138,
+          "load_average": 11.1
+        },
+        "dependencies": {
+          "seconds": 29.0,
+          "cpu_seconds": 112.1,
+          "peak_memory_mib": 1631,
+          "load_average": 10.0
+        },
+        "qml_set": {
+          "seconds": 72.7,
+          "cpu_seconds": 278.5,
+          "peak_memory_mib": 2419,
+          "load_average": 8.2
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "middle",
+        "commit": "709d784cc",
+        "preset": "release",
+        "round": 1,
+        "configure": {
+          "seconds": 8.6,
+          "cpu_seconds": 6.8,
+          "peak_memory_mib": 129,
+          "load_average": 4.2
+        },
+        "dependencies": {
+          "seconds": 29.0,
+          "cpu_seconds": 113.9,
+          "peak_memory_mib": 1428,
+          "load_average": 4.4
+        },
+        "qml_set": {
+          "seconds": 67.7,
+          "cpu_seconds": 332.0,
+          "peak_memory_mib": 2780,
+          "load_average": 7.3
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "dev",
+        "round": 2,
+        "configure": {
+          "seconds": 13.9,
+          "cpu_seconds": 11.6,
+          "peak_memory_mib": 139,
+          "load_average": 12.3
+        },
+        "dependencies": {
+          "seconds": 27.9,
+          "cpu_seconds": 109.3,
+          "peak_memory_mib": 1655,
+          "load_average": 10.2
+        },
+        "qml_set": {
+          "seconds": 69.1,
+          "cpu_seconds": 272.7,
+          "peak_memory_mib": 2322,
+          "load_average": 7.8
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "baseline",
+        "commit": "bd2aa8dfc",
+        "preset": "release",
+        "round": 2,
+        "configure": {
+          "seconds": 8.7,
+          "cpu_seconds": 6.8,
+          "peak_memory_mib": 129,
+          "load_average": 3.6
+        },
+        "dependencies": {
+          "seconds": 29.1,
+          "cpu_seconds": 113.7,
+          "peak_memory_mib": 1442,
+          "load_average": 4.3
+        },
+        "qml_set": {
+          "seconds": 63.8,
+          "cpu_seconds": 323.4,
+          "peak_memory_mib": 2827,
+          "load_average": 7.2
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "middle",
+        "commit": "709d784cc",
+        "preset": "dev",
+        "round": 2,
+        "configure": {
+          "seconds": 14.2,
+          "cpu_seconds": 11.9,
+          "peak_memory_mib": 139,
+          "load_average": 3.4
+        },
+        "dependencies": {
+          "seconds": 28.8,
+          "cpu_seconds": 111.9,
+          "peak_memory_mib": 1618,
+          "load_average": 4.5
+        },
+        "qml_set": {
+          "seconds": 72.7,
+          "cpu_seconds": 281.0,
+          "peak_memory_mib": 2427,
+          "load_average": 5.2
+        },
+        "campaign": 2
+      },
+      {
+        "variant": "middle",
+        "commit": "709d784cc",
+        "preset": "release",
+        "round": 2,
+        "configure": {
+          "seconds": 9.0,
+          "cpu_seconds": 6.9,
+          "peak_memory_mib": 127,
+          "load_average": 7.3
+        },
+        "dependencies": {
+          "seconds": 30.9,
+          "cpu_seconds": 117.6,
+          "peak_memory_mib": 1417,
+          "load_average": 7.4
+        },
+        "qml_set": {
+          "seconds": 67.3,
+          "cpu_seconds": 329.8,
+          "peak_memory_mib": 2876,
+          "load_average": 9.0
+        },
+        "campaign": 2
+      }
+    ],
+    "peek": {
+      "commits": [
+        "4a2408acf Make ui/foundation and ui/design QML modules of their own",
+        "f716b740b Make the peek overlay a library and QML module of its own"
+      ],
+      "modules": [
+        "Telar.Gui.Foundation",
+        "Telar.Gui.Design",
+        "Telar.Gui.App.Overlays.Peek"
+      ],
+      "startup": {
+        "debug": {
+          "rounds": 40,
+          "baseline_frame_median": 384.73,
+          "peek": {
+            "frame_median": 384.0,
+            "against_baseline": {
+              "main": {
+                "median_difference": 0.45,
+                "median_difference_percent": 0.3,
+                "median_interval": [
+                  -0.17,
+                  1.26
+                ],
+                "faster_rounds": 16
+              },
+              "root": {
+                "median_difference": -0.5,
+                "median_difference_percent": -0.1,
+                "median_interval": [
+                  -4.81,
+                  3.55
+                ],
+                "faster_rounds": 21
+              },
+              "frame": {
+                "median_difference": -0.49,
+                "median_difference_percent": -0.1,
+                "median_interval": [
+                  -4.82,
+                  3.94
+                ],
+                "faster_rounds": 22
+              },
+              "qml": {
+                "median_difference": -0.24,
+                "median_difference_percent": -0.2,
+                "median_interval": [
+                  -3.19,
+                  0.69
+                ],
+                "faster_rounds": 21
+              },
+              "peak_rss_mib": {
+                "median_difference": 0.06,
+                "median_difference_percent": 0.0,
+                "median_interval": [
+                  -0.02,
+                  0.09
+                ],
+                "faster_rounds": 14
+              }
+            }
+          }
+        },
+        "release": {
+          "rounds": 40,
+          "baseline_frame_median": 236.53,
+          "peek": {
+            "frame_median": 239.3,
+            "against_baseline": {
+              "main": {
+                "median_difference": 0.03,
+                "median_difference_percent": 0.1,
+                "median_interval": [
+                  -0.09,
+                  0.17
+                ],
+                "faster_rounds": 18
+              },
+              "root": {
+                "median_difference": 2.03,
+                "median_difference_percent": 0.9,
+                "median_interval": [
+                  -0.18,
+                  4.05
+                ],
+                "faster_rounds": 15
+              },
+              "frame": {
+                "median_difference": 1.62,
+                "median_difference_percent": 0.7,
+                "median_interval": [
+                  -0.21,
+                  4.16
+                ],
+                "faster_rounds": 14
+              },
+              "qml": {
+                "median_difference": 0.28,
+                "median_difference_percent": 0.3,
+                "median_interval": [
+                  -0.72,
+                  1.23
+                ],
+                "faster_rounds": 17
+              },
+              "peak_rss_mib": {
+                "median_difference": 0.08,
+                "median_difference_percent": 0.1,
+                "median_interval": [
+                  0.02,
+                  0.14
+                ],
+                "faster_rounds": 9
+              }
+            }
+          }
+        },
+        "release_three_way": {
+          "rounds": 60,
+          "baseline_frame_median": 252.96,
+          "peek": {
+            "frame_median": 252.37,
+            "against_baseline": {
+              "main": {
+                "median_difference": -0.13,
+                "median_difference_percent": -0.6,
+                "median_interval": [
+                  -0.68,
+                  0.08
+                ],
+                "faster_rounds": 37
+              },
+              "root": {
+                "median_difference": 0.77,
+                "median_difference_percent": 0.3,
+                "median_interval": [
+                  -1.9,
+                  5.85
+                ],
+                "faster_rounds": 26
+              },
+              "frame": {
+                "median_difference": 0.87,
+                "median_difference_percent": 0.3,
+                "median_interval": [
+                  -2.11,
+                  5.17
+                ],
+                "faster_rounds": 26
+              },
+              "qml": {
+                "median_difference": 0.79,
+                "median_difference_percent": 0.8,
+                "median_interval": [
+                  0.03,
+                  5.31
+                ],
+                "faster_rounds": 21
+              },
+              "peak_rss_mib": {
+                "median_difference": 0.09,
+                "median_difference_percent": 0.1,
+                "median_interval": [
+                  0.03,
+                  0.12
+                ],
+                "faster_rounds": 14
+              }
+            }
+          },
+          "middle": {
+            "frame_median": 253.06,
+            "against_baseline": {
+              "main": {
+                "median_difference": -0.12,
+                "median_difference_percent": -0.5,
+                "median_interval": [
+                  -0.37,
+                  0.16
+                ],
+                "faster_rounds": 35
+              },
+              "root": {
+                "median_difference": -0.19,
+                "median_difference_percent": -0.1,
+                "median_interval": [
+                  -2.23,
+                  2.76
+                ],
+                "faster_rounds": 32
+              },
+              "frame": {
+                "median_difference": -0.37,
+                "median_difference_percent": -0.1,
+                "median_interval": [
+                  -2.1,
+                  3.61
+                ],
+                "faster_rounds": 32
+              },
+              "qml": {
+                "median_difference": 0.63,
+                "median_difference_percent": 0.7,
+                "median_interval": [
+                  -0.17,
+                  1.69
+                ],
+                "faster_rounds": 23
+              },
+              "peak_rss_mib": {
+                "median_difference": 0.16,
+                "median_difference_percent": 0.1,
+                "median_interval": [
+                  0.09,
+                  0.23
+                ],
+                "faster_rounds": 10
+              }
+            }
+          }
+        }
+      },
+      "incremental": {
+        "debug": {
+          "targets": 39,
+          "runs": [
+            {
+              "seconds": 11.2,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 39,
+              "steps": 46,
+              "load_average": 6.6
+            },
+            {
+              "seconds": 10.2,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 39,
+              "steps": 46,
+              "load_average": 9.3
+            }
+          ]
+        },
+        "release": {
+          "targets": 2,
+          "runs": [
+            {
+              "seconds": 2.6,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 2,
+              "steps": 7,
+              "load_average": 12.4
+            },
+            {
+              "seconds": 1.7,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 2,
+              "steps": 7,
+              "load_average": 12.4
+            }
+          ]
+        }
+      },
+      "module_set": {
+        "debug": {
+          "static_libraries": [
+            "gui-quick",
+            "gui-quickplugin",
+            "gui-ui-design",
+            "gui-ui-designplugin",
+            "gui-ui-foundation",
+            "gui-ui-foundationplugin",
+            "gui-ui-peek",
+            "gui-ui-peekplugin"
+          ],
+          "plugins": 4,
+          "resource_objects": 14,
+          "init_objects": 4,
+          "qmlcache_units": 94,
+          "batch_units": 0,
+          "archive_bytes": {
+            "gui-quick": 343679760,
+            "gui-quickplugin": 772016,
+            "gui-ui-design": 75903280,
+            "gui-ui-designplugin": 772952,
+            "gui-ui-foundation": 55149168,
+            "gui-ui-foundationplugin": 773000,
+            "gui-ui-peek": 7695312,
+            "gui-ui-peekplugin": 774144
+          },
+          "telar_gui_bytes": 67528424
+        },
+        "release": {
+          "static_libraries": [
+            "gui-quick",
+            "gui-quickplugin",
+            "gui-ui-design",
+            "gui-ui-designplugin",
+            "gui-ui-foundation",
+            "gui-ui-foundationplugin",
+            "gui-ui-peek",
+            "gui-ui-peekplugin"
+          ],
+          "plugins": 4,
+          "resource_objects": 14,
+          "init_objects": 4,
+          "qmlcache_units": 94,
+          "batch_units": 12,
+          "archive_bytes": {
+            "gui-quick": 37691840,
+            "gui-quickplugin": 34872,
+            "gui-ui-design": 7129432,
+            "gui-ui-designplugin": 35680,
+            "gui-ui-foundation": 2525624,
+            "gui-ui-foundationplugin": 35392,
+            "gui-ui-peek": 440296,
+            "gui-ui-peekplugin": 36584
+          },
+          "telar_gui_bytes": 22383000
+        }
+      },
+      "release_batch_units": {
+        "units": 12,
+        "sources": 114,
+        "per_target": {
+          "gui-quick": [
+            6,
+            70
+          ],
+          "gui-ui-foundation": [
+            3,
+            27
+          ],
+          "gui-ui-design": [
+            2,
+            16
+          ],
+          "gui-ui-peek": [
+            1,
+            1
+          ]
+        }
+      },
+      "cold_build_unpaired": {
+        "debug": {
+          "configure": {
+            "seconds": 13.5,
+            "peak_memory_mib": 141,
+            "load_average": 3.2
+          },
+          "dependencies": {
+            "seconds": 27.8,
+            "peak_memory_mib": 1508,
+            "load_average": 4.0
+          },
+          "qml_set": {
+            "seconds": 75.1,
+            "peak_memory_mib": 2543,
+            "load_average": 8.5
+          }
+        },
+        "release": {
+          "configure": {
+            "seconds": 8.7,
+            "cpu_seconds": 6.9,
+            "peak_memory_mib": 116,
+            "load_average": 5.3
+          },
+          "dependencies": {
+            "seconds": 30.0,
+            "cpu_seconds": 116.8,
+            "peak_memory_mib": 1448,
+            "load_average": 5.2
+          },
+          "qml_set": {
+            "seconds": 71.6,
+            "cpu_seconds": 344.7,
+            "peak_memory_mib": 2771,
+            "load_average": 7.2
+          }
+        }
+      },
+      "qml_set_compile_units": {
+        "debug": [
+          238,
+          270
+        ],
+        "release": [
+          134,
+          168
+        ]
+      },
+      "qml_set_ninja_steps": {
+        "debug": [
+          621,
+          744
+        ],
+        "release": [
+          413,
+          540
+        ]
+      },
+      "tests": "32 GUI tests whose executables link gui-quick, among them gui-quick and gui-machine-window, and gui-startup-tools: passed offscreen in Debug"
+    },
+    "middle": {
+      "commits": [
+        "709d784cc Register the types of C++ libraries of ui/ into Telar.Gui (branch arch/qml-modules-foreign)"
+      ],
+      "startup": {
+        "debug": {
+          "rounds": 40,
+          "baseline_frame_median": 392.36,
+          "middle": {
+            "frame_median": 392.44,
+            "against_baseline": {
+              "main": {
+                "median_difference": -0.03,
+                "median_difference_percent": -0.0,
+                "median_interval": [
+                  -0.93,
+                  0.9
+                ],
+                "faster_rounds": 20
+              },
+              "root": {
+                "median_difference": -1.58,
+                "median_difference_percent": -0.4,
+                "median_interval": [
+                  -4.81,
+                  2.73
+                ],
+                "faster_rounds": 24
+              },
+              "frame": {
+                "median_difference": -1.81,
+                "median_difference_percent": -0.5,
+                "median_interval": [
+                  -5.29,
+                  3.48
+                ],
+                "faster_rounds": 24
+              },
+              "qml": {
+                "median_difference": -0.28,
+                "median_difference_percent": -0.3,
+                "median_interval": [
+                  -1.03,
+                  0.29
+                ],
+                "faster_rounds": 22
+              },
+              "peak_rss_mib": {
+                "median_difference": -0.04,
+                "median_difference_percent": -0.0,
+                "median_interval": [
+                  -0.17,
+                  0.02
+                ],
+                "faster_rounds": 24
+              }
+            }
+          }
+        },
+        "release": {
+          "rounds": 40,
+          "baseline_frame_median": 246.05,
+          "middle": {
+            "frame_median": 244.91,
+            "against_baseline": {
+              "main": {
+                "median_difference": -0.1,
+                "median_difference_percent": -0.5,
+                "median_interval": [
+                  -0.56,
+                  0.08
+                ],
+                "faster_rounds": 23
+              },
+              "root": {
+                "median_difference": -0.1,
+                "median_difference_percent": -0.0,
+                "median_interval": [
+                  -2.36,
+                  1.34
+                ],
+                "faster_rounds": 21
+              },
+              "frame": {
+                "median_difference": -0.12,
+                "median_difference_percent": -0.0,
+                "median_interval": [
+                  -2.11,
+                  1.55
+                ],
+                "faster_rounds": 21
+              },
+              "qml": {
+                "median_difference": -0.34,
+                "median_difference_percent": -0.4,
+                "median_interval": [
+                  -1.17,
+                  0.97
+                ],
+                "faster_rounds": 23
+              },
+              "peak_rss_mib": {
+                "median_difference": 0.18,
+                "median_difference_percent": 0.2,
+                "median_interval": [
+                  0.05,
+                  0.22
+                ],
+                "faster_rounds": 8
+              }
+            }
+          }
+        }
+      },
+      "incremental": {
+        "debug": {
+          "targets": 39,
+          "runs": [
+            {
+              "seconds": 14.2,
+              "compiled": 3,
+              "archived": 2,
+              "linked": 39,
+              "steps": 56,
+              "load_average": 16.5
+            },
+            {
+              "seconds": 14.0,
+              "compiled": 3,
+              "archived": 2,
+              "linked": 39,
+              "steps": 56,
+              "load_average": 19.3
+            }
+          ]
+        },
+        "release": {
+          "targets": 2,
+          "runs": [
+            {
+              "seconds": 4.9,
+              "compiled": 3,
+              "archived": 2,
+              "linked": 2,
+              "steps": 17,
+              "load_average": 11.5
+            },
+            {
+              "seconds": 4.4,
+              "compiled": 3,
+              "archived": 2,
+              "linked": 2,
+              "steps": 17,
+              "load_average": 10.7
+            }
+          ]
+        }
+      },
+      "module_set": {
+        "debug": {
+          "static_libraries": [
+            "gui-quick",
+            "gui-quickplugin",
+            "gui-ui-foundation",
+            "gui-ui-peek"
+          ],
+          "plugins": 1,
+          "resource_objects": 8,
+          "init_objects": 1,
+          "qmlcache_units": 94,
+          "batch_units": 0,
+          "archive_bytes": {
+            "gui-quick": 419057336,
+            "gui-quickplugin": 772016,
+            "gui-ui-foundation": 53521536,
+            "gui-ui-peek": 3394144
+          },
+          "telar_gui_bytes": 67494056
+        },
+        "release": {
+          "static_libraries": [
+            "gui-quick",
+            "gui-quickplugin",
+            "gui-ui-foundation",
+            "gui-ui-peek"
+          ],
+          "plugins": 1,
+          "resource_objects": 8,
+          "init_objects": 1,
+          "qmlcache_units": 94,
+          "batch_units": 12,
+          "archive_bytes": {
+            "gui-quick": 45046224,
+            "gui-quickplugin": 34872,
+            "gui-ui-foundation": 2473896,
+            "gui-ui-peek": 97272
+          },
+          "telar_gui_bytes": 22366920
+        }
+      },
+      "release_batch_units": {
+        "units": 12,
+        "sources": 114,
+        "per_target": {
+          "gui-quick": [
+            8,
+            86
+          ],
+          "gui-ui-foundation": [
+            3,
+            27
+          ],
+          "gui-ui-peek": [
+            1,
+            1
+          ]
+        }
+      },
+      "tests": "gui-quick and gui-machine-window: passed offscreen in Debug"
+    },
+    "palette": "Not run: the peek split regressed the Debug cold build, and the experiment went on only without a regression."
   }
 }
