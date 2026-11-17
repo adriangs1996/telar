@@ -253,8 +253,12 @@ def offline(f):
     logs = json.loads(f.invoke("logs/json", "diagnostics", "logs", "--lines", "2", "--json", socket=True).stdout)
     assert len(logs) == 4
     assert [Path(item["path"]).name for item in logs] == sorted(Path(item["path"]).name for item in logs)
-    f.invoke("logs/pid", "diagnostics", "logs", "--pid", "42", "--json", socket=True)
-    f.invoke("logs/component", "diagnostics", "logs", "--component", "client", socket=True)
+    by_pid = json.loads(f.invoke("logs/pid", "diagnostics", "logs", "--pid", "42", "--json", socket=True).stdout)
+    assert [Path(item["path"]).name for item in by_pid] == ["s.client-42.log"], by_pid
+    clients = f.invoke("logs/component", "diagnostics", "logs", "--component", "client", "--json", socket=True)
+    assert [Path(item["path"]).name for item in json.loads(clients.stdout)] == ["s.client-42.log"], clients.stdout
+    runtime_logs = json.loads(f.invoke("logs/component-runtime", "diagnostics", "logs", "--component", "runtime", "--json", socket=True).stdout)
+    assert sorted(Path(item["path"]).name for item in runtime_logs) == ["s.runtime-11.log", "s.runtime.log", "s.runtime.start.log"], runtime_logs
     f.invoke("logs/missing", "diagnostics", "logs", "--pid", "999", socket=True, code=2)
     (f.root / "s.runtime.log").unlink()
     (f.root / "s.runtime.log").symlink_to(path)
@@ -345,8 +349,72 @@ def runtime_queries(f):
     assert {json.loads(line)["type"] for line in events.stdout.splitlines()} == {"proxy_status", "system_metrics", "workspace_list", "agent_snapshot"}
     event = f.invoke("proxy/watch", "proxy", "watch", "--count", "1", socket=True)
     assert json.loads(event.stdout)["type"] == "proxy_status"
-    f.invoke("limits/json", "diagnostics", "limits", "--json", socket=True)
+    limits(f, "limits/json")
     f.invoke("limits/text", "diagnostics", "limits", socket=True)
+
+
+def limits(f, name):
+    """`diagnostics limits --json` is JSON with the documented keys; `requested` is a count or null."""
+    report = json.loads(f.invoke(name, "diagnostics", "limits", "--json", socket=True).stdout)
+    assert set(report) == {"runtime_evicted", "client_evicted", "refused_reports", "limits"}, report
+    for entry in report["limits"]:
+        assert set(entry) == {"name", "noun", "value", "requested", "route", "origin", "hits", "last_ms"}, entry
+        assert entry["requested"] is None or isinstance(entry["requested"], int), entry
+    return report
+
+
+def history_rows(f):
+    """Rows the runtime recorded, as `history list` shows and filters them."""
+    database = Path(f.env["XDG_DATA_HOME"]) / "telar/history.db"
+    session = bytes(range(16))
+    rows = [
+        # command, workspace, exit code, status, author, provider
+        ("printf exited", "/p", 3, 0, 0, None),
+        ("printf running", "/p", None, 2, 0, None),
+        ("printf interrupted", "/q", None, 1, 0, None),
+        ("printf by-agent", "/q", 0, 0, 1, "claude"),
+    ]
+    with sqlite3.connect(database) as connection:
+        connection.execute("INSERT INTO session (id,pane_id,location_kind,location_id,tab_id,workspace_path,shell,started_at_ms) VALUES (?,?,?,?,?,?,?,?)",
+                           (session, 900, 0, 1, 1, "/p", "/bin/sh", 1735689600000))
+        for sequence, (command, workspace, code, status, author, provider) in enumerate(rows, 1):
+            connection.execute("INSERT INTO command (session_id,pane_id,location_kind,location_id,tab_id,sequence,command,cwd,workspace_path,started_at_ms,duration_ns,exit_code,status,author,provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (session, 900, 0, 1, 1, sequence, command, workspace, workspace, 1735689600000 + sequence, 0, code, status, author, provider))
+
+    def listed(name, *args):
+        lines = f.invoke(name, "history", "list", *args, socket=True).stdout.splitlines()
+        return {line.rsplit(b"  ", 1)[-1].split(b" ")[-1]: line for line in lines}
+
+    # STATUS is the exit code, RUN or INT.
+    columns = {command: line.split(b"  ")[2] for command, line in listed("history/columns").items()}
+    assert columns == {b"exited": b"3", b"running": b"RUN", b"interrupted": b"INT", b"by-agent": b"0"}, columns
+    agent = listed("history/author-agent", "--author", "agent")
+    assert list(agent) == [b"by-agent"] and b"[claude]" in agent[b"by-agent"], agent
+    assert sorted(listed("history/author-human", "--author", "human")) == [b"exited", b"interrupted", b"running"]
+    f.invoke("history/author-invalid", "history", "list", "--author", "x", socket=True, code=1)
+    assert sorted(listed("history/workspace", "--workspace", "/p")) == [b"exited", b"running"]
+    f.invoke("history/rows-prune", "history", "prune", "--yes", socket=True)
+
+
+def history_imports(f):
+    """`history import` without a kind reads the file by its name, or the shell's own histfile."""
+    named = f.root / "detected"
+    named.mkdir()
+    (named / "fish_history").write_bytes(b"- cmd: printf auto-fish\n  when: 1735689700\n")
+    f.invoke("history/import-auto-file", "history", "import", "--file", named / "fish_history", socket=True)
+    home = Path(f.env["HOME"]) / ".zsh_history"
+    home.write_bytes(b": 1735689701:0;printf auto-zsh\n")
+    try:
+        f.invoke("history/import-auto-home", "history", "import", socket=True)
+    finally:
+        home.unlink()
+    crlf = f.root / "crlf_history"
+    crlf.write_bytes(b"printf crlf\r\n")
+    f.invoke("history/import-crlf", "history", "import", "bash", "--file", crlf, socket=True)
+    listing = f.invoke("history/imported-auto", "history", "list", socket=True).stdout
+    commands = sorted(line.rsplit(b"  ", 1)[-1] for line in listing.splitlines())
+    assert commands == [b"printf auto-fish", b"printf auto-zsh", b"printf crlf"], listing
+    f.invoke("history/imports-prune", "history", "prune", "--yes", socket=True)
 
 
 def history(f):
@@ -406,11 +474,14 @@ def history(f):
     assert entries("history/matched") == {key: line for key, line in kept.items() if key not in duplicates}
     f.invoke("history/prune", "history", "prune", "--yes", socket=True)
     assert f.invoke("history/empty", "history", "list", socket=True).stdout == b""
+    history_rows(f)
+    history_imports(f)
     large = f.root / "large_history"
     large.write_bytes(b"a" * 65535 + b"\n" + b"b" * 65536 + b"\nprintf kept\n")
     f.invoke("history/import-limit", "history", "import", "bash", "--file", large, socket=True, code=1)
     assert b"printf kept" in f.invoke("history/import-kept", "history", "search", "kept", socket=True).stdout
-    f.invoke("limits/reached", "diagnostics", "limits", "--json", socket=True)
+    reached = limits(f, "limits/reached")
+    assert any(entry["name"] == "history.import_command_bytes" for entry in reached["limits"]), reached
     f.invoke("history/final-prune", "history", "prune", "--yes", socket=True)
     batches = f.root / "batch_history"
     batches.write_bytes(b"\n".join(f"printf batch-{index}".encode() for index in range(129)) + b"\n")
