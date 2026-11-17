@@ -10,3 +10,6 @@ telar_add_domain(runtime shell_integration
 set_source_files_properties(shell_integration.cppm PROPERTIES COMPILE_OPTIONS "-fconstexpr-steps=16777216")
 # words.cpp includes the completion specs the build generates.
 add_dependencies(runtime-shell_integration command-specs)
+# A spec is one string literal of up to ~115 KB, past the 64 KB the standard asks every compiler to
+# accept; clang, the only compiler of this tree, takes it whole.
+set_source_files_properties(words/words.cpp PROPERTIES COMPILE_OPTIONS "-Wno-overlength-strings")

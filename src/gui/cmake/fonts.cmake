@@ -64,6 +64,8 @@ target_include_directories(gui-freetype SYSTEM PUBLIC "${telar_freetype_SOURCE_D
 target_compile_definitions(gui-freetype PRIVATE FT2_BUILD_LIBRARY HAVE_UNISTD_H HAVE_FCNTL_H)
 target_link_libraries(gui-freetype PRIVATE telar::build_flags)
 set_target_properties(gui-freetype PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Third-party code compiles as published: the project neither fixes nor reports its warnings.
+target_compile_options(gui-freetype PRIVATE -w)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(gui-freetype INTERFACE "LINKER:--exclude-libs,$<TARGET_FILE_NAME:gui-freetype>")
 endif()
@@ -86,6 +88,8 @@ target_compile_definitions(gui-harfbuzz PRIVATE
   HAVE_FT_GET_VAR_BLEND_COORDINATES=1 HAVE_FT_SET_VAR_BLEND_COORDINATES=1
   HAVE_FT_DONE_MM_VAR=1 HAVE_FT_GET_TRANSFORM=1)
 set_target_properties(gui-harfbuzz PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Third-party code compiles as published: the project neither fixes nor reports its warnings.
+target_compile_options(gui-harfbuzz PRIVATE -w)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(gui-harfbuzz INTERFACE "LINKER:--exclude-libs,$<TARGET_FILE_NAME:gui-harfbuzz>")
 endif()

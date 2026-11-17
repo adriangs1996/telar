@@ -8,7 +8,7 @@ endif()
 
 add_executable(telar-auth-daemon main.cpp)
 target_link_libraries(telar-auth-daemon PRIVATE telar::build_flags)
-target_compile_options(telar-auth-daemon PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(telar-auth-daemon PRIVATE ${TELAR_WARNINGS})
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(telar-auth-daemon PRIVATE _GNU_SOURCE)
 endif()

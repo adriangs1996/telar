@@ -8,12 +8,12 @@ target_link_libraries(telar-render-md4c PRIVATE telar::build_flags)
 telar_add_library(telar-render
   SOURCES document/document.cpp markdown/markdown.cpp terminal/terminal.cpp
   DEPS telar::base telar-render-md4c)
-target_compile_options(telar-render PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(telar-render PRIVATE ${TELAR_WARNINGS})
 
 if(BUILD_TESTING)
   add_executable(telar-render-tests tests/render_test.cpp)
   target_link_libraries(telar-render-tests PRIVATE telar::render)
-  target_compile_options(telar-render-tests PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(telar-render-tests PRIVATE ${TELAR_WARNINGS})
   add_test(NAME telar-render-tests COMMAND telar-render-tests)
   set_tests_properties(telar-render-tests PROPERTIES LABELS lib.render)
 endif()

@@ -1,4 +1,4 @@
-telar_process(cli OPTIONS -Wall -Wextra -Wpedantic)
+telar_process(cli OPTIONS ${TELAR_WARNINGS})
 
 find_package(Threads REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

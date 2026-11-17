@@ -7,12 +7,12 @@ telar_add_library(telar-git
   SOURCES git.cpp git-config.cpp git-format.cpp git-history.cpp git-objects.cpp git-worktree.cpp
   EXCLUDE checkout
   DEPS telar::platform telar::git-checkout telar::native OpenSSL::Crypto deps::zlib)
-target_compile_options(telar-git PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(telar-git PRIVATE ${TELAR_WARNINGS})
 
 if(BUILD_TESTING)
   add_executable(telar-git-tests tests/git_test.cpp)
   target_link_libraries(telar-git-tests PRIVATE telar::git)
-  target_compile_options(telar-git-tests PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(telar-git-tests PRIVATE ${TELAR_WARNINGS})
   add_test(NAME telar-git-tests COMMAND telar-git-tests)
   # The tests build repositories with the git CLI and skip without it.
   set_tests_properties(telar-git-tests PROPERTIES SKIP_RETURN_CODE 77 LABELS lib.git)

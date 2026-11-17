@@ -54,7 +54,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 else()
   message(FATAL_ERROR "Clipboard currently supports macOS and Linux")
 endif()
-target_compile_options(telar-clipboard PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(telar-clipboard PRIVATE ${TELAR_WARNINGS})
 telar_register_checks(telar-clipboard CHECKS lint blank_lines)
 
 # The standalone reader and its tests build with the other tests.

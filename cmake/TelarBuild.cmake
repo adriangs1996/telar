@@ -41,6 +41,17 @@ set(TELAR_COMPILE_JOBS ${telar_default_compile_jobs} CACHE STRING "Parallel comp
 set_property(GLOBAL PROPERTY JOB_POOLS telar_compile=${TELAR_COMPILE_JOBS})
 set(CMAKE_JOB_POOL_COMPILE telar_compile)
 
+# The warnings every telar process compiles with. A field a designated initializer leaves out is
+# value-initialized, which is how this tree asks for a field's default, so only the designated
+# variant of -Wmissing-field-initializers is off: a positional initializer still reports a field
+# it misses.
+set(TELAR_WARNINGS -Wall -Wextra -Wpedantic -Wno-missing-designated-field-initializers)
+
+# The pinned toolchain compiles against its libc++ through CMAKE_CXX_FLAGS, which CMake also hands
+# the link step, and links that libc++ itself after -nostdlib++. The driver then reports
+# -stdlib=libc++ unused on every link; nothing a link drops is compiled code.
+add_link_options("$<$<LINK_LANGUAGE:CXX,OBJCXX>:-Wno-unused-command-line-argument>")
+
 # The build-wide variants every telar target compiles and links with. A library
 # passes them on to its importers (telar_modules), so a module interface is
 # compiled with the flags of the code that imports it; a target that imports

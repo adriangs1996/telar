@@ -1,4 +1,4 @@
-telar_process(gui OPTIONS -Wall -Wextra -Wpedantic -ffp-contract=off QML ui)
+telar_process(gui OPTIONS ${TELAR_WARNINGS} -ffp-contract=off QML ui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, lint and per-file incremental rebuilds need one compile command per source.
@@ -37,7 +37,7 @@ target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_p
 target_link_libraries(gui-posix PUBLIC gui-core gui-text gui-attachments gui-platform Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
-target_compile_options(telar-gui-command PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(telar-gui-command PRIVATE ${TELAR_WARNINGS})
 target_link_libraries(telar-gui-command PRIVATE telar::build_flags)
 
 add_library(gui-editor-config INTERFACE)

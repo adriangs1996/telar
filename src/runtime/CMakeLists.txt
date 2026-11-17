@@ -1,4 +1,4 @@
-telar_process(runtime OPTIONS -Wall -Wextra -Wpedantic)
+telar_process(runtime OPTIONS ${TELAR_WARNINGS})
 
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
