@@ -185,7 +185,7 @@ int main() {
     displayIndicesSurviveFullscreenAndRemoval();
     std::cout << "gui-layout: passed\n";
   } catch (const std::exception& error) {
-    std::cerr << "gui-layout: " << error.what() << '\n';
+    std::cerr << "gui-workbench-layout: " << error.what() << '\n';
 
     return 1;
   }

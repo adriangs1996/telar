@@ -209,9 +209,9 @@ int main() {
     capacityAndAmbiguity();
     generatedDefaultsAndOverrides();
     historyActionsRetainTheirChoice();
-    std::puts("gui-input: passed");
+    std::puts("gui-bindings: passed");
   } catch (const std::exception& error) {
-    std::cerr << "gui-input: " << error.what() << '\n';
+    std::cerr << "gui-bindings: " << error.what() << '\n';
 
     return 1;
   }
