@@ -326,6 +326,16 @@ class Stack:
         assert all(Path(entry['path']).is_dir() for entry in titled)
         self.call('worktree-remove-titled-a', 'worktree', 'remove', 'titled-a')
         self.call('worktree-remove-titled-b', 'worktree', 'remove', 'titled-b')
+        # Git refuses a locked checkout although it is clean: it stays on disk and stays tracked.
+        locked = Path(self.call('worktree-create-locked', 'worktree', 'create', 'locked', '--json')['path'])
+        self.git('worktree', 'lock', str(locked))
+        self.call('worktree-remove-locked', 'worktree', 'remove', 'locked', status=1)
+        assert locked.is_dir()
+        tracked = self.call('worktree-list-locked', 'worktree', 'list', '--json')
+        assert [entry['branch'] for entry in tracked if entry['worktree_id'] is not None] == ['locked'], tracked
+        self.git('worktree', 'unlock', str(locked))
+        self.call('worktree-remove-unlocked', 'worktree', 'remove', 'locked')
+        assert not locked.exists()
         # A person who confirms at the terminal discards the changes and the unmerged commits.
         doomed = Path(self.call('worktree-create-confirmed', 'worktree', 'create', 'confirmed', '--json')['path'])
         (doomed / 'file.txt').write_text('discarded\n')
