@@ -12,7 +12,8 @@ telar_add_domain(runtime runtime
        proxy plugins editors persistence)
 
 if(BUILD_TESTING)
-  telar_add_domain_tests(runtime LINK telar::base telar::client telar::config telar::git telar::lua telar::platform telar::render telar::vocabulary telar::wire ebnf::ebnf)
+  # A case that drives a runtime host ends within the timeout even if a process it started hangs.
+  telar_add_domain_tests(runtime TIMEOUT 300 LINK telar::base telar::client telar::config telar::git telar::lua telar::platform telar::render telar::vocabulary telar::wire ebnf::ebnf)
   # The native clipboard tests reach the system pasteboard through the GUI tests' private one.
   if(APPLE AND TELAR_CLIPBOARD_NATIVE)
     target_sources(runtime-runtime-tests PRIVATE tests/runtime_clipboard_native.cpp

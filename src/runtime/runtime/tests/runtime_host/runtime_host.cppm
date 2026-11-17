@@ -31,7 +31,8 @@ namespace {
   // The child half: argv is `--runtime-host DIRECTORY GUARD [--session]`. The runtime listens on
   // DIRECTORY/runtime.sock and, with --session, keeps its session in DIRECTORY/session.ckpt. GUARD is
   // the read end of a pipe whose write end only the test holds: when the test ends, however it ends,
-  // the pipe reads end of file and the runtime stops as on SIGTERM, so no runtime outlives its test.
+  // the pipe reads end of file and the runtime stops as on SIGTERM, so no runtime outlives its test,
+  // even one a failed check aborted before the host's destructor could stop it.
   int runHost(int argc, char** argv) {
     using namespace telar;
     using namespace telar::runtime;
@@ -54,6 +55,9 @@ namespace {
       }
 
       ::kill(::getpid(), SIGTERM);
+      // A runtime that does not stop still ends, so its panes' ptys close and CTest's pipes with them.
+      std::this_thread::sleep_for(std::chrono::seconds{5});
+      ::_exit(3);
     }}.detach();
 
     SystemAllocator system;
