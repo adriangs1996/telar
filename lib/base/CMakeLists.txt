@@ -43,7 +43,7 @@ if(BUILD_TESTING)
   # Probes run by hand by tools/bench_memory_call.py, never by CTest. `base-probes` builds them.
   # The -single probe links one implementation of Memory, the other several.
   foreach(probe IN ITEMS memory-call-probe memory-call-probe-single)
-    add_executable(${probe} tests/memory_call_probe.cpp tests/memory_call_source.cpp)
+    add_executable(${probe} tools/memory_call_probe.cpp tools/memory_call_source.cpp)
     target_link_libraries(${probe} PRIVATE telar::base)
     target_compile_options(${probe} PRIVATE ${TELAR_WARNINGS})
   endforeach()

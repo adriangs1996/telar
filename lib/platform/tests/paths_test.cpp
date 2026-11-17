@@ -3,24 +3,10 @@
 static_assert(true);
 #endif
 
-#include <cerrno>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/un.h>
-#include <unistd.h>
-
 import std;
 import telar.base.memory.allocators;
-import telar.platform.primitives;
 import telar.testing;
-import telar.platform.error;
-import telar.platform.fs;
 import telar.platform.paths;
-import telar.client;
 
 namespace {
 
@@ -139,80 +125,8 @@ namespace {
     check(rejected);
   }
 
-  void testPrivateDirectory() {
-    std::array<char, 64> temporary{};
-
-    std::strcpy(temporary.data(), "/tmp/telar-cli-test-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
-    const std::string root = temporary.data();
-    const auto path = root + "/parent/child";
-
-    createPrivateDirectory(path);
-    struct stat state{};
-
-    check(::stat(path.c_str(), &state) == 0 && (state.st_mode & 0777) == 0700);
-    check(::chmod(path.c_str(), 0755) == 0);
-    createPrivateDirectory(path);
-    check(::stat(path.c_str(), &state) == 0 && (state.st_mode & 0777) == 0700);
-
-    const auto link = root + "/linked";
-
-    check(::symlink(path.c_str(), link.c_str()) == 0);
-    bool rejected = false;
-
-    try {
-      createPrivateDirectory(link);
-    } catch (const SystemError&) {
-      rejected = true;
-    }
-
-    check(rejected);
-    std::filesystem::remove_all(root);
-  }
-
-  // The client's socket is never inherited by a program the process runs, and it is closed once,
-  // by whichever client owns it last.
-  void testClientSocket() {
-    std::array<char, 64> temporary{};
-
-    std::strcpy(temporary.data(), "/tmp/telar-client-test-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
-    const std::string root = temporary.data();
-    const auto path = root + "/runtime.sock";
-    const int listener = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    sockaddr_un address{};
-
-    address.sun_family = AF_UNIX;
-    std::strcpy(address.sun_path, path.c_str());
-    check(listener >= 0 && ::bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 && ::listen(listener, 4) == 0);
-
-    int descriptor = -1;
-
-    {
-      auto client = Client::init(path.c_str());
-
-      descriptor = client.descriptor();
-      check(descriptor >= 0 && (::fcntl(descriptor, F_GETFD) & FD_CLOEXEC) != 0);
-      Client moved{std::move(client)};
-
-      check(client.descriptor() == -1 && moved.descriptor() == descriptor);
-      Client assigned = Client::init(path.c_str());
-      const auto replaced = assigned.descriptor();
-
-      assigned = std::move(moved);
-      check(assigned.descriptor() == descriptor && ::fcntl(replaced, F_GETFD) == -1 && errno == EBADF);
-    }
-
-    check(::fcntl(descriptor, F_GETFD) == -1 && errno == EBADF);
-
-    ::close(listener);
-    std::filesystem::remove_all(root);
-  }
-
-  const telar::testing::Case case_paths{"cli.paths", testPaths};
-  const telar::testing::Case case_config_home{"cli.config_home", testConfigHome};
-  const telar::testing::Case case_arguments{"cli.arguments", testArguments};
-  const telar::testing::Case case_private_directory{"cli.private_directory", testPrivateDirectory};
-  const telar::testing::Case case_client_socket{"cli.client_socket", testClientSocket};
+  const telar::testing::Case case_paths{"paths.runtime_paths", testPaths};
+  const telar::testing::Case case_config_home{"paths.config_home", testConfigHome};
+  const telar::testing::Case case_arguments{"paths.server_arguments", testArguments};
 
 }

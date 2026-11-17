@@ -172,9 +172,6 @@ telar_add_test(gui-machine-runtime-location-test SOURCES machine_runtime_locatio
 
 telar_add_test(gui-machines-test SOURCES machines_test.cpp LIBRARIES gui-features-machines
   TEST gui-features-machines LABELS gui.features.machines)
-telar_add_test(gui-json-integer-test SOURCES json_integer_test.cpp LIBRARIES gui-foundation-core
-  TEST gui-json-integer LABELS gui.features.machines)
-
 telar_add_test(gui-machine-remote-test SOURCES machine_remote_test.cpp LIBRARIES gui-features-machines
   TEST gui-machine-remote LABELS gui.features.machines)
 

@@ -7,7 +7,6 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.testing;
-import telar.cli.output;
 
 namespace {
 
