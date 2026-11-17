@@ -914,5 +914,257 @@
         "final": "80, 9.8 (fb4)"
       }
     ]
+  },
+  "fu5": {
+    "date": "2026-11-17",
+    "machine": {
+      "system": "Darwin 25.6.0 arm64",
+      "cpus": 8,
+      "memory_mib": 16384
+    },
+    "note": "The cost of separate QML modules for the widgets of src/gui/ui (docs/build/ui-qml-modules.md). Another agent shared the machine; builds were serialized with it, but its other work shows in the load averages.",
+    "how": {
+      "startup": "src/gui/tools/measure_startup.py on a copy of gui-startup-probe in a directory without a Telar/ folder, 3 warm-up rounds and 40 measured ones. Milliseconds from the spawn: main, root (Main.qml's window exists), frame (its first frame presented); qml is root minus the instant the controller was ready. median_interval is the distribution-free 95% interval of the median. Peak resident MiB from wait4.",
+      "cold_build": "From an empty out/<preset>, timed and memory-sampled as tools/module-metrics.py does: configure; dependencies builds every library gui-quick links outside ui/ (unchanged by the experiment); qml_set builds telar-gui and gui-startup-probe, that is gui-quick, the QML module set and the two links.",
+      "incremental": "Touch src/gui/ui/app/overlays/peek/peek_controller.cpp and rebuild, twice, after a build that brought the targets up to date. Debug builds every executable that links gui-quick (39); Release builds telar-gui and gui-startup-probe. Counts come from the build output.",
+      "module_set": "From build.ninja: the static libraries, plugins, init and resource object libraries of gui-quick and every gui-ui-* target, their qmlcache and batch units, and the sizes of their archives and of telar-gui."
+    },
+    "baseline": {
+      "commit": "c052689f4 (4fefd3727 with the probe)",
+      "startup": {
+        "debug": {
+          "main": {
+            "median": 133.17,
+            "quartiles": [
+              132.2,
+              135.07
+            ],
+            "median_interval": [
+              132.41,
+              134.13
+            ]
+          },
+          "qml": {
+            "median": 105.32,
+            "quartiles": [
+              104.35,
+              107.44
+            ],
+            "median_interval": [
+              104.59,
+              106.98
+            ]
+          },
+          "root": {
+            "median": 377.5,
+            "quartiles": [
+              373.38,
+              379.72
+            ],
+            "median_interval": [
+              374.59,
+              379.03
+            ]
+          },
+          "frame": {
+            "median": 383.34,
+            "quartiles": [
+              379.45,
+              385.74
+            ],
+            "median_interval": [
+              380.51,
+              385.22
+            ]
+          },
+          "peak_rss_mib": {
+            "median": 127.52,
+            "quartiles": [
+              127.43,
+              127.54
+            ],
+            "median_interval": [
+              127.47,
+              127.53
+            ]
+          }
+        },
+        "release": {
+          "main": {
+            "median": 20.86,
+            "quartiles": [
+              20.59,
+              21.4
+            ],
+            "median_interval": [
+              20.72,
+              21.07
+            ]
+          },
+          "qml": {
+            "median": 85.7,
+            "quartiles": [
+              84.97,
+              87.53
+            ],
+            "median_interval": [
+              85.33,
+              86.68
+            ]
+          },
+          "root": {
+            "median": 235.26,
+            "quartiles": [
+              233.02,
+              238.35
+            ],
+            "median_interval": [
+              233.86,
+              236.88
+            ]
+          },
+          "frame": {
+            "median": 239.22,
+            "quartiles": [
+              237.15,
+              242.51
+            ],
+            "median_interval": [
+              237.74,
+              241.25
+            ]
+          },
+          "peak_rss_mib": {
+            "median": 115.76,
+            "quartiles": [
+              115.7,
+              115.84
+            ],
+            "median_interval": [
+              115.73,
+              115.8
+            ]
+          }
+        }
+      },
+      "cold_build": {
+        "debug": {
+          "configure": {
+            "seconds": 16.2,
+            "peak_memory_mib": 135,
+            "load_average": 17.5
+          },
+          "dependencies": {
+            "seconds": 37.4,
+            "peak_memory_mib": 1540,
+            "load_average": 18.7
+          },
+          "qml_set": {
+            "seconds": 87.9,
+            "peak_memory_mib": 2303,
+            "load_average": 19.1
+          }
+        },
+        "release": {
+          "configure": {
+            "seconds": 8.9,
+            "peak_memory_mib": 104,
+            "load_average": 9.7
+          },
+          "dependencies": {
+            "seconds": 29.1,
+            "peak_memory_mib": 1404,
+            "load_average": 8.7
+          },
+          "qml_set": {
+            "seconds": 65.4,
+            "peak_memory_mib": 2831,
+            "load_average": 10.7
+          }
+        }
+      },
+      "incremental": {
+        "debug": {
+          "targets": 39,
+          "runs": [
+            {
+              "seconds": 12.2,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 39,
+              "steps": 46,
+              "load_average": 6.7
+            },
+            {
+              "seconds": 12.8,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 39,
+              "steps": 46,
+              "load_average": 14.3
+            }
+          ]
+        },
+        "release": {
+          "targets": 2,
+          "runs": [
+            {
+              "seconds": 5.0,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 2,
+              "steps": 7,
+              "load_average": 12.7
+            },
+            {
+              "seconds": 3.6,
+              "compiled": 1,
+              "archived": 1,
+              "linked": 2,
+              "steps": 7,
+              "load_average": 12.0
+            }
+          ]
+        }
+      },
+      "module_set": {
+        "debug": {
+          "static_libraries": [
+            "gui-quick",
+            "gui-quickplugin"
+          ],
+          "plugins": 1,
+          "resource_objects": 8,
+          "init_objects": 1,
+          "qmlcache_units": 94,
+          "batch_units": 0,
+          "archive_bytes": {
+            "gui-quick": 470181040,
+            "gui-quickplugin": 772016
+          },
+          "telar_gui_bytes": 67479896
+        },
+        "release": {
+          "static_libraries": [
+            "gui-quick",
+            "gui-quickplugin"
+          ],
+          "plugins": 1,
+          "resource_objects": 8,
+          "init_objects": 1,
+          "qmlcache_units": 94,
+          "batch_units": 10,
+          "archive_bytes": {
+            "gui-quick": 47479080,
+            "gui-quickplugin": 34872
+          },
+          "telar_gui_bytes": 22365688
+        }
+      },
+      "release_batch_units": {
+        "units": 10,
+        "sources": 114
+      }
+    }
   }
 }
