@@ -339,7 +339,6 @@
     "src/runtime/platform/session_host/session_host.cppm": "telar.runtime.platform.session_host",
     "src/runtime/redirect/direction/direction.cppm": "telar.runtime.redirect.direction",
     "src/runtime/platform/signals/signals.cppm": "telar.runtime.platform.signals",
-    "src/runtime/tools/agent_oracle/agent_oracle.cppm": "telar.runtime.tools.agent_oracle",
     "src/runtime/runtime/tests/client_peer/client_peer.cppm": "telar.runtime.runtime.tests.client_peer",
     "src/runtime/runtime/tests/clipboard_task/clipboard_task.cppm": "telar.runtime.runtime.tests.clipboard_task",
     "src/runtime/tools/control_clipboard_fixture/control_clipboard_fixture.cppm": "telar.runtime.tools.control_clipboard_fixture",

@@ -436,9 +436,8 @@ failure modes. The Neovim integration test runs when `nvim` is available and is
 reported as skipped otherwise. It checks a filename containing spaces and a
 quote, cursor position, and rejection of a stale process identity.
 
-`runtime-probe`, `services-probe`, `reporter-probe` and `graphics-probe` talk
-to actual daemon sockets. The default build and `just runtime-test` skip every
-probe CTest does not run; build them with
+`runtime-probe` talks to actual daemon sockets. The default build and
+`just runtime-test` skip every probe CTest does not run; build them with
 `cmake --build out/dev --target runtime-probes`. Only nondeterministic
 identities, timestamps and explicitly documented fixture paths are
 canonicalized.

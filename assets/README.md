@@ -15,11 +15,9 @@ Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
 without requiring a system installation. Only `Regular` is available;
 bold and italic terminal attributes use the existing synthesized styles.
 It retains the SIL Open Font License 1.1 and copyright notices; the license
-text is in `TelarForma-OFL.txt`. Rebuild it with `uv run tools/build_forma.py`
-from the pinned bundled base and `TelarForma-glyphs.json`. The JSON stores
-the 402 approved glyph overrides as coordinates, contour ends, point flags
-and horizontal metrics, so rebuilding preserves the approved outlines
-without depending on installed fonts or rasterizer versions.
+text is in `TelarForma-OFL.txt`. `TelarForma-glyphs.json` stores the 402
+approved glyph overrides as coordinates, contour ends, point flags and
+horizontal metrics.
 
 Text rasterization links FreeType 2.13.2 from the source archive pinned in
 `src/gui/cmake/fonts.cmake`. Portions of this software are copyright © 2023 The FreeType
@@ -141,14 +139,9 @@ bar box-filters it into the icon atlas at cell size, sixteen
 premultiplied-alpha bilinear taps per pixel, and keeps its alpha so the host
 composes it over whatever it paints behind the bar.
 
-`tools/build_brand_icons.py` renders both, the macOS `.icns` (16 to 64 px
-from the mark, 128 to 1024 px from the icon), the Linux PNG and the site's
-brand files from these sources. The hashes above come from librsvg 2.63.2
-and Pillow 12.2.0:
-
-```sh
-uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
-```
+The macOS `.icns` (16 to 64 px from the mark, 128 to 1024 px from the
+icon), the Linux PNG and the site's brand files are rendered from these
+sources. The hashes above come from librsvg 2.63.2 and Pillow 12.2.0.
 
 ## Sidebar provider symbols
 
@@ -202,9 +195,5 @@ the no-op full-size mask and clip, paints the frame white for tinting and the
 inner block white at 31% opacity, the ratio of those two greys; the file's
 SHA-256 is `95d1509e96cececc54baf28a6285b69877ca2d9108dfbe6f09a0de735056bb41`.
 
-Regenerate with librsvg 2.62.3 and Pillow 12.2.0 (librsvg 2.63.0 produces
-the same bytes):
-
-```sh
-uv run --no-project --with pillow==12.2.0 python tools/build_provider_symbols.py
-```
+It was rendered with librsvg 2.62.3 and Pillow 12.2.0 (librsvg 2.63.0
+produces the same bytes).

@@ -91,8 +91,6 @@ telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-mode
   TEST LABELS gui.foundation.core TIMEOUT 30)
 telar_add_test(gui-color-test SOURCES color_test.cpp LIBRARIES gui-foundation-core
   TEST gui-color LABELS gui.foundation.core)
-telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core gui-foundation-terminal
-  CHECKS lint lifetime blank_lines)
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
   CHECKS lint lifetime blank_lines)
 telar_add_test(gui-awake-clock-test SOURCES awake_clock_test.cpp LIBRARIES gui-foundation-system gui-platform
@@ -272,16 +270,9 @@ if(TELAR_GUI_NATIVE)
       target_compile_options(gui-clipboard-image-source-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    pkg_check_modules(GUI_WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
-    telar_add_test(gui-clipboard-wayland-lifecycle-server NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_lifecycle_server.c LIBRARIES PkgConfig::GUI_WAYLAND_SERVER
-      CHECKS lint lifetime blank_lines)
-    telar_add_test(gui-clipboard-wayland-lifecycle-probe NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_lifecycle_probe.cpp LIBRARIES gui-platform-native Qt6::Core gui-platform
-      CHECKS lint lifetime blank_lines)
     telar_add_test(gui-clipboard-wayland-provider QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_provider.cpp LIBRARIES Qt6::Quick
       CHECKS lint lifetime blank_lines)
     telar_add_test(gui-clipboard-wayland-probe QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_probe.cpp LIBRARIES gui-clipboard-images Qt6::Quick gui-features-machines
-      CHECKS lint lifetime blank_lines)
-    telar_add_test(gui-clipboard-wayland-owned-probe QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_owned_probe.cpp LIBRARIES gui-clipboard-images Qt6::Quick PkgConfig::GUI_WAYLAND_CLIENT gui-features-machines
       CHECKS lint lifetime blank_lines)
     target_include_directories(gui-clipboard-wayland-probe PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     set_target_properties(gui-clipboard-wayland-provider gui-clipboard-wayland-probe PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
@@ -416,8 +407,6 @@ if(TELAR_GUI_NATIVE)
     FILES fixtures/metrics-variable.ttf fixtures/metrics-collection.ttc fixtures/metrics-wide-glyph.ttf)
   telar_add_test(gui-configuration-source-test QT SOURCES configuration_source_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-configuration-source LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-configuration-reload-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/configuration_reload_probe.cpp LIBRARIES gui-quick gui-quickplugin
-    CHECKS lint lifetime blank_lines)
   telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-test-fixtures
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-key-adapter-test SOURCES key_adapter_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-foundation-system gui-keyboard gui-platform

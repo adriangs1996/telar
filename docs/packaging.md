@@ -81,13 +81,8 @@ cannot share `Contents/MacOS`.
 
 The icon comes from two sources drawn for different sizes:
 `assets/telar-mark.svg` for 16 to 64 px and `assets/telar-icon.svg`
-for 128 to 1024 px. One script renders the iconset, runs `iconutil` and
-also writes `packaging/linux/telar.png`, the top bar mark and the site's
-brand files:
-
-```sh
-uv run --no-project --with pillow==12.2.0 python tools/build_brand_icons.py
-```
+for 128 to 1024 px. The iconset, `packaging/linux/telar.png`, the top bar
+mark and the site's brand files are rendered from them and checked in.
 
 A local build signs nothing beyond the linker's ad hoc signature, which is
 enough on the machine that built it. The [release workflow](#releases) signs

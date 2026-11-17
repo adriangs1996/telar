@@ -51,6 +51,6 @@ sources; keep it that way when behavior changes.
 128 px and up), `telar-icon-small.svg` (the weaver alone, favicon and
 sidebar, 64 px and below), the one-color `telar-mark*.svg`, and PNG renders
 at 1024 and 512. `app/icon.svg` and `app/apple-icon.png` are what Next.js
-serves as favicons. They are copies: `tools/build_brand_icons.py` writes
-them from the sources in `assets/`. `brand/icon/` keeps the working
+serves as favicons. They are copies rendered from the sources in
+`assets/`. `brand/icon/` keeps the working
 files of the previous loom icon's design canvas.

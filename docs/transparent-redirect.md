@@ -366,8 +366,6 @@ and verifies direct connections and loopback flag restoration after cleanup.
 It does not require Internet
 traffic or trust-store changes. VPN, interface-bound application traffic and
 multiple-account native acceptance remain additional checks.
-`check_redirect_lifecycle.py` checks simultaneous helpers and recovery after
-their own process crashes.
 
 The separate process-selection acceptance check is:
 

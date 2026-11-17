@@ -14,11 +14,4 @@ units and doubles the em dash, so its `hhea.advanceWidthMax` is twice the cell
 width. Tests exercise these files without relying on installed
 system fonts or creating a GUI window.
 
-To regenerate the files, install the optional development dependency
-`fontTools` and run:
-
-```sh
-python3 src/gui/tools/generate_font_fixture.py
-```
-
-The checked-in binaries are sufficient for normal builds and tests.
+The binaries are checked in.
