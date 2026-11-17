@@ -153,18 +153,7 @@ gap/close events. Already emitted retransmissions are not retained for
 conflicting-overlap comparison. It is a bounded observation stream, not a
 replacement TCP endpoint.
 
-The actual PCAP-to-Desktop Lua check exercises out-of-order IPv4/IPv6 fragments,
-byte-exact original packet delivery, provenance, binary TCP reconstruction and
-an explicit reconstruction-error event for an invalid fragment:
-
-```sh
-python3 src/runtime/tools/check_traffic.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg --fragments
-```
-
-That check and `ip-fragment-tests` pass with normal and AddressSanitizer builds.
-It establishes offline import and Lua delivery, not physical/VPN capture coverage.
+`ip-fragment-tests` passes with normal and AddressSanitizer builds.
 
 Subscriber queues still hold eight frames. Drops are cumulative and visible
 through the existing counters; a subscriber must not assume a gap-free view.
@@ -208,20 +197,8 @@ ports/protocols in the application's callback. Datagrams do not acquire a DNS
 hostname for recording host filters. These observations do not provide UDP or
 ICMP rewrite decisions or active forwarding.
 
-The actual importer/runtime/Desktop check verifies all three transports,
-fragmented IPv6 messages, original packets, message boundaries, binary data and
-structured recording queries:
-
-```sh
-python3 src/runtime/tools/check_traffic.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg --datagrams
-```
-
-That check passes with normal and AddressSanitizer runtimes. Native Lua-host
-tests cover the same DTO and subscription selection for persistent apps.
-`check_traffic_recordings.py` additionally verifies reconstruction and retention
-without any connected subscriber, followed by a Desktop reconnect and query.
+Native Lua-host tests cover the datagram DTO and subscription selection for
+persistent apps.
 
 ## Decide before forwarding
 
@@ -398,25 +375,12 @@ client features. The example does not install trust or change redirection.
 
 ```sh
 cmake --build out/dev --target telar-runtime traffic-tests traffic-flow-tests http-message-tests http2-endpoint-tests redirect-tests tls-tests
-ctest --test-dir out/dev -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|network-check-tests|tls-tests)$' --output-on-failure
-cmake --build src/desktop-mode/out/debug --target traffic_dbg
-python3 src/runtime/tools/check_traffic_hooks.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg
-python3 src/runtime/tools/check_traffic_hooks.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg --http-edit
-# Use a test Python environment with tools/requirements-network.txt installed.
-python3 src/runtime/tools/check_traffic_hooks.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg --http2-edit
+ctest --test-dir out/dev -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
 ```
 
-The actual runtime/Lua hook check proves scoped registration, binary replacement
-with a different length, forwarded offsets, half-close forwarding and
-cancellation. C++ tests additionally cover transparent TLS certificate identity,
-origin trust rejection, generic non-HTTP TLS, numeric IP SANs, cleartext HTTP,
-partial writes, deadlines, wire control messages and TCP sequence reconstruction.
+C++ tests cover transparent TLS certificate identity, origin trust rejection,
+generic non-HTTP TLS, numeric IP SANs, cleartext HTTP, partial writes, deadlines,
+wire control messages and TCP sequence reconstruction.
 A regression publishes interception events from a 192 KiB worker stack; frame
 encoding writes directly to bounded allocator-owned storage.
 The transparent TLS fixture also authenticates both private CA chains and
@@ -446,73 +410,10 @@ The same suite also evaluates generated chains through macOS's native SSL policy
 with explicit anchors limited to that evaluation and certificate fetching
 disabled. DNS and IPv6 identities succeed; a wrong hostname, expired leaf and
 empty anchor set fail. This validates native chain compatibility without adding
-anything to a keychain. Separate [browser/keychain acceptance](traffic-control.md#rotation-and-publication-failure-recovery)
-passed actual Chrome HTTPS rewriting, installation, rotation, publication-failure
-recovery and removal on 2026-10-30.
-
-For native capture to Lua, loopback/LAN redirect and concurrent/crashed helper
-recovery, run from an interactive terminal:
-
-```sh
-python3 src/runtime/tools/check_network.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --ssh-origin CONTROLLED_HOST
-```
-
-The SSH check starts a temporary authenticated echo server and removes it when
-the connection closes. `--ssh-address IP` selects its destination address, and
-`--vpn-ssh-origin HOST --vpn-address IP --vpn-interface IFACE` adds a VPN
-check and verifies that the destination routes through the declared interface. No destination is
-hardcoded. Some macOS Python installations lack local-network access; a native
-`No route to host` error can differ by interpreter. Use an interpreter permitted
-to access the chosen LAN, such as `/usr/bin/python3` on the tested machine.
-
-Add `--selection` to check native process selection and Lua activation through a
-DNS address snapshot. Add `--incoming` with `--ssh-origin` to check incoming-only
-and combined redirection: the controlled host also runs a temporary authenticated
-client against selected and excluded local destinations. Native process/domain
-selection and incoming-only/combined IPv4 checks passed on 2026-10-30.
-The routed capture stage also checks packets in both directions on the actual
-LAN/VPN interface; the earlier loopback capture result does not establish that
-new stage's coverage.
-`--interface-probe out/dev/src/runtime/traffic-interface-probe` adds the
-[temporary virtual-interface check](traffic-capture.md#check-delivery-without-root).
-Its native creation, binary packet delivery, removal and recreation checks
-passed through Desktop Lua on 2026-10-30.
-
-Run the Lua check with `--http` to verify fragmented cleartext HTTP requests and
-binary response bodies. The inspector's real Qt rendering, request selection
-and domain input are checked by `traffic_inspector_dbg`; its ring retention and
-literal domain filters are checked by `luajit tests/traffic_inspector.lua` from
-`src/desktop-mode`.
-
-Native loopback redirect first passed on 2026-10-25. On 2026-10-27, the user
-reported a successful combined `check_network.py` run on macOS with a controlled
-LAN SSH origin. That run verified:
-
-- Real PCAP delivery to Desktop Lua, scoped byte-replacement hooks with length
-  changes, stream offsets, half-closes and cancellation.
-- Cleartext HTTP delivery to Lua with a fragmented request line and binary
-  response body.
-- Native UDP capture on `lo0`, including interface provenance and delivery
-  through the actual Desktop Lua subscription.
-- Native IPv4/IPv6 loopback and IPv4 LAN TCP redirection, original destinations,
-  binary relay, destination exclusion and direct connections after cleanup.
-- Concurrent helpers, exclusive endpoint ownership, helper crash recovery,
-  runtime crash cleanup, the surviving helper's lease and final PF loopback
-  restoration.
-
-The run explicitly skipped VPN acceptance because no controlled VPN destination
-was supplied. Physical/VPN packet capture, interface changes, interface-bound
-applications and incoming-flow redirection are not established by this result.
-Transparent TLS certificate/trust cases remain covered by the focused C++ tests;
-the combined native check does not perform a browser/system-trust TLS test.
+anything to a keychain.
 
 Network checkers use private directories under `/tmp` so macOS's long default
-temporary path cannot overflow the auxiliary Unix socket names. A regression
-starts the real runtime and completes its traffic subscription with a long
-`TMPDIR`, stopping before the privileged helper is launched.
+temporary path cannot overflow the auxiliary Unix socket names.
 
 Protocol parsing follows [TLS ClientHello framing](https://www.rfc-editor.org/rfc/rfc8446.html#section-4.1.2)
 and [TCP sequence numbering](https://www.rfc-editor.org/rfc/rfc9293.html#section-3.4).

@@ -365,11 +365,8 @@ and verifies direct connections and loopback flag restoration after cleanup.
 It does not require Internet
 traffic or trust-store changes. VPN, interface-bound application traffic and
 multiple-account native acceptance remain additional checks.
-`check_network.py` combines native capture/Lua, optional controlled SSH echo
-destinations and `check_redirect_lifecycle.py` for simultaneous helpers and
-recovery after their own process crashes. See [verification](traffic-flows.md#verification).
-The user reported that combined check passing with a controlled LAN origin on
-2026-10-27; VPN was explicitly skipped.
+`check_redirect_lifecycle.py` checks simultaneous helpers and recovery after
+their own process crashes.
 
 The separate process-selection acceptance check is:
 

@@ -7,14 +7,29 @@ import json
 import os
 import pathlib
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
+import traceback
 
 from check_redirect import diagnose, exchange, loopback_status, shutdown
-from check_traffic import diagnostics_directory
 from network_origin import LocalOrigin, RemoteOrigin, controlled_address
+
+
+@contextlib.contextmanager
+def diagnostics_directory():
+    root = pathlib.Path(tempfile.mkdtemp(prefix="telar-traffic-", dir="/tmp")).resolve()
+    try:
+        yield root
+    except Exception:
+        (root / "failure.log").write_text(traceback.format_exc())
+        print(f"Traffic diagnostics preserved at {root}", flush=True)
+        raise
+    else:
+        shutil.rmtree(root)
 
 
 CLIENT = r'''

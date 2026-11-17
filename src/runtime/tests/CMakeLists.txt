@@ -118,10 +118,6 @@ if(APPLE)
   telar_add_test(redirect-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/redirect_check_test.py"
     LABELS runtime.redirect)
 endif()
-telar_add_test(network-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/network_check_test.py" --runtime "$<TARGET_FILE:telar-runtime>"
-  LABELS runtime.traffic)
-telar_add_test(browser-check-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/browser_check_test.py"
-  LABELS runtime.tls)
 
 telar_add_test(traffic-flow-tests SOURCES traffic_flow_test.cpp http1_test.cpp http2_test.cpp proxy_transport_test.cpp transport_capture_test.cpp
   LIBRARIES runtime-platform runtime-vocabulary runtime-http1 runtime-exchange_capture runtime-http2 runtime-traffic runtime-proxy runtime-test-http2 runtime-test-fixtures

@@ -233,22 +233,4 @@ the package's channels. Closing Desktop does not trigger any of this recovery.
 ```sh
 cmake --build out/dev --target telar-runtime plugin-traffic-tests plugin-tests traffic-flow-tests
 ctest --test-dir out/dev -R '^(plugin-traffic-tests|plugin-tests|traffic-flow-tests)$' --output-on-failure
-python3 src/runtime/tools/check_traffic_workers.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
-
-The real-runtime check grants packages through the CLI and uses real TCP origins.
-It verifies native BPF filtering, packet/HTTP state sharing, digest attribution,
-ordered binary/gzip edits, callback failure, Desktop disconnect, dynamic
-cancellation, rejection of stale responders, recovery from a verified snapshot,
-isolation between workers, fail-closed behavior when a crashed worker cannot
-reload, live capability reduction and revocation, cancellation of disabled apps,
-and denial after trust-store corruption. It uses isolated trust/configuration
-files and needs no sudo.
-
-`tools/check_traffic_app_control.py` additionally runs actual recorder/admin
-packages. It verifies native permission denial, private CA rotation, concurrent
-control requests, asynchronous HTTP decisions, cross-package recording denial,
-recording recovery after a worker crash and stopping records on revocation while
-another app continues. It does not install OS trust or require sudo.

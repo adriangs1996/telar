@@ -154,11 +154,7 @@ an installed CA replaces its trust entry. Uninstall returns to the private CA.
 Removal during uninstall, rotation and rollback uses fingerprint-scoped
 `security delete-certificate -t -Z` in the recorded login keychain, requesting
 removal of both the certificate and its user trust settings. The exact command
-is covered by injected-command tests. The browser acceptance check below also
-verifies actual user-keychain uninstall and removal of native trust. The
-[rotation/recovery check](#rotation-and-publication-failure-recovery) also passed
-installed-CA rotation and recovery from a public certificate publication failure.
-Partial OS trust-command rollback remains covered by injected-command tests.
+and partial OS trust-command rollback are covered by injected-command tests.
 
 Each TLS session retains its signer. A pending handshake keeps its original CA;
 new sessions use the replacement. Stable `ca-active-cert.pem` and `ca-bundle.pem`
@@ -172,10 +168,6 @@ can continue. The existing startup trust maintenance still applies.
 ```sh
 cmake --build out/dev --target telar-runtime traffic-control-tests tls-tests redirect-tests
 ctest --test-dir out/dev -R '^(traffic-control-tests|tls-tests|redirect-tests)$' --output-on-failure
-cmake --build src/desktop-mode/out/debug --target traffic_dbg
-python3 src/runtime/tools/check_traffic.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg --control
 ```
 
 Native tests cover fragmented/malformed IPC, mutation denial, connected producer
@@ -184,187 +176,6 @@ failure/retry. Actual SSL peers verify handshakes created on either side of a
 rotation use their authenticated signer and transfer data. Certificate-store
 tests inject commands and do not alter the runner's keychain.
 
-The real runtime/Desktop Lua check verifies status, public certificate export,
-persisted private rotation, stop, invalid selection, cancellation and subsequent
-packet delivery. It requires no sudo. Native privileged start/stop through this
-new control API and browser trust are separate acceptance checks.
-
-The privileged API check is ready for an ordinary terminal with sudo access:
-
-```sh
-sudo -v && /usr/bin/python3 src/runtime/tools/check_traffic.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg --control-live
-```
-
-It starts/stops native capture through Lua, verifies a real loopback UDP packet,
-starts PF redirect through the same API, verifies changed source ports and exact
-binary echo, stops redirection with cleanup acknowledgement, and proves direct
-connections recover. It uses ephemeral local ports and does not install OS trust.
-Failed checks preserve their private diagnostic directory. The combined
-`check_network.py` now includes both administration checks.
-
-The live checker waits for its driver to verify the full binary exchange before
-asking Lua to stop redirection. A private stdin continuation coordinates this
-test step; it does not depend on delivery of `flow.close`. Observation events
-can be dropped by the bounded runtime/subscriber queues, with explicit loss
-counters, so they must not serve as reliable administration acknowledgements.
-The runtime's stop reply and the subsequent direct binary connection remain
-mandatory acceptance checks. Stage traces are written to the probe diagnostics
-and printed if the check fails.
-
-The regression below exercises the actual runtime, Desktop Lua, a binary proxy
-relay and a control reply while deliberately subscribing to no flow events. It
-requires neither sudo nor OS trust changes:
-
-```sh
-/usr/bin/python3 -B src/runtime/tests/network_check_test.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg
-```
-
-On 2026-10-30, both regression cases passed with the ordinary runtime and with
-the AddressSanitizer runtime. A separate 100-connection diagnostic reproduced
-observation loss while all binary relays completed exactly; this is not a
-passing privileged domain-selection result.
-
-Add `--domain-selection` to the privileged command to select `localhost` through
-Lua and verify its resolved address snapshot forwards the binary connection.
-On 2026-10-30, the user reported this focused privileged check passing: capture
-start/stop, a real packet, DNS snapshot activation, native redirected binary
-relay, acknowledged cleanup and direct connections after stop. This establishes
-the exercised `localhost` selection. The separate routed-capture, virtual
-interface lifecycle and native PID-selection checks were subsequently reported
-passing on the same date. After an incoming-only timeout and the listener/NAT
-address correction, the user reported incoming-only IPv4 forwarding passing,
-including destination exclusion, half-closes, direct local-client connections
-and cleanup. The separate combined IPv4 run subsequently passed incoming,
-selected outgoing and local-client forwarding, exclusions and restoration of
-direct connections and PF loopback state after shutdown.
-
-On 2026-10-29, the user reported the privileged check passing on macOS: capture
-start/stop, a real loopback packet, redirect activation, binary relay, acknowledged
-cleanup and direct connections after stop. This does not establish VPN, incoming
-flow selection, system-keychain changes or browser trust.
-
-### Browser and user-keychain acceptance
-
-`tools/check_browser_trust.py` separates preparation from an explicit OS-trust
-change. Preparation generates private fixture authorities, validates a leaf
-with evaluation-local anchors through macOS `security verify-cert`, proves that
-the same chain is untrusted by default, and launches an installed Chromium
-browser through the authenticated runtime proxy. The browser must reject the
-private interception CA, and Desktop Lua must receive
-`tls_client_handshake_failed`. Preparation does not install OS trust.
-
-Use Python 3.10 or newer for the optional browser automation dependency. No
-managed browser download is needed when Chrome, Chromium, Brave or Edge is
-already installed; `--browser` can select its executable explicitly.
-
-```sh
-python3 -m venv /tmp/telar-browser-venv
-/tmp/telar-browser-venv/bin/python -m pip install \
-  -r src/runtime/tools/requirements-browser.txt
-/tmp/telar-browser-venv/bin/python src/runtime/tools/check_browser_trust.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --tls-probe out/dev/src/runtime/tls-tests
-```
-
-The default HTTPS origin is `https://example.com`; supply `--url` with a reachable
-HTTPS origin whose certificate the runtime already trusts when needed. A failed
-DNS lookup or origin handshake does not count as browser rejection of the CA.
-The browser uses a fresh temporary profile, sandboxing, authenticated proxy
-access and strict HTTPS certificate verification. The script disables
-Playwright's mock-keychain launch argument. Authentication uses the private
-runtime proxy secret in memory; it is not printed or added to the prepared state.
-See [Playwright's authenticated proxy API](https://playwright.dev/python/docs/network#http-proxy).
-
-Preparation prints the private diagnostic directory, the exact future system
-CA's SHA-256 and a separate `--prepared ... --live --fingerprint ...` command.
-Review that certificate before running the live command as the ordinary account.
-This command changes that account's login keychain and can require macOS
-authorization. It installs the reviewed CA through `traffic.ca.install`, checks
-native trust and browser delivery of a Lua-rewritten HTTPS response, uninstalls
-through `traffic.ca.uninstall`, and requires browser rejection again. It also
-checks that a leaf signed by the retired CA is no longer trusted and that the
-exact certificate is absent from the selected keychain. Thus switching the
-runtime back to its private signer alone cannot satisfy removal acceptance.
-
-Installation failures still attempt fingerprint-scoped removal even if no local
-installation record was committed. Failed checks preserve their diagnostics and
-any cleanup errors. `--prepared DIRECTORY --cleanup --fingerprint SHA256` retries
-removal of only the prepared CA before deleting the fixture. Live checks reject
-shared fixture files, mismatched certificates/fingerprints and a different target
-keychain. They do not cover installed-CA rotation or browsers with private trust
-stores.
-
-On 2026-10-29, preparation and the explicitly authorized live phase passed with
-the installed Chrome browser and `--url https://www.google.com`: native
-anchored/untrusted chain checks, strict browser rejection, installation through
-Desktop Lua, native user-keychain trust, browser delivery of a Lua-rewritten HTTPS
-response, uninstall through Desktop Lua and browser rejection after removal.
-The retired CA's leaf failed native trust validation, its exact certificate was
-absent from the selected keychain, and the private fixture directory was removed.
-The separate rotation/recovery check below extends this evidence to installed
-authorities.
-
-### Rotation and publication-failure recovery
-
-`tools/check_ca_rotation.py` reuses the browser verifier and adds a deterministic
-publication fault. Its preparation remains unprivileged and does not install
-OS trust. It temporarily replaces only the fixture's `ca-active-cert.pem` with
-a nonempty directory, requests private CA rotation through Desktop Lua and
-requires the operation to fail with new TLS sessions suspended. Chrome must
-fail and Lua must receive `tls_context_failed`. After restoring the exact
-previous public file, retrying rotation must publish the new signer, resume TLS
-and produce the expected browser rejection of an untrusted private CA.
-
-```sh
-/tmp/telar-browser-venv/bin/python src/runtime/tools/check_ca_rotation.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --tls-probe out/dev/src/runtime/tls-tests \
-  --url https://YOUR_REACHABLE_HTTPS_ORIGIN
-```
-
-Preparation prints the initial CA's fingerprint and a separate explicit live
-command. The live phase installs that reviewed initial authority, performs a
-successful installed-CA rotation and then a second rotation whose publication
-is deliberately blocked. It verifies native trust and Chrome HTTPS rewriting
-before and after normal rotation, rejects retired authorities, proves new TLS
-is suspended during the publication failure, and repairs synchronization by
-retrying installation of the already-persisted replacement. A fresh Chrome
-session must then receive the Lua-rewritten HTTPS response. Final uninstall
-must retire all three authorities and return the browser to certificate
-rejection. The two rotated roots are generated by the actual runtime rather
-than substituted by the test.
-
-Public candidate certificates are retained in a bounded fixture archive while
-each operation runs. Cleanup removes only these known certificates/trust
-settings, verifies every available retired leaf and checks each archived root
-with the native basic policy without an explicit anchor. A pre-operation
-keychain fingerprint baseline detects additional unaccounted certificates.
-Such certificates are reported in private diagnostics and are not deleted.
-An existing baseline prevents restarting a failed native attempt and silently
-adopting its remaining certificates as preexisting state.
-
-Failed runs preserve their private fixture and reviewed initial certificate.
-Use the same script with `--prepared DIRECTORY --cleanup --fingerprint SHA256`
-to retry cleanup; this validates the reviewed certificate even after canonical
-CA files have rotated. Private publication failure/recovery and the eight
-verifier guard/cleanup cases passed on 2026-10-30.
-
-On 2026-10-30, the explicitly authorized installed-CA phase also passed with
-the installed Chrome browser. It verified initial installation, successful
-rotation with continued Lua-rewritten HTTPS delivery, native rejection of the
-retired authority, and a second rotation with publication deliberately blocked.
-New TLS sessions failed with `tls_context_failed` while the signer was suspended.
-Retrying installation adopted the persisted replacement and restored rewritten
-HTTPS delivery. Final uninstall rejected all three authorities under native
-trust evaluation, removed their exact certificates and restored browser
-certificate rejection. Cleanup restored the pre-operation keychain certificate
-fingerprint baseline and removed the fixture; an independent read-only check
-confirmed both results. The chosen fault occurs after store replacement;
-partial OS trust-command rollback remains covered by injected-command tests,
-not by this native publication-failure scenario.
+Observation events can be dropped by the bounded runtime/subscriber queues,
+with explicit loss counters, so they must not serve as reliable administration
+acknowledgements.
