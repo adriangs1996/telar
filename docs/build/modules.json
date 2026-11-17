@@ -359,7 +359,7 @@
     "src/gui/tests/metrics_fixture/metrics_fixture.cppm": "telar.gui.tests.metrics_fixture",
     "src/gui/tests/plugin_catalog_cases/plugin_catalog_cases.cppm": "telar.gui.tests.plugin_catalog_cases",
     "src/gui/tests/plugin_effect_cases/plugin_effect_cases.cppm": "telar.gui.tests.plugin_effect_cases",
-    "src/gui/tests/session_fixture/session_fixture.cppm": "telar.gui.tests.session_fixture",
+    "src/gui/application/tests/session_fixture/session_fixture.cppm": "telar.gui.application.tests.session_fixture",
     "src/runtime/shell_integration/shell_integration.cppm": "telar.runtime.shell_integration",
     "src/runtime/shell_integration/token/token.cppm": "telar.runtime.shell_integration.token",
     "lib/ebnf/matcher/matcher.cppm": "telar.ebnf.matcher",

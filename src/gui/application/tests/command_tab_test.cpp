@@ -1,0 +1,500 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "foundation/core/memory.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_wire/protocol/pane_io.hpp"
+#include "telar_wire/protocol/runtime.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <initializer_list>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+
+#include <limits.h>
+#include <new>
+
+import telar.testing;
+import telar.gui.tests.allocation_gate;
+import telar.gui.application.tests.session_fixture;
+import telar.gui.application;
+import telar.gui.foundation.actions;
+import telar.gui.features.workbench;
+import telar.config.client;
+
+import telar.gui.features.configuration;
+import telar.wire.layout;
+import telar.wire.runtime;
+import telar.config.core;
+
+namespace {
+
+  using telar::testing::check;
+  using namespace telar;
+  using namespace telar::gui;
+  using namespace telar::gui::features::configuration;
+  using namespace telar::gui::features::workbench;
+  using namespace telar::gui::test;
+  using namespace telar::gui::application::tests::session_fixture;
+
+  template <typename Value>
+  Value requireValue(std::optional<Value> value) {
+    check(value.has_value(), "Required command value is missing");
+
+    return *value;
+  }
+
+  runtime::config::CommandTabView sampleCommand() {
+    runtime::config::CommandTabView command;
+
+    command.arguments[0] = "/bin/echo";
+    command.arguments[1] = "quotes ' \" $HOME $(ignored)";
+    command.arguments[2] = "中";
+    command.count = 3;
+
+    return command;
+  }
+
+  void retainedAndRecentCommandLifetimes() {
+    runtime::config::RetainedCommandTabRegistry commands;
+    runtime::config::LimitNotices limits;
+    const auto command = sampleCommand();
+    const auto fixed = requireValue(commands.keepReference(command.argv(), {}, limits));
+
+    check(fixed.epoch == 0, "configuration commands must receive fixed references");
+    check(commands.keepReference(command.argv(), {}, limits) == fixed, "equivalent command rows must share their storage and reference");
+    commands.seal();
+    constexpr std::size_t argument_bytes = 4096;
+    const std::string argument(argument_bytes, 'x');
+    const std::array<std::string_view, 1> arguments{argument};
+    const auto first = requireValue(commands.keepReference(arguments, "first", limits));
+    constexpr std::size_t command_count = 128;
+
+    for (std::size_t index = 0; index < command_count; ++index) {
+      const auto recent = commands.keepReference(arguments, std::to_string(index), limits);
+
+      check(recent.has_value(), "a callback must regain storage by clearing recent rows");
+    }
+
+    check(!commands.load(first), "a cleared recent reference must never name a newer row");
+    check(commands.load(fixed).has_value() && commands.keepReference(command.argv(), {}, limits) == fixed, "recent clearing must preserve fixed commands and their deduplication");
+  }
+
+  void commandReferencesPreserveBitPatternsAndRejectMalformedIds() {
+    constexpr auto maximum_row_id = std::numeric_limits<std::uint16_t>::max();
+    constexpr runtime::config::CommandTabReference original{.epoch = std::numeric_limits<std::uint32_t>::max(), .id = maximum_row_id};
+    const auto action = commandTabAction(original, std::numeric_limits<std::uint64_t>::max());
+
+    check(requireValue(commandTabReference(action)) == original, "command actions must preserve every epoch and row-id bit");
+
+    auto invalid = action;
+
+    invalid.kind = BindingActionKind::callback;
+    check(!commandTabReference(invalid), "a callback reference must never decode as a command");
+    invalid.kind = BindingActionKind::command_tab;
+    for (const auto identity : std::array{-1, static_cast<int>(maximum_row_id) + 1}) {
+      invalid.reference = identity;
+      check(!commandTabReference(invalid), "out-of-range row IDs must be rejected before narrowing");
+    }
+  }
+
+  void renderRowsRemainValidUntilTheNextRender() {
+    runtime::config::RetainedCommandTabRegistry commands;
+    runtime::config::LimitNotices limits;
+    const auto command = sampleCommand();
+    const auto fixed = requireValue(commands.keepReference(command.argv(), {}, limits));
+
+    commands.seal();
+    commands.beginRender();
+    constexpr std::size_t argument_bytes = 4096;
+    const std::string argument(argument_bytes, 'x');
+    const std::array<std::string_view, 1> arguments{argument};
+    const auto first = requireValue(commands.keepReference(arguments, "first", limits));
+    constexpr std::size_t attempts = 64;
+    bool refused = false;
+
+    for (std::size_t index = 0; index < attempts; ++index) {
+      refused |= !commands.keepReference(arguments, std::to_string(index), limits);
+    }
+
+    check(refused && commands.load(first).has_value(), "a full render must refuse later rows instead of clearing its earlier commands");
+    commands.endRender();
+    commands.beginRender();
+    check(!commands.load(first) && commands.load(fixed).has_value(), "the next render must recover recent capacity without expiring fixed commands");
+    commands.endRender();
+  }
+
+  void callbackCommandsRetainValuesAcrossInvocations() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
+
+    {
+      const application::ConfigurationSourceText source{
+          .source = R"(
+          local command=telar.action.command_tab{command={'echo','fixed'},label='fixed'}
+          local n=0
+          return {api_version=2,client={keybindings={telar.bind({'f'},command),
+            telar.bind({'c'},function()
+              n=n+1;command.command[2]='mutated'
+              return telar.action.command_tab{command={'echo','dynamic '..n},label='callback'}
+            end)}}}
+        )",
+          .directory = {},
+          .profile = {},
+      };
+
+      application::ConfigurationGeneration generation{memory, source};
+      const auto fixed = generation.input().configured[0].action;
+      const auto callback = generation.input().configured[1].action;
+      const auto first = generation.invoke(callback, {}).actions[0];
+
+      check(requireValue(generation.commandTab(first)).arguments[1] == "dynamic 1", "callback commands must retain their own argv");
+      const auto second = generation.invoke(callback, {}).actions[0];
+
+      check(requireValue(generation.commandTab(second)).arguments[1] == "dynamic 2", "later callback values must be captured independently");
+      check(requireValue(generation.commandTab(first)).arguments[1] == "dynamic 1", "command references must survive later callback invocations until their pool epoch expires");
+      auto foreign = first;
+
+      ++foreign.generation;
+      bool obsolete = false;
+
+      try {
+        static_cast<void>(generation.commandTab(foreign));
+      } catch (const std::invalid_argument&) {
+        obsolete = true;
+      }
+
+      check(obsolete, "command references must reject a different configuration generation");
+      check(requireValue(generation.commandTab(fixed)).arguments[1] == "fixed", "callback mutation must preserve configured command values");
+    }
+
+    check(budget.liveBytes() == 0, "command generations must release every injected allocation");
+  }
+
+  void aLargeBatchCanExpireItsEarlierRecentRows() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    const application::ConfigurationSourceText source{
+        .source = R"(
+        local arguments={};for i=1,32 do arguments[i]=string.rep('x',128) end
+        local bindings={}
+        for i=1,19 do bindings[i]=telar.bind_global({string.char(96+i)},telar.action.command_tab{
+          command=arguments,label=string.format('%032d',i)}) end
+        bindings[20]=telar.bind_global({'t'},telar.action.command_tab{
+          command={string.rep('x',2000)},label=string.rep('f',32)})
+        bindings[21]=telar.bind_global({'z'},function()
+          local batch={};for i=1,16 do batch[i]=telar.action.command_tab{
+            command=arguments,label=string.format('%032d',100+i)} end
+          return batch
+        end)
+        return {api_version=2,client={keybindings=bindings}}
+      )",
+        .directory = {},
+        .profile = {},
+    };
+
+    application::ConfigurationGeneration generation{memory, source};
+    constexpr std::size_t callback_index = 20;
+    const auto batch = generation.invoke(generation.input().configured[callback_index].action, {});
+
+    check(batch.length == BindingEffects::maximum_effects, "valid recent commands must not be dropped at the fixed-row budget");
+    const auto first = batch.actions[0];
+    const auto last = batch.actions[batch.length - 1];
+    const auto fixed = generation.input().configured[0].action;
+
+    check(!generation.commandTab(first) && generation.commandTab(last).has_value(), "pool clearing must expire earlier batch references while retaining later commands");
+    check(generation.commandTab(fixed).has_value(), "a large callback batch must preserve its configuration's commands");
+  }
+
+  void commandRequestsPreserveLaunchAndRecoverFromDeliveryFailure() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    Transport transport;
+    TestSession client{memory, transport};
+    const auto command = sampleCommand();
+
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::unavailable, "a command requires an attached focused launch source");
+    openFirstPane(client, transport);
+    transport.reject_create_tab = true;
+    bool rejected = false;
+
+    try {
+      static_cast<void>(application::workbench::createCommandTab(client, command));
+    } catch (const EncodingError&) {
+      rejected = true;
+    }
+
+    transport.reject_create_tab = false;
+    check(rejected && application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "failed delivery must release tab-operation ownership for retry");
+    const auto request = transport.last<CreateTab>();
+
+    check(request.launch.cwd_source == 1 && request.label == "echo", "a command tab must inherit its focused pane's cwd and resolve its label");
+    check(request.launch.arguments.size() == command.count && request.launch.arguments[1] == command.arguments[1] && request.launch.arguments[2] == command.arguments[2], "tab requests must preserve argv boundaries without shell interpretation");
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy && transport.count(ClientTag::create_tab) == 1, "a pending tab operation must refuse a second command");
+    const TabLocation created{.workspace = request.workspace, .tab_id = 2};
+
+    deliver(client, TabCreated{.request_id = request.request_id, .location = created, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
+    check(sameTab(client.activeTab()->location, created) && client.focusedPane()->id == 2, "a confirmed command tab must become active");
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "confirmation must release tab-operation ownership");
+  }
+
+  std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, bool discover_before_confirmation) {
+    SystemAllocator system;
+    BudgetAllocator counted{system, std::numeric_limits<std::size_t>::max()};
+    AllocationGate gate{counted};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
+    Transport transport;
+    std::size_t allocations = 0;
+
+    {
+      TestSession client{memory, transport};
+
+      openFirstPane(client, transport);
+      application::workbench::createTab(client);
+      const auto request = transport.last<CreateTab>();
+      constexpr std::string_view discovered_application = "foreground_process_requiring_heap_storage";
+
+      if (discover_before_confirmation) {
+        const std::array panes{TabPane{.pane_id = 2, .foreground = discovered_application}};
+        const std::array descriptors{
+            TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1},
+            TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 1, .panes = panes},
+        };
+
+        deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
+      }
+
+      const auto previous_count = client.tabs().size();
+      const auto before = counted.allocations();
+
+      gate.permit(budget);
+      bool rejected = false;
+
+      try {
+        deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = 2}, .position = 1, .label = "command", .root_pane_id = 2, .pane_generation = 1});
+      } catch (const std::bad_alloc&) {
+        rejected = true;
+      }
+
+      allocations = counted.allocations() - before;
+      gate.permit(std::nullopt);
+      if (budget) {
+        check(rejected && client.tabs().size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
+        if (discover_before_confirmation) {
+          check(application::tabApplicationName(*client.tabs().back(), nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
+        }
+      } else {
+        check(!rejected && client.tabs().size() == 2 && client.focusedPane()->id == 2, "a complete allocation budget must adopt the confirmed command");
+        if (discover_before_confirmation) {
+          check(application::tabApplicationName(*client.activeTab(), client.focusedPane()) == discovered_application, "confirmation must preserve the discovered foreground for the newly adopted pane");
+        }
+      }
+    }
+
+    check(counted.liveBytes() == 0, "partial command adoption must release every allocation");
+
+    return allocations;
+  }
+
+  void commandAdoptionIsAtomicAcrossAllocationFailures() {
+    for (const bool discover_before_confirmation : {false, true}) {
+      const auto allocations = adoptCommandWithAllocationBudget(std::nullopt, discover_before_confirmation);
+
+      for (std::size_t permitted = 0; permitted < allocations; ++permitted) {
+        static_cast<void>(adoptCommandWithAllocationBudget(permitted, discover_before_confirmation));
+      }
+    }
+  }
+
+  void discoveryBeforeConfirmationDoesNotDuplicateTheCreatedTab() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    const auto command = sampleCommand();
+
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "a command must start its correlated tab operation");
+    const auto request = transport.last<CreateTab>();
+    const std::array descriptors{
+        TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1, .label = "source"},
+        TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 1, .label = "echo"},
+    };
+
+    deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
+    check(client.tabs().size() == 2 && client.focusedPane()->id == 1, "discovery may expose a tab's metadata without adopting its pane or focus");
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "discovery must not complete the creation request");
+    deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = 2}, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
+    check(client.tabs().size() == 2 && client.focusedPane()->id == 2, "confirmation must adopt an unloaded discovered tab without duplication");
+  }
+
+  void confirmationCannotReplaceALiveTab() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    application::workbench::createTab(client);
+    const auto request = transport.last<CreateTab>();
+    bool rejected = false;
+
+    try {
+      deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = 1}, .position = 0, .label = "incorrect", .root_pane_id = 3, .pane_generation = 1});
+    } catch (const EncodingError&) {
+      rejected = true;
+    }
+
+    check(rejected && client.tabs().size() == 1 && client.focusedPane()->id == 1, "a correlated reply must not replace an already adopted tab");
+  }
+
+  void openThreeTabs(application::Session& client, Transport& transport) {
+    openFirstPane(client, transport);
+    for (std::uint16_t position = 1; position <= 2; ++position) {
+      application::workbench::createTab(client);
+      const auto request = transport.last<CreateTab>();
+      const auto identity = static_cast<std::uint64_t>(position) + 1;
+
+      deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = identity}, .position = position, .label = "command", .root_pane_id = identity, .pane_generation = 1});
+    }
+  }
+
+  void commandsShareOperationOwnershipWithRenameMoveAndClose() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openThreeTabs(client, transport);
+    const auto command = sampleCommand();
+
+    application::workbench::renameTab(client, "renamed");
+    const auto rename = transport.last<RenameTab>();
+
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "rename and command creation must share tab-operation ownership");
+    deliver(client, TabRenamed{.request_id = rename.request_id, .location = rename.location, .label = "renamed"});
+    application::workbench::moveTab(client, TabMoveDirection::previous);
+    const auto move = transport.last<MoveTab>();
+
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "moving a tab must retain ownership until its confirmation");
+    deliver(client, TabMoved{.request_id = move.request_id, .location = move.location, .position = 1});
+    check(client.activeTab()->position == 1, "the runtime's confirmed position must be adopted");
+    for (const auto& tab : client.tabs()) {
+      if (tab->location.tab_id == 2) {
+        check(tab->position == 2, "moving one tab must shift its displaced neighbor");
+      }
+    }
+
+    application::workbench::closeTab(client, client.activeTab()->location);
+    const auto close = transport.last<CloseTab>();
+
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "closing a tab must retain the same operation owner");
+    deliver(client, RequestFailed{.request_id = close.request_id, .code = FailureCode::invalid_request, .message = "close failed"});
+    check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "a rejected operation must allow the next command tab");
+  }
+
+  void draggingRetainsTheExplicitSourceAndCanonicalOperationOwner() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openThreeTabs(client, transport);
+    const auto workspace = client.activeTab()->location.workspace;
+    const TabDragMove move{.location = {.workspace = workspace, .tab_id = 1}, .direction = TabMoveDirection::next, .relative_to = 3};
+    const auto source = std::ranges::find_if(client.tabs(), [](const auto& tab) {
+      return tab->location.tab_id == 1;
+    });
+
+    check(source != client.tabs().end(), "the captured source must be present");
+    check(application::workbench::dropTab(client, move), "a drag must move its captured source even when another tab has focus");
+    const auto request = transport.last<MoveTab>();
+
+    check(request.location.tab_id == 1 && request.relative_to == 3 && request.direction == TabMoveDirection::next, "the request must preserve the source and anchor identities");
+    check(client.activeTab()->location.tab_id == 3 && (*source)->position == 0, "a move request must preserve focus and wait for canonical order");
+    check(!application::workbench::dropTab(client, move), "a pending drag must retain the shared tab-operation owner");
+    deliver(client, TabMoved{.request_id = request.request_id, .location = request.location, .position = 2});
+    check((*source)->position == 2 && client.activeTab()->location.tab_id == 3, "confirmation must reorder the captured source without stealing focus");
+
+    auto invalid = move;
+
+    invalid.location.workspace.id += 1;
+    check(!application::workbench::dropTab(client, invalid), "a drag must never move a source from a replaced workspace");
+    invalid = move;
+    invalid.location.tab_id = 4;
+    check(!application::workbench::dropTab(client, invalid), "a retired source must not create a request");
+    invalid = move;
+    invalid.relative_to = move.location.tab_id;
+    check(!application::workbench::dropTab(client, invalid), "a source cannot anchor its own move");
+    invalid.relative_to = 4;
+    check(!application::workbench::dropTab(client, invalid), "a retired destination must not create a request");
+    check(application::workbench::dropTab(client, move), "rejected gestures must leave tab-operation admission available");
+  }
+
+  void closingACommandReturnsToTheAdjacentTab() {
+    struct ClosureCase {
+      std::uint64_t active;
+      std::uint64_t closing;
+      std::uint64_t selected;
+    };
+
+    constexpr auto cases = std::to_array<ClosureCase>({
+        {.active = 1, .closing = 1, .selected = 2},
+        {.active = 2, .closing = 2, .selected = 3},
+        {.active = 3, .closing = 3, .selected = 2},
+        {.active = 3, .closing = 1, .selected = 3},
+    });
+
+    for (const auto& entry : cases) {
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
+      Transport transport;
+      TestSession client{memory, transport};
+
+      openThreeTabs(client, transport);
+      const auto workspace = client.activeTab()->location.workspace;
+
+      application::workbench::selectTab(client, {.workspace = workspace, .tab_id = entry.active});
+      deliver(client, PaneExited{.pane_id = entry.closing, .kind = ExitKind::exited});
+      deliver(client, TabClosed{.location = {.workspace = workspace, .tab_id = entry.closing}});
+      check(client.activeTab()->location.tab_id == entry.selected, "closing a command must preserve surviving focus or select its next neighbor before its previous neighbor");
+    }
+  }
+
+  const telar::testing::Case case_retained_and_recent_command_lifetimes{"command_tab.retained_and_recent_command_lifetimes", retainedAndRecentCommandLifetimes};
+  const telar::testing::Case case_command_references_preserve_bit_patterns_and_reject_malformed_ids{"command_tab.command_references_preserve_bit_patterns_and_reject_malformed_ids", commandReferencesPreserveBitPatternsAndRejectMalformedIds};
+  const telar::testing::Case case_render_rows_remain_valid_until_the_next_render{"command_tab.render_rows_remain_valid_until_the_next_render", renderRowsRemainValidUntilTheNextRender};
+  const telar::testing::Case case_callback_commands_retain_values_across_invocations{"command_tab.callback_commands_retain_values_across_invocations", callbackCommandsRetainValuesAcrossInvocations};
+  const telar::testing::Case case_a_large_batch_can_expire_its_earlier_recent_rows{"command_tab.a_large_batch_can_expire_its_earlier_recent_rows", aLargeBatchCanExpireItsEarlierRecentRows};
+  const telar::testing::Case case_command_requests_preserve_launch_and_recover_from_delivery_failure{"command_tab.command_requests_preserve_launch_and_recover_from_delivery_failure", commandRequestsPreserveLaunchAndRecoverFromDeliveryFailure};
+  const telar::testing::Case case_closing_a_command_returns_to_the_adjacent_tab{"command_tab.closing_a_command_returns_to_the_adjacent_tab", closingACommandReturnsToTheAdjacentTab};
+  const telar::testing::Case case_commands_share_operation_ownership_with_rename_move_and_close{"command_tab.commands_share_operation_ownership_with_rename_move_and_close", commandsShareOperationOwnershipWithRenameMoveAndClose};
+  const telar::testing::Case case_dragging_retains_the_explicit_source_and_canonical_operation_owner{"command_tab.dragging_retains_the_explicit_source_and_canonical_operation_owner", draggingRetainsTheExplicitSourceAndCanonicalOperationOwner};
+  const telar::testing::Case case_discovery_before_confirmation_does_not_duplicate_the_created_tab{"command_tab.discovery_before_confirmation_does_not_duplicate_the_created_tab", discoveryBeforeConfirmationDoesNotDuplicateTheCreatedTab};
+  const telar::testing::Case case_confirmation_cannot_replace_a_live_tab{"command_tab.confirmation_cannot_replace_a_live_tab", confirmationCannotReplaceALiveTab};
+  const telar::testing::Case case_command_adoption_is_atomic_across_allocation_failures{"command_tab.command_adoption_is_atomic_across_allocation_failures", commandAdoptionIsAtomicAcrossAllocationFailures};
+
+}

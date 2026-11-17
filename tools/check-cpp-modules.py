@@ -1224,7 +1224,8 @@ def check_import_rules(files, rules, read):
     """Rule 9: below a folder of `import_rules`, a file imports, of its process's modules, only its
     own module and the ones whose names start with a listed prefix. In src/gui a feature imports
     only foundation, application imports features and foundation, and ui imports application and
-    foundation, so a feature never reaches another one and ui never reaches a feature."""
+    foundation, so a feature never reaches another one and ui never reaches a feature. A test
+    also imports the domain it checks, the support beside it and that of src/<process>/tests."""
     errors, count = [], 0
     for path in sorted(files):
         if not path.endswith(('.cppm', '.cpp', '.hpp', '.h', '.mm')):
@@ -1233,6 +1234,9 @@ def check_import_rules(files, rules, read):
         if not folders:
             continue
         allowed = rules[max(folders, key=len)]
+        tested = re.match(r'src/([^/]+)/(.+?)/tests/', path)
+        if tested:
+            allowed = [*allowed, f'telar.{tested[1]}.{tested[2].replace("/", ".")}', f'telar.{tested[1]}.tests']
         text = COMMENTS_RE.sub('', read(path))
         declaration = DECLARATION_RE.search(text)
         own = declaration[2] if declaration else None
