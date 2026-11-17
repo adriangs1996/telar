@@ -83,8 +83,6 @@ telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-found
   TEST gui-copy-mode LABELS gui.features.terminal.copy_mode TIMEOUT 30)
 telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
   TEST gui-directory-completion LABELS gui.foundation.system TIMEOUT 30)
-telar_add_test(gui-child-mouse-test SOURCES child_mouse_test.cpp LIBRARIES gui-foundation-core gui-features-terminal-input
-  TEST gui-child-mouse LABELS gui.features.terminal.input TIMEOUT 30)
 telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-test-fixtures
   TEST gui-cell-glyphs LABELS gui.foundation.terminal)
 telar_add_test(gui-workbench-layout-test SOURCES layout_test.cpp LIBRARIES gui-features-workbench gui-foundation-model gui-foundation-core

@@ -4,23 +4,18 @@ static_assert(true);
 #endif
 
 #include <cstdint>
-#include <cstdio>
 
 import std;
+import telar.testing;
 import telar.gui.features.terminal.input;
 import telar.wire.vocabulary;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar;
   using namespace telar::gui;
   using namespace telar::gui::features::terminal::input;
-
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
 
   ChildMouseView view() {
     constexpr float origin_x = 100;
@@ -47,11 +42,11 @@ namespace {
     auto release = sample();
 
     release.phase = MousePhase::release;
-    require(gestures[0].deliver(view(), release) == ChildMouseReport{.button = 0, .x = 1, .y = 1, .released = true}, "the first release must retain its own button");
-    require(!gestures[0].owned() && gestures[1].owned() && gestures[2].owned(), "one release must preserve the other button leases");
-    require(gestures[1].cancel(view()) == ChildMouseReport{.button = 1, .x = 1, .y = 1, .released = true}, "cancellation must release the middle button independently");
-    require(gestures[2].cancel(view()) == ChildMouseReport{.button = 2, .x = 1, .y = 1, .released = true}, "cancellation must release the right button independently");
-    require(!gestures[1].cancel(view()) && !gestures[2].cancel(view()), "completed cancellation must not produce duplicate releases");
+    check(gestures[0].deliver(view(), release) == ChildMouseReport{.button = 0, .x = 1, .y = 1, .released = true}, "the first release must retain its own button");
+    check(!gestures[0].owned() && gestures[1].owned() && gestures[2].owned(), "one release must preserve the other button leases");
+    check(gestures[1].cancel(view()) == ChildMouseReport{.button = 1, .x = 1, .y = 1, .released = true}, "cancellation must release the middle button independently");
+    check(gestures[2].cancel(view()) == ChildMouseReport{.button = 2, .x = 1, .y = 1, .released = true}, "cancellation must release the right button independently");
+    check(!gestures[1].cancel(view()) && !gestures[2].cancel(view()), "completed cancellation must not produce duplicate releases");
   }
 
   void identityAndModes() {
@@ -83,7 +78,7 @@ namespace {
       ChildMouseGesture gesture;
 
       gesture.begin(view(), sample());
-      require(!gesture.cancel(changed) && !gesture.owned(), "a stale attachment, pane or tab must consume cancellation without reporting to a replacement");
+      check(!gesture.cancel(changed) && !gesture.owned(), "a stale attachment, pane or tab must consume cancellation without reporting to a replacement");
     }
 
     for (const auto tracking : {MouseTracking::none, MouseTracking::x10, MouseTracking::normal, MouseTracking::button, MouseTracking::any}) {
@@ -97,7 +92,7 @@ namespace {
         const auto released = gesture.cancel(current);
         const auto retainable = sgr && tracking != MouseTracking::none && tracking != MouseTracking::x10;
 
-        require(released.has_value() == retainable && !gesture.owned(), "only matching SGR modes may retain and finish a press");
+        check(released.has_value() == retainable && !gesture.owned(), "only matching SGR modes may retain and finish a press");
       }
     }
   }
@@ -117,16 +112,16 @@ namespace {
     drag.position.y = view().surface.content.bottom();
     const auto expected = ChildMouseReport{.button = static_cast<unsigned>(MouseButton::middle) | ChildMouseProjection::motion, .x = view().columns, .y = view().rows};
 
-    require(gesture.deliver(hidden, drag) == expected, "a hidden pane must preserve and clamp its last displayed content rectangle");
+    check(gesture.deliver(hidden, drag) == expected, "a hidden pane must preserve and clamp its last displayed content rectangle");
     hidden.visible = true;
     const auto moved = gesture.deliver(hidden, drag);
 
-    require(moved && moved->x == 1 && moved->y == view().rows, "visible geometry changes must update the retained projection");
+    check(moved && moved->x == 1 && moved->y == view().rows, "visible geometry changes must update the retained projection");
     auto normal = hidden;
 
     normal.protocol.tracking = MouseTracking::normal;
-    require(!gesture.deliver(normal, drag) && gesture.owned(), "normal tracking must suppress motion without releasing ownership");
-    require(gesture.cancel(normal).has_value(), "a mode-suppressed drag must still retain its final release");
+    check(!gesture.deliver(normal, drag) && gesture.owned(), "normal tracking must suppress motion without releasing ownership");
+    check(gesture.cancel(normal).has_value(), "a mode-suppressed drag must still retain its final release");
   }
 
   void pixelsAndInvalidGeometry() {
@@ -142,29 +137,20 @@ namespace {
     point.position.y += current.surface.cell.y / 2;
     const auto center = ChildMouseProjection::project(current, point);
 
-    require(center && center->x == (current.cell_width_px / 2) + 1U && center->y == (current.cell_height_px / 2) + 1U, "pixel reporting must preserve the exact scaled physical position");
+    check(center && center->x == (current.cell_width_px / 2) + 1U && center->y == (current.cell_height_px / 2) + 1U, "pixel reporting must preserve the exact scaled physical position");
     point.position = {.x = std::numeric_limits<float>::max(), .y = -std::numeric_limits<float>::max()};
     const auto clipped = ChildMouseProjection::project(current, point);
 
-    require(clipped && clipped->x == static_cast<unsigned>(current.columns) * current.cell_width_px && clipped->y == 1, "retained coordinates must clamp before integer conversion");
+    check(clipped && clipped->x == static_cast<unsigned>(current.columns) * current.cell_width_px && clipped->y == 1, "retained coordinates must clamp before integer conversion");
     point.position.x = std::numeric_limits<float>::quiet_NaN();
-    require(!ChildMouseProjection::project(current, point), "non-finite input must not reach integer conversion");
+    check(!ChildMouseProjection::project(current, point), "non-finite input must not reach integer conversion");
     current.surface.cell.y = 0;
-    require(!ChildMouseProjection::project(current, sample()), "invalid cell geometry must not authorize a report");
+    check(!ChildMouseProjection::project(current, sample()), "invalid cell geometry must not authorize a report");
   }
 
-}
+  const telar::testing::Case case_independent_buttons{"child_mouse.independent_buttons", independentButtons};
+  const telar::testing::Case case_identity_and_modes{"child_mouse.identity_and_modes", identityAndModes};
+  const telar::testing::Case case_retained_geometry{"child_mouse.retained_geometry", retainedGeometry};
+  const telar::testing::Case case_pixels_and_invalid_geometry{"child_mouse.pixels_and_invalid_geometry", pixelsAndInvalidGeometry};
 
-int main() {
-  try {
-    independentButtons();
-    identityAndModes();
-    retainedGeometry();
-    pixelsAndInvalidGeometry();
-    std::puts("gui-child-mouse: passed");
-  } catch (const std::exception& error) {
-    std::cerr << "gui-child-mouse: " << error.what() << '\n';
-
-    return 1;
-  }
 }
