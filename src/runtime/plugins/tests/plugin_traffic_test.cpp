@@ -64,7 +64,9 @@ import telar.runtime.traffic.control_backend;
 import telar.base.memory.sensitive;
 import telar.plugins;
 import telar.runtime.http.message;
+import telar.runtime.plugins.service;
 import telar.runtime.plugins.worker;
+import telar.platform.process;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
@@ -617,6 +619,77 @@ return {}
     check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).process_count == traffic::control::Limits::processes);
   }
 
+  // A flow held for a plugin whose callback fails gets the verdict the plugin chose for failure,
+  // and the failure reaches the plugin's observers as a flow error naming the plugin.
+  void workerCrashAppliesFailurePolicy() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-failure.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+    const ExecutablePath executable;
+
+    for (const auto policy : {std::string_view{"reject"}, std::string_view{"allow"}}) {
+      write(entry, R"lua(
+local telar = require('telar')
+local traffic = require('telar.traffic')
+traffic.subscribe({events={flow=true}}, function(err, event)
+  if event and event.kind == 'flow.error' then
+    return {telar.effect.notification{title=event.reason}}
+  end
+end)
+traffic.intercept({stage='stream', host='example.test', visibility='both', timeout_ms=30000, failure=')lua" +
+                       std::string{policy} + R"lua('}, function()
+  error('callback failed')
+end)
+return {}
+)lua");
+      traffic::Service network{memory, std::string{directory.path()} + "/traffic", true};
+      auto identity = specification(true);
+
+      identity.entry.assign(entry);
+      identity.declared.insert(app::Capability::notifications);
+      identity.granted.insert(app::Capability::notifications);
+      const std::array specifications{identity};
+      app::Service plugins{memory, std::span<const app::ServiceSpec>{specifications}, executable.c_str(), {}, &network};
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+      std::uint64_t ticket = 0;
+
+      // The worker registers its interception once it starts: until then flows pass.
+      while (ticket == 0) {
+        check(std::chrono::steady_clock::now() < deadline);
+        ticket = network.intercept({.id = 31, .visibility = traffic::Visibility::plaintext, .host = "example.test"});
+        if (ticket == 0) {
+          std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        }
+      }
+
+      std::array<Byte, 64> replacement;
+      auto decision = network.poll(ticket, replacement);
+
+      while (decision.verdict == traffic::Verdict::pending) {
+        check(std::chrono::steady_clock::now() < deadline);
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        decision = network.poll(ticket, replacement);
+      }
+
+      check(decision.verdict == (policy == "reject" ? traffic::Verdict::reject : traffic::Verdict::allow));
+      bool reported = false;
+
+      while (!reported) {
+        check(std::chrono::steady_clock::now() < deadline);
+        plugins.collect([&](const app::EffectBatch& batch) {
+          reported |= batch.count == 1 && batch.notifications[0].title == "app_callback_error:traffic-fixture";
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+      }
+    }
+
+    check(budget.liveBytes() == 0);
+  }
+
   // A registration as a traffic worker writes it into a reply, valid unless a field is changed.
   struct ForgedRegistration {
     std::uint32_t id = 1;
@@ -762,5 +835,6 @@ return {}
   const telar::testing::Case case_decisions_bounded{"plugin_traffic.decisions_bounded", decisionsBounded};
   const telar::testing::Case case_http_replace_bounded{"plugin_traffic.http_replace_bounded", httpReplaceBounded};
   const telar::testing::Case case_redirect_bounds{"plugin_traffic.redirect_bounds", redirectBounds};
+  const telar::testing::Case case_worker_crash_applies_failure_policy{"plugin_traffic.worker_crash_applies_failure_policy", workerCrashAppliesFailurePolicy};
 
 }
