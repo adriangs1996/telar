@@ -21,8 +21,7 @@ PLATFORMS = ('linux', 'macos')
 # a module name component there.
 GNU_MACROS = {'linux', 'unix'}
 # Rule 5 checks every source in SCOPES except those under a tests/ or tools/ folder and those
-# under these directories. Only whole directories leave the rule: a file that breaks it goes in
-# textual-includes.json until the change that fixes it.
+# under these directories. Only whole directories leave the rule.
 #
 # lib/tbc is TBC, a build tool and not telar code. tbc-lint is a Clang tool: its AST, matchers
 # and diagnostics reach it through the Clang/LLVM headers of the linter toolchain, which offer
@@ -36,10 +35,7 @@ OUTSIDE_RULE_5 = ('lib/tbc/', 'lib/testing/')
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--write-unused-imports', action='store_true',
-                        help=f'rewrite {UNUSED_IMPORTS} with the unused imports found today, then check')
-    arguments = parser.parse_args()
+    argparse.ArgumentParser(description=__doc__).parse_args()
 
     inventory = json.loads((ROOT / 'docs/build/modules.json').read_text())
     files = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard'],
@@ -50,13 +46,8 @@ def main():
     if interfaces != set(inventory['interfaces']):
         raise RuntimeError('Update the interface inventory: ' + str(interfaces ^ set(inventory['interfaces'])))
 
-    # Other changes move imports at the same time, so the allowlist is rewritten before any
-    # other check can stop the run.
     sources = {source: (ROOT / source).read_text() for source in inventory['interfaces']}
-    allowed_reexports = json.loads((ROOT / 'docs/build/reexports.json').read_text())
-    provided = provided_names(sources, inventory['interfaces'], allowed_reexports, inventory['implicit_uses'])
-    if arguments.write_unused_imports:
-        write_unused_imports(unused_import_sites(units, provided))
+    provided = provided_names(sources, inventory['interfaces'], inventory['implicit_uses'])
 
     headers = {name for name in owned if name.endswith(('.h', '.hpp'))}
     boundaries = inventory['textual_boundaries']
@@ -88,18 +79,15 @@ def main():
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
             raise RuntimeError('Missing migrated definition owner: ' + source)
-    allowed = json.loads((ROOT / 'docs/build/textual-includes.json').read_text())
-    includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'],
-                              inventory['library_owners'])
+    check_includes(owned, inventory['macro_headers'], inventory['header_owners'], inventory['library_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
-    reexports = check_reexports(sources, allowed_reexports)
-    unused = check_unused_imports(units, provided, json.loads((ROOT / UNUSED_IMPORTS).read_text()))
+    check_reexports(sources)
+    check_unused_imports(units, provided)
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
           f'{domains} domain targets depending on what they import, '
           f'{tests} tests placed with what they check, '
-          f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
-          f'{owned} headers reached only through their owner module, '
-          f'{reexports} re-exports left, {unused} unused imports left, '
+          f'{len(headers)} justified textual boundaries, no textual include, '
+          f'{owned} headers reached only through their owner module, no re-export, no unused import, '
           f'{namespaced} modules exporting into the namespace of their name')
 
 
@@ -632,10 +620,8 @@ def textual_include_sites(files, macro_headers, owners, libraries, modules):
     return sites
 
 
-def check_includes(files, allowed, macro_headers, owners, libraries):
-    """Rule 5: no #include outside the exceptions. docs/build/textual-includes.json lists, by
-    file, the includes that exist today; the change that removes one removes its entry.
-    `macro_headers` lists the project's macro headers, which include nothing themselves.
+def check_includes(files, macro_headers, owners, libraries):
+    """Rule 5: no #include outside the exceptions. `macro_headers` lists the project's macro headers, which include nothing themselves.
     `libraries` maps each third-party header to the one module whose units include it."""
     errors = []
 
@@ -653,15 +639,9 @@ def check_includes(files, allowed, macro_headers, owners, libraries):
 
     sites = textual_include_sites(files, set(macro_headers), owners, libraries, modules)
 
-    for name in sorted(sites.keys() | allowed.keys()):
-        found, listed = sites.get(name, set()), set(allowed.get(name, ()))
-        errors += [f'{name} includes {spelling}' for spelling in sorted(found - listed)]
-        errors += [f'{name} no longer includes {spelling}; remove it from textual-includes.json'
-                   for spelling in sorted(listed - found)]
+    errors += [f'{name} includes {spelling}' for name, found in sorted(sites.items()) for spelling in sorted(found)]
     if errors:
         raise RuntimeError('Includes outside the exceptions of rule 5:\n  ' + '\n  '.join(errors))
-
-    return sum(len(spellings) for spellings in sites.values())
 
 
 TOKEN_RE = re.compile(r'''
@@ -701,33 +681,17 @@ def reexports_of(text):
             if token == 'import' and found[index - 1] == 'export' and found[index + 1] != ':'}
 
 
-def check_reexports(sources, allowed):
+def check_reexports(sources):
     """Rule 4: no `export import` but that of an own partition, std included. Each file imports
     the modules it names, so its imports show every dependency it really has. Tests and tools
-    are in the rule too. docs/build/reexports.json lists, by file, the re-exports that exist
-    today; the change that removes one removes its entry. `sources` maps each interface to its
-    text."""
-    sites = {}
-    for name, text in sorted(sources.items()):
-        targets = reexports_of(text)
-        if targets:
-            sites[name] = targets
-
-    errors = []
-    for name in sorted(sites.keys() | allowed.keys()):
-        found, listed = sites.get(name, set()), set(allowed.get(name, ()))
-        errors += [f'{name} re-exports {target}; import it where it is named instead'
-                   for target in sorted(found - listed)]
-        errors += [f'{name} no longer re-exports {target}; remove it from reexports.json'
-                   for target in sorted(listed - found)]
+    are in the rule too. `sources` maps each interface to its text."""
+    errors = [f'{name} re-exports {target}; import it where it is named instead'
+              for name, text in sorted(sources.items()) for target in sorted(reexports_of(text))]
     if errors:
         raise RuntimeError('Re-exports against rule 4:\n  ' + '\n  '.join(errors))
 
-    return sum(len(targets) for targets in sites.values())
 
 
-
-UNUSED_IMPORTS = 'docs/build/unused-imports.json'
 IMPORTING_SUFFIXES = ('.cppm', '.cpp', '.hpp', '.h')
 CLASS_KEYS = {'class', 'struct', 'union', 'enum'}
 # A declaration ends its head at the first of these outside angle brackets.
@@ -1201,11 +1165,10 @@ def check_import_rules(files, rules, read):
     return count
 
 
-def provided_names(sources, interfaces, reexports, implicit):
+def provided_names(sources, interfaces, implicit):
     """For each module and each partition, the names whose use makes an import of it needed,
-    as bytes, and its namespaces. A module provides what its interface units export, a
-    partition what it declares, and both what reaches them through the re-exports still listed
-    in reexports.json. `implicit` (`implicit_uses` in modules.json) adds the names a module
+    as bytes, and its namespaces. A module provides what its interface units export and a
+    partition what it declares. `implicit` (`implicit_uses` in modules.json) adds the names a module
     serves without declaring them: the types its specializations and ADL functions apply to,
     and the macros whose expansion names it."""
     own = {}
@@ -1213,14 +1176,11 @@ def provided_names(sources, interfaces, reexports, implicit):
         exported, every, namespaces = declarations(tokens(text), macro_lists(text))
         module = interfaces[source]
         primary = module.split(':')[0]
-        own.setdefault(primary, [set(), set(), set()])
-        own[primary][0] |= exported
-        own[primary][2] |= namespaces
+        own.setdefault(primary, (set(), set()))
+        own[primary][0].update(exported)
+        own[primary][1].update(namespaces)
         if ':' in module:
-            own[module] = [every, set(), namespaces]
-        own[primary][1].update(target for target in reexports.get(source, ()) if target != 'std')
-        if module != primary:
-            own[module][1].update(target for target in reexports.get(source, ()) if target != 'std')
+            own[module] = (set(every), set(namespaces))
 
     errors = []
     for entry in implicit:
@@ -1231,32 +1191,15 @@ def provided_names(sources, interfaces, reexports, implicit):
     if errors:
         raise RuntimeError('Invalid implicit uses in modules.json:\n  ' + '\n  '.join(errors))
 
-    provided = {}
-
-    def provide(module):
-        if module not in provided:
-            names, targets, namespaces = own[module]
-            provided[module] = (set(names), set(namespaces))
-            for target in targets:
-                if target in own:
-                    reached, spaces = provide(target)
-                    provided[module][0].update(reached)
-                    provided[module][1].update(spaces)
-
-        return provided[module]
-
-    for module in own:
-        provide(module)
-
     # A namespace that only one module declares names that module when it qualifies a name, as
     # `cell_layout::wide`, whose declaration the checker may not see; unit_names spells such a
     # use `cell_layout::`.
-    owners = collections.Counter(space for module, (_, _, spaces) in own.items() if ':' not in module for space in spaces)
-    for names, spaces in provided.values():
+    owners = collections.Counter(space for module, (_, spaces) in own.items() if ':' not in module for space in spaces)
+    for names, spaces in own.values():
         names.update(space + '::' for space in spaces if owners[space] == 1)
 
     return {module: (frozenset(name.encode() for name in names), frozenset(name.encode() for name in spaces))
-            for module, (names, spaces) in provided.items()}
+            for module, (names, spaces) in own.items()}
 
 
 # Comments, literals and the header names of includes, which name nothing. A character literal
@@ -1319,29 +1262,14 @@ def unused_import_sites(units, provided):
     return sites
 
 
-def write_unused_imports(sites):
-    (ROOT / UNUSED_IMPORTS).write_text(
-        json.dumps({name: sorted(found) for name, found in sorted(sites.items())}, indent=2) + '\n')
-
-
-def check_unused_imports(units, provided, allowed):
+def check_unused_imports(units, provided):
     """Rule 6: a unit imports only the modules it uses. An import is used when the unit names,
     outside comments and literals, something the module provides (provided_names). Tests and
-    tools are in the rule too. docs/build/unused-imports.json lists, by file, the unused imports
-    that exist today; the change that removes one removes its entry, and
-    `--write-unused-imports` rewrites the list after changes that move imports."""
-    sites = unused_import_sites(units, provided)
-    errors = []
-    for name in sorted(sites.keys() | allowed.keys()):
-        found, listed = sites.get(name, set()), set(allowed.get(name, ()))
-        errors += [f'{name} imports {target} but names nothing it provides; remove the import'
-                   for target in sorted(found - listed)]
-        errors += [f'{name} no longer has an unused import of {target}; remove it from unused-imports.json'
-                   for target in sorted(listed - found)]
+    tools are in the rule too."""
+    errors = [f'{name} imports {target} but names nothing it provides; remove the import'
+              for name, found in sorted(unused_import_sites(units, provided).items()) for target in sorted(found)]
     if errors:
         raise RuntimeError('Imports against rule 6:\n  ' + '\n  '.join(errors))
-
-    return sum(len(targets) for targets in sites.values())
 
 
 if __name__ == '__main__':

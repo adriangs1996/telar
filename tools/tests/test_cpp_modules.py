@@ -45,25 +45,12 @@ export
 
         self.assertEqual(checker.reexports_of(text), {'e'})
 
-    def test_rejects_a_reexport_outside_the_allowlist(self):
+    def test_rejects_a_reexport(self):
         with self.assertRaisesRegex(RuntimeError, 'lib/a/a.cppm re-exports std; import it where'):
-            checker.check_reexports({'lib/a/a.cppm': 'export module a;\nexport import std;\n'}, {})
+            checker.check_reexports({'lib/a/a.cppm': 'export module a;\nexport import std;\n'})
 
-    def test_rejects_an_allowlist_entry_that_no_longer_exists(self):
-        with self.assertRaisesRegex(RuntimeError, 'lib/a/a.cppm no longer re-exports b; remove it'):
-            checker.check_reexports({'lib/a/a.cppm': 'export module a;\nimport b;\n'}, {'lib/a/a.cppm': ['b']})
-
-    def test_counts_the_allowlisted_reexports(self):
-        sources = {
-            'lib/a/a.cppm': 'export module a;\nexport import :p;\nexport import b;\nexport import std;\n',
-            'src/gui/c/c.cppm': 'export module telar.gui.c;\nexport import telar.wire.vocabulary;\n',
-        }
-        allowed = {
-            'lib/a/a.cppm': ['b', 'std'],
-            'src/gui/c/c.cppm': ['telar.wire.vocabulary'],
-        }
-
-        self.assertEqual(checker.check_reexports(sources, allowed), 3)
+    def test_accepts_own_partitions_and_plain_imports(self):
+        checker.check_reexports({'lib/a/a.cppm': 'export module a;\nexport import :p;\nimport b;\n'})
 
     def test_applies_to_tests_and_tools(self):
         sources = {
@@ -72,9 +59,9 @@ export
         }
 
         with self.assertRaisesRegex(RuntimeError, 'src/gui/tests/fixture/fixture.cppm re-exports telar.wire.vocabulary'):
-            checker.check_reexports(sources, {})
+            checker.check_reexports(sources)
         with self.assertRaisesRegex(RuntimeError, 'src/runtime/tools/probe/probe.cppm re-exports std'):
-            checker.check_reexports(sources, {})
+            checker.check_reexports(sources)
 
 
 GEOMETRY = (
@@ -102,15 +89,14 @@ namespace telar {
 ''',
 )
 COLOR = ('telar.base.color', 'export module telar.base.color;\nexport namespace telar { struct Color {}; }\n')
-THEME = ('telar.gui.theme', 'export module telar.gui.theme;\nexport import telar.base.color;\nexport namespace telar::gui { struct Theme {}; }\n')
 
 
-def sites(units, interfaces, reexports=None, implicit=()):
+def sites(units, interfaces, implicit=()):
     """The unused imports of `units`, with `interfaces` mapping each interface file to its module
     and text."""
     sources = {path: text for path, (_, text) in interfaces.items()}
     modules = {path: module for path, (module, _) in interfaces.items()}
-    provided = checker.provided_names(sources, modules, reexports or {}, list(implicit))
+    provided = checker.provided_names(sources, modules, list(implicit))
 
     return checker.unused_import_sites({path: text.encode() for path, text in units.items()}, provided)
 
@@ -197,14 +183,6 @@ export {
                 self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces),
                                  {'src/gui/view/view.cpp': {'telar.sys.process'}})
 
-    def test_a_name_that_reaches_the_module_through_a_listed_reexport_uses_it(self):
-        interfaces = {'lib/base/color/color.cppm': COLOR, 'src/gui/theme/theme.cppm': THEME}
-        reexports = {'src/gui/theme/theme.cppm': ['telar.base.color']}
-        units = {'src/gui/view/view.cpp': unit('telar::Color color;\n', 'telar.gui.theme')}
-
-        self.assertEqual(sites(units, interfaces, reexports), {})
-        self.assertEqual(sites(units, interfaces, {}), {'src/gui/view/view.cpp': {'telar.gui.theme'}})
-
     def test_comments_and_literals_name_nothing(self):
         body = '''// telar::Size
 /* area(size) */
@@ -249,20 +227,18 @@ auto letter = 'a';
         with self.assertRaisesRegex(RuntimeError, 'needs a known module, the names it applies to and a reason'):
             sites(units, interfaces, implicit=[{'module': 'telar.base.formatting', 'names': ['Size']}])
 
-    def test_rejects_an_unused_import_missing_from_the_allowlist(self):
+    def test_rejects_an_unused_import(self):
         units = {'src/gui/view/idle.cpp': unit('int idle;\n', 'telar.base.geometry').encode()}
-        provided = checker.provided_names({'g': GEOMETRY[1]}, {'g': GEOMETRY[0]}, {}, [])
+        provided = checker.provided_names({'g': GEOMETRY[1]}, {'g': GEOMETRY[0]}, [])
 
         with self.assertRaisesRegex(RuntimeError, 'src/gui/view/idle.cpp imports telar.base.geometry but names nothing'):
-            checker.check_unused_imports(units, provided, {})
-        self.assertEqual(checker.check_unused_imports(units, provided, {'src/gui/view/idle.cpp': ['telar.base.geometry']}), 1)
+            checker.check_unused_imports(units, provided)
 
-    def test_rejects_an_allowlist_entry_left_over(self):
+    def test_accepts_a_used_import(self):
         units = {'src/gui/view/view.cpp': unit('telar::Size size;\n', 'telar.base.geometry').encode()}
-        provided = checker.provided_names({'g': GEOMETRY[1]}, {'g': GEOMETRY[0]}, {}, [])
+        provided = checker.provided_names({'g': GEOMETRY[1]}, {'g': GEOMETRY[0]}, [])
 
-        with self.assertRaisesRegex(RuntimeError, 'src/gui/view/view.cpp no longer has an unused import of telar.base.geometry'):
-            checker.check_unused_imports(units, provided, {'src/gui/view/view.cpp': ['telar.base.geometry']})
+        checker.check_unused_imports(units, provided)
 
 
 LAYERS = {'runtime': ['platform', 'terminal', 'http', 'proxy', 'tests']}
