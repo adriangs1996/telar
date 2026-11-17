@@ -104,7 +104,7 @@ def main():
                     runtimes={label: executable_identity(binary) for label, binary in runtimes.items()},
                     platform_archive=executable_identity(args.build.resolve() / 'lib/platform/libtelar-platform.a'),
                     sources={file.name: hashlib.sha256(file.read_bytes()).hexdigest()
-                             for file in (source, Path(__file__), ROOT / 'src/gui/terminal/screen.hpp')})
+                             for file in (source, Path(__file__), ROOT / 'src/gui/foundation/terminal/terminal-screen.cppm')})
     save(output / 'manifest.json', manifest)
     probe = build_probe(args.build.resolve(), output, source, args.sanitize)
     manifest['probe'] = executable_identity(probe)

@@ -34,7 +34,7 @@ def main():
     build = options.build_dir.resolve()
     source = Path(__file__).resolve().parents[1]
     entries = json.loads((build / 'compile_commands.json').read_text())
-    ui_headers = [*sorted((source / 'ui').rglob('*.hpp')), source / 'platform/environment.hpp']
+    ui_headers = sorted((source / 'ui').rglob('*.hpp'))
     test_headers = sorted((source / 'tests').rglob('*.hpp'))
 
     write_header_database(build, entries, ui_headers, source / 'ui/app/application_controller.cpp', 'ui')
