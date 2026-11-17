@@ -580,6 +580,7 @@ namespace {
     expectCode(FailureCode::foreign_process, [&] {
       verification.verify(model.panes, reporter.session(), VerifyPaneDescent{3, pane.id, pane.generation});
     });
+
     expectCode(FailureCode::foreign_process, [&] {
       agents.report(model, reporter.session(), report);
     });
@@ -587,6 +588,8 @@ namespace {
     expectCode(FailureCode::pane_not_found, [&] {
       verification.verify(model.panes, reporter.session(), VerifyPaneDescent{5, pane.id + 100, 1});
     });
+
+    // A pane whose process exited is gone for verification.
     pane.exit_status = 0;
     expectCode(FailureCode::pane_not_found, [&] {
       verification.verify(model.panes, reporter.session(), VerifyPaneDescent{6, pane.id, pane.generation});
