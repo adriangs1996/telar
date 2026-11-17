@@ -39,7 +39,6 @@ namespace telar::gui::qt {
   public:
     enum class DisplayMode : quint8 {
       card,
-      compact,
       pane_chip,
     };
     Q_ENUM(DisplayMode)

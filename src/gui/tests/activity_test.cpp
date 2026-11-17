@@ -141,7 +141,7 @@ namespace {
     Order::write(sources, 0, plan);
     require(allocator.allocations() == allocations, "activity ordering must not allocate");
     require(plan.count == 3 && plan.entries.front().agent == 0 && plan.entries.front().coordinator, "the root agent must own its task and tracked command");
-    require(plan.entries[1].agent == 1 && plan.entries[1].parent == 0 && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task_full, "blocked tasks must be full cards nested under their creator");
+    require(plan.entries[1].agent == 1 && plan.entries[1].parent == 0 && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task, "tasks must be nested under their creator");
     require(!plan.entries[2].agent && plan.entries[2].worktree == 1 && plan.entries[2].parent == 0, "an unrepresented tracked command must remain visible under its creator");
   }
 

@@ -112,7 +112,7 @@ namespace telar::gui::qt {
 
       context.selected = tab != nullptr && agent.pane_id == tab->focused_pane && sameTab(agent.location, tab->location);
       if (entry.worktree) {
-        return taskRecord(agent, session.workspaceList().worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact);
+        return taskRecord(agent, session.workspaceList().worktrees()[*entry.worktree], context);
       }
 
       return agentRecord(agent, context);
@@ -216,9 +216,8 @@ namespace telar::gui::qt {
 
       const auto slot = static_cast<Machines::Slot>(index);
       const auto& session = store_.client(slot).session;
-      const auto* tab = session.activeTab();
 
-      sources.push_back({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList(), .focused = tab == nullptr ? std::nullopt : std::optional{tab->focused_pane}});
+      sources.push_back({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList()});
     }
 
     Order::Plan order;

@@ -27,7 +27,7 @@ Item {
     signal hoverRequested(string key)
 
     implicitWidth: geometry.width
-    implicitHeight: record.compact ? geometry.compactHeight : geometry.height
+    implicitHeight: geometry.height
     enabled: record.enabled ?? true
 
     NativeRoundedRectangle {
@@ -45,7 +45,21 @@ Item {
         borderWidth: root.outlinePhysicalWidth / root.density
         borderColor: root.colors.text
         borderAlpha: ChromeStyle.outlineAlpha
-        visible: root.record.selected ?? false
+        visible: (root.record.selected ?? false) && attention.role.length === 0
+    }
+
+    // An agent that waits on the person tints its card in its state's color, focused or not.
+    NativeRoundedRectangle {
+        id: attention
+        objectName: "agentCardAttention"
+        readonly property string role: root.record.attention ?? ""
+        anchors.fill: parent
+        radius: root.geometry.radius
+        color: role.length > 0 ? Qt.alpha(root.colors[role], root.geometry.attentionAlpha) : "transparent"
+        borderWidth: root.outlinePhysicalWidth / root.density
+        borderColor: role.length > 0 ? root.colors[role] : "transparent"
+        borderAlpha: root.geometry.attentionOutlineAlpha
+        visible: role.length > 0
     }
 
     Rectangle {

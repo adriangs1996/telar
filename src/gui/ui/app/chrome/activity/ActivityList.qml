@@ -32,7 +32,7 @@ ListView {
         required property var record
         required property int index
         readonly property real groupGap: index === 0 ? 0 : record.header ? Math.max(root.sectionGap, root.geometry.groupGap) : record.startsProject ? root.geometry.groupGap : 0
-        readonly property real cardHeight: record.header ? root.headerHeight : record.compact ? root.geometry.compactHeight : record.command || record.task ? root.geometry.height : root.geometry.agentHeight
+        readonly property real cardHeight: record.header ? root.headerHeight : record.command ? root.geometry.height : root.geometry.agentHeight
         readonly property real indentation: Math.min(root.geometry.width / 3, (record.depth ?? 0) * root.geometry.taskIndent)
         readonly property bool animate: y + height > root.contentY && y < root.contentY + root.height
 
@@ -54,7 +54,7 @@ ListView {
             y: entry.groupGap
             width: Math.max(0, root.geometry.width - x)
             height: entry.cardHeight
-            sourceComponent: entry.record.header ? sectionHeader : entry.record.command ? commandCard : entry.record.task ? taskCard : agentCard
+            sourceComponent: entry.record.header ? sectionHeader : entry.record.command ? commandCard : agentCard
         }
 
         Component {
@@ -115,26 +115,6 @@ ListView {
                 onSelected: key => root.selected(key)
                 onPeekRequested: key => root.peekRequested(key)
                 onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
-            }
-        }
-
-        Component {
-            id: taskCard
-
-            TaskCard {
-                id: task
-                objectName: "taskCard"
-                record: entry.record
-                geometry: root.geometry
-                colors: root.colors
-                typography: root.typography
-                ratio: root.ratio
-                animate: entry.animate
-                heldHover: entry.record.key === root.hoverIdentity
-                semanticHover: root.semanticHover
-                onHoverRequested: key => root.hovered(key, task)
-                onSelected: key => root.selected(key)
-                onPeekRequested: key => root.peekRequested(key)
             }
         }
 

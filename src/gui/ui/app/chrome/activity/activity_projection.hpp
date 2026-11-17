@@ -42,32 +42,24 @@ import telar.gui.model.replicas;
 
 namespace telar::gui::qt {
 
+  // An agent in a worktree: its card names the task and trades the project for the worktree's facts.
   template <Allocator Memory>
-  QVariantMap taskRecord(const Agent<Memory>& agent, const Worktree<Memory>& task, const AgentRecordContext& context, bool compact) {
+  QVariantMap taskRecord(const Agent<Memory>& agent, const Worktree<Memory>& task, const AgentRecordContext& context) {
     auto record = agentRecord(agent, context);
-    const auto activity = TaskCardLabels::activity(agent);
-    const auto facts = TaskCardLabels::facts(context.machine, task);
-    const auto parts = TaskCardLabels::factParts(context.machine, task);
-    const auto plan = TaskCardLabels::plan(agent.plan_done, agent.plan_total);
+    const auto title = task.displayName();
+    const auto handle = task.handle();
+    const auto facts = TaskCardLabels::facts(task);
 
     record.insert(QStringLiteral("task"), true);
-    record.insert(QStringLiteral("compact"), compact);
-    record.insert(QStringLiteral("dim"), context.connected && agent.status == AgentStatus::ready);
     record.insert(QStringLiteral("machine"), toQString(context.machine));
-    record.insert(QStringLiteral("taskHandle"), toQString(task.handle()));
-    record.insert(QStringLiteral("title"), toQString(task.displayName()));
-    record.insert(QStringLiteral("facts"), toQString(facts.view()));
-    record.insert(QStringLiteral("factsLead"), toQString(parts.lead.view()));
-    record.insert(QStringLiteral("diffAdded"), toQString(parts.added.view()));
-    record.insert(QStringLiteral("diffRemoved"), toQString(parts.removed.view()));
-    record.insert(QStringLiteral("factsTail"), toQString(parts.tail.view()));
-    record.insert(QStringLiteral("activity"), toQString(activity.text));
-    record.insert(QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(activity.color)]));
-    record.insert(QStringLiteral("showPlan"), activity.plan);
-    record.insert(QStringLiteral("planCells"), static_cast<qulonglong>(plan.cells));
-    record.insert(QStringLiteral("planFilled"), static_cast<qulonglong>(plan.filled));
-    record.insert(QStringLiteral("planCount"), toQString(plan.count.view()));
-    record.insert(QStringLiteral("compactGlyph"), toQString(AgentStatusPresentation::glyph(context.connected ? agent.status : AgentStatus::unknown, agent.blocked_reason)));
+    record.insert(QStringLiteral("title"), toQString(title));
+    // A task titled after its branch would only repeat it.
+    record.insert(QStringLiteral("taskBranch"), title == task.branch || title == handle ? QString{} : toQString(handle));
+    record.insert(QStringLiteral("diffAdded"), toQString(facts.added.view()));
+    record.insert(QStringLiteral("diffRemoved"), toQString(facts.removed.view()));
+    record.insert(QStringLiteral("diffFiles"), toQString(facts.files.view()));
+    record.insert(QStringLiteral("commitsAhead"), toQString(facts.ahead.view()));
+    record.insert(QStringLiteral("commandResult"), toQString(facts.command.view()));
 
     return record;
   }
@@ -119,8 +111,13 @@ namespace telar::gui::qt {
         {QStringLiteral("project"), toQString(AgentCardLabels::project(workspace, context.machine, false, project))},
         {QStringLiteral("detail"), QString{}},
         {QStringLiteral("statusWord"), context.connected ? QString{} : QStringLiteral("offline")},
-        {QStringLiteral("statusGlyph"), QString{}},
         {QStringLiteral("statusColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(AgentStatus::ready))])},
+        {QStringLiteral("badge"), QString{}},
+        {QStringLiteral("attention"), QString{}},
+        {QStringLiteral("signal"), QString{}},
+        {QStringLiteral("signalColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(PaletteRole::overlay1)])},
+        {QStringLiteral("showPlan"), false},
+        {QStringLiteral("contextShare"), 1.0F},
         {QStringLiteral("working"), false},
         {QStringLiteral("statusCode"), static_cast<int>(AgentStatus::ready)},
         {QStringLiteral("blockedReason"), static_cast<int>(AgentBlockedReason::none)},

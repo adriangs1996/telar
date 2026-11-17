@@ -98,9 +98,7 @@ namespace {
   constexpr int wait_ms = 5000;
   constexpr int window_width = 400;
   constexpr int window_height = 224;
-  constexpr auto second = StatusAgeInterval::nanoseconds_per_second;
   constexpr std::uint32_t diff_added = 12;
-  constexpr std::uint64_t almost_a_minute = (59 * second) + (second / 2);
 
   QVariantMap properties(const QVariantMap& record) {
     const ChromeMetrics chrome;
@@ -111,6 +109,10 @@ namespace {
         {QStringLiteral("colors"), themeColors(Configuration{})},
         {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}, {QStringLiteral("title"), chrome.title}}},
     };
+  }
+
+  QString text(QQuickItem& root, const QString& name) {
+    return visualItems(root, name).front()->property("text").toString();
   }
 
   void show(QQuickWindow& window) {
@@ -133,7 +135,7 @@ namespace {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
-    Q_SLOT static void fullTaskShowsFactsPlanAndFinalAnswer() {
+    Q_SLOT static void taskCardShowsFactsPlanAndFinalAnswer() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -151,45 +153,34 @@ namespace {
       task.diff_added = diff_added;
       task.diff_removed = 3;
       task.diff_files = 2;
+      task.commits_ahead = 1;
       task.command_state = CommandState::exited;
       task.command_label = "test";
       QQuickWindow window;
       QQmlEngine engine;
-      auto record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true, .depth = 1}, false);
-      auto card = createChrome(engine, QStringLiteral("TaskCard"), properties(record));
+      auto record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true, .depth = 1});
+      auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(record));
 
       card->setParentItem(window.contentItem());
       card->setSize({window_width, card->implicitHeight()});
       show(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskTitle")).size(), 1, wait_ms);
-      QCOMPARE(record.value(QStringLiteral("facts")).toString(), QStringLiteral("host · \u2387 fix  +12 \u22123 · 2  \u2713 test"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskFactsLead")).front()->property("text").toString(), QStringLiteral("host · "));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskBranchIcon")).front()->property("symbol").toString(), QStringLiteral("git-branch"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskHandle")).front()->property("text").toString(), QStringLiteral("fix"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskAdded")).front()->property("text").toString(), QStringLiteral("+12"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskRemoved")).front()->property("text").toString(), QStringLiteral("\u22123"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskFactsTail")).front()->property("text").toString(), QStringLiteral("· 2  \u2713 test"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskTitle")).front()->property("text").toString(), QStringLiteral("Fix the task"));
-      // The task reads lighter than the agent it hangs from.
-      QVERIFY(!visualItems(*card, QStringLiteral("taskTitle")).front()->property("emphasized").toBool());
-      QVERIFY(visualItems(*card, QStringLiteral("taskTitle")).front()->y() < visualItems(*card, QStringLiteral("taskFacts")).front()->y());
-      QCOMPARE(visualItems(*card, QStringLiteral("taskActivity")).front()->property("text").toString(), QStringLiteral("Compile the changes"));
-      QCOMPARE(visualItems(*card, QStringLiteral("taskPlanCell")).size(), agent.plan_total);
-      QCOMPARE(visualItems(*card, QStringLiteral("taskPlanCount")).front()->property("text").toString(), QStringLiteral("2/4"));
+      QCOMPARE(text(*card, QStringLiteral("agentTitleLabel")), QStringLiteral("Fix the task"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsMachine")), QStringLiteral("host"));
+      QCOMPARE(visualItems(*card, QStringLiteral("agentFactsBranchIcon")).front()->property("symbol").toString(), QStringLiteral("git-branch"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsBranchLabel")), QStringLiteral("fix"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsAdded")), QStringLiteral("+12"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsRemoved")), QStringLiteral("\u22123"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsFiles")), QStringLiteral("· 2"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsAhead")), QStringLiteral("\u21911"));
+      QCOMPARE(text(*card, QStringLiteral("agentFactsCommand")), QStringLiteral("\u2713 test"));
+      QCOMPARE(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Compile the changes"));
+      QCOMPARE(text(*card, QStringLiteral("agentPlanCount")), QStringLiteral("2/4"));
+      QVERIFY(visualItems(*card, QStringLiteral("agentPlanBar")).front()->isVisible());
+      const auto* bar = visualItems(*card, QStringLiteral("agentPlanBar")).front();
+
+      QCOMPARE(visualItems(*card, QStringLiteral("agentPlanProgress")).front()->width(), bar->width() / 2);
       QVERIFY(visualItems(*card, QStringLiteral("activityTreeGuide")).front()->isVisible());
-      const auto plan_image = window.grabWindow();
-
-      QVERIFY(!plan_image.isNull());
-      const auto scale = static_cast<qreal>(plan_image.width()) / window.width();
-
-      for (const auto* cell : visualItems(*card, QStringLiteral("taskPlanCell"))) {
-        const auto center = cell->mapToScene(QPointF{cell->width() / 2, cell->height() / 2});
-        const auto pixel = QPointF{center.x() * scale, center.y() * scale}.toPoint();
-
-        QCOMPARE(plan_image.pixelColor(pixel), cell->property("color").value<QColor>());
-      }
-
       const auto selection = card->metaObject()->method(card->metaObject()->indexOfSignal("selected(QString)"));
       const QSignalSpy selected{card.get(), selection};
       constexpr QPoint title_point{200, 34};
@@ -199,53 +190,104 @@ namespace {
       QCOMPARE(selected.front().front().toString(), QStringLiteral("2"));
       agent.status = AgentStatus::done;
       agent.final_message = "\n \t\n Final answer\t\nmore";
-      record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true}, false);
+      record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true});
       QVERIFY(card->setProperty("record", record));
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskActivity")).front()->property("text").toString(), QStringLiteral("Final answer"), wait_ms);
-      QVERIFY(!visualItems(*card, QStringLiteral("taskPlan")).front()->isVisible());
+      QTRY_COMPARE_WITH_TIMEOUT(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Final answer"), wait_ms);
+      QVERIFY(!visualItems(*card, QStringLiteral("agentPlanBar")).front()->isVisible());
+      QVERIFY(!visualItems(*card, QStringLiteral("agentPlanCount")).front()->isVisible());
       QVERIFY(!visualItems(*card, QStringLiteral("activityTreeGuide")).front()->isVisible());
-      const auto image = window.grabWindow();
-
-      QVERIFY(!image.isNull());
-      qInfo() << "Task card scene graph API:" << static_cast<int>(window.rendererInterface()->graphicsApi());
+      task.title.clear();
+      record = taskRecord(agent, task, {.machine = {}, .branch = {}});
+      // A task named after its branch does not repeat it.
+      QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("worktree-fix"));
+      QVERIFY(record.value(QStringLiteral("taskBranch")).toString().isEmpty());
+      QVERIFY(!window.grabWindow().isNull());
     }
 
-    Q_SLOT static void compactClockChangesModeAndCatchesUp() {
+    Q_SLOT static void taskCardKeepsItsShapeWhileFocusAndStateChange() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
       Worktree task{memory};
 
-      agent.status = AgentStatus::unknown;
+      agent.status = AgentStatus::working;
+      agent.detail = "Reading the cards";
       task.branch = "worktree/fix";
-      task.title = "Compact task";
-      auto record = taskRecord(agent, task, {.machine = "host", .branch = {}}, true);
-
-      record.insert(QStringLiteral("statusClock"), statusAgeValue({.age_ns = almost_a_minute, .sampled_ns = platform::AwakeClock::nowNanoseconds()}));
+      task.title = "Shape";
       QQuickWindow window;
       QQmlEngine engine;
-      auto card = createChrome(engine, QStringLiteral("TaskCard"), properties(record));
+      const auto settings = properties(taskRecord(agent, task, {.machine = {}, .branch = {}}));
+      auto card = createChrome(engine, QStringLiteral("AgentCard"), settings);
 
       card->setParentItem(window.contentItem());
-      card->setSize({window_width, card->implicitHeight()});
       show(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskCompactTitle")).size(), 1, wait_ms);
-      const auto old_clock = QPointer{qobject_cast<NativeAgentStatus*>(visualItems(*card, QStringLiteral("agentStatus")).front())};
+      const auto height = settings.value(QStringLiteral("geometry")).toMap().value(QStringLiteral("agentHeight")).toReal();
+      const auto* attention = visualItems(*card, QStringLiteral("agentCardAttention")).front();
 
-      QVERIFY(old_clock);
-      const auto timers = window.findChildren<QTimer*>(QStringLiteral("agentStatusAnimation"));
+      QCOMPARE(card->implicitHeight(), height);
+      QVERIFY(!attention->isVisible());
+      QCOMPARE(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Reading the cards"));
+      agent.status = AgentStatus::blocked;
+      agent.blocked_reason = AgentBlockedReason::question;
+      agent.detail = "Keep the old snapshots?";
+      QVERIFY(card->setProperty("record", taskRecord(agent, task, {.machine = {}, .branch = {}, .selected = true})));
+      QTRY_VERIFY_WITH_TIMEOUT(attention->isVisible(), wait_ms);
+      QCOMPARE(card->implicitHeight(), height);
+      QCOMPARE(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Keep the old snapshots?"));
+      QVERIFY(!visualItems(*card, QStringLiteral("agentCardOutline")).front()->isVisible());
+      agent.status = AgentStatus::working;
+      QVERIFY(card->setProperty("record", taskRecord(agent, task, {.machine = {}, .branch = {}, .selected = true})));
+      QTRY_VERIFY_WITH_TIMEOUT(!attention->isVisible(), wait_ms);
+      QCOMPARE(card->implicitHeight(), height);
+      QVERIFY(visualItems(*card, QStringLiteral("agentCardOutline")).front()->isVisible());
+    }
 
-      QCOMPARE(timers.size(), 1);
-      QTRY_VERIFY_WITH_TIMEOUT(timers.front()->isActive(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskCompactStatus")).front()->property("text").toString(), QStringLiteral("1m"), wait_ms);
-      QCOMPARE(visualItems(*card, QStringLiteral("taskCompactPlace")).front()->property("text").toString(), QStringLiteral("host"));
-      record.insert(QStringLiteral("compact"), false);
-      QVERIFY(card->setProperty("record", record));
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskTitle")).size(), 1, wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(old_clock.isNull(), wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
+    Q_SLOT static void taskFactsGiveWayWhileTheRowRunsShort() {
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
+      Agent agent{memory};
+      Worktree task{memory};
+
+      agent.status = AgentStatus::working;
+      agent.detail = "Running the build";
+      task.branch = "worktree-arch/build";
+      task.title = "Build architecture";
+      task.diff_added = diff_added;
+      task.diff_removed = 3;
+      task.diff_files = 2;
+      task.commits_ahead = 1;
+      task.command_state = CommandState::exited;
+      task.command_label = "test";
+      QQuickWindow window;
+      QQmlEngine engine;
+      auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(taskRecord(agent, task, {.machine = "host", .branch = {}})));
+      constexpr qreal wide = 1000;
+      constexpr qreal narrow = 200;
+      const auto shown = [&card](const QString& name) {
+        return visualItems(*card, name).front()->isVisible();
+      };
+
+      card->setParentItem(window.contentItem());
+      card->setSize({wide, card->implicitHeight()});
+      show(window);
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      for (const auto* name : {"agentFactsMachine", "agentFactsBranch", "agentFactsDiff", "agentFactsFiles", "agentFactsAhead", "agentFactsCommand"}) {
+        QVERIFY2(shown(QString::fromLatin1(name)), name);
+      }
+
+      card->setWidth(narrow);
+      QTRY_VERIFY_WITH_TIMEOUT(!shown(QStringLiteral("agentFactsAhead")), wait_ms);
+      QVERIFY(!shown(QStringLiteral("agentFactsBranch")));
+      QVERIFY(!shown(QStringLiteral("agentFactsFiles")));
+      QVERIFY(shown(QStringLiteral("agentFactsMachine")));
+      QVERIFY(shown(QStringLiteral("agentFactsDiff")));
+      const auto* context = visualItems(*card, QStringLiteral("agentContext")).front();
+      const auto* signal = visualItems(*card, QStringLiteral("agentSignal")).front();
+
+      QVERIFY(signal->mapToItem(card.get(), QPointF{signal->width(), 0}).x() <= context->mapToItem(card.get(), QPointF{}).x());
     }
 
     Q_SLOT static void trackedCommandsKeepTheirOutcomeAndNavigationIdentity() {
@@ -290,7 +332,7 @@ namespace {
       QCOMPARE(visualItems(*card, QStringLiteral("commandFacts")).front()->property("text").toString(), QStringLiteral("host · fix · offline · last known"));
     }
 
-    Q_SLOT static void orderedActivityProjectsVariableCardsIntoTheList() {
+    Q_SLOT static void orderedActivityProjectsTasksAsAgentCards() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -322,7 +364,7 @@ namespace {
         if (entry.agent) {
           const auto& agent = agents.entries()[*entry.agent];
 
-          records.append(entry.worktree ? taskRecord(agent, workspaces.worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact) : agentRecord(agent, context));
+          records.append(entry.worktree ? taskRecord(agent, workspaces.worktrees()[*entry.worktree], context) : agentRecord(agent, context));
         } else if (entry.worktree) {
           records.append(commandRecord(workspaces.worktrees()[*entry.worktree], context));
         }
@@ -341,15 +383,20 @@ namespace {
       list->setSize({window_width, window_height});
       show(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*list, QStringLiteral("agentCard")).size(), 1, wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*list, QStringLiteral("taskCard")).size(), 1, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*list, QStringLiteral("agentCard")).size(), 2, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*list, QStringLiteral("commandCard")).size(), 1, wait_ms);
       const auto geometry = settings.value(QStringLiteral("geometry")).toMap();
-      auto* const task = visualItems(*list, QStringLiteral("taskCard")).front();
+      const auto cards = visualItems(*list, QStringLiteral("agentCard"));
+      const auto found = std::ranges::find_if(cards, [](const QQuickItem* card) {
+        return card->property("record").toMap().value(QStringLiteral("task")).toBool();
+      });
 
-      QCOMPARE(task->height(), geometry.value(QStringLiteral("compactHeight")).toReal());
+      QVERIFY(found != cards.end());
+      auto* const task = *found;
+
+      QCOMPARE(task->height(), geometry.value(QStringLiteral("agentHeight")).toReal());
       QCOMPARE(task->mapToItem(list.get(), QPointF{}).x(), geometry.value(QStringLiteral("taskIndent")).toReal());
-      const auto* title = visualItems(*task, QStringLiteral("taskCompactTitle")).front();
+      const auto* title = visualItems(*task, QStringLiteral("agentTitleLabel")).front();
 
       QVERIFY(title->width() < task->width());
       QVERIFY(agentRecord(agents.entries().front(), {.machine = {}, .branch = {}, .coordinator = true}).value(QStringLiteral("project")).toString().endsWith(QStringLiteral(" · coordinator")));

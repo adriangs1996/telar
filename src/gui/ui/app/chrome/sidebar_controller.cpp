@@ -144,7 +144,6 @@ namespace telar::gui::qt {
     const auto padding = 2 * card.px(AgentCardGeometry::horizontal_padding);
     const auto gap = card.px(AgentCardGeometry::gap);
     const auto mark = card.px(AgentCardGeometry::mark_column);
-    const auto status_side = std::round(static_cast<float>(chrome.title) * AgentCardGeometry::icon_size_ratio);
     // A status whose clock is drawn later reserves a short age.
     const auto age = QStringLiteral("59m");
     float card_width = 0;
@@ -155,8 +154,8 @@ namespace telar::gui::qt {
       const auto record = cards.data(cards.index(row), ListModel::record_role).toMap();
       const auto ports = record.value(QStringLiteral("ports")).toString();
       const auto status = record.value(QStringLiteral("status")).toString();
-      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + padding);
-      const auto detail = padding + mark + gap + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false) + gap + status_side + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
+      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + padding) + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
+      const auto detail = padding + mark + gap + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false);
 
       card_width = std::max({card_width, title, detail});
     }

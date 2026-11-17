@@ -12,7 +12,7 @@ namespace telar::gui {
   }
 
   std::optional<std::uint64_t> AgentAnimation::deadline(AgentStatus status, bool connected, std::uint64_t now_ns) noexcept {
-    if (!connected || (status != AgentStatus::working && status != AgentStatus::ready)) {
+    if (!connected || status == AgentStatus::unknown) {
       return std::nullopt;
     }
 

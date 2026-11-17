@@ -3,22 +3,17 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Telar.Gui
 
+// An agent's state and how long it has held it, right-aligned: narrow cards drop the clock, then the word.
 NativeAgentStatus {
     id: root
 
     required property var colors
     required property var typography
-    required property var geometry
-    property var pulseAlpha: undefined
 
-    readonly property real glyphWidth: record.statusGlyph.length > 0 ? geometry.statusSide : 0
-    readonly property real glyphSpace: glyphWidth > 0 ? glyphWidth + geometry.statusGap : 0
-    readonly property bool fullFits: glyphSpace + fullMeasure.implicitWidth <= width
-    readonly property bool wordFits: glyphSpace + wordMeasure.implicitWidth <= width
+    readonly property bool fullFits: fullMeasure.implicitWidth <= width
+    readonly property bool wordFits: wordMeasure.implicitWidth <= width
     readonly property string label: fullFits ? statusText : wordFits ? record.statusWord : ""
-    readonly property real labelWidth: fullFits ? fullMeasure.implicitWidth : wordFits ? wordMeasure.implicitWidth : 0
-    readonly property real usedWidth: Math.min(width, glyphWidth + labelWidth + (glyphWidth > 0 && labelWidth > 0 ? geometry.statusGap : 0))
-    readonly property color ink: colors[record.statusColor]
+    readonly property real usedWidth: Math.min(width, fullFits ? fullMeasure.implicitWidth : wordFits ? wordMeasure.implicitWidth : 0)
 
     NativeChromeText {
         id: fullMeasure
@@ -34,29 +29,15 @@ NativeAgentStatus {
         visible: false
     }
 
-    ChromeIcon {
-        objectName: "agentStatusGlyph"
-        x: root.width - root.usedWidth
-        width: Math.min(root.usedWidth, root.glyphWidth)
-        height: root.height
-        glyph: root.record.statusGlyph
-        primaryFamily: root.typography.primaryFamily ?? ""
-        primaryStyle: root.typography.primaryStyle ?? ""
-        color: root.ink
-        pixelSize: root.typography.title
-        opacity: root.record.working ? (root.pulseAlpha ?? root.animatedAlpha) : 1
-        visible: root.glyphWidth > 0
-    }
-
     ChromeText {
         objectName: "agentStatusLabel"
-        x: root.width - root.labelWidth
-        width: root.labelWidth
+        x: root.width - root.usedWidth
+        width: root.usedWidth
         height: root.height
         text: root.label
-        color: root.ink
+        color: root.colors[root.record.statusColor]
         pixelSize: root.typography.small
         elide: Text.ElideNone
-        visible: root.labelWidth > 0
+        visible: root.usedWidth > 0
     }
 }

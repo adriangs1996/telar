@@ -132,9 +132,13 @@ namespace {
 
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("Agent"));
       QCOMPARE(record.value(QStringLiteral("project")).toString(), QStringLiteral("machine · project"));
-      QCOMPARE(record.value(QStringLiteral("status")).toString(), QStringLiteral("Approval"));
-      QCOMPARE(record.value(QStringLiteral("statusGlyph")).toString(), QStringLiteral("\u26a0"));
+      QCOMPARE(record.value(QStringLiteral("status")).toString(), QStringLiteral("Approval 0s"));
       QCOMPARE(record.value(QStringLiteral("statusColor")).toString(), QStringLiteral("yellow"));
+      QCOMPARE(record.value(QStringLiteral("badge")).toString(), QStringLiteral("yellow"));
+      QCOMPARE(record.value(QStringLiteral("attention")).toString(), QStringLiteral("yellow"));
+      QCOMPARE(record.value(QStringLiteral("signal")).toString(), QStringLiteral("live event"));
+      QCOMPARE(record.value(QStringLiteral("signalColor")).toString(), QStringLiteral("yellow"));
+      QCOMPARE(record.value(QStringLiteral("contextShare")).toFloat(), TaskCardLabels::waiting_context_share);
       QCOMPARE(record.value(QStringLiteral("detail")).toString(), QStringLiteral("feature"));
       QVERIFY(record.value(QStringLiteral("selected")).toBool());
       QCOMPARE(record.value(QStringLiteral("providerMark")).toInt(), static_cast<int>(AgentProvider::codex));
@@ -149,7 +153,9 @@ namespace {
       record = agentRecord(agent, context);
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("Session title"));
       QCOMPARE(record.value(QStringLiteral("status")).toString(), QStringLiteral("offline"));
-      QCOMPARE(record.value(QStringLiteral("statusGlyph")).toString(), QStringLiteral("?"));
+      QCOMPARE(record.value(QStringLiteral("badge")).toString(), QString{});
+      QCOMPARE(record.value(QStringLiteral("attention")).toString(), QString{});
+      QCOMPARE(record.value(QStringLiteral("signalColor")).toString(), QStringLiteral("overlay1"));
       QVERIFY(!record.value(QStringLiteral("selected")).toBool());
       QVERIFY(!record.value(QStringLiteral("enabled")).toBool());
       QCOMPARE(record.value(QStringLiteral("detail")).toString(), QStringLiteral("live event"));
@@ -191,8 +197,12 @@ namespace {
       QCOMPARE(card->height(), expected_height);
       QCOMPARE(title.front()->position(), title_origin);
       QCOMPARE(title.front()->height(), qreal{19});
-      QCOMPARE(project.front()->parentItem()->y(), detail_origin_y);
-      QCOMPARE(project.front()->parentItem()->x(), title_origin.x());
+      const auto* detail = project.front()->parentItem()->parentItem();
+
+      QCOMPARE(detail->y(), detail_origin_y);
+      QCOMPARE(detail->x(), title_origin.x());
+      // The project closes the second row on the right; the signal takes the room before it.
+      QCOMPARE(project.front()->parentItem()->x() + project.front()->parentItem()->width(), detail->width());
       const auto colors = themeColors(Configuration{});
       auto selection_color = colors.value(QStringLiteral("text")).value<QColor>();
 
@@ -330,7 +340,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void statusDropsDurationBeforeItsWordAndGlyph() {
+    Q_SLOT static void statusDropsDurationBeforeItsWord() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -342,12 +352,15 @@ namespace {
       agent.status_age_s = large_age;
       QQuickWindow window;
       QQmlEngine engine;
-      const auto status = createChrome(engine, QStringLiteral("AgentStatus"), properties(agentRecord(agent, {})));
+      auto settings = properties(agentRecord(agent, {}));
+
+      settings.remove(QStringLiteral("geometry"));
+      const auto status = createChrome(engine, QStringLiteral("AgentStatus"), settings);
 
       status->setParentItem(window.contentItem());
       constexpr qreal complete_width = 200;
       constexpr qreal word_only_width = 70;
-      constexpr qreal glyph_only_width = 10;
+      constexpr qreal narrow_width = 10;
       constexpr qreal row_height = 15;
 
       status->setSize({complete_width, row_height});
@@ -357,9 +370,9 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(status->property("label").toString(), QStringLiteral("Working 9999d"), wait_ms);
       status->setWidth(word_only_width);
       QTRY_COMPARE_WITH_TIMEOUT(status->property("label").toString(), QStringLiteral("Working"), wait_ms);
-      status->setWidth(glyph_only_width);
+      status->setWidth(narrow_width);
       QTRY_COMPARE_WITH_TIMEOUT(status->property("label").toString(), QString{}, wait_ms);
-      QCOMPARE(status->property("usedWidth").toReal(), glyph_only_width);
+      QCOMPARE(status->property("usedWidth").toReal(), qreal{0});
     }
 
     Q_SLOT static void activityCreatesOnlyVisibleCards() {

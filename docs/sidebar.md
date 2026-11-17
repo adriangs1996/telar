@@ -218,25 +218,38 @@ title. Machine rows and the sidebar margin follow the same ratio.
 
 Every card keeps its mark in a 24-pixel column and starts its title and its
 detail row after it, so the text of machine rows, agents and processes shares
-one left edge. A task or command one level under an agent leads with its
-status glyph in a column that ends on that same edge. A task card reads its
-title first, at body size in the regular face, then its branch with the lines
-it added (green) and removed (red), then its activity. A compact task gives
-its title the room it needs before its branch or machine, and never cuts its
-state.
+one left edge. A command one level under an agent leads with its status glyph
+in a column that ends on that same edge.
+
+Every agent card has the same two rows, whether the agent runs in a worktree
+or not, focused or not; the state changes what the rows say, never the card's
+shape. The first row holds the provider's tile, the title and the state. The
+tile carries a dot in the state's color, which pulses while the agent works; an
+agent at rest has none. An agent in a worktree takes its task's name as its
+title. The second row starts with the signal, the line that matters in the
+current state: the question or request in yellow while the agent is blocked,
+the error in red when it failed, the plan's count and step while it works on a
+plan, its latest event while it works without one, and its final answer once it
+is done or at rest. The context closes the row on the right: the project, or
+for a worktree the machine, the branch, the lines it added (green) and removed
+(red), its files, its commits ahead and its command's outcome. The branch is
+left out when it reads like the title. The context may take half the row, less
+while the agent waits on the person and more once it rests; when it runs short,
+the commits ahead give way first, then the branch, the files and the command's
+outcome, while the machine and the diff stay. A plan's progress is a thin line
+under the rows. A blocked or failed agent tints its card in its state's color.
 The header reads `agents`. One array of at most 64 replica indices is sorted by
 `agent_attention.lessThan` when snapshot identity changes, never per frame.
 
-The top-right state combines an icon with `Working`, `Approval`, `Question`,
-`Review plan`, `Needs input`, `Done`, `Failed` or `Unknown`. Ready agents show
-only their status age. Working duration uses `0s` through `59s`, then `1m`,
-`1h` or `1d`; the same duration is never repeated elsewhere in the card.
-It adds monotonic seconds since the agent snapshot first painted. Narrow
-cards drop the duration, then the state word before clipping the icon;
-project, title and detail fit independently with an ellipsis. The provider
-symbol disappears only when its own box cannot fit.
+The top-right state reads `Working`, `Approval`, `Question`, `Review plan`,
+`Needs input`, `Done`, `Failed` or `Unknown`, followed by how long the agent
+has held it. Ready agents show only their status age. The duration uses `0s`
+through `59s`, then `1m`, `1h` or `1d`; the same duration is never repeated
+elsewhere in the card. It adds monotonic seconds since the agent snapshot
+first painted. Narrow cards drop the duration, then the state word; title,
+signal and project fit independently with an ellipsis.
 
-Only the working glyph pulses through six alpha steps between 1.0 and 0.65
+Only the working dot pulses through six alpha steps between 1.0 and 0.65
 across 17 animation frames, one frame every 120 ms of the window's frame
 clock. The state word and duration remain steady.
 The focused pane's card has `surface0` fill and an inner 1px `surface1` ring.

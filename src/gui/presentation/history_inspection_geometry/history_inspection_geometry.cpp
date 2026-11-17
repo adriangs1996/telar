@@ -24,10 +24,6 @@ namespace telar::gui {
     return title_row + small_row + px(title_gap) + (2 * px(vertical_padding));
   }
 
-  float AgentCardGeometry::compactHeight() const noexcept {
-    return title_row + (2 * px(compact_vertical_padding));
-  }
-
   float AgentCardGeometry::cardWidth(float list_width) const noexcept {
     return std::max(0.0F, list_width - (scrollbar_width * scale) - px(spacing));
   }

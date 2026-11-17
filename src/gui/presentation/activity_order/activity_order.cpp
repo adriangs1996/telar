@@ -46,7 +46,7 @@ namespace telar::gui {
   }
 
   template <Allocator Memory>
-  auto AgentOrder::arrange(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::optional<std::uint64_t> focused) noexcept -> Plan {
+  auto AgentOrder::arrange(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept -> Plan {
     Plan plan;
 
     plan.count = std::min(agents.size(), maximum_agents);
@@ -54,10 +54,10 @@ namespace telar::gui {
 
     for (std::size_t index = 0; index < plan.count; ++index) {
       const auto& agent = agents[index];
-      const auto* row = taskRow(workspaces, agent);
+      const auto card = taskRow(workspaces, agent) != nullptr ? ActivityCard::task : ActivityCard::agent;
       const auto project = projectOf(workspaces, agent);
 
-      entries[index] = {.agent = index, .project = project, .card = cardFor(agent, row != nullptr, focused)};
+      entries[index] = {.agent = index, .project = project, .card = card};
     }
 
     for (auto& entry : entries) {
@@ -73,19 +73,6 @@ namespace telar::gui {
     }
 
     return plan;
-  }
-
-  template <Allocator Memory>
-  ActivityCard AgentOrder::cardFor(const Agent<Memory>& agent, bool task, std::optional<std::uint64_t> focused) noexcept {
-    if (!task) {
-      return ActivityCard::agent;
-    }
-
-    if (focused == agent.pane_id || agent.status == AgentStatus::blocked || agent.status == AgentStatus::failed || agent.status == AgentStatus::done) {
-      return ActivityCard::task_full;
-    }
-
-    return ActivityCard::task_compact;
   }
 
   template <Allocator Memory>
@@ -170,10 +157,6 @@ namespace telar::gui {
       }
     }
 
-    if ((left.card == ActivityCard::task_full) != (right.card == ActivityCard::task_full)) {
-      return left.card == ActivityCard::task_full;
-    }
-
     return priority(agents[left.agent]) < priority(agents[right.agent]);
   }
 
@@ -212,7 +195,7 @@ namespace telar::gui {
       // Another machine's row in the sidebar stacks its working agents, so its cards here are
       // only the agents that wait on the person; its tracked commands stay on that machine.
       const bool active = source.slot == active_slot;
-      const auto fleet = AgentOrder::arrange(source.agents, source.workspaces, active ? source.focused : std::nullopt);
+      const auto fleet = AgentOrder::arrange(source.agents, source.workspaces);
       const auto& worktrees = source.workspaces.worktrees();
       std::array<bool, WorkspaceReplica<Memory>::maximum_worktrees> represented{};
 
@@ -235,7 +218,7 @@ namespace telar::gui {
       for (std::size_t index = 0; index < worktrees.size() && active; ++index) {
         const auto& row = worktrees[index];
         if (!represented[index] && row.command_state != CommandState::none) {
-          nodes_[count_++] = {.source = source_index, .worktree = index, .project = row.source, .card = ActivityCard::task_full};
+          nodes_[count_++] = {.source = source_index, .worktree = index, .project = row.source, .card = ActivityCard::task};
         }
       }
     }
@@ -465,34 +448,6 @@ namespace telar::gui {
     return {};
   }
 
-  std::string_view AgentStatusPresentation::glyph(AgentStatus status, AgentBlockedReason reason) noexcept {
-    switch (status) {
-    case AgentStatus::blocked:
-      switch (reason) {
-      case AgentBlockedReason::permission:
-        return "\u26a0";
-      case AgentBlockedReason::question:
-        return "?";
-      case AgentBlockedReason::plan:
-        return "\u2261";
-      default:
-        return "!";
-      }
-    case AgentStatus::working:
-      return "\u25cc";
-    case AgentStatus::done:
-      return "\u2713";
-    case AgentStatus::failed:
-      return "\u2715";
-    case AgentStatus::ready:
-      return "\u00b7";
-    case AgentStatus::unknown:
-      return "?";
-    }
-
-    return {};
-  }
-
   PaletteRole AgentStatusPresentation::color(AgentStatus status) noexcept {
     switch (status) {
     case AgentStatus::working:
@@ -539,7 +494,8 @@ namespace telar::gui {
       result.append(age(seconds).view());
     } else {
       result.append(connected ? word(status, reason) : "offline");
-      if (status == AgentStatus::working && connected) {
+      // How long an agent has worked or waited is what decides which one to visit first.
+      if (connected && status != AgentStatus::unknown) {
         result.append(" ");
         result.append(age(seconds, true).view());
       }
@@ -856,61 +812,29 @@ namespace telar::gui {
   }
 
   template <Allocator Memory>
-  auto TaskCardLabels::factParts(std::string_view machine, const Worktree<Memory>& task) -> Facts {
+  auto TaskCardLabels::facts(const Worktree<Memory>& task) -> Facts {
     Facts parts;
-
-    if (!machine.empty()) {
-      append(parts.lead, machine);
-      append(parts.lead, " · ");
-    }
 
     if (task.diff_files != 0) {
       append(parts.added, "+");
       decimal(parts.added, task.diff_added);
       append(parts.removed, "\u2212");
       decimal(parts.removed, task.diff_removed);
-      append(parts.tail, "· ");
-      decimal(parts.tail, task.diff_files);
+      append(parts.files, "· ");
+      decimal(parts.files, task.diff_files);
     }
 
     if (task.commits_ahead != 0) {
-      append(parts.tail, parts.tail.view().empty() ? "\u2191" : "  \u2191");
-      decimal(parts.tail, task.commits_ahead);
+      append(parts.ahead, "\u2191");
+      decimal(parts.ahead, task.commits_ahead);
     }
 
     if (task.command_state == CommandState::exited) {
-      if (!parts.tail.view().empty()) {
-        append(parts.tail, "  ");
-      }
-
-      append(parts.tail, task.command_exit == 0 ? "\u2713 " : "\u2715 ");
-      append(parts.tail, task.command_label);
+      append(parts.command, task.command_exit == 0 ? "\u2713 " : "\u2715 ");
+      append(parts.command, task.command_label);
     }
 
     return parts;
-  }
-
-  template <Allocator Memory>
-  auto TaskCardLabels::facts(std::string_view machine, const Worktree<Memory>& task) -> Text {
-    const auto parts = factParts(machine, task);
-    Text result;
-
-    append(result, parts.lead.view());
-    append(result, "\u2387 ");
-    append(result, task.handle());
-    if (!parts.added.view().empty()) {
-      append(result, "  ");
-      append(result, parts.added.view());
-      append(result, " ");
-      append(result, parts.removed.view());
-      append(result, " ");
-    } else if (!parts.tail.view().empty()) {
-      append(result, "  ");
-    }
-
-    append(result, parts.tail.view());
-
-    return result;
   }
 
   template <Allocator Memory>
@@ -931,16 +855,21 @@ namespace telar::gui {
     }
   }
 
-  auto TaskCardLabels::plan(std::uint16_t done, std::uint16_t total) -> Plan {
-    Plan result;
+  float TaskCardLabels::contextShare(AgentStatus state, bool signal) noexcept {
+    if (!signal) {
+      return 1;
+    }
 
-    result.cells = std::min<std::size_t>(total, maximum_plan_cells);
-    result.filled = total == 0 ? 0 : ((static_cast<std::size_t>(done) * result.cells) + total - 1) / total;
-    result.count.appendDecimal(done);
-    result.count.append("/");
-    result.count.appendDecimal(total);
-
-    return result;
+    switch (state) {
+    case AgentStatus::blocked:
+    case AgentStatus::failed:
+      return waiting_context_share;
+    case AgentStatus::done:
+    case AgentStatus::ready:
+      return resting_context_share;
+    default:
+      return context_share;
+    }
   }
 
   template <Allocator Memory>
@@ -996,18 +925,16 @@ namespace telar::gui {
   template tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> AgentOrder::taskRow<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
   template AgentOrder::Priority AgentOrder::priority<Memory>(const Agent<Memory>& agent) noexcept;
   template AgentOrder::Priority AgentOrder::priority<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
-  template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::optional<std::uint64_t> focused) noexcept;
-  template AgentOrder::Plan AgentOrder::arrange<ConcurrentMemory>(std::span<const Agent<ConcurrentMemory>> agents, const WorkspaceReplica<ConcurrentMemory>& workspaces, std::optional<std::uint64_t> focused) noexcept;
+  template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;
+  template AgentOrder::Plan AgentOrder::arrange<ConcurrentMemory>(std::span<const Agent<ConcurrentMemory>> agents, const WorkspaceReplica<ConcurrentMemory>& workspaces) noexcept;
   template class ActivityOrder<Memory>;
   template class ActivityOrder<ConcurrentMemory>;
   template tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive<Memory>(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
   template tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, std::span<const Agent<ConcurrentMemory>> agents, std::uint64_t project) noexcept;
   template TabActivity TabActivity::derive<Memory>(const Tab<Memory>& tab, PaneProgressState focused, std::span<const Agent<Memory>> agents, bool selected) noexcept;
   template TabActivity TabActivity::derive<ConcurrentMemory>(const Tab<ConcurrentMemory>& tab, PaneProgressState focused, std::span<const Agent<ConcurrentMemory>> agents, bool selected) noexcept;
-  template TaskCardLabels::Facts TaskCardLabels::factParts<Memory>(std::string_view machine, const Worktree<Memory>& task);
-  template TaskCardLabels::Facts TaskCardLabels::factParts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task);
-  template TaskCardLabels::Text TaskCardLabels::facts<Memory>(std::string_view machine, const Worktree<Memory>& task);
-  template TaskCardLabels::Text TaskCardLabels::facts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task);
+  template TaskCardLabels::Facts TaskCardLabels::facts<Memory>(const Worktree<Memory>& task);
+  template TaskCardLabels::Facts TaskCardLabels::facts<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task);
   template TaskCardLabels::Activity TaskCardLabels::activity<Memory>(const Agent<Memory>& agent) noexcept;
   template TaskCardLabels::Activity TaskCardLabels::activity<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
   template tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState<Memory>(const Worktree<Memory>& task, bool connected) noexcept;

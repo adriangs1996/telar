@@ -8,6 +8,4 @@ telar_add_qml_sources(gui-quick
     AgentCard.qml
     AgentStatus.qml
     CommandCard.qml
-    TaskCard.qml
-    TaskPlan.qml
   REGISTERS)

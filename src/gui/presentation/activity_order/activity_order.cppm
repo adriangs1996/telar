@@ -60,12 +60,9 @@ export {
       [[nodiscard]] static Priority priority(const Agent<Memory>& agent) noexcept;
 
       template <Allocator Memory>
-      [[nodiscard]] static Plan arrange(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::optional<std::uint64_t> focused = std::nullopt) noexcept;
+      [[nodiscard]] static Plan arrange(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;
 
     private:
-      template <Allocator Memory>
-      [[nodiscard]] static ActivityCard cardFor(const Agent<Memory>& agent, bool task, std::optional<std::uint64_t> focused) noexcept;
-
       template <Allocator Memory>
       [[nodiscard]] static std::size_t projectRank(std::optional<std::uint64_t> identity, std::span<const Workspace<Memory>> workspaces) noexcept;
 
@@ -83,8 +80,8 @@ export {
     extern template tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> AgentOrder::taskRow<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
     extern template AgentOrder::Priority AgentOrder::priority<Memory>(const Agent<Memory>& agent) noexcept;
     extern template AgentOrder::Priority AgentOrder::priority<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
-    extern template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::optional<std::uint64_t> focused) noexcept;
-    extern template AgentOrder::Plan AgentOrder::arrange<ConcurrentMemory>(std::span<const Agent<ConcurrentMemory>> agents, const WorkspaceReplica<ConcurrentMemory>& workspaces, std::optional<std::uint64_t> focused) noexcept;
+    extern template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;
+    extern template AgentOrder::Plan AgentOrder::arrange<ConcurrentMemory>(std::span<const Agent<ConcurrentMemory>> agents, const WorkspaceReplica<ConcurrentMemory>& workspaces) noexcept;
 
   }
 }
@@ -103,7 +100,6 @@ export {
         std::uint8_t slot = 0;
         std::span<const Agent<Memory>> agents;
         const WorkspaceReplica<Memory>& workspaces;
-        std::optional<std::uint64_t> focused = std::nullopt;
       };
 
       struct Entry {
@@ -187,8 +183,6 @@ export {
       using Age = BoundedText<age_capacity>;
 
       [[nodiscard]] static std::string_view word(AgentStatus status, AgentBlockedReason reason) noexcept;
-
-      [[nodiscard]] static std::string_view glyph(AgentStatus status, AgentBlockedReason reason) noexcept;
 
       [[nodiscard]] static PaletteRole color(AgentStatus status) noexcept;
 
@@ -370,11 +364,11 @@ export {
 
     struct TaskCardLabels {
       static constexpr std::size_t text_capacity = label_text_capacity;
-      static constexpr std::size_t maximum_plan_cells = 8;
-      static constexpr std::size_t plan_count_capacity = 16;
-      static constexpr float plan_cell_width = 8;
-      static constexpr float plan_cell_gap = 2;
-      static constexpr float plan_cell_height = 4;
+      // The share of a card's second row its context may take from the signal: less while the
+      // agent waits on the person, more once it rests, all of it when there is no signal.
+      static constexpr float context_share = 0.5F;
+      static constexpr float waiting_context_share = 0.38F;
+      static constexpr float resting_context_share = 0.6F;
       using Text = LabelText;
 
       struct Activity {
@@ -383,31 +377,24 @@ export {
         bool plan = false;
       };
 
-      struct Plan {
-        std::size_t cells = 0;
-        std::size_t filled = 0;
-        BoundedText<plan_count_capacity> count;
-      };
-
-      // The facts row in the pieces a card draws on their own: the machine before the branch, the
-      // lines the worktree added and removed, and everything after them.
+      // A worktree's facts in the pieces a card gives up one by one when its row runs short.
       struct Facts {
-        Text lead;
         Text added;
         Text removed;
-        Text tail;
+        Text files;
+        Text ahead;
+        Text command;
       };
 
       template <Allocator Memory>
-      [[nodiscard]] static Facts factParts(std::string_view machine, const Worktree<Memory>& task);
+      [[nodiscard]] static Facts facts(const Worktree<Memory>& task);
 
-      template <Allocator Memory>
-      [[nodiscard]] static Text facts(std::string_view machine, const Worktree<Memory>& task);
-
+      // The line that matters most in the agent's state: what it asks, why it failed, the plan step
+      // or event it works on, or its last answer.
       template <Allocator Memory>
       [[nodiscard]] static Activity activity(const Agent<Memory>& agent) noexcept;
 
-      [[nodiscard]] static Plan plan(std::uint16_t done, std::uint16_t total);
+      [[nodiscard]] static float contextShare(AgentStatus state, bool signal) noexcept;
 
       template <Allocator Memory>
       [[nodiscard]] static tbc::view<std::string_view, tbc::lt::static_storage> commandState(const Worktree<Memory>& task, bool connected) noexcept;
@@ -422,10 +409,8 @@ export {
       static void decimal(Text& storage, std::uint32_t value);
     };
 
-    extern template TaskCardLabels::Facts TaskCardLabels::factParts<Memory>(std::string_view machine, const Worktree<Memory>& task);
-    extern template TaskCardLabels::Facts TaskCardLabels::factParts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task);
-    extern template TaskCardLabels::Text TaskCardLabels::facts<Memory>(std::string_view machine, const Worktree<Memory>& task);
-    extern template TaskCardLabels::Text TaskCardLabels::facts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task);
+    extern template TaskCardLabels::Facts TaskCardLabels::facts<Memory>(const Worktree<Memory>& task);
+    extern template TaskCardLabels::Facts TaskCardLabels::facts<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task);
     extern template TaskCardLabels::Activity TaskCardLabels::activity<Memory>(const Agent<Memory>& agent) noexcept;
     extern template TaskCardLabels::Activity TaskCardLabels::activity<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
     extern template tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState<Memory>(const Worktree<Memory>& task, bool connected) noexcept;

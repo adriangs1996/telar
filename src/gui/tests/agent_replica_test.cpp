@@ -374,7 +374,8 @@ namespace {
 
     require(AgentAnimation::deadline(AgentStatus::working, true, interval) == 2 * interval, "working animation must request the next global 120 ms boundary");
     require(AgentAnimation::deadline(AgentStatus::ready, true, second) == 2 * second, "ready clocks must request the next global second");
-    require(!AgentAnimation::deadline(AgentStatus::blocked, true, second), "blocked status must not animate");
+    require(AgentAnimation::deadline(AgentStatus::blocked, true, second) == 2 * second, "blocked clocks must request the next global second");
+    require(!AgentAnimation::deadline(AgentStatus::unknown, true, second), "unknown status must not animate");
     require(!AgentAnimation::deadline(AgentStatus::working, false, second), "offline status must not animate");
     constexpr std::uint64_t frame_rollover = 256;
 

@@ -227,7 +227,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
     }
 
-    Q_SLOT static void onlyTheGlyphPulsesAndHiddenAncestorsParkTheClock() {
+    Q_SLOT static void onlyTheBadgePulsesAndHiddenAncestorsParkTheClock() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -247,19 +247,20 @@ namespace {
           {QStringLiteral("geometry"), agentCardGeometryRecord({.chrome = chrome}, window_width)},
       };
 
-      auto status = createChrome(engine, QStringLiteral("AgentStatus"), properties);
+      auto card = createChrome(engine, QStringLiteral("AgentCard"), properties);
 
-      status->setParentItem(&host);
-      status->setSize({window_width, window_height});
-      const auto* timeline = qobject_cast<NativeAgentStatus*>(status.get());
+      card->setParentItem(&host);
+      card->setSize({window_width, card->implicitHeight()});
+      const auto* timeline = qobject_cast<NativeAgentStatus*>(visualItems(*card, QStringLiteral("agentStatus")).front());
 
       QVERIFY(timeline != nullptr);
       show(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      const auto labels = visualItems(*status, QStringLiteral("agentStatusLabel"));
+      const auto labels = visualItems(*card, QStringLiteral("agentStatusLabel"));
 
       qInfo() << "Agent timeline scene graph API:" << window.rendererInterface()->graphicsApi();
-      const auto glyphs = visualItems(*status, QStringLiteral("agentStatusGlyph"));
+      // The working dot on the provider's tile.
+      const auto glyphs = visualItems(*card, QStringLiteral("applicationStatus"));
 
       QCOMPARE(labels.size(), 1);
       QCOMPARE(glyphs.size(), 1);

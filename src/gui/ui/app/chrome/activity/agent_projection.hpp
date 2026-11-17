@@ -63,6 +63,10 @@ namespace telar::gui::qt {
     const auto glyph = AgentCardLabels::providerGlyph(agent.provider_kind, agent.icon);
     const auto tile = ApplicationMark::forApplication(runtime::describeProvider(agent.provider_kind).display_name);
     const auto provider_label = agent.display_name.empty() ? std::string_view{agent.provider_name} : std::string_view{agent.display_name};
+    const auto activity = TaskCardLabels::activity(agent);
+    const auto color = QString::fromLatin1(palette_names[static_cast<std::size_t>(Status::color(state))]);
+    const auto waiting = state == AgentStatus::blocked || state == AgentStatus::failed;
+    const auto resting = state == AgentStatus::ready || state == AgentStatus::unknown;
 
     return {
         {QStringLiteral("key"), QString::number(agent.pane_id)},
@@ -72,9 +76,17 @@ namespace telar::gui::qt {
         {QStringLiteral("detail"), toQString(agent.status == AgentStatus::working ? std::string_view{agent.detail} : context.branch)},
         {QStringLiteral("status"), toQString(label.view())},
         {QStringLiteral("statusWord"), toQString(word)},
-        {QStringLiteral("statusGlyph"), state == AgentStatus::ready ? QString{} : toQString(Status::glyph(state, agent.blocked_reason))},
-        {QStringLiteral("statusColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(Status::color(state))])},
+        {QStringLiteral("statusColor"), color},
+        // The dot on the provider's tile; an agent at rest has none.
+        {QStringLiteral("badge"), resting ? QString{} : color},
+        // Tints the card while the agent waits on the person.
+        {QStringLiteral("attention"), waiting ? color : QString{}},
+        {QStringLiteral("dim"), state == AgentStatus::ready},
         {QStringLiteral("working"), state == AgentStatus::working},
+        {QStringLiteral("signal"), toQString(activity.text)},
+        {QStringLiteral("signalColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(context.connected ? activity.color : PaletteRole::overlay1)])},
+        {QStringLiteral("showPlan"), context.connected && activity.plan},
+        {QStringLiteral("contextShare"), TaskCardLabels::contextShare(state, !activity.text.empty())},
         {QStringLiteral("statusCode"), static_cast<int>(state)},
         {QStringLiteral("blockedReason"), static_cast<int>(agent.blocked_reason)},
         {QStringLiteral("statusClock"), agent.status_clock.observed() ? statusAgeValue(agent.status_clock.interval()) : QVariant{}},

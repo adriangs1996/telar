@@ -133,9 +133,7 @@ namespace telar::gui::qt {
       return std::nullopt;
     }
 
-    const auto state = display_mode_ == DisplayMode::compact && status_ != AgentStatus::working ? AgentStatus::ready : status_;
-
-    return AgentAnimation::deadline(state, connected_, now_ns);
+    return AgentAnimation::deadline(status_, connected_, now_ns);
   }
 
   void NativeAgentStatus::sample(std::uint64_t now_ns) {
@@ -144,8 +142,6 @@ namespace telar::gui::qt {
 
     if (display_mode_ == DisplayMode::pane_chip) {
       text = PaneStatusChip::text(status_, reason_, seconds);
-    } else if (display_mode_ == DisplayMode::compact) {
-      text.append(AgentStatusPresentation::age(seconds).view());
     } else {
       text = AgentStatusPresentation::text(status_, reason_, seconds, connected_);
     }

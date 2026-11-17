@@ -79,7 +79,7 @@ paths, arrives without control characters.
   agent = { status = "blocked", blocked_reason = 1 } }
 -- agent
 { key = "...", title = "Fix the build", project = "telar", detail = "", provider = "Claude",
-  status = "working", selected = false, compact = false, depth = 0,
+  status = "working", selected = false, depth = 0,
   plan = { done = 2, total = 5, step = "Run tests" } }
 ```
 
