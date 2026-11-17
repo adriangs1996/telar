@@ -39,9 +39,6 @@ telar_add_test(gui-image-residency-test SOURCES image_residency_test.cpp LIBRARI
 telar_add_test(gui-notification-effects-test SOURCES notification_effects_test.cpp LIBRARIES gui-foundation-system gui-application
   TEST gui-notification-effects LABELS gui.application)
 
-telar_add_test(gui-text-fit-test SOURCES text_fit_test.cpp LIBRARIES gui-foundation-text gui-foundation-system deps::ghostty_vt gui-test-fixtures
-  TEST gui-text-fit LABELS gui.foundation.text)
-target_compile_options(gui-text-fit-test PRIVATE -ffp-contract=off)
 telar_add_test(gui-font-grid-test SOURCES font_grid_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-test-fixtures
   TEST gui-font-grid LABELS gui.foundation.terminal)
 telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core gui-foundation-terminal

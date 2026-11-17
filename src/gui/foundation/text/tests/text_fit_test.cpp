@@ -4,21 +4,16 @@ static_assert(true);
 #endif
 
 #include <cstddef>
-#include <cstdio>
 #include <cstring>
 
 import std;
+import telar.testing;
 import telar.gui.foundation.text;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar::gui;
-
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
 
   template <typename Operation>
   void rejects(Operation operation) {
@@ -43,8 +38,8 @@ namespace {
 
     const auto full = TextFit::fit(label, static_cast<float>(label.size()), measure, buffer);
 
-    require(full.data() == label.data() && full == label && calls == 1, "Fitting text must borrow its source after one measurement");
-    require(TextFit::fit(label, 1, measure, buffer).empty(), "A width smaller than the ellipsis must produce no text");
+    check(full.data() == label.data() && full == label && calls == 1, "Fitting text must borrow its source after one measurement");
+    check(TextFit::fit(label, 1, measure, buffer).empty(), "A width smaller than the ellipsis must produce no text");
 
     constexpr std::size_t input_bytes = 4096;
     std::array<char, input_bytes> long_label{};
@@ -53,7 +48,7 @@ namespace {
     constexpr float wide_truncation = 3000;
     const auto fitted = TextFit::fit({long_label.data(), long_label.size()}, wide_truncation, measure, buffer);
 
-    require(fitted.data() == buffer.data() && fitted.size() == buffer.size() && fitted.ends_with(TextFit::ellipsis), "Truncation must respect the caller's fixed-capacity output");
+    check(fitted.data() == buffer.data() && fitted.size() == buffer.size() && fitted.ends_with(TextFit::ellipsis), "Truncation must respect the caller's fixed-capacity output");
   }
 
   void graphemesRemainWhole() {
@@ -71,7 +66,7 @@ namespace {
 
     constexpr float two_clusters = 2.2F;
 
-    require(TextFit::fit("ábc", two_clusters, measure, buffer) == "á…", "A combining cluster must stay attached to its base before the ellipsis");
+    check(TextFit::fit("ábc", two_clusters, measure, buffer) == "á…", "A combining cluster must stay attached to its base before the ellipsis");
   }
 
   void invalidMeasurements() {
@@ -103,18 +98,8 @@ namespace {
     });
   }
 
-}
+  const telar::testing::Case case_borrowed_and_bounded_output{"text_fit.borrowed_and_bounded_output", borrowedAndBoundedOutput};
+  const telar::testing::Case case_graphemes_remain_whole{"text_fit.graphemes_remain_whole", graphemesRemainWhole};
+  const telar::testing::Case case_invalid_measurements{"text_fit.invalid_measurements", invalidMeasurements};
 
-int main() {
-  try {
-    borrowedAndBoundedOutput();
-    graphemesRemainWhole();
-    invalidMeasurements();
-
-    return 0;
-  } catch (const std::exception& error) {
-    static_cast<void>(std::fputs(error.what(), stderr));
-
-    return 1;
-  }
 }
