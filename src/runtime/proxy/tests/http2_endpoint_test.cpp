@@ -121,8 +121,11 @@ namespace {
 
     class Peer {
     public:
+      using Fields = std::vector<std::pair<std::string, std::string>>;
+
       struct Stream {
         std::vector<std::pair<std::string, std::string>> headers;
+        Fields trailers;
         std::string body, outgoing;
         std::size_t sent = 0;
         bool complete = false, responded = false;
@@ -172,6 +175,33 @@ namespace {
         return static_cast<std::int32_t>(id);
       }
 
+      // A request with exactly `fields`, as a client that sends what it likes would.
+      auto request(const Fields& fields, std::string body) -> std::int32_t {
+        const auto id = nghttp2_session_get_next_stream_id(session_);
+        auto& stream = streams[id];
+
+        stream.outgoing = std::move(body);
+        const auto native = nativeFields(fields);
+        const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
+
+        check(nghttp2_submit_request2(session_, nullptr, native.data(), native.size(), &provider, nullptr) == static_cast<std::int32_t>(id));
+        return static_cast<std::int32_t>(id);
+      }
+
+      // A response with exactly `fields`, then `body` and, when given, `trailers`.
+      void respond(std::int32_t id, const Fields& fields, std::string body, Fields trailers = {}) {
+        auto& stream = streams.at(id);
+
+        stream.outgoing = std::move(body);
+        stream.trailers = std::move(trailers);
+        stream.sent = 0;
+        stream.responded = true;
+        const auto native = nativeFields(fields);
+        const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
+
+        check(nghttp2_submit_response2(session_, id, native.data(), native.size(), &provider) == 0);
+      }
+
       void respond(std::int32_t id, std::string body) {
         auto& stream = streams.at(id);
 
@@ -188,7 +218,7 @@ namespace {
 
       void echo() {
         for (auto& [id, stream] : streams) {
-          if (stream.complete && !stream.responded && !stream.reset) {
+          if (echoing && stream.complete && !stream.responded && !stream.reset) {
             respond(id, std::string{"origin\0", 7} + stream.body);
           }
         }
@@ -236,8 +266,19 @@ namespace {
 
       std::map<std::int32_t, Stream> streams;
       bool pong = false;
+      bool echoing = true;
 
     private:
+      static auto nativeFields(const Fields& fields) -> std::vector<nghttp2_nv> {
+        std::vector<nghttp2_nv> native;
+
+        for (const auto& [name, value] : fields) {
+          native.push_back({reinterpret_cast<std::uint8_t*>(const_cast<char*>(name.data())), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), name.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
+        }
+
+        return native;
+      }
+
       template <std::size_t Size>
       static auto nativeFields(const std::array<std::pair<std::string_view, std::string_view>, Size>& fields) -> std::array<nghttp2_nv, Size> {
         std::array<nghttp2_nv, Size> native;
@@ -251,7 +292,7 @@ namespace {
         return native;
       }
 
-      static nghttp2_ssize read(nghttp2_session*, std::int32_t, std::uint8_t* output, std::size_t capacity, std::uint32_t* flags, nghttp2_data_source* source, void*) noexcept {
+      static nghttp2_ssize read(nghttp2_session* session, std::int32_t id, std::uint8_t* output, std::size_t capacity, std::uint32_t* flags, nghttp2_data_source* source, void*) noexcept {
         auto& stream = *static_cast<Stream*>(source->ptr);
         const auto bytes = std::string_view{stream.outgoing}.substr(stream.sent, capacity);
 
@@ -259,6 +300,12 @@ namespace {
         stream.sent += bytes.size();
         if (stream.sent == stream.outgoing.size()) {
           *flags |= NGHTTP2_DATA_FLAG_EOF;
+          if (!stream.trailers.empty()) {
+            const auto native = nativeFields(stream.trailers);
+
+            *flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+            check(nghttp2_submit_trailer(session, id, native.data(), native.size()) == 0);
+          }
         }
 
         return static_cast<nghttp2_ssize>(bytes.size());
@@ -521,8 +568,198 @@ namespace {
         check(original_head ? fixture.client.streams[stream].body.empty() : fixture.client.streams[stream].body == std::string{"response\0", 9});
       }
     }
+
+    using Fields = Peer::Fields;
+
+    // The origin's stream for the request whose path ends with `suffix`, once the request is complete.
+    auto originStream(Fixture& fixture, std::string_view suffix) -> std::optional<std::int32_t> {
+      for (const auto& [id, stream] : fixture.server.streams) {
+        if (stream.complete && stream.field(":path").ends_with(suffix)) {
+          return id;
+        }
+      }
+
+      return std::nullopt;
+    }
+
+    bool settled(const Peer::Stream& stream) {
+      return stream.complete || stream.reset != 0;
+    }
+
+    bool reported(const Owner& owner, std::string_view reason) {
+      return !owner.errors.empty() && std::ranges::all_of(owner.errors, [&](const std::string& error) {
+        return error == reason;
+      });
+    }
+
+    // An intercepted stream whose body cannot be held whole, a declared length past the buffer, an
+    // event stream or a tunnel, follows the policy: closed resets it before either peer sees it,
+    // open forwards it unchanged; both report why.
+    void unavailablePolicy() {
+      for (const bool closed : {false, true}) {
+        {
+          Fixture fixture{closed};
+          const std::string body(2 * HttpMessageLimits::body_bytes, 'b');
+          const auto stream = fixture.client.request(Fields{{":method", "POST"}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", "/large"}, {"content-length", std::to_string(body.size())}}, body);
+
+          fixture.until([&] {
+            fixture.automatic(0, false);
+            return settled(fixture.client.streams[stream]);
+          });
+
+          check(reported(fixture.owner, "http2_body_limit"));
+          if (closed) {
+            check(fixture.client.streams[stream].reset != 0 && fixture.server.streams.empty());
+          } else {
+            check(fixture.client.streams[stream].complete && fixture.client.streams[stream].body == std::string{"origin\0", 7} + body);
+          }
+        }
+
+        {
+          Fixture fixture{closed};
+
+          fixture.server.echoing = false;
+          const auto stream = fixture.client.request("/events", {}, "GET");
+
+          fixture.until([&] {
+            fixture.automatic(0, false);
+            return originStream(fixture, "/events").has_value();
+          });
+
+          fixture.server.respond(*originStream(fixture, "/events"), Fields{{":status", "200"}, {"content-type", "text/event-stream"}}, "data: x\n\n");
+          fixture.until([&] {
+            fixture.automatic(0, false);
+            return settled(fixture.client.streams[stream]);
+          });
+
+          const auto& received = fixture.client.streams[stream];
+
+          check(fixture.owner.errors == std::vector<std::string>{"http2_streaming_body"});
+          if (closed) {
+            check(received.reset != 0 && received.field(":status").empty() && received.body.empty());
+          } else {
+            check(received.complete && received.field("content-type") == "text/event-stream" && received.body == "data: x\n\n");
+          }
+        }
+
+        {
+          Fixture fixture{closed};
+
+          fixture.server.echoing = false;
+          const auto stream = fixture.client.request(Fields{{":method", "CONNECT"}, {":authority", "fixture.test:443"}}, "tunnel");
+
+          fixture.until([&] {
+            return closed ? fixture.client.streams[stream].reset != 0 : !fixture.server.streams.empty() && fixture.server.streams.begin()->second.complete;
+          });
+
+          check(fixture.owner.errors.front() == "http2_tunnel_body");
+          if (closed) {
+            check(fixture.server.streams.empty());
+          } else {
+            const auto& tunneled = fixture.server.streams.begin()->second;
+
+            check(tunneled.field(":method") == "CONNECT" && tunneled.body == "tunnel");
+          }
+        }
+      }
+    }
+
+    // nghttp2 accepts a comma in an authority, which names two hosts to a reader of the Host field,
+    // and a status of 600; the endpoint refuses both, for that stream alone.
+    void invalidMessages() {
+      Fixture fixture;
+      const auto listed = fixture.client.request(Fields{{":method", "GET"}, {":scheme", "https"}, {":authority", "fixture.test,other.test"}, {":path", "/listed"}}, {});
+
+      fixture.until([&] {
+        return fixture.client.streams[listed].reset != 0;
+      });
+
+      check(fixture.server.streams.empty() && fixture.owner.errors == std::vector<std::string>{"http2_message_failed"});
+      fixture.server.echoing = false;
+      const auto status = fixture.client.request("/status", {}, "GET");
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return originStream(fixture, "/status").has_value();
+      });
+
+      fixture.server.respond(*originStream(fixture, "/status"), Fields{{":status", "600"}}, "out of range");
+      fixture.until([&] {
+        return settled(fixture.client.streams[status]);
+      });
+
+      check(fixture.client.streams[status].reset != 0 && fixture.client.streams[status].field(":status").empty());
+      check(fixture.owner.errors == std::vector<std::string>{"http2_message_failed", "http2_invalid_headers"});
+      fixture.server.echoing = true;
+      const auto next = fixture.client.request("/next", "next");
+
+      fixture.until([&] {
+        fixture.automatic();
+        return fixture.client.streams[next].complete;
+      });
+
+      check(!fixture.connection.finished());
+    }
+
+    // A plugin's replacement that does not decode resets its own stream; the connection and its
+    // other streams carry on.
+    void invalidDecision() {
+      Fixture fixture;
+      const auto broken = fixture.client.request("/broken", "body");
+
+      fixture.until([&] {
+        return !fixture.owner.requests.empty();
+      });
+
+      const std::array<Byte, 3> garbage{1, 2, 3};
+
+      fixture.owner.broker.decide(fixture.owner.requests.front().ticket, Verdict::replace, garbage);
+      fixture.owner.requests.clear();
+      fixture.until([&] {
+        return settled(fixture.client.streams[broken]);
+      });
+
+      check(fixture.client.streams[broken].reset != 0 && fixture.server.streams.empty());
+      check(fixture.owner.errors == std::vector<std::string>{"http2_invalid_decision"});
+      const auto next = fixture.client.request("/next", "next");
+
+      fixture.until([&] {
+        fixture.automatic();
+        return fixture.client.streams[next].complete;
+      });
+
+      check(!fixture.connection.finished() && fixture.server.streams.size() == 1);
+    }
+
+    // gRPC carries its status in response trailers: an intercepted response keeps them.
+    void responseTrailers() {
+      Fixture fixture;
+
+      fixture.server.echoing = false;
+      const auto stream = fixture.client.request("/grpc", "call");
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return originStream(fixture, "/grpc").has_value();
+      });
+
+      fixture.server.respond(*originStream(fixture, "/grpc"), Fields{{":status", "200"}, {"content-type", "application/grpc"}}, "reply", Fields{{"grpc-status", "0"}, {"grpc-message", "done"}});
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return settled(fixture.client.streams[stream]);
+      });
+
+      const auto& received = fixture.client.streams[stream];
+
+      check(received.complete && received.body == "reply" && fixture.owner.errors.empty());
+      check(received.field("grpc-status") == "0" && received.field("grpc-message") == "done");
+    }
   }
 
+  const telar::testing::Case case_unavailable_policy{"http2_endpoint.unavailable_policy", unavailablePolicy};
+  const telar::testing::Case case_invalid_messages{"http2_endpoint.invalid_messages", invalidMessages};
+  const telar::testing::Case case_invalid_decision{"http2_endpoint.invalid_decision", invalidDecision};
+  const telar::testing::Case case_response_trailers{"http2_endpoint.response_trailers", responseTrailers};
   const telar::testing::Case case_multiplexed{
       "http2_endpoint.multiplexed",
       [] {
