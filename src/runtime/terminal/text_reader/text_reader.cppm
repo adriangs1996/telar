@@ -471,7 +471,30 @@ export {
 
       void updateScroll();
 
-      tbc::view<GhosttyAllocatorBridge<ConcurrentMemory>, tbc::lt::a> allocator_;
+      // The terminal's memory as ghostty sees it, counting the allocations it refused. Ghostty
+      // records any operation it could not complete as a processing error and carries on, as
+      // when a page holds no more hyperlinks; only a refused allocation means the pane's memory
+      // ran out.
+      struct GhosttyMemory {
+        void* allocate(std::size_t size, std::size_t alignment) noexcept {
+          auto* const pointer = memory.allocate(size, alignment);
+          if (pointer == nullptr) {
+            refusals.fetch_add(1, std::memory_order_relaxed);
+          }
+
+          return pointer;
+        }
+
+        void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
+          memory.deallocate(pointer, size, alignment);
+        }
+
+        tbc::view<ConcurrentMemory&, tbc::lt::a> memory;
+        std::atomic<std::size_t> refusals = 0;
+      };
+
+      GhosttyMemory ghostty_memory_;
+      tbc::view<GhosttyAllocatorBridge<GhosttyMemory>, tbc::lt::a> allocator_;
       TerminalHandle terminal_;
       RenderStateHandle render_state_;
       RowIteratorHandle row_iterator_;
