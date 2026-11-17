@@ -89,8 +89,6 @@ telar_add_test(gui-font-grid-test SOURCES font_grid_test.cpp LIBRARIES gui-found
   TEST gui-font-grid LABELS gui.foundation.terminal)
 telar_add_test(gui-core-test SOURCES core_test.cpp LIBRARIES gui-foundation-model gui-foundation-core gui-foundation-terminal gui-features-history gui-features-terminal-input gui-application gui-test-fixtures
   TEST LABELS gui.foundation.core TIMEOUT 30)
-telar_add_test(gui-color-test SOURCES color_test.cpp LIBRARIES gui-foundation-core
-  TEST gui-color LABELS gui.foundation.core)
 telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core gui-foundation-terminal
   CHECKS lint lifetime blank_lines)
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
@@ -306,6 +304,18 @@ if(TELAR_GUI_NATIVE)
   add_library(gui-testing-main STATIC testing_main.cpp)
   target_link_libraries(gui-testing-main PUBLIC telar::testing Qt6::Gui)
   telar_register_checks(gui-testing-main CHECKS lint blank_lines)
+
+  # The tests of src/gui/ui live beside the folders they check, one program per tree. They
+  # are declared here, where Qt is found, and see the shared fixtures of this folder.
+  telar_add_tests(gui-ui-design-tests LABEL gui.ui.design DIRECTORY ../ui/design RECURSE QT MAIN gui-testing-main
+    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation TIMEOUT 30)
+  set_target_properties(gui-ui-design-tests PROPERTIES AUTOMOC ON)
+  target_include_directories(gui-ui-design-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  qt_add_resources(gui-ui-design-tests gui-icon-fixtures
+    PREFIX "/telar/test-icons"
+    BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons"
+    FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons/folder-small.png"
+          "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons/unknown-status.png")
   # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.
   include("${TELAR_ROOT}/cmake/openssl.cmake")
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
@@ -362,8 +372,6 @@ if(TELAR_GUI_NATIVE)
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-terminal-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/terminal_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin
     CHECKS lint lifetime blank_lines)
-  telar_add_test(gui-chrome-icon-test QT SOURCES chrome_icon_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
-    TEST gui-chrome-icon LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-status-bar-test QT SOURCES status_bar_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-status-bar LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-rounded-rectangle-test QT SOURCES rounded_rectangle_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
@@ -374,10 +382,6 @@ if(TELAR_GUI_NATIVE)
     FILES fixtures/shapes/cases.json fixtures/shapes/rounded-rectangles.png)
   telar_add_test(gui-mode-bar-test QT SOURCES mode_bar_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-mode-bar LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  qt_add_resources(gui-chrome-icon-test gui-icon-fixtures
-    PREFIX "/telar/test-icons"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/icons"
-    FILES fixtures/icons/folder-small.png fixtures/icons/unknown-status.png)
   telar_add_test(gui-tab-activity-scene-test QT SOURCES tab_activity_scene_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-tab-activity-scene LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   qt_add_resources(gui-tab-activity-scene-test gui-progress-fixtures

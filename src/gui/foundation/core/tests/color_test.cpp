@@ -6,13 +6,14 @@ static_assert(true);
 #include <cfenv>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 
 import std;
+import telar.testing;
 import telar.gui.foundation.core;
 
 namespace {
 
+  using telar::testing::check;
   using telar::gui::Color;
   using ColorBits = std::array<std::uint32_t, 4>;
 
@@ -33,12 +34,6 @@ namespace {
   static_assert(constant_color.r == constant_expected.r && constant_color.g == constant_expected.g && constant_color.b == constant_expected.b && constant_color.a == constant_expected.a);
   static_assert(sizeof(Color) == sizeof(ColorBits) && std::is_trivially_copyable_v<Color> && std::is_aggregate_v<Color>);
 
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
-
   float referenceChannel(std::uint32_t channel) {
     const volatile auto numerator = static_cast<float>(channel);
     const volatile float denominator = channel_mask;
@@ -56,7 +51,7 @@ namespace {
 
     const auto actual = std::bit_cast<ColorBits>(Color::rgb(rgb, std::bit_cast<float>(alpha)));
 
-    require(actual == expected, "RGB normalization must preserve all color and alpha bits");
+    check(actual == expected, "RGB normalization must preserve all color and alpha bits");
   }
 
   std::size_t everyChannel() {
@@ -94,19 +89,16 @@ namespace {
     return samples * alpha_bits.size();
   }
 
-}
-
-int main() {
-  try {
-    require(std::fegetround() == FE_TONEAREST, "RGB oracle requires round-to-nearest");
+  // Every channel value and a sample of combined colors, bit for bit against an oracle that
+  // rounds to nearest; the count proves the oracle ran every declared case.
+  void bitExactNormalization() {
+    check(std::fegetround() == FE_TONEAREST, "RGB oracle requires round-to-nearest");
     constexpr std::size_t expected_checks = 38912;
     const auto checks = everyChannel() + combinedChannels();
 
-    require(checks == expected_checks, "RGB oracle must execute every declared case");
-    std::puts("gui-color: 38912 bit-exact cases passed");
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-
-    return 1;
+    check(checks == expected_checks, "RGB oracle must execute every declared case");
   }
+
+  const telar::testing::Case case_bit_exact_normalization{"color.bit_exact_normalization", bitExactNormalization};
+
 }

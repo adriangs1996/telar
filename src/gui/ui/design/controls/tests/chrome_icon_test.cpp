@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
+#include "qt_case.hpp"
 #include "ui/design/controls/native_chrome_icon.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
@@ -299,13 +300,15 @@ namespace {
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QGuiApplication application{argc, argv};
-  ChromeIconTest test;
+  const QtCase<ChromeIconTest, "symbolsFallbackKeepsOriginalCoverage"> case_symbols_fallback{"chrome_icon.symbols_fallback_keeps_original_coverage"};
+  const QtCase<ChromeIconTest, "preferredSansKeepsOriginalCoverage"> case_preferred_sans{"chrome_icon.preferred_sans_keeps_original_coverage"};
+  const QtCase<ChromeIconTest, "fontFacesRemainSeparateAcrossThreads"> case_font_faces{"chrome_icon.font_faces_remain_separate_across_threads"};
+  const QtCase<ChromeIconTest, "differentSamplersCannotBatchTogether"> case_samplers{"chrome_icon.different_samplers_cannot_batch_together"};
+  const QtCase<ChromeIconTest, "adjacentColorsMatchIsolatedRenderingAfterRecoloring"> case_adjacent_colors{"chrome_icon.adjacent_colors_match_isolated_rendering"};
+  const QtCase<ChromeIconTest, "qmlIconNeedsNoApplicationController"> case_qml_icon{"chrome_icon.qml_icon_needs_no_application_controller"};
 
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "chrome_icon_test.moc"
