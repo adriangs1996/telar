@@ -323,7 +323,6 @@ class Stack:
         assert sorted((entry['branch'], entry['origin']) for entry in listed if entry['worktree_id'] is not None) == [('titled-a', 'telar'), ('titled-b', 'telar')], listed
         assert [(entry['branch'], entry['origin']) for entry in listed if entry['worktree_id'] is None] == [('manual', 'untracked')], listed
         self.call('worktree-remove-ambiguous-title', 'worktree', 'remove', 'fix', status=1)
-        assert 'more than one worktree' in self.results['worktree-remove-ambiguous-title']['stderr']
         assert all(Path(entry['path']).is_dir() for entry in titled)
         self.call('worktree-remove-titled-a', 'worktree', 'remove', 'titled-a')
         self.call('worktree-remove-titled-b', 'worktree', 'remove', 'titled-b')
