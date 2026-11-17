@@ -135,20 +135,6 @@ install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".l
     cp -R "$stage/$app" "{{ apps }}/$app"
     ln -sf "{{ apps }}/$app/Contents/Resources/bin/telar" "{{ bin }}/telar"
 
-# Run the Go proxy service. Extra arguments are passed to the service.
-[working-directory: "src/proxy"]
-proxy *args:
-    go run ./cmd/telar-proxy {{ args }}
-
-# Test the Go proxy module. Extra arguments are passed to `go test`.
-[working-directory: "src/proxy"]
-proxy-test *args:
-    go test {{ args }} ./...
-
-# Validate Linux TUN forwarding and NAT in an isolated Docker network.
-proxy-test-linux:
-    python3 src/proxy/tests/linux/run.py
-
 # Build EBNF and run its GoogleTest suite with color in the ci tree. Extra arguments are forwarded to CTest.
 [positional-arguments]
 ebnf-test *args:
