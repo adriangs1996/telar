@@ -6,3 +6,7 @@ telar_add_domain(gui features/terminal/links
     links-presentation.cpp
     links-text.cpp
   DEPS foundation/core foundation/text foundation/terminal)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(features/terminal/links TIMEOUT 30)
+endif()

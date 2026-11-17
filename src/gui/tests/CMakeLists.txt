@@ -83,12 +83,6 @@ telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-found
   TEST gui-copy-mode LABELS gui.features.terminal.copy_mode TIMEOUT 30)
 telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
   TEST gui-directory-completion LABELS gui.foundation.system TIMEOUT 30)
-telar_add_test(gui-links-test SOURCES links_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-links gui-test-fixtures
-  TEST gui-features-terminal-links LABELS gui.features.terminal.links TIMEOUT 30)
-telar_add_test(gui-file-links-test SOURCES file_links_test.cpp LIBRARIES gui-features-terminal-links
-  TEST gui-file-links LABELS gui.features.terminal.links TIMEOUT 30)
-telar_add_test(gui-link-interaction-test SOURCES link_interaction_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-links gui-test-fixtures
-  TEST gui-link-interaction LABELS gui.features.terminal.links TIMEOUT 30)
 telar_add_test(gui-child-mouse-test SOURCES child_mouse_test.cpp LIBRARIES gui-foundation-core gui-features-terminal-input
   TEST gui-child-mouse LABELS gui.features.terminal.input TIMEOUT 30)
 telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-test-fixtures
