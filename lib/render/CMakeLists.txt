@@ -11,9 +11,6 @@ telar_add_library(telar-render
 target_compile_options(telar-render PRIVATE ${TELAR_WARNINGS})
 
 if(BUILD_TESTING)
-  add_executable(telar-render-tests tests/render_test.cpp)
-  target_link_libraries(telar-render-tests PRIVATE telar::render)
+  telar_add_tests(telar-render-tests LABEL lib.render LINK telar::render)
   target_compile_options(telar-render-tests PRIVATE ${TELAR_WARNINGS})
-  add_test(NAME telar-render-tests COMMAND telar-render-tests)
-  set_tests_properties(telar-render-tests PROPERTIES LABELS lib.render)
 endif()

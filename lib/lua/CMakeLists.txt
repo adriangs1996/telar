@@ -21,3 +21,7 @@ telar_add_library(telar-lua
   SOURCES lua.cpp
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar-lua-vm telar::base)
+
+if(BUILD_TESTING)
+  telar_add_tests(telar-lua-tests LABEL lib.lua LINK telar::lua telar::base)
+endif()

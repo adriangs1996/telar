@@ -11,10 +11,10 @@
 #include <vector>
 #elif QUEUE_TRACE_BASE
 import std;
-import telar.runtime.tests.protocol_peer;
+import telar.runtime.tools.protocol_peer;
 #else
 import std;
-import telar.runtime.tests.protocol_peer;
+import telar.runtime.tools.protocol_peer;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;

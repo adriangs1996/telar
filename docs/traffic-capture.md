@@ -56,9 +56,7 @@ name and index. The one-second scan can miss interfaces that appear and disappea
 entirely between scans.
 If a name reappears with a different index, the helper closes the old capture
 and opens the replacement. A libpcap read failure also closes that capture;
-the next scan retries opening an interface that is still active. On 2026-10-30,
-the user reported native creation/removal/recreation passing for the owned
-virtual-interface fixture described below.
+the next scan retries opening an interface that is still active.
 
 Capture is best effort and non-promiscuous. There are at most 128 capture
 interfaces and 32 subscribers. Packets retain their original link type, bytes,
@@ -67,24 +65,11 @@ limited to 262144 bytes per packet; `truncated` reports shorter captures.
 Unsupported protocols remain available as raw bytes.
 
 Permissions, device errors and unavailable interfaces can reduce coverage.
-On 2026-10-27, the user reported successful native UDP loopback capture through
-the C++ helper and actual Desktop Lua API. The combined check also passed
-selected TCP redirection to a controlled LAN host. These are separate results:
-LAN redirection does not establish physical-interface packet capture. On
-2026-10-30, the user reported the routed capture check passing on `en0` with the
-controlled LAN host: exact outbound/inbound binary payloads reached Desktop Lua
-with verified interface attribution and cancellation. The user subsequently
-reported two native virtual-interface creation/packet/removal cycles reaching
-Desktop Lua with identity checks and cancellation. VPN capture remains
-unverified. The focused
-unprivileged delivery check uses a real PCAP file.
+VPN capture remains unverified.
 
 Passive TCP analysis now reconstructs bounded IPv4/IPv6 fragments while raw
-subscriptions and PCAPNG recordings keep the original packets. The
-`check_traffic.py --fragments` check passes through the actual importer, runtime
-and Desktop Lua API, also under AddressSanitizer. See the [fragment limits and
-error contract](traffic-flows.md#observe-streams). This offline evidence does not
-establish physical-interface capture coverage.
+subscriptions and PCAPNG recordings keep the original packets. See the
+[fragment limits and error contract](traffic-flows.md#observe-streams).
 
 ## Subscribe from Desktop Lua
 
@@ -216,96 +201,18 @@ Import a PCAP through the same data channel. Every imported event is labelled
 From the repository root, run the focused checks:
 
 ```sh
-cmake --build out/dev --target telar-runtime traffic-tests plugin-tests tls-tests
-ctest --test-dir out/dev -R '^(traffic-tests|plugin-tests|tls-tests)$' --output-on-failure
-cmake --build src/desktop-mode/out/debug --target traffic_dbg
-python3 src/runtime/tools/check_traffic.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg
+cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-plugins-tests runtime-tls-tests telar-tls-tests
+ctest --test-dir out/dev -L '^(runtime\.(integration|traffic|plugins|tls)|lib\.tls)$' --output-on-failure
 ```
 
-The cross-process check starts an isolated runtime with a private temporary
-directory and in-memory history. It imports a PCAP and verifies the real
-Desktop Lua API, native BPF filtering, exact binary payload and cancellation
-inside the callback. It leaves the regular runtime and OS trust untouched.
-
-To check actual loopback capture, run this as your account in a terminal. It
-requests sudo for the capture helper, keeps its temporary runtime unprivileged,
-checks exact UDP bytes and interface attribution, and shuts both down. Add
-`--lua-probe src/desktop-mode/out/debug/traffic_dbg` to verify the real Lua path:
-
-```sh
-python3 src/runtime/tools/check_traffic_live.py \
-  --runtime out/dev/src/runtime/telar-runtime
-```
-
-This establishes loopback acceptance only. Physical interfaces, VPN devices
-and interface changes still need native coverage tests.
-
-The verifier also has an optional controlled-host check for a routed interface:
-
-```sh
-/usr/bin/python3 src/runtime/tools/check_traffic_live.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --ssh-origin CONTROLLED_HOST
-```
-
-It starts the existing authenticated temporary TCP echo origin, inspects the
-destination's actual routing interface and requires the outbound and inbound
-binary markers on that interface in native subscriptions and Desktop Lua.
-The helper remains the only elevated process. `--ssh-address IP` selects the
-echo address; `--expected-interface IFACE` additionally requires that route.
-Loopback routes cannot satisfy this check. A virtual/VPN route establishes
-observation at that virtual interface, without claiming its underlying physical
-link. The temporary echo server stops when its SSH owner closes.
-
-Add `--bound-interface IFACE` to bind the remote test socket explicitly to that
-macOS interface. The checker reads back its kernel binding before and after
-connect and requires the two binary capture markers on that selected interface
-in both native subscriptions and Desktop Lua. This does not infer the binding
-from the default route. `check_network.py` forwards the same option to its LAN
-capture and redirect stages, including the selected child when `--selection` is
-used. The optional separate VPN stages retain their own destination/interface
-selection. On 2026-10-30, the user reported native bound IPv4 LAN capture on
-`en0` passing: outbound/inbound binary payloads reached Desktop Lua with verified
-interface identity and cancellation. The separate bound redirection check also
-passed remote binary relay, exclusions, direct connections after shutdown and
-PF loopback restoration. These results cover the exercised IPv4 LAN binding;
-bound VPN traffic remains unverified.
-
-`check_network.py --ssh-origin ...` now includes that routed capture check before
-redirection. Its optional VPN arguments also run capture with the specified VPN
-interface. The user reported the privileged `en0` routed-capture stage passing on
-2026-10-30. The subsequent interface-lifecycle stage failed in the Lua verifier's
-assumption that OS indices could never recur. The corrected checker requires a
-fresh open/packet/close cycle for each recreation and accepts reused indices.
-The user subsequently reported the focused native interface-lifecycle check
-passing on the same date.
-
-The optional virtual-interface fixture creates only its own temporary `utun`,
-injects a binary loopback-addressed UDP packet on it, closes it, and repeats the
-cycle. It reuses the runtime's C++ private-tunnel setup. No existing interface,
-PF rule, configured route or trust store is changed. The fixture exits and
-releases its tunnel when its owner closes stdin, or after 30 seconds without a
-command. With `--lua-probe`, Lua must observe each open, exact binary packet and
-close, including the corresponding nonzero interface index, before cancelling.
-The index must remain consistent within each observed cycle; a later cycle may
-reuse it. A Lua regression covers both reused and changed indices, missing
-openings, stale packets, mismatched indices and duplicate openings.
+The virtual-interface fixture `traffic-interface-probe` creates only its own
+temporary `utun`, injects a binary loopback-addressed UDP packet on it, closes
+it, and repeats the cycle. It reuses the runtime's C++ private-tunnel setup. No
+existing interface, PF rule, configured route or trust store is changed. The
+fixture exits and releases its tunnel when its owner closes stdin, or after 30
+seconds without a command. Its packet framing, checksum and datagram decoder
+checks pass without root in normal and AddressSanitizer builds.
 
 ```sh
 cmake --build out/dev --target traffic-interface-probe
-/usr/bin/python3 src/runtime/tools/check_traffic_live.py \
-  --runtime out/dev/src/runtime/telar-runtime \
-  --lua-probe src/desktop-mode/out/debug/traffic_dbg \
-  --interface-probe out/dev/src/runtime/traffic-interface-probe
 ```
-
-The same `--interface-probe` argument enables this stage in `check_network.py`.
-The fixture's packet framing, checksum and datagram decoder checks pass without
-root in normal and AddressSanitizer builds. Separately, the user reported native
-sudo acceptance on 2026-10-30: loopback capture, actual Desktop Lua binary packet
-delivery/cancellation and two virtual-interface creation, binary capture,
-removal and recreation cycles through Lua. This does not establish capture of
-a configured VPN's tunnel traffic or physical adapter removal.

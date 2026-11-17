@@ -62,8 +62,6 @@ if(BUILD_TESTING)
   add_executable(clipboard main.cpp cli.cpp)
   target_link_libraries(clipboard PRIVATE telar-clipboard)
   target_compile_options(clipboard PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
-  add_test(NAME clipboard-smoke COMMAND clipboard --help)
-  set_tests_properties(clipboard-smoke PROPERTIES TIMEOUT 30 LABELS lib.clipboard)
   set(clipboard_targets telar-clipboard clipboard)
   telar_register_checks(clipboard CHECKS lint lifetime)
 

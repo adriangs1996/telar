@@ -16,9 +16,11 @@ import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.history;
 import telar.platform.primitives;
-import telar.runtime.tests.check;
+import telar.testing;
 import telar.runtime.history.event;
 import telar.runtime.history.store;
+
+using telar::testing::check;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -12,12 +12,9 @@ if(TELAR_THIN_LTO AND NOT APPLE)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(telar-base-tests tests/base_test.cpp)
-  target_link_libraries(telar-base-tests PRIVATE telar::base)
+  telar_add_tests(telar-base-tests LABEL lib.base LINK telar::base)
   target_compile_definitions(telar-base-tests PRIVATE TELAR_DEBUG=$<CONFIG:Debug>)
   target_compile_options(telar-base-tests PRIVATE ${TELAR_WARNINGS})
-  add_test(NAME telar-base-tests COMMAND telar-base-tests)
-  set_tests_properties(telar-base-tests PROPERTIES LABELS lib.base)
 
   # Compile residual ABI/macro headers and every import independently, without client or runtime paths.
   add_library(telar-base-headers OBJECT)

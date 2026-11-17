@@ -25,3 +25,7 @@ add_subdirectory(git)
 add_subdirectory(tls)
 add_subdirectory(plugins)
 add_subdirectory(config)
+
+if(BUILD_TESTING)
+  add_subdirectory(testing)
+endif()

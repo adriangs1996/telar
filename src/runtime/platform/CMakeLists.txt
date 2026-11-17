@@ -25,3 +25,7 @@ telar_add_domain(runtime platform
     proc_file/proc_file.cppm
     process_probe/linux/process_inspector.cpp
   DEPS diagnostics transport suggestions)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(platform LINK telar::base telar::client telar::git telar::platform telar::tls telar::wire telar-tls-tests-support)
+endif()

@@ -81,8 +81,9 @@ dynamic-library paths have not been executed in this macOS validation.
 schema metadata and deterministic observer outputs without a runtime.
 `exec-runtime-cli-tests` runs real executions, imports, prune confirmations,
 recipes, bundle reception, closed-workspace discovery and the preparation probe.
-`runtime-tests` needs a descriptor limit above 4096 for its `F_DUPFD(4096)`
-check; raise the soft limit (for example `ulimit -n 8192`) before running it.
+The `runtime.platform` tests need a descriptor limit above 4096 for their
+`F_DUPFD(4096)` check; raise the soft limit (for example `ulimit -n 8192`) before
+running them.
 
 Common changes are `ControlFailure::message()` (owned raw refusal text), the
 optional request-buffer capacity of `ControlSession`, standard-allocator support

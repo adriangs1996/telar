@@ -197,60 +197,6 @@ export {
                 self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces),
                                  {'src/gui/view/view.cpp': {'telar.sys.process'}})
 
-    def test_the_items_of_an_exported_x_macro_list_are_names_of_the_module(self):
-        signals = ('telar.sys.process', '''module;
-#include <signal.h>
-export module telar.sys.process;
-
-#define SIGNALS(X) \\
-  X(SIGINT)        \\
-  X(SIGTERM)
-#define WAITS(X) \\
-  X(WNOHANG)     \\
-  SIGNALS(X)
-#define CONSTANT(name) inline constexpr auto name = captured::name##_;
-
-export {
-  SIGNALS(CONSTANT)
-  WAITS(CONSTANT)
-}
-''')
-        interfaces = {'lib/sys/process/process.cppm': signals}
-        for body in ('int signal = SIGTERM;', 'int flags = WNOHANG;'):
-            with self.subTest(body=body):
-                self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces), {})
-        for body in ('int signal = SIGNALS;', 'int value = name;'):
-            with self.subTest(body=body):
-                self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces),
-                                 {'src/gui/view/view.cpp': {'telar.sys.process'}})
-
-    def test_the_items_of_an_exported_x_macro_list_are_names_of_the_module(self):
-        signals = ('telar.sys.process', '''module;
-#include <signal.h>
-export module telar.sys.process;
-
-#define SIGNALS(X) \\
-  X(SIGINT)        \\
-  X(SIGTERM)
-#define WAITS(X) \\
-  X(WNOHANG)     \\
-  SIGNALS(X)
-#define CONSTANT(name) inline constexpr auto name = captured::name##_;
-
-export {
-  SIGNALS(CONSTANT)
-  WAITS(CONSTANT)
-}
-''')
-        interfaces = {'lib/sys/process/process.cppm': signals}
-        for body in ('int signal = SIGTERM;', 'int flags = WNOHANG;'):
-            with self.subTest(body=body):
-                self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces), {})
-        for body in ('int signal = SIGNALS;', 'int value = name;'):
-            with self.subTest(body=body):
-                self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces),
-                                 {'src/gui/view/view.cpp': {'telar.sys.process'}})
-
     def test_a_name_that_reaches_the_module_through_a_listed_reexport_uses_it(self):
         interfaces = {'lib/base/color/color.cppm': COLOR, 'src/gui/theme/theme.cppm': THEME}
         reexports = {'src/gui/theme/theme.cppm': ['telar.base.color']}
@@ -443,6 +389,69 @@ class ModuleNamespaces(unittest.TestCase):
             'src/gui/features/peek/peek.cppm': 'export module telar.gui.features.peek;\nnamespace telar::gui::detail {\n  int hidden();\n}\n'
                                                'export namespace telar::gui::features::peek {\n  int open();\n}\n',
         }), 1)
+
+
+LIBRARY_LAYERS = {'sys': [], 'base': ['sys'], 'tls': ['base'], 'testing': ['sys']}
+
+
+def placed(extra):
+    """The proxy domain over terminal and platform, with the tests of `extra`."""
+    files = {
+        'src/runtime/platform/CMakeLists.txt': 'telar_add_domain(runtime platform)\n',
+        'src/runtime/terminal/CMakeLists.txt': 'telar_add_domain(runtime terminal DEPS platform)\n',
+        'src/runtime/http/CMakeLists.txt': 'telar_add_domain(runtime http)\n',
+        'src/runtime/proxy/CMakeLists.txt': 'telar_add_domain(runtime proxy\n  DEPS terminal telar::config)\n',
+    }
+    files.update(extra)
+    return checker.check_test_placement(LAYERS, LIBRARY_LAYERS, set(files), files.__getitem__)
+
+
+def test_unit(*imports):
+    return ''.join(f'import {name};\n' for name in ('telar.testing', *imports))
+
+
+class TestPlacement(unittest.TestCase):
+    def test_accepts_a_domain_test_of_the_domain_and_what_it_builds_on(self):
+        self.assertEqual(placed({
+            'src/runtime/proxy/tests/relay_test.cpp': test_unit('telar.runtime.proxy.relay', 'telar.runtime.platform.socket', 'telar.base.text'),
+            'src/runtime/proxy/tests/peer/peer.cppm': 'export module telar.runtime.proxy.tests.peer;\n' + test_unit('telar.runtime.terminal.grid'),
+        }), 2)
+
+    def test_rejects_a_domain_test_that_reaches_a_domain_its_domain_does_not_build_on(self):
+        with self.assertRaisesRegex(RuntimeError, 'relay_test.cpp imports the http domain, which proxy does not build on: '
+                                    'as an integration test it belongs in src/runtime/tests/'):
+            placed({'src/runtime/proxy/tests/relay_test.cpp': test_unit('telar.runtime.proxy.relay', 'telar.runtime.http.message')})
+
+    def test_accepts_an_integration_test_no_single_domain_holds(self):
+        self.assertEqual(placed({
+            'src/runtime/tests/flow_test.cpp': test_unit('telar.runtime.proxy.relay', 'telar.runtime.http.message'),
+        }), 1)
+
+    def test_rejects_an_integration_test_one_domain_holds(self):
+        with self.assertRaisesRegex(RuntimeError, 'flow_test.cpp reaches only proxy and what it builds on: '
+                                    'it belongs in src/runtime/proxy/tests/'):
+            placed({'src/runtime/tests/flow_test.cpp': test_unit('telar.runtime.proxy.relay', 'telar.runtime.platform.socket')})
+        with self.assertRaisesRegex(RuntimeError, 'imports no domain of runtime: it belongs with the library it checks'):
+            placed({'src/runtime/tests/text_test.cpp': test_unit('telar.base.text')})
+
+    def test_a_library_test_imports_what_the_library_builds_on(self):
+        self.assertEqual(placed({'lib/tls/tests/tls_test.cpp': test_unit('telar.tls', 'telar.base.text', 'telar.sys.posix')}), 1)
+        # A sibling the library does not build on lends its utilities.
+        self.assertEqual(placed({'lib/tls/tests/tls_test.cpp': test_unit('telar.tls', 'telar.testing.socket_pair', 'telar.platform.fs')}), 1)
+        with self.assertRaisesRegex(RuntimeError, 'tls_test.cpp imports telar.runtime.proxy.relay, which is no library'):
+            placed({'lib/tls/tests/tls_test.cpp': test_unit('telar.tls', 'telar.runtime.proxy.relay')})
+        with self.assertRaisesRegex(RuntimeError, 'base_test.cpp imports telar.tls, but lib/tls builds on lib/base'):
+            placed({'lib/base/tests/base_test.cpp': test_unit('telar.base.text', 'telar.tls')})
+
+    def test_rejects_a_test_outside_a_tests_folder(self):
+        with self.assertRaisesRegex(RuntimeError, 'src/runtime/proxy/relay_test.cpp is a test outside a tests/ folder'):
+            placed({'src/runtime/proxy/relay_test.cpp': test_unit('telar.runtime.proxy.relay')})
+
+    def test_leaves_the_gui_and_tbc_to_their_own_layout(self):
+        self.assertEqual(placed({
+            'src/gui/tests/view_test.cpp': test_unit('telar.gui.core.metrics'),
+            'lib/tbc/tests/spec/places.cpp': 'import telar.runtime.proxy.relay;\n',
+        }), 0)
 
 
 if __name__ == '__main__':

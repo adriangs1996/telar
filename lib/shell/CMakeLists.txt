@@ -1,11 +1,8 @@
 telar_add_library(telar-shell SOURCES syntax/syntax.cpp)
 
 if(BUILD_TESTING)
-  add_executable(telar-shell-tests tests/syntax_test.cpp)
-  target_link_libraries(telar-shell-tests PRIVATE telar::shell)
+  telar_add_tests(telar-shell-tests LABEL lib.shell LINK telar::shell)
   target_compile_options(telar-shell-tests PRIVATE ${TELAR_WARNINGS})
-  add_test(NAME telar-shell-tests COMMAND telar-shell-tests)
-  set_tests_properties(telar-shell-tests PROPERTIES LABELS lib.shell)
 
   # Not a test: prints what lexing typical lines costs. Use a Release build.
   add_executable(telar-shell-bench tests/syntax_bench.cpp)

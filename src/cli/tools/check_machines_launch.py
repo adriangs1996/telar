@@ -54,6 +54,18 @@ def invoke(binary, root, env, args, data=b''):
             'stderr': normalize(result.stderr.decode(errors='backslashreplace'), root, binary), 'files': snapshot(root, binary)}
 
 
+def ssh_contract(output):
+    """The argv the fake ssh printed, reduced to what dispatch promises: the terminal flag,
+    the set of options with the ControlPath name hash masked, and every word from `--` on,
+    in order. The order of the options and the naming of the control socket are free."""
+    words = output.splitlines()
+    end = words.index('--')
+    options = sorted(words[index + 1] for index in range(end) if words[index] == '-o')
+    flags = [word for index, word in enumerate(words[:end]) if word != '-o' and (index == 0 or words[index - 1] != '-o')]
+    options = [re.sub(r'^(ControlPath=.*/ssh-)[0-9a-f]+$', r'\1@HASH@', option) for option in options]
+    return '\n'.join(flags + ['-o ' + option for option in options] + words[end:]) + '\n'
+
+
 def encode(word):
     return 'a' + base64.urlsafe_b64encode(word.encode()).decode().rstrip('=')
 
@@ -155,6 +167,8 @@ def outcomes(binary):
         # a terminal on stdin alone keeps stdout clean of the remote terminal's \r\n.
         for name, streams in [('ssh-forward-terminal', ('stdin', 'stdout')), ('ssh-forward-terminal-stdin', ('stdin',))]:
             run_terminal(name, ['--machine','box','worktree','remove','branch','--force'], streams)
+        for case in cases[-3:]:
+            case['stdout'] = ssh_contract(case['stdout'])
         schema = 'cqp00004' if b'cqp00004' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),

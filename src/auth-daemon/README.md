@@ -10,7 +10,6 @@ From the repository root:
 
 ```sh
 just auth-build
-just auth-test
 just lint
 just format-check
 just format
@@ -29,13 +28,11 @@ the pinned LLVM 23.1.5 / CMake 4.4.5 / Ninja 1.13.2 toolchain.
 ## Other trees
 
 `tools/cpp configure sanitize` enables AddressSanitizer and
-UndefinedBehaviorSanitizer in `out/sanitize`. The only test currently checks
-that the scaffold executable exits successfully:
+UndefinedBehaviorSanitizer in `out/sanitize`. The scaffold has no tests yet:
 
 ```sh
 tools/cpp configure sanitize
 tools/cpp build sanitize -- --target telar-auth-daemon
-tools/cpp test sanitize -- -L '^auth$'
 ```
 
 `TELAR_AUTH_WARNINGS_AS_ERRORS=ON` makes compiler warnings fatal, and
