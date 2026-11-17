@@ -40,7 +40,6 @@ static_assert(true);
 #include <span>
 #include <string_view>
 
-import telar.gui.input.copy_pointer;
 import telar.gui.foundation.actions;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;

@@ -63,7 +63,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.components.configuration;
-import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 
 import telar.gui.config.gui_query;
@@ -625,7 +624,7 @@ namespace telar::gui::qt {
       } else if (store_.dialog().kind == Dialog::rename_workspace) {
         store_.session().renameWorkspace(text);
       } else if (store_.dialog().kind == Dialog::copy_search) {
-        store_.session().searchCopy(text);
+        application::terminal::copy_mode::search(store_.session(), text);
       }
 
       dialogs_.show(Dialog::none);
@@ -727,9 +726,9 @@ namespace telar::gui::qt {
         prompt_.publish(store_.session().changedPane());
         emit terminals_.terminalChanged(store_.session().changedPane());
       } else if (store_.dialog().kind == Dialog::none) {
-        static_cast<void>(store_.session().enterCopyMode());
+        static_cast<void>(application::terminal::copy_mode::enter(store_.session()));
         status_.publish();
-        if (const auto& copy = store_.session().copyMode().state()) {
+        if (const auto& copy = application::terminal::copy_mode::view(store_.session()).state()) {
           emit terminals_.terminalChanged(copy->pane_id);
         }
       }
@@ -744,11 +743,11 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& copy = store_.session().copyMode().state();
+    const auto& copy = application::terminal::copy_mode::view(store_.session()).state();
     if (store_.dialog().kind == Dialog::none && copy && !copy->pointer) {
       const auto pane_id = copy->pane_id;
 
-      store_.session().leaveCopyMode();
+      application::terminal::copy_mode::leave(store_.session());
       emit terminals_.terminalChanged(pane_id);
       status_.publish();
     }

@@ -64,7 +64,7 @@ namespace telar::gui::qt {
     // line of the pane copy mode reads, whatever runs there.
     const auto* focused = store_.session().focusedPane();
     const bool searching = kind == Dialog::history || kind == Dialog::paths;
-    const auto& copy = store_.session().copyMode().state();
+    const auto& copy = application::terminal::copy_mode::view(store_.session()).state();
     std::uint64_t line_search_pane = 0;
     if (kind == Dialog::copy_search && copy) {
       line_search_pane = copy->pane_id;

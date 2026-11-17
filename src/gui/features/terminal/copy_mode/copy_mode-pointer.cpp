@@ -1,10 +1,9 @@
-module telar.gui.input.copy_pointer;
+module telar.gui.features.terminal.copy_mode;
 
 import std;
-
 import telar.gui.foundation.terminal;
 
-namespace telar::gui {
+namespace telar::gui::features::terminal::copy_mode {
 
   CopyGranularity ClickTracker::press(CopyPoint position, std::uint64_t now_ns) noexcept {
     const auto distance = std::max(position.x, last_.x) - std::min(position.x, last_.x);

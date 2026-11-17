@@ -8,7 +8,6 @@ import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
 import telar.gui.features.history;
-import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
@@ -202,8 +201,7 @@ namespace telar::gui::application {
     agents_.resetSource();
     pane_list_.resetSource();
     workspaces_.resetSource();
-    copy_mode_.reset();
-    copy_search_request_ = 0;
+    features::terminal::copy_mode::close(copy_mode_);
     features::history::suspend(history_);
     features::paths::close(paths_);
     features::peek::close(peek_);

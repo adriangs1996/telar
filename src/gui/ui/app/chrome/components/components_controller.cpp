@@ -44,7 +44,6 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
-import telar.gui.input.copy_pointer;
 import telar.gui.machines.picker;
 import telar.gui.application;
 

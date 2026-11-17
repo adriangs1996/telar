@@ -635,11 +635,11 @@ void lineBlocks() {
 
   // v selects its output in copy mode, and the editor stays in place of the prompt.
   press('v');
-  const auto& copy = client.copyMode().state();
+  const auto& copy = application::terminal::copy_mode::view(client).state();
 
   require(copy && copy->pane_id == 1 && copy->anchor && copy->anchor->y == 6 && copy->cursor.y == 6, "v starts copy mode on the block's output");
   require(client.promptSurface(1) == prompt::Surface::editor, "copy mode keeps telar's editor");
-  client.leaveCopyMode();
+  application::terminal::copy_mode::leave(client);
   require(client.selectedBlock(1) == std::size_t{1}, "leaving copy mode goes back to the block");
 
   // Stepping past the last block, or A, goes back to the prompt; A in insert mode.
@@ -732,10 +732,10 @@ void lineBlockMotions() {
   require(!client.folded(1, 0) && !client.folded(1, 2), "zR unfolds them all");
 
   press('/');
-  const auto& copy = client.copyMode().state();
+  const auto& copy = application::terminal::copy_mode::view(client).state();
 
-  require(copy && copy->cursor.y == 41 && client.takeSearchRequest() && client.copySearchBlock() == std::size_t{1}, "/ starts a search of the block's output");
-  client.searchCopy("error");
+  require(copy && copy->cursor.y == 41 && application::terminal::copy_mode::takeSearchRequest(client) && application::terminal::copy_mode::searchBlock(client) == std::size_t{1}, "/ starts a search of the block's output");
+  application::terminal::copy_mode::search(client, "error");
   const auto scoped = transport.last<SearchPaneRows>();
 
   require(scoped.first_row == 41 && scoped.last_row == 69, "the search reads only the block's output");
@@ -744,16 +744,16 @@ void lineBlockMotions() {
   const std::array found{PaneMatch{.x = 2, .y = 50, .len = 5}, PaneMatch{.x = 0, .y = 60, .len = 5}};
 
   deliver(client, PaneMatches{.request_id = scoped.request_id, .pane_id = 1, .matches = found});
-  require(client.copySearch().count == 2 && client.copySearch().index == 0 && client.copyMode().state()->cursor.y == 50, "the first match after where the search began is the current one");
-  client.stepCopyMatch(true);
-  require(client.copySearch().index == 1 && client.copyMode().state()->cursor.y == 60, "the next match is a step away");
-  client.searchCopy("");
-  require(client.copySearch().count == 0 && client.copyMode().state()->cursor.y == 41, "an empty query finds nothing and goes back where the search began");
-  client.toggleCopySearchScope();
-  client.searchCopy("error");
-  require(!client.copySearchBlock() && transport.last<SearchPane>().needle == "error", "Tab widens it to the whole scrollback");
-  client.leaveCopyMode();
-  require(!client.copySearchScopes(), "leaving copy mode forgets the search's command");
+  require(application::terminal::copy_mode::searchState(client).count == 2 && application::terminal::copy_mode::searchState(client).index == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == 50, "the first match after where the search began is the current one");
+  application::terminal::copy_mode::stepMatch(client, true);
+  require(application::terminal::copy_mode::searchState(client).index == 1 && application::terminal::copy_mode::view(client).state()->cursor.y == 60, "the next match is a step away");
+  application::terminal::copy_mode::search(client, "");
+  require(application::terminal::copy_mode::searchState(client).count == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == 41, "an empty query finds nothing and goes back where the search began");
+  application::terminal::copy_mode::toggleSearchScope(client);
+  application::terminal::copy_mode::search(client, "error");
+  require(!application::terminal::copy_mode::searchBlock(client) && transport.last<SearchPane>().needle == "error", "Tab widens it to the whole scrollback");
+  application::terminal::copy_mode::leave(client);
+  require(!application::terminal::copy_mode::searchScopes(client), "leaving copy mode forgets the search's command");
 
   // A view that draws its own rows says where its top is; the keys move from there.
   constexpr std::uint64_t shown = 20;

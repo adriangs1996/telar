@@ -197,7 +197,7 @@ telar_add_test(gui-input-test SOURCES input_test.cpp LIBRARIES gui-foundation-ac
   TEST gui-input LABELS gui.input TIMEOUT 30)
 telar_add_test(gui-key-encoder-test SOURCES key_encoder_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-core gui-input
   TEST gui-key-encoder LABELS gui.input TIMEOUT 30)
-telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-input gui-test-fixtures
+telar_add_test(gui-copy-mode-test SOURCES copy_mode_test.cpp LIBRARIES gui-foundation-terminal gui-features-terminal-copy_mode gui-test-fixtures
   TEST gui-copy-mode LABELS gui.input TIMEOUT 30)
 telar_add_test(gui-directory-completion-test SOURCES directory_completion_test.cpp LIBRARIES gui-foundation-system
   TEST gui-directory-completion LABELS gui.paths TIMEOUT 30)

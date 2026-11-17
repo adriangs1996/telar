@@ -60,8 +60,8 @@ namespace telar::gui::qt {
     return store_.session().configuration();
   }
 
-  const std::optional<CopyState>& PromptController::copy() const noexcept {
-    return store_.session().copyMode().state();
+  const std::optional<application::terminal::copy_mode::CopyState>& PromptController::copy() const noexcept {
+    return application::terminal::copy_mode::view(store_.session()).state();
   }
 
   bool PromptController::key(std::uint64_t pane_id, const prompt::KeyPress& key) {
@@ -91,7 +91,7 @@ namespace telar::gui::qt {
       emit blockChanged(pane_id);
     }
 
-    if (session.takeSearchRequest()) {
+    if (application::terminal::copy_mode::takeSearchRequest(session)) {
       emit searchRequested();
     }
 

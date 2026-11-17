@@ -79,7 +79,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    const auto& copy = session.copyMode().state();
+    const auto& copy = application::terminal::copy_mode::view(session).state();
     const auto previous = copy && copy->pointer ? copy->pane_id : 0;
     bool delivered = false;
 
@@ -90,7 +90,7 @@ namespace telar::gui::qt {
       emit failed(QString::fromUtf8(error.what()));
     }
 
-    if (previous != 0 && !session.copyMode().state()) {
+    if (previous != 0 && !application::terminal::copy_mode::view(session).state()) {
       copy_.publishChange(previous);
     }
 

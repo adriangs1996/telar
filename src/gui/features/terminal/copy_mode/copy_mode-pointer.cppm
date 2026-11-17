@@ -1,4 +1,6 @@
-export module telar.gui.input.copy_pointer;
+// The pointer over a terminal's text: the clicks that select a word or a line, and who owns a
+// press, a drag or the wheel while copy mode or a selection holds the pane.
+export module telar.gui.features.terminal.copy_mode:pointer;
 
 import std;
 
@@ -6,7 +8,7 @@ import telar.gui.foundation.terminal;
 
 // Interface: input/click_tracker.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::copy_mode {
 
     class ClickTracker {
     public:
@@ -28,7 +30,7 @@ export {
 
 // Interface: input/copy_pointer.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::terminal::copy_mode {
 
     enum class CopyPointerKind : std::uint8_t {
       press,

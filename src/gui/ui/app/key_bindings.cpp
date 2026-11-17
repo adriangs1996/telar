@@ -48,7 +48,6 @@ static_assert(true);
 #include <cstring>
 
 import telar.gui.application;
-import telar.gui.input.copy_pointer;
 import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {

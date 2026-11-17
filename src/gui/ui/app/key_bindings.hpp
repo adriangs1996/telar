@@ -21,7 +21,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.input.copy_pointer;
+import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.gui.input.key_encoder;

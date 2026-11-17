@@ -39,7 +39,6 @@ import telar.gui.tests.session_fixture;
 import telar.gui.layout.snapshots;
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
 import telar.gui.presentation.display_metrics;
@@ -490,35 +489,35 @@ namespace {
     constexpr std::uint32_t history_rows = 3;
 
     deliverSingleCell(client, {.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = history_rows}});
-    require(client.beginSelection({.pane_id = 1}), "an attached focused pane must admit selection");
-    static_cast<void>(client.pointer({.pane_id = 1, .kind = telar::gui::CopyPointerKind::release}));
-    require(!client.copyMode().state() && transport.count(ClientTag::copy_selection) == 0, "a bare character click must leave without copying");
-    require(client.beginSelection({.pane_id = 1, .now_ns = 1}), "the next nearby press must admit word selection");
+    require(application::terminal::copy_mode::press(client, {.pane_id = 1}), "an attached focused pane must admit selection");
+    static_cast<void>(application::terminal::copy_mode::pointer(client, {.pane_id = 1, .kind = application::terminal::copy_mode::CopyPointerKind::release}));
+    require(!application::terminal::copy_mode::view(client).state() && transport.count(ClientTag::copy_selection) == 0, "a bare character click must leave without copying");
+    require(application::terminal::copy_mode::press(client, {.pane_id = 1, .now_ns = 1}), "the next nearby press must admit word selection");
     transport.reject_copy = true;
     bool rejected = false;
 
     try {
-      static_cast<void>(client.pointer({.pane_id = 1, .kind = telar::gui::CopyPointerKind::release}));
+      static_cast<void>(application::terminal::copy_mode::pointer(client, {.pane_id = 1, .kind = application::terminal::copy_mode::CopyPointerKind::release}));
     } catch (const EncodingError&) {
       rejected = true;
     }
 
-    const auto owner = client.copyMode().pointerOwner();
+    const auto owner = application::terminal::copy_mode::view(client).pointerOwner();
 
-    require(rejected && owner && !owner->dragging && client.copyMode().state(), "copy failure must preserve highlighting and finish physical capture");
+    require(rejected && owner && !owner->dragging && application::terminal::copy_mode::view(client).state(), "copy failure must preserve highlighting and finish physical capture");
     transport.reject_copy = false;
-    require(client.copySelection(1), "retained selection must remain copyable after transport recovery");
+    require(application::terminal::copy_mode::copy(client, 1), "retained selection must remain copyable after transport recovery");
     client.input(1, "mouse", application::PaneInputSource::mouse);
-    require(client.copyMode().state().has_value(), "mouse reports must preserve highlighting");
+    require(application::terminal::copy_mode::view(client).state().has_value(), "mouse reports must preserve highlighting");
     client.input(1, "\x1b[O", application::PaneInputSource::terminal_report);
-    require(client.copyMode().state().has_value(), "focus reports must preserve highlighting");
+    require(application::terminal::copy_mode::view(client).state().has_value(), "focus reports must preserve highlighting");
     client.input(1, "release", application::PaneInputSource::key_release);
-    require(!client.copyMode().state() && client.focusedPane()->screen.scroll().offset == 0, "key releases must clear highlighting without changing the viewport");
-    require(client.beginSelection({.pane_id = 1, .now_ns = 2}), "a new pointer gesture must be available after typing");
+    require(!application::terminal::copy_mode::view(client).state() && client.focusedPane()->screen.scroll().offset == 0, "key releases must clear highlighting without changing the viewport");
+    require(application::terminal::copy_mode::press(client, {.pane_id = 1, .now_ns = 2}), "a new pointer gesture must be available after typing");
     client.input(1, "text");
-    require(!client.copyMode().state() && client.focusedPane()->screen.scroll().offset == history_rows - 1, "typed input must discard highlighting and return to the bottom");
-    static_cast<void>(client.pointer({.pane_id = 1, .kind = CopyPointerKind::release}));
-    require(!client.copyMode().pointerOwner(), "typing during a drag must quarantine and finish its later release");
+    require(!application::terminal::copy_mode::view(client).state() && client.focusedPane()->screen.scroll().offset == history_rows - 1, "typed input must discard highlighting and return to the bottom");
+    static_cast<void>(application::terminal::copy_mode::pointer(client, {.pane_id = 1, .kind = application::terminal::copy_mode::CopyPointerKind::release}));
+    require(!application::terminal::copy_mode::view(client).pointerOwner(), "typing during a drag must quarantine and finish its later release");
   }
 
   void editorNavigation() {
@@ -603,17 +602,17 @@ namespace {
     ++frame.frame_id;
     frame.mouse = {.tracking = MouseTracking::normal, .sgr = true};
     deliverSingleCell(client, frame);
-    require(client.beginSelection({.pane_id = 1}), "the scroll fixture must admit a pointer press");
-    static_cast<void>(client.pointer({.pane_id = 1, .kind = CopyPointerKind::release}));
-    require(client.beginSelection({.pane_id = 1, .now_ns = 1}), "the scroll fixture must admit word selection");
-    static_cast<void>(client.pointer({.pane_id = 1, .kind = CopyPointerKind::release}));
+    require(application::terminal::copy_mode::press(client, {.pane_id = 1}), "the scroll fixture must admit a pointer press");
+    static_cast<void>(application::terminal::copy_mode::pointer(client, {.pane_id = 1, .kind = application::terminal::copy_mode::CopyPointerKind::release}));
+    require(application::terminal::copy_mode::press(client, {.pane_id = 1, .now_ns = 1}), "the scroll fixture must admit word selection");
+    static_cast<void>(application::terminal::copy_mode::pointer(client, {.pane_id = 1, .kind = application::terminal::copy_mode::CopyPointerKind::release}));
     const auto viewport_requests = transport.count(ClientTag::set_pane_viewport);
     auto first_message = transport.sent.size();
 
     application::terminal::input::scroll(client, application::ScrollDirection::up);
     application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.inputSince(first_message) == "\x1b[<64;1;1M\x1b[<65;1;1M", "tracked scroll actions must report one SGR packet at the pane origin");
-    require(client.copyMode().state() && client.focusedPane()->screen.scroll().offset == initial_offset && transport.count(ClientTag::set_pane_viewport) == viewport_requests, "mouse reports must preserve highlighting and the scrolled viewport");
+    require(application::terminal::copy_mode::view(client).state() && client.focusedPane()->screen.scroll().offset == initial_offset && transport.count(ClientTag::set_pane_viewport) == viewport_requests, "mouse reports must preserve highlighting and the scrolled viewport");
 
     ++frame.frame_id;
     frame.mouse.tracking = MouseTracking::x10;
@@ -624,7 +623,7 @@ namespace {
     application::terminal::input::scroll(client, application::ScrollDirection::up);
     application::terminal::input::scroll(client, application::ScrollDirection::down);
     require(transport.inputSince(first_message) == "\x1b[A\x1b[A\x1b[A\x1b[B\x1b[B\x1b[B", "alternate scrolling must use literal arrows independently of Kitty mode");
-    require(client.copyMode().state() && client.focusedPane()->screen.scroll().offset == frame.scroll.offset, "alternate scrolling must preserve highlighting and the bottom viewport");
+    require(application::terminal::copy_mode::view(client).state() && client.focusedPane()->screen.scroll().offset == frame.scroll.offset, "alternate scrolling must preserve highlighting and the bottom viewport");
 
     ++frame.frame_id;
     frame.scroll.offset = initial_offset;
@@ -647,7 +646,7 @@ namespace {
     client.scroll({.pane_id = 1, .rows = std::numeric_limits<std::int64_t>::max()});
     require(client.focusedPane()->screen.scroll().offset == 0, "the largest upward scroll must clamp to the first history row");
     bounded_requests = transport.count(ClientTag::set_pane_viewport);
-    require(client.enterCopyMode(), "the scroll fixture must admit keyboard copy mode");
+    require(application::terminal::copy_mode::enter(client), "the scroll fixture must admit keyboard copy mode");
     client.scroll({.pane_id = 1, .rows = std::numeric_limits<std::int64_t>::min()});
     require(transport.count(ClientTag::set_pane_viewport) == bounded_requests && client.focusedPane()->screen.scroll().offset == 0, "keyboard copy mode must retain exclusive viewport ownership");
     client.disconnected();

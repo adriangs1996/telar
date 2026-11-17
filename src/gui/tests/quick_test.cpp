@@ -141,7 +141,6 @@ import telar.gui.tests.json_fixture;
 import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.graphics.placeholder;
-import telar.gui.input.copy_pointer;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.json;
@@ -1203,7 +1202,7 @@ return {api_version = 2, client = {
       QTest::keyClick(window_, Qt::Key_X);
       QVERIFY(!client_->copy()->state());
       client_->terminals()->input(pane->id, "\x15");
-      const auto click_wait_ms = static_cast<int>(ClickTracker::interval.count()) + 1;
+      const auto click_wait_ms = static_cast<int>(application::terminal::copy_mode::ClickTracker::interval.count()) + 1;
 
       QTest::qWait(click_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));

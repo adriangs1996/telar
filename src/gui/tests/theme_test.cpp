@@ -26,7 +26,6 @@ import telar.base.text.utf8;
 import telar.gui.config.generation;
 import telar.gui.config.gui_query;
 import telar.gui.foundation.core;
-import telar.gui.input.copy_pointer;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.application;
 

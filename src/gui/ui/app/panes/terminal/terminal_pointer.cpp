@@ -27,7 +27,6 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
-import telar.gui.input.copy_pointer;
 
 namespace telar::gui::qt {
 
@@ -90,8 +89,8 @@ namespace telar::gui::qt {
     return {.button = button, .phase = phase, .position = {.x = static_cast<float>(position.x()), .y = static_cast<float>(position.y())}, .modifiers = mouseModifiers(event.modifiers())};
   }
 
-  CopyPointerInput TerminalItem::pointerInput(QPointF position, CopyPointerKind kind, bool left_button, std::int32_t rows) const noexcept {
-    CopyPointerInput input{.pane_id = pane_id_, .kind = kind, .left_button = left_button, .inside = boundingRect().contains(position), .rows = rows};
+  application::terminal::copy_mode::CopyPointerInput TerminalItem::pointerInput(QPointF position, application::terminal::copy_mode::CopyPointerKind kind, bool left_button, std::int32_t rows) const noexcept {
+    application::terminal::copy_mode::CopyPointerInput input{.pane_id = pane_id_, .kind = kind, .left_button = left_button, .inside = boundingRect().contains(position), .rows = rows};
     const auto index = indexAt(position);
     const auto* current = pane();
     if (index < 0 || current == nullptr) {
@@ -115,7 +114,7 @@ namespace telar::gui::qt {
 
     controller_->acquire(*this, event->button());
     const auto left = event->button() == Qt::LeftButton;
-    const auto input = pointerInput(event->position(), CopyPointerKind::press, left);
+    const auto input = pointerInput(event->position(), application::terminal::copy_mode::CopyPointerKind::press, left);
     if (controller_->copy().handlePointer(input)) {
       event->accept();
 
@@ -175,7 +174,7 @@ namespace telar::gui::qt {
       selection_position_ = event->position();
     }
 
-    const auto input = pointerInput(event->position(), CopyPointerKind::drag, event->buttons().testFlag(Qt::LeftButton));
+    const auto input = pointerInput(event->position(), application::terminal::copy_mode::CopyPointerKind::drag, event->buttons().testFlag(Qt::LeftButton));
     if (controller_ != nullptr && controller_->copy().handlePointer(input)) {
       event->accept();
 
@@ -201,7 +200,7 @@ namespace telar::gui::qt {
     }
 
     const auto left = event->button() == Qt::LeftButton;
-    const auto input = pointerInput(event->position(), CopyPointerKind::release, left);
+    const auto input = pointerInput(event->position(), application::terminal::copy_mode::CopyPointerKind::release, left);
     const auto copied = controller_ != nullptr && controller_->copy().handlePointer(input);
 
     if (left) {
@@ -228,7 +227,7 @@ namespace telar::gui::qt {
 
     const auto selecting = std::exchange(selecting_, false);
     if (selecting && controller_ != nullptr) {
-      static_cast<void>(controller_->copy().handlePointer(pointerInput(selection_position_, CopyPointerKind::release)));
+      static_cast<void>(controller_->copy().handlePointer(pointerInput(selection_position_, application::terminal::copy_mode::CopyPointerKind::release)));
     }
 
     link_gesture_.cancel();
@@ -261,7 +260,7 @@ namespace telar::gui::qt {
 
     const auto lines = wheel_.consume(scrollSample(*event, font_.cell.height()));
     const auto rows = lines * WheelAccumulator::rows_per_line;
-    if (lines != 0 && !controller_->copy().handlePointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {
+    if (lines != 0 && !controller_->copy().handlePointer(pointerInput(event->position(), application::terminal::copy_mode::CopyPointerKind::wheel, true, rows))) {
       dispatchWheel(*event, lines);
     }
 
@@ -305,7 +304,7 @@ namespace telar::gui::qt {
   void TerminalItem::hoverMoveEvent(QHoverEvent* event) {
     const auto* current = pane();
 
-    if (controller_ != nullptr && controller_->copy().handlePointer(pointerInput(event->position(), CopyPointerKind::move, false))) {
+    if (controller_ != nullptr && controller_->copy().handlePointer(pointerInput(event->position(), application::terminal::copy_mode::CopyPointerKind::move, false))) {
       setCursor(Qt::IBeamCursor);
       event->accept();
 

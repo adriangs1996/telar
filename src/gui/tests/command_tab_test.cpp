@@ -37,7 +37,6 @@ import telar.gui.config.plugin_effects;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.generation;
-import telar.gui.input.copy_pointer;
 import telar.gui.presentation.tab_drop;
 import telar.config.client;
 

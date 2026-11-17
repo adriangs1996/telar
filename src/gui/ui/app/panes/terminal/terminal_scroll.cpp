@@ -22,7 +22,6 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
-import telar.gui.input.copy_mode;
 
 namespace telar::gui::qt {
 
@@ -916,9 +915,9 @@ namespace telar::gui::qt {
     match_marks_.clear();
     QVariantList rail;
     const auto* current = pane();
-    const auto& copy = controller_ == nullptr ? std::optional<CopyState>{} : controller_->copy().state();
+    const auto& copy = controller_ == nullptr ? std::optional<application::terminal::copy_mode::CopyState>{} : controller_->copy().state();
     if (current != nullptr && copy && copy->pane_id == pane_id_) {
-      const auto matches = controller_->session().copyMode().matches();
+      const auto matches = application::terminal::copy_mode::view(controller_->session()).matches();
       const auto& screen = current->screen;
       const auto total = static_cast<std::uint64_t>(screen.scroll().total_rows);
       const bool mapped = !view_rows_.empty();

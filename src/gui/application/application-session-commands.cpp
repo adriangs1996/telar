@@ -228,7 +228,7 @@ namespace telar::gui::application {
         throw EncodingError{"InvalidScrollDelta"};
       }
 
-      if (!commandPane(message.target_id).attached || copy_mode_.active()) {
+      if (!commandPane(message.target_id).attached || features::terminal::copy_mode::view(copy_mode_).active()) {
         throw EncodingError{"PaneViewportUnavailable"};
       }
 

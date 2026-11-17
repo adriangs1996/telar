@@ -17,7 +17,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.input.copy_mode;
 import telar.gui.prompt.editor;
 import telar.gui.prompt.line;
 import telar.gui.prompt.routing;
@@ -59,7 +58,7 @@ namespace telar::gui::qt {
     // What an editor shows around the line: its pane, the configuration and copy mode.
     [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
-    [[nodiscard]] const std::optional<CopyState>& copy() const noexcept;
+    [[nodiscard]] const std::optional<application::terminal::copy_mode::CopyState>& copy() const noexcept;
 
     // The keys and text telar's command editor takes. False hands the key or the text back to the
     // terminal.

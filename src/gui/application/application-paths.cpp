@@ -51,7 +51,7 @@ namespace telar::gui::application::paths {
 
   bool open(Session& session) {
     const auto* pane = session.focusedPane();
-    if (!session.ready() || session.copyMode().active() || pane == nullptr || !pane->attached || pane->exited || !std::string_view{pane->cwd}.starts_with('/')) {
+    if (!session.ready() || terminal::copy_mode::view(session).active() || pane == nullptr || !pane->attached || pane->exited || !std::string_view{pane->cwd}.starts_with('/')) {
       return false;
     }
 
@@ -119,7 +119,7 @@ namespace telar::gui::application::paths {
     }
 
     const auto* pane = session.focusedPane();
-    if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || session.copyMode().active()) {
+    if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || terminal::copy_mode::view(session).active()) {
       features::paths::report(state, "Input is busy; retry");
 
       return false;

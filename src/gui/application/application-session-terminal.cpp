@@ -40,7 +40,7 @@ namespace telar::gui::application {
     }
 
     if (source == PaneInputSource::keyboard || source == PaneInputSource::key_release) {
-      static_cast<void>(copy_mode_.clearPointer());
+      static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode_));
       if (source != PaneInputSource::key_release) {
         followLiveEnd(*pane);
       }
@@ -72,7 +72,7 @@ namespace telar::gui::application {
       return;
     }
 
-    static_cast<void>(copy_mode_.clearPointer());
+    static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode_));
     followLiveEnd(*pane);
     send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
     notePaneInput(*pane);
@@ -157,7 +157,7 @@ namespace telar::gui::application {
 
   void Session::scroll(PaneScrollDelta delta) {
     auto* pane = findPane(delta.pane_id);
-    if (pane == nullptr || !pane->attached || copy_mode_.active()) {
+    if (pane == nullptr || !pane->attached || features::terminal::copy_mode::view(copy_mode_).active()) {
       return;
     }
 
@@ -209,8 +209,8 @@ namespace telar::gui::application {
     }
 
     if (outcome == FrameApplication::applied) {
-      if (copy_mode_.state() && copy_mode_.state()->pane_id == pane->id) {
-        copy_mode_.onFrame(previous_offset, copyGrid(pane->screen));
+      if (const auto& copy = features::terminal::copy_mode::view(copy_mode_).state(); copy && copy->pane_id == pane->id) {
+        features::terminal::copy_mode::follow(copy_mode_, previous_offset, copyGrid(pane->screen));
       }
 
       if (const auto line = lines_.find(pane->id); line != lines_.end()) {
@@ -490,6 +490,10 @@ namespace telar::gui::application {
 
   Change Session::apply(const PaneText& message) {
     return peek::receive(*this, message);
+  }
+
+  Change Session::apply(const PaneMatches& message) {
+    return terminal::copy_mode::receive(*this, message);
   }
 
 }

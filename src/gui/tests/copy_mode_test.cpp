@@ -9,8 +9,7 @@ static_assert(true);
 
 import std;
 import telar.gui.foundation.terminal;
-import telar.gui.input.copy_pointer;
-import telar.gui.input.copy_mode;
+import telar.gui.features.terminal.copy_mode;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.wire.vocabulary;
@@ -18,6 +17,81 @@ import telar.wire.vocabulary;
 namespace {
 
   using namespace telar::gui;
+  using namespace telar::gui::features::terminal::copy_mode;
+
+  namespace feature = telar::gui::features::terminal::copy_mode;
+
+  // The copy mode the assertions drive, through the feature's use cases.
+  class CopyMode {
+  public:
+    bool enter(std::uint64_t pane_id, const CopyGrid& grid, const telar::Cursor& cursor) noexcept {
+      return feature::enter(state_, pane_id, grid, cursor);
+    }
+
+    [[nodiscard]] std::optional<CopyPlan> key(const TerminalKey& key, const CopyGrid& grid) {
+      return feature::key(state_, key, grid);
+    }
+
+    [[nodiscard]] CopyPlan leave(const CopyGrid& grid) const noexcept {
+      return feature::leave(state_, grid);
+    }
+
+    [[nodiscard]] bool current(const CopyPlan& plan) const noexcept {
+      return feature::current(state_, plan);
+    }
+
+    bool commit(const CopyPlan& plan) noexcept {
+      return feature::commit(state_, plan);
+    }
+
+    // The matches of a search the runtime answered.
+    [[nodiscard]] std::optional<CopyPlan> search(std::span<const telar::PaneMatch> results, const CopyGrid& grid) {
+      return feature::receive(state_, {.request_id = 0, .pane_id = state() ? state()->pane_id : 0, .matches = results}, grid);
+    }
+
+    void onFrame(std::uint32_t previous_offset, const CopyGrid& grid) noexcept {
+      feature::follow(state_, previous_offset, grid);
+    }
+
+    bool beginPointer(CopyPress press, const CopyGrid& grid) noexcept {
+      return feature::press(state_, press, grid);
+    }
+
+    [[nodiscard]] std::optional<CopyPlan> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
+      return feature::drag(state_, local, grid, released);
+    }
+
+    bool clearPointer() noexcept {
+      return feature::clearPointer(state_);
+    }
+
+    void finishPointer() noexcept {
+      feature::release(state_);
+    }
+
+    void reset() noexcept {
+      feature::close(state_);
+    }
+
+    [[nodiscard]] const std::optional<CopyState>& state() const noexcept {
+      return feature::view(state_).state();
+    }
+
+    [[nodiscard]] bool active() const noexcept {
+      return feature::view(state_).active();
+    }
+
+    [[nodiscard]] std::span<const telar::PaneMatch> matches() const noexcept {
+      return feature::view(state_).matches();
+    }
+
+    [[nodiscard]] std::optional<CopyPointerOwner> pointerOwner() const noexcept {
+      return feature::view(state_).pointerOwner();
+    }
+
+  private:
+    feature::State state_;
+  };
 
   void require(bool condition, const char* message) {
     if (!condition) {

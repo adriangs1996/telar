@@ -8,7 +8,6 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
-import telar.gui.input.copy_pointer;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -29,7 +28,7 @@ namespace telar::gui::application {
   prompt::Surface Session::promptSurface(std::uint64_t pane_id) const noexcept {
     const auto* pane = findPane(pane_id);
     // telar's editor stays while copy mode, which owns the keys, reads the scrollback.
-    if (pane == nullptr || !pane->attached || pane->exited || (copy_mode_.active() && configuration_.prompt.mode != PromptMode::telar)) {
+    if (pane == nullptr || !pane->attached || pane->exited || (features::terminal::copy_mode::view(copy_mode_).active() && configuration_.prompt.mode != PromptMode::telar)) {
       return prompt::Surface::none;
     }
 
@@ -234,7 +233,7 @@ namespace telar::gui::application {
   }
 
   void Session::paste(std::uint64_t pane_id, std::string_view bytes) {
-    if (copy_mode_.active()) {
+    if (features::terminal::copy_mode::view(copy_mode_).active()) {
       return;
     }
 

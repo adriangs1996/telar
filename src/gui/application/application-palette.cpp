@@ -30,7 +30,7 @@ namespace telar::gui::application::palette {
     const auto submission = features::palette::submit(state, task);
 
     if (submission.kind == Kind::insert) {
-      if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || session.copyMode().active()) {
+      if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || terminal::copy_mode::view(session).active()) {
         return false;
       }
 

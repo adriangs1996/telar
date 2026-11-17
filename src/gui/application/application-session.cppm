@@ -12,8 +12,7 @@ import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
 import telar.gui.graphics.pauses;
 import telar.gui.features.history;
-import telar.gui.input.copy_pointer;
-import telar.gui.foundation.keys;
+import telar.gui.features.terminal.copy_mode;
 import telar.gui.presentation.tab_drop;
 import :sound_playback;
 import telar.gui.foundation.model;
@@ -29,7 +28,6 @@ import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
-import telar.gui.input.copy_mode;
 import telar.gui.prompt.line;
 import telar.base.diagnostics;
 import telar.base.text;
@@ -311,53 +309,6 @@ export {
 
       void scroll(PaneScrollDelta delta);
 
-      [[nodiscard]] const CopyMode& copyMode() const noexcept;
-
-      bool beginSelection(CopyPress press) noexcept;
-
-      bool copySelection(std::uint64_t pane_id);
-
-      CopyPointerDecision::Outcome pointer(const CopyPointerInput& input);
-
-      bool enterCopyMode() noexcept;
-
-      CopyEffect copyKey(const TerminalKey& key);
-
-      void leaveCopyMode();
-
-      void searchCopy(std::string_view needle);
-
-      // The search typed so far ends: its matches stay for n and N, from wherever they took the
-      // cursor.
-      void finishCopySearch() noexcept;
-
-      // What the copy-mode search looks for, whether an answer is awaited, and how its matches
-      // stand: how many, which the cursor is on, and whether there were more than it kept.
-      struct CopySearchState {
-        std::string_view query;
-        bool searching = false;
-        std::size_t count = 0;
-        std::size_t index = 0;
-        bool truncated = false;
-      };
-
-      [[nodiscard]] CopySearchState copySearch() const noexcept;
-
-      // The next match or the one before, as n and N go.
-      void stepCopyMatch(bool forward);
-
-      // The command whose output the copy-mode search reads, while it reads only that output.
-      [[nodiscard]] std::optional<std::size_t> copySearchBlock() const noexcept;
-
-      // Whether a search can be confined to a command's output, as one began from a command can.
-      [[nodiscard]] bool copySearchScopes() const noexcept;
-
-      // Between that command's output and the whole scrollback.
-      void toggleCopySearchScope() noexcept;
-
-      // Whether a key asked for the scrollback search since the last call.
-      [[nodiscard]] bool takeSearchRequest() noexcept;
-
       void toggleFullscreen();
 
       void retainLayout();
@@ -607,14 +558,6 @@ export {
       void acknowledgeFocusedAgent();
 
       void prepareDetach(std::uint64_t pane_id);
-
-      Pane<Memory>* copyPane() noexcept;
-
-      [[nodiscard]] CopyPointerAuthority pointerAuthority(const CopyPointerInput& input) const noexcept;
-
-      void applyCopyPlan(const CopyPlan& plan, Pane<Memory>& pane);
-
-      void applyPointerMotion(const CopyPointerDecision& decision, bool released, Pane<Memory>& pane);
 
       Change apply(const PaneMatches& message);
 
@@ -957,25 +900,8 @@ export {
       bool block_changed_ = false;
       std::uint64_t prompt_written_ = 0;
       std::unordered_map<std::uint64_t, LineEntry> lines_;
-      CopyMode copy_mode_;
+      features::terminal::copy_mode::State copy_mode_;
       features::terminal::links::State links_;
-      std::uint64_t copy_search_request_ = 0;
-
-      // The output a search begun from a command reads, and whether it reads only that.
-      struct CopySearchRows {
-        std::size_t block = 0;
-        std::uint32_t first = 0;
-        std::uint32_t last = 0;
-      };
-
-      std::optional<CopySearchRows> copy_search_rows_;
-      // Where the search being typed began, what it looks for, and whether its answer kept fewer
-      // matches than it found.
-      std::optional<CopyPoint> copy_search_origin_;
-      std::string copy_search_query_;
-      bool copy_search_truncated_ = false;
-      bool copy_search_scoped_ = false;
-      bool search_requested_ = false;
       HostMetrics metrics_;
       ProxyStatus proxy_{};
       tbc::view<Memory&, tbc::lt::a> memory_;

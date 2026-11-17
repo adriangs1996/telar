@@ -22,7 +22,6 @@ static_assert(true);
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.config.generation;
-import telar.gui.input.copy_pointer;
 
 import telar.gui.config.gui_query;
 import telar.gui.application;

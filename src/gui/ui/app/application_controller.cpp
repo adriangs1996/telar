@@ -607,7 +607,7 @@ namespace telar::gui::qt {
     case application::Change::copy_mode:
       copy_.publishSearch();
       status_.publish();
-      if (const auto& copy = session().copyMode().state()) {
+      if (const auto& copy = application::terminal::copy_mode::view(session()).state()) {
         emit terminals_.terminalChanged(copy->pane_id);
       }
 

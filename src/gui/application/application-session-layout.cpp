@@ -8,7 +8,6 @@ import telar.gui.foundation.keys;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
 import telar.gui.features.history;
-import telar.gui.input.copy_pointer;
 import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
 import telar.gui.features.terminal.links;
@@ -61,9 +60,8 @@ namespace telar::gui::application {
       }
     }
 
-    if (const auto* copy_pane = copyPane(); copy_pane != nullptr && !sameTab(copy_pane->location, location)) {
-      copy_mode_.reset();
-      copy_search_request_ = 0;
+    if (const auto* copy_pane = terminal::copy_mode::pane(*this); copy_pane != nullptr && !sameTab(copy_pane->location, location)) {
+      features::terminal::copy_mode::close(copy_mode_);
     }
 
     active_tab_ = location;
@@ -825,8 +823,7 @@ namespace telar::gui::application {
     tabs_.clear();
     active_tab_.reset();
     pending_layout_restore_.reset();
-    copy_mode_.reset();
-    copy_search_request_ = 0;
+    features::terminal::copy_mode::close(copy_mode_);
     features::history::suspend(history_);
     features::paths::close(paths_);
     features::palette::discard(palette_);
@@ -991,9 +988,8 @@ namespace telar::gui::application {
   }
 
   void Session::prepareDetach(std::uint64_t pane_id) {
-    if (copy_mode_.state() && copy_mode_.state()->pane_id == pane_id) {
-      copy_mode_.reset();
-      copy_search_request_ = 0;
+    if (const auto& copy = features::terminal::copy_mode::view(copy_mode_).state(); copy && copy->pane_id == pane_id) {
+      features::terminal::copy_mode::close(copy_mode_);
     }
 
     transport_.willDetach(pane_id);
@@ -1418,9 +1414,8 @@ namespace telar::gui::application {
 
   void Session::forgetPane(std::uint64_t pane_id) noexcept {
     cancelPaneRequests(pane_id);
-    if (copy_mode_.state() && copy_mode_.state()->pane_id == pane_id) {
-      copy_mode_.reset();
-      copy_search_request_ = 0;
+    if (const auto& copy = features::terminal::copy_mode::view(copy_mode_).state(); copy && copy->pane_id == pane_id) {
+      features::terminal::copy_mode::close(copy_mode_);
     }
 
     features::paths::forget(paths_, pane_id);

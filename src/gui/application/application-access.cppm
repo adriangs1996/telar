@@ -10,6 +10,7 @@ import telar.gui.features.palette;
 import telar.gui.features.paths;
 import telar.gui.features.history;
 import telar.gui.features.peek;
+import telar.gui.features.terminal.copy_mode;
 import telar.gui.features.terminal.links;
 
 namespace telar::gui::application {
@@ -62,6 +63,14 @@ namespace telar::gui::application {
       return session.history_;
     }
 
+    [[nodiscard]] static constexpr features::terminal::copy_mode::State& copyMode(Session& session) noexcept {
+      return session.copy_mode_;
+    }
+
+    [[nodiscard]] static constexpr const features::terminal::copy_mode::State& copyMode(const Session& session) noexcept {
+      return session.copy_mode_;
+    }
+
     [[nodiscard]] static constexpr features::terminal::links::State& links(Session& session) noexcept {
       return session.links_;
     }
@@ -74,6 +83,16 @@ namespace telar::gui::application {
 
     [[nodiscard]] static constexpr String<Memory>& clipboard(Session& session) noexcept {
       return session.clipboard_;
+    }
+
+    // What a view of the session has to redraw: a use case that moves a pane's view bumps it.
+    [[nodiscard]] static constexpr ViewVersion& viewVersion(Session& session) noexcept {
+      return session.view_version_;
+    }
+
+    // The pane whose terminal changed since the last message, for its view to redraw.
+    [[nodiscard]] static constexpr std::uint64_t& changedPane(Session& session) noexcept {
+      return session.changed_pane_;
     }
 
     // The tab the session shows, by location, whether or not its record arrived.

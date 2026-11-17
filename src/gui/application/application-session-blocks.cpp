@@ -4,7 +4,6 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.graphics.texture_cache;
-import telar.gui.input.copy_pointer;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.prompt.line;
@@ -490,12 +489,7 @@ namespace telar::gui::application {
       fold(pane.id, index, false);
     }
 
-    if (copy_mode_.enterAt(pane.id, grid, CopyPoint{.x = 0, .y = first}, std::nullopt, false)) {
-      copy_search_request_ = 0;
-      copy_search_rows_ = CopySearchRows{.block = index, .first = first, .last = last};
-      copy_search_origin_ = CopyPoint{.x = 0, .y = first};
-      copy_search_scoped_ = readsRows();
-      search_requested_ = true;
+    if (features::terminal::copy_mode::searchOutput(copy_mode_, pane.id, grid, {.block = index, .first = first, .last = last}, readsRows())) {
       changed_pane_ = pane.id;
       block_changed_ = true;
     }
@@ -520,8 +514,7 @@ namespace telar::gui::application {
     const auto grid = copyGrid(pane.screen);
     const auto columns = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
     const CopyPoint start{.x = 0, .y = first};
-    if (copy_mode_.enterAt(pane.id, grid, lines ? CopyPoint{.x = columns, .y = last} : start, start, lines)) {
-      copy_search_request_ = 0;
+    if (features::terminal::copy_mode::select(copy_mode_, pane.id, grid, lines ? CopyPoint{.x = columns, .y = last} : start, start, lines)) {
       changed_pane_ = pane.id;
       block_changed_ = true;
     }

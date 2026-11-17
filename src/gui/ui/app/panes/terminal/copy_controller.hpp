@@ -16,8 +16,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.input.copy_mode;
-import telar.gui.input.copy_pointer;
+import telar.gui.application;
 import telar.gui.foundation.terminal;
 
 namespace telar::gui::qt {
@@ -50,7 +49,7 @@ namespace telar::gui::qt {
     CopyController& operator=(CopyController&&) = delete;
 
     [[nodiscard]] bool active() const noexcept;
-    [[nodiscard]] const std::optional<CopyState>& state() const noexcept;
+    [[nodiscard]] const std::optional<application::terminal::copy_mode::CopyState>& state() const noexcept;
     [[nodiscard]] QVariantMap searchState() const;
     [[nodiscard]] QString searchScope() const;
     [[nodiscard]] bool searchScopes() const;
@@ -64,7 +63,7 @@ namespace telar::gui::qt {
     // A key for the pane copy mode moves in; false when copy mode does not own it.
     bool handleKey(std::uint64_t pane_id, const QKeyEvent& event);
     // A pointer press, drag, release or wheel; false when copy mode does not own it.
-    bool handlePointer(const CopyPointerInput& input);
+    bool handlePointer(const application::terminal::copy_mode::CopyPointerInput& input);
     bool beginSelection(std::uint64_t pane_id, CopyPoint local);
     void copySelection(std::uint64_t pane_id);
     // Leaves the keyboard's copy mode; a pointer's selection stays.
