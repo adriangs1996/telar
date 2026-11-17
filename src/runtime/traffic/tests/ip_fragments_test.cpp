@@ -317,6 +317,81 @@ namespace {
     fragments.expire([](const Event&, std::string_view) {}, true);
   }
 
+  // An IPv6 fragment behind destination options of `options` bytes.
+  std::vector<Byte> behindOptions(std::vector<Byte> part, std::size_t options) {
+    part.insert(part.begin() + 40, options, 0);
+    part[6] = 60;
+    part[40] = 44;
+    part[41] = static_cast<Byte>(options / 8 - 1);
+    word(part, 4, static_cast<std::uint16_t>(part.size() - 40));
+    return part;
+  }
+
+  // A remote host chooses the headers before the fragment header: a prefix longer than the storage
+  // reserves for it is refused, instead of being copied in front of that storage.
+  void invalidFragmentHeaders(TlsTestMemory& memory) {
+    const auto original = traffic_test::tcp(true, false, 1, 16, "0123456789abcdef");
+    const auto first = fragment(original, 0, 24, true);
+    const auto last = fragment(original, 24, 12, false);
+
+    for (const auto options : {std::size_t{16}, IpFragments::maximum_prefix - 40 + 8}) {
+      IpFragments fragments{memory};
+      std::vector<std::string> errors;
+      std::size_t completed = 0;
+      const auto consume = [&](std::span<const Byte> bytes) {
+        const auto parsed = TcpPacketDecoder::decodeNetwork(bytes);
+
+        check(parsed && parsed->sequence == 1 && std::ranges::equal(parsed->bytes, std::string_view{"0123456789abcdef"}));
+        ++completed;
+      };
+
+      const auto report = [&](const Event&, std::string_view reason) {
+        errors.emplace_back(reason);
+      };
+
+      fragments.packet(packet(behindOptions(first, options)), consume, report);
+      fragments.packet(packet(behindOptions(last, options)), consume, report);
+      if (options + 40 <= IpFragments::maximum_prefix) {
+        check(completed == 1 && errors.empty());
+      } else {
+        check(completed == 0 && errors == std::vector<std::string>(2, "ip_fragment_invalid_or_truncated"));
+      }
+
+      fragments.expire(report, true);
+    }
+  }
+
+  // Once a final fragment fixes a datagram's length, a fragment that disagrees with it is refused
+  // rather than reassembled with stale or uninitialized bytes.
+  void conflictingLengths(TlsTestMemory& memory) {
+    for (const bool ipv6 : {false, true}) {
+      const auto original = traffic_test::tcp(ipv6, false, 1, 16, std::string(64, 'x'));
+      const std::array<std::pair<std::vector<Byte>, std::vector<Byte>>, 3> conflicts{{
+          {fragment(original, 40, 16, false), fragment(original, 56, 16, true)},
+          {fragment(original, 40, 16, false), fragment(original, 32, 16, false)},
+          {fragment(original, 16, 16, true), fragment(original, 8, 8, false)},
+      }};
+
+      for (const auto& [accepted, conflicting] : conflicts) {
+        IpFragments fragments{memory};
+        std::vector<std::string> errors;
+        const auto consume = [](std::span<const Byte>) {
+          check(false);
+        };
+
+        const auto report = [&](const Event&, std::string_view reason) {
+          errors.emplace_back(reason);
+        };
+
+        fragments.packet(packet(accepted), consume, report);
+        check(errors.empty());
+        fragments.packet(packet(conflicting), consume, report);
+        check(errors == std::vector<std::string>{"ip_fragment_conflicting_length"});
+        fragments.expire([](const Event&, std::string_view) {}, true);
+      }
+    }
+  }
+
   // Each case owns the budget its calls share and leaves nothing allocated there.
   template <auto body>
   void budgeted() {
@@ -335,5 +410,7 @@ namespace {
   const telar::testing::Case case_atomic_and_extension{"ip_fragments.atomic_and_extension", budgeted<atomicAndExtension>};
   const telar::testing::Case case_capacity_and_flow{"ip_fragments.capacity_and_flow", budgeted<capacityAndFlow>};
   const telar::testing::Case case_malformed_and_piece_limits{"ip_fragments.malformed_and_piece_limits", budgeted<malformedAndPieceLimits>};
+  const telar::testing::Case case_invalid_fragment_headers{"ip_fragments.invalid_fragment_headers", budgeted<invalidFragmentHeaders>};
+  const telar::testing::Case case_conflicting_lengths{"ip_fragments.conflicting_lengths", budgeted<conflictingLengths>};
 
 }
