@@ -81,6 +81,8 @@ def main():
     check_library_layers(inventory['library_layers'], inventory['interfaces'], imports)
     upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
     domains = check_domain_targets(inventory['process_layers'], owned, lambda path: (ROOT / path).read_text())
+    tests = check_test_placement(inventory['process_layers'], inventory['library_layers'], owned,
+                                 lambda path: (ROOT / path).read_text(errors='replace'))
     check_cycles(imports)
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
@@ -93,6 +95,7 @@ def main():
     unused = check_unused_imports(units, provided, json.loads((ROOT / UNUSED_IMPORTS).read_text()))
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
           f'{domains} domain targets depending on what they import, '
+          f'{tests} tests placed with what they check, '
           f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
           f'{owned} headers reached only through their owner module, '
           f'{reexports} re-exports left, {unused} unused imports left, '
@@ -320,6 +323,101 @@ def check_domain_targets(layers, files, read):
                 errors.append(f'{where} depends on {name}, which none of its files imports')
     if errors:
         raise RuntimeError('Domain targets against their imports:\n  ' + '\n  '.join(errors))
+
+    return count
+
+
+TEST_FILE_RE = re.compile(r'_test\.(cpp|mm)$')
+TEST_UNIT_SUFFIXES = ('.cpp', '.cppm', '.mm')
+# The processes whose tests live with their domains; the GUI's join when src/gui is cut by use case.
+DOMAIN_TESTS = ('runtime', 'cli')
+# Every test program links the harness, whatever its folder.
+HARNESS = 'telar.testing'
+
+
+def check_test_placement(layers, library_layers, files, read):
+    """Rule 9: a test lives with what it checks, so where a test goes follows from what it
+    imports. A test of a domain lives in src/<process>/<domain>/tests/ and imports that domain,
+    the domains below it that its DEPS reach and libraries. A test that needs more is an
+    integration test of the process, in src/<process>/tests/, and one there that fits a single
+    domain belongs to that domain. A test of a library lives in lib/<library>/tests/ and imports
+    no process and no library that builds on it (library_layers): it may borrow utilities from
+    any other. Every *_test file lives in a tests/ folder, and any test may import the harness."""
+    deps = {}
+    for path in sorted(name for name in files if name.endswith('CMakeLists.txt')):
+        for process, domain, arguments in domain_declarations(path, read(path)):
+            deps[(process, domain)] = [name for name in arguments.get('DEPS', [])
+                                       if re.fullmatch(r'[a-z0-9_]+(/[a-z0-9_]+)*', name)]
+
+    def reach(graph, start):
+        found, pending = set(), [start]
+        while pending:
+            for name in graph(pending.pop()):
+                if name not in found:
+                    found.add(name)
+                    pending.append(name)
+
+        return found
+
+    def below(process, domain):
+        return reach(lambda name: deps.get((process, name), []), domain)
+
+    def libraries(library):
+        return reach(lambda name: library_layers.get(name, []), library) | {library}
+
+    errors, count = [], 0
+    for path in sorted(name for name in files if name.endswith(TEST_UNIT_SUFFIXES)):
+        if '/tests/' not in path:
+            if TEST_FILE_RE.search(path) and path.startswith(('lib/', *(f'src/{name}/' for name in DOMAIN_TESTS))):
+                errors.append(f'{path} is a test outside a tests/ folder')
+            continue
+
+        library = re.match(r'lib/([^/]+)/(?:.*/)?tests/', path)
+        process = re.match(r'src/([^/]+)/(?:(.+)/)?tests/', path)
+        if library and library[1] != 'tbc':
+            owner = None
+        elif process and process[1] in DOMAIN_TESTS:
+            owner = process[2]
+            if owner is not None:
+                domains = sorted((name for name in layers.get(process[1], []) if owner == name or owner.startswith(name + '/')),
+                                 key=len)
+                if not domains:
+                    errors.append(f'{path} is in no domain of {process[1]}')
+                    continue
+                owner = domains[-1]
+        else:
+            continue
+
+        count += 1
+        names = sorted(name for name in imports_of('', COMMENTS_RE.sub('', read(path)))
+                       if name.startswith('telar.') and name != HARNESS and not name.startswith(HARNESS + '.'))
+        if library:
+            for name in names:
+                target = component(name, layers)
+                if not target.startswith('lib/'):
+                    errors.append(f'{path} imports {name}, which is no library')
+                elif target[4:] != library[1] and library[1] in libraries(target[4:]):
+                    errors.append(f'{path} imports {name}, but {target} builds on lib/{library[1]}')
+            continue
+
+        # The support of the process's integration tests is no domain to place a test in.
+        reached = sorted({target[len(process[1]) + 1:] for name in names
+                          if (target := component(name, layers)).startswith(process[1] + '/')} - {'tests'})
+        if owner is not None:
+            allowed = below(process[1], owner) | {owner}
+            for name in reached:
+                if name not in allowed:
+                    errors.append(f'{path} imports the {name} domain, which {owner} does not build on: '
+                                  f'as an integration test it belongs in src/{process[1]}/tests/')
+        elif not reached:
+            errors.append(f'{path} imports no domain of {process[1]}: it belongs with the library it checks')
+        else:
+            for name in reached:
+                if set(reached) - {name} <= below(process[1], name):
+                    errors.append(f'{path} reaches only {name} and what it builds on: it belongs in src/{process[1]}/{name}/tests/')
+                    break
+    if errors:
+        raise RuntimeError('Tests outside the folder of what they check:\n  ' + '\n  '.join(errors))
 
     return count
 
