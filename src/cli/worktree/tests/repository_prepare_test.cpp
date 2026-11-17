@@ -39,6 +39,18 @@ namespace {
     return output;
   }
 
+  // A repository with an origin and one commit, made the working directory, as `prepare` runs.
+  std::string enterRepository() {
+    std::string pattern = std::filesystem::temp_directory_path() / "telar-prepare-XXXXXX";
+
+    check(::mkdtemp(pattern.data()) != nullptr);
+    const auto root = std::filesystem::canonical(pattern).string();
+
+    shell("cd '" + root + "' && git init -q -b main && git -c commit.gpgsign=false -c user.name=fixture -c user.email=fixture@example.invalid commit -q --allow-empty -m base && git remote add origin https://example.invalid/team/repo.git");
+    check(::chdir(root.c_str()) == 0);
+    return root;
+  }
+
   // The other machine's telar, answering `repository receive` with `reply`, given the
   // commit it was asked to receive; it has no clone to list tips from.
   class Receiver final : public repository::RepositoryCapture {
@@ -83,13 +95,7 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     Memory& memory = adapter;
-    std::string pattern = std::filesystem::temp_directory_path() / "telar-prepare-XXXXXX";
-
-    check(::mkdtemp(pattern.data()) != nullptr);
-    const auto root = std::filesystem::canonical(pattern).string();
-
-    shell("cd '" + root + "' && git init -q -b main && git -c commit.gpgsign=false -c user.name=fixture -c user.email=fixture@example.invalid commit -q --allow-empty -m base && git remote add origin https://example.invalid/team/repo.git");
-    check(::chdir(root.c_str()) == 0);
+    const auto root = enterRepository();
 
     const auto transfers = [&] {
       return shell("git -C '" + root + "' for-each-ref refs/telar/transfer/");
@@ -126,6 +132,76 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // The other machine's telar as `prepare` reaches it: `repository tips` fails, and `repository
+  // receive` keeps the words of every call and the bundle it was sent.
+  class Recorder final : public repository::RepositoryCapture {
+  public:
+    std::string operator()(std::span<const std::string_view> words, int input) override {
+      calls.emplace_back(words.begin(), words.end());
+      if (std::ranges::find(words, "tips") != words.end()) {
+        throw std::runtime_error{"tips unavailable"};
+      }
+
+      std::array<char, 4096> buffer;
+      ssize_t count;
+
+      while ((count = ::read(input, buffer.data(), buffer.size())) > 0) {
+        bundle.append(buffer.data(), static_cast<std::size_t>(count));
+      }
+
+      const auto commit = std::ranges::find(words, "--commit");
+
+      check(commit != words.end() && commit + 1 != words.end());
+      return reply("/srv/clones/repo", *(commit + 1), true);
+    }
+
+    std::vector<std::vector<std::string>> calls;
+    std::string bundle;
+  };
+
+  // A machine that cannot list what its clone holds receives the whole history: the
+  // dispatch goes on, and the bundle needs nothing the other side lacks.
+  void prepareWithoutTipsSendsFullHistory() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    const auto root = enterRepository();
+
+    shell("cd '" + root + "' && git -c commit.gpgsign=false -c user.name=fixture -c user.email=fixture@example.invalid commit -q --allow-empty -m second");
+    Recorder recorder;
+    const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
+
+    check(repository::prepare(adapter, options, "telar", recorder).path == "/srv/clones/repo");
+    check(recorder.calls.size() == 2 && !recorder.bundle.empty());
+    const auto file = root + "/../" + std::filesystem::path{root}.filename().string() + ".bundle";
+
+    std::ofstream{file, std::ios::binary} << recorder.bundle;
+    shell("cd '" + root + "' && rm -rf ../empty-clone && git init -q ../empty-clone && git -C ../empty-clone bundle verify '" + file + "'");
+    std::filesystem::remove(file);
+    std::filesystem::remove_all(root + "/../empty-clone");
+    std::filesystem::remove_all(root);
+  }
+
+  // `--workspace` names the clone on the other machine for both the tips query and the receive.
+  void prepareForwardsWorkspace() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    const auto root = enterRepository();
+    Recorder recorder;
+    const RepositoryOptions options{.action = RepositoryOptions::Action::prepare, .workspace = "/w"};
+
+    static_cast<void>(repository::prepare(adapter, options, "telar", recorder));
+    check(recorder.calls.size() == 2);
+    for (const auto& words : recorder.calls) {
+      const auto flag = std::ranges::find(words, "--workspace");
+
+      check(flag != words.end() && flag + 1 != words.end() && *(flag + 1) == "/w");
+    }
+
+    std::filesystem::remove_all(root);
+  }
+
   const telar::testing::Case case_prepare_rejects_bad_receiver_reply{"repository.prepare_rejects_bad_receiver_reply", prepareRejectsBadReceiverReply};
+  const telar::testing::Case case_prepare_without_tips_sends_full_history{"repository.prepare_without_tips_sends_full_history", prepareWithoutTipsSendsFullHistory};
+  const telar::testing::Case case_prepare_forwards_workspace{"repository.prepare_forwards_workspace", prepareForwardsWorkspace};
 
 }
