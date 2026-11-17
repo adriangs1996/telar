@@ -47,8 +47,6 @@ static_assert(true);
 #include <limits.h>
 
 import telar.gui.application;
-import telar.gui.config.plugin_query;
-import telar.gui.config.plugin_effects;
 import telar.config.client;
 import telar.plugins;
 
@@ -346,7 +344,7 @@ namespace telar::gui::qt {
     return plugin == nullptr ? std::nullopt : std::optional{*plugin};
   }
 
-  PluginInvocation ConfigurationSource::pluginInvocation(const ClientCommand& request, BindingContext context) const {
+  application::plugins::PluginInvocation ConfigurationSource::pluginInvocation(const ClientCommand& request, BindingContext context) const {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
@@ -355,7 +353,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"PluginRegistryUnavailable"};
     }
 
-    const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
+    const application::plugins::PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
     const auto* package = catalog.package(catalog.find(request.text));
     if (package == nullptr) {
       throw std::runtime_error{"PluginDisabled"};
@@ -364,7 +362,7 @@ namespace telar::gui::qt {
     return pluginInvocation(PluginActionDescription{.plugin = runtime::plugins::stableId(package->manifest.id.view()), .action = request.target_id}, context);
   }
 
-  PluginInvocation ConfigurationSource::pluginInvocation(PluginActionDescription action, BindingContext context) const {
+  application::plugins::PluginInvocation ConfigurationSource::pluginInvocation(PluginActionDescription action, BindingContext context) const {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
@@ -374,7 +372,7 @@ namespace telar::gui::qt {
     }
 
     const auto packages = plugins_->packages();
-    const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), packages};
+    const application::plugins::PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), packages};
     const auto& package = catalog.resolve(action);
 
     for (const auto& name : std::span{package.manifest.actions}.first(package.manifest.action_count)) {
@@ -386,7 +384,7 @@ namespace telar::gui::qt {
     throw std::invalid_argument{"UnknownPluginAction"};
   }
 
-  void ConfigurationSource::authorizePlugin(const PluginInvocation& invocation, const PluginEffects& effects) const {
+  void ConfigurationSource::authorizePlugin(const application::plugins::PluginInvocation& invocation, const application::plugins::PluginEffects& effects) const {
     if (!generation_ || generation_->number() != invocation.configuration_generation) {
       throw std::runtime_error{"StalePluginWorker"};
     }
@@ -519,7 +517,7 @@ namespace telar::gui::qt {
     return application::configuration::query(*generation_, *commands_, query, context, platform::defaultTitlebar(), query_buffer_);
   }
 
-  PluginPage ConfigurationSource::queryPlugins(const ClientCommand& request) {
+  application::plugins::PluginPage ConfigurationSource::queryPlugins(const ClientCommand& request) {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
@@ -528,13 +526,13 @@ namespace telar::gui::qt {
       throw std::runtime_error{"PluginRegistryUnavailable"};
     }
 
-    const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages(), &plugin_overrides_};
+    const application::plugins::PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages(), &plugin_overrides_};
 
     if (request.action == ClientAction::plugin_list) {
-      return PluginQuery::list(catalog, request, query_buffer_);
+      return application::plugins::PluginQuery::list(catalog, request, query_buffer_);
     }
 
-    return PluginQuery::get(catalog, request, query_buffer_);
+    return application::plugins::PluginQuery::get(catalog, request, query_buffer_);
   }
 
   void ConfigurationSource::setPluginEnabled(const ClientCommand& request, bool enabled) {
@@ -550,7 +548,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
 
-    const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
+    const application::plugins::PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
     const auto index = catalog.find(request.text);
     auto specification = catalog.specification(index);
 

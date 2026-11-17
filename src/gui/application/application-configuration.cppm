@@ -5,7 +5,7 @@ export module telar.gui.application:configuration;
 
 import std;
 import telar.tbc;
-import telar.gui.config.plugin_query;
+import telar.gui.features.plugins;
 import telar.gui.foundation.actions;
 import telar.lua;
 import telar.gui.foundation.keys;
@@ -86,7 +86,7 @@ export {
       std::string_view directory;
       std::string_view profile;
       std::uint64_t generation = 1;
-      const PluginOverrides* plugin_overrides = nullptr;
+      const features::plugins::PluginOverrides* plugin_overrides = nullptr;
     };
 
     template <Allocator Memory>
@@ -215,9 +215,9 @@ export {
       template <typename Consumer>
       auto withDefinitions(Consumer&& consume) const;
 
-      void readConfiguration(tbc::view<Memory&, tbc::lt::a> memory, const PluginOverrides* overrides);
+      void readConfiguration(tbc::view<Memory&, tbc::lt::a> memory, const features::plugins::PluginOverrides* overrides);
 
-      void removeDisabledPluginBindings(const PluginOverrides& overrides);
+      void removeDisabledPluginBindings(const features::plugins::PluginOverrides& overrides);
 
       // A profile can replace named definitions while inheriting its keybindings.
       void rebindDefinitions();

@@ -18,7 +18,6 @@ static_assert(true);
 #include <iostream>
 #include <limits.h>
 
-import telar.gui.config.plugin_effects;
 import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
 import telar.lua;

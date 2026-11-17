@@ -30,7 +30,6 @@ static_assert(true);
 #include <exception>
 #include <limits.h>
 
-import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 
 import telar.gui.application;
@@ -130,7 +129,7 @@ namespace telar::gui::qt {
       const auto& configured = generation.runtimeValues().plugins.configured();
 
       result.plugins.emplace(memory, generation_source.directory, configured);
-      const PluginCatalog catalog{generation.number(), configured, result.plugins->packages()};
+      const application::plugins::PluginCatalog catalog{generation.number(), configured, result.plugins->packages()};
 
       generation.visitPluginActions([&](const PluginActionDescription& action) {
         if (!request.plugin_overrides.disabled(action.plugin, configured)) {

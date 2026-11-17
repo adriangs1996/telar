@@ -11,7 +11,7 @@ export module telar.gui.tests.plugin_effect_cases;
 import std;
 import telar.gui.foundation.actions;
 import telar.plugins;
-import telar.gui.config.plugin_effects;
+import telar.gui.features.plugins;
 import telar.wire.vocabulary;
 
 export {
@@ -38,7 +38,7 @@ export {
       }
 
       struct Bytes {
-        std::array<Byte, PluginEffects::maximum_bytes + 1> data{};
+        std::array<Byte, features::plugins::PluginEffects::maximum_bytes + 1> data{};
         std::size_t length = 0;
 
         [[nodiscard]] std::span<const Byte> view() const noexcept {
@@ -104,7 +104,7 @@ export {
 
         for (const auto& entry : cases) {
           const auto input = bytes(entry.original_hex);
-          const auto decoded = PluginEffects::decode(input.view());
+          const auto decoded = features::plugins::PluginEffects::decode(input.view());
 
           require(decoded.effects().size() == 1, "original worker must decode one effect");
           const auto* action = std::get_if<BindingAction>(&decoded.effects().front());
@@ -112,13 +112,13 @@ export {
           require(action != nullptr && action->kind == entry.kind && action->parameter == entry.parameter, "original worker semantics must match");
           for (std::size_t length = 0; length < input.length; ++length) {
             rejects([&] {
-              static_cast<void>(PluginEffects::decode(input.view().first(length)));
+              static_cast<void>(features::plugins::PluginEffects::decode(input.view().first(length)));
             });
           }
         }
 
-        require(PluginEffects::decode(bytes("00").view()).effects().empty(), "zero-effect protocol batch is valid");
-        const auto limit = PluginEffects::decode(bytes("1003030303030303030303030303030303").view());
+        require(features::plugins::PluginEffects::decode(bytes("00").view()).effects().empty(), "zero-effect protocol batch is valid");
+        const auto limit = features::plugins::PluginEffects::decode(bytes("1003030303030303030303030303030303").view());
 
         require(limit.effects().size() == BindingEffects::maximum_effects, "original worker clamps at sixteen effects");
         require(std::ranges::all_of(limit.effects(), [](const auto& effect) {
@@ -127,14 +127,14 @@ export {
             "all clamped effects must retain their identity");
         for (const auto* const invalid : {"11", "0100", "0115", "01ff", "010102", "010204", "010c04", "010a02", "011302", "0000", "010300"}) {
           rejects([&] {
-            static_cast<void>(PluginEffects::decode(bytes(invalid).view()));
+            static_cast<void>(features::plugins::PluginEffects::decode(bytes(invalid).view()));
           });
         }
 
         const Bytes oversized;
 
         rejects([&] {
-          static_cast<void>(PluginEffects::decode(oversized.data));
+          static_cast<void>(features::plugins::PluginEffects::decode(oversized.data));
         });
       }
 
@@ -144,10 +144,10 @@ export {
 
         package.manifest.id.assign("fixture");
         plugins::TrustStore trust;
-        const auto harmless = PluginEffects::decode(bytes("0103").view());
+        const auto harmless = features::plugins::PluginEffects::decode(bytes("0103").view());
 
         harmless.authorize(package, trust);
-        const auto mixed = PluginEffects::decode(bytes("020305").view());
+        const auto mixed = features::plugins::PluginEffects::decode(bytes("020305").view());
 
         rejects([&] {
           mixed.authorize(package, trust);
@@ -167,7 +167,7 @@ export {
           mixed.authorize(changed, trust);
         });
 
-        const auto notification = PluginEffects::decode(bytes("011200a00f0000000d00747275653a333a323a323a34320000").view());
+        const auto notification = features::plugins::PluginEffects::decode(bytes("011200a00f0000000d00747275653a333a323a323a34320000").view());
         const auto* value = std::get_if<NotificationActionDescription>(&notification.effects().front());
 
         require(value != nullptr && value->title.view() == "true:3:2:2:42" && value->message.view().empty() && value->duration_ms == default_notification_duration_ms && value->target.kind == NotificationTarget::Kind::none, "original immutable callback context must retain its notification payload");
@@ -186,7 +186,7 @@ export {
 
         for (std::size_t length = 0; length < original.length; ++length) {
           rejects([&] {
-            static_cast<void>(PluginEffects::decode(original.view().first(length)));
+            static_cast<void>(features::plugins::PluginEffects::decode(original.view().first(length)));
           });
         }
       }
@@ -195,7 +195,7 @@ export {
 
     inline void pluginEffectCases() {
       constexpr std::size_t original_worker_limit = 10033;
-      static_assert(PluginEffects::maximum_bytes == original_worker_limit);
+      static_assert(features::plugins::PluginEffects::maximum_bytes == original_worker_limit);
 
       plugin_effect_detail::decoding();
       plugin_effect_detail::authorization();

@@ -33,4 +33,4 @@ telar_add_domain(gui application
        foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history
        features/prompt features/terminal/input features/terminal/links features/terminal/copy_mode
        features/terminal/graphics features/terminal/attachments features/window features/status_bar features/notifications features/machines features/activity
-       features/workbench features/bindings features/components features/configuration config)
+       features/workbench features/bindings features/components features/configuration features/plugins)

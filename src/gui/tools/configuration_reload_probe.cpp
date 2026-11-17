@@ -27,7 +27,6 @@ static_assert(true);
 #include <exception>
 #include <iostream>
 
-import telar.gui.config.plugin_effects;
 import telar.gui.application;
 
 namespace {

@@ -45,14 +45,15 @@ static_assert(true);
 #include <variant>
 #include <vector>
 
-import telar.gui.config.plugin_query;
-import telar.gui.config.plugin_effects;
+import telar.gui.features.plugins;
 import telar.platform.fs;
 import telar.plugins;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::plugins;
   using namespace telar::gui::qt;
 
   constexpr std::string_view secret_name = "TELAR_GUI_PLUGIN_TEST_SECRET";

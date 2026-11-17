@@ -22,7 +22,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.config.plugin_query;
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.plugins;
@@ -58,7 +57,7 @@ namespace telar::gui::qt {
   struct ConfigurationReloadRequest {
     ConfigurationSelection selection;
     ConfigurationWatch watch;
-    PluginOverrides plugin_overrides{};
+    application::plugins::PluginOverrides plugin_overrides{};
     std::uint64_t revision = 0;
     std::uint64_t generation = 0;
     bool force = false;

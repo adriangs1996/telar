@@ -2,7 +2,7 @@ module telar.gui.application;
 
 import std;
 import telar.tbc;
-import telar.gui.config.plugin_query;
+import telar.gui.features.plugins;
 import telar.gui.foundation.actions;
 import telar.lua;
 import telar.gui.foundation.keys;
@@ -17,7 +17,6 @@ import telar.config.client;
 import telar.config.runtime;
 import telar.config.snapshot;
 import telar.gui.features.configuration;
-import telar.gui.config.plugin_effects;
 import telar.gui.features.notifications;
 import :access;
 
@@ -878,7 +877,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  void ConfigurationGeneration<Memory>::readConfiguration(tbc::view<Memory&, tbc::lt::a> memory, const PluginOverrides* overrides) {
+  void ConfigurationGeneration<Memory>::readConfiguration(tbc::view<Memory&, tbc::lt::a> memory, const features::plugins::PluginOverrides* overrides) {
     const runtime::lua::Value root{machine_.state(), -1, "config"};
 
     runtime::config::SnapshotReader{memory, *runtime_}.read(root, profile_.view(), client_state_);
@@ -907,7 +906,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  void ConfigurationGeneration<Memory>::removeDisabledPluginBindings(const PluginOverrides& overrides) {
+  void ConfigurationGeneration<Memory>::removeDisabledPluginBindings(const features::plugins::PluginOverrides& overrides) {
     std::size_t retained = 0;
 
     for (const auto& binding : std::span{input_.configured}.first(input_.length)) {
@@ -987,9 +986,9 @@ namespace telar::gui::application {
     transient_count_ = 0;
     lua_settop(machine_.state(), 0);
     machine_.resetBudget(callback_instructions, callback_deadline);
-    CallbackInvocation invocation{reference, context};
+    runtime::config::CallbackInvocation invocation{reference, context};
 
-    machine_.invoke(&CallbackInvocation::invoke, &invocation, 1);
+    machine_.invoke(&runtime::config::CallbackInvocation::invoke, &invocation, 1);
   }
 
   template <Allocator Memory>
@@ -1127,7 +1126,7 @@ namespace telar::gui::application::configuration {
 
       return features::configuration::BindingQuery::write(generation.input(), static_cast<std::size_t>(query.index), generation.actionDescriptions(), commands, output);
     case Section::runtime:
-      return RuntimeQuery::write(generation.runtimeValues(), output);
+      return features::configuration::RuntimeQuery::write(generation.runtimeValues(), output);
     case Section::gui:
       return features::configuration::GuiQuery::write(generation.configuration(), output, default_titlebar);
     case Section::input:

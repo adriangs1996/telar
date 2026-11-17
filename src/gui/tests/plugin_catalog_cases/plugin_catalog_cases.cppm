@@ -8,7 +8,7 @@ module;
 export module telar.gui.tests.plugin_catalog_cases;
 
 import std;
-import telar.gui.config.plugin_query;
+import telar.gui.features.plugins;
 import telar.wire.clients;
 import telar.wire.vocabulary;
 import telar.plugins;
@@ -58,56 +58,56 @@ export {
       manifest.capabilities.insert(plugins::Capability::workspace_read);
       packages[1].manifest.id.assign("last-id");
       constexpr std::uint64_t generation = 42;
-      const PluginCatalog catalog{generation, specifications, packages};
+      const features::plugins::PluginCatalog catalog{generation, specifications, packages};
 
       checkPluginCatalog(catalog.package(0) == nullptr && catalog.package(1) == packages.data() && catalog.package(2) == &packages[1]);
       checkPluginCatalog(catalog.find("disabled") == 0 && catalog.find("./enabled") == 1 && catalog.find("sample") == 1);
       std::array<char, 4096> output{};
       ClientCommand request{.action = ClientAction::plugin_list};
-      auto page = PluginQuery::list(catalog, request, output);
+      auto page = features::plugins::PluginQuery::list(catalog, request, output);
 
       checkPluginCatalog(page.next == 1 && page.text == R"({"generation":42,"entries":[{"index":0,"path":"disabled","id":null,"version":null,"requested_enabled":false,"enabled":false}]})");
       request.value = 1;
-      page = PluginQuery::list(catalog, request, output);
+      page = features::plugins::PluginQuery::list(catalog, request, output);
       checkPluginCatalog(page.next == 2 && page.text == R"({"generation":42,"entries":[{"index":1,"path":"./enabled","id":"sample","version":"1","requested_enabled":true,"enabled":true}]})");
       request.value = 3;
-      page = PluginQuery::list(catalog, request, output);
+      page = features::plugins::PluginQuery::list(catalog, request, output);
       checkPluginCatalog(page.next == -1 && page.text == R"({"generation":42,"entries":[]})");
       request = {.action = ClientAction::plugin_get, .target_id = generation, .text = "disabled"};
-      page = PluginQuery::get(catalog, request, output);
+      page = features::plugins::PluginQuery::get(catalog, request, output);
       checkPluginCatalog(page.next == -1 && page.text == R"({"generation":42,"entries":[{"path":"disabled","requested_enabled":false,"enabled":false,"id":null}]})");
       request.text = "sample";
-      page = PluginQuery::get(catalog, request, output);
+      page = features::plugins::PluginQuery::get(catalog, request, output);
       checkPluginCatalog(page.next == 1 && page.text == R"({"generation":42,"entries":[{"path":"./enabled","requested_enabled":true,"enabled":true,"id":"sample","version":"1","entry":"main.lua","source":"fixture","revision":"1","digest":"0000000000000000000000000000000000000000000000000000000000000000","capabilities":["workspace.read","notifications"]}]})");
       request.value = 1;
-      page = PluginQuery::get(catalog, request, output);
+      page = features::plugins::PluginQuery::get(catalog, request, output);
       checkPluginCatalog(page.next == 2 && page.text == R"({"generation":42,"entries":["first"]})");
       request.value = 2;
-      page = PluginQuery::get(catalog, request, output);
+      page = features::plugins::PluginQuery::get(catalog, request, output);
       checkPluginCatalog(page.next == -1 && page.text == R"({"generation":42,"entries":["second"]})");
       request.value = -1;
       pluginQueryError([&] {
-        static_cast<void>(PluginQuery::get(catalog, request, output));
+        static_cast<void>(features::plugins::PluginQuery::get(catalog, request, output));
       },
           "InvalidPage");
       request.text = "missing";
       pluginQueryError([&] {
-        static_cast<void>(PluginQuery::get(catalog, request, output));
+        static_cast<void>(features::plugins::PluginQuery::get(catalog, request, output));
       },
           "PluginNotConfigured");
       request.target_id = generation + 1;
       pluginQueryError([&] {
-        static_cast<void>(PluginQuery::get(catalog, request, output));
+        static_cast<void>(features::plugins::PluginQuery::get(catalog, request, output));
       },
           "StaleConfiguration");
       pluginQueryError([&] {
-        static_cast<void>(PluginQuery::list(catalog, request, output));
+        static_cast<void>(features::plugins::PluginQuery::list(catalog, request, output));
       },
           "StaleConfiguration");
       request.target_id = 0;
       request.value = std::numeric_limits<std::int64_t>::max();
       pluginQueryError([&] {
-        static_cast<void>(PluginQuery::list(catalog, request, output));
+        static_cast<void>(features::plugins::PluginQuery::list(catalog, request, output));
       },
           "InvalidPage");
       specifications[0].path.assign("sample");

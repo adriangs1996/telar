@@ -21,7 +21,6 @@ static_assert(true);
 #include <limits.h>
 
 import telar.gui.tests.json_fixture;
-import telar.gui.config.plugin_query;
 import telar.gui.features.configuration;
 import telar.gui.application;
 import telar.base.text.json;

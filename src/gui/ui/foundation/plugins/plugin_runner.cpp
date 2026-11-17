@@ -20,7 +20,7 @@ namespace telar::gui::qt {
     return !worker_.active() && !owner_;
   }
 
-  void PluginRunner::start(const PluginInvocation& invocation) {
+  void PluginRunner::start(const application::plugins::PluginInvocation& invocation) {
     if (!idle()) {
       throw std::runtime_error{"PluginWorkerBusy"};
     }
@@ -41,7 +41,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void PluginRunner::pluginWorkerFinished(std::uint64_t execution, const PluginInvocation& invocation, const PluginWorkerResult& result) {
+  void PluginRunner::pluginWorkerFinished(std::uint64_t execution, const application::plugins::PluginInvocation& invocation, const PluginWorkerResult& result) {
     if (!owner_ || owner_->execution != execution) {
       return;
     }

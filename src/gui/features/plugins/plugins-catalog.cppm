@@ -1,17 +1,20 @@
-export module telar.gui.config.plugin_query;
+// The plugins a configuration names: the overrides a client sets on them, the catalog of their
+// packages for one configuration generation, and the pages a client lists or reads of it.
+export module telar.gui.features.plugins:catalog;
 
 import std;
 
 import telar.tbc;
 import telar.config.client;
 import telar.plugins;
+import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 
 // Interface: config/plugin_overrides.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::plugins {
 
     class PluginOverrides {
     public:
@@ -38,7 +41,7 @@ export {
 
 // Interface: config/plugin_catalog.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::plugins {
 
     class PluginCatalog {
     public:
@@ -72,7 +75,7 @@ export {
 
 // Interface: config/plugin_query.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::plugins {
 
     struct PluginPage {
       std::string_view text;

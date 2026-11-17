@@ -50,7 +50,7 @@ static_assert(true);
 import telar.gui.tests.json_fixture;
 import telar.gui.application;
 import telar.gui.features.components;
-import telar.gui.config.plugin_effects;
+import telar.gui.features.plugins;
 import telar.gui.features.configuration;
 import telar.base.text.json;
 import telar.plugins;
@@ -84,6 +84,8 @@ namespace {
   using telar::gui::test::requiredJsonField;
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::plugins;
 
   using namespace telar::gui::features::configuration;
   using namespace telar::gui::qt;

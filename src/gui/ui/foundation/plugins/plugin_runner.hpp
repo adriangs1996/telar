@@ -15,7 +15,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.config.plugin_effects;
 import telar.gui.application;
 
 namespace telar::gui::test {
@@ -40,13 +39,13 @@ namespace telar::gui::qt {
     PluginRunner& operator=(PluginRunner&&) = delete;
 
     // Starts the plugin; it throws while another one runs.
-    void start(const PluginInvocation& invocation);
+    void start(const application::plugins::PluginInvocation& invocation);
     [[nodiscard]] bool idle() const;
     // What the worker calls once the plugin finished.
-    void pluginWorkerFinished(std::uint64_t execution, const PluginInvocation& invocation, const PluginWorkerResult& result);
+    void pluginWorkerFinished(std::uint64_t execution, const application::plugins::PluginInvocation& invocation, const PluginWorkerResult& result);
 
   signals:
-    void finished(const telar::gui::PluginEffects& effects);
+    void finished(const telar::gui::application::plugins::PluginEffects& effects);
     void failed(const QString& message);
 
   private:

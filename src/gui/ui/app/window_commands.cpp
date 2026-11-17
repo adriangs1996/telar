@@ -64,7 +64,6 @@ static_assert(true);
 import telar.gui.application;
 
 import telar.config.client;
-import telar.gui.config.plugin_effects;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
@@ -789,7 +788,7 @@ namespace telar::gui::qt {
     });
   }
 
-  void WindowCommands::applyPluginEffects(const PluginEffects& effects) {
+  void WindowCommands::applyPluginEffects(const application::plugins::PluginEffects& effects) {
     for (const auto& effect : effects.effects()) {
       if (const auto* action = std::get_if<BindingAction>(&effect)) {
         executeBinding(*action);

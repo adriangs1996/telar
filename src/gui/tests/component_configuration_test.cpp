@@ -26,9 +26,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.gui.features.components;
-import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
-import telar.gui.config.plugin_effects;
 import telar.gui.features.machines;
 
 import telar.gui.application;

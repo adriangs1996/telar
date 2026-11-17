@@ -1,9 +1,15 @@
-module telar.gui.config.plugin_query;
+module telar.gui.features.plugins;
 
+import std;
+
+import telar.tbc;
+import telar.plugins;
+import telar.base.text.json;
+import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::features::plugins {
 
   void PluginOverrides::set(const runtime::plugins::ConfiguredPlugin& specification, std::optional<std::uint64_t> identity) {
     for (auto& entry : std::span{entries_}.first(count_)) {

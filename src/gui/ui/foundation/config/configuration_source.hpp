@@ -62,9 +62,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
-import telar.gui.config.plugin_effects;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.config.client;
@@ -120,15 +118,15 @@ namespace telar::gui::qt {
     void forgetElements(std::uint64_t instance);
     [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char* field) const;
     [[nodiscard]] std::string_view query(application::configuration::ConfigurationQuery query, const application::ClientViewState& view = {});
-    [[nodiscard]] PluginPage queryPlugins(const ClientCommand& request);
+    [[nodiscard]] application::plugins::PluginPage queryPlugins(const ClientCommand& request);
     void setPluginEnabled(const ClientCommand& request, bool enabled);
     [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
     // No Lua call is queued or running, so every result has been delivered.
     [[nodiscard]] bool luaIdle() const noexcept;
     [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action, const Actions* resolved = nullptr) const;
-    [[nodiscard]] PluginInvocation pluginInvocation(const ClientCommand& request, BindingContext context) const;
-    [[nodiscard]] PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
-    void authorizePlugin(const PluginInvocation& invocation, const PluginEffects& effects) const;
+    [[nodiscard]] application::plugins::PluginInvocation pluginInvocation(const ClientCommand& request, BindingContext context) const;
+    [[nodiscard]] application::plugins::PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
+    void authorizePlugin(const application::plugins::PluginInvocation& invocation, const application::plugins::PluginEffects& effects) const;
 
   signals:
     void changed();
@@ -168,7 +166,7 @@ namespace telar::gui::qt {
     tbc::view<std::array<std::optional<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
     ConfigurationSnapshot::CommandArguments arguments_;
     tbc::view<std::optional<PluginPackages>, tbc::lt::a> plugins_;
-    PluginOverrides plugin_overrides_;
+    application::plugins::PluginOverrides plugin_overrides_;
     runtime::plugins::TrustStore trust_;
     std::uint64_t next_generation_ = 1;
     std::uint64_t revision_ = 0;

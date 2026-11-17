@@ -29,4 +29,5 @@ export import :window;
 export import :activity;
 export import :bindings;
 export import :components;
+export import :plugins;
 export import :workbench;

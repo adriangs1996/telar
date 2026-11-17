@@ -1,31 +1,20 @@
-export module telar.gui.config.plugin_effects;
+// What a plugin's action does: the run of one action of a package with the client's context,
+// and the effects the run returns, decoded and authorized against what the package may do.
+export module telar.gui.features.plugins:effects;
 
 import std;
-import telar.tbc;
 
-import telar.gui.foundation.actions;
 import telar.config.client;
-import telar.config.runtime;
-
 import telar.plugins;
-
-import telar.gui.foundation.core;
-import telar.wire.vocabulary;
-import telar.base.memory.allocators;
 import telar.base.memory.containers;
-
-// Interface: config/callback_invocation.cppm
-export {
-  namespace telar::gui {
-
-    using CallbackInvocation = runtime::config::CallbackInvocation;
-
-  }
-}
+import telar.base.text.json;
+import telar.wire.vocabulary;
+import telar.gui.foundation.actions;
+import telar.gui.foundation.core;
 
 // Interface: config/plugin_effects.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::plugins {
 
     class PluginEffects {
     public:
@@ -57,7 +46,7 @@ export {
 
 // Interface: config/plugin_invocation.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::plugins {
 
     struct PluginInvocation {
       runtime::plugins::Package package;
@@ -66,29 +55,6 @@ export {
       std::uint64_t configuration_generation = 0;
       std::size_t package_index = 0;
     };
-
-  }
-}
-
-// Interface: config/runtime_query.cppm
-export {
-  namespace telar::gui {
-
-    class RuntimeQuery {
-    public:
-      template <Allocator Memory>
-      // The query is written into the output, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const runtime::config::RuntimeValues<Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
-
-    private:
-      static std::optional<std::string_view> nullablePath(std::string_view path) noexcept;
-
-      template <Allocator Memory>
-      static void writeProxy(JsonWriter& writer, const runtime::ProxyOptions<Memory>& proxy);
-    };
-
-    extern template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::Memory>(const runtime::config::RuntimeValues<telar::Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
-    extern template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::ConcurrentMemory>(const runtime::config::RuntimeValues<telar::ConcurrentMemory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
 
   }
 }

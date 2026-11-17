@@ -140,7 +140,7 @@ static_assert(true);
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
-import telar.gui.config.plugin_effects;
+import telar.gui.features.plugins;
 import telar.gui.features.machines;
 #if (defined(__APPLE__))
 #endif
@@ -152,6 +152,7 @@ import telar.wire.layout;
 namespace telar::gui::test {
 
   using namespace telar::gui::features::machines;
+  using namespace telar::gui::features::plugins;
 
   struct MachineWindow {
     static qt::LinksController& links(qt::ApplicationController& application) {
@@ -272,6 +273,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::plugins;
   using namespace telar::gui::features::machines;
   using namespace telar::gui::features::notifications;
   using namespace telar::gui::qt;

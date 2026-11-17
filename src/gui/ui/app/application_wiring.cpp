@@ -20,7 +20,6 @@ static_assert(true);
 #include <stdexcept>
 
 import telar.gui.application;
-import telar.gui.config.plugin_effects;
 
 namespace telar::gui::qt {
 
@@ -107,7 +106,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::initializePlugins() {
-    connect(&plugins_, &PluginRunner::finished, this, [this](const PluginEffects& effects) {
+    connect(&plugins_, &PluginRunner::finished, this, [this](const application::plugins::PluginEffects& effects) {
       try {
         status_.clear();
         commands_.applyPluginEffects(effects);

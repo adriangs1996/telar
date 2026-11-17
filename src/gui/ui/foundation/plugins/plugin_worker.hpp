@@ -55,11 +55,11 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-import telar.gui.config.plugin_effects;
 import telar.platform.fs;
 import telar.plugins;
 import telar.gui.foundation.actions;
 import telar.config.client;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -72,7 +72,7 @@ namespace telar::gui::qt {
 
   struct NativePluginWorkerHost {
     static constexpr auto timeout = std::chrono::seconds{2};
-    static constexpr std::size_t stdout_limit = PluginEffects::maximum_bytes;
+    static constexpr std::size_t stdout_limit = application::plugins::PluginEffects::maximum_bytes;
 
     static void start(QProcess& process, const PluginWorkerCommand& command) {
       process.setProcessEnvironment(QProcessEnvironment{});
@@ -92,7 +92,7 @@ namespace telar::gui::qt {
   };
 
   struct PluginWorkerSnapshot {
-    explicit PluginWorkerSnapshot(ApplicationAllocator& memory, const PluginInvocation& invocation, const QString& program) {
+    explicit PluginWorkerSnapshot(ApplicationAllocator& memory, const application::plugins::PluginInvocation& invocation, const QString& program) {
       using Inspector = runtime::plugins::PackageInspection<PluginPackageHash>;
       const auto copied = runtime::plugins::PackageCopyStorage<ApplicationAllocator, Inspector>{memory}.copy(invocation.package, directory.descriptor(), directory.path());
 
@@ -119,7 +119,7 @@ namespace telar::gui::qt {
   };
 
   struct PluginWorkerResult {
-    std::optional<PluginEffects> effects;
+    std::optional<application::plugins::PluginEffects> effects;
     QString error;
   };
 
@@ -161,7 +161,7 @@ namespace telar::gui::qt {
       return invocation_.has_value();
     }
 
-    void start(const PluginInvocation& invocation, std::uint64_t execution, const QString& program) {
+    void start(const application::plugins::PluginInvocation& invocation, std::uint64_t execution, const QString& program) {
       if (active()) {
         throw std::runtime_error{"PluginWorkerBusy"};
       }
@@ -204,7 +204,7 @@ namespace telar::gui::qt {
         result.error = *failure == CommandFailure::timeout ? QStringLiteral("PluginWorkerTimedOut") : QStringLiteral("PluginWorkerFailed");
       } else {
         try {
-          result.effects = PluginEffects::decode(std::span{output_}.first(output_length_));
+          result.effects = application::plugins::PluginEffects::decode(std::span{output_}.first(output_length_));
         } catch (const std::exception& error) {
           result.error = QString::fromUtf8(error.what());
         }
@@ -244,8 +244,8 @@ namespace telar::gui::qt {
     Observer& observer_;
     QFutureWatcher<PluginWorkerPreparation> preparation_;
     PreparedPluginWorker snapshot_;
-    std::optional<PluginInvocation> invocation_;
-    std::array<Byte, PluginEffects::maximum_bytes> output_{};
+    std::optional<application::plugins::PluginInvocation> invocation_;
+    std::array<Byte, application::plugins::PluginEffects::maximum_bytes> output_{};
     std::size_t output_length_ = 0;
     std::uint64_t execution_ = 0;
     // The process reports back to this worker.

@@ -147,7 +147,7 @@ namespace telar::gui::qt {
     bool runBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
     // Runs the action a mod's component was pressed for; a panel it opens anchors at `anchor`.
     void runComponentBinding(const BindingAction& action, const ConfigurationSource::Actions& actions, QPointF anchor);
-    void applyPluginEffects(const PluginEffects& effects);
+    void applyPluginEffects(const application::plugins::PluginEffects& effects);
     // A mutation of the session failed: the open history shows it, or the window's status.
     void fail(const std::exception& error);
 

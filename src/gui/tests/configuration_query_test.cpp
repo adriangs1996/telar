@@ -25,10 +25,8 @@ static_assert(true);
 #include <new>
 
 import telar.gui.tests.json_fixture;
-import telar.gui.config.plugin_effects;
 import telar.gui.features.configuration;
 import telar.gui.application;
-import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 import telar.gui.features.status_bar;

@@ -8,6 +8,7 @@ import telar.tbc;
 import telar.base.memory.allocators;
 import telar.config.client;
 import telar.config.gui;
+import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
@@ -176,6 +177,29 @@ export {
 
     extern template tbc::view<std::string_view, tbc::lt::a> BindingQuery::write<telar::Memory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
     extern template tbc::view<std::string_view, tbc::lt::a> BindingQuery::write<telar::ConcurrentMemory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
+
+  }
+}
+
+// Interface: config/runtime_query.cppm
+export {
+  namespace telar::gui::features::configuration {
+
+    class RuntimeQuery {
+    public:
+      template <Allocator Memory>
+      // The query is written into the output, region `a`.
+      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const runtime::config::RuntimeValues<Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
+
+    private:
+      static std::optional<std::string_view> nullablePath(std::string_view path) noexcept;
+
+      template <Allocator Memory>
+      static void writeProxy(JsonWriter& writer, const runtime::ProxyOptions<Memory>& proxy);
+    };
+
+    extern template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::Memory>(const runtime::config::RuntimeValues<telar::Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
+    extern template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::ConcurrentMemory>(const runtime::config::RuntimeValues<telar::ConcurrentMemory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
 
   }
 }
