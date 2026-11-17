@@ -4,26 +4,14 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <chrono>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
-#include <utility>
 
 import telar.gui.text.notification_payload;
 import telar.gui.application.sound_playback;

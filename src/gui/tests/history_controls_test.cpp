@@ -3,14 +3,10 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../input/wheel_accumulator.hpp"
+#include "core/memory.hpp"
 #include "frame_fixture.hpp"
+#include "input/wheel_accumulator.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/panes/terminal/history/layout/history_empty_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
@@ -59,10 +55,6 @@ static_assert(true);
 #include <QtTest/qtestmouse.h>
 #include <algorithm>
 #include <array>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -70,23 +62,7 @@ static_assert(true);
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <utility>
 #include <variant>
-
-#include "core/memory.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "ui/app/panes/terminal/history/layout/history_empty_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_loading_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.history.browser;
 import telar.gui.presentation.history_inspection;

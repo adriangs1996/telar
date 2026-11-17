@@ -3,11 +3,9 @@
 static_assert(true);
 #endif
 
-#include "core/terminal_size.hpp"
 #include "machine_chrome_controller.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include <QAbstractItemModel>
@@ -20,21 +18,13 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <array>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 
 #pragma once
 

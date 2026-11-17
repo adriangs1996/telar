@@ -3,18 +3,15 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../core/memory.hpp"
-#include "../platform/window.hpp"
-#include "../terminal/screen.hpp"
+#include "application/dependencies.hpp"
 #include "assertions.hpp"
-#include "telar_config/graphics/limits.hpp"
+#include "platform/window.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "terminal/screen.hpp"
 #include "ui/app/panes/terminal/scene/graphics_scene.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
@@ -41,30 +38,18 @@ static_assert(true);
 #include <QtGui/qtestsupport_gui.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
-#include <tuple>
 #include <utility>
 #include <vector>
-
-#include "application/dependencies.hpp"
-#include "platform/window.hpp"
-#include "terminal/screen.hpp"
-#include "ui/app/panes/terminal/scene/graphics_scene.hpp"
-#include "ui/app/panes/terminal/scene/window_images.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
 
 import telar.gui.graphics.texture_cache;
 import telar.wire.graphics;

@@ -8,11 +8,6 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <nghttp2/nghttp2.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 import std;
 import telar.platform.primitives;

@@ -3,18 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../core/terminal_size.hpp"
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include <algorithm>
 #include <array>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -23,10 +14,7 @@ static_assert(true);
 #include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <variant>
 
 import telar.gui.core.metrics;
 import telar.gui.machines.discovery;

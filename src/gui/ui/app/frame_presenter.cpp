@@ -8,7 +8,6 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "platform/window.hpp"
 #include "pointer_dispatcher.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include "terminal/screen.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
@@ -28,10 +27,6 @@ static_assert(true);
 #include <optional>
 #include <span>
 #include <utility>
-
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "platform/window.hpp"
 
 import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;

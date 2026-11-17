@@ -4,10 +4,6 @@ static_assert(true);
 #endif
 
 #include "history_loading_layout.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
 #include <QPointer>
@@ -16,17 +12,9 @@ static_assert(true);
 #include <QRectF>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <chrono>
 #include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <numbers>
 #include <optional>
-#include <string_view>
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;

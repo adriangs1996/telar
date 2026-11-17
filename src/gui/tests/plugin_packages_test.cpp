@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
+#include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_platform/file_descriptor.hpp"
@@ -42,9 +42,6 @@ static_assert(true);
 #include <filesystem>
 #include <iostream>
 #include <utility>
-
-#include "core/memory.hpp"
-#include "ui/foundation/config/plugin_packages.hpp"
 
 import telar.base.text;
 import telar.gui.tests.plugin_catalog_cases;

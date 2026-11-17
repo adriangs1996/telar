@@ -4,17 +4,12 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include <algorithm>
 #include <array>
-#include <atomic>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <optional>
 #include <span>
 
 import telar.gui.graphics.texture_cache;

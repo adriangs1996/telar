@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_progress_ring.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -14,15 +13,10 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <limits>
 #include <memory>
-#include <numbers>
 #include <optional>
-#include <string_view>
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;

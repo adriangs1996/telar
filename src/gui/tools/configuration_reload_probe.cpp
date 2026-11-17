@@ -3,21 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include <algorithm>
+#include "application/dependencies.hpp"
 #include <array>
-#include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <optional>
-#include <span>
 #include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <utility>
 
 #include "ui/foundation/config/configuration_source.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -36,10 +26,6 @@ static_assert(true);
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-
-#include "application/dependencies.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
 
 import telar.gui.config.plugin_effects;
 import telar.gui.core.metrics;

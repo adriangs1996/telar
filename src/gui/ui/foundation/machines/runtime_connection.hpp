@@ -36,8 +36,6 @@ static_assert(true);
 
 #pragma once
 
-#include "application/dependencies.hpp"
-
 import telar.gui.application.host_effects;
 import telar.gui.machines.discovery;
 import telar.gui.platform.shared_image_source;

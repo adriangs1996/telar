@@ -3,22 +3,12 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../terminal/screen.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/activity_projection.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"
 #include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QAbstractItemModel>
@@ -53,32 +43,10 @@ static_assert(true);
 #include <QtTest/qtestmouse.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <chrono>
-#include <cmath>
-#include <compare>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <utility>
-#include <variant>
-
-#include "core/memory.hpp"
-#include "ui/app/chrome/activity/activity_projection.hpp"
-#include "ui/app/chrome/activity/agent_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../../gui/tests/platform/private_clipboard.hpp"
+#include "platform/private_clipboard.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -53,7 +53,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "platform/private_clipboard.hpp"
 #include <ghostty/vt.h>
 
 import telar.runtime.tests.client_peer;

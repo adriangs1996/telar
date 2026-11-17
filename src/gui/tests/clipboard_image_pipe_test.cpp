@@ -3,13 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../attachments/secure_erase.hpp"
 #include "../attachments/sensitive_bytes.hpp"
-#include "../attachments/types.hpp"
 #include "../core/memory.hpp"
-#include "../platform/clipboard_image_file.h"
-#include "../platform/clipboard_image_source.hpp"
 #include "assertions.hpp"
+#include "platform/clipboard_image_file.h"
+#include "platform/clipboard_image_source.hpp"
 #include "platform/clipboard_pipe_status.h"
 #include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
@@ -27,9 +25,6 @@ static_assert(true);
 #include <thread>
 #include <time.h>
 #include <unistd.h>
-
-#include "platform/clipboard_image_file.h"
-#include "platform/clipboard_image_source.hpp"
 
 import telar.gui.tests.erasure_allocator;
 import telar.gui.platform.clipboard_image_pipe;

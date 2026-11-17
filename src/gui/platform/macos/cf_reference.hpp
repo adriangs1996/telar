@@ -1,6 +1,5 @@
 #pragma once
 
-#include <CoreFoundation/CoreFoundation.h>
 #include <utility>
 
 namespace telar::gui::platform {

@@ -3,13 +3,8 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
@@ -25,23 +20,11 @@ static_assert(true);
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <atomic>
-#include <charconv>
 #include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <limits>
 #include <optional>
-#include <span>
 #include <string_view>
 #include <utility>
-#include <variant>
-
-#include "input/wheel_accumulator.hpp"
-#include "terminal/screen.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.input.child_mouse;

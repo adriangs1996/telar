@@ -3,12 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../platform/font.h"
-#include "telar_base/memory/fixed_text.hpp"
+#include "core/memory.hpp"
+#include "platform/font.h"
 #include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/font_cache.hpp"
 #include "ui/foundation/fonts/font_resolver.hpp"
@@ -31,15 +28,9 @@ static_assert(true);
 #include <QtTest/qtestcase.h>
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <freetype/freetype.h>
-#include <hb.h>
 #include <limits>
 #include <memory>
 #include <new>
@@ -47,18 +38,7 @@ static_assert(true);
 #include <span>
 #include <stdexcept>
 #include <string_view>
-#include <type_traits>
-#include <utility>
 #include <vector>
-
-#include "core/memory.hpp"
-#include "platform/font.h"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/font_cache.hpp"
-#include "ui/foundation/fonts/font_resolver.hpp"
-#include "ui/foundation/fonts/font_source.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/terminal_font.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

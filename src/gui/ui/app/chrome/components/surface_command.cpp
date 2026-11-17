@@ -6,7 +6,6 @@ static_assert(true);
 #include "surface_command.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -21,7 +20,6 @@ static_assert(true);
 #include <array>
 #include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <optional>
 #include <stdexcept>

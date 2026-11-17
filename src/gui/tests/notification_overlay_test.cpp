@@ -3,14 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
+#include "application/dependencies.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/overlays/notifications/notification_layout.hpp"
@@ -42,23 +37,12 @@ static_assert(true);
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestkeyboard.h>
 #include <QtTest/qtestmouse.h>
-#include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
 #include <string_view>
-
-#include "application/dependencies.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/overlays/notifications/notification_layout.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

@@ -45,9 +45,6 @@ static_assert(true);
 
 #pragma once
 
-#include "input/scroll_motion.hpp"
-#include "input/wheel_accumulator.hpp"
-
 import telar.gui.core.metrics;
 import telar.gui.input.child_mouse;
 import telar.gui.input.key_encoder;

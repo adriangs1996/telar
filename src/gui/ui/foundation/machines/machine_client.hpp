@@ -48,8 +48,6 @@ static_assert(true);
 
 #pragma once
 
-#include "application/dependencies.hpp"
-
 import telar.gui.application.session;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

@@ -3,11 +3,6 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
@@ -31,20 +26,15 @@ static_assert(true);
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
-
-#include "application/dependencies.hpp"
-#include "terminal/cell_position.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.links.cell_links;

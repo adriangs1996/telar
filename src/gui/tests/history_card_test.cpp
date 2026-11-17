@@ -3,11 +3,9 @@
 static_assert(true);
 #endif
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <ghostty/vt/unicode.h>
 
 import std;
 import telar.gui.core.primitives;

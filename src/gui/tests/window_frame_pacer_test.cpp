@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "gui_wait.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <QCoreApplication>
 #include <QEvent>
@@ -14,20 +11,13 @@ static_assert(true);
 #include <QWindow>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
-#include <variant>
-
-#include "ui/foundation/timing/window_frame_pacer.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.frame_pacer;

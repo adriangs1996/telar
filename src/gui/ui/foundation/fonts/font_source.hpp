@@ -4,33 +4,14 @@ static_assert(true);
 #endif
 
 #include "core/memory.hpp"
-#include "platform/font.h"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <QByteArray>
 #include <QString>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <freetype/freetype.h>
-#include <hb.h>
-#include <limits>
-#include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
 
 #pragma once
-#include "core/memory.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.font_requests;

@@ -4,10 +4,6 @@ static_assert(true);
 #endif
 
 #include "history_row_layout.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -20,16 +16,10 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <ghostty/vt/unicode.h>
 #include <limits>
-#include <optional>
-#include <stdexcept>
 #include <string_view>
 
 import telar.gui.core.metrics;

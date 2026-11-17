@@ -8,17 +8,7 @@ static_assert(true);
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qvariant.h>
-#include <algorithm>
-#include <array>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <tuple>
-#include <utility>
 
 #pragma once
 

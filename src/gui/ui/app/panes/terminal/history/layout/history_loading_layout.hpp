@@ -7,9 +7,7 @@ static_assert(true);
 #include <QQuickItem>
 #include <QRectF>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <cstdint>
-#include <limits>
 #include <optional>
 
 #pragma once

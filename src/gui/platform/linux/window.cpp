@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../window.hpp"
+#include "platform/window.hpp"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QLatin1StringView>
@@ -21,8 +21,6 @@ static_assert(true);
 #include <QtCore/qtenvironmentvariables.h>
 #include <cstdint>
 #include <memory>
-
-#include "platform/window.hpp"
 
 import telar.gui.platform.background_effect;
 

@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/design/controls/native_chrome_icon.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
@@ -39,20 +38,10 @@ static_assert(true);
 #include <QtTest/qtestcase.h>
 #include <algorithm>
 #include <array>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 #include <future>
-#include <optional>
-#include <string_view>
 #include <thread>
-#include <utility>
-
-#include "ui/design/controls/native_chrome_icon.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/scene/alpha_mask_material.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

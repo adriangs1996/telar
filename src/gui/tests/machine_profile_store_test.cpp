@@ -3,31 +3,23 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "assertions.hpp"
+#include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
-#include <limits>
 #include <new>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
-#include <system_error>
-
-#include "core/memory.hpp"
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;

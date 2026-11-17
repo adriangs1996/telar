@@ -25,14 +25,12 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <utility>
 
 import telar.gui.fonts.face;
 

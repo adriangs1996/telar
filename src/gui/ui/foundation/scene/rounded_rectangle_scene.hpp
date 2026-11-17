@@ -4,18 +4,10 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QQuickWindow>
 #include <QSGNode>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
 #include <span>
-#include <string_view>
 
 #pragma once
 

@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "native_mode_layout.hpp"
 #include "tbc/view.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/design/history_hint_projection.hpp"
 #include <QByteArray>
 #include <QQuickItem>
@@ -19,23 +18,14 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <ghostty/vt/unicode.h>
 #include <limits>
-#include <optional>
-#include <span>
 #include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <tuple>
-#include <utility>
 
 import telar.gui.core.metrics;
 import telar.gui.input.key_encoder;

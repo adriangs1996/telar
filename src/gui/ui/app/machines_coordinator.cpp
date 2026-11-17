@@ -5,16 +5,11 @@ static_assert(true);
 
 #include "machines_coordinator.hpp"
 #include "core/memory.hpp"
-#include "core/terminal_size.hpp"
 #include "dialogs.hpp"
 #include "frame_presenter.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
@@ -31,24 +26,14 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <tuple>
 #include <utility>
-#include <variant>
-
-#include "core/memory.hpp"
 
 import telar.gui.machines.picker;
 import telar.gui.platform.awake_clock;

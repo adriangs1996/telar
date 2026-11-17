@@ -7,7 +7,6 @@ static_assert(true);
 #include "ui/foundation/machines/machine_client.hpp"
 #include <exception>
 #include <stdexcept>
-#include <string>
 
 import telar.gui.platform.runtime_endpoint;
 

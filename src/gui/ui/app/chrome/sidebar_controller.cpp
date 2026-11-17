@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "sidebar_controller.hpp"
-#include "core/memory.hpp"
 #include "sidebar_projection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include "ui/foundation/fonts/typography_projection.hpp"

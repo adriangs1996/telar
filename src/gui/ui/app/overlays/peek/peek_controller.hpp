@@ -10,7 +10,6 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <cstdint>
-#include <exception>
 #include <optional>
 
 #pragma once

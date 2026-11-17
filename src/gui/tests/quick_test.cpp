@@ -3,20 +3,18 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../platform/window.hpp"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
 #include "agent_report_fixture.hpp"
 #include "appearance_fixture.hpp"
+#include "application/dependencies.hpp"
 #include "clipboard_fixture.hpp"
+#include "core/terminal_size.hpp"
 #include "frame_fixture.hpp"
 #include "frame_pacing_fixture.hpp"
 #include "gui_wait.hpp"
 #include "history_card_wait_trace.hpp"
 #include "history_presentation_fixture.hpp"
+#include "platform/window.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"
@@ -32,6 +30,8 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "terminal/cell_position.hpp"
+#include "terminal/screen.hpp"
 #include "terminal_cursor_fixture.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
@@ -136,26 +136,6 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 #include <variant>
-
-#include "application/dependencies.hpp"
-#include "core/terminal_size.hpp"
-#include "platform/window.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
-#include "ui/app/overlays/notifications/notification_layout.hpp"
-#include "ui/app/panes/pane_motion_layout.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/design/controls/modal_reveal_layout.hpp"
-#include "ui/design/controls/native_form_field.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/machines/runtime_connection.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/pane_attention_value.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
 
 import telar.gui.tests.json_fixture;
 import telar.gui.application.workspace_replica;

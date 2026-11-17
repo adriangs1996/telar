@@ -3,42 +3,25 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../platform/font.h"
-#include "../terminal/screen.hpp"
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
+#include "core/memory.hpp"
+#include "terminal/screen.hpp"
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <filesystem>
-#include <freetype/freetype.h>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
 #include <iostream>
 #include <limits>
-#include <memory>
 #include <new>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string_view>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "core/memory.hpp"
-#include "terminal/screen.hpp"
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.font_fixture;

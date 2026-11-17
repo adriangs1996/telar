@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/input/key_encoding.hpp"
 #include <QCoreApplication>
@@ -11,26 +10,13 @@ static_assert(true);
 #include <QString>
 #include <QtCore/qcoreevent.h>
 #include <QtCore/qnamespace.h>
-#include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
-#include <span>
 #include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <tuple>
-#include <utility>
-
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/input/key_encoding.hpp"
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.input.key_encoder;

@@ -40,8 +40,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "application/dependencies.hpp"
-
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.platform.awake_clock;

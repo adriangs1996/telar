@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include <cstdio>
-#include <sqlite3.h>
 
 import std;
 import telar.runtime.tests.agent_oracle;

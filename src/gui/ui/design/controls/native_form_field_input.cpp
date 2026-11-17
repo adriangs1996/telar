@@ -18,14 +18,9 @@ static_assert(true);
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
 #include <algorithm>
-#include <array>
-#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <ghostty/vt/unicode.h>
-#include <optional>
-#include <stdexcept>
 #include <string_view>
 
 import telar.gui.text.bounded_editor;

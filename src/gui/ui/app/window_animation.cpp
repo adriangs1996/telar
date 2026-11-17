@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "application_controller.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/app/overlays/notifications/notification_layout.hpp"
 #include "ui/app/panes/native_pane_attention.hpp"

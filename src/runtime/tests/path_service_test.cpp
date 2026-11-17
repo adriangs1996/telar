@@ -8,14 +8,10 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
-#include <pthread.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 
 import std;
 import telar.base.memory.allocators;

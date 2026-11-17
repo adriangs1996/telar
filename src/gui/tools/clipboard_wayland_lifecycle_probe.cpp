@@ -3,13 +3,13 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
 #include "../attachments/secure_erase.hpp"
 #include "../attachments/sensitive_bytes.hpp"
 #include "../attachments/types.hpp"
 #include "../core/memory.hpp"
-#include "../platform/clipboard_image_source.hpp"
-#include "../platform/linux/wayland_clipboard_image_monitor.hpp"
+#include "application/dependencies.hpp"
+#include "platform/clipboard_image_source.hpp"
+#include "platform/linux/wayland_clipboard_image_monitor.hpp"
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>
@@ -39,10 +39,6 @@ static_assert(true);
 #include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
-
-#include "application/dependencies.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "platform/linux/wayland_clipboard_image_monitor.hpp"
 
 import telar.gui.platform.clipboard_image_pipe;
 

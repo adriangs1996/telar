@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
+#include "core/memory.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
@@ -12,18 +12,12 @@ static_assert(true);
 #include <QObject>
 #include <algorithm>
 #include <array>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <stdexcept>
-#include <type_traits>
-#include <variant>
 #include <vector>
 
 #pragma once
-
-#include "core/memory.hpp"
 
 import telar.client;
 import telar.gui.transport.runtime_link;

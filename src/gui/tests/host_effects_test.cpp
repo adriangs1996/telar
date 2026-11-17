@@ -3,8 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "telar_base/memory/fixed_text.hpp"
+#include "core/memory.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
@@ -19,11 +18,7 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
-#include <array>
-#include <charconv>
 #include <chrono>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -31,16 +26,9 @@ static_assert(true);
 #include <memory>
 #include <new>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <string_view>
-#include <system_error>
 #include <vector>
-
-#include "core/memory.hpp"
-#include "ui/app/overlays/notifications/sound_player.hpp"
-#include "ui/app/overlays/notifications/system_notifier.hpp"
-#include "ui/foundation/process/command_process.hpp"
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.application.host_effects;

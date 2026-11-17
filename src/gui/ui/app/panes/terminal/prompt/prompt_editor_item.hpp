@@ -20,7 +20,6 @@ static_assert(true);
 #include <QtQml/qqmlregistration.h>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 import telar.gui.prompt.layout;

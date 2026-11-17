@@ -5,11 +5,7 @@ static_assert(true);
 
 #include "cell_text_grid.hpp"
 #include "core/memory.hpp"
-#include "platform/font.h"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"
 #include <QColor>
@@ -21,30 +17,12 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <freetype/freetype.h>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
-#include <limits>
 #include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <utility>
 
 #pragma once
-
-#include "core/memory.hpp"
 
 import telar.gui.fonts.row_text_layout;
 

@@ -3,17 +3,11 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QTimer>
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
-#include <string_view>
 
 #pragma once
 

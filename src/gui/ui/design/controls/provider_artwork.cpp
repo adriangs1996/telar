@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "provider_artwork.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <QByteArray>
 #include <QFile>
@@ -18,13 +17,9 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <iterator>
-#include <limits>
 #include <span>
-#include <string_view>
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.pauses;

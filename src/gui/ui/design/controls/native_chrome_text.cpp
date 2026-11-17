@@ -4,12 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_chrome_text.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "platform/font.h"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include "ui/foundation/fonts/window_font_catalog.hpp"
@@ -27,30 +21,13 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <freetype/freetype.h>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
-#include <limits>
 #include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <type_traits>
-#include <utility>
-
-#include "core/memory.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

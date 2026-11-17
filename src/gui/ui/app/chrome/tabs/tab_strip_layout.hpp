@@ -15,12 +15,9 @@ static_assert(true);
 #include <QString>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>

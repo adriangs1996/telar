@@ -33,9 +33,6 @@ static_assert(true);
 
 #pragma once
 
-#include "application/dependencies.hpp"
-#include "terminal/screen.hpp"
-
 import telar.gui.graphics.texture_cache;
 import telar.gui.graphics.placeholder;
 

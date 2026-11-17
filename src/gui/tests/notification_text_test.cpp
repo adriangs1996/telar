@@ -4,25 +4,11 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <exception>
-#include <ghostty/vt/unicode.h>
 #include <iostream>
-#include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 #include <utility>
 
 import telar.gui.presentation.history_meta_geometry;

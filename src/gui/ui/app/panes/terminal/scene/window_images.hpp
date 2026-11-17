@@ -29,9 +29,6 @@ static_assert(true);
 
 #pragma once
 
-#include "application/dependencies.hpp"
-#include "tbc/view.hpp"
-
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
 import telar.gui.graphics.texture_cache;

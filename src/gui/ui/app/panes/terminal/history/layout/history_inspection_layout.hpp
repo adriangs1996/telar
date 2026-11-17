@@ -3,14 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>
@@ -18,29 +11,13 @@ static_assert(true);
 #include <QWheelEvent>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <ghostty/vt/unicode.h>
-#include <initializer_list>
-#include <limits>
-#include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
 #pragma once
-#include "input/wheel_accumulator.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.history.browser;

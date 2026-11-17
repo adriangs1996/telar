@@ -4,10 +4,7 @@ static_assert(true);
 #endif
 
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/ssh_options.hpp"
 #include <QByteArray>
@@ -27,18 +24,13 @@ static_assert(true);
 #include <array>
 #include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
-
-#include "ui/foundation/machines/remote_bridge.hpp"
-#include "ui/foundation/machines/ssh_options.hpp"
 
 import telar.gui.machines.discovery;
 import telar.client;

@@ -3,22 +3,11 @@
 static_assert(true);
 #endif
 
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QImage>
 #include <QSGNode>
 #include <QSGTexture>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
-#include <optional>
-#include <span>
 
 #pragma once
 

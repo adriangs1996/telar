@@ -19,24 +19,13 @@ static_assert(true);
 #include <QImageReader>
 #include <QSize>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
-#include <limits>
 #include <new>
 #include <span>
 #include <stdexcept>
 #include <utility>
-
-#include "application/dependencies.hpp"
-#include "attachments/capture.hpp"
-#include "attachments/secure_erase.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "core/memory.hpp"
 
 import telar.gui.attachments.marker_input;
 import telar.gui.graphics.pauses;

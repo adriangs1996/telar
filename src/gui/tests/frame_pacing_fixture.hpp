@@ -3,29 +3,17 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include <QCoreApplication>
 #include <QEvent>
-#include <algorithm>
 #include <array>
-#include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
-#include <ranges>
 #include <span>
 #include <stdexcept>
-#include <string_view>
-#include <variant>
 
 #pragma once
-#include "ui/app/application_controller.hpp"
 
 import telar.gui.layout.geometry;
 import telar.gui.platform.awake_clock;

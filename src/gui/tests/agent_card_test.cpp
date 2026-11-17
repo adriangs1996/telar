@@ -3,15 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../terminal/screen.hpp"
+#include "core/memory.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"
 #include "ui/app/chrome/sidebar_projection.hpp"
@@ -42,30 +35,11 @@ static_assert(true);
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestmouse.h>
-#include <algorithm>
 #include <array>
-#include <atomic>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <limits>
-#include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
 #include <utility>
-#include <variant>
-
-#include "core/memory.hpp"
-#include "ui/app/chrome/activity/agent_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

@@ -6,15 +6,12 @@ static_assert(true);
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 import std;

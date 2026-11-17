@@ -15,10 +15,8 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
 
 import telar.gui.presentation.display_metrics;

@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "rounded_rectangle_scene.hpp"
 #include "physical_pixel_matrix.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QByteArray>
 #include <QSGGeometry>
 #include <QSGGeometryNode>
@@ -18,17 +17,12 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qsgmaterialtype.h>
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <memory>
-#include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 
 import telar.gui.core.metrics;

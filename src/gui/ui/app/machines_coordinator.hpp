@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "core/memory.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"

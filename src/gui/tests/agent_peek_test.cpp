@@ -3,53 +3,31 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../input/wheel_accumulator.hpp"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
 #include "assertions.hpp"
+#include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <memory>
 #include <new>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
-#include <tuple>
-#include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
-
-#include "core/memory.hpp"
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;

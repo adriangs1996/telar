@@ -10,15 +10,9 @@ static_assert(true);
 #include <QQuickItem>
 #include <QString>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <array>
-#include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
-#include <span>
-#include <variant>
 
 #pragma once
 

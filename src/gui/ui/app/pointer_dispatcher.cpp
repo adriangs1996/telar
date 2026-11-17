@@ -57,8 +57,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "platform/scroll_event.hpp"
-
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;
 import telar.gui.application.workspace_replica;

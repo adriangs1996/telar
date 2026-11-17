@@ -3,13 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../core/terminal_size.hpp"
 #include "controlled_awake_clock.hpp"
 #include "gui_wait.hpp"
 #include "shape_atlas.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/panes/native_pane_attention.hpp"
 #include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
@@ -45,24 +41,12 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
-#include <span>
-#include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
-
-#include "ui/app/panes/native_pane_attention.hpp"
-#include "ui/foundation/models/pane_attention_value.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;

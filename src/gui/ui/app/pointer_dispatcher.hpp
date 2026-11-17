@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/input/history_scroll_events.hpp"
 #include "ui/foundation/input/native_pointer_events.hpp"
 #include <QKeyEvent>
@@ -15,23 +13,10 @@ static_assert(true);
 #include <QPointer>
 #include <QQuickWindow>
 #include <QString>
-#include <algorithm>
 #include <array>
-#include <charconv>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <limits>
-#include <optional>
-#include <ranges>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
 #pragma once
 

@@ -3,12 +3,10 @@
 static_assert(true);
 #endif
 
-#include <brotli/decode.h>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <zlib.h>
 #include <zstd.h>
 
 import std;

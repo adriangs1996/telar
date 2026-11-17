@@ -3,10 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
+#include "application/dependencies.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
@@ -27,22 +24,16 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <bit>
 #include <cerrno>
 #include <charconv>
-#include <chrono>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <dirent.h>
 #include <exception>
 #include <fcntl.h>
 #include <filesystem>
 #include <limits.h>
-#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -50,15 +41,9 @@ static_assert(true);
 #include <string_view>
 #include <sys/stat.h>
 #include <system_error>
-#include <tuple>
 #include <unistd.h>
-#include <utility>
 #include <variant>
 #include <vector>
-
-#include "application/dependencies.hpp"
-#include "ui/foundation/config/plugin_packages.hpp"
-#include "ui/foundation/plugins/plugin_worker.hpp"
 
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;

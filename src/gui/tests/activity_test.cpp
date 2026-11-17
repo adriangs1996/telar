@@ -4,9 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <new>
 

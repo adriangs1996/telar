@@ -3,18 +3,8 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
 #include "history_controller.hpp"
 #include "input/wheel_accumulator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
@@ -32,29 +22,15 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <algorithm>
-#include <array>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
-#include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 #include <utility>
 #include <variant>
-
-#include "application/dependencies.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "ui/app/panes/terminal/history/layout/history_meta_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_row_layout.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
 
 import telar.gui.input.child_mouse;
 import telar.gui.presentation.history_pointer;

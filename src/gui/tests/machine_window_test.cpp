@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
+#include "application/dependencies.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
@@ -123,9 +123,6 @@ static_assert(true);
 #include <chrono>
 #include <memory>
 
-#include "application/dependencies.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/foundation/plugins/plugin_worker.hpp"
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
 #include "ui/app/panes/attachments/attachment_shelf.hpp"
@@ -140,13 +137,6 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/links/external_link_opener.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/foundation/models/list_model.hpp"
 
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.metrics_fixture;

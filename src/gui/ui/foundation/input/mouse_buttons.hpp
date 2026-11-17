@@ -3,14 +3,9 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QtCore/qnamespace.h>
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <cstdint>
-#include <optional>
 #include <utility>
 
 #pragma once

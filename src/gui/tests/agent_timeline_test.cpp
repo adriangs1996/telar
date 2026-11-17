@@ -3,14 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../terminal/screen.hpp"
+#include "core/memory.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"
 #include "ui/app/chrome/sidebar_projection.hpp"
@@ -48,36 +42,14 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <atomic>
-#include <charconv>
 #include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
-#include <limits>
 #include <memory>
 #include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 #include <thread>
-#include <utility>
-#include <variant>
-
-#include "core/memory.hpp"
-#include "ui/app/chrome/activity/agent_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.tests.agent_fixture;
 import telar.gui.application.workspace_replica;

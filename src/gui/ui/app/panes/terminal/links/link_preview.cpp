@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "link_preview.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "terminal/cell_position.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QFontMetricsF>
 #include <QPointF>
@@ -17,13 +14,8 @@ static_assert(true);
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <optional>
-#include <string_view>
 #include <utility>
 
 import telar.gui.core.metrics;

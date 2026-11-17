@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "rounded_rectangle_scene.hpp"
 #include "tbc/view.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QMatrix4x4>
 #include <QPointF>
 #include <QQuickItem>
@@ -14,15 +13,10 @@ static_assert(true);
 #include <QSGTransformNode>
 #include <QtCore/qlogging.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
 #include <span>
-#include <string_view>
 
 #pragma once
 

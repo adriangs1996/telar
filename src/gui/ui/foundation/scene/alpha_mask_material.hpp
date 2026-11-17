@@ -3,17 +3,11 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QSGMaterial>
 #include <QSGMaterialShader>
 #include <QSGRendererInterface>
 #include <QSGTexture>
 #include <QtQuick/qsgmaterialtype.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <string_view>
 
 #pragma once
 

@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
@@ -35,31 +32,13 @@ static_assert(true);
 #include <QtCore/qvariant.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <ghostty/vt/unicode.h>
-#include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <tuple>
-#include <utility>
-
-#include "ui/app/chrome/mode_bar/mode_projection.hpp"
-#include "ui/design/controls/cell_text_grid.hpp"
-#include "ui/design/controls/native_cell_text.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;

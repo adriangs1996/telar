@@ -29,7 +29,6 @@ static_assert(true);
 #include <variant>
 
 #pragma once
-#include "core/memory.hpp"
 
 import telar.gui.application.host_effects;
 import telar.gui.platform.notification_commands;

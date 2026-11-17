@@ -1,5 +1,4 @@
 module;
-#include "telar_platform/trace_macro.hpp"
 
 module telar.cli.hooks.session;
 import telar.sys.posix;

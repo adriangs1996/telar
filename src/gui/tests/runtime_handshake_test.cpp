@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "assertions.hpp"
+#include "core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
@@ -32,8 +32,6 @@ static_assert(true);
 #include <type_traits>
 #include <utility>
 #include <variant>
-
-#include "core/memory.hpp"
 
 import telar.gui.machines.discovery;
 import telar.client;

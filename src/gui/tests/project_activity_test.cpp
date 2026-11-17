@@ -3,10 +3,10 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "../core/terminal_size.hpp"
 #include "../terminal/screen.hpp"
 #include "assertions.hpp"
+#include "core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
@@ -30,8 +30,6 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 #include <variant>
-
-#include "core/memory.hpp"
 
 import telar.gui.tests.allocation_gate;
 import telar.gui.application.workspace_replica;

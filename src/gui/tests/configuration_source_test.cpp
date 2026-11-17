@@ -3,27 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../core/memory.hpp"
 #include "appearance_fixture.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/clients.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
+#include "application/dependencies.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include <algorithm>
 #include <array>
-#include <bit>
 #include <cerrno>
-#include <charconv>
-#include <chrono>
-#include <cinttypes>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -31,23 +15,14 @@ static_assert(true);
 #include <exception>
 #include <fcntl.h>
 #include <initializer_list>
-#include <lauxlib.h>
 #include <limits.h>
 #include <limits>
-#include <lua.h>
-#include <lualib.h>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <sys/stat.h>
-#include <system_error>
-#include <tuple>
 #include <utility>
-#include <variant>
-
-#include "telar_wire/serializers/telar_frame.hpp"
 
 #include "ui/foundation/config/configuration_source.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -71,10 +46,6 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/qtestcase.h>
 #include <memory>
-
-#include "application/dependencies.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
 
 import telar.gui.tests.json_fixture;
 import telar.gui.presentation.client_view_state;

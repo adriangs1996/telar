@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
+#include "application/dependencies.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
@@ -124,10 +124,7 @@ static_assert(true);
 #include <chrono>
 #include <memory>
 
-#include "application/dependencies.hpp"
-#include "ui/app/application_controller.hpp"
 #ifdef __APPLE__
-#include "ui/foundation/input/key_adapter.hpp"
 #include <QBuffer>
 #include <QDebug>
 #include <QFont>
@@ -138,13 +135,6 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/links/external_link_opener.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
-#include "ui/foundation/models/list_model.hpp"
 
 import telar.gui.transport.runtime_link;
 import telar.wire.content;

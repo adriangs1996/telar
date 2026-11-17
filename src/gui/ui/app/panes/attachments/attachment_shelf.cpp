@@ -19,22 +19,15 @@ static_assert(true);
 #include <QtCore/qmetatype.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <limits>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <string_view>
-#include <tuple>
 #include <utility>
-
-#include "application/dependencies.hpp"
-#include "attachments/types.hpp"
-#include "platform/clipboard_image_source.hpp"
 
 import telar.gui.attachments.catalog;
 import telar.gui.input.key_encoder;

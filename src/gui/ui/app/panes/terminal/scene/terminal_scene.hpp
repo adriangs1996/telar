@@ -39,9 +39,6 @@ static_assert(true);
 
 #pragma once
 
-#include "application/dependencies.hpp"
-#include "terminal/screen.hpp"
-
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.graphics.texture_cache;

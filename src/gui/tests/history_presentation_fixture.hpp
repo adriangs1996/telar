@@ -6,14 +6,12 @@ static_assert(true);
 #include "ui/app/application_controller.hpp"
 #include <QDebug>
 #include <QPointF>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
 
 #pragma once
-#include "ui/app/application_controller.hpp"
 
 import telar.gui.history.browser;
 import telar.gui.presentation.history_filter_geometry;

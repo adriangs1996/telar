@@ -3,14 +3,9 @@
 static_assert(true);
 #endif
 
-#include <arpa/inet.h>
-#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
 
 import std;
 import telar.base.memory.allocators;

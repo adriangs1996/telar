@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
@@ -16,23 +15,14 @@ static_assert(true);
 #include <QString>
 #include <QStringList>
 #include <QtCore/qtypes.h>
-#include <array>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <optional>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 #include <utility>
-
-#include "ui/app/overlays/notifications/sound_player.hpp"
-#include "ui/app/overlays/notifications/system_notifier.hpp"
-#include "ui/foundation/process/command_process.hpp"
 
 import telar.gui.text.notification_payload;
 

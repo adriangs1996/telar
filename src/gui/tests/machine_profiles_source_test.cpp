@@ -3,13 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../core/memory.hpp"
+#include "application/dependencies.hpp"
 #include "assertions.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include <QElapsedTimer>
@@ -22,31 +17,17 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
-#include <array>
 #include <cerrno>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <exception>
 #include <fcntl.h>
 #include <filesystem>
 #include <limits.h>
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <stop_token>
 #include <string>
 #include <string_view>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <system_error>
-
-#include "application/dependencies.hpp"
-#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;

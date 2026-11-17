@@ -5,12 +5,7 @@ static_assert(true);
 
 #include "machine_profiles_source.hpp"
 #include "application/dependencies.hpp"
-#include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include <QFuture>
 #include <QString>
 #include <QtConcurrentRun>
@@ -19,31 +14,19 @@ static_assert(true);
 #include <QtCore/qtimer.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
 #include <array>
-#include <bit>
 #include <cerrno>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
 #include <limits.h>
-#include <limits>
-#include <new>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <stop_token>
 #include <string_view>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <system_error>
 #include <utility>
-
-#include "application/dependencies.hpp"
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;

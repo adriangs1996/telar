@@ -3,44 +3,21 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
+#include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
 #include <chrono>
-#include <cinttypes>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
-#include <lauxlib.h>
-#include <limits>
-#include <lua.h>
-#include <lualib.h>
-#include <optional>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <tuple>
 #include <utility>
-#include <variant>
 
-#include "telar_wire/serializers/telar_frame.hpp"
-
-#include "telar_config/graphics/limits.hpp"
-#include "telar_config/terminal/control/policy.hpp"
 #include "ui/app/chrome/components/pick_controller.hpp"
 #include "ui/app/chrome/components/surface_command.hpp"
 #include "ui/foundation/config/lua_host.hpp"
@@ -59,18 +36,10 @@ static_assert(true);
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtypes.h>
-#include <arpa/inet.h>
 #include <exception>
-#include <format>
 #include <functional>
-#include <ghostty/vt/unicode.h>
 #include <iostream>
 #include <limits.h>
-#include <sys/stat.h>
-
-#include "core/memory.hpp"
-#include "ui/app/chrome/components/pick_controller.hpp"
-#include "ui/app/chrome/components/surface_command.hpp"
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;

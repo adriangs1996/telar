@@ -3,10 +3,10 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "../core/terminal_size.hpp"
 #include "../terminal/screen.hpp"
 #include "assertions.hpp"
+#include "core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_config/graphics/limits.hpp"
@@ -31,8 +31,6 @@ static_assert(true);
 #include <system_error>
 #include <utility>
 #include <variant>
-
-#include "core/memory.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.model.records;

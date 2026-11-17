@@ -6,15 +6,10 @@ static_assert(true);
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <limits.h>
 #include <poll.h>
-#include <pthread.h>
-#include <sqlite3.h>
 #include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 import std;
 import telar.base.memory.allocators;

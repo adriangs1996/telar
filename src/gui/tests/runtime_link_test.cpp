@@ -4,14 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include <algorithm>
 #include <array>
-#include <charconv>
-#include <chrono>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -19,11 +12,8 @@ static_assert(true);
 #include <iostream>
 #include <limits>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <type_traits>
 
 import telar.gui.machines.discovery;

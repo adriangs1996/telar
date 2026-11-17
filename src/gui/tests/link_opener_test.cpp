@@ -3,9 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../platform/environment.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "platform/environment.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QByteArray>
@@ -23,13 +21,10 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
-#include <array>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
@@ -38,10 +33,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 #include <vector>
-
-#include "platform/environment.hpp"
-#include "ui/foundation/links/external_link_opener.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.links.cell_links;
 import telar.gui.platform.login_shell;

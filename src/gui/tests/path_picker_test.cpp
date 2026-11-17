@@ -3,33 +3,19 @@
 static_assert(true);
 #endif
 
-#include "../terminal/cell_position.hpp"
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include <algorithm>
+#include "terminal/cell_position.hpp"
 #include <array>
-#include <bit>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <ghostty/vt/unicode.h>
 #include <iostream>
-#include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
-
-#include "terminal/cell_position.hpp"
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.paths.label;

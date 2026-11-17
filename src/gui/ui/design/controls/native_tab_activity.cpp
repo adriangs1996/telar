@@ -4,13 +4,7 @@ static_assert(true);
 #endif
 
 #include "native_tab_activity.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/foundation/models/progress_value.hpp"
 #include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
@@ -30,26 +24,11 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <atomic>
-#include <charconv>
 #include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <exception>
 #include <limits>
 #include <memory>
-#include <numbers>
 #include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <tuple>
-#include <utility>
-#include <variant>
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;

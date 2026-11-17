@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_agent_status.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/agent_status_value.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
@@ -19,20 +18,8 @@ static_assert(true);
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <limits>
-#include <numbers>
 #include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.suggestion_labels;

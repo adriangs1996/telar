@@ -3,13 +3,10 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../platform/window.hpp"
-#include "../tests/platform/window_activation.hpp"
 #include "animation_presentation.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
+#include "application/dependencies.hpp"
+#include "platform/window.hpp"
+#include "platform/window_activation.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
@@ -25,26 +22,12 @@ static_assert(true);
 #include <QScreen>
 #include <QTimer>
 #include <QVariantMap>
-#include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <string_view>
-
-#include "application/dependencies.hpp"
-#include "platform/window.hpp"
-#include "platform/window_activation.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/chrome/tabs/tab_strip_layout.hpp"
-#include "ui/design/controls/modal_reveal_layout.hpp"
-#include "ui/design/controls/native_rounded_rectangle.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;

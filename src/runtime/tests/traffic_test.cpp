@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include <arpa/inet.h>
-#include <brotli/decode.h>
 #include <cassert>
 #include <cerrno>
 #include <csignal>
@@ -13,18 +11,12 @@ static_assert(true);
 #include <cstdlib>
 #include <cstring>
 #include <limits.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <pcap/pcap.h>
 #include <poll.h>
 #include <pthread.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/un.h>
 #include <unistd.h>
-#include <zlib.h>
 #include <zstd.h>
 
 import std;

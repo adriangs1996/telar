@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "core/memory.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
 #include "ui/app/panes/terminal/terminal_preparation.hpp"
 #include "ui/foundation/store/store.hpp"

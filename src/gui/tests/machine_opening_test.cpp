@@ -4,22 +4,12 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

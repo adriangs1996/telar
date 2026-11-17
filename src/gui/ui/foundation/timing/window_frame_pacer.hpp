@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/window.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QObject>
@@ -15,8 +12,6 @@ static_assert(true);
 #include <QTimer>
 #include <QWindow>
 #include <algorithm>
-#include <array>
-#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -24,12 +19,9 @@ static_assert(true);
 #include <memory>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <utility>
-#include <variant>
 
 #pragma once
-#include "platform/window.hpp"
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.platform.awake_clock;

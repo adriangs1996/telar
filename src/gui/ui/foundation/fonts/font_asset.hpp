@@ -5,16 +5,11 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "font_source.hpp"
-#include "platform/font.h"
 #include "tbc/view.hpp"
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
 #include <span>
 
 #pragma once
-
-#include "core/memory.hpp"
 
 import telar.gui.fonts.face;
 

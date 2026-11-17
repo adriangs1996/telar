@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
@@ -12,19 +10,13 @@ static_assert(true);
 #include <QString>
 #include <QStringList>
 #include <QtCore/qchar.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <fcntl.h>
 #include <limits.h>
 #include <limits>
-#include <stdexcept>
 #include <string_view>
-#include <sys/stat.h>
 
 #pragma once
 

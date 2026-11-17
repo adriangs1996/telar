@@ -3,14 +3,8 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
@@ -24,28 +18,13 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <ghostty/vt/unicode.h>
-#include <limits>
 #include <memory>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 
 #pragma once
-
-#include "core/memory.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.notification_stack;

@@ -3,17 +3,13 @@
 static_assert(true);
 #endif
 
-#include "application/dependencies.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
-#include <array>
 #include <concepts>
 #include <cstdint>
 #include <exception>
-#include <optional>
 #include <utility>
 
 #pragma once

@@ -3,25 +3,17 @@
 static_assert(true);
 #endif
 
-#include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
 #include <csignal>
 #include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <ghostty/vt.h>
 #include <limits.h>
 #include <poll.h>
-#include <pthread.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 import std;

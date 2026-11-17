@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "assertions.hpp"
+#include "core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
@@ -21,8 +21,6 @@ static_assert(true);
 #include <optional>
 #include <type_traits>
 #include <utility>
-
-#include "core/memory.hpp"
 
 import telar.gui.graphics.texture_cache;
 import telar.wire.graphics;

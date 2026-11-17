@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 

@@ -60,7 +60,6 @@ static_assert(true);
 #include <QTimer>
 
 #pragma once
-#include "application/dependencies.hpp"
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;

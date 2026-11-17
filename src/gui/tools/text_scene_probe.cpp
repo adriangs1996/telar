@@ -3,12 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../platform/font.h"
-#include "../platform/window.hpp"
+#include "platform/window.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
@@ -35,38 +31,21 @@ static_assert(true);
 #include <QTimer>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
 #include <array>
 #include <bit>
 #include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <freetype/freetype.h>
-#include <hb.h>
 #include <iostream>
-#include <limits>
 #include <memory>
-#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "platform/window.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/font_collection.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/scene/alpha_mask_material.hpp"
-#include "ui/foundation/scene/alpha_mask_vertex.hpp"
-#include "ui/foundation/scene/chrome_glyph_images.hpp"
-#include "ui/foundation/scene/chrome_text_scene.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

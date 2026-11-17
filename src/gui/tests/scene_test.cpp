@@ -3,20 +3,14 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../core/memory.hpp"
-#include "../platform/font.h"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
+#include "application/dependencies.hpp"
 #include "telar_wire/codecs/telar_cells.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "terminal/cell_position.hpp"
+#include "terminal/screen.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
@@ -52,41 +46,18 @@ static_assert(true);
 #include <QtTest/qtestcase.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
-#include <freetype/freetype.h>
-#include <hb.h>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "application/dependencies.hpp"
-#include "terminal/cell_position.hpp"
-#include "terminal/screen.hpp"
-#include "ui/app/panes/terminal/links/link_preview.hpp"
-#include "ui/app/panes/terminal/scene/terminal_scene.hpp"
-#include "ui/app/panes/terminal/scene/window_images.hpp"
-#include "ui/foundation/fonts/box_font.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/font_collection.hpp"
-#include "ui/foundation/fonts/font_resolver.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/terminal_font.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

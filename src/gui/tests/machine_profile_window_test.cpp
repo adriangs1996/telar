@@ -3,14 +3,10 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
+#include "application/dependencies.hpp"
 #include "assertions.hpp"
 #include "gui_wait.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
@@ -38,30 +34,16 @@ static_assert(true);
 #include <QtTest/qtestcase.h>
 #include <array>
 #include <cerrno>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
 #include <fcntl.h>
 #include <limits.h>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <stop_token>
 #include <string_view>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <system_error>
-
-#include "application/dependencies.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/machine_client_key.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

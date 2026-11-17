@@ -27,7 +27,6 @@ static_assert(true);
 #include <mutex>
 
 #pragma once
-#include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
 
 import telar.gui.platform.awake_clock;
 

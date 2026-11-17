@@ -12,18 +12,11 @@ static_assert(true);
 #include <QRectF>
 #include <QTimer>
 #include <QtTest/QTest>
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <span>
-#include <variant>
-
-#include "ui/app/panes/pane_motion_layout.hpp"
-#include "ui/foundation/models/list_model.hpp"
 
 import telar.gui.presentation.frame_pacer;
 import telar.gui.core.metrics;

@@ -3,11 +3,7 @@
 static_assert(true);
 #endif
 
-#include "../platform/font.h"
 #include "frame_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
 #include "ui/design/controls/native_chrome_text.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -44,37 +40,17 @@ static_assert(true);
 #include <QtGui/qrgb.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <bit>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <freetype/freetype.h>
-#include <functional>
-#include <hb.h>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
-#include <utility>
-
-#include "ui/design/controls/native_cell_text.hpp"
-#include "ui/design/controls/native_chrome_text.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/chrome_fonts.hpp"
-#include "ui/foundation/fonts/font_asset.hpp"
-#include "ui/foundation/fonts/font_source.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/window_font_catalog.hpp"
-#include "ui/foundation/scene/chrome_text_scene.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;

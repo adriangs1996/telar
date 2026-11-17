@@ -3,13 +3,7 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QtCore/qnamespace.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <string_view>
 
 #pragma once
 

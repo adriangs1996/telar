@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include <arpa/inet.h>
-#include <brotli/decode.h>
-#include <brotli/encode.h>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -13,7 +10,6 @@ static_assert(true);
 #include <cstdio>
 #include <cstring>
 #include <nghttp2/nghttp2.h>
-#include <zlib.h>
 #include <zstd.h>
 
 import std;

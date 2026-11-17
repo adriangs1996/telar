@@ -3,18 +3,15 @@
 static_assert(true);
 #endif
 
-#include <arpa/inet.h>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <pcap/pcap.h>
-#include <sys/stat.h>
 
 import std;
 import telar.base.memory.allocators;

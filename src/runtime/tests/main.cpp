@@ -6,7 +6,6 @@ static_assert(true);
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
-#include <ghostty/vt.h>
 #include <unistd.h>
 
 import std;

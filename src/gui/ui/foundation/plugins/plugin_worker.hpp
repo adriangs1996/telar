@@ -55,9 +55,6 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-
 import telar.gui.config.plugin_effects;
 import telar.platform.fs;
 import telar.plugins;

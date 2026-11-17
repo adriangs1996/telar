@@ -15,7 +15,6 @@
 #include <memory>
 #include <span>
 #include <string_view>
-#include <type_traits>
 
 #ifdef TELAR_DEBUG
 #include <cstdio>

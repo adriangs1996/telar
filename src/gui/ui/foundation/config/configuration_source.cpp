@@ -9,47 +9,22 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_config/terminal/control/policy.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cinttypes>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <functional>
-#include <initializer_list>
-#include <lauxlib.h>
-#include <limits>
-#include <lua.h>
-#include <lualib.h>
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <system_error>
-#include <tuple>
-#include <type_traits>
 #include <utility>
 #include <variant>
 
-#include "telar_wire/serializers/telar_frame.hpp"
-
 #include "configuration_loader.hpp"
 #include "platform/window.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_config/terminal/control/policy.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include "ui/foundation/fonts/font_resolver.hpp"
 #include <QByteArray>
 #include <QFileInfo>
@@ -67,17 +42,9 @@ static_assert(true);
 #include <QtCore/qtimer.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <arpa/inet.h>
-#include <cerrno>
 #include <exception>
 #include <fcntl.h>
-#include <format>
-#include <ghostty/vt/unicode.h>
 #include <limits.h>
-#include <sys/stat.h>
-
-#include "application/dependencies.hpp"
-#include "platform/window.hpp"
 
 import telar.gui.presentation.client_view_state;
 import telar.gui.components.configuration;

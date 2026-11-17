@@ -34,8 +34,6 @@ static_assert(true);
 
 #pragma once
 
-#include "core/memory.hpp"
-
 import telar.gui.core.metrics;
 import telar.gui.presentation.notification_stack;
 import telar.gui.presentation.activity_order;

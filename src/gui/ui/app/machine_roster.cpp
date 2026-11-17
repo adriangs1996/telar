@@ -4,17 +4,14 @@ static_assert(true);
 #endif
 
 #include "machine_roster.hpp"
-#include "core/terminal_size.hpp"
 #include "dialogs.hpp"
 #include "machines_coordinator.hpp"
 #include "platform/environment.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include "ui/foundation/machines/window_identity.hpp"
 #include "ui/foundation/models/projection.hpp"
@@ -30,22 +27,12 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <optional>
-#include <span>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <sys/un.h>
-#include <system_error>
-#include <vector>
-
-#include "platform/environment.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

@@ -4,40 +4,18 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include <QPointF>
 #include <QString>
 #include <QVariantList>
-#include <algorithm>
 #include <array>
-#include <charconv>
 #include <chrono>
-#include <cinttypes>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <initializer_list>
-#include <lauxlib.h>
-#include <limits>
-#include <lua.h>
-#include <lualib.h>
 #include <memory>
 #include <optional>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
 #pragma once
 

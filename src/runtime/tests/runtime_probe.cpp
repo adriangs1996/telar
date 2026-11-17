@@ -8,10 +8,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <ghostty/vt.h>
 #include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
 #include <termios.h>
 #include <unistd.h>
 

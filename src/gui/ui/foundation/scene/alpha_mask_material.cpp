@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "alpha_mask_material.hpp"
 #include "physical_pixel_matrix.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
 #include <QSGMaterialShader>
@@ -17,11 +16,8 @@ static_assert(true);
 #include <QtQuick/qsgmaterialtype.h>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <memory>
-#include <optional>
-#include <string_view>
 #include <tuple>
 
 import telar.gui.core.metrics;

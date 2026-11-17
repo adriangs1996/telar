@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../attachments/capture.hpp"
-#include "../attachments/sensitive_bytes.hpp"
-#include "../attachments/types.hpp"
+#include "application/dependencies.hpp"
 #include "assertions.hpp"
+#include "attachments/capture.hpp"
+#include "attachments/sensitive_bytes.hpp"
+#include "attachments/types.hpp"
 #include "ui/app/panes/attachments/attachment_preview.hpp"
 #include <QBuffer>
 #include <QByteArray>
@@ -16,21 +16,12 @@ static_assert(true);
 #include <QImage>
 #include <QSize>
 #include <QtCore/qnamespace.h>
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <span>
-#include <stdexcept>
-
-#include "application/dependencies.hpp"
-#include "attachments/capture.hpp"
-#include "attachments/sensitive_bytes.hpp"
-#include "attachments/types.hpp"
-#include "ui/app/panes/attachments/attachment_preview.hpp"
 
 import telar.gui.attachments.marker_input;
 

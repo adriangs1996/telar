@@ -4,10 +4,6 @@ static_assert(true);
 #endif
 
 #include "history_meta_layout.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/design/history_hint_projection.hpp"
 #include <QByteArray>
@@ -22,21 +18,13 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <ghostty/vt/unicode.h>
 #include <limits>
 #include <optional>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <utility>
 
 import telar.gui.presentation.history_pointer;
 import telar.gui.history.browser;

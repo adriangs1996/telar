@@ -6,7 +6,6 @@ static_assert(true);
 #include "provider_mark.hpp"
 #include "provider_artwork.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include <QColor>
@@ -25,10 +24,8 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <memory>
-#include <string_view>
 #include <utility>
 
 import telar.gui.presentation.application_mark;

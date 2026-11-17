@@ -1,5 +1,4 @@
 module;
-#include "telar_platform/trace_macro.hpp"
 
 module telar.runtime.proxy.http2_capture_streams;
 

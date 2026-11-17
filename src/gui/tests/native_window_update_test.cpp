@@ -3,33 +3,18 @@
 static_assert(true);
 #endif
 
-#include "../platform/window.hpp"
 #include "assertions.hpp"
 #include "gui_wait.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
+#include "platform/window.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <QEvent>
 #include <QGuiApplication>
 #include <QWindow>
-#include <algorithm>
-#include <array>
-#include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <optional>
 #include <qpa/qplatformwindow.h>
-#include <span>
-#include <string_view>
 #include <utility>
-#include <variant>
-
-#include "platform/window.hpp"
-#include "ui/foundation/timing/window_frame_pacer.hpp"
 
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;

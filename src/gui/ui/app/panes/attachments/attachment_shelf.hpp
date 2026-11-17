@@ -18,20 +18,10 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <span>
-#include <stdexcept>
-#include <tuple>
 
 #pragma once
-
-#include "application/dependencies.hpp"
-#include "attachments/types.hpp"
-#include "platform/clipboard_image_source.hpp"
 
 import telar.gui.attachments.catalog;
 import telar.gui.attachments.marker_input;

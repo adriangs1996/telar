@@ -4,31 +4,18 @@ static_assert(true);
 #endif
 
 #include "application/dependencies.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 #include <QTimer>
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <stop_token>
-#include <string_view>
-#include <sys/stat.h>
-#include <system_error>
 
 #pragma once
-
-#include "application/dependencies.hpp"
 
 import telar.gui.machines.profile_store;
 import telar.gui.platform.file_stamp;

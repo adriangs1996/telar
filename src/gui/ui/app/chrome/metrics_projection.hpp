@@ -3,23 +3,14 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
 #include <array>
-#include <charconv>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 
 #pragma once
 

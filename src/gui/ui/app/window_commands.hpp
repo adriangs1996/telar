@@ -8,7 +8,6 @@ static_assert(true);
 #include "telar_wire/protocol/clients.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
 #include "ui/foundation/input/window_actions.hpp"
 #include "ui/foundation/plugins/plugin_runner.hpp"
 #include "ui/foundation/store/store.hpp"

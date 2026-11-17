@@ -44,9 +44,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "core/terminal_size.hpp"
-#include "terminal/screen.hpp"
-
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.core.json_writer;

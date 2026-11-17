@@ -3,23 +3,13 @@
 static_assert(true);
 #endif
 
-#include "../core/terminal_size.hpp"
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <limits>
-#include <optional>
 #include <stdexcept>
-#include <string_view>
 #include <type_traits>
 
 import telar.gui.core.metrics;

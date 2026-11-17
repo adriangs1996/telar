@@ -4,11 +4,8 @@ static_assert(true);
 #endif
 
 #include "window_images.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
 #include "graphics_scene.hpp"
 #include "image_resource.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include "ui/foundation/timing/deadline_timer.hpp"
@@ -28,20 +25,13 @@ static_assert(true);
 #include <array>
 #include <atomic>
 #include <bit>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
-#include <string_view>
-#include <tuple>
 #include <utility>
-
-#include "application/dependencies.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;

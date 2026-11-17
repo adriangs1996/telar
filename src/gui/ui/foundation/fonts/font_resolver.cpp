@@ -6,9 +6,6 @@ static_assert(true);
 #include "font_resolver.hpp"
 #include "bundled_fonts.hpp"
 #include "platform/font.h"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_font.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QFont>
@@ -17,22 +14,10 @@ static_assert(true);
 #include <QString>
 #include <QStringList>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <freetype/freetype.h>
-#include <hb.h>
-#include <limits>
-#include <memory>
 #include <optional>
-#include <span>
 #include <stdexcept>
-#include <string_view>
-#include <type_traits>
 #include <utility>
 
 import telar.gui.core.metrics;

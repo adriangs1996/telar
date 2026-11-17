@@ -4,24 +4,12 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_config/terminal/control/policy.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
-#include <arpa/inet.h>
 #include <array>
 #include <cerrno>
-#include <charconv>
 #include <chrono>
-#include <cinttypes>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -30,19 +18,12 @@ static_assert(true);
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <ghostty/vt/unicode.h>
 #include <initializer_list>
-#include <lauxlib.h>
 #include <limits.h>
-#include <limits>
-#include <lua.h>
-#include <lualib.h>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
 

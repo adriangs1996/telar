@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include <cstdint>
-
 import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;

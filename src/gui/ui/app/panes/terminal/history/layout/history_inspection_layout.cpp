@@ -4,13 +4,6 @@ static_assert(true);
 #endif
 
 #include "history_inspection_layout.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/input/scroll_event.hpp"
 #include <QByteArray>
 #include <QQuickItem>
@@ -25,24 +18,15 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <ghostty/vt/unicode.h>
 #include <initializer_list>
 #include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_filter_geometry;

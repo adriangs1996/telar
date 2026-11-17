@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "rounded_rectangle_scene.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QColor>
 #include <QMatrix4x4>
 #include <QPaintDevice>
@@ -21,13 +20,8 @@ static_assert(true);
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <string_view>
 #include <utility>
 
 import telar.gui.core.metrics;

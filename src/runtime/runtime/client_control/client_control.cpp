@@ -1,5 +1,4 @@
 module;
-#include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.runtime.client_control;
 

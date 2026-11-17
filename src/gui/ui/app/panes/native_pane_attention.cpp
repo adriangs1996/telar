@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_pane_attention.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
@@ -19,17 +17,11 @@ static_assert(true);
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <span>
-#include <string_view>
-#include <variant>
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;

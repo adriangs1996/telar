@@ -3,26 +3,16 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../terminal/cell_position.hpp"
-#include "../terminal/screen.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
+#include "terminal/screen.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QtCore/qchar.h>
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <span>
 
 #pragma once
-
-#include "application/dependencies.hpp"
-#include "terminal/screen.hpp"
-#include "ui/foundation/models/projection.hpp"
 
 import telar.gui.links.path_expansion;
 

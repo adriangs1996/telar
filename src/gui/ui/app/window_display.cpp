@@ -4,12 +4,8 @@ static_assert(true);
 #endif
 
 #include "window_display.hpp"
-#include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "platform/window.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/typography_projection.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QQuickWindow>
@@ -19,16 +15,11 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
-#include <span>
-#include <stdexcept>
 #include <utility>
-#include <variant>
 
 import telar.gui.layout.geometry;
 import telar.gui.core.metrics;

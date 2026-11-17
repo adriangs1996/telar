@@ -3,12 +3,7 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "platform/font.h"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include <QColor>
 #include <QPointF>
@@ -18,26 +13,10 @@ static_assert(true);
 #include <QSizeF>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <freetype/freetype.h>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <utility>
 
 #pragma once
 

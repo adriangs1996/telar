@@ -75,12 +75,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "application/dependencies.hpp"
-#include "core/terminal_size.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "platform/window.hpp"
-#include "terminal/screen.hpp"
-
 import telar.gui.application.workspace_replica;
 import telar.gui.fonts.font_requests;
 import telar.gui.fonts.face;

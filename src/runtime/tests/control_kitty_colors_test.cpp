@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -11,8 +10,6 @@ static_assert(true);
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <ghostty/vt.h>
-#include <sys/mman.h>
 
 import std;
 import telar.base.memory.allocators;

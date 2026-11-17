@@ -7,7 +7,6 @@ static_assert(true);
 #include "ui/app/overlays/palette/palette_controller.hpp"
 #include "ui/design/elements/element_slots.hpp"
 #include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/timing/deadline_timer.hpp"
 #include <QByteArray>
 #include <QPointF>
 #include <QString>
@@ -16,12 +15,9 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qscopeguard.h>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <optional>
 #include <stdexcept>
-#include <utility>
-#include <variant>
 
 import telar.gui.links.cell_links;
 import telar.gui.components.configuration;

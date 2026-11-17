@@ -3,16 +3,12 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
+#include "application/dependencies.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/protocol/runtime.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include <QByteArray>
@@ -33,27 +29,16 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
-#include <charconv>
-#include <chrono>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <variant>
 #include <vector>
-
-#include "application/dependencies.hpp"
-#include "ui/foundation/machines/remote_bridge.hpp"
-#include "ui/foundation/machines/runtime_connection.hpp"
 
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;

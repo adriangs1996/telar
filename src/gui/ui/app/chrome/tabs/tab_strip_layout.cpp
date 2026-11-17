@@ -4,15 +4,7 @@ static_assert(true);
 #endif
 
 #include "tab_strip_layout.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
 #include "ui/foundation/fonts/chrome_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
@@ -33,11 +25,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -45,12 +33,8 @@ static_assert(true);
 #include <limits>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
-#include <tuple>
 #include <utility>
-#include <variant>
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.tab_drop;

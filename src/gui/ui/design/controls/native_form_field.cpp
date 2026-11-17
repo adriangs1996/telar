@@ -5,13 +5,9 @@ static_assert(true);
 
 #include "native_form_field.hpp"
 #include "cell_text_grid.hpp"
-#include "core/terminal_size.hpp"
 #include "form_input_context.hpp"
 #include "form_text_grid.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -29,22 +25,15 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <QtQuick/qquickitem.h>
 #include <algorithm>
-#include <array>
-#include <bit>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <ghostty/vt/unicode.h>
 #include <limits>
 #include <optional>
-#include <stdexcept>
 #include <string_view>
 #include <utility>
-
-#include "ui/foundation/text/utf16_encoding.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.text.bounded_editor;

@@ -12,9 +12,7 @@ static_assert(true);
 #include <QString>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
 #include <cstdint>
-#include <limits>
 #include <optional>
 
 namespace telar::gui::qt {

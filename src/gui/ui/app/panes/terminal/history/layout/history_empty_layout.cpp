@@ -4,11 +4,6 @@ static_assert(true);
 #endif
 
 #include "history_empty_layout.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QPointer>
@@ -22,19 +17,12 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
-#include <array>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <optional>
-#include <stdexcept>
 #include <string_view>
-#include <system_error>
 
 import telar.gui.core.metrics;
 import telar.gui.history.browser;

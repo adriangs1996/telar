@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "../input/scroll_motion.hpp"
 #include "../terminal/fold_map.hpp"
 #include "assertions.hpp"

@@ -3,13 +3,9 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QMetaType>
 #include <QTypeInfo>
 #include <QVariant>
-#include <algorithm>
-#include <cstdint>
-#include <limits>
 #include <optional>
 
 #pragma once

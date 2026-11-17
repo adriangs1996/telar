@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "peek_controller.hpp"
-#include "application/dependencies.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/text/utf16_encoding.hpp"
 #include <QByteArray>

@@ -46,7 +46,6 @@ static_assert(true);
 #include <QTextCharFormat>
 
 #pragma once
-#include "core/memory.hpp"
 #ifdef Q_OS_MACOS
 #include "optical_text.hpp"
 #endif

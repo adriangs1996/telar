@@ -39,22 +39,14 @@ static_assert(true);
 #include <QtTest/qtestmouse.h>
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string_view>
 #include <utility>
-
-#include "ui/design/controls/form_input_context.hpp"
-#include "ui/design/controls/native_form_field.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/text/utf16_encoding.hpp"
 
 import telar.gui.text.bounded_editor;
 

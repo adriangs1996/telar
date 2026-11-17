@@ -14,14 +14,8 @@ static_assert(true);
 #include <QVariant>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
-#include <span>
-#include <variant>
 
 #pragma once
 

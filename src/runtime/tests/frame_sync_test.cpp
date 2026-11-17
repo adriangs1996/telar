@@ -3,9 +3,7 @@
 static_assert(true);
 #endif
 
-#include "telar_base/diagnostics/config.hpp"
 #include <cstring>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.memory.allocators;

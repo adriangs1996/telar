@@ -4,30 +4,15 @@ static_assert(true);
 #endif
 
 #include "core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <QLocalSocket>
 #include <QString>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
 #include <cerrno>
-#include <charconv>
-#include <concepts>
 #include <cstdlib>
-#include <exception>
 #include <fcntl.h>
 #include <limits.h>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <sys/stat.h>
-#include <sys/un.h>
 
 #pragma once
-
-#include "core/memory.hpp"
 
 import telar.gui.platform.runtime_endpoint;
 import telar.platform.paths;

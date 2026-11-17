@@ -9,10 +9,7 @@ static_assert(true);
 #include <QString>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
 
 #pragma once

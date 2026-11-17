@@ -3,32 +3,16 @@
 static_assert(true);
 #endif
 
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <optional>
 #include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
 #pragma once
 

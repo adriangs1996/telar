@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "pane_header_layout.hpp"
 #include "pane_chrome_style.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>
@@ -16,18 +14,7 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <charconv>
 #include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 
 import telar.gui.core.metrics;
 import telar.gui.presentation.activity_order;

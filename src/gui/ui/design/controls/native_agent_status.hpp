@@ -11,9 +11,7 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
-#include <algorithm>
 #include <cstdint>
-#include <limits>
 #include <optional>
 
 #pragma once

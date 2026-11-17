@@ -4,16 +4,10 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <utility>
 
 #include "telar_wire/serializers/telar_frame.hpp"
 #include <QElapsedTimer>
@@ -24,8 +18,6 @@ static_assert(true);
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTimer>
-#include <concepts>
-#include <limits>
 
 #pragma once
 

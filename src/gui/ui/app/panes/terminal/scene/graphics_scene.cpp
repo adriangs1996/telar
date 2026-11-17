@@ -4,10 +4,6 @@ static_assert(true);
 #endif
 
 #include "graphics_scene.hpp"
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "graphics/placeholder_diacritics.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
@@ -19,21 +15,12 @@ static_assert(true);
 #include <QtQuick/qsgnode.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
-#include <utility>
-
-#include "application/dependencies.hpp"
-#include "terminal/screen.hpp"
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.texture_cache;

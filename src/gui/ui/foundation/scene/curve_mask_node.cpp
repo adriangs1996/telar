@@ -8,7 +8,6 @@ static_assert(true);
 #include "alpha_mask_vertex.hpp"
 #include "curve_mask.hpp"
 #include "scene_nodes.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QPointF>
 #include <QRectF>
 #include <QSGGeometry>
@@ -16,10 +15,7 @@ static_assert(true);
 #include <QSGNode>
 #include <array>
 #include <cstddef>
-#include <cstdint>
-#include <optional>
 #include <span>
-#include <string_view>
 #include <utility>
 
 import telar.gui.core.metrics;

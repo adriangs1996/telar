@@ -5,11 +5,9 @@ static_assert(true);
 
 #include <cerrno>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <sqlite3.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>

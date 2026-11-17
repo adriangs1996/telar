@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../platform/font.h"
-#include "../platform/macos/glyph_rasterizer.h"
+#include "core/memory.hpp"
+#include "glyph_rasterizer.h"
+#include "platform/font.h"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/scene/optical_text.hpp"
 #include <QByteArray>
@@ -40,16 +40,10 @@ static_assert(true);
 #include <stdexcept>
 #include <vector>
 
-#include "core/memory.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/scene/optical_text.hpp"
-
 import telar.gui.fonts.face;
 import telar.gui.fonts.glyph_rasterizer;
 
 extern "C" {
-#include "glyph_rasterizer.h"
-#include "platform/font.h"
 }
 
 namespace {

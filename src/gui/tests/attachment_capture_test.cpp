@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../attachments/types.hpp"
 #include "assertions.hpp"
+#include "attachments/types.hpp"
 #include <cstdint>
 #include <exception>
 #include <initializer_list>
@@ -13,8 +13,6 @@ static_assert(true);
 #include <optional>
 #include <stdexcept>
 #include <string_view>
-
-#include "attachments/types.hpp"
 
 import telar.gui.attachments.marker_input;
 

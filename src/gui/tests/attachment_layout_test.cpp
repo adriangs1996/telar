@@ -6,15 +6,12 @@ static_assert(true);
 #include "assertions.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
-#include <limits>
 #include <optional>
 #include <span>
-#include <variant>
 
 import telar.gui.layout.geometry;
 import telar.gui.core.unicode_scalar;

@@ -3,23 +3,15 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
 #include "assertions.hpp"
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <concepts>
+#include "core/memory.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
-#include <limits>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-
-#include "core/memory.hpp"
 
 import telar.machines;
 

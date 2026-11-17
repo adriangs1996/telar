@@ -3,40 +3,22 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../platform/font.h"
+#include "core/memory.hpp"
+#include "platform/font.h"
 #include "tbc/view.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include <algorithm>
 #include <array>
-#include <bit>
 #include <cerrno>
-#include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
-#include <freetype/freetype.h>
-#include <hb.h>
 #include <limits>
-#include <memory>
-#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
-#include <sys/stat.h>
-#include <type_traits>
 #include <vector>
-
-#include "core/memory.hpp"
-#include "platform/font.h"
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.fonts.face;

@@ -5,17 +5,12 @@ static_assert(true);
 
 #include "window_commands.hpp"
 #include "activity_selection.hpp"
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
 #include "dialogs.hpp"
 #include "key_bindings.hpp"
 #include "machines_coordinator.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
 #include "ui/app/chrome/components/components_controller.hpp"
@@ -37,30 +32,16 @@ static_assert(true);
 #include <QScopeGuard>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cinttypes>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 #include <initializer_list>
-#include <lauxlib.h>
-#include <limits>
-#include <lua.h>
-#include <lualib.h>
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <system_error>
-#include <tuple>
 #include <utility>
 #include <variant>
 
@@ -79,8 +60,6 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
-
-#include "platform/window.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.components.configuration;

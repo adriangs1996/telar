@@ -54,7 +54,6 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <exception>
 
-#include "terminal/screen.hpp"
 #ifdef Q_OS_MACOS
 #include "optical_text.hpp"
 #endif

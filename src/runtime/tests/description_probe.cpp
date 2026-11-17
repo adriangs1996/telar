@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include <cstdio>
-#include <sqlite3.h>
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>

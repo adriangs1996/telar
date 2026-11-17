@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "../core/memory.hpp"
-#include "../platform/font.h"
+#include "core/memory.hpp"
+#include "platform/font.h"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "terminal_font_requests_variant.hpp"
@@ -19,9 +19,6 @@ static_assert(true);
 #include <stdexcept>
 #include <sys/stat.h>
 #include <vector>
-
-#include "core/memory.hpp"
-#include "platform/font.h"
 
 import telar.base.memory.allocators;
 import telar.platform.fs;

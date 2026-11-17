@@ -3,17 +3,11 @@
 static_assert(true);
 #endif
 
-#include "../application/dependencies.hpp"
-#include "../core/memory.hpp"
-#include "../core/terminal_size.hpp"
-#include "../terminal/screen.hpp"
+#include "application/dependencies.hpp"
+#include "core/memory.hpp"
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/metrics_projection.hpp"
@@ -59,36 +53,13 @@ static_assert(true);
 #include <QtTest/qtestmouse.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
-#include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
-#include <utility>
-#include <variant>
-
-#include "application/dependencies.hpp"
-#include "core/memory.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/chrome/metrics_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/app/chrome/tabs/tab_strip_layout.hpp"
-#include "ui/design/controls/provider_artwork.hpp"
-#include "ui/design/controls/provider_mark.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/typography_projection.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;

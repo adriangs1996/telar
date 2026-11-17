@@ -21,10 +21,6 @@ static_assert(true);
 #include <limits>
 #include <optional>
 
-#include "input/scroll_motion.hpp"
-#include "input/wheel_accumulator.hpp"
-#include "terminal/screen.hpp"
-
 import telar.gui.application.workspace_replica;
 import telar.gui.input.copy_mode;
 

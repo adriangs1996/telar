@@ -3,21 +3,13 @@
 static_assert(true);
 #endif
 
-#include <brotli/decode.h>
 #include <cassert>
 #include <cerrno>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <nghttp2/nghttp2.h>
 #include <poll.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <zlib.h>
 #include <zstd.h>
 
 import std;

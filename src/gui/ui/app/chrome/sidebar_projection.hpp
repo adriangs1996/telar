@@ -3,38 +3,13 @@
 static_assert(true);
 #endif
 
-#include "core/memory.hpp"
-#include "core/terminal_size.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "terminal/screen.hpp"
-#include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <charconv>
-#include <chrono>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
 #pragma once
 
