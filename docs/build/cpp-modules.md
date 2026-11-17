@@ -227,7 +227,7 @@ incluye en su fragmento global y reexporta sus nombres con
 dueño y mantiene en su fragmento global únicamente headers estándar, de sistema,
 de terceros y las cabeceras de macros del proyecto que lista `macro_headers`
 (`telar_base/diagnostics/config.hpp`, `telar_platform/trace_macro.hpp`,
-`tbc/annotations.hpp`, `telar_client/codecs/telar_annotations.hpp` y
+`tbc/annotations.hpp`, `telar_wire/codecs/telar_annotations.hpp` y
 `telar_ghostty/modes.hpp`).
 
 Cada copia textual de un header en un fragmento global se serializa en el BMI de

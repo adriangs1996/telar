@@ -3,11 +3,11 @@
 static_assert(true);
 #endif
 
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_wire/codecs/telar_codec.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_serializer.hpp"
 #include "ui/foundation/machines/remote_bridge.hpp"
 #include "ui/foundation/machines/ssh_options.hpp"
 #include <QByteArray>

@@ -19,7 +19,7 @@ def replace_required(source, before, after, count=1):
 
 def main():
     root = Path(__file__).resolve().parents[3]
-    default_reader = root / 'lib/wire/include/telar_client/codecs/telar_cells.hpp'
+    default_reader = root / 'lib/wire/include/telar_wire/codecs/telar_cells.hpp'
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', required=True, type=Path)
     parser.add_argument('--before-screen', required=True, type=Path)
@@ -43,16 +43,16 @@ def main():
     }
     for name, source in sources.items():
         (output / name).write_text(source)
-    client = output / 'telar_client'
-    shutil.copytree(default_reader.parents[1], client)
-    (client / 'codecs/telar_cells.hpp').write_text(after_reader)
+    wire = output / 'telar_wire'
+    shutil.copytree(default_reader.parents[1], wire)
+    (wire / 'codecs/telar_cells.hpp').write_text(after_reader)
     marker = '  struct CellRunCodec {'
     if before_reader.count(marker) != 1:
         raise ValueError('Cannot isolate the baseline CellReader')
     baseline = before_reader.split(marker)[0] + '}\n'
     baseline = replace_required(baseline, 'class CellReader {', 'class BaselineCellReader {')
     baseline = replace_required(baseline, '    CellReader(', '    BaselineCellReader(')
-    baseline = replace_required(baseline, '#include "../serializers/telar_cells.hpp"', '#include "telar_client/serializers/telar_cells.hpp"')
+    baseline = replace_required(baseline, '#include "../serializers/telar_cells.hpp"', '#include "telar_wire/serializers/telar_cells.hpp"')
     (output / 'baseline-reader.hpp').write_text(baseline)
     baseline_screen = replace_required(before_screen, 'auto reader = span.reader();', 'auto reader = BaselineCellReader{span.cells, span.count};', count=2)
     (output / 'oracle-before.hpp').write_text(baseline_screen)
@@ -105,7 +105,7 @@ def main():
         if damaged == after_reader:
             raise ValueError('Cannot construct the invalid-cell negative control')
         (output / 'negative-reader.hpp').write_text(damaged)
-        reader_path = client / 'codecs/telar_cells.hpp'
+        reader_path = wire / 'codecs/telar_cells.hpp'
         try:
             reader_path.write_text(damaged)
             result = compile_and_run('negative')

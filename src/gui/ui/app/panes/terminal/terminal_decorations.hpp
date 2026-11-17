@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/scene/rounded_rectangle_scene.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"

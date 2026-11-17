@@ -13,8 +13,8 @@ static_assert(true);
 #include "scene_nodes.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include <QColor>

@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCryptographicHash>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <QKeyEvent>
 
 namespace telar::gui::qt {

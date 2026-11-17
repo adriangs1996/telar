@@ -7,8 +7,8 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "image_resource.hpp"
 #include "tbc/view.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <QObject>
 #include <QQuickWindow>
 #include <QTimer>

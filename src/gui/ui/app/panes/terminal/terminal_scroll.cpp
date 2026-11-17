@@ -7,7 +7,7 @@ static_assert(true);
 #include "input/scroll_motion.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "platform/scroll_event.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"
 #include "terminal_item.hpp"
 #include "terminal_scene.hpp"

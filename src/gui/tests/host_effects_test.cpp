@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "../core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/foundation/process/command_process.hpp"

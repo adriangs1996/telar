@@ -6,8 +6,8 @@ static_assert(true);
 #include "history_footer_layout.hpp"
 #include "core/terminal_size.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/design/history_hint_projection.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>

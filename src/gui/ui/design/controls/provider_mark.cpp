@@ -7,7 +7,7 @@ static_assert(true);
 #include "provider_artwork.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QImage>

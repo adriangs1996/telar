@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "provider_artwork.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QIODevice>

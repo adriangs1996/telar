@@ -10,8 +10,8 @@ static_assert(true);
 #include "form_text_grid.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QGuiApplication>

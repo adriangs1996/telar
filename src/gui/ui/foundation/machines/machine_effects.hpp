@@ -6,7 +6,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "machine_client_key.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <array>
 #include <optional>

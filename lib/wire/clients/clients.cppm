@@ -1,5 +1,5 @@
 module;
-#include "telar_client/protocol/clients.hpp"
+#include "telar_wire/protocol/clients.hpp"
 
 export module telar.wire.clients;
 

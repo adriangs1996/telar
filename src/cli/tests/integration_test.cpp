@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cerrno>
 #include <charconv>

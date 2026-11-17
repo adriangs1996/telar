@@ -1,6 +1,6 @@
 module;
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 
 export module telar.wire.vocabulary;
 

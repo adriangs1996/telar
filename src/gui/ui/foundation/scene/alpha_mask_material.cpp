@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "alpha_mask_material.hpp"
 #include "physical_pixel_matrix.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
 #include <QSGMaterialShader>

@@ -1,5 +1,5 @@
 module;
-#include "telar_client/protocol/runtime.hpp"
+#include "telar_wire/protocol/runtime.hpp"
 
 export module telar.wire.runtime;
 

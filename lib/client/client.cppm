@@ -1,6 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
-#include "telar_client/codecs/telar_annotations.hpp"
+#include "telar_wire/codecs/telar_annotations.hpp"
 
 export module telar.client;
 

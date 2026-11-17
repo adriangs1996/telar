@@ -6,10 +6,10 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "tbc/view.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"
 #include <QColor>

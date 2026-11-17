@@ -10,10 +10,10 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/protocol/pane_io.hpp"
-#include "telar_client/protocol/runtime.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/protocol/pane_io.hpp"
+#include "telar_wire/protocol/runtime.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/foundation/plugins/plugin_worker.hpp"
 #include <QByteArray>
@@ -71,10 +71,10 @@ static_assert(true);
 #if (defined(__APPLE__))
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/codecs/telar_cells.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"

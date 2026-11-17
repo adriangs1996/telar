@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "curve_scene.hpp"
 #include "scene_nodes.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/foundation/fonts/box_font.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <algorithm>

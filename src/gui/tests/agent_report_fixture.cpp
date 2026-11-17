@@ -1,10 +1,10 @@
 #include "agent_report_fixture.hpp"
 #include "application/dependencies.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/pane_io.hpp"
-#include "telar_client/protocol/runtime.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/codecs/telar_codec.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/protocol/pane_io.hpp"
+#include "telar_wire/protocol/runtime.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/machines/runtime_connection.hpp"
 #include <QByteArrayView>
 #include <QCoreApplication>

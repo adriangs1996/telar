@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "curve_mask.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include <QQuickWindow>
 #include <QSGNode>
 #include <QtCore/qtypes.h>

@@ -6,9 +6,9 @@ static_assert(true);
 #include "../application/dependencies.hpp"
 #include "../terminal/cell_position.hpp"
 #include "../terminal/screen.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QString>
 #include <QtCore/qchar.h>

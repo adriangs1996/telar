@@ -12,6 +12,6 @@ telar_add_library(telar-wire
     vocabulary/vocabulary.cpp
     worktrees/worktrees.cpp
   # The textual headers of the codecs, serializers and protocol messages its modules own,
-  # which Qt adapters, tests and global module fragments include as telar_client/....
+  # which Qt adapters, tests and global module fragments include as telar_wire/....
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar::base telar::vocabulary)

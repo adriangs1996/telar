@@ -6,8 +6,8 @@ static_assert(true);
 #include "image_resource.hpp"
 #include "graphics_scene.hpp"
 #include "tbc/view.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include <QImage>
 #include <QRgb>

@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "native_pane_attention.hpp"
 #include "core/terminal_size.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/foundation/models/pane_attention_value.hpp"
 #include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"

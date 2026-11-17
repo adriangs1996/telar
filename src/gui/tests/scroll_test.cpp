@@ -8,7 +8,7 @@ static_assert(true);
 #include "../terminal/fold_map.hpp"
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_cells.hpp"
+#include "telar_wire/codecs/telar_cells.hpp"
 #include <array>
 #include <cmath>
 #include <cstdint>

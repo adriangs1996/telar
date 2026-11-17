@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "gui_wait.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/timing/window_frame_pacer.hpp"
 #include <QCoreApplication>
 #include <QEvent>

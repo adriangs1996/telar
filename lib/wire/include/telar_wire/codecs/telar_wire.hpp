@@ -26,8 +26,8 @@
 #define MEGA_BYTES(x) KILO_BYTES(x) * 1024
 
 #include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_annotations.hpp"
 #include "telar_vocabulary/vocabulary.hpp"
+#include "telar_wire/codecs/telar_annotations.hpp"
 
 namespace telar {
 

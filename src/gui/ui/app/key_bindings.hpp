@@ -15,7 +15,7 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <QElapsedTimer>
 #include <QKeyEvent>
 #include <QList>

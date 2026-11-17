@@ -7,8 +7,8 @@ static_assert(true);
 #include "bundled_fonts.hpp"
 #include "platform/font.h"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_font.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QFont>

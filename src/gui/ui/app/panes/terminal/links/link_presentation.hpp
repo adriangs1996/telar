@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "terminal/cell_position.hpp"
 #include <algorithm>
 #include <array>

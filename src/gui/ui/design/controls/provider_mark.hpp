@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tbc/view.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>

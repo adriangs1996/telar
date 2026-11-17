@@ -8,7 +8,7 @@ static_assert(true);
 #include "alpha_mask_vertex.hpp"
 #include "curve_mask.hpp"
 #include "scene_nodes.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include <QPointF>
 #include <QRectF>
 #include <QSGGeometry>

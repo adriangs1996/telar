@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "panes_controller.hpp"
 #include "pane_projection.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/models/tab_leaves.hpp"
 #include <QList>

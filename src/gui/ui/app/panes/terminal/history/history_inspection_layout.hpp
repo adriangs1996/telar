@@ -7,10 +7,10 @@ static_assert(true);
 #include "core/terminal_size.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>

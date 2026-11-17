@@ -1,6 +1,6 @@
 #pragma once
 
-#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArrayView>
 #include <QCryptographicHash>
 #include <array>

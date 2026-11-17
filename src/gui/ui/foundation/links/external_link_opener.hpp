@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/process/command_process.hpp"
 #include <QIODevice>

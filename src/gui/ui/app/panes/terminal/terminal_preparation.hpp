@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/panes/terminal/links/link_presentation.hpp"
 #include <algorithm>
 #include <array>

@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "rounded_rectangle_scene.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include <QColor>
 #include <QMatrix4x4>
 #include <QPaintDevice>

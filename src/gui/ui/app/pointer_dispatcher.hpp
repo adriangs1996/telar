@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/input/history_scroll_events.hpp"
 #include "ui/foundation/input/native_pointer_events.hpp"
 #include <QKeyEvent>

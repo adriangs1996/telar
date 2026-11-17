@@ -7,8 +7,8 @@ static_assert(true);
 #include "application_controller.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
 #include <algorithm>
 #include <array>
@@ -27,7 +27,7 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/input/key_encoding.hpp"

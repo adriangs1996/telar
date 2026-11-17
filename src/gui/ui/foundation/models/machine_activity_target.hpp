@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/machines/machine_client_key.hpp"
 #include <cstdint>
 #include <variant>

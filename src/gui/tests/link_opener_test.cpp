@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "../platform/environment.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QByteArray>

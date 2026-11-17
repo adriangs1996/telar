@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "native_progress_ring.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include <QColor>
 #include <QQuickItem>

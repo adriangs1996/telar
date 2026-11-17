@@ -8,8 +8,8 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "graphics_scene.hpp"
 #include "image_resource.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include "ui/foundation/timing/deadline_timer.hpp"
 #include <QEvent>

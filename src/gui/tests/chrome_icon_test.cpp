@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/design/controls/native_chrome_icon.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"

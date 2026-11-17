@@ -1,10 +1,10 @@
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
 #include "tbc/view.hpp"
-#include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/codecs/telar_cells.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal/screen.hpp"
 #include <algorithm>
 #include <array>

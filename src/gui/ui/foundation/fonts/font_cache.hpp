@@ -10,8 +10,8 @@ static_assert(true);
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>

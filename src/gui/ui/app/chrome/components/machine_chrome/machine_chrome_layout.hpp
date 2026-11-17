@@ -6,8 +6,8 @@ static_assert(true);
 #include "core/terminal_size.hpp"
 #include "machine_chrome_controller.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include <QAbstractItemModel>

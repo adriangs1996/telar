@@ -1,5 +1,5 @@
 module;
-#include "telar_client/protocol/pane_io.hpp"
+#include "telar_wire/protocol/pane_io.hpp"
 
 export module telar.wire.pane_io;
 

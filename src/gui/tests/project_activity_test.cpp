@@ -7,9 +7,9 @@ static_assert(true);
 #include "../core/terminal_size.hpp"
 #include "../terminal/screen.hpp"
 #include "assertions.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>

@@ -6,9 +6,9 @@ static_assert(true);
 #include "agent_projection.hpp"
 #include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal/screen.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include <QString>

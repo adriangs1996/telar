@@ -5,12 +5,12 @@ static_assert(true);
 
 #include "ssh_options.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_wire/codecs/telar_codec.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_serializer.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QIODevice>

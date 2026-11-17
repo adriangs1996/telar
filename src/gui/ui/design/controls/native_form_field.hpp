@@ -8,8 +8,8 @@ static_assert(true);
 #include "form_input_context.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <QByteArray>
 #include <QFocusEvent>
 #include <QInputMethodEvent>

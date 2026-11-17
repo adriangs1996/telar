@@ -5,9 +5,9 @@ static_assert(true);
 
 #include "core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/process/command_process.hpp"
 #include "ui/foundation/process/host_command.hpp"
 #include <QProcess>

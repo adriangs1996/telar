@@ -6,9 +6,9 @@ static_assert(true);
 #include "../core/terminal_size.hpp"
 #include "assertions.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>

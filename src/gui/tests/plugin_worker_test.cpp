@@ -7,10 +7,10 @@ static_assert(true);
 #include "../core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/config/plugin_packages.hpp"
 #include "ui/foundation/plugins/plugin_worker.hpp"
 #include <QCoreApplication>

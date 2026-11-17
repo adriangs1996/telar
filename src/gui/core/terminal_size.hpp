@@ -1,6 +1,6 @@
 #pragma once
 
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstddef>

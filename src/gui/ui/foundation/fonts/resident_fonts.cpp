@@ -10,8 +10,8 @@ static_assert(true);
 #include "font_source.hpp"
 #include "platform/font.h"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <QHash>
 #include <QString>
 #include <QtCore/qstringliteral.h>

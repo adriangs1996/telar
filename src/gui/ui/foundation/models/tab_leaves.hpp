@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "core/memory.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <variant>
 
 #pragma once

@@ -6,9 +6,9 @@ static_assert(true);
 #include "font_source.hpp"
 #include "platform/font.h"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_frame.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFileDevice>

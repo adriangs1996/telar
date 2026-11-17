@@ -3,8 +3,8 @@
 static_assert(true);
 #endif
 
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_wire/serializers/telar_cells.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
 #include <QVariantMap>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
