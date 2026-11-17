@@ -337,8 +337,9 @@ so a retry does not release the same reference twice.
 From the repository root:
 
 ```sh
-cmake --build out/dev --target telar-runtime redirect-tests tls-tests
-ctest --test-dir out/dev -R '^(redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime runtime-proxy-tests runtime-tls-tests telar-tls-tests
+ctest --test-dir out/dev -L '^(runtime\.(proxy|tls)|lib\.tls)$' --output-on-failure
+ctest --test-dir out/dev -R '^redirect-check-tests$' --output-on-failure
 python3 src/runtime/tools/check_redirect.py --runtime out/dev/src/runtime/telar-runtime
 ```
 

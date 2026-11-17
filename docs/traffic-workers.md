@@ -231,6 +231,6 @@ the package's channels. Closing Desktop does not trigger any of this recovery.
 ## Verification
 
 ```sh
-cmake --build out/dev --target telar-runtime plugin-traffic-tests plugin-tests traffic-flow-tests
-ctest --test-dir out/dev -R '^(plugin-traffic-tests|plugin-tests|traffic-flow-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime runtime-plugins-tests runtime-vocabulary-tests runtime-proxy-tests
+ctest --test-dir out/dev -L '^runtime\.(plugins|vocabulary|proxy)$' --output-on-failure
 ```

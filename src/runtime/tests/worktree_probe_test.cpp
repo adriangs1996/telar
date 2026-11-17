@@ -17,11 +17,13 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
-import telar.runtime.tests.check;
+import telar.testing;
 import telar.runtime.workspaces.git_probe;
 import telar.runtime.worktrees.git_probe;
 import telar.vocabulary;
 import telar.platform.process;
+
+using telar::testing::check;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -69,7 +71,7 @@ static void untrackedFiles(ConcurrentMemory& memory) {
   std::filesystem::remove_all(root);
 }
 
-void testWorktreeProbe() {
+static void testWorktreeProbe() {
   SystemAllocator system;
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
@@ -130,3 +132,5 @@ void testWorktreeProbe() {
   std::filesystem::remove_all(root);
   check(!probe.observe(request).present);
 }
+
+static const telar::testing::Case case_worktree_probe{"worktree_probe.worktree_probe", testWorktreeProbe};

@@ -34,10 +34,12 @@ static_assert(true);
 #include <limits>
 #include <type_traits>
 
-import telar.cli.tests.check;
+import telar.testing;
 import telar.cli.integration.settings;
 import telar.cli.tab;
 import telar.base.text.json;
+
+using telar::testing::check;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -119,21 +121,33 @@ namespace {
 
 }
 
-int main() {
-  try {
-    SystemAllocator system;
-    BudgetAllocator budget{system, 16 * 1024 * 1024};
-    MemoryAdapter adapter{budget};
-    Memory& memory = adapter;
+// Each case owns the budget its calls share and leaves nothing allocated there.
+template <auto body>
+void budgeted() {
+  SystemAllocator system;
+  BudgetAllocator budget{system, 16 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
 
-    testSettings(memory);
-    testMixedHooks(memory);
-    testJsonDocument(memory);
-    check(budget.liveBytes() == 0);
-    std::puts("Integration tests passed");
-    return 0;
-  } catch (const std::exception& error) {
-    std::fprintf(stderr, "%s\n", error.what());
-    return 1;
-  }
+  body(memory);
+  check(budget.liveBytes() == 0);
 }
+
+static const telar::testing::Case case_settings{
+    "integration.settings",
+    budgeted<[](auto& memory) {
+      testSettings(memory);
+    }>,
+};
+static const telar::testing::Case case_mixed_hooks{
+    "integration.mixed_hooks",
+    budgeted<[](auto& memory) {
+      testMixedHooks(memory);
+    }>,
+};
+static const telar::testing::Case case_json_document{
+    "integration.json_document",
+    budgeted<[](auto& memory) {
+      testJsonDocument(memory);
+    }>,
+};

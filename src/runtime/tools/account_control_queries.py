@@ -96,7 +96,7 @@ def main():
             print(name, cases['warm']['phases'][3]['successes'],
                   cases['warm']['phases'][3]['requested_bytes'], flush=True)
     root = Path(__file__).resolve().parents[1]
-    sources = ['tests/control_accounting_probe.cpp', 'tests/control_component_probe.cpp',
+    sources = ['tools/control_accounting_probe.cpp', 'tools/control_component_probe.cpp',
                'tools/account_control_queries.py', 'tools/bench_control_queries.py',
                'terminal/control/engine/engine.cppm', 'terminal/control/control-vt_state.cppm',
                'terminal/ghostty/ghostty.cppm', '../../lib/base/include/telar_base/memory/allocator.hpp']

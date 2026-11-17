@@ -201,8 +201,8 @@ Import a PCAP through the same data channel. Every imported event is labelled
 From the repository root, run the focused checks:
 
 ```sh
-cmake --build out/dev --target telar-runtime traffic-tests plugin-tests tls-tests
-ctest --test-dir out/dev -R '^(traffic-tests|plugin-tests|tls-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-plugins-tests runtime-tls-tests telar-tls-tests
+ctest --test-dir out/dev -L '^(runtime\.(integration|traffic|plugins|tls)|lib\.tls)$' --output-on-failure
 ```
 
 The virtual-interface fixture `traffic-interface-probe` creates only its own

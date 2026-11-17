@@ -153,7 +153,7 @@ gap/close events. Already emitted retransmissions are not retained for
 conflicting-overlap comparison. It is a bounded observation stream, not a
 replacement TCP endpoint.
 
-`ip-fragment-tests` passes with normal and AddressSanitizer builds.
+The `runtime.traffic.ip_fragments.*` cases pass with normal and AddressSanitizer builds.
 
 Subscriber queues still hold eight frames. Drops are cumulative and visible
 through the existing counters; a subscriber must not assume a gap-free view.
@@ -374,8 +374,9 @@ client features. The example does not install trust or change redirection.
 ## Verification
 
 ```sh
-cmake --build out/dev --target telar-runtime traffic-tests traffic-flow-tests http-message-tests http2-endpoint-tests redirect-tests tls-tests
-ctest --test-dir out/dev -R '^(traffic-tests|traffic-flow-tests|http-message-tests|http2-endpoint-tests|redirect-tests|redirect-check-tests|tls-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-proxy-tests runtime-tls-tests telar-tls-tests
+ctest --test-dir out/dev -L '^(runtime\.(integration|traffic|proxy|tls)|lib\.tls)$' --output-on-failure
+ctest --test-dir out/dev -R '^redirect-check-tests$' --output-on-failure
 ```
 
 C++ tests cover transparent TLS certificate identity, origin trust rejection,

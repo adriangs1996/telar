@@ -176,11 +176,11 @@ decoded before delivery. Replacements regenerate Content-Length or chunking
 and re-encode gzip, deflate, Brotli and Zstd. See the implemented API and limits
 in [traffic-flows.md](traffic-flows.md#http-message-hooks).
 
-`http-message-tests` exercises transport partial writes, unsent message holds,
+The `runtime.proxy.http_message.*` cases exercise transport partial writes, unsent message holds,
 compression, trailers, Expect/100-continue, HEAD metadata, strict chunk framing
 and fail-open/fail-closed limits.
 
-`http2-endpoint-tests` exercises two nghttp2 endpoints with separate stream and
+The `runtime.proxy.http2_endpoint.*` cases exercise two nghttp2 endpoints with separate stream and
 connection credits, independent interception decisions, ID mapping, partial
 writes, PING, reset isolation, cancellation, fail-open/fail-closed deadlines,
 streaming pass-through, HEAD method changes, GOAWAY and origin EOF while a

@@ -79,6 +79,8 @@
     ],
     "tbc": [],
     "testing": [
+      "base",
+      "platform",
       "sys",
       "tbc"
     ]
@@ -120,7 +122,8 @@
       "persistence",
       "runtime",
       "cli",
-      "tests"
+      "tests",
+      "tools"
     ],
     "gui": [
       "core",
@@ -403,21 +406,15 @@
     "src/runtime/platform/session_host/session_host.cppm": "telar.runtime.platform.session_host",
     "src/runtime/redirect/direction/direction.cppm": "telar.runtime.redirect.direction",
     "src/runtime/platform/signals/signals.cppm": "telar.runtime.platform.signals",
-    "src/runtime/tests/agent_oracle/agent_oracle.cppm": "telar.runtime.tests.agent_oracle",
-    "src/runtime/tests/check/check.cppm": "telar.runtime.tests.check",
-    "src/runtime/tests/client_peer/client_peer.cppm": "telar.runtime.tests.client_peer",
-    "src/runtime/tests/clipboard_task/clipboard_task.cppm": "telar.runtime.tests.clipboard_task",
-    "src/runtime/tests/control_clipboard_fixture/control_clipboard_fixture.cppm": "telar.runtime.tests.control_clipboard_fixture",
-    "src/runtime/tests/control_png_pty_inputs/control_png_pty_inputs.cppm": "telar.runtime.tests.control_png_pty_inputs",
-    "src/runtime/tests/erasure_checking_allocator/erasure_checking_allocator.cppm": "telar.runtime.tests.erasure_checking_allocator",
-    "src/runtime/tests/http2_fixture/http2_fixture.cppm": "telar.runtime.tests.http2_fixture",
-    "src/runtime/tests/one_shot_allocator/one_shot_allocator.cppm": "telar.runtime.tests.one_shot_allocator",
-    "src/runtime/tests/packet_fixture/packet_fixture.cppm": "telar.runtime.tests.packet_fixture",
-    "src/runtime/tests/protocol_peer/protocol_peer.cppm": "telar.runtime.tests.protocol_peer",
-    "src/runtime/tests/socket_pair/socket_pair.cppm": "telar.runtime.tests.socket_pair",
-    "src/runtime/tests/test_byte_stream/test_byte_stream.cppm": "telar.runtime.tests.test_byte_stream",
-    "src/runtime/tests/tls_fixture/tls_fixture.cppm": "telar.runtime.tests.tls_fixture",
-    "src/cli/tests/check/check.cppm": "telar.cli.tests.check",
+    "src/runtime/tools/agent_oracle/agent_oracle.cppm": "telar.runtime.tools.agent_oracle",
+    "src/runtime/runtime/tests/client_peer/client_peer.cppm": "telar.runtime.runtime.tests.client_peer",
+    "src/runtime/runtime/tests/clipboard_task/clipboard_task.cppm": "telar.runtime.runtime.tests.clipboard_task",
+    "src/runtime/tools/control_clipboard_fixture/control_clipboard_fixture.cppm": "telar.runtime.tools.control_clipboard_fixture",
+    "src/runtime/tools/control_png_pty_inputs/control_png_pty_inputs.cppm": "telar.runtime.tools.control_png_pty_inputs",
+    "src/runtime/http2/tests/http2_fixture/http2_fixture.cppm": "telar.runtime.http2.tests.http2_fixture",
+    "src/runtime/traffic/tests/packet_fixture/packet_fixture.cppm": "telar.runtime.traffic.tests.packet_fixture",
+    "src/runtime/tools/protocol_peer/protocol_peer.cppm": "telar.runtime.tools.protocol_peer",
+    "lib/tls/tests/tls_fixture/tls_fixture.cppm": "telar.tls.tests.tls_fixture",
     "src/gui/tests/activity_fixture/activity_fixture.cppm": "telar.gui.tests.activity_fixture",
     "src/gui/tests/agent_fixture/agent_fixture.cppm": "telar.gui.tests.agent_fixture",
     "src/gui/tests/allocation_gate/allocation_gate.cppm": "telar.gui.tests.allocation_gate",
@@ -496,6 +493,10 @@
     "src/gui/platform/window_lease/window_lease.cppm": "telar.gui.platform.window_lease",
     "lib/tbc/tbc.cppm": "telar.tbc",
     "lib/testing/testing.cppm": "telar.testing",
+    "lib/testing/test_byte_stream/test_byte_stream.cppm": "telar.testing.test_byte_stream",
+    "lib/testing/socket_pair/socket_pair.cppm": "telar.testing.socket_pair",
+    "lib/testing/erasure_checking_allocator/erasure_checking_allocator.cppm": "telar.testing.erasure_checking_allocator",
+    "lib/testing/one_shot_allocator/one_shot_allocator.cppm": "telar.testing.one_shot_allocator",
     "src/runtime/terminal/control/control-capabilities.cppm": "telar.runtime.terminal.control:capabilities",
     "src/runtime/terminal/control/control-classification.cppm": "telar.runtime.terminal.control:classification",
     "src/runtime/terminal/control/control-color_queries.cppm": "telar.runtime.terminal.control:color_queries",
@@ -775,7 +776,7 @@
     "src/gui/tests/terminal_cursor_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/wire_runtime.hpp": "Qt adapter dependency",
     "src/gui/tools/animation_presentation.hpp": "Objective-C++ ABI",
-    "src/runtime/tests/fixtures/control_parser_156.hpp": "Test or tool support (local textual fixture)"
+    "src/runtime/terminal/tests/control_parser_156.hpp": "Test or tool support (local textual fixture)"
   },
   "macro_headers": [
     "lib/base/include/telar_base/diagnostics/config.hpp",

@@ -210,7 +210,7 @@ void pointerParameterPointeeDead() {
 
 // CASE: lambda.copy_capture_dead
 // PAIR: lambda.copy_capture
-// SOURCE: src/runtime/tests/pty_response_queue_test.cpp :: testConcurrentResponses
+// SOURCE: src/runtime/terminal/tests/pty_response_queue_test.cpp :: testConcurrentResponses
 // STATUS: implemented
 // CONTRACT: A closure holds copies of its by-value captures, including the borrows of a copied view.
 // SCENARIO: The captured view's source dies before the closure's result is read.
@@ -231,7 +231,7 @@ void lambdaCopyCaptureDead() {
 
 // CASE: lambda.copy_capture_live
 // PAIR: lambda.copy_capture
-// SOURCE: src/runtime/tests/pty_response_queue_test.cpp :: testConcurrentResponses
+// SOURCE: src/runtime/terminal/tests/pty_response_queue_test.cpp :: testConcurrentResponses
 // STATUS: implemented
 // CONTRACT: A closure's result may be read while its captured view's source is alive.
 // SCENARIO: The source outlives the read; accept.

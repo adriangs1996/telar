@@ -19,7 +19,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.platform.primitives;
-import telar.runtime.tests.check;
+import telar.testing;
 import telar.runtime.editors.remote_editor;
 import telar.runtime.paths.query_task;
 import telar.runtime.platform.request_worker;
@@ -33,6 +33,8 @@ import telar.platform.process;
 import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
 import telar.runtime.platform.process_probe;
+
+using telar::testing::check;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -177,12 +179,11 @@ static void testNeovimEditor(ConcurrentMemory& memory) {
     Command locate{memory, Launch{.cwd = "/tmp", .arguments = std::array<std::string_view, 2>{"nvim", "--version"}}, CommandPurpose::administration};
     CommandOutput version{memory, 16384};
     if (version.run(locate, std::chrono::steady_clock::now() + std::chrono::seconds{3}) != 0) {
-      return;
+      telar::testing::skip("nvim does not run");
     }
   } catch (const SystemError& error) {
     if (error.code() == ENOENT) {
-      std::puts("Neovim integration skipped: nvim is not installed");
-      return;
+      telar::testing::skip("nvim is not installed");
     }
 
     throw;
@@ -248,7 +249,7 @@ static void testNeovimEditor(ConcurrentMemory& memory) {
   std::filesystem::remove_all(root);
 }
 
-void testBackgroundServices() {
+static void testBackgroundServices() {
   SystemAllocator system;
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
@@ -258,5 +259,15 @@ void testBackgroundServices() {
   testSuggestions(memory);
   testPaths(memory);
   testMissingEditor(memory);
+}
+
+static void testNeovim() {
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
+
   testNeovimEditor(memory);
 }
+
+static const telar::testing::Case case_background_services{"background_services.background_services", testBackgroundServices};
+static const telar::testing::Case case_neovim{"background_services.neovim", testNeovim};

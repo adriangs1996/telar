@@ -22,7 +22,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
-import telar.runtime.tests.check;
+import telar.testing;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.exchange_capture.producer;
@@ -32,6 +32,8 @@ import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
+
+using telar::testing::check;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -473,9 +475,7 @@ static void interceptionDelivery(Service& service, const std::string& path) {
   check(decision.verdict == Verdict::allow);
 }
 
-int main() {
-  codecAndFilters();
-  kernelLossAccounting();
+static void serviceDelivery() {
   SystemAllocator system;
   MemoryAdapter offline{system};
   BudgetAllocator budget{system, 64 * 1024 * 1024};
@@ -501,5 +501,8 @@ int main() {
   check(budget.liveBytes() == 0);
   check(!std::filesystem::exists(path));
   std::filesystem::remove_all(directory);
-  std::puts("Traffic tests passed");
 }
+
+static const telar::testing::Case case_codec_and_filters{"traffic.codec_and_filters", codecAndFilters};
+static const telar::testing::Case case_kernel_loss_accounting{"traffic.kernel_loss_accounting", kernelLossAccounting};
+static const telar::testing::Case case_service_delivery{"traffic.service_delivery", serviceDelivery};

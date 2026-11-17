@@ -171,9 +171,9 @@ def module_tree(root):
         (13, "          delivery.collect(clients_, plugins);\n", "          "),
     ))
 
-    tests = runtime / "tests/CMakeLists.txt"
-    probe = "telar_add_test(checkpoint-probe NO_TEST SOURCES checkpoint_probe.cpp LIBRARIES runtime-test-fixtures)\n"
-    replace_once(tests, probe, probe + f"telar_add_test(pane-traffic-probe NO_TEST SOURCES \"{HERE / 'pane_traffic_probe.cpp'}\" LIBRARIES runtime-test-fixtures)\n")
+    tools = runtime / "tools/CMakeLists.txt"
+    probe = "telar_add_test(checkpoint-probe NO_TEST SOURCES checkpoint_probe.cpp LIBRARIES runtime-tools-support)\n"
+    replace_once(tools, probe, probe + f"telar_add_test(pane-traffic-probe NO_TEST SOURCES \"{HERE / 'pane_traffic_probe.cpp'}\" LIBRARIES runtime-tools-support)\n")
     return runtime
 
 

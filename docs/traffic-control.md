@@ -166,8 +166,8 @@ can continue. The existing startup trust maintenance still applies.
 ## Verification
 
 ```sh
-cmake --build out/dev --target telar-runtime traffic-control-tests tls-tests redirect-tests
-ctest --test-dir out/dev -R '^(traffic-control-tests|tls-tests|redirect-tests)$' --output-on-failure
+cmake --build out/dev --target telar-runtime runtime-proxy-tests runtime-tls-tests telar-tls-tests
+ctest --test-dir out/dev -L '^(runtime\.(proxy|tls)|lib\.tls)$' --output-on-failure
 ```
 
 Native tests cover fragmented/malformed IPC, mutation denial, connected producer

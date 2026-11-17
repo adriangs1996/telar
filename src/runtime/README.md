@@ -425,12 +425,16 @@ diagnostics in Debug builds.
 
 ## Validation
 
-`runtime-tests` covers memory exhaustion and ownership, PTY errors and descriptor
-isolation, terminal/frame behavior, graphics and credit, SQLite persistence,
-execution state, agent authorization and interruption, worktree observation,
-path ranking, editor validation and suggestion-engine failure modes. The Neovim
-integration test runs when `nvim` is available. It checks a filename containing
-spaces and a quote, cursor position, and rejection of a stale process identity.
+Each domain's tests live in its `tests/` folder and build into
+`runtime-<domain>-tests`, one CTest test per case labelled `runtime.<domain>`;
+`tests/` holds the integration tests (`runtime.integration`) and the end-to-end
+checks (`runtime.e2e`). Together they cover memory exhaustion and ownership, PTY
+errors and descriptor isolation, terminal/frame behavior, graphics and credit,
+SQLite persistence, execution state, agent authorization and interruption,
+worktree observation, path ranking, editor validation and suggestion-engine
+failure modes. The Neovim integration test runs when `nvim` is available and is
+reported as skipped otherwise. It checks a filename containing spaces and a
+quote, cursor position, and rejection of a stale process identity.
 
 `runtime-probe`, `services-probe`, `reporter-probe` and `graphics-probe` talk
 to actual daemon sockets. The default build and `just runtime-test` skip every

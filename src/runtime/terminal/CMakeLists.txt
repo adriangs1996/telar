@@ -18,3 +18,8 @@ telar_add_domain(runtime terminal
   DEPS diagnostics platform)
 # The grid includes the cell layout the build reads from libghostty-vt.
 add_dependencies(runtime-terminal cell-layout)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(terminal LINK telar::base telar::config telar::platform telar::vocabulary telar::wire)
+  target_compile_options(runtime-terminal-tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()

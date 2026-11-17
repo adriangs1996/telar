@@ -29,7 +29,10 @@ GNU_MACROS = {'linux', 'unix'}
 # no C++ named modules to import. The rest of lib/tbc (the example, the annotation headers)
 # keeps the includes of its own standalone build. Telar's sources stay in the rule when they
 # use TBC.
-OUTSIDE_RULE_5 = ('lib/tbc/',)
+#
+# lib/testing is test code like the tests/ folders: its fixtures reach the sockets and allocators
+# under test through the system headers the tests include.
+OUTSIDE_RULE_5 = ('lib/tbc/', 'lib/testing/')
 
 
 def main():
@@ -184,9 +187,11 @@ def check_library_layers(layers, interfaces, imports):
         library = library_of.get(name.split(':')[0])
         if library is None:
             continue
+        # A library's test support may import the harness, which no library builds on.
+        extra = {'testing'} if '.tests.' in name else set()
         for dependency in dependencies:
             target = library_of.get(dependency.split(':')[0])
-            if target and target != library and target not in layers[library]:
+            if target and target != library and target not in layers[library] and target not in extra:
                 raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
 
 
