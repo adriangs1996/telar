@@ -6,21 +6,16 @@ static_assert(true);
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 
 import std;
+import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar::gui;
-
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
 
   template <typename Exception, typename Operation>
   void rejects(Operation&& operation) {
@@ -32,7 +27,7 @@ namespace {
       rejected = true;
     }
 
-    require(rejected, "Invalid font geometry must be rejected before conversion");
+    check(rejected, "Invalid font geometry must be rejected before conversion");
   }
 
   void fixedPointRounding() {
@@ -42,14 +37,14 @@ namespace {
     for (auto value = -rounding_radius; value <= rounding_radius; ++value) {
       const auto expected = static_cast<std::int32_t>(std::round(static_cast<double>(value) / fixed_unit));
 
-      require(FontMetrics::roundFixed(value) == expected, "Font fixed-point rounding must preserve both signs and half-pixel ties");
+      check(FontMetrics::roundFixed(value) == expected, "Font fixed-point rounding must preserve both signs and half-pixel ties");
     }
 
     constexpr auto largest = std::numeric_limits<std::int32_t>::max();
     constexpr auto smallest = std::numeric_limits<std::int32_t>::min();
 
-    require(FontMetrics::roundFixed(static_cast<std::int64_t>(largest) * fixed_unit) == largest, "The largest representable font metric must remain valid");
-    require(FontMetrics::roundFixed(static_cast<std::int64_t>(smallest) * fixed_unit) == smallest, "The smallest representable font metric must remain valid");
+    check(FontMetrics::roundFixed(static_cast<std::int64_t>(largest) * fixed_unit) == largest, "The largest representable font metric must remain valid");
+    check(FontMetrics::roundFixed(static_cast<std::int64_t>(smallest) * fixed_unit) == smallest, "The smallest representable font metric must remain valid");
     rejects<std::out_of_range>([] {
       static_cast<void>(FontMetrics::roundFixed(std::numeric_limits<std::int64_t>::max()));
     });
@@ -72,9 +67,9 @@ namespace {
     constexpr std::uint16_t expected_height = 21;
     constexpr float expected_baseline = 16.5F;
 
-    require(grid.width == expected_width && grid.height == expected_height, "Spacing must round complete physical cell dimensions");
-    require(grid.baseline == expected_baseline, "Odd leading must preserve its half-pixel baseline");
-    require(grid.box_stroke == metrics.box_stroke, "A physical font stroke must survive grid resolution");
+    check(grid.width == expected_width && grid.height == expected_height, "Spacing must round complete physical cell dimensions");
+    check(grid.baseline == expected_baseline, "Odd leading must preserve its half-pixel baseline");
+    check(grid.box_stroke == metrics.box_stroke, "A physical font stroke must survive grid resolution");
   }
 
   void invalidGeometry() {
@@ -110,17 +105,8 @@ namespace {
     });
   }
 
-}
+  const telar::testing::Case case_fixed_point_rounding{"font_grid.fixed_point_rounding", fixedPointRounding};
+  const telar::testing::Case case_physical_grid_keeps_half_pixels{"font_grid.physical_grid_keeps_half_pixels", physicalGridKeepsHalfPixels};
+  const telar::testing::Case case_invalid_geometry{"font_grid.invalid_geometry", invalidGeometry};
 
-int main() {
-  try {
-    fixedPointRounding();
-    physicalGridKeepsHalfPixels();
-    invalidGeometry();
-    std::puts("gui-font-grid: passed");
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-
-    return 1;
-  }
 }
