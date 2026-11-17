@@ -1,7 +1,7 @@
 module;
 #include "platform/clipboard_image_source.hpp"
 
-export module telar.gui.platform.clipboard_image_pipe;
+export module telar.gui.platform:clipboard_image_pipe;
 
 import std;
 

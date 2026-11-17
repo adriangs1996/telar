@@ -82,11 +82,15 @@
   "namespaced_folders": [
     "src/gui/foundation",
     "src/gui/features",
+    "src/gui/platform",
     "src/gui/application"
   ],
   "import_rules": {
     "src/gui/foundation": ["telar.gui.foundation"],
-    "src/gui/features": ["telar.gui.foundation"]
+    "src/gui/features": ["telar.gui.foundation"],
+    "src/gui/platform": ["telar.gui.foundation", "telar.gui.platform"],
+    "src/gui/application": ["telar.gui.foundation", "telar.gui.features"],
+    "src/gui/ui": ["telar.gui.foundation", "telar.gui.application"]
   },
   "process_layers": {
     "runtime": [
@@ -313,8 +317,9 @@
     "src/cli/integration/settings/settings.cppm": "telar.cli.integration.settings",
     "src/cli/base/command_error/command_error.cppm": "telar.cli.base.command_error",
     "src/cli/hooks/session/session.cppm": "telar.cli.hooks.session",
-    "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": "telar.gui.platform.clipboard_image_pipe",
-    "src/gui/platform/clipboard_image_transfer/clipboard_image_transfer.cppm": "telar.gui.platform.clipboard_image_transfer",
+    "src/gui/platform/platform.cppm": "telar.gui.platform",
+    "src/gui/platform/platform-clipboard_image_pipe.cppm": "telar.gui.platform:clipboard_image_pipe",
+    "src/gui/platform/platform-clipboard_image_transfer.cppm": "telar.gui.platform:clipboard_image_transfer",
     "lib/ebnf/lexer/lexer.cppm": "telar.ebnf.lexer",
     "lib/ebnf/parser/parser.cppm": "telar.ebnf.parser",
     "lib/platform/primitives/primitives.cppm": "telar.platform.primitives",
@@ -1924,9 +1929,9 @@
     "src/gui/platform/host_name.cppm": "src/gui/foundation/system/system-login_shell.cppm",
     "src/gui/platform/runtime_endpoint.cppm": "src/gui/foundation/system/system-runtime_endpoint.cppm",
     "src/gui/platform/process_group.cppm": "src/gui/foundation/system/system-process_group.cppm",
-    "src/gui/platform/clipboard_image_pipe.cppm": "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm",
+    "src/gui/platform/clipboard_image_pipe.cppm": "src/gui/platform/platform-clipboard_image_pipe.cppm",
     "src/gui/platform/profile_file/profile_file.cppm": "src/gui/foundation/system/system-profile_file.cppm",
-    "src/gui/platform/clipboard_image_transfer.cppm": "src/gui/platform/clipboard_image_transfer/clipboard_image_transfer.cppm",
+    "src/gui/platform/clipboard_image_transfer.cppm": "src/gui/platform/platform-clipboard_image_transfer.cppm",
     "src/gui/platform/awake_clock.cppm": "src/gui/foundation/system/system-awake_clock.cppm",
     "src/gui/platform/notification_commands/notification_commands.cppm": "src/gui/foundation/system/system-notification_commands.cppm",
     "src/gui/platform/peer_identity.cppm": "src/gui/foundation/system/system-peer_identity.cppm",
@@ -3317,7 +3322,7 @@
     "src/gui/foundation/fonts/fonts-glyph_rasterizer.cpp": [
       "src/gui/platform/macos/glyph_rasterizer.h"
     ],
-    "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": [
+    "src/gui/platform/platform-clipboard_image_pipe.cppm": [
       "src/gui/platform/clipboard_image_source.hpp"
     ],
     "src/gui/application/application-fold_map.cppm": [

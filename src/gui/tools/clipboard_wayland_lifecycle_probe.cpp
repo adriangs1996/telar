@@ -40,7 +40,7 @@ static_assert(true);
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 
-import telar.gui.platform.clipboard_image_pipe;
+import telar.gui.platform;
 
 namespace {
 

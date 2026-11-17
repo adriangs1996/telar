@@ -27,7 +27,7 @@ static_assert(true);
 #include <unistd.h>
 
 import telar.gui.tests.erasure_allocator;
-import telar.gui.platform.clipboard_image_pipe;
+import telar.gui.platform;
 
 namespace {
 

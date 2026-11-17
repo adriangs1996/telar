@@ -33,7 +33,7 @@ foreach(domain IN ITEMS foundation features
 endforeach()
 
 add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/system-peer_identity.cpp foundation/system/system-window_lease.cpp foundation/system/system-profile_file.cpp foundation/system/system-stdio_socket.cpp foundation/system/system-managed_directory.cpp foundation/system/system-process_group.cpp)
-target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
+target_sources(gui-posix PRIVATE platform/platform-clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-foundation-core gui-foundation-system gui-platform Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")

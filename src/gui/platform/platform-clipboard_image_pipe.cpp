@@ -1,4 +1,4 @@
-module telar.gui.platform.clipboard_image_pipe;
+module telar.gui.platform;
 
 import std;
 import telar.base.memory.allocators;

@@ -39,8 +39,7 @@ static_assert(true);
 #include <unistd.h>
 #include <utility>
 
-import telar.gui.platform.clipboard_image_pipe;
-import telar.gui.platform.clipboard_image_transfer;
+import telar.gui.platform;
 
 namespace telar::gui::platform {
 

@@ -14,6 +14,15 @@ Una feature nunca importa otra feature ni `application`; `ui` nunca importa una 
 con el nombre (regla 1) y el namespace (regla 8) de cada módulo. Los tests pueden importar una
 feature directamente para probar sus casos de uso.
 
+`src/gui/platform/` es la frontera nativa, entre las features y `application` en
+`process_layers`: los fuentes en C, Objective-C y Objective-C++, sus encabezados, los adaptadores
+Qt de Linux que los implementan y un módulo, `telar.gui.platform`, que exporta en
+`telar::gui::platform` lo que esos fuentes comparten en C++ (el tubo de imágenes del portapapeles
+y la transferencia que completa una declaración adelantada de Objective-C++). Importa solo
+`telar.gui.foundation` y su propio módulo, e incluye textualmente los encabezados que una feature
+comparte con Objective-C++ (`attachments/*.hpp`). Nadie fuera de los tests y las
+herramientas importa `telar.gui.platform`; `ui` y `main.cpp` incluyen sus encabezados.
+
 ## Carpeta = módulo = namespace
 
 - `src/gui/features/history/` es el módulo `telar.gui.features.history`. Su interfaz primaria es

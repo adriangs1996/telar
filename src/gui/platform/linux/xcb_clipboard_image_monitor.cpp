@@ -44,8 +44,7 @@ static_assert(true);
 #include <xcb/xcbext.h>
 #include <xcb/xproto.h>
 
-import telar.gui.platform.clipboard_image_pipe;
-import telar.gui.platform.clipboard_image_transfer;
+import telar.gui.platform;
 
 namespace telar::gui::platform {
 
