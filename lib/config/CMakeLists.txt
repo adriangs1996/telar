@@ -4,5 +4,6 @@ telar_add_library(telar-config
   DEPS telar::ghostty telar::lua telar::plugins)
 
 if(BUILD_TESTING)
-  telar_add_tests(telar-config-tests LABEL lib.config LINK telar::config)
+  # The runtime reader measures icon widths with libghostty-vt, which each program links itself.
+  telar_add_tests(telar-config-tests LABEL lib.config LINK telar::config deps::ghostty_vt)
 endif()
