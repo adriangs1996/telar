@@ -686,5 +686,233 @@
         }
       }
     }
+  },
+  "final": {
+    "commit": "8ed096002e706bc12edc589aa8fd4b9698d523d2",
+    "date": "2026-11-17",
+    "machine": {
+      "system": "Darwin 25.6.0 arm64",
+      "cpus": 8,
+      "memory_mib": 16384
+    },
+    "note": "The integrated build-ui-architecture with the wire headers under telar_wire/, measured once from an empty tree, out/final, so out/dev stayed as it was. Another agent built in its own worktree at the same time; builds were serialized with it through the build lock, but its other work shows in the load averages (load_average_before is the one-minute load when each step started). The per-process trees of before FB3 were still under src/<process>/out. The second cold sample ran at a9d0ecd6e, which changes two GUI headers only, to tell the peak memory from noise.",
+    "tree": {
+      "directory": "out/final",
+      "configure": "tools/cpp configure dev -B out/final -- -DTELAR_GUI_TEST_RUNTIME=<root>/out/final/src/runtime/telar"
+    },
+    "snapshot": {
+      "how": "python3 tools/build-snapshot.py record out/final",
+      "compiled_sources": 1431,
+      "flag_sets": 158,
+      "linked": {
+        "static": 116,
+        "executable": 238,
+        "shared": 1
+      },
+      "tests": 198
+    },
+    "cold_build": {
+      "how": "Configured and built from an empty out/final with tools/cpp, memory sampled as tools/module-metrics.py does, as fb4 did. build_production builds telar-runtime, telar, telar-gui and telar-gui-command; build_all then builds the rest of the default target. all_seconds is both builds, without the configure, as in fb0 and fb4.",
+      "configure_seconds": 13.1,
+      "configure_peak_memory_mib": 133,
+      "configure_load_average": 6.1,
+      "configure_load_average_before": 6.4,
+      "build_production_seconds": 117.9,
+      "build_production_peak_memory_mib": 2327,
+      "build_production_load_average": 6.2,
+      "build_production_load_average_before": 5.7,
+      "build_all_seconds": 98.6,
+      "build_all_peak_memory_mib": 2845,
+      "build_all_load_average": 7.1,
+      "build_all_load_average_before": 5.8,
+      "production_seconds": 117.9,
+      "all_seconds": 216.5,
+      "peak_memory_mib": 2845,
+      "second_sample": {
+        "tree": "out/final2",
+        "configure_seconds": 13.1,
+        "configure_peak_memory_mib": 134,
+        "configure_load_average": 5.0,
+        "configure_load_average_before": 5.0,
+        "build_production_seconds": 116.5,
+        "build_production_peak_memory_mib": 2393,
+        "build_production_load_average": 5.5,
+        "build_production_load_average_before": 5.0,
+        "build_all_seconds": 98.5,
+        "build_all_peak_memory_mib": 2879,
+        "build_all_load_average": 7.3,
+        "build_all_load_average_before": 5.9,
+        "production_seconds": 116.5,
+        "all_seconds": 215.0,
+        "peak_memory_mib": 2879
+      },
+      "warnings": "The 519 compiler warnings of fb4, the same ones at their new paths"
+    },
+    "noop_build": {
+      "how": "tools/cpp build dev -B out/final again on the unchanged tree, three times",
+      "result": "ninja: no work to do",
+      "seconds": 0.7
+    },
+    "tests": {
+      "command": "QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software tools/cpp test dev -B out/final -- -E '^(gui-native-scroll-input|gui-native-window-appearance|gui-native-window-update)$'",
+      "registered": 198,
+      "passed": 195,
+      "failed": 0,
+      "not_run": {
+        "tests": [
+          "gui-native-scroll-input",
+          "gui-native-window-appearance",
+          "gui-native-window-update"
+        ],
+        "why": "They set QT_QPA_PLATFORM=cocoa and open real windows on the desktop"
+      },
+      "seconds": 446.1,
+      "by_suite": {
+        "runtime": 35,
+        "cli": 14,
+        "gui": 137,
+        "lib": 8,
+        "auth": 1
+      },
+      "gui_with_runtime": "gui-quick and gui-suggestion-controls registered with TELAR_GUI_TEST_RUNTIME, both passed"
+    },
+    "incremental": {
+      "how": "Not measured again here: the last measurement of each source, by the phase that took it (fb5 for the runtime after its test fixtures split, fb4 for the GUI, before the folders of src/gui/ui became targets), next to fb0. Default target fully built, one no-op build, then touch the source and time tools/cpp build dev.",
+      "runtime hub": {
+        "domain": "transport",
+        "source": "src/runtime/transport/connection/connection.cpp",
+        "measured_in": "fb5",
+        "seconds": 3.2,
+        "linked": 31,
+        "steps": 36,
+        "fb0_seconds": 5.0,
+        "fb0_linked": 32
+      },
+      "runtime non-hub": {
+        "domain": "editors",
+        "source": "src/runtime/editors/remote_editor/remote_editor.cpp",
+        "measured_in": "fb5",
+        "seconds": 1.8,
+        "linked": 7,
+        "steps": 12,
+        "fb0_seconds": 4.4,
+        "fb0_linked": 32
+      },
+      "gui hub": {
+        "domain": "core",
+        "source": "src/gui/core/metrics/metrics.cpp",
+        "measured_in": "fb4",
+        "seconds": 12.5,
+        "linked": 136,
+        "steps": 141,
+        "fb0_seconds": 13.7,
+        "fb0_linked": 136
+      },
+      "gui non-hub": {
+        "domain": "peek",
+        "source": "src/gui/peek/screen/screen.cpp",
+        "measured_in": "fb4",
+        "seconds": 9.8,
+        "linked": 80,
+        "steps": 85,
+        "fb0_seconds": 13.3,
+        "fb0_linked": 136
+      }
+    },
+    "gui_release_batch_units": 10,
+    "gui_release_batch_sources": 114,
+    "configure_only": {
+      "how": "tools/cpp configure <preset> -B out/final-<preset> into an empty directory; headless is dev with --headless. No managed dependency was rebuilt.",
+      "seconds": {
+        "release": 10.0,
+        "sanitize": 13.8,
+        "ci": 12.9,
+        "dist": 3.0,
+        "headless": 6.6
+      }
+    },
+    "repository_checks": {
+      "check-cpp-modules.py": "passed",
+      "ui-graph.py HEAD --rules": "passed, 0 rule violations, no C++ or QML cycle",
+      "check-cpp-package.py --build out/final": "passed",
+      "python_unit_tests": {
+        "tools/tests": 54,
+        "src/gui/tools": 28,
+        "failed": 0
+      }
+    },
+    "quality_checks": {
+      "how": "Each check target of out/final over a scope narrowed to these sources, the ones of its scope among them: src/gui/ui/app/application_controller.cpp, src/gui/ui/app/chrome/activity/activity_controller.cpp, src/gui/ui/app/overlays/palette/palette_controller.cpp, src/gui/ui/foundation/config/configuration_source.cpp, src/gui/ui/foundation/scene/rounded_rectangle_scene.cpp, src/runtime/editors/remote_editor/remote_editor.{cpp,cppm}, src/cli/control_session/control_session.{cpp,cppm}, lib/client/client.cppm. format-check ran clang-format --dry-run --Werror over all 1446 tracked C++ files. A finding is attributed to fb0 when git blame -M -C -C of its line names a commit of main.",
+      "format-check": "fails only on lib/sys/process/process.cppm, as on main",
+      "interface-bodies": "passed (3 interfaces)",
+      "blank-lines": "fails on src/gui/input/scroll_motion.hpp (19 findings), unchanged since main, reached through ui/app/panes/terminal/terminal_item.hpp",
+      "lifetime": "fails: the ebnf interfaces every importing unit reports, as on main; tbc-dangling-borrow on 22 initializers of the ApplicationController constructor (13 from main, 9 from the UI track adding or changing controllers of the same shape), and 4 findings of main in activity_controller.cpp, palette_controller.cpp and ui/foundation/machines/machine_client.hpp",
+      "lint": "fails: 65 distinct findings from main in the GUI headers and sources the scope reaches; of the UI track, misc-override-with-different-visibility on ApplicationController::resolveFont is left, and the three of Store::interact and TerminalHost are fixed in a9d0ecd6e. The runtime and CLI sources have warnings only.",
+      "ci_scope": "gui-cpp.yml ran gui-lifetime and gui-blank-lines on the Release tree of main, whose database held 5 sources of src/gui/ui (the rest compile in 10 batch units under out/); it now runs lifetime and blank-lines on the ci preset, a Debug tree whose scopes hold 119 sources of src/gui/ui, so those steps now visit the findings above."
+    },
+    "against_fb0": [
+      {
+        "what": "CMake trees for one development build",
+        "fb0": "4 (runtime, gui, cli, auth)",
+        "final": "1 (out/dev)"
+      },
+      {
+        "what": "Configure, seconds",
+        "fb0": 20.9,
+        "final": 13.1
+      },
+      {
+        "what": "Cold build of the production binaries, seconds",
+        "fb0": 112.1,
+        "final": 117.9
+      },
+      {
+        "what": "Cold build of everything, seconds",
+        "fb0": 238.0,
+        "final": 216.5,
+        "change_percent": -9.0,
+        "caveat": "fb0 built the runtime and gui trees only; final also builds the CLI, the auth daemon and the library tests"
+      },
+      {
+        "what": "Peak memory, MiB",
+        "fb0": 2457,
+        "final": 2845,
+        "final_second_sample": 2879,
+        "fb3": 2588,
+        "fb4": 2495,
+        "change_percent": 15.8,
+        "caveat": "Reproduced by the second sample. The peak is in build_all; build_production peaks at 2327 and 2393 MiB, as fb4's 2367. Against fb4's build_all, 14.0 %; against fb3's whole build, 9.9 % and 11.2 % for the two samples, at the 10 % threshold fb4 was held to. Not bisected"
+      },
+      {
+        "what": "Tests",
+        "fb0": "202 by the four trees' counts",
+        "final": "198 registered, 195 run and passed offscreen"
+      },
+      {
+        "what": "Release gui-quick_batch_*.cpp units",
+        "fb0": 9,
+        "final": 10
+      },
+      {
+        "what": "Touch src/runtime/transport/connection/connection.cpp (runtime hub): binaries relinked, seconds",
+        "fb0": "32, 5.0",
+        "final": "31, 3.2 (fb5)"
+      },
+      {
+        "what": "Touch src/runtime/editors/remote_editor/remote_editor.cpp (runtime non-hub): binaries relinked, seconds",
+        "fb0": "32, 4.4",
+        "final": "7, 1.8 (fb5)"
+      },
+      {
+        "what": "Touch src/gui/core/metrics/metrics.cpp (gui hub): binaries relinked, seconds",
+        "fb0": "136, 13.7",
+        "final": "136, 12.5 (fb4)"
+      },
+      {
+        "what": "Touch src/gui/peek/screen/screen.cpp (gui non-hub): binaries relinked, seconds",
+        "fb0": "136, 13.3",
+        "final": "80, 9.8 (fb4)"
+      }
+    ]
   }
 }
