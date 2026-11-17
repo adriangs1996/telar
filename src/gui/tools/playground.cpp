@@ -30,7 +30,7 @@ static_assert(true);
 //
 // The file's root is an Item, which the window sizes to itself; it imports Telar.Gui and
 // reaches the GUI's components, and `telar` is an application controller on the default
-// configuration, so `telar.colors` and `telar.windowGeometry.typography` give a component
+// configuration, so `telar.colors` and `telar.display.geometry.typography` give a component
 // what the window would. src/gui/playground/ is ignored by git: it is the place for these
 // files, and for copies of the module's components to try variants of without a rebuild.
 
