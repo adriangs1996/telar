@@ -58,7 +58,6 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.input.child_mouse;
-import telar.gui.presentation.history_pointer;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -115,17 +114,17 @@ namespace telar::gui::qt {
     return true;
   }
 
-  HistoryActionCapture* PointerDispatcher::capture(Qt::MouseButton button) noexcept {
+  application::history::HistoryActionCapture* PointerDispatcher::capture(Qt::MouseButton button) noexcept {
     const auto semantic = mouseButton(button);
 
     return semantic == MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
   }
 
   bool PointerDispatcher::occupied() const noexcept {
-    return terminals_.holdsPointer() || std::ranges::any_of(captures_, &HistoryActionCapture::held);
+    return terminals_.holdsPointer() || std::ranges::any_of(captures_, &application::history::HistoryActionCapture::held);
   }
 
-  void PointerDispatcher::presentHistoryActions(const HistoryActionSurface& surface) {
+  void PointerDispatcher::presentHistoryActions(const application::history::HistoryActionSurface& surface) {
     for (auto& lease : captures_) {
       if (lease.held()) {
         lease.present(surface);
@@ -160,14 +159,14 @@ namespace telar::gui::qt {
       return false;
     }
 
-    history_.observeHover(event.position(), HistoryHover::Observation::point);
+    history_.observeHover(event.position(), application::history::HistoryHover::Observation::point);
     if (auto* lease = capture(event.button())) {
       if (lease->held()) {
         *lease = {};
       }
 
       const auto& surface = history_.presentedActions();
-      HistoryActionCapture history;
+      application::history::HistoryActionCapture history;
       if (store_.dialog().kind == Store::Dialog::history && surface.generation == store_.dialog().generation && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
         // The history takes the button from a terminal that held it.
         *lease = history;
@@ -194,7 +193,7 @@ namespace telar::gui::qt {
   bool PointerDispatcher::move(QMouseEvent& event) {
     if (native_events_.moving()) {
       attachments_.shelf()->observePointer(event.position());
-      history_.observeHover(event.position(), event.buttons() == Qt::NoButton ? HistoryHover::Observation::point : HistoryHover::Observation::retained);
+      history_.observeHover(event.position(), event.buttons() == Qt::NoButton ? application::history::HistoryHover::Observation::point : application::history::HistoryHover::Observation::retained);
     }
 
     activity_.observePointer(true, event.position());
@@ -217,7 +216,7 @@ namespace telar::gui::qt {
     }
 
     if (auto* lease = capture(event.button()); lease != nullptr && lease->held()) {
-      auto previous = std::exchange(*lease, HistoryActionCapture{});
+      auto previous = std::exchange(*lease, application::history::HistoryActionCapture{});
       const auto& surface = history_.presentedActions();
       const auto action = previous.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
       const auto choice = surface.choice;

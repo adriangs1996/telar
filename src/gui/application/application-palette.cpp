@@ -6,7 +6,7 @@ import :access;
 import telar.gui.features.palette;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.model;
-import telar.gui.input.configuration;
+import telar.gui.features.history;
 import telar.wire.editor;
 
 namespace telar::gui::application::palette {
@@ -41,7 +41,7 @@ namespace telar::gui::application::palette {
 
       const auto bracketed = pane->screen.modes().bracketed_paste;
 
-      HistoryText::validate(submission.text, bracketed);
+      features::history::HistoryText::validate(submission.text, bracketed);
       const auto encoded = PasteEncoding::encode<SuggestionLimits::text_bytes>(submission.text, bracketed);
 
       session.input(pane->id, encoded.view());

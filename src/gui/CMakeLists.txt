@@ -26,7 +26,7 @@ target_include_directories(gui-settings INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" 
 target_link_libraries(gui-settings INTERFACE telar::config telar::machines gui-harfbuzz deps::ghostty_vt)
 
 # The module domains of docs/build/modules.json (process_layers), lowest first.
-foreach(domain IN ITEMS foundation features core history layout text prompt links
+foreach(domain IN ITEMS foundation features core layout text prompt links
     input attachments platform machines presentation graphics components config transport
     application)
   add_subdirectory(${domain})
@@ -161,7 +161,7 @@ if(TELAR_GUI_NATIVE)
 
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
-    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-core gui-history gui-layout
+    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-core gui-layout
     gui-text gui-prompt gui-links gui-input gui-attachments
     gui-platform gui-machines gui-presentation gui-graphics gui-components gui-config gui-transport
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
@@ -200,7 +200,7 @@ if(TELAR_GUI_NATIVE)
   # tests builds it too.
   telar_add_test(gui-host-effects-smoke QT PROBE SOURCES tools/host_effects_smoke.cpp
     LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-text gui-core
-      gui-history gui-layout gui-text gui-platform gui-presentation gui-application deps::ghostty_vt
+      gui-features-history gui-layout gui-text gui-platform gui-presentation gui-application deps::ghostty_vt
       Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
 
   qt_add_shaders(gui-quick gui-curve-shaders

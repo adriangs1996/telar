@@ -28,10 +28,8 @@ static_assert(true);
 #include <span>
 #include <string_view>
 
-import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.application;
 import telar.gui.presentation.history_inspection;
-import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {
   namespace {
@@ -132,13 +130,13 @@ namespace telar::gui::qt {
     return chrome;
   }
 
-  QVariantMap HistoryInspectionLayout::projectLine(const HistoryInspectionLine& line, const HistoryInspectionGeometry& geometry, std::uint16_t index) const {
+  QVariantMap HistoryInspectionLayout::projectLine(const application::history::HistoryInspectionLine& line, const application::history::HistoryInspectionGeometry& geometry, std::uint16_t index) const {
     const auto row = geometry.row(index);
 
     return {
-        {QStringLiteral("command"), line.kind == HistoryInspectionLine::Kind::command},
-        {QStringLiteral("fact"), line.kind == HistoryInspectionLine::Kind::fact},
-        {QStringLiteral("heading"), line.kind == HistoryInspectionLine::Kind::heading},
+        {QStringLiteral("command"), line.kind == application::history::HistoryInspectionLine::Kind::command},
+        {QStringLiteral("fact"), line.kind == application::history::HistoryInspectionLine::Kind::fact},
+        {QStringLiteral("heading"), line.kind == application::history::HistoryInspectionLine::Kind::heading},
         {QStringLiteral("text"), string(line.text)},
         {QStringLiteral("label"), string(line.label)},
         {QStringLiteral("color"), QString::fromLatin1(palette_names[static_cast<std::size_t>(line.color)])},
@@ -149,14 +147,14 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantMap HistoryInspectionLayout::prepareContent(const HistoryInspectionGeometry& geometry) {
+  QVariantMap HistoryInspectionLayout::prepareContent(const application::history::HistoryInspectionGeometry& geometry) {
     const auto command = input_.value(QStringLiteral("command")).toString().toUtf8();
     const auto output = input_.value(QStringLiteral("output")).toString().toUtf8();
     const auto heading = input_.value(QStringLiteral("heading")).toString().toUtf8();
     const auto records = input_.value(QStringLiteral("facts")).toList();
-    std::array<QByteArray, HistoryInspectionFacts::count> texts;
-    std::array<QByteArray, HistoryInspectionFacts::count> labels;
-    std::array<HistoryInspectionLine, HistoryInspectionFacts::count> facts;
+    std::array<QByteArray, application::history::HistoryInspectionFacts::count> texts;
+    std::array<QByteArray, application::history::HistoryInspectionFacts::count> labels;
+    std::array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::count> facts;
     const auto fact_count = std::min(facts.size(), static_cast<std::size_t>(records.size()));
 
     for (std::size_t index = 0; index < fact_count; ++index) {
@@ -164,10 +162,10 @@ namespace telar::gui::qt {
 
       texts[index] = record.value(QStringLiteral("text")).toString().toUtf8();
       labels[index] = record.value(QStringLiteral("label")).toString().toUtf8();
-      facts[index] = {.kind = HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
+      facts[index] = {.kind = application::history::HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
     }
 
-    HistoryInspectionLines lines{{.command = bytes(command), .facts = std::span{facts}.first(fact_count), .heading = bytes(heading), .output = bytes(output)}, geometry.columns};
+    application::history::HistoryInspectionLines lines{{.command = bytes(command), .facts = std::span{facts}.first(fact_count), .heading = bytes(heading), .output = bytes(output)}, geometry.columns};
     const auto total = lines.count();
     const auto maximum_scroll = static_cast<int>(total - std::min(total, static_cast<std::uint32_t>(geometry.rows)));
     const auto next_scroll = std::min(scroll_, maximum_scroll);
@@ -199,8 +197,8 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantList HistoryInspectionLayout::prepareButtons(const HistoryInspectionGeometry& geometry, ChromeMetrics chrome) {
-    std::array<float, HistoryInspectionGeometry::maximum_actions> measured{};
+  QVariantList HistoryInspectionLayout::prepareButtons(const application::history::HistoryInspectionGeometry& geometry, ChromeMetrics chrome) {
+    std::array<float, application::history::HistoryInspectionGeometry::maximum_actions> measured{};
     const auto action_count = std::min(measured.size(), static_cast<std::size_t>(advances_.size()));
 
     for (std::size_t index = 0; index < action_count; ++index) {
@@ -217,23 +215,23 @@ namespace telar::gui::qt {
     return buttons;
   }
 
-  std::size_t HistoryInspectionLayout::hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const {
+  std::size_t HistoryInspectionLayout::hoverTargets(std::uint64_t generation, std::span<application::history::HistoryHoverTarget> destination) const {
     if (!isVisible() || window() == nullptr) {
       return 0;
     }
 
-    constexpr std::array actions{HistoryInspectionAction::submit, HistoryInspectionAction::alternate, HistoryInspectionAction::copy, HistoryInspectionAction::erase, HistoryInspectionAction::visit};
+    constexpr std::array actions{application::history::HistoryInspectionAction::submit, application::history::HistoryInspectionAction::alternate, application::history::HistoryInspectionAction::copy, application::history::HistoryInspectionAction::erase, application::history::HistoryInspectionAction::visit};
     std::size_t count = 0;
 
     for (std::size_t index = 0; index < actions.size() && count < destination.size(); ++index) {
       const auto action = actions[index];
-      if (button_bounds_[index].empty() || (action == HistoryInspectionAction::visit && (!pane_open_ || !ready_))) {
+      if (button_bounds_[index].empty() || (action == application::history::HistoryInspectionAction::visit && (!pane_open_ || !ready_))) {
         continue;
       }
 
       const auto bounds = mapRectToScene(logical(button_bounds_[index]));
 
-      destination[count++] = {.identity = {.action = HistoryInspectionIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
+      destination[count++] = {.identity = {.action = application::history::HistoryInspectionIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
     }
 
     return count;
@@ -247,13 +245,13 @@ namespace telar::gui::qt {
 
     density_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
     const auto chrome = metrics(ratio);
-    const auto geometry = HistoryInspectionGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, {.x = physical(input_.value(QStringLiteral("cellWidth"))), .y = physical(input_.value(QStringLiteral("cellHeight")))});
+    const auto geometry = application::history::HistoryInspectionGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, {.x = physical(input_.value(QStringLiteral("cellWidth"))), .y = physical(input_.value(QStringLiteral("cellHeight")))});
 
     layout_ = prepareContent(geometry);
     layout_.insert(QStringLiteral("buttons"), prepareButtons(geometry, chrome));
-    layout_.insert(QStringLiteral("buttonRadius"), HistoryInspectionGeometry::button_radius * ratio);
-    layout_.insert(QStringLiteral("disabledAlpha"), HistoryInspectionGeometry::disabled_alpha);
-    layout_.insert(QStringLiteral("pressedAlpha"), HistoryInspectionGeometry::pressed_alpha);
+    layout_.insert(QStringLiteral("buttonRadius"), application::history::HistoryInspectionGeometry::button_radius * ratio);
+    layout_.insert(QStringLiteral("disabledAlpha"), application::history::HistoryInspectionGeometry::disabled_alpha);
+    layout_.insert(QStringLiteral("pressedAlpha"), application::history::HistoryInspectionGeometry::pressed_alpha);
     emit layoutChanged();
   }
 

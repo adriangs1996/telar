@@ -12,6 +12,7 @@ import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.model;
+import telar.gui.features.history;
 import telar.gui.input.configuration;
 import telar.gui.transport.runtime_link;
 import telar.wire.pane_io;
@@ -27,7 +28,7 @@ namespace {
 
   bool acceptsHistory(std::string_view text, bool bracketed_paste) {
     try {
-      telar::gui::HistoryText::validate(text, bracketed_paste);
+      telar::gui::features::history::HistoryText::validate(text, bracketed_paste);
 
       return true;
     } catch (const telar::EncodingError&) {
@@ -67,7 +68,7 @@ namespace {
     require(acceptsHistory("printf 'café 🌱'", false), "printable Unicode must retain its exact UTF-8 bytes");
     require(acceptsHistory("printf '\xc2\xa0'", false), "nonbreaking space must not be confused with C1 controls");
     require(!acceptsHistory({}, true), "empty history commands must be rejected");
-    std::string bounded(telar::gui::HistoryText::maximum_bytes, 'a');
+    std::string bounded(telar::gui::features::history::HistoryText::maximum_bytes, 'a');
 
     require(acceptsHistory(bounded, true), "maximum-size captured commands must be accepted");
     bounded.push_back('a');

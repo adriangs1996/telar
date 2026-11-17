@@ -22,9 +22,8 @@ static_assert(true);
 #include <limits>
 #include <string_view>
 
-import telar.gui.presentation.history_meta_geometry;
-import telar.gui.presentation.display_metrics;
 import telar.gui.foundation.text;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -87,17 +86,17 @@ namespace telar::gui::qt {
         {QStringLiteral("provider"), logical(geometry_.provider)},
         {QStringLiteral("cwd"), logical(geometry_.cwd)},
         {QStringLiteral("time"), logical(geometry_.time)},
-        {QStringLiteral("radius"), HistoryRowGeometry::corner_radius * ratio_},
+        {QStringLiteral("radius"), application::history::HistoryRowGeometry::corner_radius * ratio_},
         {QStringLiteral("stroke"), ratio_},
-        {QStringLiteral("providerRadius"), HistoryRowGeometry::provider_radius * ratio_},
-        {QStringLiteral("selectionTintAlpha"), HistoryRowGeometry::selection_tint_alpha},
-        {QStringLiteral("selectionRingAlpha"), HistoryRowGeometry::selection_ring_alpha},
-        {QStringLiteral("hoverAlpha"), HistoryRowGeometry::hover_alpha},
-        {QStringLiteral("cwdAlpha"), HistoryRowGeometry::cwd_alpha},
+        {QStringLiteral("providerRadius"), application::history::HistoryRowGeometry::provider_radius * ratio_},
+        {QStringLiteral("selectionTintAlpha"), application::history::HistoryRowGeometry::selection_tint_alpha},
+        {QStringLiteral("selectionRingAlpha"), application::history::HistoryRowGeometry::selection_ring_alpha},
+        {QStringLiteral("hoverAlpha"), application::history::HistoryRowGeometry::hover_alpha},
+        {QStringLiteral("cwdAlpha"), application::history::HistoryRowGeometry::cwd_alpha},
         {QStringLiteral("cardHeight"), card_.height / density_},
         {QStringLiteral("meta"), logical(card_.meta)},
         {QStringLiteral("more"), card_.more},
-        {QStringLiteral("moreBound"), HistoryCard::more_bound},
+        {QStringLiteral("moreBound"), application::history::HistoryCard::more_bound},
     };
   }
 
@@ -114,7 +113,7 @@ namespace telar::gui::qt {
 
   QVariantMap HistoryRowLayout::commandLine(std::string_view text, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const {
     const auto needed = static_cast<float>(cellTextColumns(text)) * cell_width_;
-    const auto line = HistoryCommandLine::derive(bounds, {.needed = needed, .cell_width = cell_width_, .continues = continues});
+    const auto line = application::history::HistoryCommandLine::derive(bounds, {.needed = needed, .cell_width = cell_width_, .continues = continues});
     QVariantList matches;
     auto record = [&](Rect area, std::string_view cluster) {
       matches.append(QVariantMap{
@@ -152,7 +151,7 @@ namespace telar::gui::qt {
     for (std::uint16_t index = 0; index < card_.shown; ++index) {
       const Rect area{.x = geometry_.command.x, .y = card_.text_y + (static_cast<float>(index) * cell_height_), .width = geometry_.command.width, .height = cell_height_};
 
-      result.append(commandLine(HistoryCard::line(command, card_.lines[index]), area, false, highlight));
+      result.append(commandLine(application::history::HistoryCard::line(command, card_.lines[index]), area, false, highlight));
     }
 
     return result;
@@ -198,7 +197,7 @@ namespace telar::gui::qt {
     const auto cell_width = std::max(1.0F, std::round(advance(QStringLiteral("cellWidth"))));
     const auto cell_height = std::max(1.0F, std::round(advance(QStringLiteral("cellHeight"))));
     const auto command_width = static_cast<float>(first_line_columns_) * cell_width;
-    const HistoryRowMeasurements measured{
+    const application::history::HistoryRowMeasurements measured{
         .command = command_width,
         .cwd = advance(QStringLiteral("cwd")),
         .time = advance(QStringLiteral("time")),
@@ -210,7 +209,7 @@ namespace telar::gui::qt {
     };
 
     const auto row_height = advance(QStringLiteral("rowHeight"));
-    const auto geometry = HistoryRowGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, row_height, measured);
+    const auto geometry = application::history::HistoryRowGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, row_height, measured);
     if (geometry != geometry_ || density != density_ || ratio != ratio_ || command_width != command_width_ || measurements_dirty_) {
       const auto previous_geometry = geometryState();
 
@@ -221,14 +220,14 @@ namespace telar::gui::qt {
       cell_width_ = cell_width;
       cell_height_ = cell_height;
       expanded_ = measured.expanded;
-      card_ = expanded_ ? HistoryCard::measure(geometry_, chrome, {.cell_width = cell_width, .cell_height = cell_height, .row_height = row_height, .viewport_height = advance(QStringLiteral("viewportHeight"))}, {command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())}) : HistoryCard{};
+      card_ = expanded_ ? application::history::HistoryCard::measure(geometry_, chrome, {.cell_width = cell_width, .cell_height = cell_height, .row_height = row_height, .viewport_height = advance(QStringLiteral("viewportHeight"))}, {command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())}) : application::history::HistoryCard{};
       if (expanded_) {
         const auto raw_open = measurements_.value(QStringLiteral("open"), 1).toFloat();
         const auto open = std::isfinite(raw_open) ? std::clamp(raw_open, 0.0F, 1.0F) : 0.0F;
         const auto delta = std::max(0.0F, card_.intrinsic_height - row_height) * open;
         const auto opened = std::round(row_height + delta);
         const auto viewport_height = advance(QStringLiteral("viewportHeight"));
-        const auto tallest = std::max(row_height, viewport_height - chrome.px(HistoryCard::viewport_clearance));
+        const auto tallest = std::max(row_height, viewport_height - chrome.px(application::history::HistoryCard::viewport_clearance));
 
         card_.height = viewport_height > 0 ? std::min(tallest, opened) : opened;
       }

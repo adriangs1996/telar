@@ -141,12 +141,10 @@ import telar.gui.tests.json_fixture;
 import telar.gui.application;
 import telar.gui.components.configuration;
 import telar.gui.graphics.placeholder;
-import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection;
 import telar.base.text.json;
 import telar.base.text.utf8;
@@ -3408,8 +3406,8 @@ return {api_version=2, client={keybindings={
         clipboard->setMimeData(saved.release());
       });
 
-      QTRY_VERIFY_WITH_TIMEOUT(test::HistoryPresentation::actionCenter(*client_, HistoryCardAction::copy).has_value(), runtime_wait_ms);
-      const auto copy_position = test::HistoryPresentation::actionCenter(*client_, HistoryCardAction::copy);
+      QTRY_VERIFY_WITH_TIMEOUT(test::HistoryPresentation::actionCenter(*client_, application::history::HistoryCardAction::copy).has_value(), runtime_wait_ms);
+      const auto copy_position = test::HistoryPresentation::actionCenter(*client_, application::history::HistoryCardAction::copy);
 
       QVERIFY(copy_position.has_value());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, copy_position->toPoint());
@@ -4176,7 +4174,7 @@ return {api_version=2, client={keybindings={
       seedHistoryPages();
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_BROWSER_PAGE"));
-      constexpr auto page_entries = static_cast<int>(HistoryBrowser<telar::Memory>::page_entries);
+      constexpr auto page_entries = static_cast<int>(application::history::HistoryLimits::page_entries);
 
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == page_entries, runtime_wait_ms);
       QVERIFY(client_->history()->state().value(QStringLiteral("canOlder")).toBool());
@@ -4271,7 +4269,7 @@ return {api_version=2, client={keybindings={
       client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("cwd")}});
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QCOMPARE(client_->history()->state().value(QStringLiteral("effectiveScope")).toString(), QStringLiteral("cwd"));
-      QCOMPARE(client_->history()->state().value(QStringLiteral("scopeValue")).toString(), toQString(HistoryPath::compact(std::string_view{firstPane()->cwd}).view()));
+      QCOMPARE(client_->history()->state().value(QStringLiteral("scopeValue")).toString(), toQString(application::history::HistoryPath::compact(std::string_view{firstPane()->cwd}).view()));
       const auto revision = client_->history()->state().value(QStringLiteral("revision"));
       const QTemporaryDir changed_directory;
 
@@ -4281,7 +4279,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(!changed_path.isEmpty());
       change_directory(changed_path);
       QTRY_VERIFY2_WITH_TIMEOUT(toQString(firstPane()->cwd) == changed_path, qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("scopeValue")).toString(), toQString(HistoryPath::compact(std::string_view{firstPane()->cwd}).view()), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("scopeValue")).toString(), toQString(application::history::HistoryPath::compact(std::string_view{firstPane()->cwd}).view()), runtime_wait_ms);
       QCOMPARE(client_->history()->state().value(QStringLiteral("revision")), revision);
       client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("global")}});
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
@@ -4666,7 +4664,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyWheelStopsAtPageAdmission() {
-      constexpr auto page_count = HistoryBrowser<telar::Memory>::page_entries;
+      constexpr auto page_count = application::history::HistoryLimits::page_entries;
       constexpr auto entry_count = page_count + 2;
       std::array<std::string, entry_count> commands;
       std::array<telar::ImportHistoryEntry, entry_count> entries{};
@@ -4805,7 +4803,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyEqualSizedReplyUpdatesPendingDelegates() {
-      constexpr auto entry_count = HistoryBrowser<telar::Memory>::page_entries;
+      constexpr auto entry_count = application::history::HistoryLimits::page_entries;
       std::array<std::string, entry_count> commands;
       std::array<telar::ImportHistoryEntry, entry_count> entries{};
 
@@ -4931,7 +4929,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyLongCommands() {
-      using Storage = HistoryPageStorage<ApplicationAllocator>;
+      using Storage = application::history::HistoryLimits;
       constexpr std::size_t command_bytes = std::size_t{48} * 1024;
       constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
       constexpr auto entry_count = cached_entries + 1;
@@ -4986,7 +4984,7 @@ return {api_version=2, client={keybindings={
       }
 
       QCOMPARE(card->property("commandText").toString(), toQString(*expected));
-      QTRY_COMPARE_WITH_TIMEOUT(card->property("layout").toMap().value(QStringLiteral("more")).toInt(), static_cast<int>(HistoryCard::more_bound), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(card->property("layout").toMap().value(QStringLiteral("more")).toInt(), static_cast<int>(application::history::HistoryCard::more_bound), runtime_wait_ms);
       const auto* results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
       if (results == nullptr) {
         QFAIL("Required history results viewport is missing");
@@ -8302,7 +8300,7 @@ return {api_version=2, client={keybindings={
     }
 
     void seedHistoryPages() {
-      constexpr auto entry_count = HistoryBrowser<telar::Memory>::page_entries + 1;
+      constexpr auto entry_count = application::history::HistoryLimits::page_entries + 1;
       std::array<std::string, entry_count> commands;
       std::array<telar::ImportHistoryEntry, entry_count> entries{};
 

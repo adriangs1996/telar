@@ -1,6 +1,7 @@
 telar_add_domain(gui application
   SOURCES
     application-configuration.cpp
+    application-history.cpp
     application-host_effects.cpp
     application-palette.cpp
     application-paths.cpp
@@ -19,5 +20,5 @@ telar_add_domain(gui application
     application-sound_playback.cpp
     application-workspace_replica.cpp
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
-       foundation/keys foundation/model foundation/agents features/peek features/palette features/paths core history layout
+       foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history core layout
        text prompt links input presentation graphics components config)

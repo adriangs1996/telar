@@ -26,22 +26,19 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 
-import telar.gui.presentation.history_pointer;
-import telar.gui.history.browser;
-import telar.gui.presentation.history_filter_geometry;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
   namespace {
 
-    QString actionName(HistoryCardAction action) {
+    QString actionName(application::history::HistoryCardAction action) {
       switch (action) {
-      case HistoryCardAction::copy:
+      case application::history::HistoryCardAction::copy:
         return QStringLiteral("copy");
-      case HistoryCardAction::erase:
+      case application::history::HistoryCardAction::erase:
         return QStringLiteral("erase");
-      case HistoryCardAction::visit:
+      case application::history::HistoryCardAction::visit:
         return QStringLiteral("visit");
       }
 
@@ -97,8 +94,8 @@ namespace telar::gui::qt {
     const auto provider = record.value(QStringLiteral("provider")).toString().toUtf8();
     const auto duration = record.value(QStringLiteral("duration")).toString().toUtf8();
     const auto age = record.value(QStringLiteral("age")).toString().toUtf8();
-    const auto style = input_.value(QStringLiteral("macStyle")).toBool() ? HistoryKeyStyle::mac : HistoryKeyStyle::pc;
-    const HistoryFactData data{
+    const auto style = input_.value(QStringLiteral("macStyle")).toBool() ? application::history::HistoryKeyStyle::mac : application::history::HistoryKeyStyle::pc;
+    const application::history::HistoryFactData data{
         .directory = metaBytes(directory),
         .provider = metaBytes(provider),
         .duration = metaBytes(duration),
@@ -106,7 +103,7 @@ namespace telar::gui::qt {
         .exit_code = record.contains(QStringLiteral("exitCode")) ? std::optional{record.value(QStringLiteral("exitCode")).toInt()} : std::nullopt,
         .status = static_cast<HistoryStatus>(record.value(QStringLiteral("status")).toInt()),
         .key_style = style,
-        .more = static_cast<std::uint16_t>(std::clamp(input_.value(QStringLiteral("more")).toInt(), 0, static_cast<int>(HistoryCard::more_bound))),
+        .more = static_cast<std::uint16_t>(std::clamp(input_.value(QStringLiteral("more")).toInt(), 0, static_cast<int>(application::history::HistoryCard::more_bound))),
         .truncated = record.value(QStringLiteral("truncated")).toBool(),
         .loaded = input_.value(QStringLiteral("loaded"), true).toBool(),
         .show_directory = input_.value(QStringLiteral("showDirectory"), true).toBool(),
@@ -122,9 +119,9 @@ namespace telar::gui::qt {
       });
     };
 
-    HistoryFacts::visit(data, append);
+    application::history::HistoryFacts::visit(data, append);
     actions_.clear();
-    for (const auto label : HistoryActions::labels(style)) {
+    for (const auto label : application::history::HistoryActions::labels(style)) {
       actions_.append(QVariantMap{
           {QStringLiteral("key"), QString::fromUtf8(label.key.data(), static_cast<qsizetype>(label.key.size()))},
           {QStringLiteral("word"), QString::fromUtf8(label.word.data(), static_cast<qsizetype>(label.word.size()))},
@@ -160,20 +157,20 @@ namespace telar::gui::qt {
     return result;
   }
 
-  HistoryActionSurface HistoryMetaLayout::actionSurface(std::uint64_t generation) const {
-    HistoryActionSurface result{.generation = generation, .scale = density_};
+  application::history::HistoryActionSurface HistoryMetaLayout::actionSurface(std::uint64_t generation) const {
+    application::history::HistoryActionSurface result{.generation = generation, .scale = density_};
     bool valid_revision = false;
     const auto revision = input_.value(QStringLiteral("revision")).toString().toULongLong(&valid_revision);
     const auto index = input_.value(QStringLiteral("historyIndex"), -1).toInt();
     if (valid_revision && index >= 0) {
-      result.choice = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = revision};
+      result.choice = application::history::HistoryChoice{.index = static_cast<std::size_t>(index), .revision = revision};
     }
 
     if (!isVisible() || window() == nullptr) {
       return result;
     }
 
-    const auto labels = HistoryActions::labels(HistoryKeyStyle::pc);
+    const auto labels = application::history::HistoryActions::labels(application::history::HistoryKeyStyle::pc);
 
     for (std::size_t index = 0; index < geometry_.action_count; ++index) {
       auto bounds = mapRectToScene(logical(geometry_.actions[index].bounds));
@@ -212,9 +209,9 @@ namespace telar::gui::qt {
 
     const auto facts = measurements_.value(QStringLiteral("facts")).toList();
     const auto actions = measurements_.value(QStringLiteral("actions")).toList();
-    HistoryMetaMeasurements measured;
+    application::history::HistoryMetaMeasurements measured;
 
-    measured.fact_count = std::min(static_cast<std::size_t>(facts_.size()), HistoryFacts::capacity);
+    measured.fact_count = std::min(static_cast<std::size_t>(facts_.size()), application::history::HistoryFacts::capacity);
     measured.selected = input_.value(QStringLiteral("selected"), true).toBool();
     measured.pane_open = input_.value(QStringLiteral("paneOpen")).toBool();
     for (std::size_t index = 0; index < measured.fact_count; ++index) {
@@ -227,7 +224,7 @@ namespace telar::gui::qt {
       measured.actions[index] = {.key = advance(value.value(QStringLiteral("key"))), .word = advance(value.value(QStringLiteral("word")))};
     }
 
-    geometry_ = HistoryMetaGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
+    geometry_ = application::history::HistoryMetaGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
     emit layoutChanged();
   }
 

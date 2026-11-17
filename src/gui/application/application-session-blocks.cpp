@@ -4,7 +4,6 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.graphics.texture_cache;
-import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.config.client;
 import telar.config.runtime;

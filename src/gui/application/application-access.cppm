@@ -8,6 +8,7 @@ import :session;
 import telar.gui.prompt.line;
 import telar.gui.features.palette;
 import telar.gui.features.paths;
+import telar.gui.features.history;
 import telar.gui.features.peek;
 
 namespace telar::gui::application {
@@ -52,7 +53,35 @@ namespace telar::gui::application {
       return session.paths_;
     }
 
+    [[nodiscard]] static constexpr features::history::State& history(Session& session) noexcept {
+      return session.history_;
+    }
+
+    [[nodiscard]] static constexpr const features::history::State& history(const Session& session) noexcept {
+      return session.history_;
+    }
+
+    // ---- what the session keeps for every feature -------------------------------------------
+
+    [[nodiscard]] static constexpr Memory& memory(Session& session) noexcept {
+      return session.memory_;
+    }
+
+    [[nodiscard]] static constexpr String<Memory>& clipboard(Session& session) noexcept {
+      return session.clipboard_;
+    }
+
+    // The tab the session shows, by location, whether or not its record arrived.
+    [[nodiscard]] static constexpr const std::optional<TabLocation>& activeTab(const Session& session) noexcept {
+      return session.active_tab_;
+    }
+
     // ---- telar's command editor, until the prompt is a feature -----------------------------
+
+    // The editor's line of pane `pane_id`, made on first use as the keys make it.
+    [[nodiscard]] static prompt::Line& editorLine(Session& session, std::uint64_t pane_id) {
+      return session.lineEntry(pane_id).line;
+    }
 
     // The editor's line of pane `pane_id`, if it has one.
     [[nodiscard]] static prompt::Line* promptLine(Session& session, std::uint64_t pane_id) noexcept {

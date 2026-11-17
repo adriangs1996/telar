@@ -24,9 +24,8 @@ static_assert(true);
 #include <limits>
 #include <string_view>
 
-import telar.gui.history.browser;
+import telar.gui.application;
 import telar.gui.foundation.forms;
-import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 
@@ -55,9 +54,9 @@ namespace telar::gui::qt {
 
   QString HistoryEmptyLayout::action() const {
     switch (content_.action) {
-    case HistoryEmpty::Action::import:
+    case application::history::HistoryEmpty::Action::import:
       return QStringLiteral("import");
-    case HistoryEmpty::Action::everywhere:
+    case application::history::HistoryEmpty::Action::everywhere:
       return QStringLiteral("everywhere");
     default:
       return QStringLiteral("none");
@@ -91,7 +90,7 @@ namespace telar::gui::qt {
     const auto phase = state.value(QStringLiteral("phase")).toString();
     const auto scope = state.value(QStringLiteral("effectiveScope")).toString();
     const auto workspace = input_.value(QStringLiteral("workspace")).toString().toUtf8();
-    HistoryEmptyOptions options{
+    application::history::HistoryEmptyOptions options{
         .workspace = {workspace.constData(), static_cast<std::size_t>(workspace.size())},
         .page_offset = static_cast<std::uint32_t>(std::min(state.value(QStringLiteral("offset")).toULongLong(), qulonglong{std::numeric_limits<std::uint32_t>::max()})),
         .has_page = state.value(QStringLiteral("hasPage")).toBool(),
@@ -100,11 +99,11 @@ namespace telar::gui::qt {
     };
 
     if (phase == QStringLiteral("loading")) {
-      options.phase = HistoryPhase::loading;
+      options.phase = application::history::HistoryPhase::loading;
     } else if (phase == QStringLiteral("failed")) {
-      options.phase = HistoryPhase::failed;
+      options.phase = application::history::HistoryPhase::failed;
     } else if (phase == QStringLiteral("ready")) {
-      options.phase = HistoryPhase::ready;
+      options.phase = application::history::HistoryPhase::ready;
     }
 
     if (scope == QStringLiteral("workspace")) {
@@ -119,7 +118,7 @@ namespace telar::gui::qt {
       options.author = HistoryAuthorFilter::all;
     }
 
-    content_ = HistoryEmpty::derive(options);
+    content_ = application::history::HistoryEmpty::derive(options);
   }
 
   QVariantMap HistoryEmptyLayout::layout() const {
@@ -127,8 +126,8 @@ namespace telar::gui::qt {
         {QStringLiteral("title"), toQRectF(geometry_.title, density_)},
         {QStringLiteral("subtitle"), toQRectF(geometry_.subtitle, density_)},
         {QStringLiteral("action"), toQRectF(geometry_.action, density_)},
-        {QStringLiteral("importInset"), HistoryEmptyGeometry::import_inset * ratio_},
-        {QStringLiteral("importRadius"), HistoryEmptyGeometry::import_radius * ratio_},
+        {QStringLiteral("importInset"), application::history::HistoryEmptyGeometry::import_inset * ratio_},
+        {QStringLiteral("importRadius"), application::history::HistoryEmptyGeometry::import_radius * ratio_},
         {QStringLiteral("buttonRadius"), FormButtonStyle::radius * ratio_},
         {QStringLiteral("disabledAlpha"), FormButtonStyle::disabled_alpha},
         {QStringLiteral("pressedAlpha"), FormButtonStyle::pressed_alpha},
@@ -158,9 +157,9 @@ namespace telar::gui::qt {
       return std::max(0.0F, static_cast<float>(measurements_.value(key).toDouble() * density_));
     };
 
-    const HistoryEmptyMeasurements measured{.title = advance(QStringLiteral("title")), .subtitle = advance(QStringLiteral("subtitle")), .import = advance(QStringLiteral("import")), .action = content_.action};
+    const application::history::HistoryEmptyMeasurements measured{.title = advance(QStringLiteral("title")), .subtitle = advance(QStringLiteral("subtitle")), .import = advance(QStringLiteral("import")), .action = content_.action};
 
-    geometry_ = HistoryEmptyGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
+    geometry_ = application::history::HistoryEmptyGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
     emit layoutChanged();
   }
 

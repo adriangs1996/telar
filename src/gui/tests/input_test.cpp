@@ -8,13 +8,12 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.gui.history.browser;
+import telar.gui.features.history;
 import telar.gui.input.copy_pointer;
 import telar.gui.foundation.actions;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
 import telar.gui.input.configuration;
-import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_filter_geometry;
 
 import telar.gui.config.gui_query;
@@ -174,18 +173,18 @@ namespace {
 
   void historyActionsRetainTheirChoice() {
     constexpr float extent = 10;
-    constexpr HistoryActionPosition position{.x = 5, .y = 5};
-    constexpr HistoryChoice original{.index = 0, .revision = std::numeric_limits<std::uint64_t>::max() - 1};
-    HistoryActionSurface surface{.generation = 1, .choice = original};
+    constexpr features::history::HistoryActionPosition position{.x = 5, .y = 5};
+    constexpr features::history::HistoryChoice original{.index = 0, .revision = std::numeric_limits<std::uint64_t>::max() - 1};
+    features::history::HistoryActionSurface surface{.generation = 1, .choice = original};
 
-    surface.targets[0] = {.action = HistoryCardAction::copy, .bounds = {.width = extent, .height = extent}, .enabled = true};
-    HistoryActionCapture capture;
+    surface.targets[0] = {.action = features::history::HistoryCardAction::copy, .bounds = {.width = extent, .height = extent}, .enabled = true};
+    features::history::HistoryActionCapture capture;
 
     require(capture.begin(surface, position, true), "a visible history action must consume its press");
     ++surface.choice->revision;
     require(!capture.release(surface, position), "replaced results must cancel a held action without an intermediate disabled frame");
     require(capture.begin(surface, position, true), "a new result must accept a fresh press");
-    require(capture.release(surface, position) == HistoryCardAction::copy, "a fresh press must act on the new result");
+    require(capture.release(surface, position) == features::history::HistoryCardAction::copy, "a fresh press must act on the new result");
 
     require(capture.begin(surface, position, true), "selection test must capture the action");
     ++surface.choice->index;

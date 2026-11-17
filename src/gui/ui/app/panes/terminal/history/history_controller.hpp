@@ -32,15 +32,10 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.foundation.core;
-import telar.gui.history.browser;
 import telar.gui.input.child_mouse;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.foundation.core;
 import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
-import telar.gui.presentation.history_inspection_geometry;
-import telar.gui.presentation.history_meta_geometry;
-import telar.gui.presentation.history_pointer;
 
 namespace telar::gui::test {
   struct HistoryPresentation;
@@ -91,24 +86,24 @@ namespace telar::gui::qt {
 
     // The choice a frame showed, so that an action from the pointer applies to what was seen.
     struct Presented {
-      HistoryChoice choice;
+      application::history::HistoryChoice choice;
       std::uint64_t dialog_generation = 0;
       bool enter_runs = false;
     };
 
     struct HoverFrame {
-      std::array<HistoryHoverTarget, HistoryBrowser<Memory>::page_entries + HistoryActions::count + HistoryFooter::capacity + history_filter_target_count + history_inspection_action_count> targets;
+      std::array<application::history::HistoryHoverTarget, application::history::HistoryLimits::page_entries + application::history::HistoryActions::count + application::history::HistoryFooter::capacity + application::history::history_filter_target_count + application::history::history_inspection_action_count> targets;
       std::size_t count = 0;
       std::uint64_t generation = 0;
       double scale = 1;
 
-      void append(HistoryHoverTarget target) {
+      void append(application::history::HistoryHoverTarget target) {
         if (count < targets.size() && !target.bounds.empty()) {
           targets[count++] = target;
         }
       }
 
-      [[nodiscard]] std::span<const HistoryHoverTarget> view() const noexcept {
+      [[nodiscard]] std::span<const application::history::HistoryHoverTarget> view() const noexcept {
         return std::span{targets}.first(count);
       }
     };
@@ -117,7 +112,7 @@ namespace telar::gui::qt {
     struct Frame {
       std::optional<Presented> history;
       HistoryScrollSurface surface;
-      HistoryActionSurface actions;
+      application::history::HistoryActionSurface actions;
       std::optional<HoverFrame> hover;
     };
 
@@ -136,7 +131,7 @@ namespace telar::gui::qt {
     // The active session is about to change: nothing the dialog holds belongs to the next one.
     void forget();
     void setWindow(QQuickWindow* window);
-    void setMetrics(const HistoryModalMetrics& metrics);
+    void setMetrics(const application::history::HistoryModalMetrics& metrics);
     // Rebuilds what QML reads when an input it depends on moved since the last call. The window
     // calls it on every flush of the store, in the order its projections depend on each other.
     void synchronize();
@@ -145,13 +140,13 @@ namespace telar::gui::qt {
     // Runs while the GUI thread is blocked in the scene graph's synchronization.
     void prepare(Frame& frame) const;
     void present(const Frame& frame);
-    [[nodiscard]] const HistoryActionSurface& presentedActions() const noexcept;
+    [[nodiscard]] const application::history::HistoryActionSurface& presentedActions() const noexcept;
     // Whether the focused pane's prompt line hosts the search and scrolls its own rows.
     [[nodiscard]] bool hosted() const;
     bool handleWheel(QWheelEvent& event);
     void scroll(HistoryScrollPosition pointer, ScrollSample sample);
-    void activate(HistoryCardAction action, HistoryChoice choice);
-    void observeHover(QPointF position, HistoryHover::Observation observation);
+    void activate(application::history::HistoryCardAction action, application::history::HistoryChoice choice);
+    void observeHover(QPointF position, application::history::HistoryHover::Observation observation);
     void retireHover();
 
     [[nodiscard]] QAbstractItemModel* rows() noexcept;
@@ -229,7 +224,7 @@ namespace telar::gui::qt {
     // Whether a search is pending or loading now; actions refuse to run while it is.
     [[nodiscard]] bool busy() const;
     [[nodiscard]] const Presented* presented(const QString& revision) const;
-    [[nodiscard]] HistoryActionSurface actionSurface() const;
+    [[nodiscard]] application::history::HistoryActionSurface actionSurface() const;
     [[nodiscard]] HistoryScrollSurface scrollSurface(HoverFrame& hover) const;
     void submit(std::uint64_t entry_id, bool alternate);
     void moveRows(std::int32_t steps);
@@ -249,7 +244,7 @@ namespace telar::gui::qt {
     ListModel rows_;
     QTimer search_timer_;
     QString query_;
-    HistoryFilters filters_;
+    application::history::HistoryFilters filters_;
     std::uint64_t search_version_ = 0;
     CalendarSample calendar_;
     std::optional<Inputs> synchronized_;
@@ -260,7 +255,7 @@ namespace telar::gui::qt {
     QString output_;
     QByteArray directory_source_;
     QString directory_value_;
-    HistoryModalMetrics metrics_;
+    application::history::HistoryModalMetrics metrics_;
     QPointer<QQuickWindow> window_;
     HistoryScroll scroll_;
     ScrollEventSequence wheel_sequence_;
@@ -274,9 +269,9 @@ namespace telar::gui::qt {
     QPointer<QQuickItem> inspector_;
     std::optional<Presented> presented_;
     HistoryScrollSurface presented_surface_;
-    HistoryActionSurface presented_actions_;
+    application::history::HistoryActionSurface presented_actions_;
     std::optional<HoverFrame> presented_hover_;
-    HistoryHover hover_;
+    application::history::HistoryHover hover_;
     std::optional<std::uint64_t> hover_revision_value_;
     QString hover_revision_;
   };

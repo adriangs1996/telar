@@ -20,10 +20,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.history.browser;
-import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.history_inspection;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -44,7 +41,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap layout() const;
     [[nodiscard]] int scroll() const;
     void setScroll(int scroll);
-    [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const;
+    [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<application::history::HistoryHoverTarget> destination) const;
 
   signals:
     void inputChanged();
@@ -63,15 +60,15 @@ namespace telar::gui::qt {
     [[nodiscard]] QRectF logical(Rect area) const noexcept;
     [[nodiscard]] float physical(const QVariant& value) const;
     [[nodiscard]] ChromeMetrics metrics(qreal ratio) const;
-    [[nodiscard]] QVariantMap projectLine(const HistoryInspectionLine& line, const HistoryInspectionGeometry& geometry, std::uint16_t index) const;
-    [[nodiscard]] QVariantMap prepareContent(const HistoryInspectionGeometry& geometry);
-    [[nodiscard]] QVariantList prepareButtons(const HistoryInspectionGeometry& geometry, ChromeMetrics chrome);
+    [[nodiscard]] QVariantMap projectLine(const application::history::HistoryInspectionLine& line, const application::history::HistoryInspectionGeometry& geometry, std::uint16_t index) const;
+    [[nodiscard]] QVariantMap prepareContent(const application::history::HistoryInspectionGeometry& geometry);
+    [[nodiscard]] QVariantList prepareButtons(const application::history::HistoryInspectionGeometry& geometry, ChromeMetrics chrome);
 
     QVariantMap input_;
     QVariantList advances_;
     QVariantMap layout_;
-    std::array<Rect, HistoryInspectionGeometry::maximum_actions> button_bounds_{};
-    HistoryChoice choice_;
+    std::array<Rect, application::history::HistoryInspectionGeometry::maximum_actions> button_bounds_{};
+    application::history::HistoryChoice choice_;
     bool pane_open_ = false;
     bool ready_ = false;
     qreal density_ = 1;

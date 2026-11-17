@@ -17,7 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -50,7 +50,7 @@ namespace telar::gui::qt {
     // The window's own density, or 1 before it has a window.
     [[nodiscard]] qreal density() const;
     [[nodiscard]] DisplayMetrics metrics(qreal density) const;
-    [[nodiscard]] HistoryModalMetrics historyMetrics() const;
+    [[nodiscard]] application::history::HistoryModalMetrics historyMetrics() const;
     [[nodiscard]] const CellMetrics& cell() const noexcept;
     [[nodiscard]] const TerminalGrid& grid() const noexcept;
     [[nodiscard]] ResolvedFont resolveFont(qreal scale);

@@ -16,8 +16,8 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_meta_geometry;
 import telar.gui.foundation.forms;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -71,7 +71,7 @@ namespace telar::gui::qt {
 
   private:
     struct GeometryState {
-      HistoryRowGeometry row;
+      application::history::HistoryRowGeometry row;
       qreal density = 1;
       qreal ratio = 1;
       float card_height = 0;
@@ -93,8 +93,8 @@ namespace telar::gui::qt {
     QString query_;
     QByteArray query_bytes_;
     QByteArray command_bytes_;
-    HistoryRowGeometry geometry_;
-    HistoryCard card_;
+    application::history::HistoryRowGeometry geometry_;
+    application::history::HistoryCard card_;
     qreal density_ = 1;
     qreal ratio_ = 1;
     float command_width_ = 0;

@@ -68,10 +68,8 @@ static_assert(true);
 #include "tbc/view.hpp"
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_pointer;
 import telar.gui.application;
 import telar.gui.prompt.line;
-import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::test {
   struct HistoryPresentation;

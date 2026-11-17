@@ -21,7 +21,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.input.child_mouse;
-import telar.gui.presentation.history_pointer;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -48,7 +48,7 @@ namespace telar::gui::qt {
     PointerDispatcher(PointerDispatcher&&) = delete;
     PointerDispatcher& operator=(PointerDispatcher&&) = delete;
     void setWindow(QQuickWindow& window);
-    void presentHistoryActions(const HistoryActionSurface& surface);
+    void presentHistoryActions(const application::history::HistoryActionSurface& surface);
     void ungrab(TerminalItem& terminal);
     bool eventFilter(QObject* watched, QEvent* event) override;
     bool handleNativeScroll(std::string_view event_type, const void* message);
@@ -58,7 +58,7 @@ namespace telar::gui::qt {
 
   private:
     // The history actions a press holds, by button; the terminals hold theirs in their controller.
-    [[nodiscard]] HistoryActionCapture* capture(Qt::MouseButton button) noexcept;
+    [[nodiscard]] application::history::HistoryActionCapture* capture(Qt::MouseButton button) noexcept;
     [[nodiscard]] bool occupied() const noexcept;
     void cancel();
     bool press(QMouseEvent& event);
@@ -75,7 +75,7 @@ namespace telar::gui::qt {
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;
-    std::array<HistoryActionCapture, static_cast<std::size_t>(MouseButton::none)> captures_;
+    std::array<application::history::HistoryActionCapture, static_cast<std::size_t>(MouseButton::none)> captures_;
     bool delivering_ = false;
     bool handing_off_ = false;
   };

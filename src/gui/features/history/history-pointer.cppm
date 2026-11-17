@@ -1,15 +1,19 @@
-export module telar.gui.presentation.history_pointer;
+module;
+#include "tbc/annotations.hpp"
+
+// The pointer over the panel: scrolling its list, pressing its actions and what it hovers.
+export module telar.gui.features.history:pointer;
 
 import std;
 
+import :entry;
+import :filters;
+import :cards;
 import telar.gui.foundation.core;
-import telar.gui.history.browser;
-import telar.gui.presentation.history_filter_geometry;
-import telar.gui.presentation.history_meta_geometry;
 
 // Interface: input/history_action_capture.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::history {
 
     struct HistoryActionPosition {
       double x = 0;
@@ -53,7 +57,7 @@ export {
 
 // Interface: input/history_hover.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::history {
 
     enum class HistoryFilterAction : std::uint8_t {
       global,

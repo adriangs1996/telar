@@ -17,9 +17,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.history.browser;
-import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -41,7 +39,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList hints() const;
     [[nodiscard]] QString range() const;
     [[nodiscard]] QVariantMap layout() const;
-    [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const;
+    [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<application::history::HistoryHoverTarget> destination) const;
 
   signals:
     void inputChanged();
@@ -63,9 +61,9 @@ namespace telar::gui::qt {
     QVariantMap measurements_;
     QVariantList hints_;
     QString range_;
-    HistoryFooterGeometry geometry_;
-    HistoryFooter footer_;
-    HistoryChoice choice_;
+    application::history::HistoryFooterGeometry geometry_;
+    application::history::HistoryFooter footer_;
+    application::history::HistoryChoice choice_;
     qreal density_ = 1;
     qreal ratio_ = 1;
   };

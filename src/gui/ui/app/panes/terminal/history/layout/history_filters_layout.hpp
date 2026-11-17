@@ -17,8 +17,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -33,7 +32,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap layout READ layout NOTIFY layoutChanged)
 
   public:
-    static constexpr std::size_t target_count = history_filter_target_count;
+    static constexpr std::size_t target_count = application::history::history_filter_target_count;
 
     explicit HistoryFiltersLayout(QQuickItem* parent = nullptr);
     [[nodiscard]] QVariantMap input() const;
@@ -44,7 +43,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList authorChoices() const;
     [[nodiscard]] QStringList keyLabels() const;
     [[nodiscard]] QVariantMap layout() const;
-    [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const;
+    [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<application::history::HistoryHoverTarget> destination) const;
 
   signals:
     void inputChanged();
@@ -61,14 +60,14 @@ namespace telar::gui::qt {
   private:
     void prepareLabels();
     [[nodiscard]] QRectF logical(Rect area) const noexcept;
-    [[nodiscard]] QVariantMap chipRecord(const HistoryFilterChipGeometry& chip) const;
+    [[nodiscard]] QVariantMap chipRecord(const application::history::HistoryFilterChipGeometry& chip) const;
 
     QVariantMap input_;
     QVariantMap measurements_;
     QVariantList scope_choices_;
     QVariantList author_choices_;
     QStringList key_labels_;
-    HistoryFilterGeometry geometry_;
+    application::history::HistoryFilterGeometry geometry_;
     qreal density_ = 1;
     qreal ratio_ = 1;
   };

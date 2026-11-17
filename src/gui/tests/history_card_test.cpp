@@ -12,6 +12,7 @@ import telar.gui.foundation.core;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.foundation.forms;
 import telar.gui.foundation.text;
+import telar.gui.features.history;
 
 namespace {
 
@@ -99,14 +100,14 @@ namespace {
   void cardsBoundTheRemainingLineCount() {
     constexpr ChromeMetrics chrome;
     constexpr Rect bounds{.width = 800, .height = 34};
-    const auto row = HistoryRowGeometry::derive(bounds, chrome, bounds.height, {.expanded = true});
-    constexpr HistoryCardMetrics metrics{.cell_width = 8, .cell_height = 20, .row_height = bounds.height, .viewport_height = 800};
+    const auto row = features::history::HistoryRowGeometry::derive(bounds, chrome, bounds.height, {.expanded = true});
+    constexpr features::history::HistoryCardMetrics metrics{.cell_width = 8, .cell_height = 20, .row_height = bounds.height, .viewport_height = 800};
     constexpr std::size_t command_bytes = 100'000;
     const std::string command(command_bytes, '\n');
-    const auto card = HistoryCard::measure(row, chrome, metrics, command);
+    const auto card = features::history::HistoryCard::measure(row, chrome, metrics, command);
 
-    require(card.shown == HistoryCard::maximum_lines && card.more == HistoryCard::more_bound, "a long command must count only the visible lines and bounded remainder");
-    require(HistoryCard::line(command, card.lines.front()).data() == command.data(), "card lines must lie in the command they were measured over");
+    require(card.shown == features::history::HistoryCard::maximum_lines && card.more == features::history::HistoryCard::more_bound, "a long command must count only the visible lines and bounded remainder");
+    require(features::history::HistoryCard::line(command, card.lines.front()).data() == command.data(), "card lines must lie in the command they were measured over");
     require(card.meta.y >= card.text_y + (static_cast<float>(card.shown) * metrics.cell_height), "metadata must remain below the wrapped command");
     require(card.height <= metrics.viewport_height, "the selected card must remain inside the list viewport");
   }

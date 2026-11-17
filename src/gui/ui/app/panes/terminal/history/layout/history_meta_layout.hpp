@@ -13,8 +13,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -36,7 +35,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList facts() const;
     [[nodiscard]] QVariantList actions() const;
     [[nodiscard]] QVariantMap layout() const;
-    [[nodiscard]] HistoryActionSurface actionSurface(std::uint64_t generation) const;
+    [[nodiscard]] application::history::HistoryActionSurface actionSurface(std::uint64_t generation) const;
 
   signals:
     void inputChanged();
@@ -58,7 +57,7 @@ namespace telar::gui::qt {
     QVariantMap measurements_;
     QVariantList facts_;
     QVariantList actions_;
-    HistoryMetaGeometry geometry_;
+    application::history::HistoryMetaGeometry geometry_;
     qreal density_ = 1;
     qreal ratio_ = 1;
   };

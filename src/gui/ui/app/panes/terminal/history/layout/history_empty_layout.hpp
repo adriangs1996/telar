@@ -10,7 +10,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -54,8 +54,8 @@ namespace telar::gui::qt {
 
     QVariantMap input_;
     QVariantMap measurements_;
-    HistoryEmpty content_;
-    HistoryEmptyGeometry geometry_;
+    application::history::HistoryEmpty content_;
+    application::history::HistoryEmptyGeometry geometry_;
     qreal density_ = 1;
     qreal ratio_ = 1;
   };

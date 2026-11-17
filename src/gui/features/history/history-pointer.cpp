@@ -1,9 +1,10 @@
-module telar.gui.presentation.history_pointer;
+module telar.gui.features.history;
 
 import std;
-import telar.gui.presentation.history_meta_geometry;
 
-namespace telar::gui {
+import telar.gui.foundation.core;
+
+namespace telar::gui::features::history {
 
   bool HistoryActionTarget::contains(HistoryActionPosition position) const noexcept {
     return position.x >= bounds.x && position.y >= bounds.y && position.x < static_cast<double>(bounds.x) + bounds.width && position.y < static_cast<double>(bounds.y) + bounds.height;

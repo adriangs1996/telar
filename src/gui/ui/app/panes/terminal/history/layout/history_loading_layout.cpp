@@ -18,6 +18,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -45,7 +46,7 @@ namespace telar::gui::qt {
   }
 
   qreal HistoryLoadingLayout::rowsOpacity() const noexcept {
-    return cue_visible_ ? HistoryLoading::row_opacity : 1;
+    return cue_visible_ ? application::history::HistoryLoading::row_opacity : 1;
   }
 
   QRectF HistoryLoadingLayout::line() const noexcept {
@@ -81,7 +82,7 @@ namespace telar::gui::qt {
   }
 
   std::optional<std::uint64_t> HistoryLoadingLayout::deadline(std::uint64_t now_ns) const noexcept {
-    return cue_visible_ ? std::optional{ProgressAnimation::nextStep(now_ns, HistoryLoading::step_ns)} : cue_.deadline();
+    return cue_visible_ ? std::optional{ProgressAnimation::nextStep(now_ns, application::history::HistoryLoading::step_ns)} : cue_.deadline();
   }
 
   void HistoryLoadingLayout::sample(std::uint64_t now_ns) {
@@ -95,7 +96,7 @@ namespace telar::gui::qt {
 
     chrome.ratio = static_cast<float>(ratio_ * density);
     const Rect area{.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)};
-    const auto line = visible ? toQRectF(HistoryLoading::line(area, chrome, now_ns), density) : QRectF{};
+    const auto line = visible ? toQRectF(application::history::HistoryLoading::line(area, chrome, now_ns), density) : QRectF{};
     if (cue_visible_ != visible || line_ != line) {
       cue_visible_ = visible;
       line_ = line;

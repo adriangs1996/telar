@@ -2,23 +2,6 @@ export module telar.gui.input.configuration;
 
 import std;
 
-// Interface: input/history_text.cppm
-export {
-  namespace telar::gui {
-
-    class HistoryText {
-    public:
-      static constexpr std::size_t maximum_bytes = std::size_t{64} * 1024;
-
-      static void validate(std::string_view text, bool bracketed_paste);
-
-    private:
-      static bool isControl(std::string_view text, std::size_t index) noexcept;
-    };
-
-  }
-}
-
 // Interface: input/mouse_encoder.cppm
 export {
   namespace telar::gui {

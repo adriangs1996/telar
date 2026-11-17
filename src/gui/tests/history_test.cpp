@@ -12,9 +12,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.gui.foundation.core;
-import telar.gui.history.browser;
-import telar.gui.presentation.history_inspection_geometry;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.features.history;
 import telar.wire.history;
 import telar.wire.vocabulary;
 
@@ -22,6 +20,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::history;
 
   void require(bool condition, const char* message) {
     if (!condition) {
@@ -29,9 +28,79 @@ namespace {
     }
   }
 
+  // The feature's use cases under the names the browser's methods had, so each assertion reads as
+  // it did; every call goes through the feature's boundary, its reads through HistoryView.
+  struct BrowserState {
+    explicit BrowserState(telar::Memory& memory)
+        : history(memory) {}
+
+    State history;
+  };
+
+  class Browser : private BrowserState, public HistoryView {
+  public:
+    static constexpr auto page_entries = HistoryLimits::page_entries;
+    static constexpr auto maximum_requests = HistoryLimits::maximum_requests;
+    static constexpr auto maximum_command_bytes = HistoryLimits::maximum_command_bytes;
+    static constexpr auto maximum_output_bytes = HistoryLimits::maximum_output_bytes;
+
+    explicit Browser(telar::Memory& memory)
+        : BrowserState(memory),
+          HistoryView(view(history)) {}
+
+    Browser(const Browser&) = delete;
+    Browser& operator=(const Browser&) = delete;
+
+    QueryHistory begin(QueryHistory query) {
+      return search(history, query);
+    }
+
+    std::optional<QueryHistory> page(HistoryPage direction, std::uint64_t request_id) {
+      return features::history::page(history, direction, request_id);
+    }
+
+    QueryHistory refresh(std::uint64_t request_id) {
+      return features::history::refresh(history, request_id);
+    }
+
+    template <typename Message>
+    bool apply(const Message& message) {
+      return receive(history, message);
+    }
+
+    bool select(std::size_t index) {
+      return features::history::select(history, index);
+    }
+
+    void setInspecting(bool enabled) {
+      inspect(history, enabled);
+    }
+
+    std::optional<QueryHistory> readCommand(std::uint64_t request_id) {
+      return features::history::readCommand(history, request_id);
+    }
+
+    std::optional<ReadHistoryOutput> readOutput(std::uint64_t request_id) {
+      return features::history::readOutput(history, request_id);
+    }
+
+    DeleteHistory erase(std::uint64_t id, std::uint64_t request_id) {
+      return features::history::erase(history, id, request_id);
+    }
+
+    bool fail(std::uint64_t request_id, std::string_view message) {
+      return features::history::fail(history, request_id, message);
+    }
+
+    void suspend() noexcept {
+      features::history::suspend(history);
+    }
+  };
+
   void ownedSearchAndPages() {
     SystemAllocator memory;
-    HistoryBrowser browser{memory};
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
     std::string query = "compiler errors";
     std::string directory = "/work/project";
     const auto started = browser.begin({.request_id = 1, .query = query, .scope = HistoryScope::cwd, .scope_value = std::string_view{directory}, .author = HistoryAuthorFilter::human, .match = HistoryMatch::fuzzy});
@@ -66,7 +135,8 @@ namespace {
 
   void renderedChoicesNeverRetargetACommand() {
     SystemAllocator memory;
-    HistoryBrowser browser{memory};
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
 
     require(!browser.choice(), "an idle browser must not offer a command choice");
     const std::array entries{HistoryEntry{.id = 1, .command = "first"}, HistoryEntry{.id = 2, .command = "second"}};
@@ -121,7 +191,8 @@ namespace {
 
   void boundedRequestsAndStaleFailures() {
     SystemAllocator memory;
-    HistoryBrowser browser{memory};
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
     std::uint64_t sequence = 0;
 
     for (std::size_t index = 0; index < decltype(browser)::maximum_requests; ++index) {
@@ -151,7 +222,7 @@ namespace {
     telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser<telar::Memory> browser{adapter};
+      Browser browser{adapter};
 
       static_cast<void>(browser.begin({.request_id = 1}));
       const std::array initial{HistoryEntry{.id = 1, .pane_id = 1, .command = "retained"}};
@@ -187,7 +258,7 @@ namespace {
     telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser<telar::Memory> browser{adapter};
+      Browser browser{adapter};
 
       static_cast<void>(browser.begin({.request_id = 1}));
       const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "available"}};
@@ -222,7 +293,8 @@ namespace {
 
   void inspectionAndDeletion() {
     SystemAllocator memory;
-    HistoryBrowser browser{memory};
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
     std::uint64_t sequence = 0;
     const auto query = browser.begin({.request_id = ++sequence});
     const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "first"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "second"}};
@@ -268,9 +340,9 @@ namespace {
     telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser<telar::Memory> browser{adapter};
+      Browser browser{adapter};
       std::uint64_t sequence = 0;
-      using Storage = HistoryPageStorage<telar::Memory>;
+      using Storage = HistoryLimits;
       constexpr auto command_bytes = decltype(browser)::maximum_command_bytes;
       constexpr auto first_uncached = Storage::command_cache_bytes / command_bytes;
       const std::string large_command(command_bytes, 'x');
@@ -316,9 +388,10 @@ namespace {
 
   void selectedCommandFailures() {
     SystemAllocator memory;
-    HistoryBrowser browser{memory};
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
     std::uint64_t sequence = 0;
-    using Storage = HistoryPageStorage<decltype(memory)>;
+    using Storage = HistoryLimits;
     constexpr auto command_bytes = decltype(browser)::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     const std::string large_command(command_bytes, 'x');
@@ -355,21 +428,23 @@ namespace {
 
   void commandPreviewBoundaries() {
     SystemAllocator memory;
-    using Storage = HistoryPageStorage<decltype(memory)>;
+    using Storage = HistoryLimits;
     std::string command(Storage::command_preview_bytes - 1, 'x');
 
     command += "🌱tail";
     const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = command}};
-    const Storage page{memory, entries};
+    telar::MemoryAdapter adapted{memory};
+    Browser page{adapted};
 
+    static_cast<void>(page.begin({.request_id = 1}));
+    page.apply(HistoryResults{.request_id = 1, .entries = entries});
     require(page.rows().front().command.size() == Storage::command_preview_bytes - 1, "previews must stop before a split UTF-8 scalar");
-    require(page.command(0) == command, "preview truncation must preserve complete canonical command bytes");
+    require(page.command(1) == command, "preview truncation must preserve complete canonical command bytes");
   }
 
   void selectedCommandAllocationFailure() {
     SystemAllocator system;
-    using Storage = HistoryPageStorage<telar::Memory>;
-    using Browser = HistoryBrowser<telar::Memory>;
+    using Storage = HistoryLimits;
     constexpr auto command_bytes = Browser::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     constexpr auto allocation_budget = Storage::command_cache_bytes + (command_bytes / 2);
@@ -377,7 +452,7 @@ namespace {
     telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser<telar::Memory> browser{adapter};
+      Browser browser{adapter};
       const std::string command(command_bytes, 'x');
       std::array<HistoryEntry, cached_entries + 1> entries{};
 
@@ -406,32 +481,6 @@ namespace {
     }
 
     require(budget.liveBytes() == 0 && budget.failures() != 0, "detail failure must release all injected memory");
-  }
-
-  void pageAllocatorOwnership() {
-    SystemAllocator system;
-    constexpr std::size_t allocation_budget = std::size_t{4} * 1024;
-    BudgetAllocator first_memory{system, allocation_budget};
-    BudgetAllocator second_memory{system, allocation_budget};
-    telar::MemoryAdapter first_adapter{first_memory};
-    telar::MemoryAdapter second_adapter{second_memory};
-
-    {
-      const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "owned command"}};
-      HistoryPageStorage<telar::Memory> first{first_adapter, entries};
-      HistoryPageStorage<telar::Memory> second{second_adapter};
-      bool rejected = false;
-
-      try {
-        first.exchangeWith(second);
-      } catch (const std::invalid_argument&) {
-        rejected = true;
-      }
-
-      require(rejected && first.rows().size() == 1 && second.rows().empty(), "page swaps must reject different allocator instances before transferring ownership");
-    }
-
-    require(first_memory.liveBytes() == 0 && second_memory.liveBytes() == 0, "each page must release storage through its original allocator");
   }
 
   void plainTextFixtures() {
@@ -570,7 +619,6 @@ int main() {
     selectedCommandFailures();
     commandPreviewBoundaries();
     selectedCommandAllocationFailure();
-    pageAllocatorOwnership();
     plainTextFixtures();
     historyPanelPreservesTheSearchPosition();
     historyInspectionReplacesOnlyTheNarrowList();

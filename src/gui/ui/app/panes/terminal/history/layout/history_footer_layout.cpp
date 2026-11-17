@@ -24,24 +24,22 @@ static_assert(true);
 #include <span>
 #include <string_view>
 
-import telar.gui.presentation.history_pointer;
-import telar.gui.presentation.history_filter_geometry;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
   namespace {
 
-    QString actionName(HistoryFooterAction action) {
+    QString actionName(application::history::HistoryFooterAction action) {
       switch (action) {
-      case HistoryFooterAction::none:
+      case application::history::HistoryFooterAction::none:
         return QStringLiteral("none");
-      case HistoryFooterAction::submit:
+      case application::history::HistoryFooterAction::submit:
         return QStringLiteral("submit");
-      case HistoryFooterAction::alternate:
+      case application::history::HistoryFooterAction::alternate:
         return QStringLiteral("alternate");
-      case HistoryFooterAction::inspect:
+      case application::history::HistoryFooterAction::inspect:
         return QStringLiteral("inspect");
-      case HistoryFooterAction::visit:
+      case application::history::HistoryFooterAction::visit:
         return QStringLiteral("visit");
       }
 
@@ -93,8 +91,8 @@ namespace telar::gui::qt {
 
   void HistoryFooterLayout::prepareLabels() {
     const auto state = input_.value(QStringLiteral("state")).toMap();
-    const HistoryFooterOptions options{
-        .key_style = state.value(QStringLiteral("macStyle")).toBool() ? HistoryKeyStyle::mac : HistoryKeyStyle::pc,
+    const application::history::HistoryFooterOptions options{
+        .key_style = state.value(QStringLiteral("macStyle")).toBool() ? application::history::HistoryKeyStyle::mac : application::history::HistoryKeyStyle::pc,
         .offset = static_cast<std::uint32_t>(std::min(state.value(QStringLiteral("offset")).toULongLong(), qulonglong{std::numeric_limits<std::uint32_t>::max()})),
         .count = static_cast<std::uint16_t>(std::clamp(state.value(QStringLiteral("count")).toInt(), 0, static_cast<int>(std::numeric_limits<std::uint16_t>::max()))),
         .inspecting = state.value(QStringLiteral("inspecting")).toBool(),
@@ -104,10 +102,10 @@ namespace telar::gui::qt {
         .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
     };
 
-    footer_ = HistoryFooter::resolve(options);
+    footer_ = application::history::HistoryFooter::resolve(options);
     choice_ = {.index = static_cast<std::size_t>(std::max(0, state.value(QStringLiteral("selection")).toInt())), .revision = state.value(QStringLiteral("revision")).toString().toULongLong()};
 
-    range_ = footerLabel(HistoryFooter::range(options).view());
+    range_ = footerLabel(application::history::HistoryFooter::range(options).view());
     hints_.clear();
     for (std::size_t index = 0; index < footer_.count; ++index) {
       const auto hint = footer_.hints[index];
@@ -144,7 +142,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  std::size_t HistoryFooterLayout::hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const {
+  std::size_t HistoryFooterLayout::hoverTargets(std::uint64_t generation, std::span<application::history::HistoryHoverTarget> destination) const {
     if (!isVisible() || window() == nullptr) {
       return 0;
     }
@@ -153,13 +151,13 @@ namespace telar::gui::qt {
 
     for (std::size_t index = 0; index < geometry_.count && count < destination.size(); ++index) {
       const auto action = footer_.hints[index].action;
-      if (action == HistoryFooterAction::none) {
+      if (action == application::history::HistoryFooterAction::none) {
         continue;
       }
 
       const auto bounds = mapRectToScene(logical(geometry_.hints[index].bounds));
 
-      destination[count++] = {.identity = {.action = HistoryFooterIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
+      destination[count++] = {.identity = {.action = application::history::HistoryFooterIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
     }
 
     return count;
@@ -187,9 +185,9 @@ namespace telar::gui::qt {
 
     const auto state = input_.value(QStringLiteral("state")).toMap();
     const auto hints = measurements_.value(QStringLiteral("hints")).toList();
-    HistoryFooterMeasurements measured;
+    application::history::HistoryFooterMeasurements measured;
 
-    measured.count = std::min(static_cast<std::size_t>(hints_.size()), HistoryFooter::capacity);
+    measured.count = std::min(static_cast<std::size_t>(hints_.size()), application::history::HistoryFooter::capacity);
     measured.range = advance(measurements_.value(QStringLiteral("range")));
     measured.empty = state.value(QStringLiteral("count")).toInt() == 0;
     measured.error = !state.value(QStringLiteral("error")).toString().isEmpty();
@@ -199,7 +197,7 @@ namespace telar::gui::qt {
       measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key"))), .word = advance(hint.value(QStringLiteral("word")))};
     }
 
-    geometry_ = HistoryFooterGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
+    geometry_ = application::history::HistoryFooterGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
     emit layoutChanged();
   }
 

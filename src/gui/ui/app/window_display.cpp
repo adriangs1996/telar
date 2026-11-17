@@ -22,7 +22,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -101,7 +101,7 @@ namespace telar::gui::qt {
     };
   }
 
-  HistoryModalMetrics WindowDisplay::historyMetrics() const {
+  application::history::HistoryModalMetrics WindowDisplay::historyMetrics() const {
     const auto density = this->density();
     const auto display = metrics(density);
 

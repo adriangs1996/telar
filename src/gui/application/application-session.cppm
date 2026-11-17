@@ -11,7 +11,7 @@ import :workspace_replica;
 import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
 import telar.gui.graphics.pauses;
-import telar.gui.history.browser;
+import telar.gui.features.history;
 import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
 import telar.gui.presentation.tab_drop;
@@ -103,7 +103,6 @@ export {
       static constexpr std::size_t input_chunk_size = 65536;
       // A viewport past any bottom: the runtime follows the output.
       static constexpr std::uint32_t follow_output = std::numeric_limits<std::uint32_t>::max();
-      static constexpr std::size_t maximum_history_query_bytes = HistoryBrowser<Memory>::maximum_query_bytes;
       static constexpr std::uint16_t default_sidebar_columns = SidebarColumns::minimum_width;
       static constexpr std::size_t maximum_launch_arguments = 64;
 
@@ -311,25 +310,11 @@ export {
       // A paste straight to the terminal, framed when the program asked for bracketed paste.
       void pasteBytes(std::uint64_t pane_id, std::string_view bytes);
 
-      void pasteHistory(std::uint64_t entry_id, bool alternate = false);
-
-      void copyHistory(std::uint64_t entry_id);
-
-      void reportHistoryError(std::string_view message);
-
-      void visitHistory(std::uint64_t entry_id);
-
       void visitPane(std::uint64_t pane_id, std::optional<std::uint64_t> generation = {});
 
       bool focusAgent(std::uint64_t pane_id, std::uint64_t generation);
 
       bool focusListedPane(std::uint64_t pane_id, std::uint64_t generation);
-
-      void deleteHistory(std::uint64_t entry_id);
-
-      void selectHistoryRow(std::size_t row);
-
-      void inspectHistory(bool enabled);
 
       void resize(std::uint64_t pane_id, TerminalSize size);
 
@@ -386,16 +371,6 @@ export {
       // Whether a key asked for the scrollback search since the last call.
       [[nodiscard]] bool takeSearchRequest() noexcept;
 
-      void queryHistory(std::string_view query);
-
-      void queryHistory(std::string_view query, HistoryFilters filters);
-
-      bool pageHistory(HistoryPage direction);
-
-      [[nodiscard]] bool historyLoading() const noexcept;
-
-      [[nodiscard]] const HistoryBrowser<Memory>& historyBrowser() const noexcept;
-
       void toggleFullscreen();
 
       void retainLayout();
@@ -425,8 +400,6 @@ export {
       [[nodiscard]] std::span<const ListedPane> paneList() const noexcept;
 
       [[nodiscard]] std::uint64_t paneListRevision() const noexcept;
-
-      [[nodiscard]] const Vector<HistoryRow<Memory>, Memory>& history() const noexcept;
 
       [[nodiscard]] std::string_view clipboard() const noexcept;
 
@@ -603,13 +576,6 @@ export {
       static void reserveAppend(Vector<Value, Memory>& values, std::size_t maximum);
 
       TabCreationOutcome requestTabCreation(std::string_view label, std::span<const std::string_view> arguments);
-
-      template <typename Request>
-      void sendHistory(const Request& request);
-
-      void refreshHistoryDetails();
-
-      void resolveHistoryScope(tbc::view<QueryHistory&, tbc::lt::a> request, HistoryScope scope) const;
 
       std::uint64_t nextRequest() noexcept;
 
@@ -1051,7 +1017,7 @@ export {
       NotificationCenter notifications_;
       std::uint64_t notification_revision_ = 0;
       std::uint64_t chrome_revision_ = 0;
-      tbc::view<HistoryBrowser<Memory>, tbc::lt::a> history_;
+      tbc::view<features::history::State, tbc::lt::a> history_;
       tbc::view<features::peek::State, tbc::lt::a> peek_;
       features::paths::State paths_;
       features::palette::State palette_;

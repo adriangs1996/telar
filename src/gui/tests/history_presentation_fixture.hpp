@@ -13,8 +13,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.history.browser;
-import telar.gui.presentation.history_filter_geometry;
+import telar.gui.application;
 
 namespace telar::gui::test {
 
@@ -27,13 +26,13 @@ namespace telar::gui::test {
       const auto& history = *application.history();
       const auto& surface = history.presented_surface_;
 
-      return !history.loading() && surface.delivered && surface.generation == application.store_.dialog().generation && surface.revision == application.session().historyBrowser().revision();
+      return !history.loading() && surface.delivered && surface.generation == application.store_.dialog().generation && surface.revision == application::history::view(application.session()).revision();
     }
 
-    [[nodiscard]] static std::optional<QPointF> actionCenter(qt::ApplicationController& application, HistoryCardAction action) {
+    [[nodiscard]] static std::optional<QPointF> actionCenter(qt::ApplicationController& application, application::history::HistoryCardAction action) {
       const auto& surface = application.history()->presented_actions_;
-      const auto& browser = application.session().historyBrowser();
-      const HistoryChoice expected{.index = browser.state().selection, .revision = browser.revision()};
+      const auto browser = application::history::view(application.session());
+      const application::history::HistoryChoice expected{.index = browser.state().selection, .revision = browser.revision()};
       if (!current(application) || surface.generation != application.store_.dialog().generation || surface.choice != expected || surface.scale <= 0) {
         return std::nullopt;
       }
@@ -56,7 +55,7 @@ namespace telar::gui::test {
     static void describe(qt::ApplicationController& application) {
       const auto& surface = application.history()->presented_surface_;
 
-      qInfo() << "History presentation" << "delivered" << surface.delivered << "generation" << surface.generation << application.store_.dialog().generation << "revision" << surface.revision << application.session().historyBrowser().revision() << "rows" << surface.has_rows << "loading" << application.history()->loading();
+      qInfo() << "History presentation" << "delivered" << surface.delivered << "generation" << surface.generation << application.store_.dialog().generation << "revision" << surface.revision << application::history::view(application.session()).revision() << "rows" << surface.has_rows << "loading" << application.history()->loading();
     }
   };
 

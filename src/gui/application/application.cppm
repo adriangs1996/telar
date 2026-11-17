@@ -14,3 +14,4 @@ export import :session;
 export import :peek;
 export import :palette;
 export import :paths;
+export import :history;

@@ -1,9 +1,15 @@
-module telar.gui.history.browser;
+module telar.gui.features.history;
+
+import std;
 
 import telar.base.text.utf8;
 import telar.gui.foundation.core;
+import telar.tbc;
+import telar.base.memory.allocators;
+import telar.wire.history;
+import telar.wire.vocabulary;
 
-namespace telar::gui {
+namespace telar::gui::features::history {
 
   template <Allocator Memory>
   HistoryRow<Memory>::HistoryRow(Memory& memory)

@@ -1,9 +1,8 @@
 module telar.gui.application;
 
 import std;
-import telar.base.text.utf8;
 import telar.ebnf.matcher;
-import telar.gui.input.configuration;
+import telar.gui.features.history;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
@@ -259,39 +258,6 @@ namespace telar::gui::application {
     });
   }
 
-  void Session::pasteHistory(std::uint64_t entry_id, bool alternate) {
-    // The entry is copied out of the history, which pasting must not be able to reach.
-    const String<Memory> entry{history_.command(entry_id), AllocatorRef<char, Memory>{memory_}};
-    const std::string_view command = entry;
-    const auto* pane = focusedPane();
-    if (pane == nullptr || !pane->attached || pane->exited) {
-      throw EncodingError{"No terminal is ready for input"};
-    }
-
-    if (editsPrompt(pane->id)) {
-      auto& text = lineEntry(pane->id).line.editor().text();
-
-      text.assign(command);
-      text.moveTo(text.size());
-      prompt_written_ = pane->id;
-      if (configuration_.history.enter_runs != alternate) {
-        promptKey(pane->id, prompt::KeyPress{prompt::Key::enter});
-      }
-
-      return;
-    }
-
-    HistoryText::validate(command, pane->screen.modes().bracketed_paste);
-    paste(pane->id, command);
-    if (configuration_.history.enter_runs != alternate) {
-      input(pane->id, "\r");
-    }
-  }
-
-  void Session::copyHistory(std::uint64_t entry_id) {
-    clipboard_ = history_.command(entry_id);
-  }
-
   Change Session::apply(const CommandSpec& message) {
     const auto request = spec_requests_.find(message.request_id);
     if (request == spec_requests_.end()) {
@@ -539,7 +505,7 @@ namespace telar::gui::application {
 
     switch (outcome) {
     case prompt::Outcome::run:
-      HistoryText::validate(text, pane->screen.modes().bracketed_paste);
+      features::history::HistoryText::validate(text, pane->screen.modes().bracketed_paste);
       runCommand(pane_id, text);
       // Every pane's suggestions know the command at once, without asking the history again.
       std::erase(prompt_history_, text);
@@ -550,7 +516,7 @@ namespace telar::gui::application {
 
       break;
     case prompt::Outcome::answer: {
-      HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
+      features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
       std::string answer{text};
 
       answer.push_back('\r');

@@ -64,11 +64,10 @@ static_assert(true);
 #include <span>
 #include <variant>
 
-import telar.gui.history.browser;
+import telar.gui.application;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.application_mark;
-import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_filter_geometry;
 
@@ -342,7 +341,7 @@ namespace {
       constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
 
       QVERIFY(elapsed.elapsed() >= static_cast<qint64>(LoadingCue::delay_ns / nanoseconds_per_millisecond));
-      QCOMPARE(loading->rowsOpacity(), static_cast<qreal>(HistoryLoading::row_opacity));
+      QCOMPARE(loading->rowsOpacity(), static_cast<qreal>(application::history::HistoryLoading::row_opacity));
       const auto initial = loading->line();
 
       QTRY_VERIFY_WITH_TIMEOUT(loading->line().x() != initial.x(), wait_ms);
@@ -506,15 +505,15 @@ namespace {
       const auto* layout = qobject_cast<HistoryFiltersLayout*>(filters.get());
 
       QVERIFY(layout != nullptr);
-      std::array<HistoryHoverTarget, HistoryFiltersLayout::target_count> targets;
+      std::array<application::history::HistoryHoverTarget, HistoryFiltersLayout::target_count> targets;
       constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
 
       QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
       const auto identity = targets[1].identity;
-      const auto* action = std::get_if<HistoryFilterAction>(&identity.action);
+      const auto* action = std::get_if<application::history::HistoryFilterAction>(&identity.action);
 
       QVERIFY(action != nullptr);
-      QCOMPARE(*action, HistoryFilterAction::workspace);
+      QCOMPARE(*action, application::history::HistoryFilterAction::workspace);
       QCOMPARE(identity.generation, generation);
       const auto* workspace = chipFor(*filters, QStringLiteral("workspace"));
 
@@ -755,14 +754,14 @@ namespace {
 
     Q_SLOT static void rowsFitFactsAndSelectWithoutAnApplicationController() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "make test\nnext command";
       entry.cwd = "/work/project";
       entry.provider = "custom-agent";
       entry.author = telar::HistoryAuthor::agent;
       entry.exit_code = 1;
-      constexpr std::int64_t two_days_ms = 2 * HistoryLabels::seconds_per_day * HistoryLabels::milliseconds_per_second;
+      constexpr std::int64_t two_days_ms = 2 * application::history::HistoryLabels::seconds_per_day * application::history::HistoryLabels::milliseconds_per_second;
       auto record = historyRecord(entry, {.now_ms = two_days_ms});
 
       QCOMPARE(record.value(QStringLiteral("providerLetter")).toString(), QStringLiteral("C"));
@@ -817,7 +816,7 @@ namespace {
 
     Q_SLOT static void rowsRetireGesturesWhenTheContentRevisionChanges() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "first command";
       auto record = historyRecord(entry, {});
@@ -857,7 +856,7 @@ namespace {
 
     Q_SLOT static void queryChangesPreserveRowMeasurements() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "git build";
       auto record = historyRecord(entry, {});
@@ -946,7 +945,7 @@ namespace {
 
     Q_SLOT static void matchDelegatesRetainPositionsAcrossQueryChanges() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "abc";
       auto record = historyRecord(entry, {});
@@ -1065,7 +1064,7 @@ namespace {
 
     Q_SLOT static void selectedCardsShowEveryExplicitCommandLine() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "first command\nsecond command\nthird command";
       const auto record = historyRecord(entry, {});
@@ -1134,7 +1133,7 @@ namespace {
 
     Q_SLOT static void runningCardsNameTheirOutcome() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "sleep 10";
       entry.status = telar::HistoryStatus::running;
@@ -1234,7 +1233,7 @@ namespace {
 
     Q_SLOT static void metadataRefreshesWhenTheSelectedCommandChanges() {
       SystemAllocator memory;
-      HistoryRow<SystemAllocator> entry{memory};
+      application::history::HistoryRow<SystemAllocator> entry{memory};
 
       entry.command = "failed command";
       entry.cwd = "/work/project";
@@ -1301,14 +1300,14 @@ namespace {
       const auto* layout = qobject_cast<HistoryFooterLayout*>(footer.get());
 
       QVERIFY(layout != nullptr);
-      std::array<HistoryHoverTarget, HistoryFooter::capacity> targets;
+      std::array<application::history::HistoryHoverTarget, application::history::HistoryFooter::capacity> targets;
       constexpr std::size_t browse_count = 3;
 
       QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), browse_count, wait_ms);
-      const auto* submit = std::get_if<HistoryFooterIdentity>(&targets.front().identity.action);
+      const auto* submit = std::get_if<application::history::HistoryFooterIdentity>(&targets.front().identity.action);
 
       QVERIFY(submit != nullptr);
-      QCOMPARE(submit->action, HistoryFooterAction::submit);
+      QCOMPARE(submit->action, application::history::HistoryFooterAction::submit);
       QCOMPARE(submit->choice.revision, revision);
       QCOMPARE(submit->choice.index, std::size_t{2});
       QCOMPARE(targets.front().identity.generation, generation);
@@ -1335,7 +1334,7 @@ namespace {
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       QCOMPARE(layout->hoverTargets(generation, targets), browse_count);
       QVERIFY(targets.front().identity != identity);
-      submit = std::get_if<HistoryFooterIdentity>(&targets.front().identity.action);
+      submit = std::get_if<application::history::HistoryFooterIdentity>(&targets.front().identity.action);
       QVERIFY(submit != nullptr);
       QCOMPARE(submit->choice.revision, revision - 1);
       QCOMPARE(submit->choice.index, std::size_t{3});
@@ -1359,7 +1358,7 @@ namespace {
       const auto* layout = qobject_cast<HistoryFooterLayout*>(footer.get());
 
       QVERIFY(layout != nullptr);
-      std::array<HistoryHoverTarget, HistoryFooter::capacity> targets;
+      std::array<application::history::HistoryHoverTarget, application::history::HistoryFooter::capacity> targets;
       constexpr std::size_t actions = 3;
       constexpr std::uint64_t generation = 41;
 
@@ -1371,10 +1370,10 @@ namespace {
       footer->setProperty("state", state);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       QCOMPARE(layout->hoverTargets(generation, targets), actions);
-      const auto* visit = std::get_if<HistoryFooterIdentity>(&targets[actions - 1].identity.action);
+      const auto* visit = std::get_if<application::history::HistoryFooterIdentity>(&targets[actions - 1].identity.action);
 
       QVERIFY(visit != nullptr);
-      QCOMPARE(visit->action, HistoryFooterAction::visit);
+      QCOMPARE(visit->action, application::history::HistoryFooterAction::visit);
       state.insert(QStringLiteral("error"), QStringLiteral("fixture failure"));
       footer->setProperty("state", state);
       QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), std::size_t{0}, wait_ms);
@@ -1490,16 +1489,16 @@ namespace {
       const auto* layout = qobject_cast<HistoryInspectionLayout*>(fixture.item.get());
 
       QVERIFY(layout != nullptr);
-      std::array<HistoryHoverTarget, history_inspection_action_count> targets;
+      std::array<application::history::HistoryHoverTarget, application::history::history_inspection_action_count> targets;
 
       QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
       const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate"), QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
 
       for (std::size_t index = 0; index < actions.size(); ++index) {
-        const auto* identity = std::get_if<HistoryInspectionIdentity>(&targets[index].identity.action);
+        const auto* identity = std::get_if<application::history::HistoryInspectionIdentity>(&targets[index].identity.action);
 
         QVERIFY(identity != nullptr);
-        QCOMPARE(identity->action, static_cast<HistoryInspectionAction>(index));
+        QCOMPARE(identity->action, static_cast<application::history::HistoryInspectionAction>(index));
         QCOMPARE(targets[index].identity.generation, generation);
         const auto* button = inspectionAction(*fixture.item, actions[index]);
 
@@ -1513,7 +1512,7 @@ namespace {
         QCOMPARE(targets[index].bounds.height, static_cast<float>(bounds.height() * scale));
       }
 
-      const auto* submit = std::get_if<HistoryInspectionIdentity>(&targets.front().identity.action);
+      const auto* submit = std::get_if<application::history::HistoryInspectionIdentity>(&targets.front().identity.action);
 
       QVERIFY(submit != nullptr);
       QCOMPARE(submit->choice.revision, revision);
@@ -1534,7 +1533,7 @@ namespace {
       QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
       QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
       for (std::size_t index = 0; index < targets.size(); ++index) {
-        const auto* identity = std::get_if<HistoryInspectionIdentity>(&targets[index].identity.action);
+        const auto* identity = std::get_if<application::history::HistoryInspectionIdentity>(&targets[index].identity.action);
 
         QVERIFY(identity != nullptr);
         QCOMPARE(targets[index].identity == previous[index].identity, !identity->submission());
@@ -1550,7 +1549,7 @@ namespace {
       const auto* layout = qobject_cast<HistoryInspectionLayout*>(fixture.item.get());
 
       QVERIFY(layout != nullptr);
-      std::array<HistoryHoverTarget, history_inspection_action_count> targets;
+      std::array<application::history::HistoryHoverTarget, application::history::history_inspection_action_count> targets;
       constexpr std::uint64_t generation = 41;
 
       QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);

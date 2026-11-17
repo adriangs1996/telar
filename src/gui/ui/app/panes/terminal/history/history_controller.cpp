@@ -18,8 +18,6 @@ static_assert(true);
 
 import telar.base.text.utf8;
 import telar.gui.application;
-import telar.gui.history.browser;
-import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
@@ -72,7 +70,7 @@ namespace telar::gui::qt {
 
     // The words the dialog's filter chips show for `value`.
     template <std::size_t Count>
-    QString filterLabel(const std::array<HistoryFilterLabels::Choice, Count>& choices, const QString& value) {
+    QString filterLabel(const std::array<application::history::HistoryFilterLabels::Choice, Count>& choices, const QString& value) {
       for (const auto& choice : choices) {
         if (QLatin1StringView{choice.value.data(), static_cast<qsizetype>(choice.value.size())} == value) {
           return toQString(choice.text);
@@ -82,13 +80,13 @@ namespace telar::gui::qt {
       return value;
     }
 
-    QString phaseName(HistoryPhase phase) {
+    QString phaseName(application::history::HistoryPhase phase) {
       switch (phase) {
-      case HistoryPhase::loading:
+      case application::history::HistoryPhase::loading:
         return QStringLiteral("loading");
-      case HistoryPhase::ready:
+      case application::history::HistoryPhase::ready:
         return QStringLiteral("ready");
-      case HistoryPhase::failed:
+      case application::history::HistoryPhase::failed:
         return QStringLiteral("failed");
       default:
         return QStringLiteral("idle");
@@ -111,7 +109,7 @@ namespace telar::gui::qt {
     auto& session = store_.session();
 
     filters_ = {.author = session.configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
-    session.inspectHistory(false);
+    application::history::inspect(session, false);
     // At the prompt line, the search starts from the command being written.
     QString seed;
 
@@ -133,7 +131,7 @@ namespace telar::gui::qt {
     directory_value_.clear();
   }
 
-  void HistoryController::setMetrics(const HistoryModalMetrics& metrics) {
+  void HistoryController::setMetrics(const application::history::HistoryModalMetrics& metrics) {
     metrics_ = metrics;
     emit changed();
   }
@@ -145,7 +143,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    store_.session().reportHistoryError(error.what());
+    application::history::report(store_.session(), error.what());
     synchronize();
   }
 
@@ -159,7 +157,7 @@ namespace telar::gui::qt {
   }
 
   bool HistoryController::busy() const {
-    return search_timer_.isActive() || store_.session().historyLoading();
+    return search_timer_.isActive() || application::history::loading(store_.session());
   }
 
   bool HistoryController::isOpen() const noexcept {
@@ -172,7 +170,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& browser = store_.session().historyBrowser();
+    const auto browser = application::history::view(store_.session());
     if (rows_version_ != browser.rowsVersion()) {
       buildRows();
       rows_version_ = browser.rowsVersion();
@@ -188,7 +186,7 @@ namespace telar::gui::qt {
 
   HistoryController::Inputs HistoryController::inputs() {
     const auto& session = store_.session();
-    const auto& browser = session.historyBrowser();
+    const auto browser = application::history::view(session);
     const auto open = isOpen();
     const auto selection = browser.state().selection;
     const auto* pane = open && selection < browser.rows().size() ? session.findPane(browser.rows()[selection].pane_id) : nullptr;
@@ -209,7 +207,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::buildRows() {
-    const auto& rows = store_.session().historyBrowser().rows();
+    const auto& rows = application::history::view(store_.session()).rows();
     const auto sampled = system::WallClock::sample();
 
     calendar_ = sampled;
@@ -219,8 +217,8 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < rows.size(); ++index) {
       const auto& entry = rows[index];
       auto record = historyRecord(entry, sampled);
-      const auto day = HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
-      const auto group_ends = index + 1 == rows.size() || day != HistoryLabels::localDay(rows[index + 1].started_at_ms, sampled.utc_offset_min);
+      const auto day = application::history::HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
+      const auto group_ends = index + 1 == rows.size() || day != application::history::HistoryLabels::localDay(rows[index + 1].started_at_ms, sampled.utc_offset_min);
 
       record.insert(QStringLiteral("groupEnds"), group_ends);
       records.append(std::move(record));
@@ -244,7 +242,7 @@ namespace telar::gui::qt {
 
   QString HistoryController::scopeValue() {
     const auto& session = store_.session();
-    if (session.historyBrowser().scope() == HistoryScope::workspace) {
+    if (application::history::view(session).scope() == HistoryScope::workspace) {
       const auto* active = session.activeTab();
       if (active == nullptr || active->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
         return {};
@@ -257,7 +255,7 @@ namespace telar::gui::qt {
       return current == session.workspaces().end() ? QString{} : toQString(current->name);
     }
 
-    if (session.historyBrowser().scope() != HistoryScope::cwd) {
+    if (application::history::view(session).scope() != HistoryScope::cwd) {
       return {};
     }
 
@@ -268,7 +266,7 @@ namespace telar::gui::qt {
 
     const QByteArrayView source{pane->cwd.data(), static_cast<qsizetype>(pane->cwd.size())};
     if (QByteArrayView{directory_source_} != source) {
-      const auto compact = HistoryPath::compact(std::string_view{pane->cwd.data(), pane->cwd.size()});
+      const auto compact = application::history::HistoryPath::compact(std::string_view{pane->cwd.data(), pane->cwd.size()});
       auto value = toQString(compact.view());
 
       directory_source_.assign(source);
@@ -285,11 +283,11 @@ namespace telar::gui::qt {
   }
 
   QString HistoryController::output() const {
-    return synchronized_ ? output_ : toQString(store_.session().historyBrowser().output());
+    return synchronized_ ? output_ : toQString(application::history::view(store_.session()).output());
   }
 
   QString HistoryController::command() const {
-    return synchronized_ ? command_ : toQString(store_.session().historyBrowser().selectedCommand());
+    return synchronized_ ? command_ : toQString(application::history::view(store_.session()).selectedCommand());
   }
 
   QVariantMap HistoryController::inspection() const {
@@ -298,12 +296,12 @@ namespace telar::gui::qt {
 
   QVariantMap HistoryController::buildState() const {
     const auto& session = store_.session();
-    const auto& browser = session.historyBrowser();
+    const auto browser = application::history::view(session);
     const auto& state = browser.state();
     const auto& rows = browser.rows();
     const bool selected_detail = state.selection < rows.size() && rows[state.selection].id == state.command_id;
     const auto query = query_.toUtf8();
-    const auto parsed = HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, filters_.failed_only);
+    const auto parsed = application::history::HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, filters_.failed_only);
 
     return {
         {QStringLiteral("generation"), QString::number(store_.dialog().generation)},
@@ -315,26 +313,26 @@ namespace telar::gui::qt {
         {QStringLiteral("effectiveScope"), scopeName(browser.scope())},
         {QStringLiteral("scopeValue"), synchronized_ ? synchronized_->scope_value : QString{}},
         {QStringLiteral("author"), authorName(filters_.author)},
-        {QStringLiteral("scopeLabel"), filterLabel(HistoryFilterLabels::scopes, scopeName(browser.scope()))},
-        {QStringLiteral("authorLabel"), filterLabel(HistoryFilterLabels::authors, authorName(filters_.author))},
+        {QStringLiteral("scopeLabel"), filterLabel(application::history::HistoryFilterLabels::scopes, scopeName(browser.scope()))},
+        {QStringLiteral("authorLabel"), filterLabel(application::history::HistoryFilterLabels::authors, authorName(filters_.author))},
         {QStringLiteral("failedOnly"), parsed.failed_only},
         {QStringLiteral("grouped"), parsed.query.empty()},
         {QStringLiteral("query"), toQString(parsed.query)},
         {QStringLiteral("editorText"), query_},
-        {QStringLiteral("maximumQueryBytes"), static_cast<int>(HistorySearch::maximum_query_bytes)},
+        {QStringLiteral("maximumQueryBytes"), static_cast<int>(application::history::HistorySearch::maximum_query_bytes)},
         {QStringLiteral("inspectionKey"), platform::usesCommandKey() ? QStringLiteral("⌃O") : QStringLiteral("Ctrl+O")},
         {QStringLiteral("macStyle"), platform::usesCommandKey()},
         {QStringLiteral("paneOpen"), state.selection < rows.size() && session.findPane(rows[state.selection].pane_id) != nullptr},
-        {QStringLiteral("commandLoaded"), state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == HistoryPhase::ready))},
-        {QStringLiteral("canOlder"), browser.canPage(HistoryPage::older)},
+        {QStringLiteral("commandLoaded"), state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == application::history::HistoryPhase::ready))},
+        {QStringLiteral("canOlder"), browser.canPage(application::history::HistoryPage::older)},
         {QStringLiteral("hasMore"), state.has_more},
         {QStringLiteral("matchFuzzy"), browser.match() == HistoryMatch::fuzzy},
-        {QStringLiteral("canNewer"), browser.canPage(HistoryPage::newer)},
+        {QStringLiteral("canNewer"), browser.canPage(application::history::HistoryPage::newer)},
         {QStringLiteral("offset"), static_cast<qulonglong>(state.page_offset)},
         {QStringLiteral("selection"), static_cast<int>(state.selection)},
         {QStringLiteral("count"), static_cast<int>(browser.rows().size())},
         {QStringLiteral("canSubmit"), browser.canSubmit()},
-        {QStringLiteral("commandPhase"), phaseName(selected_detail ? state.command_phase : HistoryPhase::idle)},
+        {QStringLiteral("commandPhase"), phaseName(selected_detail ? state.command_phase : application::history::HistoryPhase::idle)},
         {QStringLiteral("enterRuns"), session.configuration().history.enter_runs},
         {QStringLiteral("inspecting"), state.inspecting},
         {QStringLiteral("outputPhase"), phaseName(state.output_phase)},
@@ -346,7 +344,7 @@ namespace telar::gui::qt {
 
   QVariantMap HistoryController::buildInspection() const {
     const auto& session = store_.session();
-    const auto& browser = session.historyBrowser();
+    const auto browser = application::history::view(session);
     const auto& state = browser.state();
     if (state.selection >= browser.rows().size()) {
       return {};
@@ -356,7 +354,7 @@ namespace telar::gui::qt {
     const auto* pane = session.findPane(entry.pane_id);
     const auto tab_name = tabName(pane);
 
-    const auto details = HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, calendar_);
+    const auto details = application::history::HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, calendar_);
     QVariantList facts;
 
     for (const auto& fact : details.lines()) {
@@ -371,12 +369,12 @@ namespace telar::gui::qt {
     return {
         {QStringLiteral("identity"), QString::number(entry.id)},
         {QStringLiteral("facts"), facts},
-        {QStringLiteral("heading"), toQString(HistoryInspectionFacts::outputHeading(state.output_phase, state.output_truncated, browser.output().size()).view())},
+        {QStringLiteral("heading"), toQString(application::history::HistoryInspectionFacts::outputHeading(state.output_phase, state.output_truncated, browser.output().size()).view())},
     };
   }
 
   void HistoryController::search(const QString& query) {
-    const auto measured = Utf16Prefix::fit(QStringView{query}, HistorySearch::maximum_query_bytes, utf16Encoding());
+    const auto measured = Utf16Prefix::fit(QStringView{query}, application::history::HistorySearch::maximum_query_bytes, utf16Encoding());
 
     query_ = query.first(static_cast<qsizetype>(measured.units));
     if (!query_.isValidUtf16()) {
@@ -396,7 +394,7 @@ namespace telar::gui::qt {
     try {
       const auto query = query_.toUtf8();
 
-      store_.session().queryHistory(std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
+      application::history::search(store_.session(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -405,11 +403,11 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::reportQueryLimit(qulonglong requested_bytes) {
-    if (!isOpen() || requested_bytes <= HistorySearch::maximum_query_bytes) {
+    if (!isOpen() || requested_bytes <= application::history::HistorySearch::maximum_query_bytes) {
       return;
     }
 
-    store_.session().reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
+    store_.session().reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = application::history::HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 
@@ -442,7 +440,7 @@ namespace telar::gui::qt {
     }
 
     interact([&] {
-      store_.session().selectHistoryRow(static_cast<std::size_t>(row));
+      application::history::select(store_.session(), static_cast<std::size_t>(row));
     });
   }
 
@@ -452,13 +450,13 @@ namespace telar::gui::qt {
       return;
     }
 
-    const HistoryChoice choice{.index = static_cast<std::size_t>(row), .revision = shown->choice.revision};
-    if (!store_.session().historyBrowser().acceptsRow(choice)) {
+    const application::history::HistoryChoice choice{.index = static_cast<std::size_t>(row), .revision = shown->choice.revision};
+    if (!application::history::view(store_.session()).acceptsRow(choice)) {
       return;
     }
 
     interact([&] {
-      store_.session().selectHistoryRow(choice.index);
+      application::history::select(store_.session(), choice.index);
     });
   }
 
@@ -471,21 +469,21 @@ namespace telar::gui::qt {
       auto& session = store_.session();
 
       if (action == Action::older || action == Action::newer) {
-        session.pageHistory(action == Action::older ? HistoryPage::older : HistoryPage::newer);
+        application::history::page(session, action == Action::older ? application::history::HistoryPage::older : application::history::HistoryPage::newer);
       } else if (action == Action::inspect) {
-        session.inspectHistory(!session.historyBrowser().state().inspecting);
+        application::history::inspect(session, !application::history::view(session).state().inspecting);
       } else {
-        const auto& browser = session.historyBrowser();
+        const auto browser = application::history::view(session);
         const auto& rows = browser.rows();
         const auto identity = entry_id.isEmpty() && !rows.empty() ? rows[browser.state().selection].id : entry_id.toULongLong();
 
         if (action == Action::copy) {
-          session.copyHistory(identity);
+          application::history::copy(session, identity);
           QGuiApplication::clipboard()->setText(toQString(session.clipboard()));
         } else if (action == Action::erase) {
-          session.deleteHistory(identity);
+          application::history::remove(session, identity);
         } else if (action == Action::visit) {
-          session.visitHistory(identity);
+          application::history::visit(session, identity);
           emit closeRequested();
         }
       }
@@ -502,14 +500,14 @@ namespace telar::gui::qt {
         throw EncodingError{"History search is still loading"};
       }
 
-      store_.session().pasteHistory(entry_id, alternate);
+      application::history::paste(store_.session(), entry_id, alternate);
       emit submitted();
       emit closeRequested();
     });
   }
 
   void HistoryController::use(int row, bool alternate) {
-    const auto& entries = store_.session().history();
+    const auto& entries = application::history::view(store_.session()).rows();
     if (row < 0 || static_cast<std::size_t>(row) >= entries.size()) {
       return;
     }
@@ -523,7 +521,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& browser = store_.session().historyBrowser();
+    const auto browser = application::history::view(store_.session());
     if (!browser.accepts(shown->choice)) {
       return;
     }

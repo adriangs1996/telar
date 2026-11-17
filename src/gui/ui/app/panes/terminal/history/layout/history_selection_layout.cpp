@@ -19,7 +19,7 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -70,7 +70,7 @@ namespace telar::gui::qt {
     const auto index = selection.value(QStringLiteral("index"), -1).toInt();
     if (selection.value(QStringLiteral("active")).toBool() && generation_valid && id_valid && index >= 0) {
       generation_ = generation;
-      selected_ = HistoryPosition{.index = static_cast<std::size_t>(index), .id = id};
+      selected_ = application::history::HistoryPosition{.index = static_cast<std::size_t>(index), .id = id};
     }
 
     dirty_ = true;

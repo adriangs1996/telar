@@ -7,7 +7,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
-import telar.gui.history.browser;
+import telar.gui.features.history;
 import telar.gui.input.copy_pointer;
 import telar.gui.foundation.keys;
 import telar.gui.features.paths;
@@ -204,7 +204,7 @@ namespace telar::gui::application {
     workspaces_.resetSource();
     copy_mode_.reset();
     copy_search_request_ = 0;
-    history_.suspend();
+    features::history::suspend(history_);
     features::paths::close(paths_);
     features::peek::close(peek_);
     features::palette::discard(palette_);
@@ -410,10 +410,6 @@ namespace telar::gui::application {
 
   std::uint64_t Session::paneListRevision() const noexcept {
     return pane_list_.revision();
-  }
-
-  const Vector<HistoryRow<Memory>, Memory>& Session::history() const noexcept {
-    return history_.rows();
   }
 
   std::string_view Session::clipboard() const noexcept {
@@ -638,8 +634,8 @@ namespace telar::gui::application {
       return *change;
     }
 
-    if (history_.owns(message.request_id)) {
-      return history_.fail(message.request_id, message.message) ? Change::history : Change::none;
+    if (const auto change = history::fail(*this, message.request_id, message.message)) {
+      return *change;
     }
 
     if (const auto change = failPromptRequest(message.request_id)) {

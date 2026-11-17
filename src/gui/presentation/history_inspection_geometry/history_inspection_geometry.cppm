@@ -4,10 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
-import telar.gui.foundation.forms;
 import telar.gui.foundation.model;
-import telar.gui.presentation.history_filter_geometry;
-import telar.gui.presentation.history_inspection;
 
 // Interface: presentation/agent_card_geometry.cppm
 export {
@@ -60,98 +57,6 @@ export {
       // The list width whose cards are `card_width` wide.
       [[nodiscard]] float listWidth(float card_width) const noexcept;
       [[nodiscard]] Rect row(Rect bounds, Row role) const noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/history_modal_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct HistoryModalMetrics {
-      Rect viewport{};
-      ChromeMetrics chrome{};
-      float cell_height = 0;
-    };
-
-    struct HistoryModalGeometry {
-      static constexpr float maximum_width = 1360;
-      static constexpr float minimum_height = 640;
-      static constexpr float height_share = 0.8F;
-      static constexpr float split_width = 900;
-      static constexpr float list_share = 0.44F;
-      static constexpr float margin = 28;
-      static constexpr float margin_divisor = 12;
-      static constexpr float row_minimum = 34;
-      static constexpr float row_padding = 12;
-      static constexpr float group_minimum = 28;
-      static constexpr float group_padding = 10;
-      static constexpr float header_minimum = 46;
-      static constexpr float header_padding = 22;
-      static constexpr float search_minimum = 52;
-      static constexpr float search_padding = 24;
-      static constexpr float footer_minimum = 36;
-      static constexpr float footer_padding = 14;
-      static constexpr float compact_width = 420;
-      static constexpr float compact_height = 260;
-      static constexpr float inspection_inset = 18;
-      static constexpr float inspection_inset_divisor = 8;
-      static constexpr float action_minimum = 28;
-      static constexpr float action_padding = 8;
-
-      Rect viewport;
-      Rect bounds;
-      Rect header;
-      Rect results;
-      Rect inspection;
-      Rect search;
-      Rect footer;
-      float row_height = 0;
-      float group_height = 0;
-      bool compact = false;
-
-      [[nodiscard]] static HistoryModalGeometry measure(const HistoryModalMetrics& metrics, bool inspecting) noexcept;
-      void offsetY(float offset) noexcept;
-      [[nodiscard]] Rect inspectionContent(const ChromeMetrics& chrome) const noexcept;
-      [[nodiscard]] Rect inspectionActions(const ChromeMetrics& chrome) const noexcept;
-
-    private:
-      [[nodiscard]] float inspectionInset(const ChromeMetrics& chrome) const noexcept;
-      static Rect takeBottom(Rect& remaining, float height) noexcept;
-      static Rect takeTop(Rect& remaining, float height) noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/history_inspection_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct HistoryInspectionGeometry {
-      static constexpr std::size_t maximum_actions = history_inspection_action_count;
-      static constexpr float command_padding = 8;
-      static constexpr float fact_label_width = 64;
-      static constexpr float fact_label_divisor = 3;
-      static constexpr float button_padding = 24;
-      static constexpr float button_gap = 8;
-      static constexpr float button_radius = FormButtonStyle::radius;
-      static constexpr float disabled_alpha = FormButtonStyle::disabled_alpha;
-      static constexpr float pressed_alpha = FormButtonStyle::pressed_alpha;
-
-      Rect content;
-      Rect actions;
-      std::uint16_t columns = 0;
-      std::uint16_t rows = 0;
-      float row_height = 0;
-      float label_width = 0;
-      float command_inset = 0;
-
-      [[nodiscard]] static HistoryInspectionGeometry derive(Rect area, ChromeMetrics chrome, Point cell) noexcept;
-      [[nodiscard]] Rect row(std::size_t index) const noexcept;
-      [[nodiscard]] Rect text(Rect row, HistoryInspectionLine::Kind kind) const noexcept;
-      [[nodiscard]] std::array<Rect, maximum_actions> buttons(std::span<const float> advances, ChromeMetrics chrome) const noexcept;
     };
 
   }

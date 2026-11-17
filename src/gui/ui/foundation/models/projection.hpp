@@ -49,7 +49,6 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.foundation.core;
-import telar.gui.history.browser;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection;
@@ -229,13 +228,13 @@ namespace telar::gui::qt {
   }
 
   template <Allocator Memory>
-  QVariantMap historyRecord(const HistoryRow<Memory>& entry, CalendarSample sampled) {
+  QVariantMap historyRecord(const application::history::HistoryRow<Memory>& entry, CalendarSample sampled) {
     QVariantMap record;
 
     record.insert(QStringLiteral("key"), QString::number(entry.id));
     record.insert(QStringLiteral("command"), toQString(entry.command));
     record.insert(QStringLiteral("cwd"), toQString(entry.cwd));
-    record.insert(QStringLiteral("compactCwd"), toQString(HistoryPath::compact(entry.cwd).view()));
+    record.insert(QStringLiteral("compactCwd"), toQString(application::history::HistoryPath::compact(entry.cwd).view()));
     if (entry.exit_code) {
       record.insert(QStringLiteral("exitCode"), *entry.exit_code);
     }
@@ -253,18 +252,18 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("status"), static_cast<int>(entry.status));
     record.insert(QStringLiteral("running"), entry.status == HistoryStatus::running);
     record.insert(QStringLiteral("timestamp"), static_cast<qlonglong>(entry.started_at_ms));
-    const auto status = HistoryLabels::status(entry.status, entry.exit_code);
-    const auto day = HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
-    const auto today = HistoryLabels::localDay(sampled.now_ms, sampled.utc_offset_min);
+    const auto status = application::history::HistoryLabels::status(entry.status, entry.exit_code);
+    const auto day = application::history::HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
+    const auto today = application::history::HistoryLabels::localDay(sampled.now_ms, sampled.utc_offset_min);
 
     record.insert(QStringLiteral("statusGlyph"), toQString(status.glyph));
     record.insert(QStringLiteral("statusColor"), toQString(palette_names[static_cast<std::size_t>(status.color)]));
-    record.insert(QStringLiteral("duration"), toQString(HistoryLabels::duration(entry.duration_ns).view()));
-    record.insert(QStringLiteral("age"), toQString(HistoryLabels::ageAt(entry.started_at_ms, sampled).view()));
-    record.insert(QStringLiteral("clock"), entry.started_at_ms >= 0 ? toQString(HistoryLabels::clock(entry.started_at_ms, sampled.utc_offset_min).view()) : QString{});
-    record.insert(QStringLiteral("date"), entry.started_at_ms >= 0 ? toQString(HistoryLabels::dateLabel(entry.started_at_ms, sampled).view()) : QString{});
+    record.insert(QStringLiteral("duration"), toQString(application::history::HistoryLabels::duration(entry.duration_ns).view()));
+    record.insert(QStringLiteral("age"), toQString(application::history::HistoryLabels::ageAt(entry.started_at_ms, sampled).view()));
+    record.insert(QStringLiteral("clock"), entry.started_at_ms >= 0 ? toQString(application::history::HistoryLabels::clock(entry.started_at_ms, sampled.utc_offset_min).view()) : QString{});
+    record.insert(QStringLiteral("date"), entry.started_at_ms >= 0 ? toQString(application::history::HistoryLabels::dateLabel(entry.started_at_ms, sampled).view()) : QString{});
     record.insert(QStringLiteral("day"), static_cast<qlonglong>(day));
-    record.insert(QStringLiteral("dayLabel"), toQString(HistoryLabels::dayLabel(day, today).view()).toUpper());
+    record.insert(QStringLiteral("dayLabel"), toQString(application::history::HistoryLabels::dayLabel(day, today).view()).toUpper());
 
     return record;
   }

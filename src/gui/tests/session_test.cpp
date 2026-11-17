@@ -39,7 +39,6 @@ import telar.gui.tests.session_fixture;
 import telar.gui.layout.snapshots;
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
@@ -320,16 +319,16 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.queryHistory("old");
+    application::history::search(client, "old");
     const auto old_request = transport.last<QueryHistory>().request_id;
 
-    client.queryHistory("new");
+    application::history::search(client, "new");
     const auto new_request = transport.last<QueryHistory>().request_id;
     const std::array<HistoryEntry, 1> rows{{{.id = 1, .pane_id = 1, .command = "echo result", .cwd = "/tmp"}}};
 
     require(deliver(client, HistoryResults{.request_id = old_request, .snapshot_id = 1, .has_more = false, .entries = rows}) == application::Change::none, "stale search results must not replace the current query");
     deliver(client, HistoryResults{.request_id = new_request, .snapshot_id = 1, .has_more = false, .entries = rows});
-    require(client.history().size() == 1 && client.history().front().command == "echo result", "history results must own command bytes");
+    require(application::history::view(client).rows().size() == 1 && application::history::view(client).rows().front().command == "echo result", "history results must own command bytes");
   }
 
   void routedCommands() {
@@ -806,7 +805,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.queryHistory("recent");
+    application::history::search(client, "recent");
     const auto query = transport.last<QueryHistory>();
 
     require(query.author == HistoryAuthorFilter::human && query.match == HistoryMatch::fuzzy, "default history queries must use human authors and fuzzy search");
@@ -823,7 +822,7 @@ namespace {
       bool rejected = false;
 
       try {
-        client.pasteHistory(entry_id);
+        application::history::paste(client, entry_id);
       } catch (const EncodingError&) {
         rejected = true;
       }
@@ -836,7 +835,7 @@ namespace {
     reject(4);
     auto first_message = transport.sent.size();
 
-    client.pasteHistory(1);
+    application::history::paste(client, 1);
     require(transport.inputSince(first_message) == "echo safe", "default history submission must paste exact canonical bytes without running");
 
     auto configuration = client.configuration();
@@ -844,34 +843,34 @@ namespace {
     configuration.history = {.show_agent_commands = true, .enter_runs = true, .match_fts = true};
     client.configure(configuration);
     first_message = transport.sent.size();
-    client.pasteHistory(1);
+    application::history::paste(client, 1);
     require(transport.inputSince(first_message) == "echo safe\r", "configured run must append Enter after the complete paste");
     first_message = transport.sent.size();
-    client.pasteHistory(1, true);
+    application::history::paste(client, 1, true);
     require(transport.inputSince(first_message) == "echo safe", "alternate submission must invert the configured run preference");
 
-    client.queryHistory("new query");
-    require(client.historyLoading(), "new requests must mark history as loading");
+    application::history::search(client, "new query");
+    require(application::history::loading(client), "new requests must mark history as loading");
     reject(1);
     deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
-    require(client.historyLoading(), "stale results must not release current history input authority");
+    require(application::history::loading(client), "stale results must not release current history input authority");
     const auto requested = transport.last<QueryHistory>();
 
     require(requested.author == HistoryAuthorFilter::all && requested.match == HistoryMatch::fts, "history preferences must select the wire author and match filters");
     deliver(client, RequestFailed{.request_id = requested.request_id, .code = FailureCode::resource_limit, .message = "Query failed"});
-    require(!client.historyLoading(), "failed queries must finish their loading indication");
+    require(!application::history::loading(client), "failed queries must finish their loading indication");
     reject(1);
 
     transport.reject_history = true;
     bool queue_failed = false;
 
     try {
-      client.queryHistory("queue failure");
+      application::history::search(client, "queue failure");
     } catch (const EncodingError&) {
       queue_failed = true;
     }
 
-    require(queue_failed && !client.historyLoading(), "transport failure must release the loading indication");
+    require(queue_failed && !application::history::loading(client), "transport failure must release the loading indication");
     reject(1);
   }
 
@@ -881,20 +880,20 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    client.queryHistory("unknown directory", {.scope = HistoryScope::cwd});
+    application::history::search(client, "unknown directory", {.scope = HistoryScope::cwd});
     require(transport.last<QueryHistory>().scope == HistoryScope::global, "unavailable scopes must use the original global fallback");
     deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work/current"});
     const std::array workspaces{WorkspaceListEntry{.workspace = 1, .name = "Project", .path = "/work"}};
 
     deliver(client, WorkspaceList{.revision = 1, .entries = workspaces});
-    client.queryHistory("!   failed", {.scope = HistoryScope::workspace, .author = HistoryAuthorFilter::agent});
+    application::history::search(client, "!   failed", {.scope = HistoryScope::workspace, .author = HistoryAuthorFilter::agent});
     const auto workspace_query = transport.last<QueryHistory>();
 
     require(workspace_query.query == "failed" && workspace_query.failed_only && workspace_query.author == HistoryAuthorFilter::agent, "the failed prefix must combine with explicit author filters without entering the search text");
     require(workspace_query.scope == HistoryScope::workspace && std::get<std::string_view>(workspace_query.scope_value) == "/work", "workspace scope must resolve the canonical project path");
-    client.queryHistory({}, {.scope = HistoryScope::cwd});
+    application::history::search(client, {}, {.scope = HistoryScope::cwd});
     require(std::get<std::string_view>(transport.last<QueryHistory>().scope_value) == "/work/current", "directory scope must use the focused terminal's reported cwd");
-    client.queryHistory({}, {.scope = HistoryScope::pane});
+    application::history::search(client, {}, {.scope = HistoryScope::pane});
     const auto query = transport.last<QueryHistory>();
 
     require(query.scope == HistoryScope::pane && std::get<std::uint64_t>(query.scope_value) == 1, "pane scope must retain the focused pane identity");
@@ -902,12 +901,12 @@ namespace {
     const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "copy exact bytes"}, HistoryEntry{.id = 2, .pane_id = 2, .command = "visit existing pane"}};
 
     deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
-    client.copyHistory(1);
+    application::history::copy(client, 1);
     require(client.clipboard() == "copy exact bytes", "history copy must use the complete canonical command");
-    client.deleteHistory(1);
+    application::history::remove(client, 1);
     const auto deletion = transport.last<DeleteHistory>();
 
-    require(client.history().size() == entries.size(), "queued deletion must preserve rows until confirmation");
+    require(application::history::view(client).rows().size() == entries.size(), "queued deletion must preserve rows until confirmation");
     require(deliver(client, HistoryPruned{.request_id = deletion.request_id, .removed = 1}) == application::Change::history, "deletion confirmation must refresh the history projection");
     const auto refreshed = transport.last<QueryHistory>();
 
@@ -916,7 +915,7 @@ namespace {
 
     const auto creations = transport.count(ClientTag::create_pane);
 
-    client.visitHistory(2);
+    application::history::visit(client, 2);
     const auto opened = transport.last<OpenPane>();
 
     require(opened.target.kind == PaneTarget::Kind::pane && opened.target.id == 2 && !opened.launch, "visiting an unknown pane must discover its existing runtime location");
@@ -974,8 +973,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     TestSession client{memory, transport};
-    using Storage = HistoryPageStorage<decltype(memory)>;
-    using Browser = HistoryBrowser<decltype(memory)>;
+    using Storage = application::history::HistoryLimits;
+    using Browser = application::history::HistoryLimits;
     constexpr auto command_bytes = Browser::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     const std::string command(command_bytes, 'x');
@@ -986,11 +985,11 @@ namespace {
     }
 
     openFirstPane(client, transport);
-    client.queryHistory({});
+    application::history::search(client, {});
     deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
     const auto queries = transport.count(ClientTag::query_history);
 
-    client.selectHistoryRow(cached_entries);
+    application::history::select(client, cached_entries);
     const auto full = transport.last<QueryHistory>();
 
     require(full.entry_id == entries[cached_entries].id && full.limit == 1 && transport.count(ClientTag::query_history) == queries + 1, "selecting an uncached command must issue one exact-entry query");
@@ -998,34 +997,34 @@ namespace {
     const auto before_load = transport.count(ClientTag::pane_input);
 
     try {
-      client.pasteHistory(full.entry_id);
+      application::history::paste(client, full.entry_id);
     } catch (const EncodingError&) {
       rejected = true;
     }
 
     require(rejected && transport.count(ClientTag::pane_input) == before_load, "a preview must never be sent while full command loading is pending");
     deliver(client, HistoryResults{.request_id = full.request_id, .entries = std::span{entries}.subspan(cached_entries, 1)});
-    client.copyHistory(full.entry_id);
+    application::history::copy(client, full.entry_id);
     require(client.clipboard() == command, "copy must use the complete fetched command rather than its preview");
     const auto first_input = transport.sent.size();
 
-    client.pasteHistory(full.entry_id);
+    application::history::paste(client, full.entry_id);
     require(transport.inputSince(first_input) == command, "large selected commands must preserve every byte through chunked terminal input");
 
-    client.selectHistoryRow(0);
-    client.selectHistoryRow(cached_entries);
-    require(client.historyBrowser().canSubmit() && transport.count(ClientTag::query_history) == queries + 1, "returning to the last complete detail must reuse it without another request");
+    application::history::select(client, 0);
+    application::history::select(client, cached_entries);
+    require(application::history::view(client).canSubmit() && transport.count(ClientTag::query_history) == queries + 1, "returning to the last complete detail must reuse it without another request");
     transport.reject_history = true;
     bool failed = false;
 
     try {
-      client.selectHistoryRow(cached_entries + 1);
+      application::history::select(client, cached_entries + 1);
     } catch (const EncodingError&) {
       failed = true;
     }
 
-    require(failed && client.historyBrowser().state().command_phase == HistoryPhase::failed && !client.historyBrowser().canSubmit(), "a failed exact-entry send must release loading state and keep the preview unactionable");
-    require(client.historyBrowser().state().phase == HistoryPhase::ready, "a detail transport failure must preserve the command page");
+    require(failed && application::history::view(client).state().command_phase == application::history::HistoryPhase::failed && !application::history::view(client).canSubmit(), "a failed exact-entry send must release loading state and keep the preview unactionable");
+    require(application::history::view(client).state().phase == application::history::HistoryPhase::ready, "a detail transport failure must preserve the command page");
   }
 
   void historyQueryBounds() {
@@ -1034,14 +1033,13 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    using Client = decltype(client);
-    std::string query(Client::maximum_history_query_bytes - 1, 'x');
+    std::string query(application::history::HistoryLimits::maximum_query_bytes - 1, 'x');
 
     query += "é";
-    client.queryHistory(query);
+    application::history::search(client, query);
     const auto sent = transport.last<QueryHistory>();
 
-    require(sent.query.size() == Client::maximum_history_query_bytes - 1 && query.starts_with(sent.query), "oversized queries must stop before a split UTF-8 scalar");
+    require(sent.query.size() == application::history::HistoryLimits::maximum_query_bytes - 1 && query.starts_with(sent.query), "oversized queries must stop before a split UTF-8 scalar");
   }
 
   void bracketedHistoryReplay() {
@@ -1067,13 +1065,13 @@ namespace {
     frame.spans = spans;
     deliver(client, frame);
 
-    client.queryHistory({});
+    application::history::search(client, {});
     const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "echo first\necho\tsecond"}};
 
     deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
     const auto first_message = transport.sent.size();
 
-    client.pasteHistory(1, true);
+    application::history::paste(client, 1, true);
     require(transport.inputSince(first_message) == "\x1b[200~echo first\necho\tsecond\x1b[201~\r", "multiline run must put Enter after the bracketed-paste terminator");
 
     const auto clipboard_message = transport.sent.size();

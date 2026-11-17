@@ -13,7 +13,6 @@ import telar.lua;
 
 import telar.base.memory.containers;
 import telar.base.text;
-import telar.gui.presentation.history_filter_geometry;
 import telar.config.core;
 
 // Interface: components/node.cppm

@@ -166,6 +166,15 @@ recibe el id de la petición, no lo inventa. `application` pide el id (`Access::
 una vista de solo lectura con los métodos `const` de la clase (`PathPickerPage` sobre el
 `PathPicker` oculto), válida hasta el siguiente caso de uso.
 
+Una vista que se lee en un camino caliente (el puntero sobre el panel de historial lee
+`HistoryView`) define sus métodos `inline` en la interfaz, y `view(state)` también, para costar lo
+que costaba el método al que sustituye. Las constantes que los llamadores leían de la clase oculta
+salen a un tipo de valor (`HistoryLimits`).
+
+**Tests de una clase oculta.** Un test que manejaba la clase con estado pasa por los casos de uso;
+si sus aserciones usan los nombres de los métodos, un adaptador local los reenvía a los casos de uso
+y a la vista (`Browser` en `history_test.cpp`), sin tocar lo que afirman.
+
 **Fuera de las features.** Una sección que hace I/O no es pura: va a `foundation/system`
 (`DirectoryCompletion` lista el sistema de archivos) o se queda en `application` (la reproducción
 de sonido). Lo que una feature compone con otra aún no migrada (el editor de la línea para

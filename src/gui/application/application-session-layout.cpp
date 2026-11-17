@@ -7,7 +7,7 @@ import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.tbc;
 import telar.gui.graphics.texture_cache;
-import telar.gui.history.browser;
+import telar.gui.features.history;
 import telar.gui.input.copy_pointer;
 import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
@@ -883,7 +883,7 @@ namespace telar::gui::application {
     pending_layout_restore_.reset();
     copy_mode_.reset();
     copy_search_request_ = 0;
-    history_.suspend();
+    features::history::suspend(history_);
     features::paths::close(paths_);
     features::palette::discard(palette_);
     graphics_pauses_.reset();

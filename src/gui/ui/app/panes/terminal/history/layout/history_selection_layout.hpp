@@ -14,7 +14,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -65,11 +65,11 @@ namespace telar::gui::qt {
     QVariantMap selection_;
     QPointer<WindowAnimationClock> clock_;
     QMetaObject::Connection frame_connection_;
-    HistorySelectionMotion motion_;
-    HistoryExpansion expansion_;
+    application::history::HistorySelectionMotion motion_;
+    application::history::HistoryExpansion expansion_;
     QString leaving_key_;
     std::optional<std::uint64_t> generation_;
-    std::optional<HistoryPosition> selected_;
+    std::optional<application::history::HistoryPosition> selected_;
     std::optional<std::uint64_t> next_sample_ns_;
     bool dirty_ = true;
     bool frame_requested_ = false;

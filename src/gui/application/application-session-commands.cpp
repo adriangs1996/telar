@@ -6,7 +6,6 @@ import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.graphics.texture_cache;
-import telar.gui.history.browser;
 import telar.gui.layout.snapshots;
 import telar.gui.links.path_expansion;
 import telar.config.client;
