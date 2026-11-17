@@ -6,45 +6,39 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 
-#include <cstdio>
-
 import std;
+import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.fonts;
 
 namespace {
 
+  using telar::testing::check;
   using namespace telar::gui;
   using namespace telar::gui::glyphs;
-
-  void require(bool condition, const char* message) {
-    if (!condition) {
-      throw std::runtime_error{message};
-    }
-  }
 
   void parsing() {
     for (const auto first : {Symbol::first_box, Symbol::first_block, Symbol::first_braille, Symbol::first_powerline, Symbol::last_powerline}) {
       const auto bytes = Utf8Scalar::encode(first);
       const auto glyph = Symbol::parse(bytes.view());
 
-      require(glyph && glyph->codepoint == first, "bare procedural codepoints must retain their identity");
+      check(glyph && glyph->codepoint == first, "bare procedural codepoints must retain their identity");
     }
 
     for (const auto* text : {"x", "", "\xe2\xa0\x80\xcc\x81", "\xe2\xa0", "\xe2\xa0x", "\xe2\x16\x80"}) {
-      require(!Symbol::parse(text), "incomplete, invalid and combining sequences must remain in the text path");
+      check(!Symbol::parse(text), "incomplete, invalid and combining sequences must remain in the text path");
     }
 
-    require(Symbol::parse("\xee\x82\xb4")->kind == SymbolKind::powerline, "Powerline separators must leave the font path");
-    require(!Symbol::parse("\xee\x82\xaf") && !Symbol::parse("\xee\x83\x80"), "neighbouring private-use icons must stay in the font path");
+    check(Symbol::parse("\xee\x82\xb4")->kind == SymbolKind::powerline, "Powerline separators must leave the font path");
+    check(!Symbol::parse("\xee\x82\xaf") && !Symbol::parse("\xee\x83\x80"), "neighbouring private-use icons must stay in the font path");
   }
 
   template <typename Paint>
   void verifyBounds(const Paint& paint, Rect cell) {
     for (const auto rectangle : paint.rectangles()) {
-      require(rectangle.x >= cell.x && rectangle.y >= cell.y && rectangle.right() <= cell.right() && rectangle.bottom() <= cell.bottom(), "procedural ink must remain inside its complete cell");
-      require(!rectangle.empty(), "procedural ink must not retain empty rectangles");
+      check(rectangle.x >= cell.x && rectangle.y >= cell.y && rectangle.right() <= cell.right() && rectangle.bottom() <= cell.bottom(), "procedural ink must remain inside its complete cell");
+      check(!rectangle.empty(), "procedural ink must not retain empty rectangles");
     }
   }
 
@@ -52,14 +46,14 @@ namespace {
     constexpr Rect cell{.x = 10, .y = 20, .width = 8, .height = 16};
     const auto blank = Braille::draw(cell, 0);
 
-    require(blank.rectangles().empty(), "blank Braille must keep its advance without drawing ink");
+    check(blank.rectangles().empty(), "blank Braille must keep its advance without drawing ink");
     const auto full = Braille::draw(cell, std::numeric_limits<std::uint8_t>::max());
 
-    require(full.rectangles().size() == Braille::dot_count, "each set Braille bit must own one dot");
+    check(full.rectangles().size() == Braille::dot_count, "each set Braille bit must own one dot");
     for (std::size_t bit = 0; bit < Braille::dot_count; ++bit) {
       const auto single = Braille::draw(cell, static_cast<std::uint8_t>(1U << bit));
 
-      require(single.rectangles().size() == 1 && single.rectangles().front() == full.rectangles()[bit], "bit positions must preserve Unicode Braille numbering");
+      check(single.rectangles().size() == 1 && single.rectangles().front() == full.rectangles()[bit], "bit positions must preserve Unicode Braille numbering");
     }
 
     for (const auto extent : {0.0F, 0.5F, 1.0F, 2.0F, 3.0F, 9.0F}) {
@@ -81,12 +75,12 @@ namespace {
     const auto upper = Block::draw(cell, upper_half).rectangles().front();
     const auto lower = Block::draw(cell, lower_half).rectangles().front();
 
-    require(upper.bottom() == lower.y && upper.height + lower.height == cell.height, "opposite half blocks must tile odd pixel extents exactly");
+    check(upper.bottom() == lower.y && upper.height + lower.height == cell.height, "opposite half blocks must tile odd pixel extents exactly");
     constexpr std::uint32_t light_shade = 0x2591;
     constexpr float expected_coverage = 0.25F;
     const auto shade = Block::draw(cell, light_shade);
 
-    require(shade.coverage() == expected_coverage && shade.rectangles().front() == cell, "shades must blend one complete cell at their coverage");
+    check(shade.coverage() == expected_coverage && shade.rectangles().front() == cell, "shades must blend one complete cell at their coverage");
   }
 
   void invalidBounds() {
@@ -102,14 +96,14 @@ namespace {
         rejected = true;
       }
 
-      require(rejected, "invalid cell geometry must fail before integer projection");
+      check(rejected, "invalid cell geometry must fail before integer projection");
     }
   }
 
   void verifyDisjoint(std::span<const Rect> rectangles) {
     for (std::size_t index = 0; index < rectangles.size(); ++index) {
       for (const auto other : rectangles.subspan(index + 1)) {
-        require(rectangles[index].intersect(other).empty(), "box intersections must blend each pixel at most once");
+        check(rectangles[index].intersect(other).empty(), "box intersections must blend each pixel at most once");
       }
     }
   }
@@ -138,7 +132,7 @@ namespace {
     const auto single = Box::draw(light_horizontal, tiny, 1);
     const auto doubled = Box::draw(double_horizontal, tiny, 1);
 
-    require(single.rectangles().size() == doubled.rectangles().size() && single.rectangles().front() == doubled.rectangles().front(), "tiny cells must replace a clipped double stroke with one visible stroke");
+    check(single.rectangles().size() == doubled.rectangles().size() && single.rectangles().front() == doubled.rectangles().front(), "tiny cells must replace a clipped double stroke with one visible stroke");
   }
 
   void physicalBoxStroke() {
@@ -147,10 +141,10 @@ namespace {
     constexpr std::uint16_t doubled_height = 30;
     constexpr std::uint16_t quadrupled_height = 60;
 
-    require(design.pixels(normal_height) == 1 && design.pixels(doubled_height) == 2 && design.pixels(quadrupled_height) == 3, "box thickness must scale the design metric before rounding to physical pixels");
+    check(design.pixels(normal_height) == 1 && design.pixels(doubled_height) == 2 && design.pixels(quadrupled_height) == 3, "box thickness must scale the design metric before rounding to physical pixels");
     constexpr BoxStroke negative{.units_per_em = 1000, .underline_thickness = -1};
 
-    require(negative.pixels(doubled_height) == 2 && BoxStroke{}.pixels(normal_height) == 1, "missing or nonpositive design metrics must use the original pixel-height fallback");
+    check(negative.pixels(doubled_height) == 2 && BoxStroke{}.pixels(normal_height) == 1, "missing or nonpositive design metrics must use the original pixel-height fallback");
   }
 
   void curveRaster() {
@@ -177,14 +171,14 @@ namespace {
 
         const auto padding = std::span{pixels}.subspan((row * stride) + width, stride - width);
 
-        require(std::ranges::all_of(padding, [](auto value) {
+        check(std::ranges::all_of(padding, [](auto value) {
           return value == guard;
         }),
             "curve rasterization must preserve row padding");
       }
 
-      require(ink, "each curve must rasterize visible ink");
-      require(std::ranges::all_of(std::span{pixels}.last(guard_bytes), [](auto value) {
+      check(ink, "each curve must rasterize visible ink");
+      check(std::ranges::all_of(std::span{pixels}.last(guard_bytes), [](auto value) {
         return value == guard;
       }),
           "curve rasterization must preserve the storage guard");
@@ -213,19 +207,19 @@ namespace {
     const auto left = raster(0xe0b6);
 
     for (std::size_t row = 0; row < height; ++row) {
-      require(alpha(right, 0, row) > 0 && alpha(left, width - 1, row) > 0, "half circles must cover their flat edge along the whole cell height");
+      check(alpha(right, 0, row) > 0 && alpha(left, width - 1, row) > 0, "half circles must cover their flat edge along the whole cell height");
       for (std::size_t column = 0; column < width; ++column) {
-        require(alpha(right, column, row) == alpha(left, width - 1 - column, row), "left and right half circles must mirror each other");
+        check(alpha(right, column, row) == alpha(left, width - 1 - column, row), "left and right half circles must mirror each other");
       }
     }
 
-    require(alpha(right, 0, 2) == opaque && alpha(right, 0, height - 3) == opaque && alpha(right, width - 2, height / 2) == opaque && alpha(right, width - 1, height / 2) > opaque / 2, "the half circle must be solid from its flat edge to the far edge");
+    check(alpha(right, 0, 2) == opaque && alpha(right, 0, height - 3) == opaque && alpha(right, width - 2, height / 2) == opaque && alpha(right, width - 1, height / 2) > opaque / 2, "the half circle must be solid from its flat edge to the far edge");
     const auto triangle = raster(0xe0b0);
 
-    require(alpha(triangle, 0, 2) == opaque && alpha(triangle, 0, height - 3) == opaque && alpha(triangle, width - 1, height / 2) > 0, "the triangle must span the cell from edge to tip");
+    check(alpha(triangle, 0, 2) == opaque && alpha(triangle, 0, height - 3) == opaque && alpha(triangle, width - 1, height / 2) > 0, "the triangle must span the cell from edge to tip");
     const auto arc = raster(0xe0b5);
 
-    require(alpha(arc, width / 2, height / 2) == 0 && alpha(arc, width - 1, height / 2) > 0, "outlined separators must stroke without filling");
+    check(alpha(arc, width / 2, height / 2) == 0 && alpha(arc, width - 1, height / 2) > 0, "outlined separators must stroke without filling");
   }
 
   void invalidRasters() {
@@ -246,8 +240,8 @@ namespace {
         rejected = true;
       }
 
-      require(rejected, "invalid raster storage must fail before writing or multiplying strides");
-      require(std::ranges::all_of(pixels, [](auto value) {
+      check(rejected, "invalid raster storage must fail before writing or multiplying strides");
+      check(std::ranges::all_of(pixels, [](auto value) {
         return value == guard;
       }),
           "rejected rasters must preserve all borrowed bytes");
@@ -268,8 +262,8 @@ namespace {
       const BoxCurve curve{BoxCurve::Shape::diagonal_cross, {.width = extent, .height = extent}, 1};
 
       curve.rasterize({.pixels = pixels, .stride = stride, .width = width, .height = height});
-      require(pixels[0] == 0 && pixels[1] == 0 && pixels[stride] == 0 && pixels[stride + 1] == 0, "empty or underflowed geometry must clear only the active raster");
-      require(pixels[width] == guard && pixels[stride + width] == guard && pixels.back() == guard, "empty curves must preserve padding and trailing storage");
+      check(pixels[0] == 0 && pixels[1] == 0 && pixels[stride] == 0 && pixels[stride + 1] == 0, "empty or underflowed geometry must clear only the active raster");
+      check(pixels[width] == guard && pixels[stride + width] == guard && pixels.back() == guard, "empty curves must preserve padding and trailing storage");
     }
   }
 
@@ -286,18 +280,18 @@ namespace {
     const auto metrics = BoxMetrics::resolve(cell, 1);
     const auto* retained = cache.resolve(metrics, shape, build);
 
-    require(retained != nullptr && *retained == 1, "the first curve must own one cache entry");
-    require(cache.resolve(metrics, shape, build) == retained && builds == 1, "repainting a curve must reuse its admitted mask");
+    check(retained != nullptr && *retained == 1, "the first curve must own one cache entry");
+    check(cache.resolve(metrics, shape, build) == retained && builds == 1, "repainting a curve must reuse its admitted mask");
     for (std::size_t index = 1; index < Cache::capacity; ++index) {
       const Rect extent{.width = cell.width + static_cast<float>(index), .height = cell.height};
 
-      require(cache.resolve(BoxMetrics::resolve(extent, 1), shape, build) != nullptr, "the cache must admit its complete mask capacity");
+      check(cache.resolve(BoxMetrics::resolve(extent, 1), shape, build) != nullptr, "the cache must admit its complete mask capacity");
     }
 
     constexpr Rect extra{.width = 100, .height = 200};
 
-    require(cache.resolve(BoxMetrics::resolve(extra, 1), shape, build) == nullptr && builds == Cache::capacity, "full caches must request the reserved fallback without more rasterization");
-    require(*retained == 1 && cache.resolve(metrics, shape, build) == retained, "saturation must preserve every retained mask identity");
+    check(cache.resolve(BoxMetrics::resolve(extra, 1), shape, build) == nullptr && builds == Cache::capacity, "full caches must request the reserved fallback without more rasterization");
+    check(*retained == 1 && cache.resolve(metrics, shape, build) == retained, "saturation must preserve every retained mask identity");
   }
 
   void curveCacheMemoizesFailure() {
@@ -311,32 +305,23 @@ namespace {
       return std::nullopt;
     };
 
-    require(cache.resolve(metrics, shape, failed) == nullptr, "a failed mask must request the reserved fallback");
-    require(cache.resolve(metrics, shape, failed) == nullptr && attempts == 1 && cache.size() == 1, "a failed admission must not be rasterized again");
+    check(cache.resolve(metrics, shape, failed) == nullptr, "a failed mask must request the reserved fallback");
+    check(cache.resolve(metrics, shape, failed) == nullptr && attempts == 1 && cache.size() == 1, "a failed admission must not be rasterized again");
     cache.reset();
-    require(cache.resolve(metrics, shape, failed) == nullptr && attempts == 2, "a new font generation must release old admissions");
+    check(cache.resolve(metrics, shape, failed) == nullptr && attempts == 2, "a new font generation must release old admissions");
   }
 
-}
+  const telar::testing::Case case_parsing{"cell_glyphs.parsing", parsing};
+  const telar::testing::Case case_braille_geometry{"cell_glyphs.braille_geometry", brailleGeometry};
+  const telar::testing::Case case_block_geometry{"cell_glyphs.block_geometry", blockGeometry};
+  const telar::testing::Case case_box_geometry{"cell_glyphs.box_geometry", boxGeometry};
+  const telar::testing::Case case_physical_box_stroke{"cell_glyphs.physical_box_stroke", physicalBoxStroke};
+  const telar::testing::Case case_curve_raster{"cell_glyphs.curve_raster", curveRaster};
+  const telar::testing::Case case_powerline_spans_tall_cells{"cell_glyphs.powerline_spans_tall_cells", powerlineSpansTallCells};
+  const telar::testing::Case case_invalid_rasters{"cell_glyphs.invalid_rasters", invalidRasters};
+  const telar::testing::Case case_empty_curves_clear_active_pixels{"cell_glyphs.empty_curves_clear_active_pixels", emptyCurvesClearActivePixels};
+  const telar::testing::Case case_curve_cache_keeps_references{"cell_glyphs.curve_cache_keeps_references", curveCacheKeepsReferences};
+  const telar::testing::Case case_curve_cache_memoizes_failure{"cell_glyphs.curve_cache_memoizes_failure", curveCacheMemoizesFailure};
+  const telar::testing::Case case_invalid_bounds{"cell_glyphs.invalid_bounds", invalidBounds};
 
-int main() {
-  try {
-    parsing();
-    brailleGeometry();
-    blockGeometry();
-    boxGeometry();
-    physicalBoxStroke();
-    curveRaster();
-    powerlineSpansTallCells();
-    invalidRasters();
-    emptyCurvesClearActivePixels();
-    curveCacheKeepsReferences();
-    curveCacheMemoizesFailure();
-    invalidBounds();
-    std::puts("gui-cell-glyphs: passed");
-  } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
-
-    return 1;
-  }
 }

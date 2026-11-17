@@ -10,7 +10,7 @@ module;
 #include <hb.h>
 #include <sys/stat.h>
 
-export module telar.gui.tests.font_fixture;
+export module telar.gui.foundation.fonts.tests.font_fixture;
 
 import std;
 import telar.tbc;
@@ -20,7 +20,7 @@ import telar.gui.foundation.fonts;
 import telar.platform.fs;
 
 export {
-  namespace telar::gui::test {
+  namespace telar::gui::inline foundation::inline fonts::tests::font_fixture {
 
     template <Allocator Memory>
     class FontFixture {

@@ -7,7 +7,6 @@ set(CMAKE_AUTOUIC OFF)
 # Shared test fixtures are module interfaces. They link the domains they import, whose
 # -ffp-contract=off they inherit like every other GUI importer.
 file(GLOB gui_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*/*.cppm")
-list(REMOVE_ITEM gui_test_fixtures "${CMAKE_CURRENT_SOURCE_DIR}/font_fixture/font_fixture.cppm")
 telar_add_test(gui-test-fixtures STATIC SOURCES ${gui_test_fixtures} LIBRARIES gui-foundation-actions gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-application gui-features-plugins)
 
 telar_add_test(gui-clipboard-image-pipe-test SOURCES clipboard_image_pipe_test.cpp platform/clipboard_pipe_status.c LIBRARIES gui-posix gui-test-fixtures gui-platform
@@ -105,21 +104,12 @@ telar_add_test(gui-link-interaction-test SOURCES link_interaction_test.cpp LIBRA
   TEST gui-link-interaction LABELS gui.features.terminal.links TIMEOUT 30)
 telar_add_test(gui-child-mouse-test SOURCES child_mouse_test.cpp LIBRARIES gui-foundation-core gui-features-terminal-input
   TEST gui-child-mouse LABELS gui.features.terminal.input TIMEOUT 30)
-telar_add_test(gui-cell-glyphs-test SOURCES cell_glyphs_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-test-fixtures
-  TEST gui-cell-glyphs LABELS gui.foundation.terminal)
 telar_add_test(gui-workbench-layout-test SOURCES layout_test.cpp LIBRARIES gui-features-workbench gui-foundation-model gui-foundation-core
   TEST LABELS gui.features.workbench TIMEOUT 30)
 telar_add_test(gui-graphics-test SOURCES graphics_test.cpp LIBRARIES gui-foundation-core gui-foundation-terminal gui-features-terminal-graphics gui-test-fixtures
   TEST gui-features-terminal-graphics LABELS gui.features.terminal.graphics TIMEOUT 30)
 
 if(TELAR_GUI_NATIVE)
-  telar_add_test(gui-test-font-fixture STATIC SOURCES font_fixture/font_fixture.cppm LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native gui-test-fixtures)
-  telar_add_test(gui-font-cascade-test SOURCES font_cascade_test.cpp LIBRARIES gui-foundation-fonts gui-fonts-native deps::ghostty_vt gui-test-font-fixture
-    TEST gui-font-cascade ARGS "${TELAR_ROOT}/assets" LABELS gui.foundation.fonts)
-  target_compile_options(gui-font-cascade-test PRIVATE -ffp-contract=off)
-  telar_add_test(gui-row-text-test SOURCES row_text_test.cpp LIBRARIES gui-foundation-fonts gui-fonts-native deps::ghostty_vt gui-test-font-fixture
-    TEST gui-row-text ARGS "${TELAR_ROOT}/assets" LABELS gui.foundation.fonts)
-  target_compile_options(gui-row-text-test PRIVATE -ffp-contract=off)
   telar_add_test(gui-font-coverage-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/font_coverage_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native
     CHECKS lint lifetime blank_lines)
 
