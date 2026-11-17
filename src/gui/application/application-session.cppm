@@ -24,6 +24,7 @@ import telar.gui.foundation.system;
 import :client_view_state;
 import :sidebar;
 import telar.gui.features.palette;
+import telar.gui.features.status_bar;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -341,10 +342,6 @@ export {
       [[nodiscard]] bool workspaceListCollapsed() const noexcept;
 
       void setWorkspaceListCollapsed(bool collapsed);
-
-      [[nodiscard]] const SystemMetrics& metrics() const noexcept;
-
-      [[nodiscard]] const HostMetrics& hostMetrics() const noexcept;
 
       [[nodiscard]] const ProxyStatus& proxyStatus() const noexcept;
 
@@ -711,7 +708,7 @@ export {
       features::prompt::State prompt_;
       features::terminal::copy_mode::State copy_mode_;
       features::terminal::links::State links_;
-      HostMetrics metrics_;
+      features::status_bar::State status_bar_;
       ProxyStatus proxy_{};
       tbc::view<Memory&, tbc::lt::a> memory_;
       tbc::view<RuntimeTransport&, tbc::lt::a> transport_;

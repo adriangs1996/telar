@@ -15,9 +15,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
-import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {
 
@@ -25,28 +23,28 @@ namespace telar::gui::qt {
     return QString::fromLatin1(palette_names[static_cast<std::size_t>(role)]);
   }
 
-  inline QVariantMap metricRecord(BarMetric metric, const application::HostMetrics& metrics) {
+  inline QVariantMap metricRecord(BarMetric metric, const application::status_bar::HostMetrics& metrics) {
     constexpr std::array names{"cpu", "memory", "battery"};
     const auto& sample = metrics.sample();
     const auto severity = metrics.severity(metric);
-    const auto ink = BarMetrics::ink(severity);
+    const auto ink = application::status_bar::BarMetrics::ink(severity);
 
     return {
         {QStringLiteral("name"), QString::fromLatin1(names[static_cast<std::size_t>(metric)])},
-        {QStringLiteral("available"), BarMetrics::available(metric, sample)},
+        {QStringLiteral("available"), application::status_bar::BarMetrics::available(metric, sample)},
         // A machine without a battery has nothing to measure; the summary leaves it out instead of showing it as unknown.
         {QStringLiteral("absent"), metric == BarMetric::battery && sample.revision != 0 && !sample.has_battery},
-        {QStringLiteral("glyph"), toQString(BarMetrics::glyph(metric))},
-        {QStringLiteral("text"), toQString(BarMetrics::value(metric, sample).view())},
+        {QStringLiteral("glyph"), toQString(application::status_bar::BarMetrics::glyph(metric))},
+        {QStringLiteral("text"), toQString(application::status_bar::BarMetrics::value(metric, sample).view())},
         {QStringLiteral("ink"), paletteName(ink)},
         {QStringLiteral("mark"), paletteName(ink == PaletteRole::text ? PaletteRole::subtext0 : ink)},
-        {QStringLiteral("percent"), BarMetrics::percent(metric, sample)},
+        {QStringLiteral("percent"), application::status_bar::BarMetrics::percent(metric, sample)},
         {QStringLiteral("severity"), static_cast<int>(severity)},
     };
   }
 
-  inline QVariantMap metricsRecord(const application::HostMetrics& metrics) {
-    CpuHistory::Samples buffer;
+  inline QVariantMap metricsRecord(const application::status_bar::HostMetrics& metrics) {
+    application::status_bar::CpuHistory::Samples buffer;
     QVariantList history;
 
     for (const auto sample : metrics.history().ordered(buffer)) {

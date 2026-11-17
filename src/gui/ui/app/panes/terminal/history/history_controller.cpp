@@ -18,7 +18,6 @@ static_assert(true);
 
 import telar.base.text.utf8;
 import telar.gui.application;
-import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
 

@@ -18,6 +18,7 @@ telar_add_domain(gui application
     application-session.cpp
     application-sidebar.cpp
     application-sound_playback.cpp
+    application-status_bar.cpp
     application-terminal_copy_mode.cpp
     application-terminal_graphics.cpp
     application-terminal_input.cpp
@@ -27,5 +28,5 @@ telar_add_domain(gui application
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
        foundation/keys foundation/model foundation/agents features/peek features/palette features/paths features/history
        features/prompt features/terminal/input features/terminal/links features/terminal/copy_mode
-       features/terminal/graphics features/terminal/attachments features/window core layout
+       features/terminal/graphics features/terminal/attachments features/window features/status_bar layout
        text presentation components config)

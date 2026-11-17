@@ -20,7 +20,7 @@ static_assert(true);
 import telar.gui.tests.metrics_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
-import telar.gui.core.json_writer;
+import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_filter_geometry;
 
@@ -28,6 +28,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::status_bar;
   using telar::gui::test::hostSample;
   using telar::gui::test::require;
   using telar::gui::test::TestSession;
@@ -37,7 +38,7 @@ namespace {
   constexpr std::uint8_t invalid_cpu = 101;
 
   void revisionsKeepTheLatestSampleAndHistory() {
-    application::HostMetrics metrics;
+    telar::gui::test::HostMetricsState metrics;
     CpuHistory::Samples buffer;
 
     require(!BarMetrics::available(BarMetric::cpu, metrics.sample()), "Missing metrics must stay hidden");
@@ -59,7 +60,7 @@ namespace {
   }
 
   void historyKeepsOnlyTheLastSamplesInOrder() {
-    application::HostMetrics metrics;
+    telar::gui::test::HostMetricsState metrics;
     CpuHistory::Samples buffer;
     constexpr std::uint64_t sample_count = (3 * CpuHistory::capacity) + 7;
     constexpr std::uint64_t percent_count = 101;
@@ -94,12 +95,12 @@ namespace {
     session.disconnected();
     CpuHistory::Samples buffer;
 
-    require(session.metrics().revision == previous_revision && session.metrics().cpu_percent == initial_cpu && session.hostMetrics().history().ordered(buffer).size() == 1, "A lost runtime must retain its last metric sample and CPU history until replacement adoption");
+    require(application::status_bar::metrics(session).sample().revision == previous_revision && application::status_bar::metrics(session).sample().cpu_percent == initial_cpu && application::status_bar::metrics(session).history().ordered(buffer).size() == 1, "A lost runtime must retain its last metric sample and CPU history until replacement adoption");
     require(session.proxyStatus().active && session.proxyStatus().scope == ProxyScope::wildcard && session.proxyStatus().system_trusted, "A lost runtime must retain proxy status while the old session stays visible");
     session.disconnected();
-    require(session.metrics().revision == previous_revision, "Failed retries must not retire the last visible metric sample");
+    require(application::status_bar::metrics(session).sample().revision == previous_revision, "Failed retries must not retire the last visible metric sample");
     session.connected(2);
-    require(session.metrics().revision == 0 && session.hostMetrics().history().ordered(buffer).empty(), "Adopting the replacement runtime must clear the old metric replica and history");
+    require(application::status_bar::metrics(session).sample().revision == 0 && application::status_bar::metrics(session).history().ordered(buffer).empty(), "Adopting the replacement runtime must clear the old metric replica and history");
     require(!session.proxyStatus().active && session.proxyStatus().scope == ProxyScope::exact && !session.proxyStatus().system_trusted, "Adopting the replacement runtime must reset its proxy status");
     require(telar::gui::test::deliver(session, hostSample(1, initial_cpu)) == application::Change::metrics, "A replacement runtime may restart its revision counter");
   }
@@ -107,7 +108,7 @@ namespace {
 }
 
 void alertsDebouncePeaksAndReleaseWithAMargin() {
-  application::HostMetrics metrics;
+  telar::gui::test::HostMetricsState metrics;
   std::uint64_t revision = 0;
   const auto cpu = [&](std::uint8_t percent, std::optional<std::uint8_t> battery = std::nullopt) {
     require(metrics.update(hostSample(++revision, percent, 0, battery)), "Each sample must be accepted");

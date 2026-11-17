@@ -12,11 +12,11 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.history_inspection;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  inline QVariantMap statusModeRecord(StatusMode mode, const ModeHints& hints = {}) {
+  inline QVariantMap statusModeRecord(application::status_bar::StatusMode mode, const application::status_bar::ModeHints& hints = {}) {
     QVariantList records;
 
     for (const auto& hint : hints.items()) {

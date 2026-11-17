@@ -9,7 +9,6 @@ import telar.gui.features.window;
 
 import telar.gui.text.notification_payload;
 
-import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
@@ -112,29 +111,6 @@ export {
 
     protected:
       ~RuntimeTransport() = default;
-    };
-
-  }
-}
-
-// Interface: application/host_metrics.cppm
-export {
-  namespace telar::gui::application {
-
-    class HostMetrics {
-    public:
-      [[nodiscard]] bool update(const SystemMetrics& sample);
-
-      [[nodiscard]] const SystemMetrics& sample() const noexcept;
-
-      [[nodiscard]] const CpuHistory& history() const noexcept;
-
-      [[nodiscard]] MetricSeverity severity(BarMetric metric) const noexcept;
-
-    private:
-      SystemMetrics sample_{};
-      CpuHistory history_;
-      MetricAlerts alerts_;
     };
 
   }

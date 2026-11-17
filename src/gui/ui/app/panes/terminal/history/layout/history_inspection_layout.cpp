@@ -29,7 +29,6 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
-import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
   namespace {

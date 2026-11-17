@@ -25,7 +25,6 @@ import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.gui.input.key_encoder;
-import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
 
@@ -52,7 +51,7 @@ namespace telar::gui::qt {
     [[nodiscard]] std::optional<KeyChord> prefixedKeyForAction(const BindingAction& action) const noexcept;
     [[nodiscard]] std::uint64_t nowNanoseconds() const noexcept;
     [[nodiscard]] bool prefixPending() const noexcept;
-    [[nodiscard]] tbc::view<ModeHints, tbc::lt::static_storage> modeHints() const noexcept;
+    [[nodiscard]] tbc::view<application::status_bar::ModeHints, tbc::lt::static_storage> modeHints() const noexcept;
     // Keys typed while a Lua binding runs on the Lua thread wait for its result, so a key
     // never reaches a pane the binding was about to leave.
     using Hold = std::uint64_t;

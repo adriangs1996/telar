@@ -120,7 +120,7 @@ namespace telar::gui::application {
     ++view_version_.active_tab;
     ++view_version_.panes;
     ready_ = true;
-    metrics_ = {};
+    status_bar_ = {};
     proxy_ = {};
     send(RequestRuntimeState{.client_identity = identity, .interactive = true});
     send(ConfigureGraphics{supportsSharedGraphics()});
@@ -496,14 +496,6 @@ namespace telar::gui::application {
     retainLayout();
   }
 
-  const SystemMetrics& Session::metrics() const noexcept {
-    return metrics_.sample();
-  }
-
-  const HostMetrics& Session::hostMetrics() const noexcept {
-    return metrics_;
-  }
-
   const ProxyStatus& Session::proxyStatus() const noexcept {
     return proxy_;
   }
@@ -591,7 +583,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const SystemMetrics& message) {
-    return metrics_.update(message) ? Change::metrics : Change::none;
+    return status_bar::receive(*this, message);
   }
 
   Change Session::apply(const ProxyStatus& message) {

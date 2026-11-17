@@ -48,7 +48,6 @@ static_assert(true);
 #include <cstring>
 
 import telar.gui.application;
-import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {
 
@@ -98,8 +97,8 @@ namespace telar::gui::qt {
     return router_.prefixPending();
   }
 
-  tbc::view<ModeHints, tbc::lt::static_storage> KeyBindings::modeHints() const noexcept {
-    return ModeHints::resolve(router_);
+  tbc::view<application::status_bar::ModeHints, tbc::lt::static_storage> KeyBindings::modeHints() const noexcept {
+    return application::status_bar::ModeHints::resolve(router_);
   }
 
   void KeyBindings::configure(const InputConfiguration& configuration, const BindingMap<BindingAction>& map) {

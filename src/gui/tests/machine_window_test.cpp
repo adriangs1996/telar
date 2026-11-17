@@ -780,7 +780,7 @@ namespace {
       constexpr std::uint8_t trailing_cpu = 13;
 
       fixture.remote_runtime->send(hostSample(1, retained_cpu));
-      QTRY_COMPARE_WITH_TIMEOUT(remote.session.metrics().cpu_percent, retained_cpu, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application::status_bar::metrics(remote.session).sample().cpu_percent, retained_cpu, wait_ms);
       switch (status) {
       case TerminalStatus::stopping:
         fixture.remote_runtime->send(RuntimeStopping{});
@@ -798,7 +798,7 @@ namespace {
       QVERIFY(!remote.session.presented());
       QVERIFY(MachineWindow::client(application, Machines::local_slot).session.presented());
       QCOMPARE(remote.phase, MachinePhase::connected);
-      QCOMPARE(remote.session.metrics().cpu_percent, retained_cpu);
+      QCOMPARE(application::status_bar::metrics(remote.session).sample().cpu_percent, retained_cpu);
       fixture.remote_runtime.reset();
       fixture.remote_socket_->disconnectFromServer();
       constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
@@ -987,7 +987,7 @@ namespace {
       const auto& remote = MachineWindow::client(application, fixture.remote.machine.slot);
 
       fixture.remote_runtime->send(hostSample(revision, remote_cpu));
-      QTRY_COMPARE_WITH_TIMEOUT(remote.session.metrics().cpu_percent, remote_cpu, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(application::status_bar::metrics(remote.session).sample().cpu_percent, remote_cpu, wait_ms);
       QCOMPARE(changed.size(), local_changes);
       MachineWindow::select(application, fixture.remote.machine);
       QVERIFY(finishOpening(*fixture.remote_runtime));

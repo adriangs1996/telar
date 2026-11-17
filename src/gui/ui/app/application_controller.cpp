@@ -54,7 +54,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.machines.picker;
-import telar.gui.presentation.history_inspection;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {

@@ -268,7 +268,7 @@ namespace telar::gui::qt {
 
     const auto& client = *found;
     const auto& summary = store_.machines().row(slot);
-    const auto& sample = client.session.hostMetrics().sample();
+    const auto& sample = application::status_bar::metrics(client.session).sample();
     MachineObservation observation{
         .phase = client.phase,
         .needs_setup = client.needs_setup,

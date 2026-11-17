@@ -388,7 +388,7 @@ namespace telar::gui::qt {
         .weekday = static_cast<std::uint8_t>(date.dayOfWeek() % days_per_week),
     };
 
-    const auto& sample = store_.session().hostMetrics().sample();
+    const auto& sample = application::status_bar::metrics(store_.session()).sample();
     if (sample.revision != 0) {
       context.metrics = sample;
     }

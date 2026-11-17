@@ -45,10 +45,13 @@ import telar.gui.input.key_encoder;
 import telar.gui.foundation.keys;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.history_meta_geometry;
+import telar.gui.features.status_bar;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::status_bar;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

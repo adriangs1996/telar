@@ -9,6 +9,7 @@ import telar.gui.features.palette;
 import telar.gui.features.paths;
 import telar.gui.features.history;
 import telar.gui.features.prompt;
+import telar.gui.features.status_bar;
 import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.features.terminal.graphics;
@@ -86,6 +87,14 @@ namespace telar::gui::application {
 
     [[nodiscard]] static constexpr const features::terminal::graphics::State& graphics(const Session& session) noexcept {
       return session.graphics_;
+    }
+
+    [[nodiscard]] static constexpr features::status_bar::State& statusBar(Session& session) noexcept {
+      return session.status_bar_;
+    }
+
+    [[nodiscard]] static constexpr const features::status_bar::State& statusBar(const Session& session) noexcept {
+      return session.status_bar_;
     }
 
     [[nodiscard]] static constexpr features::terminal::links::State& links(Session& session) noexcept {

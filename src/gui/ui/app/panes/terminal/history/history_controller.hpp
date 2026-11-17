@@ -33,7 +33,6 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
 
 namespace telar::gui::test {

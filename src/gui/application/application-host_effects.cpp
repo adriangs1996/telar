@@ -3,7 +3,6 @@ module telar.gui.application;
 import std;
 import telar.gui.foundation.text;
 import telar.gui.foundation.system;
-import telar.gui.core.json_writer;
 import telar.gui.foundation.core;
 import telar.tbc;
 import telar.gui.features.window;
@@ -70,31 +69,6 @@ namespace telar::gui::application {
 
   system::SharedImageSource RuntimeTransport::sharedImage([[maybe_unused]] std::string_view name) const {
     throw EncodingError{"Shared graphics was not negotiated"};
-  }
-
-  bool HostMetrics::update(const SystemMetrics& sample) {
-    sample.validate();
-    if (sample.revision <= sample_.revision) {
-      return false;
-    }
-
-    sample_ = sample;
-    history_.push(sample.cpu_percent);
-    alerts_.update(sample);
-
-    return true;
-  }
-
-  const SystemMetrics& HostMetrics::sample() const noexcept {
-    return sample_;
-  }
-
-  const CpuHistory& HostMetrics::history() const noexcept {
-    return history_;
-  }
-
-  MetricSeverity HostMetrics::severity(BarMetric metric) const noexcept {
-    return alerts_.severity(metric);
   }
 
   LimitReach LimitReports::Row::reach() const noexcept {

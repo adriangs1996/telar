@@ -1,16 +1,15 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.core.json_writer;
+// The CPU's recent samples, which the bar draws as a sparkline.
+export module telar.gui.features.status_bar:history;
 
 import std;
-
 import telar.tbc;
-import telar.base.text.json;
 
 // Interface: core/cpu_history.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::status_bar {
 
     class CpuHistory {
     public:

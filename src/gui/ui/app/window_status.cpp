@@ -61,14 +61,14 @@ namespace telar::gui::qt {
 
   QVariantMap WindowStatus::mode() const {
     if (prefixPending()) {
-      return statusModeRecord(StatusMode::prefix, keys_.modeHints());
+      return statusModeRecord(application::status_bar::StatusMode::prefix, keys_.modeHints());
     }
 
-    return statusModeRecord(copy_.active() ? StatusMode::copy : StatusMode::normal);
+    return statusModeRecord(copy_.active() ? application::status_bar::StatusMode::copy : application::status_bar::StatusMode::normal);
   }
 
   QVariantMap WindowStatus::hostMetrics() const {
-    return metricsRecord(store_.session().hostMetrics());
+    return metricsRecord(application::status_bar::metrics(store_.session()));
   }
 
   QString WindowStatus::tlsBadgeColor() const {

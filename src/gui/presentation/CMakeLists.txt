@@ -13,6 +13,6 @@ telar_add_domain(gui presentation
     suggestion_geometry/suggestion_geometry.cpp
     suggestion_labels/suggestion_labels.cpp
     tab_drop/tab_drop.cpp
-  DEPS foundation/core foundation/text foundation/actions foundation/keys
+  DEPS foundation/core foundation/text
        foundation/model foundation/agents foundation/drawing
        machines)

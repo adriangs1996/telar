@@ -69,6 +69,7 @@ import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.notification_stack;
 import telar.gui.features.window;
+import telar.gui.features.status_bar;
 
 namespace {
 
@@ -225,7 +226,7 @@ namespace {
       const QVariantMap status_properties{
           {QStringLiteral("width"), width},
           {QStringLiteral("height"), chrome.top_bar},
-          {QStringLiteral("metrics"), metricsRecord({})},
+          {QStringLiteral("metrics"), metricsRecord(features::status_bar::metrics(features::status_bar::State{}))},
           {QStringLiteral("colors"), themeColors(Configuration{})},
           {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), chrome.small}}},
       };

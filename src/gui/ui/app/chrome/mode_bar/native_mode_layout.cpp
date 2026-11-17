@@ -28,20 +28,19 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.actions;
-import telar.gui.presentation.history_inspection;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.application;
 
 namespace telar::gui::qt {
   namespace {
 
-    static_assert(ModeBarLabels::capacity <= ModeBarMeasurements::capacity);
+    static_assert(application::status_bar::ModeBarLabels::capacity <= application::status_bar::ModeBarMeasurements::capacity);
 
     QString text(std::string_view value) {
       return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
     }
 
     // The hint views the label it writes into the storage, region `a`.
-    tbc::view<ModeHint, tbc::lt::a> readHint(const QVariantMap& value, tbc::view<QByteArray&, tbc::lt::a> storage) {
+    tbc::view<application::status_bar::ModeHint, tbc::lt::a> readHint(const QVariantMap& value, tbc::view<QByteArray&, tbc::lt::a> storage) {
       const auto kind = value.value(QStringLiteral("key")).toInt();
       if (kind < static_cast<int>(KeyChord::Key::character) || kind > static_cast<int>(KeyChord::Key::back_tab)) {
         throw std::invalid_argument{"InvalidModeHintKey"};
@@ -132,20 +131,20 @@ namespace telar::gui::qt {
 
     try {
       const auto kind = mode_.value(QStringLiteral("kind")).toInt();
-      if (kind < static_cast<int>(StatusMode::normal) || kind > static_cast<int>(StatusMode::copy)) {
+      if (kind < static_cast<int>(application::status_bar::StatusMode::normal) || kind > static_cast<int>(application::status_bar::StatusMode::copy)) {
         throw std::invalid_argument{"InvalidStatusMode"};
       }
 
       const auto records = mode_.value(QStringLiteral("hints")).toList();
-      std::array<QByteArray, ModeHints::capacity> storage;
-      ModeHints bound;
+      std::array<QByteArray, application::status_bar::ModeHints::capacity> storage;
+      application::status_bar::ModeHints bound;
       const auto count = std::min(records.size(), static_cast<qsizetype>(storage.size()));
 
       for (qsizetype index = 0; index < count; ++index) {
         bound.append(readHint(records[index].toMap(), storage[static_cast<std::size_t>(index)]));
       }
 
-      const auto labels = ModeBarLabels::resolve(static_cast<StatusMode>(kind), bound);
+      const auto labels = application::status_bar::ModeBarLabels::resolve(static_cast<application::status_bar::StatusMode>(kind), bound);
 
       title = text(labels.title());
       for (const auto& hint : labels.hints()) {
@@ -170,17 +169,17 @@ namespace telar::gui::qt {
     chrome.ratio = static_cast<float>(ratio_ * density);
     chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(pixel_size_ * density), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()}));
     const auto measured_hints = measurements_.value(QStringLiteral("hints")).toList();
-    ModeBarMeasurements measured;
+    application::status_bar::ModeBarMeasurements measured;
 
     measured.title = advance(measurements_.value(QStringLiteral("title")), density);
-    measured.count = std::min({static_cast<std::size_t>(hints_.size()), static_cast<std::size_t>(measured_hints.size()), ModeBarMeasurements::capacity});
+    measured.count = std::min({static_cast<std::size_t>(hints_.size()), static_cast<std::size_t>(measured_hints.size()), application::status_bar::ModeBarMeasurements::capacity});
     for (std::size_t index = 0; index < measured.count; ++index) {
       const auto hint = measured_hints[static_cast<qsizetype>(index)].toMap();
 
       measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key")), density), .word = advance(hint.value(QStringLiteral("word")), density)};
     }
 
-    const auto geometry = title_.isEmpty() ? ModeBarGeometry{} : ModeBarGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, measured);
+    const auto geometry = title_.isEmpty() ? application::status_bar::ModeBarGeometry{} : application::status_bar::ModeBarGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, measured);
     QVariantList hints;
 
     for (std::size_t index = 0; index < geometry.count; ++index) {

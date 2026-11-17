@@ -35,7 +35,7 @@ import telar.gui.presentation.history_filter_geometry;
 
 import telar.gui.config.gui_query;
 import telar.gui.application;
-import telar.gui.core.json_writer;
+import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
 
 namespace {

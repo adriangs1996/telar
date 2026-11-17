@@ -32,7 +32,7 @@ import telar.gui.application;
 import telar.gui.config.plugin_query;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
-import telar.gui.core.json_writer;
+import telar.gui.features.status_bar;
 import telar.base.text.json;
 import telar.gui.foundation.keys;
 import telar.gui.input.key_encoder;

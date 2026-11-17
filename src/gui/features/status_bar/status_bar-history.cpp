@@ -1,10 +1,9 @@
-module telar.gui.core.json_writer;
+module telar.gui.features.status_bar;
 
 import std;
-
 import telar.tbc;
 
-namespace telar::gui {
+namespace telar::gui::features::status_bar {
 
   void CpuHistory::push(std::uint8_t percent) noexcept {
     samples_[next_] = percent;
