@@ -484,6 +484,40 @@ def repositories(f, prepare_probe=None):
     shutil.rmtree(stage)
 
 
+def dispatch(f):
+    """A dispatch to another machine never overwrites commits its clone's branch holds."""
+    bindir = f.root / "ssh-bin"
+    bindir.mkdir(mode=0o700)
+    # The other machine is this one: the remote command runs locally, as sshd would run it.
+    (bindir / "ssh").write_text('#!/bin/sh\nfor command; do :; done\nexec /bin/sh -c "$command"\n')
+    (bindir / "ssh").chmod(0o700)
+    profiles = Path(f.env["XDG_CONFIG_HOME"]) / "telar/machines.json"
+    profiles.parent.mkdir(mode=0o700, exist_ok=True)
+    profiles.write_text(json.dumps({"version": 2, "local_label": "local", "machines": [
+        {"id": "m-0123456789ab", "label": "box", "destination": "box", "telar_path": str(f.binary)}]}))
+    profiles.chmod(0o600)
+    path = f.env["PATH"]
+    f.env["PATH"] = f"{bindir}:{path}"
+    try:
+        source = f.root / "dispatched"
+        source.mkdir(mode=0o700)
+        f.git(source, "init", "-q", "--template=", "-b", "main")
+        f.git(source, "config", "remote.origin.url", "https://example.test/team/dispatched.git")
+        f.git(source, "commit", "-q", "--allow-empty", "-m", "Base")
+        base = f.git(source, "rev-parse", "HEAD").decode().strip()
+        clone = Path(json.loads(f.invoke("dispatch/prepare", "repository", "prepare", "--machine", "box", "--json", cwd=source).stdout)["path"])
+        # Work that exists only on the other machine's branch, and diverging work here.
+        remote = f.git(clone, "commit-tree", "-p", base, "-m", "Remote work", base + "^{tree}").decode().strip()
+        f.git(clone, "update-ref", "refs/heads/feature", remote)
+        f.git(source, "switch", "-q", "-c", "feature")
+        f.git(source, "commit", "-q", "--allow-empty", "-m", "Local work")
+        result = f.invoke("dispatch/diverged", "worktree", "create", "feature", "--machine", "box", cwd=source, code=None)
+        assert f.git(clone, "rev-parse", "refs/heads/feature").decode().strip() == remote
+        assert result.returncode == 1, (result.returncode, result.stderr)
+    finally:
+        f.env["PATH"] = path
+
+
 def run_suite(binary, root, with_runtime=True, prepare_probe=None):
     f = Fixture(binary, root)
     offline(f)
@@ -494,6 +528,7 @@ def run_suite(binary, root, with_runtime=True, prepare_probe=None):
             history(f)
             projects(f)
             repositories(f, prepare_probe)
+            dispatch(f)
     return f
 
 
