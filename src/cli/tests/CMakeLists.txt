@@ -21,6 +21,9 @@ telar_add_test(clipboard-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURR
 telar_add_test(pane-agent-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/pane_agent_test.py"
   --telar "$<TARGET_FILE:telar>"
   LABELS cli.e2e)
+telar_add_test(hook-worktree-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/hook_worktree_test.py"
+  --telar "$<TARGET_FILE:telar>"
+  LABELS cli.e2e TIMEOUT 90)
 # Expected outputs were recorded on macOS: the window launch checks the
 # display first on Linux, and setup reports the local platform.
 if(APPLE)
