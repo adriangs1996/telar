@@ -15,3 +15,7 @@ telar_add_library(telar-wire
   # which Qt adapters, tests and global module fragments include as telar_wire/....
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar::base telar::vocabulary)
+
+if(BUILD_TESTING)
+  telar_add_tests(telar-wire-tests LABEL lib.wire LINK telar::wire)
+endif()
