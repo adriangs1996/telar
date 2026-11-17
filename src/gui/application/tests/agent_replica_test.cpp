@@ -1,0 +1,369 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "foundation/core/memory.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_wire/protocol/pane_io.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <limits>
+#include <new>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+
+import telar.testing;
+import telar.gui.tests.agent_fixture;
+import telar.gui.application.tests.session_fixture;
+import telar.gui.application;
+import telar.gui.features.activity;
+import telar.gui.foundation.model;
+import telar.wire.agents;
+
+namespace {
+
+  using telar::testing::check;
+  using namespace telar;
+  using namespace telar::gui;
+  using namespace telar::gui::features::activity;
+  using telar::gui::test::agentSnapshotEntry;
+  using namespace telar::gui::application::tests::session_fixture;
+
+  constexpr std::uint64_t second = StatusAgeInterval::nanoseconds_per_second;
+  constexpr std::uint32_t initial_age = 5;
+  constexpr std::uint32_t advanced_age = 8;
+  constexpr std::uint64_t replacement_now_ns = 20 * second;
+  constexpr std::uint64_t provider_change_ns = 5 * second;
+  constexpr std::uint64_t generation_change_ns = 6 * second;
+  constexpr std::uint64_t stale_delivery_ns = 8 * second;
+
+  void fractionsAndResets() {
+    StatusAge clock;
+    StatusAgeSample sample{.pane_id = 1, .pane_generation = 1, .status = AgentStatus::working, .provider = AgentProvider::codex, .reported_seconds = initial_age};
+
+    clock.observe(sample, second);
+    clock.observe(sample, second + (second / 2));
+    check(clock.interval().seconds(2 * second) == initial_age + 1, "same-age reports must retain fractional progress");
+    sample.reported_seconds = advanced_age;
+    clock.observe(sample, 2 * second);
+    check(clock.interval().seconds(3 * second) == advanced_age + 1, "newer reported ages must advance the baseline");
+    sample.reported_seconds = 2;
+    clock.observe(sample, 3 * second);
+    check(clock.interval().seconds(3 * second) == 2, "decreasing reports must reset the interval");
+    sample.status = AgentStatus::ready;
+    clock.observe(sample, 4 * second);
+    check(clock.interval().seconds(4 * second) == 2, "status transitions must reset elapsed age");
+    sample.provider = AgentProvider::claude;
+    clock.observe(sample, provider_change_ns);
+    check(clock.interval().seconds(provider_change_ns) == 2, "provider replacement must reset elapsed age");
+    ++sample.pane_generation;
+    clock.observe(sample, generation_change_ns);
+    check(clock.interval().seconds(generation_change_ns) == 2, "pane reuse must reset elapsed age");
+    check(clock.interval().seconds(0) == 2, "backward timestamps must not subtract age");
+    constexpr StatusAgeInterval saturated{.age_ns = std::numeric_limits<std::uint64_t>::max() - second, .sampled_ns = 0};
+
+    check(saturated.elapsed(std::numeric_limits<std::uint64_t>::max()) == std::numeric_limits<std::uint64_t>::max(), "elapsed nanoseconds must saturate");
+    check(saturated.seconds(std::numeric_limits<std::uint64_t>::max()) == std::numeric_limits<std::uint32_t>::max(), "display seconds must saturate");
+  }
+
+  void revisionsAndSourceReplacement() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    AgentReplica replica{memory};
+    std::array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
+
+    entries.back().pane_id = 2;
+    check(replica.apply({.revision = 1, .entries = entries}, second), "first revision must be accepted");
+    check(!replica.apply({.revision = 1, .entries = {}}, stale_delivery_ns), "duplicate revisions must not erase agents");
+    check(replica.entries().size() == 2 && replica.revision() == 1, "duplicate revisions must preserve the replica");
+    std::swap(entries.front(), entries.back());
+    check(replica.apply({.revision = 2, .entries = entries}, second + (second / 2)), "reordering must commit");
+    check(replica.entries().front().pane_id == 2 && replica.entries().front().status_clock.interval().seconds(2 * second) == initial_age + 1, "clocks must follow identity through reordering");
+    entries.back() = entries.front();
+    bool rejected = false;
+
+    try {
+      replica.apply({.revision = 3, .entries = entries}, 3 * second);
+    } catch (const std::invalid_argument&) {
+      rejected = true;
+    }
+
+    check(rejected && replica.revision() == 2 && replica.entries().back().pane_id == 1, "duplicate identities must preserve the entire previous revision");
+    replica.resetSource();
+    check(replica.entries().size() == 2, "offline presentation must retain the last entries");
+    entries.back().pane_id = 1;
+    check(replica.apply({.revision = 1, .entries = entries}, replacement_now_ns), "replacement runtime may restart its revision counter");
+    check(replica.entries().front().status_clock.interval().seconds(replacement_now_ns) == initial_age, "replacement runtime must not inherit a retired clock");
+  }
+
+  void attachmentCapabilitiesFollowExactAgentIdentities() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    AgentReplica replica{memory};
+    std::array entries{agentSnapshotEntry(), agentSnapshotEntry()};
+
+    entries[0].attachments = AgentAttachmentMarkers::stable_number;
+    entries[1].pane_id = 2;
+    entries[1].attachments = AgentAttachmentMarkers::pasted_path;
+    check(replica.apply({.revision = 1, .entries = entries}, second), "initial attachment capabilities must commit");
+    check(replica.entries()[0].attachments == AgentAttachmentMarkers::stable_number && replica.entries()[1].attachments == AgentAttachmentMarkers::pasted_path, "each identity must retain the marker policy its manifest reports");
+
+    std::swap(entries[0], entries[1]);
+    entries[1].attachments = AgentAttachmentMarkers::ordered;
+    check(replica.apply({.revision = 2, .entries = entries}, 2 * second), "reordering and a capability update must commit together");
+    check(replica.entries()[0].pane_id == 2 && replica.entries()[0].attachments == AgentAttachmentMarkers::pasted_path && replica.entries()[1].attachments == AgentAttachmentMarkers::ordered, "capabilities must follow snapshot identities through staging reuse");
+
+    ++entries[0].pane_generation;
+    entries[0].attachments = AgentAttachmentMarkers::none;
+    check(replica.apply({.revision = 3, .entries = entries}, 3 * second), "a replacement agent must commit");
+    check(replica.entries()[0].attachments == AgentAttachmentMarkers::none, "an incapable replacement must not inherit a previous agent's shelf");
+  }
+
+  void statusChangesFollowCommittedIdentities() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    AgentReplica replica{memory};
+    std::array entries{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
+
+    entries[1].pane_id = 2;
+    entries[2].pane_id = 3;
+    replica.apply({.revision = 1, .entries = entries}, second);
+    check(replica.statusChanges().empty(), "initial identities must not raise alerts");
+
+    std::swap(entries[0], entries[2]);
+    entries[0].status = AgentStatus::blocked;
+    constexpr std::uint16_t changed_pane_index = 9;
+
+    entries[0].pane_index = changed_pane_index;
+    entries[0].provider = AgentProvider::claude;
+    entries[1].status = AgentStatus::done;
+    ++entries[1].pane_generation;
+    replica.apply({.revision = 2, .entries = entries}, 2 * second);
+    const auto changes = replica.statusChanges();
+
+    check(changes.size() == 1, "a replacement generation must not inherit a prior status");
+    check(changes.front().pane_id == 3 && changes.front().pane_index == changed_pane_index && changes.front().provider == AgentProvider::claude, "changes must retain new metadata in snapshot order");
+    check(changes.front().previous == AgentStatus::working && changes.front().current == AgentStatus::blocked, "changes must name both committed statuses");
+
+    entries[0].status = AgentStatus::failed;
+    entries[2] = entries[0];
+    bool rejected = false;
+
+    try {
+      replica.apply({.revision = 3, .entries = entries}, 3 * second);
+    } catch (const std::invalid_argument&) {
+      rejected = true;
+    }
+
+    check(rejected && replica.statusChanges().size() == 1 && replica.statusChanges().front().current == AgentStatus::blocked, "invalid snapshots must not publish partial transitions");
+    replica.resetSource();
+    check(replica.statusChanges().empty(), "source retirement must clear pending transitions");
+    entries[2].pane_id = 4;
+    replica.apply({.revision = 1, .entries = entries}, replacement_now_ns);
+    check(replica.statusChanges().empty(), "reconnection must not compare new agents with retired source metadata");
+    replica.apply({.revision = 2, .entries = entries}, replacement_now_ns);
+    check(replica.statusChanges().empty(), "unchanged statuses must not repeat alerts");
+  }
+
+  class RejectingAllocator {
+  public:
+    void* allocate(std::size_t size, std::size_t alignment) noexcept {
+      return rejecting_ ? nullptr : budget_.allocate(size, alignment);
+    }
+
+    void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
+      budget_.deallocate(pointer, size, alignment);
+    }
+
+    [[nodiscard]] std::size_t liveBytes() const noexcept {
+      return budget_.liveBytes();
+    }
+
+    void setRejecting(bool rejecting) noexcept {
+      rejecting_ = rejecting;
+    }
+
+  private:
+    static constexpr std::size_t capacity = std::size_t{1024} * 1024;
+    bool rejecting_ = false;
+    SystemAllocator system_;
+    BudgetAllocator<SystemAllocator> budget_{system_, capacity};
+  };
+
+  void allocationFailurePreservesTheReplica() {
+    RejectingAllocator rejecting;
+    telar::MemoryAdapter adapter{rejecting};
+    telar::Memory& memory = adapter;
+
+    {
+      AgentReplica replica{memory};
+      std::array entries{agentSnapshotEntry(initial_age)};
+
+      replica.apply({.revision = 1, .entries = entries}, second);
+      replica.apply({.revision = 2, .entries = entries}, second);
+      const auto interval = replica.entries().front().status_clock.interval();
+      const auto live_bytes = rejecting.liveBytes();
+      const std::string title(80, 'x');
+
+      entries.front().session_title = title;
+      entries.front().status = AgentStatus::blocked;
+      rejecting.setRejecting(true);
+      bool rejected = false;
+
+      try {
+        replica.apply({.revision = 3, .entries = entries}, 4 * second);
+      } catch (const std::bad_alloc&) {
+        rejected = true;
+      }
+
+      check(rejected && replica.revision() == 2, "allocation failure must not publish a revision");
+      check(replica.statusChanges().empty(), "allocation failure must not publish status transitions");
+      check(replica.entries().front().title == "Initial" && replica.entries().front().status == AgentStatus::working, "allocation failure must not partially replace metadata");
+      check(replica.entries().front().status_clock.interval() == interval && rejecting.liveBytes() == live_bytes, "allocation failure must preserve clocks and release temporary allocations");
+      rejecting.setRejecting(false);
+      check(replica.apply({.revision = 3, .entries = entries}, 4 * second), "a failed revision must be retryable");
+      check(replica.statusChanges().size() == 1 && replica.statusChanges().front().current == AgentStatus::blocked, "successful retry must publish its transition once");
+    }
+
+    check(rejecting.liveBytes() == 0, "replica destruction must release injected storage");
+  }
+
+  void warmedSnapshotsReuseStorage() {
+    SystemAllocator upstream;
+    constexpr std::size_t budget_bytes = std::size_t{1024} * 1024;
+    constexpr std::size_t title_bytes = 80;
+    BudgetAllocator allocator{upstream, budget_bytes};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
+    AgentReplica replica{memory};
+    std::string title(title_bytes, 'x');
+    std::array<AgentSnapshotEntry, decltype(replica)::capacity> entries;
+
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+      entries[index] = agentSnapshotEntry(initial_age);
+      entries[index].pane_id = index + 1;
+      entries[index].pane_index = static_cast<std::uint16_t>(index + 1);
+      entries[index].session_title = title;
+    }
+
+    replica.apply({.revision = 1, .entries = entries}, second);
+    replica.apply({.revision = 2, .entries = entries}, second);
+    const auto allocations = allocator.allocations();
+    constexpr std::uint64_t revisions = 100;
+    constexpr std::uint64_t alphabet_size = 26;
+
+    for (std::uint64_t revision = 3; revision <= revisions; ++revision) {
+      title.front() = static_cast<char>('a' + (revision % alphabet_size));
+      replica.apply({.revision = revision, .entries = entries}, revision * second);
+    }
+
+    check(allocator.allocations() == allocations, "repeated full snapshots with warmed string capacities must not allocate");
+    std::cout << "Warm agent snapshots: entries=" << entries.size() << ", additional_allocations=" << allocator.allocations() - allocations << '\n';
+  }
+
+  struct FakeClock {
+    static inline std::uint64_t current = 0;
+
+    static std::uint64_t nowNanoseconds() noexcept {
+      return current;
+    }
+  };
+
+  void sessionUsesTheInjectedClock() {
+    SystemAllocator memory;
+    telar::gui::application::tests::session_fixture::Transport transport;
+    TestSession session{memory, transport, &FakeClock::nowNanoseconds};
+    const std::array entries{agentSnapshotEntry(initial_age)};
+
+    FakeClock::current = second;
+    telar::gui::application::tests::session_fixture::deliver(session, AgentSnapshot{.revision = 1, .entries = entries});
+    check(session.agents().front().status_clock.interval().sampled_ns == second, "session must use the compile-time clock dependency");
+    session.disconnected();
+    FakeClock::current = replacement_now_ns;
+    telar::gui::application::tests::session_fixture::deliver(session, AgentSnapshot{.revision = 1, .entries = entries});
+    check(session.agents().front().status_clock.interval().sampled_ns == FakeClock::current, "session disconnect must retire the previous clock source");
+  }
+
+  void paneListRevisions() {
+    SystemAllocator memory;
+    telar::gui::application::tests::session_fixture::Transport transport;
+    TestSession session{memory, transport, &FakeClock::nowNanoseconds};
+    const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+    const std::array<std::uint16_t, 2> ports{3000, 9229};
+    std::array entries{
+        PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .foreground_age_s = initial_age, .ports = ports},
+        PaneListEntry{.pane_id = 2, .pane_generation = 1, .location = location, .foreground = "zsh", .shell = true},
+    };
+
+    FakeClock::current = second;
+    telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 2, .entries = entries});
+    const auto listed = session.paneList();
+
+    check(session.paneListRevision() == 2 && listed.size() == 2 && listed.front().foreground.view() == "node" && listed.back().shell, "the pane list must replace the replica");
+    check(listed.front().age.seconds(2 * second) == initial_age + 1, "a foreground age must advance from its arrival");
+    check(std::ranges::equal(listed.front().ports(), ports) && listed.back().ports().empty(), "listening ports must follow their pane");
+    const std::array<std::uint16_t, 2> unordered{9229, 3000};
+    bool unsorted = false;
+
+    try {
+      telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 3, .entries = std::array{PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .ports = unordered}}});
+    } catch (const EncodingError&) {
+      unsorted = true;
+    }
+
+    check(unsorted && session.paneListRevision() == 2, "unordered ports must be rejected");
+    telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 2, .entries = {}});
+    check(session.paneList().size() == 2, "a stale revision must not replace the pane list");
+    entries.back().pane_id = 1;
+    bool rejected = false;
+
+    try {
+      telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 3, .entries = entries});
+    } catch (const std::invalid_argument&) {
+      rejected = true;
+    }
+
+    check(rejected && session.paneListRevision() == 2 && session.paneList().back().pane_id == 2, "a duplicate pane must preserve the previous list");
+    session.disconnected();
+    telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 1, .entries = std::span{entries}.first(1)});
+    check(session.paneListRevision() == 1 && session.paneList().size() == 1, "a replacement runtime may restart its revision counter");
+  }
+
+  void animationBoundaries() {
+    constexpr auto interval = AgentAnimation::pulse_interval_ns;
+
+    check(AgentAnimation::deadline(AgentStatus::working, true, interval) == 2 * interval, "working animation must request the next global 120 ms boundary");
+    check(AgentAnimation::deadline(AgentStatus::ready, true, second) == 2 * second, "ready clocks must request the next global second");
+    check(AgentAnimation::deadline(AgentStatus::blocked, true, second) == 2 * second, "blocked clocks must request the next global second");
+    check(!AgentAnimation::deadline(AgentStatus::unknown, true, second), "unknown status must not animate");
+    check(!AgentAnimation::deadline(AgentStatus::working, false, second), "offline status must not animate");
+    constexpr std::uint64_t frame_rollover = 256;
+
+    check(AgentAnimation::alpha(frame_rollover * interval) == AgentAnimation::alpha(0), "pulse phase must retain the original eight-bit rollover");
+  }
+
+  const telar::testing::Case case_fractions_and_resets{"agent_replica.fractions_and_resets", fractionsAndResets};
+  const telar::testing::Case case_revisions_and_source_replacement{"agent_replica.revisions_and_source_replacement", revisionsAndSourceReplacement};
+  const telar::testing::Case case_attachment_capabilities_follow_exact_agent_identities{"agent_replica.attachment_capabilities_follow_exact_agent_identities", attachmentCapabilitiesFollowExactAgentIdentities};
+  const telar::testing::Case case_status_changes_follow_committed_identities{"agent_replica.status_changes_follow_committed_identities", statusChangesFollowCommittedIdentities};
+  const telar::testing::Case case_allocation_failure_preserves_the_replica{"agent_replica.allocation_failure_preserves_the_replica", allocationFailurePreservesTheReplica};
+  const telar::testing::Case case_warmed_snapshots_reuse_storage{"agent_replica.warmed_snapshots_reuse_storage", warmedSnapshotsReuseStorage};
+  const telar::testing::Case case_session_uses_the_injected_clock{"agent_replica.session_uses_the_injected_clock", sessionUsesTheInjectedClock};
+  const telar::testing::Case case_pane_list_revisions{"agent_replica.pane_list_revisions", paneListRevisions};
+  const telar::testing::Case case_animation_boundaries{"agent_replica.animation_boundaries", animationBoundaries};
+
+}
