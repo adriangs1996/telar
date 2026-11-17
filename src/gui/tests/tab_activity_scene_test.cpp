@@ -57,11 +57,13 @@ import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
 import telar.gui.presentation.display_metrics;
+import telar.gui.features.activity;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::activity;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

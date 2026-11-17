@@ -41,9 +41,7 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
-import telar.gui.presentation.application_mark;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.application;
 
@@ -340,11 +338,11 @@ namespace telar::gui::qt {
     }
 
     const auto agents = std::span{(*client)->session.agents()};
-    std::array<std::size_t, AgentOrder::maximum_agents> chosen{};
+    std::array<std::size_t, application::activity::AgentOrder::maximum_agents> chosen{};
     std::size_t count = 0;
 
     for (std::size_t index = 0; index < agents.size() && count < chosen.size(); ++index) {
-      if (AgentOrder::stacked(agents[index].status)) {
+      if (application::activity::AgentOrder::stacked(agents[index].status)) {
         chosen[count++] = index;
       }
     }
@@ -352,7 +350,7 @@ namespace telar::gui::qt {
     const auto shown = std::min(count, stack_cards);
 
     std::partial_sort(chosen.begin(), chosen.begin() + static_cast<std::ptrdiff_t>(shown), chosen.begin() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
-      return AgentOrder::priority(agents[left]) < AgentOrder::priority(agents[right]);
+      return application::activity::AgentOrder::priority(agents[left]) < application::activity::AgentOrder::priority(agents[right]);
     });
 
     for (std::size_t rank = 0; rank < shown; ++rank) {
@@ -380,7 +378,7 @@ namespace telar::gui::qt {
       record.insert(QStringLiteral("scale"), pose.scale);
       record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
       // The row has no focused pane, so whichever card waits on the person is tinted, front one included.
-      record.insert(QStringLiteral("attentionColor"), AgentOrder::attention(status) == AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
+      record.insert(QStringLiteral("attentionColor"), application::activity::AgentOrder::attention(status) == application::activity::AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
       cards.append(std::move(record));
     }
 

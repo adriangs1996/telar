@@ -14,7 +14,6 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application;
-import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {
 
@@ -127,7 +126,7 @@ namespace telar::gui::qt {
     if (valid()) {
       const auto& session = store_.session();
       if (const auto* agent = application::peek::agent(session)) {
-        const auto* task = AgentOrder::taskRow(session.workspaceList(), *agent);
+        const auto* task = application::activity::AgentOrder::taskRow(session.workspaceList(), *agent);
 
         title = toQString(application::peek::PeekLabels::title(*agent, task));
         facts = toQString(application::peek::PeekLabels::facts(*agent, task).view());

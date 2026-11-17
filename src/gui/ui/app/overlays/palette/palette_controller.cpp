@@ -671,7 +671,7 @@ namespace telar::gui::qt {
 
     const auto agent = std::get<AgentNavigationTarget>(target);
 
-    return session.focusAgent(agent.pane_id, agent.pane_generation);
+    return application::activity::chooseAgent(session, agent.pane_id, agent.pane_generation);
   }
 
   void PaletteController::submitSuggestion(const QString& revision) {

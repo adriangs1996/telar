@@ -67,7 +67,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.application_mark;
+import telar.gui.features.activity;
 import telar.gui.features.machines;
 import telar.gui.features.window;
 

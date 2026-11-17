@@ -13,7 +13,6 @@ import telar.gui.presentation.tab_drop;
 import telar.gui.layout.snapshots;
 import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
-import telar.gui.presentation.application_mark;
 import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
@@ -932,7 +931,7 @@ namespace telar::gui::application {
       return;
     }
 
-    acknowledgeFocusedAgent();
+    activity::acknowledge(*this);
     const auto* active = activeTab();
 
     for (auto& pane : panes_) {

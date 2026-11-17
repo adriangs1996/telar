@@ -14,17 +14,17 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.agents;
 import telar.gui.foundation.model;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
   template <Allocator Memory>
   QVariantMap projectRecord(const Workspace<Memory>& workspace, const WorkspaceReplica<Memory>& workspaces, std::span<const Agent<Memory>> agents, bool selected) {
     auto record = workspaceRecord(workspace, selected);
-    const auto activity = ProjectActivity::derive(workspaces, agents, workspace.location.id);
-    ProjectActivity::Text summary;
+    const auto activity = application::activity::ProjectActivity::derive(workspaces, agents, workspace.location.id);
+    application::activity::ProjectActivity::Text summary;
 
     record.insert(QStringLiteral("detail"), toQString(activity.summary(summary).value_or(workspace.path)));
     record.insert(QStringLiteral("attention"), toQString(activity.attentionLabel().view()));

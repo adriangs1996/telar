@@ -1,12 +1,11 @@
-module telar.gui.presentation.application_mark;
+module telar.gui.features.activity;
 
 import std;
-
 import telar.config.core;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
-namespace telar::gui {
+namespace telar::gui::features::activity {
 
   bool ApplicationMark::followsTheme() const noexcept {
     return provider == AgentProvider::codex || provider == AgentProvider::pi || provider == AgentProvider::cursor || provider == AgentProvider::opencode;

@@ -36,7 +36,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.agents;
-import telar.gui.presentation.activity_order;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -59,9 +59,9 @@ namespace telar::gui::qt {
     AgentCardLabels::Project project;
     const auto project_label = AgentCardLabels::project(agent.workspace_label, context.machine, context.coordinator, project);
     const auto glyph = AgentCardLabels::providerGlyph(agent.provider_kind, agent.icon);
-    const auto tile = ApplicationMark::forApplication(runtime::describeProvider(agent.provider_kind).display_name);
+    const auto tile = application::activity::ApplicationMark::forApplication(runtime::describeProvider(agent.provider_kind).display_name);
     const auto provider_label = agent.display_name.empty() ? std::string_view{agent.provider_name} : std::string_view{agent.display_name};
-    const auto activity = TaskCardLabels::activity(agent);
+    const auto activity = application::activity::TaskCardLabels::activity(agent);
     const auto color = QString::fromLatin1(palette_names[static_cast<std::size_t>(Status::color(state))]);
     const auto waiting = state == AgentStatus::blocked || state == AgentStatus::failed;
     const auto resting = state == AgentStatus::ready || state == AgentStatus::unknown;
@@ -85,7 +85,7 @@ namespace telar::gui::qt {
         {QStringLiteral("signal"), toQString(activity.text)},
         {QStringLiteral("signalColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(context.connected ? activity.color : PaletteRole::overlay1)])},
         {QStringLiteral("showPlan"), context.connected && activity.plan},
-        {QStringLiteral("contextShare"), TaskCardLabels::contextShare(state, !activity.text.empty())},
+        {QStringLiteral("contextShare"), application::activity::TaskCardLabels::contextShare(state, !activity.text.empty())},
         {QStringLiteral("statusCode"), static_cast<int>(state)},
         {QStringLiteral("blockedReason"), static_cast<int>(agent.blocked_reason)},
         {QStringLiteral("statusClock"), agent.status_clock.observed() ? statusAgeValue(agent.status_clock.interval()) : QVariant{}},

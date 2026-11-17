@@ -28,8 +28,7 @@ static_assert(true);
 import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
-import telar.gui.presentation.suggestion_labels;
-import telar.gui.presentation.application_mark;
+import telar.gui.features.activity;
 import telar.gui.foundation.model;
 import telar.wire.agents;
 
@@ -37,6 +36,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::activity;
   using telar::gui::test::agentSnapshotEntry;
   using telar::gui::test::require;
   using telar::gui::test::TestSession;

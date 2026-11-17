@@ -1,4 +1,5 @@
-export module telar.gui.presentation.application_mark;
+// The kind of card an agent or a task shows, and the mark of the application an agent runs.
+export module telar.gui.features.activity:mark;
 
 import std;
 
@@ -6,7 +7,7 @@ import telar.wire.vocabulary;
 
 // Interface: presentation/activity_card.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::activity {
 
     enum class ActivityCard : std::uint8_t {
       agent,
@@ -18,7 +19,7 @@ export {
 
 // Interface: presentation/application_mark.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::features::activity {
 
     struct ApplicationMark {
       static constexpr float dimmed_alpha = 0.6F;

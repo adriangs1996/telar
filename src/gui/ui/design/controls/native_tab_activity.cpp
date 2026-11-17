@@ -32,7 +32,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.activity_order;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -93,11 +93,11 @@ namespace telar::gui::qt {
     record_ = record;
     const auto kind = record.value(QStringLiteral("activityKind")).toInt();
 
-    kind_ = kind >= static_cast<int>(TabActivity::Kind::none) && kind <= static_cast<int>(TabActivity::Kind::progress) ? static_cast<TabActivity::Kind>(kind) : TabActivity::Kind::none;
+    kind_ = kind >= static_cast<int>(application::activity::TabActivity::Kind::none) && kind <= static_cast<int>(application::activity::TabActivity::Kind::progress) ? static_cast<application::activity::TabActivity::Kind>(kind) : application::activity::TabActivity::Kind::none;
     const auto value = record.value(QStringLiteral("progressSample"));
 
     progress_ = progressSample(value).value_or(ProgressSample{});
-    if (kind_ != TabActivity::Kind::progress) {
+    if (kind_ != application::activity::TabActivity::Kind::progress) {
       motion_ = {};
     }
 
@@ -144,11 +144,11 @@ namespace telar::gui::qt {
   }
 
   std::optional<std::uint64_t> NativeTabActivity::deadline(std::uint64_t now_ns) const noexcept {
-    if (kind_ == TabActivity::Kind::spinner) {
-      return ProgressAnimation::nextStep(now_ns, TabActivity::spinner_interval_ns);
+    if (kind_ == application::activity::TabActivity::Kind::spinner) {
+      return ProgressAnimation::nextStep(now_ns, application::activity::TabActivity::spinner_interval_ns);
     }
 
-    if (kind_ != TabActivity::Kind::progress) {
+    if (kind_ != application::activity::TabActivity::Kind::progress) {
       return std::nullopt;
     }
 
@@ -173,10 +173,10 @@ namespace telar::gui::qt {
     float fraction = 0;
     float turns = 0;
 
-    if (kind_ == TabActivity::Kind::spinner) {
-      fraction = TabActivity::spinner_fraction;
-      turns = static_cast<float>((now_ns / TabActivity::spinner_interval_ns) % TabActivity::spinner_steps) / TabActivity::spinner_steps;
-    } else if (kind_ == TabActivity::Kind::progress) {
+    if (kind_ == application::activity::TabActivity::Kind::spinner) {
+      fraction = application::activity::TabActivity::spinner_fraction;
+      turns = static_cast<float>((now_ns / application::activity::TabActivity::spinner_interval_ns) % application::activity::TabActivity::spinner_steps) / application::activity::TabActivity::spinner_steps;
+    } else if (kind_ == application::activity::TabActivity::Kind::progress) {
       fraction = motion_.sample(progress_, now_ns);
       if (progress_.state == PaneProgressState::indeterminate) {
         const auto frame = ProgressAnimation::indeterminate<core::ProgressCosine>(now_ns);
@@ -223,7 +223,7 @@ namespace telar::gui::qt {
   }
 
   QSGNode* NativeTabActivity::updatePaintNode(QSGNode* previous, [[maybe_unused]] UpdatePaintNodeData* data) {
-    if (window() == nullptr || width() <= 0 || height() <= 0 || kind_ == TabActivity::Kind::none) {
+    if (window() == nullptr || width() <= 0 || height() <= 0 || kind_ == application::activity::TabActivity::Kind::none) {
       const std::unique_ptr<QSGNode> retired{previous};
 
       return nullptr;
@@ -234,15 +234,15 @@ namespace telar::gui::qt {
     const Color color{.r = color_.redF(), .g = color_.greenF(), .b = color_.blueF(), .a = color_.alphaF()};
 
     return paintRoundedShapes<ProgressCapsule::maximum_paints>(*this, previous, [&](auto append, Rect area) {
-      if (kind_ == TabActivity::Kind::dot) {
-        const auto side = std::min(TabActivity::dot_side * ratio, area.width);
+      if (kind_ == application::activity::TabActivity::Kind::dot) {
+        const auto side = std::min(application::activity::TabActivity::dot_side * ratio, area.width);
 
         append(RoundedRectanglePaint{.origin = {.x = area.x + area.width - side, .y = area.y + ((area.height - side) / 2)}, .shape = RoundedRectangle::resolve({.x = side, .y = side}, {.fill = color, .radius = side / 2})});
-      } else if (kind_ == TabActivity::Kind::spinner) {
-        const auto side = std::min(TabActivity::spinner_side * ratio, area.width);
+      } else if (kind_ == application::activity::TabActivity::Kind::spinner) {
+        const auto side = std::min(application::activity::TabActivity::spinner_side * ratio, area.width);
 
         ProgressRing{.area = {.x = area.x + area.width - side, .y = area.y + ((area.height - side) / 2), .width = side, .height = side}, .color = color, .fraction = fraction_, .rotation = turns_}.visit(append);
-      } else if (kind_ == TabActivity::Kind::progress) {
+      } else if (kind_ == application::activity::TabActivity::Kind::progress) {
         ProgressCapsule{.area = area, .color = color, .ratio = ratio, .state = progress_.state, .fraction = fraction_, .rotation = turns_, .compact = compact_}.visit(append);
       }
     });

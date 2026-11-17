@@ -49,12 +49,10 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.foundation.core;
-import telar.gui.presentation.application_mark;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
 import telar.gui.presentation.history_inspection_geometry;
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.agents;
 import telar.config.gui;
 import telar.config.core;
@@ -109,7 +107,7 @@ namespace telar::gui::qt {
   }
 
   inline QVariantMap applicationMarkRecord(std::string_view application) {
-    const auto mark = ApplicationMark::forApplication(application);
+    const auto mark = application::activity::ApplicationMark::forApplication(application);
 
     return {
         {QStringLiteral("glyph"), toQString(mark.glyph)},
@@ -130,7 +128,7 @@ namespace telar::gui::qt {
     QString attention;
 
     for (const auto& agent : agents) {
-      if (owns(agent) && AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input) {
+      if (owns(agent) && application::activity::AgentOrder::attention(agent.status) == application::activity::AgentOrder::Attention::needs_input) {
         attention = QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(agent.status))]);
         break;
       }
@@ -214,13 +212,13 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("path"), tab.label.empty() ? displayPath(pane != nullptr ? std::string_view{pane->cwd} : std::string_view{tab.directory}) : QString{});
     record.insert(QStringLiteral("cards"), tabCards(tab, panes, agents));
     record.insert(QStringLiteral("selected"), selected);
-    const auto activity = TabActivity::derive(tab, pane != nullptr ? pane->progress_state : PaneProgressState::remove, agents, selected);
+    const auto activity = application::activity::TabActivity::derive(tab, pane != nullptr ? pane->progress_state : PaneProgressState::remove, agents, selected);
 
     record.insert(QStringLiteral("activityKind"), static_cast<int>(activity.kind));
     record.insert(QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(activity.color)]));
     record.insert(QStringLiteral("statusWidth"), activity.width());
     record.insert(QStringLiteral("attentionColor"), activity.attention ? QString::fromLatin1(palette_names[static_cast<std::size_t>(*activity.attention)]) : QString{});
-    if (activity.kind == TabActivity::Kind::progress && pane != nullptr) {
+    if (activity.kind == application::activity::TabActivity::Kind::progress && pane != nullptr) {
       record.insert(QStringLiteral("progressSample"), progressValue(ProgressSample{.pane_id = pane->id, .attachment = pane->attachment_generation, .state = pane->progress_state, .percent = pane->progress_percent}));
     }
 

@@ -52,13 +52,14 @@ import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;
 import telar.gui.application;
 import telar.gui.foundation.system;
-import telar.gui.presentation.application_mark;
+import telar.gui.features.activity;
 import telar.gui.presentation.activity_order;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::activity;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
 

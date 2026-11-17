@@ -23,7 +23,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
-import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
 
@@ -85,7 +84,7 @@ namespace telar::gui::qt {
 
   QImage ProviderArtwork::image(AgentProvider provider, int side) {
     const auto* const found = std::ranges::find(providers, provider);
-    if (found == providers.end() || side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
+    if (found == providers.end() || side < application::activity::ApplicationMark::minimum_cell || side > application::activity::ApplicationMark::maximum_cell) {
       return {};
     }
 
@@ -123,7 +122,7 @@ namespace telar::gui::qt {
   }
 
   QImage ProviderArtwork::vector(const QString& source, int side) {
-    if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
+    if (side < application::activity::ApplicationMark::minimum_cell || side > application::activity::ApplicationMark::maximum_cell) {
       return {};
     }
 

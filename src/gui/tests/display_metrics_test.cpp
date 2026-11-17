@@ -16,10 +16,13 @@ import telar.gui.foundation.core;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.display_metrics;
 import telar.gui.features.window;
+import telar.gui.features.activity;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::activity;
 
   using namespace telar::gui::features::window;
   using telar::gui::test::require;

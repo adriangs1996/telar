@@ -19,7 +19,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.activity_order;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -83,7 +83,7 @@ namespace telar::gui::qt {
     QVariantMap record_;
     QColor color_ = Qt::white;
     qreal ratio_ = 1;
-    TabActivity::Kind kind_ = TabActivity::Kind::none;
+    application::activity::TabActivity::Kind kind_ = application::activity::TabActivity::Kind::none;
     ProgressSample progress_;
     ProgressMotion motion_;
     float fraction_ = 0;

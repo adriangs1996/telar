@@ -38,10 +38,10 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.presentation.tab_drop;
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.foundation.model;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -421,7 +421,7 @@ namespace telar::gui::qt {
       record.insert(QStringLiteral("number"), index + 1);
       const auto slot = static_cast<std::size_t>(index);
       const auto kind = record.value(QStringLiteral("activityKind")).toInt();
-      const auto status_width = kind == static_cast<int>(TabActivity::Kind::progress) ? ProgressGeometry::compactWidth(ratio) : record.value(QStringLiteral("statusWidth")).toFloat() * ratio;
+      const auto status_width = kind == static_cast<int>(application::activity::TabActivity::Kind::progress) ? ProgressGeometry::compactWidth(ratio) : record.value(QStringLiteral("statusWidth")).toFloat() * ratio;
       const auto title = record.value(QStringLiteral("title"), record.value(QStringLiteral("label"))).toString();
       const auto path = record.value(QStringLiteral("path")).toString();
       const auto stacked = std::min(static_cast<std::size_t>(std::max<qsizetype>(record.value(QStringLiteral("cards")).toList().size(), 1)), Geometry::chip_widths.size());

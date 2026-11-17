@@ -44,10 +44,13 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.drawing;
+import telar.gui.features.activity;
 
 namespace {
 
   using namespace telar::gui;
+
+  using namespace telar::gui::features::activity;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
   using telar::AgentBlockedReason;

@@ -18,7 +18,7 @@ import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.application;
-import telar.gui.presentation.application_mark;
+import telar.gui.features.activity;
 import telar.gui.features.notifications;
 import telar.gui.foundation.model;
 import telar.gui.features.window;

@@ -248,10 +248,6 @@ export {
 
       void visitPane(std::uint64_t pane_id, std::optional<std::uint64_t> generation = {});
 
-      bool focusAgent(std::uint64_t pane_id, std::uint64_t generation);
-
-      bool focusListedPane(std::uint64_t pane_id, std::uint64_t generation);
-
       void resize(std::uint64_t pane_id, TerminalSize size);
 
       void presented(std::uint64_t pane_id, std::uint64_t frame_id);
@@ -464,8 +460,6 @@ export {
       [[nodiscard]] Launch defaultLaunch() const noexcept;
 
       void synchronizeAttachments();
-
-      void acknowledgeFocusedAgent();
 
       void prepareDetach(std::uint64_t pane_id);
 

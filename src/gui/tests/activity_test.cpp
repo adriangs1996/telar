@@ -17,7 +17,7 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application;
-import telar.gui.presentation.application_mark;
+import telar.gui.features.activity;
 import telar.gui.presentation.activity_order;
 import telar.wire.layout;
 import telar.wire.pane_io;
@@ -29,6 +29,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::activity;
   using namespace telar::gui::test;
 
   void workspaceMetadataAndRevisions() {

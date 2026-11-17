@@ -34,7 +34,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.presentation.activity_order;
 import telar.platform.process;
 import telar.gui.application;
 import telar.wire.vocabulary;
@@ -286,7 +285,7 @@ namespace telar::gui::qt {
 
     if (summary.agent_revision != observation.agent_revision) {
       observation.attention = std::ranges::any_of(client.session.agents(), [](const auto& agent) {
-        return AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input;
+        return application::activity::AgentOrder::attention(agent.status) == application::activity::AgentOrder::Attention::needs_input;
       });
     }
 

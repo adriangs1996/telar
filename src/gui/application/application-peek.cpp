@@ -4,9 +4,9 @@ import std;
 
 import :access;
 import telar.base.memory.allocators;
+import telar.gui.features.activity;
 import telar.gui.features.peek;
 import telar.gui.foundation.model;
-import telar.gui.presentation.activity_order;
 import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.vocabulary;
@@ -41,7 +41,7 @@ namespace telar::gui::application::peek {
 
     // What an agent's task changed, in a worktree terminal of its own.
     void openDiff(Session& session, const Agent<Memory>& agent) {
-      const auto* row = AgentOrder::taskRow(session.workspaceList(), agent);
+      const auto* row = features::activity::AgentOrder::taskRow(session.workspaceList(), agent);
       if (row == nullptr) {
         return;
       }
@@ -91,7 +91,7 @@ namespace telar::gui::application::peek {
 
     switch (submission.command) {
     case features::peek::PeekCommand::open:
-      static_cast<void>(session.focusAgent(peeked->pane_id, peeked->pane_generation));
+      static_cast<void>(activity::chooseAgent(session, peeked->pane_id, peeked->pane_generation));
       break;
     case features::peek::PeekCommand::stop:
       Access::sendRegistered(session, Access::RequestKind::peek_action, InterruptAgent{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation}, peeked->pane_id);

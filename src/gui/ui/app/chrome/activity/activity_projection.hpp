@@ -35,9 +35,9 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.activity_order;
 import telar.gui.foundation.agents;
 import telar.gui.foundation.model;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -47,7 +47,7 @@ namespace telar::gui::qt {
     auto record = agentRecord(agent, context);
     const auto title = task.displayName();
     const auto handle = task.handle();
-    const auto facts = TaskCardLabels::facts(task);
+    const auto facts = application::activity::TaskCardLabels::facts(task);
 
     record.insert(QStringLiteral("task"), true);
     record.insert(QStringLiteral("machine"), toQString(context.machine));
@@ -65,8 +65,8 @@ namespace telar::gui::qt {
 
   template <Allocator Memory>
   QVariantMap commandRecord(const Worktree<Memory>& task, const AgentRecordContext& context) {
-    TaskCardLabels::Text storage;
-    const auto facts = TaskCardLabels::commandFacts(context.machine, task, context.connected, storage);
+    application::activity::TaskCardLabels::Text storage;
+    const auto facts = application::activity::TaskCardLabels::commandFacts(context.machine, task, context.connected, storage);
 
     return {
         {QStringLiteral("key"), QStringLiteral("command:") + QString::number(task.id)},
@@ -100,7 +100,7 @@ namespace telar::gui::qt {
   // and the ports it listens on.
   inline QVariantMap processRecord(const ListedPane& pane, std::string_view workspace, const AgentRecordContext& context) {
     const auto name = pane.foreground.view();
-    const auto mark = ApplicationMark::forApplication(name);
+    const auto mark = application::activity::ApplicationMark::forApplication(name);
     AgentCardLabels::Project project;
 
     return {

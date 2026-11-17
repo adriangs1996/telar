@@ -28,7 +28,7 @@ static_assert(true);
 #include <memory>
 #include <utility>
 
-import telar.gui.presentation.application_mark;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -53,7 +53,7 @@ namespace telar::gui::qt {
 
     QImage coloredMark(AgentProvider provider, int side, const QColor& color, bool telar_mark, bool monochrome, int theme) {
       auto image = telar_mark ? ProviderArtwork::telar(side, monochrome, theme) : ProviderArtwork::image(provider, side);
-      if (!image.isNull() && (monochrome || (!telar_mark && ApplicationMark{.provider = provider}.followsTheme()))) {
+      if (!image.isNull() && (monochrome || (!telar_mark && application::activity::ApplicationMark{.provider = provider}.followsTheme()))) {
         tint(image, color);
       }
 
@@ -80,7 +80,7 @@ namespace telar::gui::qt {
   ProviderMark::~ProviderMark() = default;
 
   qreal ProviderMark::dimmedAlpha() noexcept {
-    return ApplicationMark::dimmed_alpha;
+    return application::activity::ApplicationMark::dimmed_alpha;
   }
 
   int ProviderMark::provider() const noexcept {
@@ -187,7 +187,7 @@ namespace telar::gui::qt {
     // scaled mark stays smooth.
     constexpr qreal supersample = 2;
     const auto wanted = static_cast<float>(std::round(std::max(width(), height()) * scale * supersample));
-    const auto side = static_cast<int>(std::clamp(wanted, static_cast<float>(ApplicationMark::minimum_cell), static_cast<float>(ApplicationMark::maximum_cell)));
+    const auto side = static_cast<int>(std::clamp(wanted, static_cast<float>(application::activity::ApplicationMark::minimum_cell), static_cast<float>(application::activity::ApplicationMark::maximum_cell)));
 
     if (!node) {
       node = std::make_unique<ProviderNode>();

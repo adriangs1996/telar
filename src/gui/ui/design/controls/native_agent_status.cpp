@@ -22,10 +22,10 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.foundation.system;
-import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.agents;
 import telar.gui.presentation.display_metrics;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -121,7 +121,7 @@ namespace telar::gui::qt {
       return std::nullopt;
     }
 
-    return AgentAnimation::deadline(status_, connected_, now_ns);
+    return application::activity::AgentAnimation::deadline(status_, connected_, now_ns);
   }
 
   void NativeAgentStatus::sample(std::uint64_t now_ns) {
@@ -135,7 +135,7 @@ namespace telar::gui::qt {
     }
 
     const QAnyStringView label{text.view()};
-    const auto alpha = display_mode_ != DisplayMode::pane_chip && connected_ && status_ == AgentStatus::working ? AgentAnimation::alpha(now_ns) : 1;
+    const auto alpha = display_mode_ != DisplayMode::pane_chip && connected_ && status_ == AgentStatus::working ? application::activity::AgentAnimation::alpha(now_ns) : 1;
     const auto text_changed = QAnyStringView::compare(status_text_, label) != 0;
     const auto alpha_changed = animated_alpha_ != alpha;
     if (!text_changed && !alpha_changed) {

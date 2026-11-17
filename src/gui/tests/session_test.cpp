@@ -939,9 +939,9 @@ namespace {
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     const auto previous_requests = transport.sent.size();
 
-    require(!client.focusAgent(destination_id, destination_generation - 1), "a stale agent generation must not navigate");
+    require(!application::activity::chooseAgent(client, destination_id, destination_generation - 1), "a stale agent generation must not navigate");
     require(transport.sent.size() == previous_requests, "rejecting an obsolete agent must not send runtime requests");
-    require(client.focusAgent(destination_id, destination_generation), "a committed agent must offer navigation");
+    require(application::activity::chooseAgent(client, destination_id, destination_generation), "a committed agent must offer navigation");
     const auto opening = transport.last<OpenPane>();
 
     require(opening.target.kind == PaneTarget::Kind::pane && opening.target.id == destination_id && !opening.launch, "uncached agent navigation must open its existing pane without launching a process");
@@ -956,15 +956,15 @@ namespace {
     require(!client.requestsPending(), "the first navigation must settle its canonical snapshots before another workspace departure");
     const auto openings = transport.count(ClientTag::open_pane);
 
-    require(client.focusAgent(destination_id, destination_generation), "an already known agent must remain navigable");
+    require(application::activity::chooseAgent(client, destination_id, destination_generation), "an already known agent must remain navigable");
     require(transport.count(ClientTag::open_pane) == openings, "known agent navigation must reuse its current local pane");
 
     auto replacement = agents;
 
     replacement.front().pane_generation = destination_generation + 1;
     deliver(client, AgentSnapshot{.revision = 2, .entries = replacement});
-    require(!client.focusAgent(destination_id, destination_generation), "a replacement snapshot must retire the previous generation's choice");
-    require(client.focusAgent(destination_id, destination_generation + 1), "the replacement agent must remain reachable");
+    require(!application::activity::chooseAgent(client, destination_id, destination_generation), "a replacement snapshot must retire the previous generation's choice");
+    require(application::activity::chooseAgent(client, destination_id, destination_generation + 1), "the replacement agent must remain reachable");
     require(transport.count(ClientTag::open_pane) == openings + 1, "a stale cached pane must be reopened through the runtime instead of focusing the former generation");
   }
 

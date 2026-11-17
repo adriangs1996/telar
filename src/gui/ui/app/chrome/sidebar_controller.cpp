@@ -18,7 +18,6 @@ static_assert(true);
 #include <cstddef>
 #include <string_view>
 
-import telar.gui.presentation.activity_order;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -136,10 +135,10 @@ namespace telar::gui::qt {
       return static_cast<float>(fonts::TextLayout<ConcurrentMemory>::measure(*fonts, view, {.pixel_height = pixels, .preferred = role}));
     };
 
-    const auto card = AgentCardGeometry::derive(chrome);
-    const auto padding = 2 * card.px(AgentCardGeometry::horizontal_padding);
-    const auto gap = card.px(AgentCardGeometry::gap);
-    const auto mark = card.px(AgentCardGeometry::mark_column);
+    const auto card = application::activity::AgentCardGeometry::derive(chrome);
+    const auto padding = 2 * card.px(application::activity::AgentCardGeometry::horizontal_padding);
+    const auto gap = card.px(application::activity::AgentCardGeometry::gap);
+    const auto mark = card.px(application::activity::AgentCardGeometry::mark_column);
     // A status whose clock is drawn later reserves a short age.
     const auto age = QStringLiteral("59m");
     float card_width = 0;
@@ -170,7 +169,7 @@ namespace telar::gui::qt {
 
       if (client) {
         active = static_cast<std::size_t>(std::ranges::count_if((*client)->session.agents(), [](const auto& agent) {
-          return AgentOrder::stacked(agent.status);
+          return application::activity::AgentOrder::stacked(agent.status);
         }));
       }
 

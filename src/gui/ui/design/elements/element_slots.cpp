@@ -15,7 +15,7 @@ static_assert(true);
 #include <array>
 #include <cstddef>
 
-import telar.gui.presentation.application_mark;
+import telar.gui.application;
 
 namespace telar::gui::qt {
 
@@ -334,7 +334,7 @@ namespace telar::gui::qt {
         record.insert(QStringLiteral("providerMark"), static_cast<int>(icon.provider));
         record.insert(QStringLiteral("telarMark"), icon.telar);
       } else if (kind == components::ElementKind::tile) {
-        const auto mark = ApplicationMark::forApplication(rendered.view(element.text));
+        const auto mark = application::activity::ApplicationMark::forApplication(rendered.view(element.text));
 
         record.insert(QStringLiteral("glyph"), text(mark.glyph));
         record.insert(QStringLiteral("tile"), text(mark.tile));

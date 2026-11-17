@@ -21,14 +21,13 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.presentation.activity_order;
 import telar.gui.application;
 
 namespace telar::gui::qt {
 
   namespace {
 
-    using Order = ActivityOrder<Memory>;
+    using Order = application::activity::ActivityOrder<Memory>;
 
     bool containsActivityPointer(const QQuickItem& card, QPointF position) {
       if (!card.isVisible() || !card.isEnabled()) {

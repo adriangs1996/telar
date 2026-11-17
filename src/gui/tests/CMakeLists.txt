@@ -34,7 +34,7 @@ telar_add_test(gui-host-commands-test SOURCES host_commands_test.cpp LIBRARIES g
 telar_add_test(gui-agent-acknowledgement-test SOURCES agent_acknowledgement_test.cpp LIBRARIES gui-application gui-test-fixtures
   TEST gui-agent-acknowledgement LABELS gui.application)
 
-telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-presentation gui-features-window
+telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARIES gui-foundation-core gui-presentation gui-features-activity gui-features-window
   TEST gui-display-metrics LABELS gui.presentation)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 

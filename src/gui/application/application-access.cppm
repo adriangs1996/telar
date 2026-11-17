@@ -140,6 +140,20 @@ namespace telar::gui::application {
       return session.active_tab_;
     }
 
+    // The agents the runtime reports and the panes it lists, which the session replicates.
+    [[nodiscard]] static constexpr AgentReplica<Memory>& agents(Session& session) noexcept {
+      return session.agents_;
+    }
+
+    [[nodiscard]] static constexpr PaneListReplica<Memory>& paneList(Session& session) noexcept {
+      return session.pane_list_;
+    }
+
+    // The status of the focused agent the runtime last heard the user saw.
+    [[nodiscard]] static constexpr AgentAcknowledgement& agentAcknowledgement(Session& session) noexcept {
+      return session.agent_acknowledgement_;
+    }
+
     // ---- the command blocks, which the session composes ------------------------------------
 
     // The keys of the command blocks, ahead of the editor's: what a key did to them, none when it

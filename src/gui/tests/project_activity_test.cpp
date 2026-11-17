@@ -36,11 +36,13 @@ import telar.gui.application;
 import telar.gui.presentation.activity_order;
 import telar.gui.foundation.text;
 import telar.gui.foundation.model;
+import telar.gui.features.activity;
 
 namespace {
 
   using namespace telar;
   using namespace telar::gui;
+  using namespace telar::gui::features::activity;
   using namespace telar::gui::test;
 
   void projectCountsAndAttention() {

@@ -384,7 +384,7 @@ namespace {
     const std::array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
-    require(client.focusAgent(target.agent.pane_id, target.agent.pane_generation), "the known agent must admit navigation");
+    require(application::activity::chooseAgent(client, target.agent.pane_id, target.agent.pane_generation), "the known agent must admit navigation");
     const auto request = transport.last<OpenPane>();
 
     deliver(client, RequestFailed{.request_id = request.request_id, .code = FailureCode::pane_not_found, .message = "Task pane gone"});
@@ -411,7 +411,7 @@ namespace {
     bool rejected = false;
 
     try {
-      static_cast<void>(client.focusAgent(target.agent.pane_id, target.agent.pane_generation));
+      static_cast<void>(application::activity::chooseAgent(client, target.agent.pane_id, target.agent.pane_generation));
     } catch (const EncodingError&) {
       rejected = true;
     }
@@ -445,7 +445,7 @@ namespace {
     bool rejected = false;
 
     try {
-      static_cast<void>(client.focusAgent(target.agent.pane_id, target.agent.pane_generation));
+      static_cast<void>(application::activity::chooseAgent(client, target.agent.pane_id, target.agent.pane_generation));
     } catch (const EncodingError&) {
       rejected = true;
     }
