@@ -230,3 +230,74 @@ def outcomes(binary):
             profiles.write_text(raw)
             run('profiles-invalid-'+raw,['machine','list','--json'])
     return cases
+
+
+INCOMPATIBLE_SHIM = r'''#!/usr/bin/env python3
+import os,subprocess,sys
+command=sys.argv[-1]
+home=os.environ['FIXTURE_REMOTE_HOME']
+if command.endswith("server endpoint'"):
+ print('telar protocol mismatch',file=sys.stderr);sys.exit(1)
+script=sys.stdin.read()
+if script.startswith('dir='):
+ print('os=Darwin\narch=arm64\nlibc=gnu\nhome='+home)
+ print('target='+home+'/.local/share/telar/versions/0.0.0/telar')
+ print('installed=telar 0.0.0')
+elif 'link=$HOME/.local/bin/telar' in script:print('linked')
+else:sys.exit(subprocess.run(['/bin/sh','-s'],input=script,text=True,env=dict(os.environ,HOME=home)).returncode)
+'''
+
+
+def incompatible_runtime_kept(binary):
+    """Another build's runtime there keeps running when setup has no person to agree to stop
+    it: stopping it ends every pane and agent it runs."""
+    with tempfile.TemporaryDirectory(prefix='telar-machines-', dir='/tmp') as temporary:
+        root = Path(temporary).resolve()
+        env = environment(root)
+        bindir = root / 'bin'
+        bindir.mkdir()
+        (bindir / 'ssh').write_text(INCOMPATIBLE_SHIM)
+        (bindir / 'ssh').chmod(0o700)
+        remote = root / 'remote'
+        log = root / 'stopped'
+        # The remote telar a stop would run; it logs what it was asked.
+        (remote / '.local/bin').mkdir(parents=True)
+        (remote / '.local/bin/telar').write_text(f'#!/bin/sh\necho "$@" >> "{log}"\necho "telar runtime is stopping"\n')
+        (remote / '.local/bin/telar').chmod(0o700)
+        env.update(PATH=f'{bindir}:/usr/bin:/bin', FIXTURE_REMOTE_HOME=str(remote))
+        subprocess.run([str(binary), 'machine', 'add', 'box', 'host'], env=env, cwd=root, check=True, capture_output=True, timeout=15)
+        for flags in (['--json'], []):
+            result = subprocess.run([str(binary), 'machine', 'setup', 'box', '--skip', 'agents,config,login', *flags], env=env, cwd=root,
+                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+            assert result.returncode != 0 and not log.exists(), (flags, result, log.exists() and log.read_text())
+            if flags:
+                steps = {step['step']: step['status'] for step in json.loads(result.stdout)['steps']}
+                assert steps['runtime'] == 'failed', steps
+
+
+def concurrent_edits(binary):
+    """Machines added or removed at once all count: each edit rewrites the whole file. A
+    lost update shows only when two edits interleave, so rounds of them race, each filling
+    the file to its 16 machines and emptying it."""
+    with tempfile.TemporaryDirectory(prefix='telar-machines-', dir='/tmp') as temporary:
+        root = Path(temporary).resolve()
+        env = environment(root)
+
+        def race(commands):
+            processes = [subprocess.Popen([str(binary), 'machine', *words], env=env, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                         for words in commands]
+            statuses = [(process.wait(timeout=30), process.stderr.read()) for process in processes]
+            assert all(status == 0 for status, _ in statuses), statuses
+            listed = subprocess.run([str(binary), 'machine', 'list', '--json'], env=env, cwd=root, capture_output=True, check=True, timeout=15)
+            return {machine['label'] for machine in json.loads(listed.stdout)['machines']}
+        for round in range(3):
+            labels = {f'r{round}m{index}' for index in range(16)}
+            assert race([['add', label, label + '.host'] for label in labels]) == labels
+            assert race([['remove', label] for label in labels]) == set()
+
+
+def contracts(binary):
+    """Machine contracts asserted on their effects alone, beside the recorded outputs."""
+    incompatible_runtime_kept(binary)
+    concurrent_edits(binary)
+    return 3
