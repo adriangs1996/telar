@@ -21,7 +21,6 @@ static_assert(true);
 #include <optional>
 #include <utility>
 
-import telar.gui.layout.geometry;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection_geometry;
 

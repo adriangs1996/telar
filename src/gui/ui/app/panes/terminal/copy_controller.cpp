@@ -8,8 +8,6 @@ static_assert(true);
 #include <QByteArray>
 #include <exception>
 
-import telar.gui.input.key_encoder;
-
 namespace telar::gui::qt {
 
   CopyController::CopyController(Store& store, QObject* parent)

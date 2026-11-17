@@ -1,4 +1,4 @@
-module telar.gui.model.replicas;
+module telar.gui.foundation.model;
 
 import std;
 
@@ -7,8 +7,9 @@ import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline model {
 
   template <Allocator Memory>
   AgentReplica<Memory>::AgentReplica(Memory& memory)

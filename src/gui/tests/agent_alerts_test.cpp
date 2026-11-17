@@ -33,8 +33,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application.workspace_replica;
-import telar.gui.model.records;
-import telar.gui.model.replicas;
+import telar.gui.foundation.model;
 import telar.gui.presentation.notification_center;
 
 namespace {

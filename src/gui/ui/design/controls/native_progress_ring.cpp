@@ -18,8 +18,6 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.graphics.placeholder;
-
 namespace telar::gui::qt {
 
   NativeProgressRing::NativeProgressRing(QQuickItem* parent)

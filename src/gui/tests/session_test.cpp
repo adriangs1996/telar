@@ -43,13 +43,14 @@ import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
+import telar.gui.foundation.keys;
 import telar.gui.presentation.display_metrics;
 import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.runtime;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 
 namespace {
 

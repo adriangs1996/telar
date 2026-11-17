@@ -11,7 +11,7 @@ import telar.wire.pane_io;
 import telar.wire.vocabulary;
 export import :fold_map;
 import telar.base.memory.allocators;
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 
 // Interface: application/records.cppm
 export {

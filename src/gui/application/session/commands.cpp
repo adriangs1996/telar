@@ -2,6 +2,7 @@ module telar.gui.application.session;
 
 import std;
 import telar.gui.foundation.terminal;
+import telar.gui.foundation.model;
 
 namespace telar::gui {
 

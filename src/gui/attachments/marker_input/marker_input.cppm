@@ -2,7 +2,7 @@ export module telar.gui.attachments.marker_input;
 
 import std;
 
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.actions;
 import telar.gui.attachments.catalog;
 import telar.wire.vocabulary;
 

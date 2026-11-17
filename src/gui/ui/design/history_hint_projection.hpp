@@ -11,7 +11,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.history_meta_geometry;
+import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
 

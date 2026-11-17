@@ -10,7 +10,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 
 Q_DECLARE_METATYPE(telar::gui::StatusAgeInterval)
 Q_DECLARE_TYPEINFO(telar::gui::StatusAgeInterval, Q_RELOCATABLE_TYPE);

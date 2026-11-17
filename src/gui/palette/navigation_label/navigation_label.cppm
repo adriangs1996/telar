@@ -5,7 +5,6 @@ export module telar.gui.palette.navigation_label;
 
 import std;
 
-import telar.wire.vocabulary;
 import telar.gui.foundation.text;
 
 // Interface: palette/navigation_label.cppm
@@ -25,22 +24,6 @@ export {
     private:
       BoundedText<capacity> text_;
     };
-
-  }
-}
-
-// Interface: palette/navigation_target.cppm
-export {
-  namespace telar::gui {
-
-    struct AgentNavigationTarget {
-      std::uint64_t pane_id = 0;
-      std::uint64_t pane_generation = 0;
-
-      bool operator==(const AgentNavigationTarget&) const = default;
-    };
-
-    using NavigationTarget = std::variant<WorkspaceLocation, TabLocation, AgentNavigationTarget>;
 
   }
 }

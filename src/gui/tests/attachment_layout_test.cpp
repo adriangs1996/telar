@@ -13,7 +13,7 @@ static_assert(true);
 #include <optional>
 #include <span>
 
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 import telar.gui.foundation.core;
 
 namespace {

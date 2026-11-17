@@ -1,16 +1,14 @@
 export module telar.gui.presentation.activity_order;
 
 import std;
+
 import telar.tbc;
-
-import telar.gui.presentation.application_mark;
-import telar.gui.model.replicas;
-
-import telar.gui.foundation.core;
-import telar.gui.foundation.text;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
-import telar.gui.model.records;
+import telar.gui.foundation.core;
+import telar.gui.foundation.model;
+import telar.gui.foundation.text;
+import telar.gui.presentation.application_mark;
 
 // Interface: presentation/agent_order.cppm
 export {
@@ -163,71 +161,6 @@ export {
 
     extern template class ActivityOrder<Memory>;
     extern template class ActivityOrder<ConcurrentMemory>;
-
-  }
-}
-
-// Interface: presentation/agent_status.cppm
-export {
-  namespace telar::gui {
-
-    struct AgentStatusPresentation {
-      static constexpr std::uint32_t seconds_per_minute = 60;
-      static constexpr std::uint32_t seconds_per_hour = 60 * seconds_per_minute;
-      static constexpr std::uint32_t seconds_per_day = 24 * seconds_per_hour;
-      static constexpr std::uint32_t maximum_days = 9999;
-      static constexpr std::size_t age_capacity = 8;
-      static constexpr std::size_t text_capacity = 32;
-      using Text = BoundedText<text_capacity>;
-      using Age = BoundedText<age_capacity>;
-
-      [[nodiscard]] static std::string_view word(AgentStatus status, AgentBlockedReason reason) noexcept;
-
-      [[nodiscard]] static std::string_view glyph(AgentStatus status, AgentBlockedReason reason) noexcept;
-
-      [[nodiscard]] static PaletteRole color(AgentStatus status) noexcept;
-
-      [[nodiscard]] static Age age(std::uint32_t seconds, bool duration = false);
-
-      [[nodiscard]] static Text text(AgentStatus status, AgentBlockedReason reason, std::uint32_t seconds, bool connected = true);
-
-      [[nodiscard]] static float pulse(std::uint8_t frame) noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/progress_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct ProgressGeometry {
-      static constexpr float ring_side = 14;
-      static constexpr float padding = 5;
-      static constexpr float height = 20;
-      static constexpr float ring_inset = 4;
-      static constexpr float background_alpha = 0.1F;
-      static constexpr float mark_stroke_ratio = 0.1F;
-      static constexpr float mark_top_ratio = 0.32F;
-      static constexpr float pause_height_ratio = 0.36F;
-      static constexpr float error_height_ratio = 0.24F;
-      static constexpr float error_dot_ratio = 0.63F;
-      static constexpr std::array pause_offsets{-1.5F, 0.5F};
-
-      Rect background;
-      Rect ring;
-      std::array<Rect, 2> marks{};
-      std::size_t mark_count = 0;
-      float mark_radius = 0;
-
-      [[nodiscard]] static constexpr float compactWidth(float ratio = 1) noexcept {
-        const auto scaled_padding = padding * ratio;
-
-        return (ring_side * ratio) + (2 * scaled_padding);
-      }
-
-      [[nodiscard]] static ProgressGeometry derive(Rect area, float ratio, PaneProgressState state, bool compact = true) noexcept;
-    };
 
   }
 }

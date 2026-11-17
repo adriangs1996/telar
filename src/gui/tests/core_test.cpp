@@ -11,7 +11,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 import telar.gui.input.configuration;
 import telar.gui.transport.runtime_link;
 import telar.wire.pane_io;

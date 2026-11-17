@@ -12,7 +12,7 @@ import telar.gui.foundation.core;
 import telar.gui.layout.snapshots;
 import telar.wire.layout;
 import telar.wire.vocabulary;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 
 namespace {
 

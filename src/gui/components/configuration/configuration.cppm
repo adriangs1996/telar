@@ -6,7 +6,7 @@ export module telar.gui.components.configuration;
 import std;
 
 import telar.gui.foundation.core;
-import telar.gui.input.copy_pointer;
+import telar.gui.foundation.actions;
 import telar.config.client;
 
 import telar.lua;

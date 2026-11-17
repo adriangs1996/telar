@@ -31,10 +31,13 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.input.key_encoder;
+import telar.gui.foundation.keys;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.suggestion_labels;
+import telar.gui.foundation.forms;
 import telar.gui.presentation.form_field_geometry;
 import telar.gui.suggestions.state;
+import telar.gui.foundation.model;
 import telar.gui.foundation.terminal;
 
 namespace {

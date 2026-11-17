@@ -2,6 +2,7 @@ module telar.gui.application.workspace_replica;
 
 import std;
 import telar.gui.foundation.core;
+import telar.gui.foundation.model;
 
 namespace telar::gui {
 

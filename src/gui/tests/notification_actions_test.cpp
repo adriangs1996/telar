@@ -20,6 +20,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.gui.config.plugin_query;
+import telar.gui.foundation.actions;
 import telar.gui.config.generation;
 import telar.gui.input.copy_pointer;
 

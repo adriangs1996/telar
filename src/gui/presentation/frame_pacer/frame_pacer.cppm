@@ -2,7 +2,7 @@ export module telar.gui.presentation.frame_pacer;
 
 import std;
 
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 
 import telar.gui.foundation.core;
 import telar.gui.links.link_hover;

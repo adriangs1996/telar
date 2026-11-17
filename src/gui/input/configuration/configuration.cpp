@@ -5,33 +5,6 @@ import telar.wire.vocabulary;
 
 namespace telar::gui {
 
-  void InputConfiguration::setPrefix(KeyChord key) noexcept {
-    prefix = key;
-    for (auto& binding : std::span{configured}.first(length)) {
-      if (binding.prefixed) {
-        binding.keys[0] = key;
-      }
-    }
-  }
-
-  BindingMap<BindingAction> InputConfiguration::compile() const {
-    auto resolved = configured;
-    auto count = length;
-    const auto explicit_bindings = std::span{configured}.first(length);
-
-    for (const auto& original : default_bindings) {
-      const Binding binding{.keys = {prefix, original.suffix}, .length = 2, .action = original.action, .prefixed = true};
-      const bool overridden = std::ranges::any_of(explicit_bindings, [&](const auto& configured) {
-        return configured.conflictsWith(binding);
-      });
-      if (!overridden && count < resolved.size()) {
-        resolved[count++] = binding;
-      }
-    }
-
-    return BindingMap<BindingAction>{std::span{resolved}.first(count)};
-  }
-
   void HistoryText::validate(std::string_view text, bool bracketed_paste) {
     if (text.empty() || text.size() > maximum_bytes) {
       throw EncodingError{"Command is empty or exceeds its input capacity"};

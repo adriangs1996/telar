@@ -10,8 +10,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 import telar.gui.history.browser;
-import telar.gui.input.copy_pointer;
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.actions;
 
 // Interface: presentation/history_labels.cppm
 export {

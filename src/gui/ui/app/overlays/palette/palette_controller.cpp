@@ -16,7 +16,7 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.presentation.form_field_geometry;
+import telar.gui.foundation.forms;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.suggestions.state;
 

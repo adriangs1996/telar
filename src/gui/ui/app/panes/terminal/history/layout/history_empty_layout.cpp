@@ -25,7 +25,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.history.browser;
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.foundation.forms;
 import telar.gui.presentation.history_filter_geometry;
 
 namespace telar::gui::qt {

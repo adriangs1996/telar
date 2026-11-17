@@ -3,8 +3,7 @@ export module telar.gui.config.plugin_effects;
 import std;
 import telar.tbc;
 
-import telar.gui.input.copy_pointer;
-import telar.gui.input.binding_effects;
+import telar.gui.foundation.actions;
 import telar.config.client;
 import telar.config.runtime;
 

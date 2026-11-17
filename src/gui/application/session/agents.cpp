@@ -2,9 +2,10 @@ module telar.gui.application.session;
 
 import std;
 import telar.gui.presentation.activity_order;
-import telar.gui.presentation.notification_stack;
+import telar.gui.foundation.agents;
 import telar.gui.text.notification_payload;
 import telar.gui.foundation.core;
+import telar.gui.foundation.model;
 
 namespace telar::gui {
 

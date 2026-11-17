@@ -1,10 +1,13 @@
 module telar.gui.presentation.suggestion_labels;
 
 import std;
-import telar.gui.presentation.activity_order;
+
 import telar.wire.vocabulary;
-import telar.gui.model.records;
+import telar.gui.foundation.agents;
 import telar.gui.foundation.core;
+import telar.gui.foundation.forms;
+import telar.gui.foundation.model;
+import telar.gui.suggestions.state;
 
 namespace telar::gui {
 
@@ -21,32 +24,6 @@ namespace telar::gui {
     const auto remaining = interval - (now_ns % interval);
 
     return now_ns + std::min(std::numeric_limits<std::uint64_t>::max() - now_ns, remaining);
-  }
-
-  NamePromptGeometry NamePromptGeometry::measure(CellRectangle host, CellRectangle wanted) noexcept {
-    const auto margin_x = host.width > horizontal_threshold ? horizontal_margin : 0;
-    const auto margin_y = host.height > vertical_threshold ? vertical_margin : 0;
-    const auto width = std::min(wanted.width, static_cast<std::uint16_t>(host.width - (margin_x * 2)));
-    const auto height = std::min(wanted.height, static_cast<std::uint16_t>(host.height - (margin_y * 2)));
-    NamePromptGeometry result;
-
-    result.bounds = {.x = coordinate(static_cast<std::uint32_t>(host.x) + ((host.width - width) / 2)), .y = coordinate(static_cast<std::uint32_t>(host.y) + ((host.height - height) / 2)), .width = width, .height = height};
-    const auto content = width > 2 && height > 2 ? result.bounds.inner(1) : result.bounds;
-
-    if (width > 4) {
-      result.title = {.x = coordinate(static_cast<std::uint32_t>(result.bounds.x) + 2), .y = result.bounds.y, .width = static_cast<std::uint16_t>(width - 4), .height = 1};
-    }
-
-    result.field = {.x = content.x, .y = coordinate(static_cast<std::uint32_t>(content.y) + (content.height > 2 ? 1 : 0)), .width = content.width, .height = std::min<std::uint16_t>(1, content.height)};
-    if (content.height > 2) {
-      result.footer = {.x = content.x, .y = coordinate(static_cast<std::uint32_t>(content.y) + content.height - 1), .width = content.width, .height = 1};
-    }
-
-    return result;
-  }
-
-  std::uint16_t NamePromptGeometry::coordinate(std::uint32_t value) noexcept {
-    return static_cast<std::uint16_t>(std::min<std::uint32_t>(value, std::numeric_limits<std::uint16_t>::max()));
   }
 
   AttachmentModalGeometry AttachmentModalGeometry::measure(CellRectangle host) noexcept {
@@ -69,61 +46,6 @@ namespace telar::gui {
     }
 
     return result;
-  }
-
-  float ModalMotion::sample(std::optional<std::uint64_t> generation, std::optional<std::uint64_t> timestamp) noexcept {
-    if (!generation) {
-      *this = {};
-
-      return 1;
-    }
-
-    if (!timestamp) {
-      *this = {};
-      generation_ = generation;
-
-      return 1;
-    }
-
-    if (generation_ != generation) {
-      generation_ = generation;
-      started_ns_ = timestamp;
-    }
-
-    if (!started_ns_) {
-      return 1;
-    }
-
-    if (*timestamp < *started_ns_) {
-      return 0;
-    }
-
-    if (*timestamp - *started_ns_ >= duration_ns) {
-      return 1;
-    }
-
-    const auto progress = static_cast<float>(*timestamp - *started_ns_) / static_cast<float>(duration_ns);
-    const float remaining = 1 - progress;
-    const float square = remaining * remaining;
-    const float cube = square * remaining;
-
-    return 1 - cube;
-  }
-
-  std::optional<std::uint64_t> ModalMotion::deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
-    if (!started_ns_ || (now_ns >= *started_ns_ && now_ns - *started_ns_ >= duration_ns)) {
-      return {};
-    }
-
-    if (now_ns < *started_ns_) {
-      return started_ns_;
-    }
-
-    return std::min(add(now_ns, interval_ns), add(*started_ns_, duration_ns));
-  }
-
-  std::uint64_t ModalMotion::add(std::uint64_t left, std::uint64_t right) noexcept {
-    return left + std::min(std::numeric_limits<std::uint64_t>::max() - left, right);
   }
 
   PeekGeometry PeekGeometry::measure(CellRectangle host) noexcept {

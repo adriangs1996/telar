@@ -7,7 +7,7 @@ import telar.gui.presentation.client_view_state;
 import telar.gui.foundation.core;
 
 import telar.config.gui;
-import telar.gui.input.copy_pointer;
+import telar.gui.foundation.actions;
 import telar.wire.vocabulary;
 
 // Interface: config/query.cppm

@@ -1,18 +1,18 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.gui.model.records;
+export module telar.gui.foundation.model:records;
 
 import std;
 
-import telar.gui.layout.geometry;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
+import :pane_layout;
 
 // Interface: presentation/status_age.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     struct StatusAgeInterval {
       static constexpr std::uint64_t nanoseconds_per_second = 1'000'000'000;
@@ -51,7 +51,7 @@ export {
 
 // Interface: application/agent_status_change.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     struct AgentStatusChange {
       std::uint64_t pane_id = 0;
@@ -67,7 +67,7 @@ export {
 
 // Interface: application/records.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     // A pane the runtime listed for a tab. It stands in for the pane while the tab is not loaded.
     struct TabMember {
@@ -189,7 +189,7 @@ export {
 
 // Interface: model/tab_leaves.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     // Calls `visit` with each pane leaf of `tab` in layout order; with `shown`, only the leaves the
     // tab shows: the focused one alone when it is fullscreen.

@@ -36,7 +36,8 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.presentation.activity_order;
-import telar.gui.model.replicas;
+import telar.gui.foundation.agents;
+import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
 

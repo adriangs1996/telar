@@ -28,8 +28,7 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
-import telar.gui.layout.geometry;
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 import telar.wire.layout;
 import telar.wire.runtime;
 

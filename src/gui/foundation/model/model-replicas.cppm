@@ -1,18 +1,18 @@
-export module telar.gui.model.replicas;
+export module telar.gui.foundation.model:replicas;
 
 import std;
 
-import telar.gui.model.records;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import :records;
 
 // Interface: application/agent_replica.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     template <Allocator Memory>
     class AgentReplica {
@@ -52,7 +52,7 @@ export {
 
 // Interface: application/pane_list_replica.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     // A live pane of the runtime and the process holding its terminal.
     struct ListedPane {
@@ -98,7 +98,7 @@ export {
 
 // Interface: application/workspace_replica.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     template <Allocator Memory>
     class WorkspaceReplica {

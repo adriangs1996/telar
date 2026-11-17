@@ -1,16 +1,16 @@
-export module telar.gui.input.binding_effects;
+export module telar.gui.foundation.actions:binding_effects;
 
 import std;
 
 import telar.config.client;
-import telar.gui.input.copy_pointer;
-import telar.gui.input.key_encoder;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
+import :action;
+import :binding;
 
 // Interface: config/callback.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline actions {
 
     using BindingContext = runtime::config::BindingContext;
 
@@ -42,7 +42,7 @@ export {
 
 // Interface: config/action_descriptions.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline actions {
 
     struct NotificationActionDescription {
       runtime::FixedText<max_notification_title_bytes> title;

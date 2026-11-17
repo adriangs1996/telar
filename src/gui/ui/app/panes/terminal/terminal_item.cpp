@@ -76,7 +76,6 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application.workspace_replica;
-import telar.gui.input.key_encoder;
 
 namespace telar::gui::qt {
 

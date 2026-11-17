@@ -23,7 +23,6 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.graphics.placeholder;
 import telar.gui.presentation.history_inspection_geometry;
 
 namespace telar::gui::qt {

@@ -8,7 +8,7 @@
 #include <array>
 #include <cstddef>
 
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
 

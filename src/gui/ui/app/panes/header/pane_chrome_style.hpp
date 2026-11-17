@@ -10,6 +10,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.presentation.activity_order;
+import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
 

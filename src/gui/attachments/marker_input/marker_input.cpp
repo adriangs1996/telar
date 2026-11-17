@@ -1,5 +1,7 @@
 module telar.gui.attachments.marker_input;
 
+import telar.gui.foundation.keys;
+
 namespace telar::gui {
 
   ClipboardCaptureState::ClipboardCaptureState(std::uint64_t next_id) noexcept

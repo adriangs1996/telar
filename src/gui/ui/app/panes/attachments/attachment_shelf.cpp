@@ -30,7 +30,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.attachments.catalog;
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.actions;
 
 namespace telar::gui::qt {
 

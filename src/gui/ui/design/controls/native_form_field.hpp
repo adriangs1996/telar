@@ -23,7 +23,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.form_field_geometry;
+import telar.gui.foundation.forms;
 import telar.gui.foundation.text;
 import telar.gui.foundation.terminal;
 

@@ -11,7 +11,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.machines.profile_store;
-import telar.gui.presentation.suggestion_labels;
+import telar.gui.foundation.forms;
 
 namespace telar::gui::qt {
 

@@ -4,7 +4,7 @@ import std;
 
 import telar.base.text.utf8;
 import telar.gui.foundation.core;
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.keys;
 import telar.gui.foundation.text;
 
 namespace telar::gui {

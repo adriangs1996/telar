@@ -1,6 +1,7 @@
 module telar.gui.presentation.history_pointer;
 
 import std;
+import telar.gui.presentation.history_meta_geometry;
 
 namespace telar::gui {
 

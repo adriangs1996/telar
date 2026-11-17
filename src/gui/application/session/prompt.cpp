@@ -4,7 +4,11 @@ import std;
 import telar.base.text.utf8;
 import telar.ebnf.matcher;
 import telar.gui.input.configuration;
+import telar.gui.foundation.keys;
 import telar.gui.foundation.core;
+import telar.gui.foundation.model;
+import telar.gui.suggestions.state;
+import telar.gui.foundation.actions;
 
 namespace telar::gui {
 

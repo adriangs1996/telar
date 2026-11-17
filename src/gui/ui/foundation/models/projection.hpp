@@ -47,7 +47,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application.workspace_replica;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 import telar.gui.foundation.core;
 import telar.gui.history.browser;
 import telar.gui.presentation.application_mark;
@@ -56,9 +56,9 @@ import telar.gui.presentation.history_inspection;
 import telar.gui.foundation.text;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.activity_order;
+import telar.gui.foundation.agents;
 import telar.config.gui;
 import telar.config.core;
-import telar.gui.model.records;
 
 namespace telar::gui::qt {
 

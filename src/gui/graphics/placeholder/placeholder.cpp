@@ -5,17 +5,12 @@ module telar.gui.graphics.placeholder;
 
 import std;
 
-import telar.gui.foundation.core;
-import telar.gui.foundation.text;
-import telar.gui.presentation.activity_order;
-import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
+import telar.gui.foundation.terminal;
+import telar.gui.foundation.text;
 
 namespace telar::gui {
-
-  void PaintSink::operator()(const RoundedRectanglePaint& paint) const {
-    call(context, paint);
-  }
 
   ImageSourceRect ImageSourceRect::resolve(const GraphicsPlacement& placement, const ImageDescription& image) noexcept {
     const auto left = std::min(placement.source_x, image.width);
@@ -286,133 +281,6 @@ namespace telar::gui {
 
   ImageGeometry placeholderGeometry(const PlaceholderRun& run, const GraphicsPlacement& placement, const ImageDescription& image, Point cell, float scale) noexcept {
     return placeholderGeometry(run, placement, ImageGeometry::resolve(placement, image, cell, scale), cell, scale);
-  }
-
-  RoundedRectangle RoundedRectangle::resolve(Point size, RoundedRectangleStyle style) noexcept {
-    style.radius = std::min(style.radius, std::min(size.x, size.y) / 2);
-
-    return {.size = size, .style = style};
-  }
-
-  Color RoundedRectangle::sample(Point local) const noexcept {
-    if (style.radius == 0 && style.border_width == 0) {
-      return style.fill;
-    }
-
-    constexpr float pixel_center = 0.5F;
-    const Point half_size{.x = size.x * pixel_center, .y = size.y * pixel_center};
-    const auto radius = style.radius;
-    const auto horizontal = std::abs(local.x - half_size.x) - half_size.x + radius;
-    const auto vertical = std::abs(local.y - half_size.y) - half_size.y + radius;
-    const auto outside_horizontal = std::max(horizontal, 0.0F);
-    const auto outside_vertical = std::max(vertical, 0.0F);
-    const auto distance = std::sqrt((outside_horizontal * outside_horizontal) + (outside_vertical * outside_vertical)) + std::min(std::max(horizontal, vertical), 0.0F) - radius;
-    const auto outer = 1 - std::clamp(distance + pixel_center, 0.0F, 1.0F);
-    const auto inner = 1 - std::clamp(distance + style.border_width + pixel_center, 0.0F, 1.0F);
-    const auto fill_alpha = style.fill.a * inner;
-    const auto border_alpha = style.border.a * (outer - inner);
-    const auto backdrop_alpha = style.replace_background ? style.backdrop.a * (1 - outer) : 0;
-    const auto alpha = fill_alpha + border_alpha + backdrop_alpha;
-    if (alpha <= 0) {
-      return {.a = 0};
-    }
-
-    return {.r = ((style.fill.r * fill_alpha) + (style.border.r * border_alpha) + (style.backdrop.r * backdrop_alpha)) / alpha, .g = ((style.fill.g * fill_alpha) + (style.border.g * border_alpha) + (style.backdrop.g * backdrop_alpha)) / alpha, .b = ((style.fill.b * fill_alpha) + (style.border.b * border_alpha) + (style.backdrop.b * backdrop_alpha)) / alpha, .a = alpha};
-  }
-
-  RoundedRectanglePaint RoundedRectanglePaint::clipped(Rect clip) const noexcept {
-    const auto size = shape.size;
-    if (origin.x >= clip.x && origin.y >= clip.y && origin.x + size.x <= clip.x + clip.width && origin.y + size.y <= clip.y + clip.height) {
-      return *this;
-    }
-
-    const auto left = std::fmax(origin.x, clip.x);
-    const auto top = std::fmax(origin.y, clip.y);
-    const auto right = std::fmax(left, std::fmin(origin.x + size.x, clip.x + clip.width));
-    const auto bottom = std::fmax(top, std::fmin(origin.y + size.y, clip.y + clip.height));
-    auto paint = *this;
-
-    paint.origin = {.x = left, .y = top};
-    paint.shape.size = {.x = right - left, .y = bottom - top};
-
-    return paint;
-  }
-
-  void ProgressRing::visit(PaintSink visitor) const {
-    const auto side = std::min(area.width, area.height);
-    if (!std::isfinite(side) || side <= 0 || !std::isfinite(fraction) || !std::isfinite(rotation) || !std::isfinite(stroke_width)) {
-      return;
-    }
-
-    const auto stroke = stroke_width > 0 ? std::min(side / 2, stroke_width) : std::min(side / 4, std::max(1.0F, side * stroke_ratio));
-    const Point origin{.x = area.x + ((area.width - side) / 2), .y = area.y + ((area.height - side) / 2)};
-    auto ring_track = track.value_or(color);
-
-    if (!track) {
-      ring_track.a *= track_alpha;
-    }
-
-    if (ring_track.a > 0) {
-      visitor(RoundedRectanglePaint{.origin = origin, .shape = RoundedRectangle::resolve({.x = side, .y = side}, {.border = ring_track, .radius = side / 2, .border_width = stroke})});
-    }
-
-    const auto filled = std::clamp(fraction, 0.0F, 1.0F);
-    if (filled == 0) {
-      return;
-    }
-
-    const auto radius = (side - stroke) / 2;
-    const auto axis = endpoint(rotation);
-    const auto cosine = -axis.y;
-    const auto sine = axis.x;
-    const auto steps = static_cast<std::size_t>(std::ceil(filled * segments));
-
-    for (std::size_t index = 0; index <= steps; ++index) {
-      const auto point = index == steps ? endpoint(filled) : circle[index];
-      const auto x = (point.x * cosine) - (point.y * sine);
-      const auto y = (point.x * sine) + (point.y * cosine);
-
-      visitor(RoundedRectanglePaint{.origin = {.x = origin.x + radius + (x * radius), .y = origin.y + radius + (y * radius)}, .shape = RoundedRectangle::resolve({.x = stroke, .y = stroke}, {.fill = color, .radius = stroke / 2})});
-    }
-  }
-
-  Point ProgressRing::endpoint(float fraction) noexcept {
-    const auto angle = static_cast<double>(fraction * (2 * std::numbers::pi_v<float>));
-
-    return {.x = static_cast<float>(std::sin(angle)), .y = -static_cast<float>(std::cos(angle))};
-  }
-
-  const std::array<Point, ProgressRing::segments> ProgressRing::circle = [] noexcept {
-    std::array<Point, segments> points{};
-
-    for (std::size_t index = 0; index < points.size(); ++index) {
-      points[index] = endpoint(static_cast<float>(index) / segments);
-    }
-
-    return points;
-  }();
-
-  void ProgressCapsule::visit(PaintSink append) const {
-    if (state == PaneProgressState::remove || area.empty()) {
-      return;
-    }
-
-    const auto geometry = ProgressGeometry::derive(area, ratio, state, compact);
-    const auto bounds = geometry.background;
-    auto background = color;
-
-    background.a *= ProgressGeometry::background_alpha;
-    append(RoundedRectanglePaint{.origin = {.x = bounds.x, .y = bounds.y}, .shape = RoundedRectangle::resolve({.x = bounds.width, .y = bounds.height}, {.fill = background, .radius = bounds.height / 2})});
-    if (geometry.ring.width <= 0) {
-      return;
-    }
-
-    ProgressRing{.area = geometry.ring, .color = color, .fraction = fraction, .rotation = rotation}.visit(append);
-    for (std::size_t index = 0; index < geometry.mark_count; ++index) {
-      const auto mark = geometry.marks[index];
-
-      append(RoundedRectanglePaint{.origin = {.x = mark.x, .y = mark.y}, .shape = RoundedRectangle::resolve({.x = mark.width, .y = mark.height}, {.fill = color, .radius = geometry.mark_radius})});
-    }
   }
 
 }

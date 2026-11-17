@@ -20,7 +20,8 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.actions;
+import telar.gui.foundation.keys;
 import telar.gui.foundation.system;
 
 namespace telar::gui::qt {

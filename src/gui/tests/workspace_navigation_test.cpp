@@ -29,7 +29,7 @@ import telar.gui.application.session;
 import telar.gui.prompt.layout;
 import telar.wire.layout;
 import telar.wire.runtime;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 
 namespace {
 

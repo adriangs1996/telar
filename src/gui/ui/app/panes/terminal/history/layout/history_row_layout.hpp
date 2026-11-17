@@ -17,7 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.presentation.history_meta_geometry;
-import telar.gui.presentation.form_field_geometry;
+import telar.gui.foundation.forms;
 
 namespace telar::gui::qt {
 

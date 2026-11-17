@@ -3,30 +3,11 @@ export module telar.gui.presentation.history_inspection_geometry;
 import std;
 
 import telar.gui.foundation.core;
-
-import telar.gui.presentation.history_inspection;
-
-import telar.gui.layout.geometry;
+import telar.gui.foundation.drawing;
+import telar.gui.foundation.forms;
+import telar.gui.foundation.model;
 import telar.gui.presentation.history_filter_geometry;
-
-// Interface: presentation/chrome_style.cppm
-export {
-  namespace telar::gui {
-
-    // Logical radii and theme-relative state opacities shared by window chrome.
-    struct ChromeStyle {
-      static constexpr float small_radius = 4;
-      static constexpr float control_radius = 6;
-      static constexpr float surface_radius = 10;
-      static constexpr float dialog_radius = 12;
-      static constexpr float hover_alpha = 0.045F;
-      static constexpr float selection_alpha = 0.09F;
-      static constexpr float outline_alpha = 0.12F;
-      static constexpr float focus_alpha = 0.65F;
-    };
-
-  }
-}
+import telar.gui.presentation.history_inspection;
 
 // Interface: presentation/agent_card_geometry.cppm
 export {
@@ -79,19 +60,6 @@ export {
       // The list width whose cards are `card_width` wide.
       [[nodiscard]] float listWidth(float card_width) const noexcept;
       [[nodiscard]] Rect row(Rect bounds, Row role) const noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/form_button_style.cppm
-export {
-  namespace telar::gui {
-
-    struct FormButtonStyle {
-      static constexpr float radius = ChromeStyle::control_radius;
-      static constexpr float disabled_alpha = 0.4F;
-      static constexpr float pressed_alpha = 0.8F;
     };
 
   }

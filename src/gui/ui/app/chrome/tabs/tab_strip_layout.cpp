@@ -39,8 +39,9 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
+import telar.gui.foundation.drawing;
 import telar.gui.presentation.frame_pacer;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
 

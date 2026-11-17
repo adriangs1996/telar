@@ -18,7 +18,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.tab_drop;
 

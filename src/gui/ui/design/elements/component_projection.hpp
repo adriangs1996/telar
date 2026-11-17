@@ -40,7 +40,7 @@ import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
 import telar.gui.foundation.core;
 import telar.gui.input.copy_pointer;
-import telar.gui.input.binding_effects;
+import telar.gui.foundation.actions;
 
 namespace telar::gui::qt {
 

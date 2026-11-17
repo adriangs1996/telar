@@ -3,7 +3,7 @@ export module telar.gui.layout.snapshots;
 import std;
 import telar.tbc;
 
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 import telar.base.memory.allocators;
 import telar.wire.layout;
 import telar.wire.vocabulary;

@@ -7,12 +7,10 @@ import std;
 import telar.tbc;
 
 import telar.gui.config.plugin_query;
+import telar.gui.foundation.actions;
 import telar.lua;
 
-import telar.gui.input.copy_pointer;
-
-import telar.gui.input.key_encoder;
-import telar.gui.input.configuration;
+import telar.gui.foundation.keys;
 
 import telar.gui.foundation.core;
 
@@ -24,7 +22,6 @@ import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.config.core;
 import telar.config.gui;
-import telar.gui.input.binding_effects;
 import telar.config.client;
 import telar.config.runtime;
 import telar.base.memory.containers;

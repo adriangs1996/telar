@@ -21,32 +21,6 @@ export {
   }
 }
 
-// Interface: presentation/name_prompt_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct NamePromptGeometry {
-      static constexpr std::uint16_t requested_width = 64;
-      static constexpr std::uint16_t requested_height = 7;
-      static constexpr std::uint16_t horizontal_threshold = 12;
-      static constexpr std::uint16_t vertical_threshold = 6;
-      static constexpr std::uint16_t horizontal_margin = 2;
-      static constexpr std::uint16_t vertical_margin = 1;
-
-      CellRectangle bounds;
-      CellRectangle title;
-      CellRectangle field;
-      CellRectangle footer;
-
-      [[nodiscard]] static NamePromptGeometry measure(CellRectangle host, CellRectangle wanted = {.width = requested_width, .height = requested_height}) noexcept;
-
-    private:
-      [[nodiscard]] static std::uint16_t coordinate(std::uint32_t value) noexcept;
-    };
-
-  }
-}
-
 // Interface: presentation/attachment_modal_geometry.cppm
 export {
   namespace telar::gui {
@@ -63,27 +37,6 @@ export {
       CellRectangle footer{};
 
       [[nodiscard]] static AttachmentModalGeometry measure(CellRectangle host) noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/modal_motion.cppm
-export {
-  namespace telar::gui {
-
-    class ModalMotion {
-    public:
-      static constexpr std::uint64_t duration_ns = 220'000'000;
-
-      [[nodiscard]] float sample(std::optional<std::uint64_t> generation, std::optional<std::uint64_t> timestamp) noexcept;
-      [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept;
-
-    private:
-      [[nodiscard]] static std::uint64_t add(std::uint64_t left, std::uint64_t right) noexcept;
-
-      std::optional<std::uint64_t> generation_;
-      std::optional<std::uint64_t> started_ns_;
     };
 
   }

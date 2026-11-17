@@ -12,83 +12,6 @@ import telar.gui.foundation.text;
 
 import telar.base.text;
 
-// Interface: presentation/form_field_geometry.cppm
-export {
-  namespace telar::gui {
-
-    struct FormFieldGeometry {
-      static constexpr float horizontal_padding = 12;
-      static constexpr float vertical_padding = 8;
-      static constexpr float caret_width = 1;
-      static constexpr float underline_offset = 2;
-      static constexpr float underline_height = 1;
-
-      Rect content;
-      float cell_width = 1;
-      float line_height = 1;
-      float insertion_width = 1;
-      std::uint16_t columns = 0;
-
-      [[nodiscard]] static FormFieldGeometry derive(Rect bounds, ChromeMetrics chrome, const FontGrid& grid) noexcept;
-      [[nodiscard]] Rect caret(std::uint16_t column) const noexcept;
-      [[nodiscard]] static FormFieldGeometry terminal(Rect bounds, const FontGrid& grid) noexcept;
-      [[nodiscard]] Rect selection(EditorColumns selected) const noexcept;
-      [[nodiscard]] Rect underline(std::uint32_t text_columns) const noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/history_match_highlight.cppm
-export {
-  namespace telar::gui {
-
-    template <typename Sink>
-    concept HistoryMatchSink = requires(Sink& sink, Rect bounds, std::string_view text) {
-      { sink(bounds, text) } -> std::same_as<void>;
-    };
-
-    class HistoryMatchHighlight {
-    public:
-      explicit HistoryMatchHighlight(std::string_view query) noexcept;
-
-      [[nodiscard]] std::size_t matched() const noexcept;
-
-      // Generic over the caller's sink, so it stays here; it runs per history row painted.
-      template <HistoryMatchSink Sink>
-      TBC_GENERIC void paint(std::string_view text, Rect bounds, float cell_width, Sink& sink) {
-        GraphemeCursor cursor{text};
-        std::uint32_t column = 0;
-
-        while (static_cast<float>(column) * cell_width < bounds.width && matched_ < query_.size()) {
-          const auto cluster = cursor.nextReplacingInvalid();
-          if (!cluster) {
-            break;
-          }
-
-          const auto width = static_cast<float>(cursor.columns()) * cell_width;
-          const auto x = static_cast<float>(column) * cell_width;
-          if (x + width > bounds.width) {
-            break;
-          }
-
-          if (cluster->size() <= query_.size() - matched_ && runtime::asciiEqualIgnoreCase(*cluster, query_.substr(matched_, cluster->size()))) {
-            sink({.x = bounds.x + x, .y = bounds.y, .width = width, .height = bounds.height}, *cluster);
-            matched_ += cluster->size();
-          }
-
-          column += cursor.columns();
-        }
-      }
-
-    private:
-      std::string_view query_;
-      std::size_t matched_ = 0;
-    };
-
-  }
-}
-
 // Interface: presentation/path_picker_footer.cppm
 export {
   namespace telar::gui {
@@ -197,37 +120,6 @@ export {
       std::size_t row_count = 0;
 
       [[nodiscard]] static PathPickerGeometry measure(PathPickerPlacement placement, std::size_t total, std::size_t selection, PathPickerFieldColumns columns) noexcept;
-    };
-
-  }
-}
-
-// Interface: presentation/suggestion_preview.cppm
-export {
-  namespace telar::gui {
-
-    struct SuggestionPreviewLine {
-      std::string_view text;
-      Rect bounds;
-      bool shortened = false;
-    };
-
-    class SuggestionPreview {
-    public:
-      static constexpr std::string_view shortened_message = "Preview shortened. Review the full command after pasting.";
-
-      SuggestionPreview(std::string_view text, Rect bounds, const FontGrid& grid);
-
-      [[nodiscard]] std::optional<SuggestionPreviewLine> next();
-
-    private:
-      [[nodiscard]] static std::uint16_t columns(Rect bounds, std::uint16_t width);
-
-      Rect bounds_;
-      float line_height_;
-      float y_;
-      WrappedLines lines_;
-      bool finished_ = false;
     };
 
   }

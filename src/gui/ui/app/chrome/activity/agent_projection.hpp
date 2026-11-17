@@ -35,7 +35,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.presentation.notification_stack;
+import telar.gui.foundation.agents;
 import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {

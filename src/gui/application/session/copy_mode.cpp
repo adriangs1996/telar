@@ -2,6 +2,9 @@ module telar.gui.application.session;
 
 import std;
 import telar.gui.foundation.terminal;
+import telar.gui.input.copy_pointer;
+import telar.gui.foundation.actions;
+import telar.gui.foundation.keys;
 
 namespace telar::gui {
 

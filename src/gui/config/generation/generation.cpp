@@ -4,6 +4,9 @@ import telar.config.snapshot;
 import telar.gui.config.gui_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.foundation.core;
+import telar.gui.foundation.keys;
+import telar.gui.foundation.actions;
+import telar.gui.config.plugin_query;
 
 namespace telar::gui {
 

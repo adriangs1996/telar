@@ -23,10 +23,11 @@ import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.foundation.core;
 import telar.gui.graphics.placeholder;
+import telar.gui.foundation.drawing;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.activity_order;
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 
 namespace {
 

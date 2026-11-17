@@ -18,6 +18,7 @@ import telar.gui.attachments.catalog;
 import telar.gui.attachments.marker_input;
 import telar.gui.machines.picker;
 import telar.gui.presentation.suggestion_labels;
+import telar.gui.foundation.actions;
 
 namespace telar::gui::qt {
 

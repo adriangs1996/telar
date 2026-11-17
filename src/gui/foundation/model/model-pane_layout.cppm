@@ -1,4 +1,4 @@
-export module telar.gui.layout.geometry;
+export module telar.gui.foundation.model:pane_layout;
 
 import std;
 
@@ -7,7 +7,7 @@ import telar.wire.vocabulary;
 
 // Interface: application/pane_bottom_reservation.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     struct PaneBottomReservation {
       static constexpr std::uint16_t shelf_rows = 6;
@@ -27,7 +27,7 @@ export {
 
 // Interface: application/pane_layout.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     class PaneLayout {
     public:
@@ -137,7 +137,7 @@ export {
 
 // Interface: application/workbench_geometry.cppm
 export {
-  namespace telar::gui {
+  namespace telar::gui::inline foundation::inline model {
 
     struct WorkbenchGeometry {
       static constexpr float default_width = default_terminal_size.cols * default_terminal_size.cell_width_px;

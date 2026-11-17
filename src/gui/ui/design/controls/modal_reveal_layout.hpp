@@ -13,7 +13,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.suggestion_labels;
+import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
 

@@ -44,9 +44,9 @@ static_assert(true);
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.presentation.activity_order;
+import telar.gui.foundation.drawing;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.frame_pacer;
-import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.history_filter_geometry;
 

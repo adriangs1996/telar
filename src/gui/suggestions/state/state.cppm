@@ -5,18 +5,7 @@ import std;
 import telar.base.memory.containers;
 import telar.wire.editor;
 import telar.wire.vocabulary;
-
-// Interface: suggestions/limits.cppm
-export {
-  namespace telar::gui {
-
-    struct SuggestionLimits {
-      static constexpr std::size_t request_bytes = 512;
-      static constexpr std::size_t text_bytes = 1024;
-    };
-
-  }
-}
+import telar.gui.foundation.model;
 
 // Interface: suggestions/state.cppm
 export {

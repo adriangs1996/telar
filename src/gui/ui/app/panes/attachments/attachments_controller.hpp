@@ -17,8 +17,8 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.input.key_encoder;
-import telar.gui.layout.geometry;
+import telar.gui.foundation.keys;
+import telar.gui.foundation.model;
 import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {

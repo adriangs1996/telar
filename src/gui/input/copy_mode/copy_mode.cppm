@@ -4,7 +4,7 @@ import std;
 import telar.tbc;
 
 import telar.gui.foundation.terminal;
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.keys;
 import telar.gui.input.copy_pointer;
 import telar.wire.clipboard;
 import telar.wire.pane_io;

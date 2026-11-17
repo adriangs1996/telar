@@ -6,7 +6,7 @@ export module telar.gui.presentation.notification_center;
 import std;
 import telar.tbc;
 
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 import telar.gui.foundation.text;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;

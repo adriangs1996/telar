@@ -7,6 +7,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.wire.layout;
 import telar.wire.vocabulary;
+import telar.gui.foundation.model;
 
 namespace telar::gui {
 

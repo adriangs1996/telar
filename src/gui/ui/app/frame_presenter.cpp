@@ -27,13 +27,11 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.frame_pacer;
 import telar.wire.vocabulary;
-import telar.gui.model.records;
 
 namespace telar::gui::qt {
 

@@ -15,8 +15,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.input.configuration;
-import telar.gui.layout.geometry;
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
 

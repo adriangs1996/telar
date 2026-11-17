@@ -8,7 +8,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
 

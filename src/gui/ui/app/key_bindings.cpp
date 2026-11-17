@@ -49,8 +49,6 @@ static_assert(true);
 
 import telar.gui.application.workspace_replica;
 import telar.gui.input.copy_pointer;
-import telar.gui.input.key_encoder;
-import telar.gui.input.configuration;
 import telar.gui.presentation.history_inspection;
 
 namespace telar::gui::qt {

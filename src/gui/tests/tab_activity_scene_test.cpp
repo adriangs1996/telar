@@ -55,6 +55,7 @@ static_assert(true);
 
 import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
+import telar.gui.foundation.drawing;
 import telar.gui.presentation.display_metrics;
 
 namespace {

@@ -15,7 +15,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.model.records;
+import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
 

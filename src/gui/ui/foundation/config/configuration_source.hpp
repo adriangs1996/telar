@@ -65,14 +65,12 @@ import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
 import telar.gui.presentation.client_view_state;
 import telar.gui.config.plugin_query;
+import telar.gui.foundation.actions;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;
 import telar.gui.foundation.core;
-import telar.gui.input.copy_pointer;
-import telar.gui.input.configuration;
+import telar.gui.foundation.keys;
 import telar.config.client;
-import telar.gui.input.key_encoder;
-import telar.gui.input.binding_effects;
 
 namespace telar::gui {
 

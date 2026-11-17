@@ -5,6 +5,8 @@ import std;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.gui.foundation.actions;
+import telar.gui.foundation.keys;
 
 namespace telar::gui {
 

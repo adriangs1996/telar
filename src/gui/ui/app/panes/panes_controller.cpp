@@ -18,9 +18,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 
-import telar.gui.layout.geometry;
-import telar.gui.model.records;
-
 namespace telar::gui::qt {
 
   PanesController::PanesController(Store& store, ElementSlots& elements, QObject* parent)

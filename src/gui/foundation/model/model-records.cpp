@@ -1,11 +1,12 @@
-module telar.gui.model.records;
+module telar.gui.foundation.model;
 
 import std;
 
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline model {
 
   std::uint64_t StatusAgeInterval::elapsed(std::uint64_t now_ns) const noexcept {
     const auto delta = now_ns > sampled_ns ? now_ns - sampled_ns : 0;

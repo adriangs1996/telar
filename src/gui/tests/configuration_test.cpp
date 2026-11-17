@@ -22,13 +22,13 @@ import telar.gui.config.plugin_effects;
 import telar.gui.config.generation;
 import telar.gui.foundation.core;
 import telar.gui.input.copy_pointer;
+import telar.gui.foundation.actions;
 import telar.gui.input.key_encoder;
 import telar.lua;
 
 import telar.config.snapshot;
 import telar.gui.config.gui_query;
 import telar.config.runtime;
-import telar.gui.input.binding_effects;
 
 namespace {
 

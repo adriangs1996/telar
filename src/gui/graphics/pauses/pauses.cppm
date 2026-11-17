@@ -5,7 +5,7 @@ export module telar.gui.graphics.pauses;
 
 import std;
 
-import telar.gui.layout.geometry;
+import telar.gui.foundation.model;
 import telar.wire.vocabulary;
 
 // Interface: graphics/artwork_resize.cppm

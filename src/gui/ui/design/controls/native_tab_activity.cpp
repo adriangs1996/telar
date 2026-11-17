@@ -30,7 +30,6 @@ static_assert(true);
 #include <memory>
 #include <optional>
 
-import telar.gui.graphics.placeholder;
 import telar.gui.foundation.system;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.activity_order;

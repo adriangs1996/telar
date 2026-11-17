@@ -5,7 +5,7 @@ import telar.tbc;
 
 import telar.gui.components.configuration;
 
-import telar.gui.input.binding_effects;
+import telar.gui.foundation.actions;
 
 import telar.gui.foundation.text;
 
@@ -17,7 +17,6 @@ import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.config.core;
-import telar.gui.input.copy_pointer;
 
 // Interface: components/builtin_content.cppm
 export {

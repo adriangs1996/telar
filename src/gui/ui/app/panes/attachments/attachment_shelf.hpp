@@ -24,7 +24,7 @@ static_assert(true);
 
 import telar.gui.attachments.catalog;
 import telar.gui.attachments.marker_input;
-import telar.gui.input.key_encoder;
+import telar.gui.foundation.keys;
 import telar.gui.machines.picker;
 
 namespace telar::gui::qt {

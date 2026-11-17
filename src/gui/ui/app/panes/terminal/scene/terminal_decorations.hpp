@@ -24,7 +24,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
-import telar.gui.graphics.placeholder;
+import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
 

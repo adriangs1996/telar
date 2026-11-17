@@ -31,8 +31,7 @@ import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.application_mark;
-import telar.gui.model.records;
-import telar.gui.model.replicas;
+import telar.gui.foundation.model;
 import telar.wire.agents;
 
 namespace {

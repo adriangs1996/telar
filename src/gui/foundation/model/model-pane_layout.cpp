@@ -1,11 +1,11 @@
-module telar.gui.layout.geometry;
+module telar.gui.foundation.model;
 
 import std;
 
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 
-namespace telar::gui {
+namespace telar::gui::inline foundation::inline model {
 
   std::uint16_t PaneLayout::Metrics::minimumPaneExtent(ClientLayoutAxis axis) const noexcept {
     return border == 0 ? 1 : 1 + static_cast<std::uint16_t>(border) + (axis == ClientLayoutAxis::vertical ? std::max(border, header) : border);

@@ -9,11 +9,10 @@ module;
 export module telar.gui.tests.plugin_effect_cases;
 
 import std;
-import telar.gui.input.copy_pointer;
+import telar.gui.foundation.actions;
 import telar.plugins;
 import telar.gui.config.plugin_effects;
 import telar.wire.vocabulary;
-import telar.gui.input.binding_effects;
 
 export {
   namespace telar::gui::test {

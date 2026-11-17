@@ -24,6 +24,7 @@ static_assert(true);
 import telar.gui.foundation.system;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.activity_order;
+import telar.gui.foundation.agents;
 import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {

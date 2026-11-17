@@ -7,6 +7,7 @@ import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.gui.foundation.actions;
 
 namespace telar::gui::components {
 

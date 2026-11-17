@@ -1,5 +1,4 @@
 telar_add_domain(gui layout
   SOURCES
-    geometry/geometry.cpp
     snapshots/snapshots.cpp
-  DEPS foundation/core)
+  DEPS foundation/model)
