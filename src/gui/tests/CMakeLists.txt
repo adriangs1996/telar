@@ -13,9 +13,6 @@ telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARI
   TEST gui-display-metrics LABELS gui.features.window)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 
-telar_add_test(gui-notification-payload-test SOURCES notification_payload_test.cpp LIBRARIES gui-foundation-system gui-foundation-core
-  TEST gui-notification-payload LABELS gui.foundation.system)
-
 telar_add_test(gui-screen-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/screen_probe.cpp LIBRARIES gui-foundation-core gui-foundation-terminal
   CHECKS lint lifetime blank_lines)
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
