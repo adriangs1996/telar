@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import select
+import signal
 import stat
 import struct
 import subprocess
@@ -94,6 +95,37 @@ def check_runtime(binary, checkpoint_probe):
             if seeded.returncode:
                 raise RuntimeError(f"Checkpoint probe failed: {seeded.stderr.strip()}")
             wait_socket(socket, False)
+
+            def verify_session():
+                verified = subprocess.run([str(checkpoint_probe), str(socket), "verify", str(root / "expected")],
+                                          env=environment, capture_output=True, text=True, timeout=30)
+                if verified.returncode:
+                    raise RuntimeError(f"Restored session differs: {verified.stderr.strip()}")
+                wait_socket(socket, False)
+
+            # A restart without --fresh restores the session the stopped runtime saved.
+            invoke("--background", "--socket", socket, "--no-config")
+            wait_socket(socket, True)
+            verify_session()
+
+            # SIGTERM, as a service manager sends it, stops the runtime as `telar server stop` does:
+            # it exits 0, removes its socket and leaves a session the next start restores.
+            runtime = subprocess.Popen([str(binary), "server", "--socket", str(socket), "--no-config"], env=environment,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            try:
+                wait_socket(socket, True)
+                runtime.send_signal(signal.SIGTERM)
+                assert runtime.wait(timeout=15) == 0, runtime.stderr.read()
+            finally:
+                if runtime.poll() is None:
+                    runtime.kill()
+                    runtime.wait()
+                runtime.stderr.close()
+            assert not socket.exists()
+            invoke("--background", "--socket", socket, "--no-config")
+            wait_socket(socket, True)
+            verify_session()
+
             checkpoint = history.with_name("session.ckpt")
             previous = checkpoint.read_bytes()
             invoke("--background", "--socket", socket, "--fresh", "--no-config")
