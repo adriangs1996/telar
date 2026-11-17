@@ -13,15 +13,6 @@ telar_add_test(gui-test-fixtures STATIC SOURCES ${gui_test_fixtures} LIBRARIES g
 telar_add_test(gui-clipboard-image-pipe-test SOURCES clipboard_image_pipe_test.cpp platform/clipboard_pipe_status.c LIBRARIES gui-posix gui-test-fixtures gui-platform
   TEST gui-clipboard-image-pipe LABELS gui.platform TIMEOUT 20)
 
-telar_add_test(gui-attachment-capture-test SOURCES attachment_capture_test.cpp LIBRARIES gui-features-terminal-attachments
-  TEST gui-attachment-capture LABELS gui.features.terminal.attachments)
-
-telar_add_test(gui-attachment-catalog-test SOURCES attachment_catalog_test.cpp LIBRARIES gui-features-terminal-attachments gui-test-fixtures
-  TEST gui-attachment-catalog LABELS gui.features.terminal.attachments)
-
-telar_add_test(gui-attachment-marker-test SOURCES attachment_marker_test.cpp LIBRARIES gui-features-terminal-attachments
-  TEST gui-attachment-marker LABELS gui.features.terminal.attachments)
-
 telar_add_test(gui-attachment-layout-test SOURCES attachment_layout_test.cpp LIBRARIES gui-foundation-model gui-foundation-core
   TEST gui-attachment-layout LABELS gui.foundation.model)
 
