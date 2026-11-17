@@ -23,11 +23,8 @@ telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARI
   TEST gui-display-metrics LABELS gui.features.window)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 
-telar_add_test(gui-notification-text-test SOURCES notification_text_test.cpp LIBRARIES gui-foundation-text gui-foundation-system gui-features-notifications deps::ghostty_vt
-  TEST gui-notification-text LABELS gui.features.notifications)
-
-telar_add_test(gui-notification-effects-test SOURCES notification_effects_test.cpp LIBRARIES gui-foundation-system gui-application
-  TEST gui-notification-effects LABELS gui.application)
+telar_add_test(gui-notification-payload-test SOURCES notification_payload_test.cpp LIBRARIES gui-foundation-system gui-foundation-core
+  TEST gui-notification-payload LABELS gui.foundation.system)
 
 telar_add_test(gui-text-fit-test SOURCES text_fit_test.cpp LIBRARIES gui-foundation-text gui-foundation-system deps::ghostty_vt gui-test-fixtures
   TEST gui-text-fit LABELS gui.foundation.text)
