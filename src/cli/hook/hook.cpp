@@ -591,18 +591,20 @@ namespace telar::runtime::cli::hooks {
         throw std::runtime_error{"InvalidWorktreePath"};
       }
 
-      if (const auto pane = unsignedValue(environment_.lookup("TELAR_PANE_ID")); pane) {
-        try {
-          forgetWorktree();
-        } catch (const std::exception&) {
-        }
-      }
-
       mainRoot(path_);
       try {
         git({"git", "-C", root_, "worktree", "remove", "--", path_}, "git worktree remove failed");
       } catch (const std::exception&) {
         std::fprintf(stderr, "telar hook: kept %s; it has changes to review\n", path_.c_str());
+        return;
+      }
+
+      // Only a checkout that is gone leaves the runtime's catalog; a kept one stays tracked.
+      if (const auto pane = unsignedValue(environment_.lookup("TELAR_PANE_ID")); pane) {
+        try {
+          forgetWorktree();
+        } catch (const std::exception&) {
+        }
       }
     }
 
