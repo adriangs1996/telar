@@ -323,8 +323,3 @@ Lo que se ejecuta por frame o por tecla (preparar y presentar frames, codificar 
 no gana llamadas indirectas, asignaciones ni copias: las consultas devuelven referencias o vistas
 constantes y son `inline` (`TBC_HOT_PATH` si están en una interfaz). Un caso de uso en un camino
 caliente cuesta lo mismo que el método al que sustituye.
-
-## Reparto
-
-`gui-features.md` y `gui-features.json` asignan cada sección `// Interface:` de los módulos
-anteriores a su carpeta.
