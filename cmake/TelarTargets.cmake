@@ -292,19 +292,25 @@ function(telar_add_probes target)
   add_custom_target(${target} DEPENDS ${probes})
 endfunction()
 
-# telar_add_tests(<target> LABEL <label> [DIRECTORY <folder>] [LINK <target>...]
-#                 [SOURCES <file>...] [MACOS_SOURCES <file>...] [LINUX_SOURCES <file>...]
-#                 [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...] [CHECKS <check>...])
-# The test program of the current folder: <folder>/*_test.cpp, <folder>/macos/*_test.cpp
+# telar_add_tests(<target> LABEL <label> [DIRECTORY <folder>] [RECURSE] [QT] [MAIN <target>]
+#                 [LINK <target>...] [SOURCES <file>...] [MACOS_SOURCES <file>...]
+#                 [LINUX_SOURCES <file>...] [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...]
+#                 [CHECKS <check>...])
+# The test program of the current folder: <folder>/*_test.cpp, <folder>/macos/*_test.{cpp,mm}
 # on macOS and <folder>/linux/*_test.cpp on Linux, and SOURCES, with MACOS_SOURCES and
-# LINUX_SOURCES on their platform. DIRECTORY defaults to tests, and is .
-# for a program declared in its tests folder itself. Module interfaces in
-# <folder>/<x>/<x>.cppm are its support, the library <target>-support, which tests of the
-# folders above may link as well; a folder with support and no tests builds only that. Both link LINK and telar::testing, whose main runs the
-# cases. Every case is a CTest test of its own, <label>.<suite>.<case>, carrying LABELS
+# LINUX_SOURCES on their platform. DIRECTORY defaults to tests, and is . for a program
+# declared in its tests folder itself. With RECURSE, DIRECTORY is a tree and the program
+# gathers the tests of every tests/ folder under it, as one program serves the folders of
+# src/gui/ui/app. Module interfaces in <folder>/<x>/<x>.cppm (with RECURSE, in every
+# tests/<x>/<x>.cppm) are its support, the library <target>-support, which tests of the
+# folders above may link as well; a folder with support and no tests builds only that. Both
+# link LINK and telar::testing; the program links MAIN, telar::testing-main by default, the
+# main that runs the cases. QT builds it as a Qt program that finds the process's QML
+# modules. Every case is a CTest test of its own, <label>.<suite>.<case>, carrying LABELS
 # <label>, TIMEOUT and ENVIRONMENT. CHECKS defaults to lint and blank_lines.
 function(telar_add_tests target)
-  cmake_parse_arguments(PARSE_ARGV 1 tests "" "LABEL;TIMEOUT;DIRECTORY" "LINK;SOURCES;MACOS_SOURCES;LINUX_SOURCES;ENVIRONMENT;CHECKS")
+  cmake_parse_arguments(PARSE_ARGV 1 tests "QT;RECURSE" "LABEL;TIMEOUT;DIRECTORY;MAIN"
+    "LINK;SOURCES;MACOS_SOURCES;LINUX_SOURCES;ENVIRONMENT;CHECKS")
   if(tests_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_tests(${target}): unexpected arguments ${tests_UNPARSED_ARGUMENTS}")
   endif()
@@ -317,7 +323,11 @@ function(telar_add_tests target)
   if(NOT tests_DIRECTORY)
     set(tests_DIRECTORY tests)
   endif()
+  if(NOT tests_MAIN)
+    set(tests_MAIN telar::testing-main)
+  endif()
   cmake_path(ABSOLUTE_PATH tests_DIRECTORY BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE OUTPUT_VARIABLE folder)
+  string(REGEX REPLACE "/$" "" folder "${folder}")
 
   # The tests of one platform live in its own subfolder.
   if(APPLE)
@@ -325,14 +335,33 @@ function(telar_add_tests target)
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(platform linux)
   endif()
-  file(GLOB sources CONFIGURE_DEPENDS "${folder}/*_test.cpp" "${folder}/${platform}/*_test.cpp")
+  if(tests_RECURSE)
+    file(GLOB_RECURSE found CONFIGURE_DEPENDS "${folder}/*_test.cpp" "${folder}/*_test.mm" "${folder}/*.cppm")
+    set(sources "")
+    set(interfaces "")
+    foreach(file IN LISTS found)
+      if(file MATCHES "/(out(-[^/]*)?|CMakeFiles)/")
+        continue()
+      elseif(file MATCHES "/tests/[^/]+_test\\.cpp$" OR file MATCHES "/tests/${platform}/[^/]+_test\\.(cpp|mm)$")
+        list(APPEND sources "${file}")
+      elseif(file MATCHES "/tests/[^/]+/[^/]+\\.cppm$")
+        list(APPEND interfaces "${file}")
+      endif()
+    endforeach()
+  else()
+    file(GLOB sources CONFIGURE_DEPENDS "${folder}/*_test.cpp" "${folder}/${platform}/*_test.cpp")
+    if(platform STREQUAL "macos")
+      file(GLOB objective CONFIGURE_DEPENDS "${folder}/macos/*_test.mm")
+      list(APPEND sources ${objective})
+    endif()
+    file(GLOB interfaces CONFIGURE_DEPENDS "${folder}/*/*.cppm")
+  endif()
   list(APPEND sources ${tests_SOURCES})
   if(platform STREQUAL "macos")
     list(APPEND sources ${tests_MACOS_SOURCES})
   elseif(platform STREQUAL "linux")
     list(APPEND sources ${tests_LINUX_SOURCES})
   endif()
-  file(GLOB interfaces CONFIGURE_DEPENDS "${folder}/*/*.cppm")
   if(DEFINED TELAR_PROCESS_BINARY_DIR)
     set(directory "${TELAR_PROCESS_BINARY_DIR}")
   else()
@@ -342,7 +371,7 @@ function(telar_add_tests target)
   set(links ${tests_LINK} telar::testing)
   if(interfaces)
     add_library(${target}-support STATIC)
-    target_sources(${target}-support PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${interfaces})
+    target_sources(${target}-support PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${folder}" FILES ${interfaces})
     target_link_libraries(${target}-support PUBLIC ${links})
     set_target_properties(${target}-support PROPERTIES POSITION_INDEPENDENT_CODE ON ARCHIVE_OUTPUT_DIRECTORY "${directory}")
     telar_register_checks(${target}-support CHECKS ${tests_CHECKS})
@@ -356,8 +385,22 @@ function(telar_add_tests target)
     return()
   endif()
 
-  add_executable(${target} ${sources})
-  target_link_libraries(${target} PRIVATE ${links})
+  if(tests_QT)
+    qt_add_executable(${target} ${sources})
+    # Static Qt links the QML plugins a program imports; like telar_add_test's QT programs,
+    # it scans the process's QML and finds its QML modules in its build directory.
+    set_target_properties(${target} PROPERTIES
+      QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS "${TELAR_PROCESS_QML_DIR}"
+      QT_QML_IMPORT_PATH "${TELAR_PROCESS_BINARY_DIR}")
+  else()
+    add_executable(${target} ${sources})
+  endif()
+  set(objective_sources ${sources})
+  list(FILTER objective_sources INCLUDE REGEX "\\.mm$")
+  if(objective_sources)
+    set_source_files_properties(${objective_sources} TARGET_DIRECTORY ${target} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+  endif()
+  target_link_libraries(${target} PRIVATE ${links} ${tests_MAIN})
   set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${directory}")
   telar_register_checks(${target} CHECKS ${tests_CHECKS})
 

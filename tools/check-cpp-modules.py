@@ -83,7 +83,8 @@ def main():
     upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
     domains = check_domain_targets(inventory['process_layers'], owned, lambda path: (ROOT / path).read_text())
     tests = check_test_placement(inventory['process_layers'], inventory['library_layers'], owned,
-                                 lambda path: (ROOT / path).read_text(errors='replace'))
+                                 lambda path: (ROOT / path).read_text(errors='replace'),
+                                 inventory.get('import_rules', {}).get('src/gui/ui', ()))
     check_cycles(imports)
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
@@ -338,20 +339,47 @@ def check_domain_targets(layers, files, read):
 
 TEST_FILE_RE = re.compile(r'_test\.(cpp|mm)$')
 TEST_UNIT_SUFFIXES = ('.cpp', '.cppm', '.mm')
-# The processes whose tests live with their domains; the GUI's join when src/gui is cut by use case.
+# The processes whose tests live with their domains; the GUI's join once its tests have moved.
 DOMAIN_TESTS = ('runtime', 'cli')
 # Every test program links the harness, whatever its folder.
 HARNESS = 'telar.testing'
+# src/gui/ui is no domain: its folders are one QML module, and a UI test is placed by the
+# headers of ui/ it includes. Its trees, the one a test checks first.
+UI_TREES = ('app', 'design', 'foundation')
+UI_INCLUDE_RE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"(ui/[^"]+)/[^/"]+"', re.M)
 
 
-def check_test_placement(layers, library_layers, files, read):
+def ui_folder(text):
+    """The ui/ folder a GUI test checks: of the folders whose headers it includes, those of the
+    tree it reaches first in UI_TREES (an app folder uses design and foundation, a design one
+    foundation), and the deepest folder that holds them all. None without a ui/ include."""
+    folders = [folder.split('/') for folder in UI_INCLUDE_RE.findall(text)]
+    for tree in UI_TREES:
+        checked = [folder for folder in folders if len(folder) > 1 and folder[1] == tree]
+        if checked:
+            common = checked[0]
+            for folder in checked[1:]:
+                length = 0
+                while length < min(len(common), len(folder)) and common[length] == folder[length]:
+                    length += 1
+                common = common[:length]
+
+            return '/'.join(common)
+
+    return None
+
+
+def check_test_placement(layers, library_layers, files, read, ui_rules=()):
     """Rule 9: a test lives with what it checks, so where a test goes follows from what it
     imports. A test of a domain lives in src/<process>/<domain>/tests/ and imports that domain,
     the domains below it that its DEPS reach and libraries. A test that needs more is an
     integration test of the process, in src/<process>/tests/, and one there that fits a single
     domain belongs to that domain. A test of a library lives in lib/<library>/tests/ and imports
     no process and no library that builds on it (library_layers): it may borrow utilities from
-    any other. Every *_test file lives in a tests/ folder, and any test may import the harness."""
+    any other. Every *_test file lives in a tests/ folder, and any test may import the harness.
+    A test of src/gui/ui lives in the folder whose headers it includes (ui_folder); one that
+    imports what ui/ may not (`ui_rules`, the import rules of src/gui/ui) is an integration
+    test of the GUI."""
     deps = {}
     for path in sorted(name for name in files if name.endswith('CMakeLists.txt')):
         for process, domain, arguments in domain_declarations(path, read(path)):
@@ -387,6 +415,29 @@ def check_test_placement(layers, library_layers, files, read):
             owner = None
         elif process and process[1] in DOMAIN_TESTS:
             owner = process[2]
+            if process[1] == 'gui' and TEST_FILE_RE.search(path):
+                text = COMMENTS_RE.sub('', read(path))
+                checked = ui_folder(text)
+                gui = [name for name in imports_of('', text) if name.startswith('telar.gui.')]
+                ui_imports = all(name.startswith(tuple(ui_rules)) for name in gui)
+                if owner is not None and owner.split('/')[0] == 'ui':
+                    count += 1
+                    if checked is None:
+                        errors.append(f'{path} includes no header of ui/: a UI test lives with the ui/ folder it includes')
+                    elif owner != checked:
+                        errors.append(f'{path} includes the headers of {checked}: it belongs in src/gui/{checked}/tests/')
+                    continue
+                if checked is not None:
+                    if owner is None and ui_imports:
+                        errors.append(f'{path} includes the headers of {checked} and imports only what ui/ builds on: '
+                                      f'it belongs in src/gui/{checked}/tests/')
+                        continue
+                    if owner is not None:
+                        errors.append(f'{path} includes headers of ui/, which no domain builds on: '
+                                      f'it belongs in src/gui/{checked}/tests/ or, with what ui/ does not import, in src/gui/tests/')
+                        continue
+                    count += 1
+                    continue
             if owner is not None:
                 domains = sorted((name for name in layers.get(process[1], []) if owner == name or owner.startswith(name + '/')),
                                  key=len)

@@ -3,6 +3,7 @@ and no import a unit does not use."""
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('check_cpp_modules', ROOT / 'tools/check-cpp-modules.py')
@@ -466,6 +467,55 @@ def placed(extra):
 
 def test_unit(*imports):
     return ''.join(f'import {name};\n' for name in ('telar.testing', *imports))
+
+
+GUI_LAYERS = {'gui': ['foundation/core', 'features/history', 'application', 'tests']}
+UI_RULES = ('telar.gui.foundation', 'telar.gui.application')
+
+
+def placed_gui(extra):
+    """The GUI's foundation, a feature over it and the application over both, with the tests of
+    `extra`, its tests placed with its domains."""
+    files = {
+        'src/gui/foundation/core/CMakeLists.txt': 'telar_add_domain(gui foundation/core)\n',
+        'src/gui/features/history/CMakeLists.txt': 'telar_add_domain(gui features/history DEPS foundation/core)\n',
+        'src/gui/application/CMakeLists.txt': 'telar_add_domain(gui application DEPS features/history foundation/core)\n',
+    }
+    files.update(extra)
+    with mock.patch.object(checker, 'DOMAIN_TESTS', ('runtime', 'cli', 'gui')):
+        return checker.check_test_placement(GUI_LAYERS, LIBRARY_LAYERS, set(files), files.__getitem__, UI_RULES)
+
+
+def ui_unit(includes, *imports):
+    return ''.join(f'#include "{name}"\n' for name in includes) + test_unit(*imports)
+
+
+class UiPlacement(unittest.TestCase):
+    def test_a_ui_test_lives_in_the_deepest_folder_of_the_tree_it_checks_first(self):
+        self.assertEqual(placed_gui({
+            'src/gui/ui/app/chrome/tests/tabs_test.cpp': ui_unit(
+                ['ui/app/chrome/tabs/strip.hpp', 'ui/app/chrome/bar.hpp', 'ui/design/controls/button.hpp']),
+            'src/gui/ui/design/controls/tests/button_test.cpp': ui_unit(
+                ['ui/design/controls/button.hpp', 'ui/foundation/fonts/font.hpp'], 'telar.gui.foundation.core'),
+            'src/gui/ui/app/tests/window_test.cpp': ui_unit(['ui/app/window.hpp', 'ui/app/panes/pane.hpp'], 'telar.gui.application'),
+        }), 3)
+
+    def test_a_ui_test_in_another_folder_names_the_right_one(self):
+        with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/chrome/tabs/tests/'):
+            placed_gui({'src/gui/ui/app/chrome/tests/tabs_test.cpp': ui_unit(['ui/app/chrome/tabs/strip.hpp'])})
+        with self.assertRaisesRegex(RuntimeError, r'includes no header of ui/'):
+            placed_gui({'src/gui/ui/app/tests/empty_test.cpp': ui_unit([])})
+
+    def test_a_gui_integration_test_imports_what_ui_does_not(self):
+        integration = ui_unit(['ui/app/window.hpp'], 'telar.gui.features.history.cards')
+        self.assertEqual(placed_gui({'src/gui/tests/window_test.cpp': integration}), 1)
+        with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/tests/'):
+            placed_gui({'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.application')})
+
+    def test_a_domain_test_includes_no_ui_header(self):
+        self.assertEqual(placed_gui({'src/gui/features/history/tests/cards_test.cpp': test_unit('telar.gui.features.history.cards')}), 1)
+        with self.assertRaisesRegex(RuntimeError, r'includes headers of ui/, which no domain builds on'):
+            placed_gui({'src/gui/application/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.application')})
 
 
 class TestPlacement(unittest.TestCase):

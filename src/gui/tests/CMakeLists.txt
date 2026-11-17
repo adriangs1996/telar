@@ -301,6 +301,11 @@ if(TELAR_GUI_NATIVE)
     LABELS gui.platform ENVIRONMENT "TELAR_GUI_QT_CACHE=${CMAKE_BINARY_DIR}/CMakeCache.txt" TIMEOUT 30)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Test
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
+  # The main of the Qt programs telar_add_tests(... QT MAIN gui-testing-main) builds: their
+  # cases run inside one QGuiApplication.
+  add_library(gui-testing-main STATIC testing_main.cpp)
+  target_link_libraries(gui-testing-main PUBLIC telar::testing Qt6::Gui)
+  telar_register_checks(gui-testing-main CHECKS lint blank_lines)
   # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.
   include("${TELAR_ROOT}/cmake/openssl.cmake")
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
