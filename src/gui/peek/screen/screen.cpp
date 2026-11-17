@@ -74,7 +74,13 @@ namespace telar::gui {
 
     request_id_ = identity;
 
-    return ReadPane{.request_id = identity, .pane_id = target_->agent.pane_id, .pane_generation = target_->agent.pane_generation, .rows = PeekLimits::rows, .source = PaneTextSource::recent};
+    return ReadPane{
+        .request_id = identity,
+        .pane_id = target_->agent.pane_id,
+        .pane_generation = target_->agent.pane_generation,
+        .rows = PeekLimits::rows,
+        .source = PaneTextSource::recent,
+    };
   }
 
   template <Allocator Memory>
