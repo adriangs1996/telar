@@ -15,6 +15,7 @@ import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
+import telar.runtime.traffic.tests.packet_fixture;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
 import telar.vocabulary;
@@ -180,7 +181,71 @@ namespace {
     check(receiveSome(peer.get(), 65536).empty());
   }
 
+  // A UDP datagram from 0.0.0.1:53535 to 0.0.0.2:53.
+  std::vector<Byte> udp(std::string_view body) {
+    auto bytes = traffic_test::tcp(false, false, 0, 0);
+
+    bytes.resize(20 + 8 + body.size());
+    bytes[2] = static_cast<Byte>(bytes.size() >> 8);
+    bytes[3] = static_cast<Byte>(bytes.size());
+    bytes[9] = 17;
+    bytes[20] = 53535 >> 8;
+    bytes[21] = 53535 & 0xff;
+    bytes[22] = 0;
+    bytes[23] = 53;
+    bytes[24] = 0;
+    bytes[25] = static_cast<Byte>(8 + body.size());
+    bytes[26] = bytes[27] = 0;
+    std::ranges::copy(body, bytes.begin() + 28);
+    return bytes;
+  }
+
+  // The kinds a subscriber receives until the capture stops.
+  std::set<Kind> received(int socket) {
+    std::set<Kind> kinds;
+
+    for (;;) {
+      const auto event = Protocol::decode(receiveFrame(socket));
+
+      kinds.insert(event.kind);
+      if (event.kind == Kind::capture_stopped) {
+        return kinds;
+      }
+    }
+  }
+
+  // A subscriber to flows or datagrams gets what the service derives from a producer's packets; one
+  // that asked for packets alone gets none of it.
+  void testAnalyzedSubscriptions() {
+    Allocation memory;
+    Socket socket;
+    Service service{memory.memory, socket.path};
+    auto packets = greeted(socket.path, Role::subscribe, Selection::packets);
+    auto flows = greeted(socket.path, Role::subscribe, Selection::flows);
+    auto datagrams = greeted(socket.path, Role::subscribe, Selection::datagrams);
+
+    {
+      auto producer = greeted(socket.path, Role::offline_capture);
+      constexpr Byte syn = 2;
+      const auto segment = traffic_test::tcp(false, false, 0, syn);
+      const auto datagram = udp("query");
+
+      for (const auto& bytes : {segment, datagram}) {
+        publish(producer.get(), traffic::Event{.kind = Kind::packet, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(bytes.size()), .interface = "producer", .bytes = bytes});
+      }
+    }
+
+    const auto flow_kinds = received(flows.get());
+    const auto datagram_kinds = received(datagrams.get());
+    const auto packet_kinds = received(packets.get());
+
+    check(flow_kinds.contains(Kind::flow_open) && flow_kinds.contains(Kind::flow_close) && !flow_kinds.contains(Kind::datagram));
+    check(datagram_kinds.contains(Kind::datagram) && !datagram_kinds.contains(Kind::flow_open));
+    check(packet_kinds.contains(Kind::packet) && !packet_kinds.contains(Kind::flow_open) && !packet_kinds.contains(Kind::datagram));
+  }
+
   const telar::testing::Case case_peer_role_violations{"traffic_service.peer_role_violations", testPeerRoleViolations};
   const telar::testing::Case case_interception_control_violations{"traffic_service.interception_control_violations", testInterceptionControlViolations};
+  const telar::testing::Case case_analyzed_subscriptions{"traffic_service.analyzed_subscriptions", testAnalyzedSubscriptions};
 
 }

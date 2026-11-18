@@ -232,6 +232,38 @@ namespace {
     check(budget.liveBytes() == 0);
   }
 
+  // A recording request names budgets the runtime then reserves: one past a published limit, or a
+  // capture filter with a NUL that would cut it short, is refused and starts nothing.
+  void requestValidation() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 16 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+
+    {
+      tr::Recordings recordings{memory};
+      SensitiveAllocation output{memory, rec::Limits::page_bytes};
+      const auto rejected = [&](const rec::Request& request) {
+        try {
+          recordings.handle(request, output.bytes());
+        } catch (const EncodingError&) {
+          return true;
+        }
+
+        return false;
+      };
+
+      check(rejected({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes + 1, .max_events = 1}));
+      // A whole session's bytes, so its budget holds the larger index and only the event limit refuses.
+      check(rejected({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes, .max_events = rec::Limits::events + 1}));
+      check(rejected({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 1, .filter = std::string_view{"tcp\0 or udp", 11}}));
+      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytes())).count == 0);
+    }
+
+    check(budget.liveBytes() == 0);
+  }
+
   const telar::testing::Case case_retained{
       "traffic_recording.retained",
       [] {
@@ -254,6 +286,12 @@ namespace {
       "traffic_recording.runtime_limits",
       [] {
         runtimeLimits();
+      },
+  };
+  const telar::testing::Case case_request_validation{
+      "traffic_recording.request_validation",
+      [] {
+        requestValidation();
       },
   };
 
