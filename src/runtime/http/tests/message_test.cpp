@@ -213,9 +213,76 @@ namespace {
     check(fields.fields().size() == maximum);
   }
 
+  auto text(std::span<const Byte> bytes) -> std::string_view {
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+  }
+
+  // A trailer arrives after the body, where nothing inspects it: one the message's Connection field
+  // names as hop-by-hop, or one carrying credentials, is refused instead of written.
+  void testUnsafeTrailers() {
+    Fixture fixture;
+
+    auto serializes = [&](std::string_view trailer) {
+      HttpMessage message{fixture.memory};
+
+      message.readHttp1Head("POST /upload HTTP/1.1\r\nHost: fixture.test\r\nConnection: keep-alive, x-hop\r\nContent-Length: 1\r\n\r\n");
+      message.body.assign({'b'});
+      message.trailers.append(trailer, "value");
+      return !throws<std::invalid_argument>([&] {
+        static_cast<void>(message.serializeHttp1());
+      });
+    };
+
+    check(serializes("X-Checksum"));
+    check(!serializes("X-Hop"));
+    check(!serializes("Authorization"));
+  }
+
+  // HTTP/1.0 clients still exist: their requests parse and are written back as HTTP/1.0. Another
+  // version, or a field line without a colon, is refused instead of forwarded unread.
+  void testRequestLineVersions() {
+    Fixture fixture;
+    HttpMessage request{fixture.memory};
+
+    request.readHttp1Head("GET /legacy HTTP/1.0\r\nHost: fixture.test\r\n\r\n");
+    check(text(request.serializeHttp1()).starts_with("GET /legacy HTTP/1.0\r\n"));
+
+    for (const std::string_view malformed : {"GET / HTTP/1.2\r\nHost: a\r\n\r\n", "GET / HTTP/1.1\r\nHost: a\r\nNoColon\r\n\r\n"}) {
+      check(throws<std::invalid_argument>([&] {
+        HttpMessage invalid{fixture.memory};
+
+        invalid.readHttp1Head(malformed);
+      }));
+    }
+  }
+
+  // Codings listed over two Content-Encoding lines are one list, applied in order: the body decodes
+  // through both, and encodes back to bytes that decode to the same plaintext.
+  void testContentEncodingLines() {
+    Fixture fixture;
+    constexpr std::string_view plaintext = "body coded twice";
+    const std::span<const Byte> plain{reinterpret_cast<const Byte*>(plaintext.data()), plaintext.size()};
+    HttpContentCodec codec{fixture.memory};
+    const auto gzip = codec.encode(plain, "gzip", 1024);
+    const std::vector<Byte> inner{gzip.bytes().begin(), gzip.bytes().end()};
+    const auto wire = codec.encode(inner, "br", 1024);
+    HttpMessage message{fixture.memory};
+
+    message.readHttp1Head("POST / HTTP/1.1\r\nHost: fixture.test\r\nContent-Encoding: gzip\r\nContent-Encoding: br\r\nContent-Length: 0\r\n\r\n");
+    message.decodeBody(wire.bytes());
+    check(std::ranges::equal(message.body, plain));
+
+    const auto encoded = message.encodeBody();
+
+    check(std::ranges::equal(codec.decode(encoded.bytes(), "gzip, br", 1024).bytes(), plain));
+  }
+
   const telar::testing::Case case_decision_metadata_immutable{"http_message.decision_metadata_immutable", testDecisionMetadataImmutable};
   const telar::testing::Case case_codec_bounds{"http_message.codec_bounds", testCodecBounds};
   const telar::testing::Case case_http2_validation{"http_message.http2_validation", testHttp2Validation};
   const telar::testing::Case case_field_limits{"http_message.field_limits", testFieldLimits};
+  const telar::testing::Case case_unsafe_trailers{"http_message.unsafe_trailers", testUnsafeTrailers};
+  const telar::testing::Case case_request_line_versions{"http_message.request_line_versions", testRequestLineVersions};
+  const telar::testing::Case case_content_encoding_lines{"http_message.content_encoding_lines", testContentEncodingLines};
 
 }
