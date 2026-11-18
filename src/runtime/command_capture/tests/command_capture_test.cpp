@@ -267,6 +267,10 @@ namespace {
   }
 
   void testOscFragments() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
     struct Completions {
       std::vector<CommandCompletion> values;
 
@@ -279,7 +283,7 @@ namespace {
     const std::string completion = "\x1b]133;C\x07output\x1b]133;D;+12;extra\x1b\\";
 
     for (std::size_t width = 1; width <= prompt.size(); ++width) {
-      CommandZones zones{"/initial"};
+      CommandZones zones{zone_memory, "/initial"};
       Completions sink;
 
       for (std::size_t offset = 0; offset < prompt.size(); offset += width) {
@@ -306,6 +310,10 @@ namespace {
 
   // A pane with a token trusts only the marks its shell integration signed.
   void testSignedMarks() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
     struct Completions {
       std::vector<CommandCompletion> values;
 
@@ -317,7 +325,7 @@ namespace {
     const auto token = ShellToken::generate();
     const auto signature = ";telar=" + std::string{token.text()};
     const auto forged = ";telar=" + std::string(ShellToken::length, '0');
-    CommandZones zones{"/", token};
+    CommandZones zones{zone_memory, "/", token};
     Completions sink;
 
     zones.feed(byteSpan("\x1b]133;A\x07\x1b]133;B\x07"), {}, sink);
@@ -342,6 +350,10 @@ namespace {
   // `ssh` nests a remote shell: the pane's shell signs a one-time nonce, the remote shell
   // answers with it and its own token, and the pane's token signing a mark again ends it.
   void testNestedMarks() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
     struct Completions {
       std::vector<CommandCompletion> values;
 
@@ -356,7 +368,7 @@ namespace {
     const auto signature = ";telar=" + std::string{token.text()};
     const auto remote_signature = ";telar=" + std::string{remote.text()};
     const auto answer = "\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{remote.text()} + ";shell=fish\x07";
-    CommandZones zones{"/", token};
+    CommandZones zones{zone_memory, "/", token};
     Completions sink;
 
     // An answer nobody asked for, or one to a nonce the pane's shell did not sign, is ignored.
@@ -403,6 +415,10 @@ namespace {
   // telar's private reports count only when the pane's shell signs them; without a token no mark
   // is signed, so nothing a program prints changes the PATH completion searches.
   void testPrivateReportWithoutToken() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
     struct Completions {
       void complete(CommandCompletion) {}
     };
@@ -410,12 +426,12 @@ namespace {
     const auto token = ShellToken::generate();
     const auto report = "\x1b]6973;telar=" + std::string{token.text()} + ";path=/evil\x07";
     Completions sink;
-    CommandZones signed_zones{"/", token};
+    CommandZones signed_zones{zone_memory, "/", token};
 
     signed_zones.feed(byteSpan(report), {}, sink);
     check(signed_zones.path() == "/evil");
 
-    CommandZones zones{"/"};
+    CommandZones zones{zone_memory, "/"};
 
     zones.feed(byteSpan(report), {}, sink);
     zones.feed(byteSpan("\x1b]6973;telar=;path=/evil\x07"), {}, sink);
@@ -457,13 +473,19 @@ namespace {
 
   // An OSC longer than the 16 KiB a pane keeps is dropped whole: its kept prefix is never read.
   void testOverlongOscIgnored() {
+    SystemAllocator zone_system;
+    BudgetAllocator zone_budget{zone_system, 1 << 20};
+    SynchronizedAllocator zone_synchronized{zone_budget};
+    MemoryAdapter zone_adapter{zone_synchronized};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
     struct Completions {
       void complete(CommandCompletion) {}
     };
 
     const auto token = ShellToken::generate();
     const auto names = "\x1b]6973;telar=" + std::string{token.text()} + ";names=";
-    CommandZones zones{"/initial", token};
+    CommandZones zones{zone_memory, "/initial", token};
     Completions sink;
 
     zones.feed(byteSpan("\x1b]7;file://host/" + std::string(17 * 1024, 'a') + "\x1b\\"), {}, sink);
@@ -471,10 +493,12 @@ namespace {
 
     zones.feed(byteSpan(names + "ll gs\x07"), {}, sink);
     check(zones.names() != nullptr && *zones.names() == "ll gs");
+    check(zone_budget.liveBytes() != 0, "the names live in the zones' allocator");
 
     // Names that did not fit are unknown, not the ones that did.
     zones.feed(byteSpan(names + std::string(17 * 1024, 'n') + "\x07"), {}, sink);
     check(zones.names() == nullptr, "a prefix of an overlong names report was taken");
+    check(zone_budget.liveBytes() == 0, "names no one holds go back to the allocator");
 
     // The next report is read again.
     zones.feed(byteSpan("\x1b]7;file://host/next\x07"), {}, sink);
@@ -483,6 +507,10 @@ namespace {
 
   // A prompt while a command runs, with no D mark, ends that command as interrupted.
   void testPromptWhileRunningInterrupts() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
     struct Completions {
       std::vector<CommandCompletion> values;
 
@@ -491,7 +519,7 @@ namespace {
       }
     };
 
-    CommandZones zones{"/"};
+    CommandZones zones{zone_memory, "/"};
     Completions sink;
 
     zones.feed(byteSpan("\x1b]133;A\x07$ \x1b]133;B\x07"), {}, sink);

@@ -207,9 +207,14 @@ namespace telar::runtime {
 
   // CommandZones
 
-  CommandZones::CommandZones(std::string_view directory, ds::Option<ShellToken> token)
-      : token_(token) {
+  CommandZones::CommandZones(ConcurrentMemory& memory, std::string_view directory, ds::Option<ShellToken> token)
+      : memory_(&memory),
+        token_(token) {
     setDirectory(directory);
+  }
+
+  ConcurrentMemory& CommandZones::memory() const noexcept {
+    return *memory_;
   }
 
   ds::Option<ShellToken> CommandZones::token() const noexcept {
@@ -307,7 +312,7 @@ namespace telar::runtime {
     return path_.view();
   }
 
-  const std::shared_ptr<const std::string>& CommandZones::names() const noexcept {
+  const std::shared_ptr<const ds::String<ConcurrentMemory>>& CommandZones::names() const noexcept {
     return names_;
   }
 
@@ -388,7 +393,7 @@ namespace telar::runtime {
       // The last option, so its names may be anything but the sequence's terminators.
       const auto names = body.substr(body.find(";names=") + 7);
 
-      names_ = std::make_shared<const std::string>(names);
+      names_ = std::allocate_shared<ds::String<ConcurrentMemory>>(AllocatorRef<ds::String<ConcurrentMemory>, ConcurrentMemory>{*memory_}, *memory_, names);
       return false;
     }
 
@@ -1084,9 +1089,9 @@ namespace telar::runtime {
     tbc::view<CapturedCommandEmitter&, tbc::lt::a> emitter_;
   };
 
-  CommandTrackerCore::CommandTrackerCore(GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token)
+  CommandTrackerCore::CommandTrackerCore(ConcurrentMemory& memory, GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token)
       : selection_(terminal),
-        zones_(directory, shell_token) {}
+        zones_(memory, directory, shell_token) {}
 
   std::size_t CommandTrackerCore::input(const CommandByteObservation& observation, CapturedCommandEmitter& emitter) {
     TELAR_TRACE("history.captureInput");
@@ -1212,7 +1217,7 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(metrics_.merge(zones_.takeMetrics()));
     clearSubmitted();
     reset();
-    zones_ = CommandZones{zones_.directory(), zones_.token()};
+    zones_ = CommandZones{zones_.memory(), zones_.directory(), zones_.token()};
   }
 
   void CommandTrackerCore::updateDirectory(std::string_view directory) {
@@ -1337,7 +1342,7 @@ namespace telar::runtime {
   }
 
   CommandTracker::CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
-      : CommandTrackerCore(terminal.handle(), directory, shell_token),
+      : CommandTrackerCore(memory, terminal.handle(), directory, shell_token),
         terminal_(terminal),
         output_(memory),
         command_(memory),

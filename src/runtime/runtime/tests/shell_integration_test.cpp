@@ -232,7 +232,7 @@ namespace {
       check(command.environment("TELAR_PROMPT_MODE") == (bare ? ds::Option<std::string_view>{"telar"} : ds::none));
       std::string drawn;
       PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
-      CommandZones zones{"/", launch->token};
+      CommandZones zones{memory, "/", launch->token};
       Completions completions;
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
       const auto pump = [&](auto ready) {
@@ -344,7 +344,7 @@ namespace {
 
         arguments.insert(arguments.end(), options.begin(), options.end());
         const ds::Array<std::pair<std::string_view, std::string_view>, 5> environment{{{"PATH", path}, {"TELAR_SHELL_TOKEN", token.text()}, {"TELAR_TEST_RECORD", record}, {"TELAR_TEST_CONFIG", configuration}, {"TELAR_PROMPT_MODE", mode}}};
-        CommandZones zones{"/", token};
+        CommandZones zones{memory, "/", token};
 
         ::unlink(record.c_str());
         runOnTerminal(memory, arguments, home.path(), environment, zones);
@@ -394,7 +394,7 @@ namespace {
       }
 
       PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
-      CommandZones zones{"/", token};
+      CommandZones zones{memory, "/", token};
       Completions completions;
       std::string drawn;
 
@@ -589,7 +589,7 @@ namespace {
 
     check(pane.shell_state.status == 1);
     // It reports its aliases and functions, the commands no PATH directory holds.
-    check(pane.shell_zones->names() != nullptr && pane.shell_zones->names()->find("which-command") != std::string::npos);
+    check(pane.shell_zones->names() != nullptr && pane.shell_zones->names()->view().contains("which-command"));
 
     // Each command is a block anchored to its prompt's row, in order, with how it ended.
     ds::Array<CommandBlock, PaneBlocks::capacity> storage;
@@ -799,6 +799,10 @@ namespace {
 
   // The repository a shell works in, read on the git worker.
   void gitContext() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+
     if (!findProgram("git")) {
       telar::testing::skip("git is not installed");
     }
@@ -838,7 +842,7 @@ namespace {
     check(message.pane_id == 7 && message.branch == "trunk");
 
     run("git branch feature/x && git branch other");
-    WordReader reader;
+    WordReader reader{memory};
     WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::branch, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.directory.assign(repository.path());
@@ -846,7 +850,7 @@ namespace {
       std::vector<std::string> result;
 
       for (const auto& word : reader.observe(query).words) {
-        result.push_back(word.text);
+        result.emplace_back(word.text.view());
       }
 
       return result;
@@ -862,6 +866,10 @@ namespace {
 
   // The values completion asks the runtime for, read from files the shell's machine holds.
   void words() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+
     TemporaryDirectory root{"/tmp/telar-words-XXXXXX"};
     const auto base = text(root.path());
     const auto make = [&](std::string_view relative, std::string_view contents, mode_t mode) {
@@ -881,7 +889,7 @@ namespace {
     make(".ssh/config", "Host build-01 build-02\n  HostName x\nhost *.internal\nHost=builder\nMatch all\n", 0600);
     make("Makefile", "all: build\nbuild test: deps\n\tcc\n.PHONY: all\nVAR := 1\n%.o: %.c\ninstall::\n", 0600);
 
-    WordReader reader{base + "/telar"};
+    WordReader reader{memory, base + "/telar"};
     const auto ask = [&](CompletionProvider provider, std::string_view prefix) {
       WordRequest request{.client = 1, .request = 9, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
@@ -895,7 +903,7 @@ namespace {
       std::vector<std::string> texts;
 
       for (const auto& word : result.words) {
-        texts.push_back(word.text);
+        texts.emplace_back(word.text.view());
       }
 
       return texts;
@@ -910,7 +918,7 @@ namespace {
     named.path.assign(base + "/bin");
     check(reader.observe(named).truncated && reader.observe(named).words.empty());
     named.shell = IntegratedShell::zsh;
-    named.names = std::make_shared<const std::string>("gst  ll gsw");
+    named.names = std::allocate_shared<ds::String<ConcurrentMemory>>(AllocatorRef<ds::String<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, "gst  ll gsw");
     const auto names = reader.observe(named);
 
     check(!names.truncated && names.words.size() == 2 && names.words[0].text == "gst" && names.words[1].text == "gsw");
@@ -957,7 +965,7 @@ namespace {
       request.prefix.assign(command);
       request.path.assign(base + "/bin");
       request.shell = IntegratedShell::zsh;
-      request.names = std::make_shared<const std::string>(reported);
+      request.names = std::allocate_shared<ds::String<ConcurrentMemory>>(AllocatorRef<ds::String<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, reported);
       request.spec = true;
       request.known_digest = known;
       return reader.observe(request);
@@ -965,7 +973,7 @@ namespace {
 
     const auto nmap = spec("nmap");
 
-    check(nmap.spec && nmap.command == "nmap" && nmap.spec_state == CommandSpecState::available && nmap.source.find("nmap = ") != std::string::npos && nmap.digest != 0);
+    check(nmap.spec && nmap.command == "nmap" && nmap.spec_state == CommandSpecState::available && nmap.source.view().contains("nmap = ") && nmap.digest != 0);
     check(spec("nmap", nmap.digest).spec_state == CommandSpecState::unchanged && spec("nmap", nmap.digest).source.empty());
     check(spec("git").spec_state == CommandSpecState::unavailable);
     check(spec("cd").spec_state == CommandSpecState::available);
@@ -977,7 +985,7 @@ namespace {
     const auto alias = spec("n");
 
     check(alias.spec_state == CommandSpecState::available && alias.expansion == "nmap" && alias.source == nmap.source && alias.digest == nmap.digest);
-    check(spec("gst").expansion == "git status" && spec("gst").source.find("git = ") != std::string::npos);
+    check(spec("gst").expansion == "git status" && spec("gst").source.view().contains("git = "));
     check(spec("gl").expansion == "git status --oneline");
     check(spec("less").spec_state == CommandSpecState::unavailable);
     check(spec("weird").spec_state == CommandSpecState::unavailable && spec("weird").expansion.empty());
@@ -986,7 +994,7 @@ namespace {
     make("telar/completions/nmap.ebnf", "nmap = { \"--mine\" : \"The user's own\" } ;\n", 0600);
     const auto users = spec("nmap");
 
-    check(users.spec_state == CommandSpecState::available && users.source.find("--mine") != std::string::npos && users.digest != nmap.digest);
+    check(users.spec_state == CommandSpecState::available && users.source.view().contains("--mine") && users.digest != nmap.digest);
     make("telar/completions/nmap.ebnf", "nmap = { \"--broken\" \n", 0600);
     check(spec("nmap").source == nmap.source);
 
@@ -996,11 +1004,14 @@ namespace {
 
     processes.prefix.assign(std::to_string(::getpid()));
     const auto own = reader.observe(processes).words;
-    const auto found = std::ranges::find(own, std::to_string(::getpid()), &Word::text);
+    const auto pid = std::to_string(::getpid());
+    const auto found = std::ranges::find_if(own, [&](const Word& word) {
+      return word.text == std::string_view{pid};
+    });
 
     check(found != own.end() && !found->description.empty());
     check(std::ranges::is_sorted(own, std::greater{}, [](const Word& word) {
-      return std::stoll(word.text);
+      return parseExact<long long>(word.text.view()).valueOr(0);
     }));
   }
 

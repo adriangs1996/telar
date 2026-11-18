@@ -86,61 +86,82 @@ namespace telar::runtime::shell_files {
     return heredocSafe(file.content);
   }));
 
-  // What a remote host runs: the bootstrap, then the calls that write each shell's scripts and
-  // start the login shell with them.
-  inline constexpr std::string remoteScript() {
-    std::string script{shell_scripts::remote};
+  // Counts the text it is given, or copies it too once it has storage, so that one pass sizes a
+  // compile-time text and another fills it.
+  struct ScriptWriter {
+    char* output = nullptr;
+    std::size_t size = 0;
 
-    script += "_telar_prepare ";
-    script.append(digest_digits.data(), digest_digits.size());
-    script += '\n';
-    for (const auto& file : shells) {
-      script += "_telar_put '";
-      script += file.directory;
-      script += "' '";
-      script += file.name;
-      script += "' <<'";
-      script += heredoc_end;
-      script += "'\n";
-      script += file.content;
-      if (!file.content.ends_with('\n')) {
-        script += '\n';
+    constexpr void put(std::string_view text) {
+      if (output != nullptr) {
+        std::ranges::copy(text, output + size);
       }
 
-      script += heredoc_end;
-      script += '\n';
+      size += text.size();
+    }
+  };
+
+  // What a remote host runs: the bootstrap, then the calls that write each shell's scripts and
+  // start the login shell with them.
+  constexpr void writeRemoteScript(ScriptWriter& script) {
+    script.put(shell_scripts::remote);
+    script.put("_telar_prepare ");
+    script.put({digest_digits.data(), digest_digits.size()});
+    script.put("\n");
+    for (const auto& file : shells) {
+      script.put("_telar_put '");
+      script.put(file.directory);
+      script.put("' '");
+      script.put(file.name);
+      script.put("' <<'");
+      script.put(heredoc_end);
+      script.put("'\n");
+      script.put(file.content);
+      if (!file.content.ends_with('\n')) {
+        script.put("\n");
+      }
+
+      script.put(heredoc_end);
+      script.put("\n");
     }
 
-    script += "_telar_start \"$1\" \"${2-}\"\n";
-    return script;
+    script.put("_telar_start \"$1\" \"${2-}\"\n");
   }
+
+  consteval std::size_t remoteScriptBytes() {
+    ScriptWriter script;
+
+    writeRemoteScript(script);
+    return script.size;
+  }
+
+  inline constexpr auto remote_script = [] {
+    ds::Array<std::uint8_t, remoteScriptBytes()> bytes{};
+    ds::Array<char, remoteScriptBytes()> text{};
+    ScriptWriter script{.output = text.dataMut()};
+
+    writeRemoteScript(script);
+    std::ranges::transform(text.view(), bytes.viewMut().begin(), [](char byte) {
+      return static_cast<std::uint8_t>(byte);
+    });
+    return bytes;
+  }();
 
   // The remote command `ssh` sends, the nonce left to append. Every login shell parses it alike
   // (sh, bash, zsh, fish, csh): it starts /bin/sh with one single-quoted argument holding no
   // quote, backslash or `!`, which runs the script carried in base64, and the login shell as
   // usual when the host cannot decode it.
-  inline constexpr std::string remoteCommand() {
-    const auto script = remoteScript();
-    std::vector<std::uint8_t> bytes(script.size());
-
-    std::ranges::transform(script, bytes.begin(), [](char byte) {
-      return static_cast<std::uint8_t>(byte);
-    });
-
-    std::string encoded((bytes.size() + 2) / 3 * 4, '=');
-
-    static_cast<void>(base64::encode(bytes, encoded));
-    std::string command{"exec /bin/sh -c 'p="};
-
-    command += encoded;
-    command += ";{ s=$(printf %s \"$p\" | base64 -d 2>/dev/null) || s=$(printf %s \"$p\" | base64 -D); } && eval \"$s\" || exec \"${SHELL:-/bin/sh}\" -l' telar";
-    return command;
-  }
+  inline constexpr std::string_view remote_command_prefix = "exec /bin/sh -c 'p=";
+  inline constexpr std::string_view remote_command_suffix = ";{ s=$(printf %s \"$p\" | base64 -d 2>/dev/null) || s=$(printf %s \"$p\" | base64 -D); } && eval \"$s\" || exec \"${SHELL:-/bin/sh}\" -l' telar";
+  inline constexpr std::size_t remote_script_encoded_bytes = (remote_script.size() + 2) / 3 * 4;
 
   inline constexpr auto remote_command = [] {
-    ds::Array<char, remoteCommand().size()> text{};
+    ds::Array<char, remote_command_prefix.size() + remote_script_encoded_bytes + remote_command_suffix.size()> text{};
+    const auto encoded = text.viewMut().subspan(remote_command_prefix.size(), remote_script_encoded_bytes);
 
-    std::ranges::copy(remoteCommand(), text.viewMut().begin());
+    std::ranges::copy(remote_command_prefix, text.viewMut().begin());
+    static_cast<void>(base64::encode(remote_script.view(), encoded));
+    std::ranges::copy(remote_command_suffix, encoded.end());
     return text;
   }();
 

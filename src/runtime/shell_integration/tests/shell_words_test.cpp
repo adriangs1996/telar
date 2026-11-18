@@ -11,6 +11,7 @@ import telar.runtime.shell_integration.token;
 import telar.runtime.shell_integration.words;
 import telar.wire.editor;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 
@@ -20,6 +21,9 @@ namespace {
   using namespace telar::runtime;
 
   void testReplyCap() {
+    telar::SystemAllocator system;
+    telar::MemoryAdapter<telar::SystemAllocator> adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 
     std::strcpy(directory.dataMut(), "/tmp/telar-word-cap-XXXXXX");
@@ -36,12 +40,12 @@ namespace {
       check(::chmod(path.c_str(), 0700) == 0);
     }
 
-    WordReader reader;
+    WordReader reader{memory};
     WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.prefix.assign("capcmd");
     request.path.assign(root);
-    request.names = std::make_shared<const std::string>();
+    request.names = std::allocate_shared<ds::String<telar::ConcurrentMemory>>(telar::AllocatorRef<ds::String<telar::ConcurrentMemory>, telar::ConcurrentMemory>{memory}, memory);
     const auto result = reader.observe(request);
 
     check(result.words.size() == WordReader::maximum_words, "a reply carries more words than the wire allows");
@@ -68,13 +72,16 @@ namespace {
   // A FIFO named like a makefile, as a cloned repository can hold, and a package.json past the
   // size the reader takes: neither blocks the completion worker nor is read.
   void testIgnoresSpecialAndOversizedFiles() {
+    telar::SystemAllocator system;
+    telar::MemoryAdapter<telar::SystemAllocator> adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 
     std::strcpy(directory.dataMut(), "/tmp/telar-word-files-XXXXXX");
     check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
     const auto observe = [&](CompletionProvider provider) {
-      WordReader reader;
+      WordReader reader{memory};
       WordRequest request{.client = 1, .request = 2, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
       request.directory.assign(root);

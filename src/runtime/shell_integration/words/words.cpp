@@ -16,6 +16,8 @@ namespace telar::runtime {
 
   namespace {
 
+    using Text = ds::String<ConcurrentMemory>;
+
     // The completion specs telar ships, by the command they describe.
     namespace shipped {
 
@@ -88,18 +90,19 @@ namespace telar::runtime {
     }
 
     // Reads a regular file of at most `limit` bytes; empty when it is missing or larger.
-    std::string readSmall(int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
+    Text readSmall(ConcurrentMemory& memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
+      Text bytes{memory};
       FileDescriptor file{::openat(directory, name, O_RDONLY | O_CLOEXEC | O_NONBLOCK)};
       struct stat state{};
       if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || static_cast<std::size_t>(state.st_size) > limit) {
-        return {};
+        return bytes;
       }
 
-      std::string bytes(static_cast<std::size_t>(state.st_size), '\0');
+      bytes.resizeForOverwrite(static_cast<std::size_t>(state.st_size));
       std::size_t done = 0;
 
       while (done < bytes.size()) {
-        const auto count = ::read(file.get(), bytes.data() + done, bytes.size() - done);
+        const auto count = ::read(file.get(), bytes.dataMut() + done, bytes.size() - done);
         if (count <= 0) {
           break;
         }
@@ -107,7 +110,7 @@ namespace telar::runtime {
         done += static_cast<std::size_t>(count);
       }
 
-      bytes.resize(done);
+      bytes.truncate(done);
       return bytes;
     }
 
@@ -127,15 +130,16 @@ namespace telar::runtime {
 
     // The first of `names` that `directory` or one of its parents holds, read whole; as the
     // tools find their files. Empty when there is none.
-    std::string nearest(std::string_view directory, std::span<const std::string_view> names) {
-      std::string current{directory};
+    Text nearest(ConcurrentMemory& memory, std::string_view directory, std::span<const std::string_view> names) {
+      Text current{memory, directory};
+      Text file{memory};
 
-      for (int depth = 0; depth < 32 && !current.empty() && current.front() == '/'; ++depth) {
-        FileDescriptor folder{::open(current.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      for (int depth = 0; depth < 32 && current.view().starts_with('/'); ++depth) {
+        FileDescriptor folder{::open(current.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
         if (folder) {
           for (const auto name : names) {
-            const std::string file{name};
-            if (auto bytes = readSmall(folder.get(), file.c_str()); !bytes.empty()) {
+            file.assign(name);
+            if (auto bytes = readSmall(memory, folder.get(), file.data()); !bytes.empty()) {
               return bytes;
             }
           }
@@ -145,23 +149,24 @@ namespace telar::runtime {
           break;
         }
 
-        const auto slash = current.rfind('/');
+        const auto slash = current.view().rfind('/');
 
-        current.resize(slash == 0 ? 1 : slash);
+        current.truncate(slash == 0 ? 1 : slash);
       }
 
-      return {};
+      return Text{memory};
     }
 
     // What the alias `name` stands for, as the shell reported it (name=words, %-encoded),
     // followed through aliases of aliases; empty when it is no alias of plain words. An alias
     // that starts with its own name (ls='ls -G') stands for that command.
-    std::string expand(std::string_view names, std::string_view name) {
-      std::string words{name};
+    Text expand(ConcurrentMemory& memory, std::string_view names, std::string_view name) {
+      Text words{memory, name};
+      Text decoded{memory};
       bool expanded = false;
 
       for (int depth = 0; depth < 4; ++depth) {
-        const auto first = std::string_view{words}.substr(0, words.find(' '));
+        const auto first = words.view().substr(0, words.view().find(' '));
         std::string_view value;
         bool found = false;
         const auto find = [&](std::string_view entry) {
@@ -176,35 +181,38 @@ namespace telar::runtime {
           break;
         }
 
-        std::string decoded;
-
+        decoded.clear();
         for (std::size_t index = 0; index < value.size(); ++index) {
           if (value.substr(index).starts_with("%20")) {
-            decoded.push_back(' ');
+            decoded.push(' ');
             index += 2;
           } else if (value.substr(index).starts_with("%25")) {
-            decoded.push_back('%');
+            decoded.push('%');
             index += 2;
           } else {
-            decoded.push_back(value[index]);
+            decoded.push(value[index]);
           }
         }
 
-        if (decoded.empty() || decoded.size() > 256 || !printable(decoded) || decoded.front() == ' ') {
-          return {};
+        if (decoded.empty() || decoded.size() > 256 || !printable(decoded) || decoded.view().front() == ' ') {
+          return Text{memory};
         }
 
-        const auto rest = std::string_view{words}.substr(first.size());
-        const bool same = std::string_view{decoded}.substr(0, decoded.find(' ')) == first;
+        const bool same = decoded.view().substr(0, decoded.view().find(' ')) == first;
 
-        words = decoded + std::string{rest};
+        // The alias's words replace the name; the words after the name stay.
+        words.replace(0, first.size(), decoded);
         expanded = true;
         if (same) {
           break;
         }
       }
 
-      return expanded ? words : std::string{};
+      if (!expanded) {
+        words.clear();
+      }
+
+      return words;
     }
 
     // A spec is named after its command: letters, digits and ., _, + or -, not leading with a dot.
@@ -254,7 +262,7 @@ namespace telar::runtime {
 
       builtins(request.shell, exact);
       if (request.names) {
-        words(*request.names, exact);
+        words(request.names->view(), exact);
       }
 
       // No directory holds a file whose name is longer than NAME_MAX.
@@ -277,9 +285,10 @@ namespace telar::runtime {
     // The public recipes of the nearest justfile, each with the comment above it, and its
     // aliases.
     template <typename Add>
-    void justRecipes(std::string_view directory, Add& add) {
+    void justRecipes(ConcurrentMemory& memory, std::string_view directory, Add& add) {
       static constexpr ds::Array<std::string_view, 3> names{"justfile", "Justfile", ".justfile"};
-      const auto source = nearest(directory, names);
+      const auto source = nearest(memory, directory, names);
+      Text alias{memory};
       std::string_view comment;
       bool hidden = false;
 
@@ -315,7 +324,9 @@ namespace telar::runtime {
           const auto rest = trimText(line.substr(6), " \t");
           const auto assign = rest.find(":=");
           if (assign != std::string_view::npos) {
-            add(trimText(rest.substr(0, assign), " \t"), "Alias of " + std::string{trimText(rest.substr(assign + 2), " \t")});
+            alias.assign("Alias of ");
+            alias.append(trimText(rest.substr(assign + 2), " \t"));
+            add(trimText(rest.substr(0, assign), " \t"), alias.view());
           }
 
           return;
@@ -346,9 +357,9 @@ namespace telar::runtime {
 
     // The scripts of the nearest package.json, each with the command it runs.
     template <typename Add>
-    void packageScripts(SystemAllocator& memory, std::string_view directory, Add& add) {
+    void packageScripts(ConcurrentMemory& memory, std::string_view directory, Add& add) {
       static constexpr ds::Array<std::string_view, 1> names{"package.json"};
-      const auto source = nearest(directory, names);
+      const auto source = nearest(memory, directory, names);
       if (source.empty()) {
         return;
       }
@@ -359,8 +370,8 @@ namespace telar::runtime {
         return;
       }
 
-      ds::String<SystemAllocator> name{memory};
-      ds::String<SystemAllocator> command{memory};
+      Text name{memory};
+      Text command{memory};
 
       scripts->eachMember([&](const JsonValue& key, const JsonValue& value) {
         key.string(name);
@@ -376,9 +387,9 @@ namespace telar::runtime {
 
     // The services of the compose file in the nearest directory that has one.
     template <typename Add>
-    void composeServices(std::string_view directory, Add& add) {
+    void composeServices(ConcurrentMemory& memory, std::string_view directory, Add& add) {
       static constexpr ds::Array<std::string_view, 4> names{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"};
-      const auto source = nearest(directory, names);
+      const auto source = nearest(memory, directory, names);
       bool services = false;
       std::size_t indent = 0;
 
@@ -447,18 +458,20 @@ namespace telar::runtime {
 
     // `Host` names in ~/.ssh/config, without patterns.
     template <typename Add>
-    void sshHosts(std::string_view home, Add& add) {
+    void sshHosts(ConcurrentMemory& memory, std::string_view home, Add& add) {
       if (home.empty() || home.front() != '/') {
         return;
       }
 
-      const std::string directory_name{std::string{home} + "/.ssh"};
-      FileDescriptor directory{::open(directory_name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      Text directory_name{memory, home};
+
+      directory_name.append("/.ssh");
+      FileDescriptor directory{::open(directory_name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
       if (!directory) {
         return;
       }
 
-      const auto text = readSmall(directory.get(), "config");
+      const auto text = readSmall(memory, directory.get(), "config");
 
       lines(text, [&](std::string_view line) {
         line = trimText(line, " \t");
@@ -483,21 +496,21 @@ namespace telar::runtime {
 
     // The explicit targets of the makefile make would read in `directory`.
     template <typename Add>
-    void makeTargets(std::string_view directory_path, Add& add) {
+    void makeTargets(ConcurrentMemory& memory, std::string_view directory_path, Add& add) {
       if (directory_path.empty() || directory_path.front() != '/') {
         return;
       }
 
-      const std::string directory_name{directory_path};
-      FileDescriptor directory{::open(directory_name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      const Text directory_name{memory, directory_path};
+      FileDescriptor directory{::open(directory_name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
       if (!directory) {
         return;
       }
 
-      std::string text;
+      Text text{memory};
 
       for (const auto* name : {"GNUmakefile", "makefile", "Makefile"}) {
-        text = readSmall(directory.get(), name);
+        text = readSmall(memory, directory.get(), name);
         if (!text.empty()) {
           break;
         }
@@ -527,11 +540,13 @@ namespace telar::runtime {
 
     // The user's processes, newest first, each with its name.
     template <typename Add>
-    void processes(Add& add) {
-      std::vector<std::pair<int, std::string>> found;
+    void processes(ConcurrentMemory& memory, Add& add) {
+      ds::Vec<std::pair<int, Text>, ConcurrentMemory> found{memory};
 #if defined(__APPLE__)
-      std::vector<pid_t> pids(4096);
-      const auto count = ::proc_listallpids(pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+      ds::Vec<pid_t, ConcurrentMemory> pids{memory};
+
+      pids.resize(4096);
+      const auto count = ::proc_listallpids(pids.dataMut(), static_cast<int>(pids.size() * sizeof(pid_t)));
 
       for (int index = 0; index < count && index < static_cast<int>(pids.size()); ++index) {
         proc_bsdshortinfo info{};
@@ -542,7 +557,7 @@ namespace telar::runtime {
         ds::Array<char, 2 * MAXCOMLEN + 1> name{};
         const auto length = ::proc_name(pids[index], name.dataMut(), static_cast<std::uint32_t>(name.size()));
 
-        found.emplace_back(pids[index], std::string{name.data(), static_cast<std::size_t>(std::max(0, length))});
+        found.push({pids[index], Text{memory, std::string_view{name.data(), static_cast<std::size_t>(std::max(0, length))}}});
       }
 
 #else
@@ -575,26 +590,42 @@ namespace telar::runtime {
         if (text.ends_with('\n')) {
           text.remove_suffix(1);
         }
-        found.emplace_back(pid, std::string{text});
+        found.push({pid, Text{memory, text}});
       }
 #endif
-      std::ranges::sort(found, std::greater{}, &std::pair<int, std::string>::first);
+      std::ranges::sort(found.viewMut(), std::greater{}, &std::pair<int, Text>::first);
       for (const auto& [pid, name] : found) {
-        add(std::to_string(pid), name);
+        ds::Array<char, 16> digits;
+        const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), pid).ptr;
+
+        add(std::string_view{digits.data(), end}, name.view());
       }
     }
 
   }
 
-  WordReader::WordReader(std::string_view configuration_directory)
-      : git_(erased_) {
+  WordResult::WordResult(ConcurrentMemory& memory)
+      : words(memory),
+        command(memory),
+        source(memory),
+        expansion(memory) {}
+
+  WordReader::WordReader(ConcurrentMemory& memory, std::string_view configuration_directory)
+      : memory_(memory),
+        completions_(memory),
+        git_(memory),
+        compiled_(memory) {
     if (!configuration_directory.empty()) {
-      completions_.assign(configuration_directory).append("/completions");
+      completions_.assign(configuration_directory);
+      completions_.append("/completions");
     }
   }
 
   WordReader::Result WordReader::observe(const Request& request) noexcept {
-    Result result{.client = request.client, .request = request.request, .words = {}, .truncated = false};
+    Result result{memory_};
+
+    result.client = request.client;
+    result.request = request.request;
 
     if (request.spec) {
       result.spec = true;
@@ -621,7 +652,7 @@ namespace telar::runtime {
           return;
         }
 
-        result.words.push_back({std::string{word}, printable(description) ? std::string{description.substr(0, 256)} : std::string{}});
+        result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? description.substr(0, 256) : std::string_view{}}});
       };
 
       const auto add_word = [&](std::string_view word) {
@@ -633,7 +664,7 @@ namespace telar::runtime {
         commands(request.path.view(), prefix, add);
         builtins(request.shell, add_word);
         if (request.names) {
-          words(*request.names, add_word);
+          words(request.names->view(), add_word);
         } else {
           result.truncated = true;
         }
@@ -652,41 +683,44 @@ namespace telar::runtime {
         const auto count = git_.stashes(maximum_words);
 
         for (std::size_t index = 0; index < count; ++index) {
-          add("stash@{" + std::to_string(index) + "}");
+          ds::Array<char, 32> stash;
+          const auto written = std::format_to_n(stash.dataMut(), stash.size(), "stash@{{{}}}", index);
+
+          add(std::string_view{stash.data(), written.out});
         }
 
         break;
       }
       case CompletionProvider::process:
-        processes(add);
+        processes(memory_, add);
         break;
       case CompletionProvider::ssh_host:
-        sshHosts(request.home.view(), add);
+        sshHosts(memory_, request.home.view(), add);
         break;
       case CompletionProvider::make_target:
-        makeTargets(request.directory.view(), add);
+        makeTargets(memory_, request.directory.view(), add);
         break;
       case CompletionProvider::just_recipe:
-        justRecipes(request.directory.view(), add);
+        justRecipes(memory_, request.directory.view(), add);
         break;
       case CompletionProvider::package_script:
         packageScripts(memory_, request.directory.view(), add);
         break;
       case CompletionProvider::compose_service:
-        composeServices(request.directory.view(), add);
+        composeServices(memory_, request.directory.view(), add);
         break;
       }
 
       // Processes keep the newest first; everything else reads best sorted.
       if (request.provider != CompletionProvider::process) {
-        std::ranges::sort(result.words);
+        std::ranges::sort(result.words.viewMut());
       }
 
-      const auto [first, last] = std::ranges::unique(result.words, {}, &Word::text);
+      const auto duplicates = std::ranges::unique(result.words.viewMut(), {}, &Word::text);
 
-      result.words.erase(first, last);
+      result.words.truncate(result.words.size() - duplicates.size());
       if (result.words.size() > maximum_words) {
-        result.words.resize(maximum_words);
+        result.words.truncate(maximum_words);
         result.truncated = true;
       }
     } catch (...) {
@@ -706,9 +740,9 @@ namespace telar::runtime {
 
     // An alias completes as the command it stands for.
     if (request.names) {
-      result.expansion = expand(*request.names, name);
+      result.expansion = expand(memory_, request.names->view(), name);
       if (!result.expansion.empty()) {
-        name = std::string_view{result.expansion}.substr(0, result.expansion.find(' '));
+        name = result.expansion.view().substr(0, result.expansion.view().find(' '));
         if (!specName(name)) {
           result.expansion.clear();
           return;
@@ -745,27 +779,31 @@ namespace telar::runtime {
     return shipped::specs;
   }
 
-  std::string WordReader::userSpec(std::string_view name) {
+  ds::String<ConcurrentMemory> WordReader::userSpec(std::string_view name) {
+    Text source{memory_};
     if (completions_.empty()) {
-      return {};
+      return source;
     }
 
-    FileDescriptor folder{::open(completions_.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    FileDescriptor folder{::open(completions_.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!folder) {
-      return {};
+      return source;
     }
 
-    const auto file = std::string{name} + ".ebnf";
-    auto source = readSmall(folder.get(), file.c_str(), CommandSpec::maximum_source);
+    Text file{memory_, name};
+
+    file.append(".ebnf");
+    source = readSmall(memory_, folder.get(), file.data(), CommandSpec::maximum_source);
     if (source.empty()) {
-      return {};
+      return source;
     }
 
     const auto key = digest(source);
-    auto known = compiled_.find(key);
-    if (known == compiled_.end()) {
-      bool compiles = true;
+    const auto* known = compiled_.find(key);
+    bool compiles = known != nullptr && *known;
 
+    if (known == nullptr) {
+      compiles = true;
       try {
         static_cast<void>(ebnf::command_spec::compile(source));
       } catch (...) {
@@ -776,14 +814,18 @@ namespace telar::runtime {
         compiled_.clear();
       }
 
-      known = compiled_.emplace(key, compiles).first;
+      static_cast<void>(compiled_.insert(key, compiles));
     }
 
-    return known->second ? source : std::string{};
+    if (!compiles) {
+      source.clear();
+    }
+
+    return source;
   }
 
-  WordService::WordService(std::string_view configuration_directory)
-      : worker_(std::in_place, configuration_directory) {}
+  WordService::WordService(ConcurrentMemory& memory, std::string_view configuration_directory)
+      : worker_(std::in_place, memory, configuration_directory) {}
 
   void WordService::request(const WordRequest& request) {
     if (std::ranges::count(queue_.waiting(), request.client, &WordRequest::client) >= 4) {

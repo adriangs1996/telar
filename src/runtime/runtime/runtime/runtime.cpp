@@ -1679,7 +1679,7 @@ namespace telar::runtime {
         session_(memory),
         metrics_(Clock::now()),
         workspace_git_(limits_, memory),
-        words_(options.configuration_directory),
+        words_(memory, options.configuration_directory),
         agent_files_(memory),
         descriptions_(memory, background_, options.descriptions),
         telemetry_(options.socket, proxy.status()) {
@@ -2709,14 +2709,14 @@ namespace telar::runtime {
       return;
     }
 
-    std::vector<CompletionWord> words;
+    ds::Vec<CompletionWord, ConcurrentMemory> words{memory_};
 
     words.reserve(result.words.size());
     for (const auto& word : result.words) {
-      words.push_back({word.text, word.description});
+      words.push({word.text.view(), word.description.view()});
     }
 
-    client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words});
+    client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words.view()});
   }
 
   template <EventLoop Poller, typename Background>

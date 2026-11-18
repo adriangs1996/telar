@@ -151,7 +151,10 @@ export namespace telar::runtime {
   public:
     // With a token, only marks signed with it count: the pane's shell integration signs its
     // own, and a program cannot sign the ones it prints.
-    explicit CommandZones(std::string_view directory, ds::Option<ShellToken> token = ds::none);
+    // The shell's names are kept in `memory`, which must outlive the zones and every copy of them.
+    explicit CommandZones(ConcurrentMemory& memory, std::string_view directory, ds::Option<ShellToken> token = ds::none);
+
+    ConcurrentMemory& memory() const noexcept;
 
     ds::Option<ShellToken> token() const noexcept;
 
@@ -182,7 +185,8 @@ export namespace telar::runtime {
 
     // The aliases and functions the shell last reported, blank-separated: names it runs that
     // no PATH directory holds. Null until it reports them, or when they did not fit.
-    const std::shared_ptr<const std::string>& names() const noexcept;
+    // Shared, not copied, with the completion requests that read them on another thread.
+    const std::shared_ptr<const ds::String<ConcurrentMemory>>& names() const noexcept;
 
     // The host a shell `ssh` reached runs on, as its working directory report names it.
     std::string_view remoteHost() const noexcept;
@@ -225,6 +229,7 @@ export namespace telar::runtime {
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters metrics_;
 #endif
+    ConcurrentMemory* memory_;
     ds::Option<ShellToken> token_;
     ds::Option<ShellToken> remote_;
     ds::Option<ShellToken> nest_;
@@ -242,7 +247,7 @@ export namespace telar::runtime {
     FixedText<path_capacity> path_;
     FixedText<host_capacity> host_;
     FixedText<directory_capacity> remote_directory_;
-    std::shared_ptr<const std::string> names_;
+    std::shared_ptr<const ds::String<ConcurrentMemory>> names_;
   };
 
   // The last bytes of a command's output, kept in storage its owner allocates: empty storage
@@ -468,7 +473,7 @@ export namespace telar::runtime {
 #endif
 
   protected:
-    CommandTrackerCore(GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token);
+    CommandTrackerCore(ConcurrentMemory& memory, GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token);
     ~CommandTrackerCore() = default;
 
   private:

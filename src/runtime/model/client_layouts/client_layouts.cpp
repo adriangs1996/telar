@@ -136,7 +136,7 @@ namespace telar::runtime {
     terminal.attachMedia(*media);
     shell_state.pane_id = identity;
     if (settings.shell) {
-      shell_zones.emplace(command.cwd(), settings.shell->token);
+      shell_zones.emplace(memory, command.cwd(), settings.shell->token);
       blocks.emplace(memory, terminal);
       shell_state.shell = settings.shell->shell;
       local_shell = settings.shell->shell;
