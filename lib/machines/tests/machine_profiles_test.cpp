@@ -132,6 +132,68 @@ namespace {
     });
   }
 
+  // Files written before logins were named store each login as its ordinal: one in range loads
+  // as that login, one past the names is refused rather than kept for format() to trip on.
+  void loginOrdinalsLoadWithinTheirNames() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::Memory& memory = adapter;
+    const auto profiles = MachineProfileCodec::parse(memory, R"({"version":2,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"codex":1}}]})");
+
+    check(profiles.rows().front().login(MachineAgent::codex) == MachineLogin::done, "an in-range login ordinal must load as that login");
+    rejects(MachineError::invalid_profiles, [&] {
+      static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":2,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"codex":3}}]})"));
+    });
+  }
+
+  // Only the versions this build writes load: an older one is incompatible, and the version may
+  // be written as a string.
+  void onlyKnownVersionsLoad() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::Memory& memory = adapter;
+
+    rejects(MachineError::incompatible_profiles, [&] {
+      static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":0,"machines":[]})"));
+    });
+
+    const auto profiles = MachineProfileCodec::parse(memory, R"({"version":"2","machines":[{"id":"m-000000000001","label":"box","destination":"host"}]})");
+
+    check(profiles.rows().size() == 1 && profiles.rows().front().label() == "box", "a string version must load like the number");
+  }
+
+  // A hand-edited file is admitted row by row like `machine add`: rows that share an identity,
+  // a destination or the local label, or more rows than fit, are refused.
+  void filesRefuseDuplicateRows() {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::Memory& memory = adapter;
+
+    rejects(MachineError::duplicate_id, [&] {
+      static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":1,"machines":[{"id":"m-000000000001","label":"one","destination":"one"},{"id":"m-000000000001","label":"two","destination":"two"}]})"));
+    });
+
+    rejects(MachineError::duplicate_destination, [&] {
+      static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":1,"machines":[{"id":"m-000000000001","label":"one","destination":"host"},{"id":"m-000000000002","label":"two","destination":"host"}]})"));
+    });
+
+    rejects(MachineError::duplicate_label, [&] {
+      static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":1,"local_label":"here","machines":[{"id":"m-000000000001","label":"here","destination":"host"}]})"));
+    });
+
+    std::string rows;
+
+    for (std::size_t index = 0; index <= MachineLimits::profiles; ++index) {
+      const auto number = std::to_string(index + 1);
+
+      rows += (index == 0 ? "" : ",") + std::string{R"({"id":"m-)"} + std::string(12 - number.size(), '0') + number + R"(","label":"box)" + number + R"(","destination":"box)" + number + R"("})";
+    }
+
+    rejects(MachineError::too_many, [&] {
+      static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":1,"machines":[)" + rows + "]}"));
+    });
+  }
+
   void capacityAndUniquenessHaveTheOriginalAdmissionOrder() {
     MachineProfiles profiles;
 
@@ -207,6 +269,9 @@ namespace {
   const telar::testing::Case case_profiles_preserve_identity_order_and_rejected_edits{"machine_profiles.profiles_preserve_identity_order_and_rejected_edits", profilesPreserveIdentityOrderAndRejectedEdits};
   const telar::testing::Case case_versions_and_json_round_trips_preserve_every_field{"machine_profiles.versions_and_json_round_trips_preserve_every_field", versionsAndJsonRoundTripsPreserveEveryField};
   const telar::testing::Case case_strict_json_rejects_unknown_duplicated_and_wrongly_typed_fields{"machine_profiles.strict_json_rejects_unknown_duplicated_and_wrongly_typed_fields", strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields};
+  const telar::testing::Case case_login_ordinals_load_within_their_names{"machine_profiles.login_ordinals_load_within_their_names", loginOrdinalsLoadWithinTheirNames};
+  const telar::testing::Case case_only_known_versions_load{"machine_profiles.only_known_versions_load", onlyKnownVersionsLoad};
+  const telar::testing::Case case_files_refuse_duplicate_rows{"machine_profiles.files_refuse_duplicate_rows", filesRefuseDuplicateRows};
   const telar::testing::Case case_capacity_and_uniqueness_have_the_original_admission_order{"machine_profiles.capacity_and_uniqueness_have_the_original_admission_order", capacityAndUniquenessHaveTheOriginalAdmissionOrder};
   const telar::testing::Case case_remote_arguments_retain_their_validation_boundaries{"machine_profiles.remote_arguments_retain_their_validation_boundaries", remoteArgumentsRetainTheirValidationBoundaries};
   const telar::testing::Case case_allocation_rejection_releases_every_temporary{"machine_profiles.allocation_rejection_releases_every_temporary", allocationRejectionReleasesEveryTemporary};
