@@ -6,6 +6,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.machines;
 
 namespace {
@@ -27,8 +28,7 @@ namespace {
   }
 
   void conversionsRetainOriginalNumericSyntaxAndRejectFractionalValues() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
 
     for (const auto* const text : {"1", "+1", "01", "1.0", "1e0", "100e-2", "0x1.0p0", "0x.8p1"}) {
@@ -49,8 +49,7 @@ namespace {
   }
 
   void binary128TiesRoundToTheIntegerWithoutPlatformFloatingPoint() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
     constexpr auto fraction_digits = (JsonUnsignedInteger::binary128_significand_bits - 1) / JsonUnsignedInteger::hexadecimal_bits;
     const auto upper_tie = std::string{"0x1."} + std::string(fraction_digits, '0') + "8p0";
@@ -84,8 +83,7 @@ namespace {
   // value must neither wrap into a small exponent (2^64 wraps to zero) nor overflow, which
   // UBSan reports in the sanitize preset.
   void hugeExponentsStayHuge() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
 
     rejects(memory, "1e99999999999999999999");

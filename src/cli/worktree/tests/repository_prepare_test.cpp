@@ -9,6 +9,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.cli.worktree;
 import telar.cli.command_limit;
@@ -96,8 +97,7 @@ namespace {
   // never pushes to or launches in a path the other machine did not vouch for, and the
   // transfer leaves no ref behind in the user's repository.
   void prepareRejectsBadReceiverReply() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     const auto root = enterRepository();
 
@@ -170,8 +170,7 @@ namespace {
   // A machine that cannot list what its clone holds receives the whole history: the
   // dispatch goes on, and the bundle needs nothing the other side lacks.
   void prepareWithoutTipsSendsFullHistory() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     const auto root = enterRepository();
 
     shell("cd '" + root + "' && git -c commit.gpgsign=false -c user.name=fixture -c user.email=fixture@example.invalid commit -q --allow-empty -m second");
@@ -191,8 +190,7 @@ namespace {
 
   // `--workspace` names the clone on the other machine for both the tips query and the receive.
   void prepareForwardsWorkspace() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     const auto root = enterRepository();
     Recorder recorder{adapter};
     const RepositoryOptions options{.action = RepositoryOptions::Action::prepare, .workspace = "/w"};

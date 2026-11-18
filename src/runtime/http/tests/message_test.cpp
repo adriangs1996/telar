@@ -1,6 +1,7 @@
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.http.message;
 import telar.runtime.http1.head;
 import telar.runtime.vocabulary.frames;
@@ -28,8 +29,7 @@ namespace {
   }
 
   struct Fixture {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
   };
 

@@ -17,6 +17,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.features.terminal.graphics;
@@ -101,8 +102,7 @@ namespace {
   }
 
   void replacementDoesNotConsumeAnotherLogicalImageSlot() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
@@ -123,8 +123,7 @@ namespace {
   }
 
   void supersededIncompleteHeadersStayWithinOneImageAllocation() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
@@ -139,8 +138,7 @@ namespace {
   }
 
   void virtualPlacementIdentityDoesNotDependOnItsImage() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};

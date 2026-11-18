@@ -25,6 +25,7 @@ import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.graphics.synchronizer;
 import telar.runtime.platform.request_worker;
 import telar.runtime.terminal.text_reader;
@@ -441,8 +442,7 @@ namespace {
 #endif
 
   void testMedia() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testMediaCursor(memory);

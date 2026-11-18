@@ -19,6 +19,7 @@ import telar.base.memory.allocators;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.grid;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.terminal.text_reader;
 import telar.wire.content;
 import telar.wire.vocabulary;
@@ -61,8 +62,7 @@ namespace {
   // A title the pane sets reaches clients as bounded UTF-8 text with no controls: DEL and C0
   // bytes are dropped, and a long title is cut between code points.
   void testTitleSanitized() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
     std::string title{"a\x7f"
                       "b\x01"};
@@ -84,8 +84,7 @@ namespace {
   // A title report answers into the program's input, so it carries no control, 8-bit ones
   // (U+0080-U+009F) included: a title holding CSI cannot inject a sequence through it.
   void testTitleReportStripsControls() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
 
     terminal.controlPolicy().title_report = true;
@@ -142,8 +141,7 @@ namespace {
   // `clear` erases the scrollback before the screen; Ghostty would move a screen ending in a prompt
   // back into it. ^L at a prompt, without ED 3, still keeps the screen in the scrollback.
   void testClearAtPrompt() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
     std::string history;
@@ -190,8 +188,7 @@ namespace {
   // Rows keep their stable number, the rows dropped above them plus their row, while the
   // scrollback drops its oldest; a resize renumbers them under a new generation.
   void testScrollbackOrigin() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
     const std::size_t limit = 1;
@@ -249,8 +246,7 @@ namespace {
 
   void testTerminal() {
     {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
 
@@ -352,8 +348,7 @@ namespace {
   // path, a relative path, an oversized path or a bad escape leaves the last one in place:
   // `%00` in particular would hand C APIs a shorter, different directory.
   void testCwdRejectsMalformedUri() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
     const std::string rejected[]{
         "file://host",
@@ -381,8 +376,7 @@ namespace {
   // palette entries the pane redefined, the defaults it redefined, and the background of
   // erased cells. Text past the Basic Multilingual Plane keeps all four bytes.
   void testCellProjectionColors() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     constexpr TerminalSize size{10, 4, 0, 0};
 
     {
@@ -440,8 +434,7 @@ namespace {
   // included: reverse video (DECSCNM, a visual bell) and OSC 10/11 recolour every cell
   // that uses them, not only the rows the pane writes next.
   void testDefaultColorsRepaint() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     constexpr TerminalSize size{10, 4, 0, 0};
 
     for (const std::string_view change : {"\x1b[?5h", "\x1b]10;rgb:11/22/33\x1b\\\x1b]11;rgb:44/55/66\x1b\\"}) {

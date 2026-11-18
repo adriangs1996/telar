@@ -10,6 +10,7 @@ static_assert(true);
 #include <vector>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.terminal;
@@ -36,8 +37,7 @@ namespace {
     constexpr std::uint64_t after_later = later_fold + later_rows + 1;
     constexpr std::uint64_t indexes = 40;
     constexpr std::uint64_t total = 50;
-    SystemAllocator system;
-    telar::MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     application::FoldMap<> folds{memory};
 
     check(folds.display(any_row) == any_row && folds.row(any_row) == any_row, "without folds rows are their own display index");
@@ -121,8 +121,7 @@ namespace {
     constexpr std::uint64_t from = 100;
     constexpr std::uint16_t count = 4;
     constexpr std::uint64_t third = from + 2;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     RowCache<telar::ConcurrentMemory> cache{memory};
 
@@ -163,8 +162,7 @@ namespace {
     const ds::Array runs{MetadataRun{.start = columns + linked_column, .len = linked_cells, .link_index = 0}};
     const auto uri_bytes = byteView(uri);
     const PaneRows reply{.request_id = 1, .pane_id = 1, .generation = generation, .from = from, .cols = columns, .rows = rows, .text_metadata = TextMetadata{.row_flags = flags, .links = links, .runs = runs, .uris = uri_bytes}, .cells = CellRunCodec::encode(cells, encoded.viewMut())};
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     RowCache<telar::ConcurrentMemory> cache{memory};
 

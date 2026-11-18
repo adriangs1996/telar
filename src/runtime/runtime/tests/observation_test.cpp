@@ -33,6 +33,7 @@ import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.observation.processor;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.client_control;
@@ -508,8 +509,7 @@ namespace {
 #endif
 
   void testObservation() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
 #if TELAR_DIAGNOSTICS
@@ -527,8 +527,7 @@ namespace {
   const telar::testing::Case case_observation{"observation.observation", testObservation};
   const telar::testing::Case case_manifests{"observation.manifests", testManifests};
   const telar::testing::Case case_oversized_output_drops_batch{"observation.oversized_output_drops_batch", [] {
-                                                                 SystemAllocator system;
-                                                                 MemoryAdapter adapter{system};
+                                                                 telar::testing::TestMemory adapter;
 
                                                                  testOversizedOutputDropsBatch(adapter);
                                                                }};

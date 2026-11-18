@@ -20,6 +20,7 @@ static_assert(true);
 #include <vector>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.wire.vocabulary;
 import telar.gui.tests.allocation_gate;
 import telar.gui.foundation.terminal;
@@ -79,8 +80,7 @@ namespace {
   }
 
   void fontAndGridChangesRetireCachedPositions(FontFixture<telar::ConcurrentMemory>& fonts, FontFixture<telar::ConcurrentMemory>& alternate) {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     RowTextLayout layout{memory};
     telar::ds::Array<CellValue, 2> cells;
@@ -106,8 +106,7 @@ namespace {
   // A short cell outside ASCII lays out the same whether the row shapes it or recalls what it kept
   // of it: one glyph of the primary face, a combining pair, a ligature's letter, a face's fallback.
   void keptClustersLayOutAsShaped(FontFixture<telar::ConcurrentMemory>& fonts) {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     RowTextLayout layout{memory};
     constexpr telar::ds::Array<std::string_view, 9> texts{"á", "ñ", "ß", "λ", "ж", "e\u0301", "→", "漢", "\U0001F600"};
@@ -180,8 +179,7 @@ namespace {
   // The fonts of the repository's assets, read into system memory for one case.
   template <void (*verify)(FontFixture<telar::ConcurrentMemory>&)>
   void withFonts() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     FontFixture fonts{memory, std::filesystem::path{TELAR_GUI_ASSETS_DIR}};
 
@@ -189,8 +187,7 @@ namespace {
   }
 
   void fontAndGridChanges() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const std::filesystem::path assets{TELAR_GUI_ASSETS_DIR};
     FontFixture fonts{memory, assets};

@@ -8,6 +8,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.lua;
 import telar.config.runtime;
 import telar.config.gui;
@@ -25,8 +26,7 @@ namespace {
   // hands the values to `inspect` when the reader accepted it. Returns whether it did.
   template <typename Inspect>
   bool readConfiguration(std::string_view source, std::string_view profile, Inspect&& inspect) {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     lua::Vm<Memory> vm{memory};
     const auto values = makeOwned<config::RuntimeValues<Memory>>(memory, memory);
@@ -196,8 +196,7 @@ namespace {
   // `gui.window.background_blur` is either a switch or a radius in 0..255.
   void testGuiBackgroundBlur() {
     const auto window = [](std::string_view blur) {
-      SystemAllocator system;
-      MemoryAdapter memory{system};
+      telar::testing::TestMemory memory;
       lua::Vm<Memory> vm{memory};
 
       vm.execute(std::string{"return {window = {background_blur = "} + std::string{blur} + "}}", "@gui.lua");

@@ -11,6 +11,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.test_byte_stream;
 import telar.runtime.http.message;
 import telar.runtime.proxy.intercepted_relay;
@@ -311,8 +312,7 @@ namespace {
   const telar::testing::Case case_content{
       "http_message.content",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         Memory& memory = adapter;
 
         content(memory);
@@ -327,8 +327,7 @@ namespace {
   const telar::testing::Case case_messages{
       "http_message.messages",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         Memory& memory = adapter;
 
         messages(memory);

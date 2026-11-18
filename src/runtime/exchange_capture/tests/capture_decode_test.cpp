@@ -16,6 +16,7 @@ import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.erasure_checking_allocator;
 import telar.runtime.exchange_capture.producer;
 import telar.config.runtime;
@@ -432,8 +433,7 @@ namespace {
   // coding the limit cuts short, does fail.
   void testStackedAndUnknownCodings() {
     const auto plaintext = bodyText(512);
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     HttpContentCodec codec{memory};
     const auto gzip = codec.encode(plaintext, "gzip", 4096);
@@ -496,8 +496,8 @@ namespace {
   }
 
   void testDecodedCaptureCounters() {
+    telar::testing::TestMemory adapter;
     SystemAllocator system;
-    MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     ProxyCaptureLimits limits{.part_bytes = 32, .exchange_bytes = 64, .total_bytes = 4096, .enabled = true};
     CaptureProducer producer{memory, limits};

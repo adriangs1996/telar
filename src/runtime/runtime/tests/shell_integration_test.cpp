@@ -15,6 +15,7 @@ import telar.platform.fs;
 import telar.platform.process;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.ebnf.matcher;
 import telar.runtime.command_capture.tracker;
 import telar.runtime.shell_integration;
@@ -800,8 +801,7 @@ namespace {
 
   // The repository a shell works in, read on the git worker.
   void gitContext() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     if (!findProgram("git")) {
@@ -867,8 +867,7 @@ namespace {
 
   // The values completion asks the runtime for, read from files the shell's machine holds.
   void words() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     TemporaryDirectory root{"/tmp/telar-words-XXXXXX"};
@@ -1017,8 +1016,7 @@ namespace {
   }
 
   void testShellIntegration() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     detection();

@@ -14,6 +14,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.machines;
 import telar.base.ds;
 
@@ -107,8 +108,7 @@ namespace {
   }
 
   void strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
     const auto invalid = ds::Array<std::string_view, 5>{
         R"({"version":1,"machines":[],"unknown":true})",
@@ -136,8 +136,7 @@ namespace {
   // Files written before logins were named store each login as its ordinal: one in range loads
   // as that login, one past the names is refused rather than kept for format() to trip on.
   void loginOrdinalsLoadWithinTheirNames() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
     const auto profiles = MachineProfileCodec::parse(memory, R"({"version":2,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"codex":1}}]})");
 
@@ -150,8 +149,7 @@ namespace {
   // Only the versions this build writes load: an older one is incompatible, and the version may
   // be written as a string.
   void onlyKnownVersionsLoad() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
 
     rejects(MachineError::incompatible_profiles, [&] {
@@ -166,8 +164,7 @@ namespace {
   // A hand-edited file is admitted row by row like `machine add`: rows that share an identity,
   // a destination or the local label, or more rows than fit, are refused.
   void filesRefuseDuplicateRows() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
 
     rejects(MachineError::duplicate_id, [&] {

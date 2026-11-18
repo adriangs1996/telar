@@ -6,6 +6,7 @@ import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.ds;
 
 namespace {
@@ -21,8 +22,7 @@ namespace {
       telar::testing::expect(condition, what, where);
     }
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     Doc parse(std::string_view source) {

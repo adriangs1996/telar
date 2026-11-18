@@ -7,6 +7,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.text.json;
 import telar.cli.machine_ssh;
 import telar.base.ds;
@@ -23,8 +24,7 @@ namespace {
 
   // Memory for the texts a test builds, released with it.
   struct TestMemory {
-    telar::SystemAllocator system;
-    telar::MemoryAdapter<telar::SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
 
     Memory& get() noexcept {
       return adapter;

@@ -27,6 +27,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.history.event;
 import telar.runtime.history.store;
 import telar.runtime.platform.request_worker;
@@ -706,8 +707,7 @@ namespace {
       telar::testing::skip("root writes into any directory");
     }
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-history-path-XXXXXX"};
     const auto locked = std::string{directory.path()} + "/locked";
@@ -761,8 +761,7 @@ namespace {
   };
 
   void testDescriptionTitleRecordedInHistory() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; echo Fix the parser"};
     RecordedTitles history;

@@ -12,6 +12,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.lua;
 import telar.base.ds;
 
@@ -161,8 +162,7 @@ return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and ta
   // The deadline stops a script the instruction budget would let run, and resetBudget installs
   // the limits it is given.
   void testDeadlineBudget() {
-    SystemAllocator system;
-    MemoryAdapter erased{system};
+    telar::testing::TestMemory erased;
     constexpr auto unlimited = std::numeric_limits<std::uint64_t>::max();
     lua::Vm<Memory> vm{erased, lua::Limits{.instructions = unlimited, .deadline = std::chrono::milliseconds{50}}};
 
@@ -195,8 +195,7 @@ return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and ta
     check(::mkfifo((root + "/p.lua").c_str(), 0600) == 0);
 
     {
-      SystemAllocator system;
-      MemoryAdapter erased{system};
+      telar::testing::TestMemory erased;
       lua::Vm<Memory> vm{erased};
       const lua::LocalModules<lua::ModuleDomain::configuration> modules{vm.state(), root};
 

@@ -8,6 +8,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.lua;
 
 namespace {
@@ -37,8 +38,7 @@ namespace {
   // Configuration and plugin code runs with exactly these globals: anything else, a loader of
   // files or bytecode included, is out of the sandbox, and so is a binary chunk.
   void testSandboxGlobals() {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     lua::Vm<Memory> vm{memory};
 
     vm.execute(R"lua(
@@ -66,8 +66,7 @@ return table.concat(names, ',')
   // os.date hands its format to strftime, so it takes only the conversions C defines, a format
   // of at most 64 bytes, and nothing past its 256-byte output.
   void testOsDateRestrictions() {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     lua::Vm<Memory> vm{memory};
 
     vm.execute(R"lua(

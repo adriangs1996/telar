@@ -20,6 +20,7 @@ static_assert(true);
 #include <utility>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
 import telar.base.ds;
@@ -47,8 +48,7 @@ namespace {
   }
 
   void supersededReferencedMetadataSurvivesCompletion() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
@@ -66,8 +66,7 @@ namespace {
   }
 
   void deletingAVirtualPlacementReleasesItsRetiredGeneration() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
@@ -83,8 +82,7 @@ namespace {
   }
 
   void anUnreferencedReplacementReleasesPixelsAtItsHeader() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
@@ -99,8 +97,7 @@ namespace {
   }
 
   void invalidHeadersPreserveTheExistingGeneration() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};

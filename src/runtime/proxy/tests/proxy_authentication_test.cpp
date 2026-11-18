@@ -29,6 +29,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.proxy.authenticate;
 import telar.platform.error;
 import telar.config.runtime;
@@ -158,8 +159,7 @@ namespace {
   }
 
   void testProxyAuthentication() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     testAuthorization(memory);

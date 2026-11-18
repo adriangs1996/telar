@@ -61,6 +61,7 @@ import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.wire.clipboard;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
@@ -237,8 +238,7 @@ namespace {
   const telar::testing::Case case_transfer{
       "runtime_clipboard.transfer",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         transferTests(memory);
@@ -249,8 +249,7 @@ namespace {
   const telar::testing::Case case_native{
       "runtime_clipboard.native",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         nativeClipboardTests(memory);

@@ -22,6 +22,7 @@ import telar.base.memory.allocators;
 import telar.git.checkout;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.runtime.client_control;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
@@ -130,8 +131,7 @@ namespace {
   }
 
   void testDetectionLifecycle() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};
@@ -191,8 +191,7 @@ namespace {
   // A pane in a worktree's workspace that moves into another linked worktree registers it under
   // the repository the first one came from, not under the worktree's own workspace.
   void testSourceFollowsWorktreeWorkspace() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};

@@ -8,6 +8,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.plugins;
@@ -63,8 +64,7 @@ namespace {
   // A plugin's id becomes a directory name under the plugins directory, so the manifest refuses
   // any id that is not a single safe path component.
   void testManifestRejectsUnsafeIds() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     for (const std::string_view id : {"../x", "a/b", ".hidden", "a..b", "x.", ""}) {
@@ -92,8 +92,7 @@ namespace {
 
   // Manifest::actions holds 64 entries; a manifest that declares more is refused.
   void testManifestRefusesMoreActionsThanCapacity() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     check(refused([&] {
@@ -114,8 +113,7 @@ namespace {
   // The entry is opened beneath the package directory, so the manifest refuses any entry that is
   // not a relative path of plain components, whichever separator it uses.
   void testManifestRejectsUnsafeEntrypoints() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     for (const std::string_view entry : {R"("/abs.lua")", R"("")", R"("./main.lua")", R"("lib//x.lua")", R"("lib/../main.lua")", R"("lib\\..\\x.lua")", R"("..")"}) {
@@ -131,8 +129,7 @@ namespace {
   // A manifest written for another plugin API, or whose version is not the plain number 1, does
   // not load into this runtime.
   void testManifestRefusesOtherApiVersions() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     for (const std::string_view version : {"0", "2", R"("1")", "1.0", "65536"}) {
@@ -208,8 +205,7 @@ namespace {
   // trust.json decides which capabilities a plugin runs with: a store the runtime cannot read
   // unambiguously, or that would overflow its 64 grants, is refused as a whole.
   void testTrustStoreRefusesMalformedStores() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     const auto rejects = [&](const std::string& bytes) {
@@ -234,8 +230,7 @@ namespace {
   // `telar plugin trust` twice for one plugin leaves one grant, for the digest trusted last, and
   // `telar plugin untrust` removes it: both through the file the runtime reads.
   void testTrustUpdatesReplaceAndRoundTrip() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-plugins-trust-XXXXXX"};
     const auto path = std::string{directory.path()} + "/config/trust.json";

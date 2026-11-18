@@ -33,6 +33,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.proxy.runtime;
 import telar.platform.fs;
 import telar.base.ds;
@@ -164,8 +165,7 @@ namespace {
   }
 
   void testProxyNetwork() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     testPortMemory(memory);

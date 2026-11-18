@@ -1,5 +1,4 @@
 import std;
-import telar.base.memory.allocators;
 import telar.base.text;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.clipboard;
@@ -7,6 +6,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.clipboard;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.ds;
 
 namespace {
@@ -44,8 +44,7 @@ namespace {
 
   // A terminal with one client to route desktop clipboard requests to.
   struct RoutedTerminal {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     Terminal terminal{adapter, TerminalSize{80, 24, 9, 18}};
 
     RoutedTerminal() {
@@ -145,8 +144,7 @@ namespace {
   // number of them, go back: raw C1, DEL or quotes would let a pane end its own reply early
   // or inject input into the program reading it.
   void kittyIdSanitized() {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     Terminal terminal{adapter, TerminalSize{80, 24, 9, 18}};
     std::string id{"ab\x9c\x7f\"c\xc3\xa9[6n"};
 

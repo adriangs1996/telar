@@ -3,6 +3,7 @@
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.platform.fs;
 import telar.platform.process;
@@ -36,8 +37,7 @@ namespace {
   }
 
   void testReplacesPlantedSymlink() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory home{"/tmp/telar-scripts-XXXXXX"};
     TemporaryDirectory reference{"/tmp/telar-scripts-XXXXXX"};
@@ -62,8 +62,7 @@ namespace {
       telar::testing::skip("root writes into any directory");
     }
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory home{"/tmp/telar-scripts-XXXXXX"};
     const auto directory = text(ShellIntegration<ConcurrentMemory>::install(memory, home.path()));
@@ -86,8 +85,7 @@ namespace {
   }
 
   void testBashLoginVariants() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory home{"/tmp/telar-scripts-XXXXXX"};
     const auto directory = ShellIntegration<ConcurrentMemory>::install(memory, home.path());

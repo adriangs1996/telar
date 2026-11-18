@@ -1,6 +1,7 @@
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.http.message;
 import telar.base.ds;
 
@@ -21,8 +22,7 @@ namespace {
   // An origin declares the window the decoder reserves, so a window past 8 MiB is refused whatever
   // the output limit allows.
   void testZstdWindowLimit() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     HttpContentCodec codec{memory};
     constexpr std::size_t limit = 1024;

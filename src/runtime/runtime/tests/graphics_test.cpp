@@ -29,6 +29,7 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
@@ -613,8 +614,7 @@ namespace {
   }
 
   void testGraphics() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testMediaBudget(memory);
@@ -635,8 +635,7 @@ namespace {
 
   template <void (*body)(ConcurrentMemory&)>
   void withMemory() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
 
     body(adapter);
   }

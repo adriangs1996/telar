@@ -12,6 +12,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.vocabulary;
 import telar.platform.fs;
 import telar.platform.process;
@@ -93,8 +94,7 @@ namespace {
     std::filesystem::remove(marker);
     check(shell(in + "printf 'gamma\\n' > a.txt") == 0);
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     HardenedGit<Memory> git{memory, repository};
 
@@ -111,8 +111,7 @@ namespace {
   // A repository that may fetch objects lazily is observed only by a git that honors
   // GIT_NO_LAZY_FETCH; an unreadable listing is refused too.
   void testHardenedGitRejectsLazyFetchWithOldGit() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     const auto rejected = [&](int listing_status, std::string_view listing) {

@@ -10,6 +10,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.test_byte_stream;
 import telar.runtime.http1.head;
 import telar.runtime.proxy.intercepted_relay;
@@ -201,8 +202,7 @@ namespace {
 
   void checkConnectionOrdering() {
     ProxyCounters counters;
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& connection_memory = adapter;
     Http1Connection connection{connection_memory, counters};
     TestByteStream child;
@@ -238,8 +238,7 @@ namespace {
              "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
          }) {
       ProxyCounters counters;
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& connection_memory = adapter;
       Http1Connection connection{connection_memory, counters};
       TestByteStream child;
@@ -256,8 +255,7 @@ namespace {
 
     for (const bool response : {false, true}) {
       ProxyCounters counters;
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& connection_memory = adapter;
       Http1Connection connection{connection_memory, counters};
       TestByteStream child;

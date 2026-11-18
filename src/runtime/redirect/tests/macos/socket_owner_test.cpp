@@ -96,6 +96,7 @@ import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.redirect.socket_owners;
 import telar.runtime.redirect.pf_rules;
 import telar.wire.vocabulary;
@@ -174,8 +175,7 @@ namespace {
     const auto peer = listener.accept();
 
     check(static_cast<bool>(peer));
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     redirect::SocketAccounts accounts{static_cast<Memory&>(adapter)};
 
     accounts.validate();

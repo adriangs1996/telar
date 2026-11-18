@@ -12,6 +12,7 @@ import telar.base.memory.allocators;
 import telar.platform.process;
 import telar.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.cli.worktree_git;
 import telar.base.ds;
 
@@ -83,8 +84,7 @@ namespace {
 
   // What `ready` refuses with, or "ready".
   std::string readiness(std::string_view root) {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     repository::Git repository{adapter, root};
 
     try {
@@ -143,8 +143,7 @@ namespace {
     git(root, {"merge", "--quiet", "--ff-only", "feature"});
     git(root, {"branch", "--quiet", "--set-upstream-to=published", "feature"});
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     sessions::WorktreeGit worktrees{adapter};
 
     check(!worktrees.merged(root, "feature"));
@@ -162,8 +161,7 @@ namespace {
     const auto tip = commit(root, "feature.txt", "Feature work");
 
     git(root, {"checkout", "--quiet", "main"});
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     sessions::WorktreeGit worktrees{adapter};
     const auto checkout = directory.path("feature");
 

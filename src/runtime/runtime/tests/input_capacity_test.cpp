@@ -47,6 +47,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.runtime;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.wire.clients;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -68,8 +69,7 @@ namespace {
   using namespace telar::runtime;
 
   void testInputCapacity() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

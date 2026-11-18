@@ -5,6 +5,7 @@
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.runtime.history.event;
 import telar.runtime.history.store;
@@ -78,8 +79,7 @@ namespace {
   }
 
   void testMigratesLegacySchema() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Directory directory;
     const auto path = directory.file("history.db");
@@ -120,8 +120,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testFailedWriteRollsBack() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -141,8 +140,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testPageRespectsPayloadCap() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -185,8 +183,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testPruneFailedOnly() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -203,8 +200,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testWorkspaceScope() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -254,8 +250,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testRefusesLinkedDatabase() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Directory directory;
     const auto victim = directory.file("victim");
@@ -289,8 +284,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testTightensExistingDatabaseMode() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Directory directory;
     const auto path = directory.file("history.db");
@@ -303,8 +297,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testAuthorFilter() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -320,8 +313,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testShortQuerySubstring() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -339,8 +331,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
   // A distinct listing names each command once, however often it ran.
   void testDistinctListsEachCommandOnce() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -357,8 +348,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testQueryWithDoubleQuote() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -370,8 +360,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testExactEntryQuery() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -398,8 +387,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testRejectsCorruptRows() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Directory directory;
     const auto path = directory.file("history.db");
@@ -430,8 +418,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testAgentCommandWithoutToolCall() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
@@ -455,8 +442,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   void testRejectsIdentitiesBeyondInt64() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};

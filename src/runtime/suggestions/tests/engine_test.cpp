@@ -1,5 +1,6 @@
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.platform.fs;
 import telar.runtime.suggestions.engine;
@@ -40,8 +41,7 @@ namespace {
   // An engine that refuses the prompt, or one that exits, fails that request at once; the next
   // one starts the engine again.
   void testPromptRejected() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-engine-XXXXXX"};
     const std::string started = std::string{directory.path()} + "/started";
@@ -65,8 +65,7 @@ namespace {
   }
 
   void testMissingEngineUnavailable() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     const ds::Array<std::string_view, 1> arguments{"/nonexistent/telar-suggestion-engine"};
     SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::seconds{5}}};
@@ -76,8 +75,7 @@ namespace {
   }
 
   void testOversizedRecordSkipped() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     // A line that is no record, longer than the engine's whole input buffer, ahead of the answer:
     // the reader drops it as it streams in rather than waiting for its end.
@@ -91,8 +89,7 @@ namespace {
   }
 
   void testStopAborts() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "while read -r line; do :; done"};
     SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::seconds{30}}};

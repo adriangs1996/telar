@@ -15,6 +15,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.agents.snapshot;
 import telar.wire.vocabulary;
 import telar.runtime.history.store;
@@ -155,8 +156,7 @@ namespace {
   }
 
   void testSessionFiles() {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     SessionFileReader<ConcurrentMemory> reader{memory};
     ds::Array<char, 64> temporary{};
 

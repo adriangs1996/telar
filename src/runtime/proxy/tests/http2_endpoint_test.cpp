@@ -16,6 +16,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.test_byte_stream;
 import telar.runtime.proxy.runtime;
 import telar.runtime.traffic.control_backend;
@@ -355,8 +356,7 @@ namespace {
     };
 
     struct Fixture {
-      SystemAllocator system;
-      MemoryAdapter<SystemAllocator> adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       Owner owner;
       Peer client{false}, server{true};

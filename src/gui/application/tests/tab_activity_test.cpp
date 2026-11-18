@@ -15,6 +15,7 @@ static_assert(true);
 #include <span>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.allocation_gate;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
@@ -42,8 +43,7 @@ namespace {
   constexpr float half_fraction = 0.5F;
 
   void selectionAndProgressPrecedence() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::Memory& memory = adapter;
     GraphicsBudget budget;
     const TabLocation location{.workspace = {.id = 1}, .tab_id = 1};

@@ -41,6 +41,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.socket_pair;
 import telar.testing.test_byte_stream;
 import telar.runtime.proxy.http2_capture_streams;
@@ -274,8 +275,7 @@ namespace {
   }
 
   void testHandshake() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
@@ -477,8 +477,7 @@ namespace {
     using Handshake = ConnectHandshake<Memory, FailedResolver>;
     using State = Handshake::State;
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
@@ -569,8 +568,7 @@ namespace {
   // head timeout closes the connection.
   void testConnectHeadTimeout() {
     using Policy = ProxyConnectionPolicy;
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
@@ -628,8 +626,7 @@ namespace {
   // of waiting on a resolution that was never started.
   void testResolutionRefused() {
     using Resolutions = NameResolutions<StalledResolver>;
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();

@@ -11,6 +11,7 @@ import telar.runtime.terminal.graphics_storage;
 import telar.runtime.terminal.kitty;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 
 namespace {
 
@@ -57,8 +58,7 @@ namespace {
 
   // A media terminal over its own budget, as a pane's media worker runs one.
   struct Media {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     MediaAllocator<ConcurrentMemory> allocator{adapter, budget, GraphicsLimits::maximum_pane_bytes};
     MediaTerminal terminal;

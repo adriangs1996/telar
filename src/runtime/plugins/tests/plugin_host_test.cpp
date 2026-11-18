@@ -44,6 +44,7 @@ static_assert(true);
 #include <utility>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.plugins.run_worker;
 import telar.base.text.utf8;
 import telar.platform.fs;
@@ -232,8 +233,7 @@ end}
   // A callback's effects fill a batch of `Limits::effects`: one that returns that many gets
   // them all, and one that returns more gets an error for its event, never a cut batch.
   void testEffectBatchBounded() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-plugin-effects.XXXXXX"};
     const auto path = std::string{directory.path()} + "/main.lua";

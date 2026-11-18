@@ -6,6 +6,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.platform.fs;
 import telar.plugins;
 
@@ -55,8 +56,7 @@ namespace {
   // A package is inspected before anyone trusts it, so its file count, its manifest, its entry
   // and its total size are bounded.
   void testInspectionRefusesPackagesBeyondLimits() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-plugin-limits-XXXXXX"};
     const std::filesystem::path root{std::string{directory.path()}};
@@ -104,8 +104,7 @@ namespace {
   // `telar plugin install` publishes the package's bytes at the destination, accepts a
   // destination that already holds the same package, and refuses one that holds anything else.
   void testInstallationIsIdempotentAndRefusesForeignTargets() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-plugin-install-XXXXXX"};
     const std::filesystem::path root{std::string{directory.path()}};

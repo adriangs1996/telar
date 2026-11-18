@@ -23,6 +23,7 @@ import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.platform.events;
 import telar.platform.process;
 import telar.runtime.agents.description_generator;
@@ -49,8 +50,7 @@ namespace {
   };
 
   struct ReporterFixture {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

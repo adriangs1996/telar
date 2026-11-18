@@ -23,6 +23,7 @@ static_assert(true);
 #include <new>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.json_fixture;
 import telar.gui.features.configuration;
 import telar.gui.application;
@@ -249,8 +250,7 @@ namespace {
   }
 
   void shortEscapesPreserveTheOriginalResponseCapacity() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = "local p=string.rep(string.char(10),512); return {api_version=2,runtime={history={path=p},session={path=p},proxy={ca_dir=p}}}",

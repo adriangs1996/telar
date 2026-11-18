@@ -1,11 +1,11 @@
 import std;
-import telar.base.memory.allocators;
 import telar.config.core;
 import telar.runtime.graphics.file_input;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.terminal.kitty;
 import telar.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 
 namespace {
 
@@ -33,8 +33,7 @@ namespace {
   // does: output past what a batch holds fails the pane instead of being dropped, and the
   // pane processes none of it.
   void orderedInputNeverDrops() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     PaneMedia media{adapter, budget, GraphicsLimits{}, size};
     const std::string filler(MediaBatch::byte_capacity, 'x');

@@ -20,6 +20,7 @@ import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.editors.remote_editor;
 import telar.runtime.paths.query_task;
 import telar.runtime.platform.request_worker;
@@ -286,8 +287,7 @@ namespace {
   }
 
   static void testBackgroundServices() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testJson(memory);
@@ -298,8 +298,7 @@ namespace {
   }
 
   static void testNeovim() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testNeovimEditor(memory);
@@ -308,8 +307,7 @@ namespace {
   static const telar::testing::Case case_background_services{"background_services.background_services", testBackgroundServices};
   static const telar::testing::Case case_neovim{"background_services.neovim", testNeovim};
   static const telar::testing::Case case_suggestion_control_bytes{"background_services.suggestion_control_bytes", [] {
-                                                                    SystemAllocator system;
-                                                                    MemoryAdapter adapter{system};
+                                                                    telar::testing::TestMemory adapter;
 
                                                                     testSuggestionControlBytes(adapter);
                                                                   }};

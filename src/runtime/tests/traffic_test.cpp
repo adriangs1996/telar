@@ -23,6 +23,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.exchange_capture.producer;
@@ -479,8 +480,8 @@ namespace {
   }
 
   void serviceDelivery() {
+    telar::testing::TestMemory offline;
     SystemAllocator system;
-    MemoryAdapter offline{system};
     BudgetAllocator budget{system, 64 * 1024 * 1024};
     SynchronizedAllocator synchronized{budget};
     MemoryAdapter adapter{synchronized};

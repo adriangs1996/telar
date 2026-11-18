@@ -16,6 +16,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.http2.tests.http2_fixture;
 import telar.testing.test_byte_stream;
 import telar.runtime.exchange_capture.pipeline;
@@ -134,8 +135,7 @@ namespace {
                Fixture{"GET / HTTP/1.1\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\n", true, 2, CaptureOutcome::finished},
                Fixture{"GET / HTTP/1.1\r\n\r\n", std::string(Http1Head::capacity, 'a'), true, 2, CaptureOutcome::finished},
            }) {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
         CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
         ProxyCounters counters;
@@ -165,8 +165,7 @@ namespace {
     }
 
     void testHttp1CaptureEarlyResponseAndReuse() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
       ProxyCounters counters;
@@ -264,8 +263,7 @@ namespace {
     }
 
     void testHttp2CaptureLifecycle() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
       ProxyCounters counters;
@@ -307,8 +305,7 @@ namespace {
 
     void testHttp2CaptureMalformedHeaders() {
       for (const auto& headers : {std::string{}, std::string{"\x82\xff"}}) {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
         CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
         ProxyCounters counters;

@@ -11,6 +11,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.cli.machine_ssh;
 import telar.cli.command_limit;
 import telar.machines;
@@ -64,8 +65,7 @@ namespace {
 
   // A remote command that hangs ends at its deadline instead of holding setup or check.
   void captureTimeoutThrows() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     check(failure([&] {
@@ -77,8 +77,7 @@ namespace {
   // listing is never read as complete. Input and output are pumped together: a large input
   // to a program that echoes it does not deadlock.
   void captureKeepsTailAndCountsDropped() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     std::string input(launch::output_limit + 44 * 1024, '\0');
 
@@ -96,8 +95,7 @@ namespace {
   // A program killed by a signal is a failure: `telar --machine X cmd` does not exit 0 when
   // ssh was killed.
   void inheritSignalIsFailure() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     check(launch::inherit(launch::words(memory, {"/bin/sh", "-c", "kill -9 $$"}).view()) == launch::ssh_failure);
@@ -114,8 +112,7 @@ namespace {
     const std::string socket = std::string{directory.data()} + "/runtime.sock";
 
     check(::setenv("TELAR_SOCKET", socket.c_str(), 1) == 0);
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     const auto words = shellWords(std::string{machine::gitSshCommand(memory, "dev@host").view()});
     auto dispatch = machine::ssh(memory, "dev@host", "x");
@@ -151,8 +148,7 @@ namespace {
     const auto path = root + ":/usr/bin:/bin";
 
     check(::setenv("PATH", path.c_str(), 1) == 0 && ::setenv("TELAR_SOCKET", (root + "/runtime.sock").c_str(), 1) == 0);
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     const auto profiles = machines::MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"dev@host","enabled":true}]})");
     const auto& profile = profiles.rows().front();

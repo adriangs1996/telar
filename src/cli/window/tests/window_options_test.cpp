@@ -7,6 +7,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.wire.vocabulary;
 import telar.cli.window;
 import telar.base.ds;
@@ -63,8 +64,7 @@ namespace {
 
   // `config show` keeps the sign of a number JSON writes in scientific notation.
   void negativeScientificNumbers() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     ds::String<Memory> output{memory};
 

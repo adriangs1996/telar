@@ -7,6 +7,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.render.markdown;
@@ -22,8 +23,7 @@ namespace {
   using namespace telar::gui::application::tests::session_fixture;
 
   std::vector<Byte> encoded(std::string_view markdown) {
-    SystemAllocator system;
-    telar::MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     render::Document<telar::Memory> document{memory};
 
     check(render::markdown::render(markdown, document) == render::markdown::Error::none, "the fixture renders");

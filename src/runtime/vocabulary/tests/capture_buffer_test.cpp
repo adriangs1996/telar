@@ -1,6 +1,7 @@
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.vocabulary.exchange;
 import telar.base.ds;
 
@@ -14,8 +15,7 @@ namespace {
   // A buffer whose limit is not a power of two grows to that limit and no further, so the quota
   // shared by every capture is not charged past what the buffer may hold.
   void testLimitNotPowerOfTwo() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     CaptureQuota quota{4096};
     constexpr std::size_t limit = 1000;

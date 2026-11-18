@@ -9,6 +9,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 
 import telar.gui.foundation.core;
@@ -35,8 +36,7 @@ namespace {
   using namespace telar::gui::application::tests::session_fixture;
 
   void workspaceMetadataAndRevisions() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica replica{memory};
     const ds::Array projects{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}, WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .tab_count = 3}};
@@ -144,8 +144,7 @@ namespace {
   }
 
   void exactReferencesAndCycles() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
@@ -182,8 +181,7 @@ namespace {
   }
 
   void crossMachineAliasesResolveDeterministically() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica parent_workspaces{memory};
     WorkspaceReplica child_workspaces{memory};
@@ -225,8 +223,7 @@ namespace {
   }
 
   void otherMachinesListOnlyAgentsThatWait() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};

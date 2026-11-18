@@ -5,8 +5,8 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.cli.worktree_git;
-import telar.base.memory.allocators;
 
 namespace {
 
@@ -25,8 +25,7 @@ namespace {
   }
 
   std::string normalized(std::string_view url) {
-    telar::SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
 
     return outcome([&] {
       return std::string{repository::normalize(adapter, url).view()};
@@ -34,8 +33,7 @@ namespace {
   }
 
   std::string sanitized(std::string_view origin) {
-    telar::SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
 
     return outcome([&] {
       return std::string{repository::sanitized(adapter, origin).view()};

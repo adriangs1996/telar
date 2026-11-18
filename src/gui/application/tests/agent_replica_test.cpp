@@ -24,6 +24,7 @@ static_assert(true);
 #include <utility>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.agent_fixture;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
@@ -79,8 +80,7 @@ namespace {
   }
 
   void revisionsAndSourceReplacement() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
     ds::Array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
@@ -110,8 +110,7 @@ namespace {
   }
 
   void attachmentCapabilitiesFollowExactAgentIdentities() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
     ds::Array entries{agentSnapshotEntry(), agentSnapshotEntry()};
@@ -134,8 +133,7 @@ namespace {
   }
 
   void statusChangesFollowCommittedIdentities() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
     ds::Array entries{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};

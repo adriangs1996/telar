@@ -56,6 +56,7 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.model.client_layouts;
 import telar.runtime.platform.process_probe;
 import telar.runtime.terminal.text_reader;
@@ -528,8 +529,7 @@ namespace {
   }
 
   void testAgents() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testScreenEvidence(memory);
@@ -552,8 +552,7 @@ namespace {
   }
 
   void testDescentVerifyRefusals() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

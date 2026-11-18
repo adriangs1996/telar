@@ -1,5 +1,6 @@
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.config.runtime;
@@ -55,8 +56,7 @@ namespace {
   const HistorySession session{.id = {1}, .pane = 1, .workspace_path = "/tmp", .shell = "/bin/sh"};
 
   void testInjectedSubmissionAuthoredByAgent() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     PaneObserver observer{memory, TerminalSize{80, 24, 8, 16}};
     FinishedCommands history;
@@ -73,8 +73,7 @@ namespace {
   }
 
   void testConfigureHistoryEnablesOutputCapture() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     // runtime.history.output reaches a pane only through its history configuration.
@@ -116,8 +115,7 @@ namespace {
   };
 
   void testProcessorRoutesProcessResultsByPane() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ReversedProbe probe;
     FinishedCommands history;

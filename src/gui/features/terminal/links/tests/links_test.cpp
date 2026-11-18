@@ -8,6 +8,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
@@ -132,8 +133,7 @@ namespace {
   }
 
   void metadataAuthority() {
-    SystemAllocator system;
-    telar::MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     Screen<telar::ConcurrentMemory> screen{memory};
     constexpr std::string_view label = "https://label.test";
     constexpr std::string_view destination = "https://destination.test";

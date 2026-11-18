@@ -1,5 +1,6 @@
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.config.runtime;
 import telar.runtime.agents.screen_inference;
@@ -19,8 +20,7 @@ namespace {
   }
 
   void testCursorStatus() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{80, 24, 8, 16}};
 

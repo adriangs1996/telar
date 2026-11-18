@@ -13,6 +13,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.test_byte_stream;
 import telar.runtime.proxy.intercepted_relay;
 import telar.runtime.proxy.runtime;
@@ -639,8 +640,7 @@ namespace {
   }
 
   void testHttpInterception() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     rejected(memory);
@@ -656,8 +656,7 @@ namespace {
 
   template <void (*body)(ConcurrentMemory&)>
   void withMemory() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
 
     body(adapter);
   }

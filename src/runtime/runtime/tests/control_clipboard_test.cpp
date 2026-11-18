@@ -56,6 +56,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.platform.process;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
@@ -1122,8 +1123,7 @@ namespace {
 
   template <auto body>
   void unbudgeted() {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
 
     body(memory);
   }

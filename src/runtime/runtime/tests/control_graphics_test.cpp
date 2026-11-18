@@ -48,6 +48,7 @@ import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.testing.one_shot_allocator;
 import telar.runtime.graphics.synchronizer;
 import telar.runtime.platform.request_worker;
@@ -720,8 +721,7 @@ namespace {
 
     void orderedResizeFailure() {
       for (bool start_worker : {false, true}) {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
         RuntimeModel model{memory};
         ClientStore clients{memory};
@@ -1187,8 +1187,7 @@ namespace {
   template <auto body>
   void unbudgeted() {
     installPngDecoder();
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
 
     body(memory);
   }

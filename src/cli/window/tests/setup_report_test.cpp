@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 import std;
-import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.cli.window;
 
 namespace {
@@ -33,8 +33,7 @@ namespace {
   }
 
   int finished(std::initializer_list<std::pair<Step, Status>> steps) {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     SetupReport report{adapter, false};
 
     for (const auto& [step, status] : steps) {

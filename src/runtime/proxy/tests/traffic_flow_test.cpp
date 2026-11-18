@@ -27,6 +27,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.traffic.tests.packet_fixture;
 import telar.testing.test_byte_stream;
 import telar.runtime.traffic.control_backend;
@@ -519,8 +520,7 @@ namespace {
   const telar::testing::Case case_protocol_sniffing{
       "traffic_flow.protocol_sniffing",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         protocolSniffing(memory);
@@ -529,8 +529,7 @@ namespace {
   const telar::testing::Case case_gates{
       "traffic_flow.gates",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         gates(memory);
@@ -539,8 +538,7 @@ namespace {
   const telar::testing::Case case_composition{
       "traffic_flow.composition",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         composition(memory);
@@ -549,8 +547,7 @@ namespace {
   const telar::testing::Case case_application_detection{
       "traffic_flow.application_detection",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         applicationDetection(memory);
@@ -559,8 +556,7 @@ namespace {
   const telar::testing::Case case_reconstruction{
       "traffic_flow.reconstruction",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         reconstruction(memory);
@@ -569,8 +565,7 @@ namespace {
   const telar::testing::Case case_passive_gaps{
       "traffic_flow.passive_gaps",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         passiveGaps(memory);

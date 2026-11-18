@@ -13,6 +13,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.redirect.direction;
 import telar.runtime.redirect.ingress;
 import telar.runtime.redirect.pf_rules;
@@ -31,8 +32,7 @@ namespace {
   // mapping covers, or route a bypass through a gateway pf cannot read is refused before any rule
   // text exists.
   void testScopeGuards() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     redir::PfIdentity identity{memory, "/tmp/fixture.sock.redirect"};
     const ds::Array<redir::Mapping, 1> mappings{{{redir::Target::parse("192.0.2.1:443"), 53001, true}}};

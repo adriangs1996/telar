@@ -35,6 +35,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.diagnostics.operation;
 import telar.runtime.runtime.runtime_telemetry;
 import telar.runtime.diagnostics.runtime_counters;
@@ -272,8 +273,7 @@ namespace {
 
 #if TELAR_DIAGNOSTICS
     void testFrameCounters() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       Terminal terminal{memory, telar::TerminalSize{20, 4, 8, 16}};
       FrameSync frames{memory, 1};

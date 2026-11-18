@@ -54,6 +54,7 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
@@ -217,8 +218,7 @@ namespace {
   }
 
   void testControlServices() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testLimits(memory);
@@ -253,8 +253,7 @@ namespace {
   }
 
   void testExecutionCapacity() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};
@@ -286,8 +285,7 @@ namespace {
   }
 
   void testAdministrationWorkspaceFromHome() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};
@@ -322,8 +320,7 @@ namespace {
   }
 
   void testExecutionInputRefusals() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

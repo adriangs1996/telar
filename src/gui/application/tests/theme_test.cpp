@@ -20,6 +20,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.text.utf8;
 import telar.gui.features.configuration;
 import telar.gui.foundation.core;
@@ -34,8 +35,7 @@ namespace {
   using namespace telar::gui::features::configuration;
 
   void completeThemeInheritanceAndProjection() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(

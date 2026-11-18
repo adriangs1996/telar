@@ -8,6 +8,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.features.workbench;
@@ -103,8 +104,7 @@ namespace {
   }
 
   void emptySnapshot() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     ds::String<telar::ConcurrentMemory> text{memory};
     const ClientLayoutSnapshot bootstrap;
@@ -156,8 +156,7 @@ namespace {
     auto snapshot = fixture_snapshot;
 
     snapshot.tabs = tabs;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     ds::String<telar::ConcurrentMemory> text{memory};
 

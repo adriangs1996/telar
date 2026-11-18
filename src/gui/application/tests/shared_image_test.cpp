@@ -47,6 +47,7 @@ static_assert(true);
 #include <vector>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.features.terminal.graphics;
@@ -186,8 +187,7 @@ namespace {
   }
 
   void sharedAndInlineStoresHaveEquivalentGenerationsAndCredits() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget inline_budget;
     GraphicsBudget shared_budget;

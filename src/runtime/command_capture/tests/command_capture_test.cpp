@@ -19,6 +19,7 @@ import telar.base.memory.allocators;
 
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.command_capture.tracker;
 import telar.wire.content;
 import telar.wire.vocabulary;
@@ -46,8 +47,7 @@ namespace {
   };
 
   struct CaptureFixture {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
     CommandTracker tracker{memory, terminal, "/initial", true};
@@ -442,8 +442,7 @@ namespace {
 
   // A pane keeps its newest 64 command blocks, the most the wire carries.
   void testBlockRingKeepsNewest() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{40, 12, 8, 16}};
     CommandBlocks blocks{memory, terminal};

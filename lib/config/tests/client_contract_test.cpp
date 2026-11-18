@@ -8,6 +8,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.lua;
 import telar.config.client;
 import telar.config.core;
@@ -127,8 +128,7 @@ namespace {
   // Runs `source` and hands what it returned to `consume`.
   template <typename Consume>
   void withResult(std::string_view source, Consume&& consume) {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
     lua::Vm<Memory> vm{memory};
 
     vm.execute(source, "@result.lua");

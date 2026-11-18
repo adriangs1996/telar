@@ -9,6 +9,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.terminal.text_reader;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
@@ -142,8 +143,7 @@ namespace {
   // links, longer URIs or more runs than a frame carries mark the metadata partial, and the
   // frame still encodes with the first link in it.
   void testHyperlinkMetadataBounded() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     std::vector<Byte> decoded(8 * 1024 * 1024);
 
@@ -187,8 +187,7 @@ namespace {
   // A pane that prints a screenful of links, each cell its own, keeps working: the terminal
   // takes all of its output and the frame encodes with the first link in it.
   void testHyperlinkFloodKeepsPane() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     std::vector<Byte> decoded(8 * 1024 * 1024);
     Terminal terminal{memory, TerminalSize{80, 24, 0, 0}};

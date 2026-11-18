@@ -24,6 +24,7 @@ import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
@@ -259,8 +260,7 @@ namespace {
   }
 
   void testAtomicRuntime() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testMappingOwnership(memory);

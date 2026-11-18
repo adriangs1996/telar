@@ -55,6 +55,7 @@ import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.persistence.session_store;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.execution_service;
@@ -422,8 +423,7 @@ namespace {
   }
 
   void testWorktreeRestore() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<Byte, 4096> buffer;
     checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
@@ -456,8 +456,7 @@ namespace {
   // A session file the runtime cannot read: it starts empty, keeps the file aside as evidence, and
   // saves the new session where the old one was.
   void testCorruptSessionQuarantined() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<Byte, 4096> fixture_buffer;
     const auto fixture = checkpointFixture(fixture_buffer.viewMut());
@@ -570,8 +569,7 @@ namespace {
   }
 
   void testAgentResume() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 
@@ -668,8 +666,7 @@ namespace {
 
   // A checkpoint write that fails, as on a full disk, is tried again without the session changing.
   void testWriteFailureRetried() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 
@@ -718,8 +715,7 @@ namespace {
 
   // A worktree record that later validation rejects is skipped; the rest of the session restores.
   void testInvalidWorktreeSkipped() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<Byte, 4096> buffer;
     checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
@@ -747,8 +743,7 @@ namespace {
   // A workspace none of whose panes could start again is not restored empty, and the worktree it
   // held forgets it.
   void testEmptyWorkspacesDropped() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<Byte, 4096> buffer;
     checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
@@ -770,8 +765,7 @@ namespace {
   }
 
   void testPersistence() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testMonotonicIdentities(memory);

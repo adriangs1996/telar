@@ -11,6 +11,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.http2.tests.http2_fixture;
 import telar.testing.test_byte_stream;
 import telar.runtime.http2.direction_observer;
@@ -123,8 +124,8 @@ namespace {
     }
 
     void testObservationLimits() {
+      telar::testing::TestMemory adapter;
       SystemAllocator system;
-      MemoryAdapter adapter{system};
       Memory& memory = adapter;
 
       {
@@ -178,8 +179,7 @@ namespace {
     }
 
     void testResponseMetadata() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       Memory& memory = adapter;
       Http2Observer observer{memory, Http2Direction::response};
       Events events;

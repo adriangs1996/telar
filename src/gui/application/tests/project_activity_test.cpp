@@ -26,6 +26,7 @@ static_assert(true);
 #include <variant>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.allocation_gate;
 import telar.gui.application;
 import telar.gui.foundation.text;
@@ -42,8 +43,7 @@ namespace {
   using namespace telar::gui::test;
 
   void projectCountsAndAttention() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     const ds::Array entries{

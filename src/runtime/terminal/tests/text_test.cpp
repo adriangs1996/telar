@@ -15,6 +15,7 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.terminal.osc_scanner;
 import telar.runtime.terminal.text_reader;
 import telar.wire.clipboard;
@@ -163,8 +164,7 @@ namespace {
   // A reader smaller than the text keeps its end, the part a user saw last, cut at a line
   // start, or at a character start when the end is one long line.
   void testTruncatedTail() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     {
@@ -207,8 +207,7 @@ namespace {
   // ASCII on wide cells, only the rows a client asks for, and says when it kept fewer
   // matches than there are.
   void testSearchOverlapUnicodeRanges() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{.cols = 20, .rows = 6, .cell_width_px = 0, .cell_height_px = 0}};
 

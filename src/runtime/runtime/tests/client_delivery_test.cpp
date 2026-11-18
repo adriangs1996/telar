@@ -60,6 +60,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.proxy.runtime;
@@ -140,8 +141,7 @@ namespace {
     }
 
     void currentState() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};
@@ -238,8 +238,7 @@ namespace {
     // other panes never send one.
     void shellState() {
       static_assert(DeliveryLane::shell < DeliveryLane::cells);
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};
@@ -272,8 +271,7 @@ namespace {
     // cells; a viewport above the bottom moves up with the rows the scrollback dropped.
     void scrollbackOrigin() {
       static_assert(DeliveryLane::scrollback < DeliveryLane::cells);
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};
@@ -328,8 +326,7 @@ namespace {
     // chunks, and is withdrawn once the program leaves the alternate screen. On the primary screen
     // the same sequence is ignored, so ordinary output cannot take a pane over.
     void paneDocument() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};
@@ -466,8 +463,7 @@ namespace {
     }
 
     void attachmentRotation() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};
@@ -587,8 +583,7 @@ namespace {
 
     // A program that begins a synchronized update and never ends it still gets its screen drawn.
     void syncOutputReleased() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};
@@ -627,8 +622,7 @@ namespace {
     // More workspace changes than the runtime queues between deliveries: every client that watches a
     // changed workspace still resynchronizes it, though its change was not queued.
     void noticeOverflowResyncsObservers() {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
       ClientStore clients{memory};

@@ -54,6 +54,7 @@ import telar.config.runtime;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.lua;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
@@ -461,8 +462,7 @@ namespace {
   const telar::testing::Case case_policy_configuration{
       "control_desktop.policy_configuration",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         policyConfiguration(memory);
@@ -471,8 +471,7 @@ namespace {
   const telar::testing::Case case_multiple_clients{
       "control_desktop.multiple_clients",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         multipleClients(memory);
@@ -481,8 +480,7 @@ namespace {
   const telar::testing::Case case_palette_notification{
       "control_desktop.palette_notification",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         paletteNotification(memory);
@@ -491,8 +489,7 @@ namespace {
   const telar::testing::Case case_notification_transitions{
       "control_desktop.notification_transitions",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         notificationTransitions(memory);
@@ -501,8 +498,7 @@ namespace {
   const telar::testing::Case case_interrupted_response_writes{
       "control_desktop.interrupted_response_writes",
       [] {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         ConcurrentMemory& memory = adapter;
 
         interruptedResponseWrites(memory);

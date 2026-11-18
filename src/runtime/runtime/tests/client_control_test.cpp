@@ -50,6 +50,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.runtime.client_control;
 import telar.runtime.runtime.runtime;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.wire.clients;
 import telar.wire.layout;
 import telar.wire.pane_io;
@@ -402,8 +403,7 @@ namespace {
   }
 
   void testClientControl() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testNotificationCapacity(memory);

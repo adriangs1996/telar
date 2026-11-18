@@ -6,6 +6,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.machines;
 import telar.cli.machine_ssh;
 import telar.cli.machine;
@@ -33,8 +34,7 @@ namespace {
   // label asks for --label, which then names it; a saved machine's destination is that
   // machine, not a second one.
   void resolveDerivesLabel() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     const auto profiles = MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"dev@host","enabled":true}]})");
 

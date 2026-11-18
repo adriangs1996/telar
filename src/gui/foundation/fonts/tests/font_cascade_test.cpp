@@ -17,6 +17,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.allocation_gate;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.fonts.tests.font_fixture;
@@ -111,8 +112,7 @@ namespace {
   }
 
   void naturalAndMixedRuns(FontFixture<telar::ConcurrentMemory>& fonts) {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     TextLayout layout{memory};
     constexpr std::string_view natural = "AVATAR fi ffi · Crème";
@@ -245,8 +245,7 @@ namespace {
   // The fonts of the repository's assets, read into system memory for one case.
   template <void (*verify)(FontFixture<telar::ConcurrentMemory>&)>
   void withFonts() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     FontFixture fonts{memory, std::filesystem::path{TELAR_GUI_ASSETS_DIR}};
 

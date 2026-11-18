@@ -16,6 +16,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.foundation.actions;
 
 import telar.gui.application;
@@ -102,8 +103,7 @@ namespace {
   }
 
   void callbackDescriptionsOwnTextAndRetireTheirRegistryReferences() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     application::ConfigurationGeneration generation{memory, source};
     const auto callback = generation.input().configured[1].action;

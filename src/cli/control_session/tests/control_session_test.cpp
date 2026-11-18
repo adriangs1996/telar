@@ -10,6 +10,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.platform.fs;
 import telar.wire.runtime;
 import telar.cli.control_session;
@@ -137,8 +138,7 @@ namespace {
   // the answer: the exchange returns the reply that carries its own request id.
   void skipsRepliesForOtherRequests() {
     FakeRuntime runtime{2, {completed(1), refused(1), completed(2)}};
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
     {
@@ -156,8 +156,7 @@ namespace {
   // command waiting out its reply timeout.
   void stoppingRuntimeAbortsExchange() {
     FakeRuntime runtime{1, {stopping}};
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     std::string error;
 

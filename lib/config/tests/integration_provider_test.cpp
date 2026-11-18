@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 import std;
-import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.platform.paths;
 import telar.config.core;
 import telar.wire.vocabulary;
@@ -38,8 +38,7 @@ namespace {
   };
 
   std::string root(AgentProvider provider, const TestEnvironment& environment, bool legacy = false) {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
 
     return std::string{config::IntegrationProvider::describe(provider).root(memory, environment, legacy)};
   }

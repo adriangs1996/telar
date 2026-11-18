@@ -11,6 +11,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.vocabulary.traffic;
 import telar.wire.vocabulary;
 import telar.config.runtime;
@@ -271,8 +272,7 @@ namespace {
   // An exchange cut to the part limit tells the plugin so, which must not take a cut body for the
   // whole one.
   void testPartLimitMarksTruncation() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     CaptureQuota quota{4096};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};

@@ -24,6 +24,7 @@ import telar.git.checkout;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.media_service;
 import telar.wire.runtime;
@@ -159,8 +160,7 @@ namespace {
   }
 
   void testObservationLifecycle() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

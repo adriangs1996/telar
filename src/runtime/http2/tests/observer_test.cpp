@@ -1,6 +1,7 @@
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.http2.direction_observer;
 import telar.runtime.http2.frame_reader;
 import telar.runtime.http2.tests.http2_fixture;
@@ -50,8 +51,7 @@ namespace {
 
     for (const auto& frame : frames) {
       for (const std::size_t fragment : {1, 3, 16384}) {
-        SystemAllocator system;
-        MemoryAdapter adapter{system};
+        telar::testing::TestMemory adapter;
         Memory& memory = adapter;
         Http2Observer observer{memory, Http2Direction::request};
         Fields events;
@@ -72,8 +72,7 @@ namespace {
   // Feeds `input` to an observer of `direction` and returns what it emitted and whether decoding
   // failed.
   auto observe(Http2Direction direction, std::string_view input) -> std::pair<Fields, bool> {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     Http2Observer observer{memory, direction};
     Fields events;

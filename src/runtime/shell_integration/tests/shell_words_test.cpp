@@ -7,6 +7,7 @@
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.shell_integration.token;
 import telar.runtime.shell_integration.words;
 import telar.wire.editor;
@@ -21,8 +22,7 @@ namespace {
   using namespace telar::runtime;
 
   void testReplyCap() {
-    telar::SystemAllocator system;
-    telar::MemoryAdapter<telar::SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 
@@ -72,8 +72,7 @@ namespace {
   // A FIFO named like a makefile, as a cloned repository can hold, and a package.json past the
   // size the reader takes: neither blocks the completion worker nor is read.
   void testIgnoresSpecialAndOversizedFiles() {
-    telar::SystemAllocator system;
-    telar::MemoryAdapter<telar::SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 

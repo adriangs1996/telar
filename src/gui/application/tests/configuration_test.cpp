@@ -17,6 +17,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
 import telar.lua;
@@ -280,8 +281,7 @@ namespace {
   }
 
   void inputExpressions() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(
@@ -311,8 +311,7 @@ namespace {
   }
 
   void invalidCallbacksAndRecovery() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(

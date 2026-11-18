@@ -1,12 +1,12 @@
 #include <ghostty/vt.h>
 
 import std;
-import telar.base.memory.allocators;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 
 namespace {
 
@@ -24,8 +24,7 @@ namespace {
   // A terminal whose cursor follows the images a program places, as a terminal that
   // does not draw them must so the text after an image lands where it would.
   struct CursorTerminal {
-    SystemAllocator system;
-    MemoryAdapter<SystemAllocator> adapter{system};
+    telar::testing::TestMemory adapter;
     Terminal terminal{adapter, size, TerminalPurpose::separate_media};
     GraphicsCursor cursor;
 

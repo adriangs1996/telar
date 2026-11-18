@@ -10,6 +10,7 @@
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.platform.fs;
 import telar.runtime.editors.remote_editor;
@@ -112,8 +113,7 @@ namespace {
   // Neovim servers in a shared runtime directory that another user could have planted: one that
   // anyone may write to, and a link to a socket elsewhere. telar sends neither an expression.
   void testForeignSocketIgnored() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory runtime{"/tmp/telar-editor-XXXXXX"};
     TemporaryDirectory elsewhere{"/tmp/telar-editor-XXXXXX"};
@@ -145,8 +145,7 @@ namespace {
 
   // vim lists its servers itself; the one whose process is the pane's editor opens the file.
   void testVimServerList() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-editor-XXXXXX"};
     const auto vim = text(directory.path()) + "/vim";

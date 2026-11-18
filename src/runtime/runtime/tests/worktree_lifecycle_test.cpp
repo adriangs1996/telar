@@ -52,6 +52,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
@@ -85,8 +86,7 @@ namespace {
   }
 
   void testDeferredClosure(bool worktree) {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

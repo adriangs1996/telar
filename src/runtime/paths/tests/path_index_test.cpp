@@ -5,6 +5,7 @@
 
 import std;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.platform.fs;
 import telar.runtime.paths.query_task;
@@ -65,8 +66,7 @@ namespace {
       telar::testing::skip("git is not installed");
     }
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory repository{"/tmp/telar-paths-XXXXXX"};
     const std::string root{repository.path()};
@@ -89,8 +89,7 @@ namespace {
   }
 
   void testUnreadableRoot() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-paths-XXXXXX"};
     const std::string locked = std::string{directory.path()} + "/locked";
@@ -124,8 +123,7 @@ namespace {
   }
 
   void testSkipsHeavyDirectories() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-paths-XXXXXX"};
     const std::string root{directory.path()};
@@ -143,8 +141,7 @@ namespace {
   }
 
   void testRankingContract() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-paths-XXXXXX"};
     const std::string root{directory.path()};
@@ -170,8 +167,7 @@ namespace {
   }
 
   void testSymlinksNotFollowed() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-paths-XXXXXX"};
     TemporaryDirectory outside{"/tmp/telar-paths-XXXXXX"};

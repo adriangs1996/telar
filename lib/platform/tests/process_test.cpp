@@ -15,6 +15,7 @@ import telar.base.text;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.vocabulary;
 import telar.platform.process;
 import telar.base.ds;
@@ -32,8 +33,7 @@ namespace {
   // of a pane, so an agent hook gated on TELAR_PANE_ID does not fire from it; a helper the
   // user configured keeps the environment it was given.
   void testAdministrationCommandDropsPaneIdentity() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     const ds::Array<std::string_view, 1> arguments{"/bin/sh"};
     const ds::Array<EnvironmentEntry, 6> environment{{
@@ -74,8 +74,7 @@ namespace {
       check(finished.load(), "a large input to cat did not finish");
     }};
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     std::string input(std::size_t{4} << 20, '\0');
 
@@ -108,8 +107,7 @@ namespace {
   // A pane starts as telar's own terminal: it does not inherit another runtime's socket or
   // Ghostty's resources, and it advertises 256 colors, truecolor and this program's version.
   void testTerminalCommandEnvironment() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     const ds::Array<std::string_view, 1> arguments{"/bin/sh"};
     const ds::Array<EnvironmentEntry, 5> environment{{
@@ -139,8 +137,7 @@ namespace {
   // A bare program name is looked up along the PATH the launch gives, relative entries against
   // the launch's cwd, and a miss is ENOENT rather than a program from the runtime's own PATH.
   void testBareProgramUsesLaunchPath() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory temporary{"/tmp/telar-launch-path-XXXXXX"};
     const std::string base{temporary.path()};

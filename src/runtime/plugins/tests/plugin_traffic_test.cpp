@@ -57,6 +57,7 @@ static_assert(true);
 #include <utility>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.plugins.run_worker;
 import telar.platform.fs;
 import telar.runtime.traffic.capture_analysis;
@@ -464,8 +465,7 @@ return {}
   // carries, and no replacement past a stream chunk: past either it gets an error frame, never
   // a reply with part of its decisions.
   void decisionsBounded() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/tlr-app-decisions.XXXXXX"};
     const auto entry = std::string{directory.path()} + "/main.lua";
@@ -522,8 +522,7 @@ return {}
   // An HTTP replacement holds as many header and trailer fields as a message carries: more is
   // an error frame, never a message with some of them.
   void httpReplaceBounded() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/tlr-app-replace.XXXXXX"};
     const auto entry = std::string{directory.path()} + "/main.lua";
@@ -581,8 +580,7 @@ return {}
   // A plugin's redirect request names at most as many targets and processes as the control
   // protocol carries, and a process list it gives is not empty: past that the call raises.
   void redirectBounds() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/tlr-app-redirect.XXXXXX"};
     const auto entry = std::string{directory.path()} + "/main.lua";
@@ -718,8 +716,7 @@ return {}
   // A package holds at most 32 registrations and 8 pending control requests. One more is
   // an error the plugin can catch, and the ones it already holds stay registered.
   void registrationLimits() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/tlr-app-limits.XXXXXX"};
     const auto entry = std::string{directory.path()} + "/main.lua";
@@ -755,8 +752,7 @@ return {}
   // never read as a default: a misspelt failure policy must not turn a fail-closed rule
   // into fail-open.
   void optionValidation() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/tlr-app-options.XXXXXX"};
     const auto entry = std::string{directory.path()} + "/main.lua";

@@ -9,6 +9,7 @@ import telar.base.text;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 import telar.testing;
+import telar.testing.test_memory;
 
 namespace {
 
@@ -74,8 +75,7 @@ namespace {
     create(inside);
     create(outside);
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
@@ -114,8 +114,7 @@ namespace {
       check(file.good());
     }
 
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
     const auto inside = query(terminal, "t=f,O=4,S=4,s=1,v=1", path.string());
@@ -133,8 +132,7 @@ namespace {
   // A query answers what the backend would do with the same upload, so a program learns
   // an image is unusable before it sends it.
   void validationReplies() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
     constexpr std::string_view pixel = "AAAAAA==";

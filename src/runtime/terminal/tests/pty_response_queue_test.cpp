@@ -7,6 +7,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.terminal.osc_scanner;
 import telar.base.ds;
 
@@ -304,8 +305,7 @@ namespace {
     std::atomic<bool> drained = false;
     std::atomic<std::size_t> yielded = 0;
     std::jthread worker{[&] {
-      SystemAllocator system;
-      MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
       ResponseOutbox outbox{memory, shared_queue};
 

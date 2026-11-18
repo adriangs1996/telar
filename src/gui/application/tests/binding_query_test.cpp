@@ -18,6 +18,7 @@ static_assert(true);
 #include <limits.h>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.json_fixture;
 import telar.gui.features.configuration;
 import telar.gui.application;
@@ -41,8 +42,7 @@ namespace {
   }
 
   void configuredOrderAndCallbackReferences() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(
@@ -111,8 +111,7 @@ namespace {
   }
 
   void notificationValuesAndDefinitionIndices() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(
@@ -141,8 +140,7 @@ namespace {
   }
 
   void byteArgumentsRemainQueryable() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = "return {api_version=2,client={keybindings={telar.bind({'x'},telar.action.command_tab{command={'echo',string.char(255)}})}}}",
@@ -156,8 +154,7 @@ namespace {
   }
 
   void commandLabelsFollowPosixPaths() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(
@@ -180,8 +177,7 @@ namespace {
   }
 
   void boundedRepliesAndSkippedActions() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(

@@ -12,6 +12,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.cli.hook;
 import telar.platform.paths;
 import telar.platform.process;
@@ -48,8 +49,7 @@ namespace {
   }
 
   bool rejected(AgentProvider provider, std::string_view input) {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
 
     try {
       Payload payload{adapter, provider, JsonValue::parse(input)};

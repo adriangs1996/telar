@@ -27,6 +27,7 @@ static_assert(true);
 #include <new>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.gui.tests.allocation_gate;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
@@ -187,8 +188,7 @@ namespace {
   }
 
   void aLargeBatchCanExpireItsEarlierRecentRows() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     const application::ConfigurationSourceText source{
         .source = R"(
@@ -223,8 +223,7 @@ namespace {
   }
 
   void commandRequestsPreserveLaunchAndRecoverFromDeliveryFailure() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     TestSession client{memory, transport};
@@ -325,8 +324,7 @@ namespace {
   }
 
   void discoveryBeforeConfirmationDoesNotDuplicateTheCreatedTab() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     TestSession client{memory, transport};
@@ -349,8 +347,7 @@ namespace {
   }
 
   void confirmationCannotReplaceALiveTab() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     TestSession client{memory, transport};
@@ -381,8 +378,7 @@ namespace {
   }
 
   void commandsShareOperationOwnershipWithRenameMoveAndClose() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     TestSession client{memory, transport};
@@ -416,8 +412,7 @@ namespace {
   }
 
   void draggingRetainsTheExplicitSourceAndCanonicalOperationOwner() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     TestSession client{memory, transport};
@@ -469,8 +464,7 @@ namespace {
     }};
 
     for (const auto& entry : cases) {
-      SystemAllocator system;
-      telar::MemoryAdapter adapter{system};
+      telar::testing::TestMemory adapter;
       telar::ConcurrentMemory& memory = adapter;
       Transport transport;
       TestSession client{memory, transport};

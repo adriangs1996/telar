@@ -14,6 +14,7 @@ import telar.config.core;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.graphics.pane_media;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.ghostty;
@@ -223,8 +224,7 @@ namespace {
   }
 
   void testGraphicsLimits() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     testImageEviction(memory);

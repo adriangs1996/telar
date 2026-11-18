@@ -18,6 +18,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.workspaces.git_probe;
 import telar.runtime.worktrees.git_probe;
 import telar.vocabulary;
@@ -75,8 +76,7 @@ namespace {
   }
 
   void testWorktreeProbe() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
 
     untrackedFiles(memory);
@@ -139,8 +139,7 @@ namespace {
   // A worktree another tool created registers with no base: the probe finds the main checkout's
   // branch and measures the distance from it, deletions included.
   void testLinkedWorktreeAgainstMain() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ds::Array<char, 64> directory{};
 

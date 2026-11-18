@@ -28,6 +28,7 @@ static_assert(true);
 #include <utility>
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.config.loader;
 import telar.config.client;
 import telar.config.runtime;
@@ -262,8 +263,7 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
 
   // True when loading `options` threw; `persist_session` tells whether the values kept their defaults.
   bool refused(const cli::ServerOptions& options, bool* defaults = nullptr) {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     config::RuntimeValues values{memory};
     const config::RuntimeValues untouched{memory};

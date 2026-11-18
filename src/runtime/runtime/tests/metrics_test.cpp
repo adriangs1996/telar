@@ -23,6 +23,7 @@ import std;
 import telar.base.memory.allocators;
 
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.platform.stream_read_buffer;
 import telar.runtime.runtime.client_control;
@@ -97,8 +98,7 @@ namespace {
   }
 
   void testDelivery() {
-    SystemAllocator system;
-    MemoryAdapter adapter{system};
+    telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};

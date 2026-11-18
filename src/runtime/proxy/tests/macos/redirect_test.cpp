@@ -121,6 +121,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.testing;
+import telar.testing.test_memory;
 import telar.runtime.http2.tests.http2_fixture;
 import telar.tls.tests.tls_fixture;
 import telar.runtime.redirect.socket_owners;
@@ -1366,8 +1367,7 @@ namespace {
 
   template <auto body>
   void plain() {
-    SystemAllocator system;
-    MemoryAdapter memory{system};
+    telar::testing::TestMemory memory;
 
     body(memory);
   }
