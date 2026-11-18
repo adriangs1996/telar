@@ -16,9 +16,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.grid;
 import telar.testing;
@@ -26,6 +23,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.ghostty;
+import telar.base.text.utf8;
 
 namespace {
 
@@ -36,6 +34,67 @@ namespace {
 
   std::span<const Byte> bytes(std::string_view text) {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
+  }
+
+  std::string drain(Terminal& terminal) {
+    std::string result;
+
+    while (!terminal.responses().empty()) {
+      const auto pending = terminal.responses();
+
+      result.append(reinterpret_cast<const char*>(pending.data()), pending.size());
+      terminal.consumeResponses(pending.size());
+    }
+
+    return result;
+  }
+
+  bool validUtf8(std::string_view text) {
+    try {
+      validateUtf8(text);
+      return true;
+    } catch (const EncodingError&) {
+      return false;
+    }
+  }
+
+  // A title the pane sets reaches clients as bounded UTF-8 text with no controls: DEL and C0
+  // bytes are dropped, and a long title is cut between code points.
+  void testTitleSanitized() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
+    std::string title{"a\x7f"
+                      "b\x01"};
+
+    for (std::size_t index = 0; index < 100; ++index) {
+      title.append("\xe7\x95\x8c");
+    }
+
+    terminal.feed(bytes("\x1b]2;" + title + "\x1b\\"));
+    terminal.refresh();
+    const auto shown = terminal.effects.title();
+
+    check(shown.starts_with("ab\xe7\x95\x8c") && shown.size() <= 256 && validUtf8(shown));
+    check(std::ranges::none_of(shown, [](char byte) {
+      return static_cast<Byte>(byte) < 0x20 || byte == 0x7f;
+    }));
+  }
+
+  // A title report answers into the program's input, so it carries no control, 8-bit ones
+  // (U+0080-U+009F) included: a title holding CSI cannot inject a sequence through it.
+  void testTitleReportStripsControls() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
+
+    terminal.controlPolicy().title_report = true;
+    terminal.feed(bytes("\x1b]2;a\xc2\x9b"
+                        "31m\x7f\xc2\x85"
+                        "b\xc2\xa0"
+                        "c\x1b\\\x1b[21t"));
+    check(drain(terminal) == "\x1b]la31mb\xc2\xa0"
+                             "c\x1b\\");
   }
 
   void testTerminalStorage() {
@@ -289,9 +348,123 @@ namespace {
     }
   }
 
+  // OSC 7 names the directory new panes and captured commands start in. A URI without a
+  // path, a relative path, an oversized path or a bad escape leaves the last one in place:
+  // `%00` in particular would hand C APIs a shorter, different directory.
+  void testCwdRejectsMalformedUri() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Terminal terminal{adapter, TerminalSize{80, 24, 0, 0}};
+    const std::string rejected[]{
+        "file://host",
+        "relative/directory",
+        "file://localhost/" + std::string(4100, 'a'),
+        "file://localhost/tmp/a%2",
+        "file://localhost/tmp/%zz",
+        "file://localhost/tmp/%1z",
+        "file://localhost/tmp/a%00b",
+    };
+
+    for (const auto& uri : rejected) {
+      terminal.feed(bytes("\x1b]7;file://localhost/tmp/start\x1b\\"));
+      check(terminal.effects.cwd() == "/tmp/start");
+      terminal.feed(bytes("\x1b]7;" + uri + "\x1b\\"));
+      telar::testing::expect(terminal.effects.cwd() == "/tmp/start", uri.substr(0, 40));
+    }
+  }
+
+  CellColor rgb(Byte red, Byte green, Byte blue) {
+    return CellColor{.kind = CellColor::Kind::rgb, .channels = {red, green, blue}};
+  }
+
+  // The frame a client draws carries each cell's colours as the pane set them: direct RGB,
+  // palette entries the pane redefined, the defaults it redefined, and the background of
+  // erased cells. Text past the Basic Multilingual Plane keeps all four bytes.
+  void testCellProjectionColors() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    constexpr TerminalSize size{10, 4, 0, 0};
+
+    {
+      Terminal terminal{adapter, size};
+
+      terminal.feed(bytes("\x1b[38;2;1;2;3;48;2;4;5;6mA\x1b[0m\r\n"
+                          "\x1b[48;5;9m\x1b[K\x1b[0m\r\n"
+                          "\x1b[48;2;7;8;9m\x1b[K\x1b[0m\r\n"
+                          "\xf0\x9f\x98\x80"));
+      terminal.refresh();
+      const auto& cells = terminal.screen.cells;
+
+      check(cells[0].style.foreground == rgb(1, 2, 3) && cells[0].style.background == rgb(4, 5, 6));
+      check(cells[10].style.background == CellColor{.kind = CellColor::Kind::indexed, .channels = {9, 0, 0}});
+      check(cells[19].style.background == CellColor{.kind = CellColor::Kind::indexed, .channels = {9, 0, 0}});
+      check(cells[20].style.background == rgb(7, 8, 9) && cells[29].style.background == rgb(7, 8, 9));
+      check(cells[30].width == CellWidth::wide && cells[30].length == 4);
+      check(std::ranges::equal(std::span{cells[30].text}.first(4), bytes("\xf0\x9f\x98\x80")));
+      check(cells[31].width == CellWidth::continuation);
+    }
+
+    {
+      Terminal terminal{adapter, TerminalSize{10, 4, 0, 0}};
+
+      // A wide character that does not fit the last column moves to the next row.
+      terminal.feed(bytes("xxxxxxxxx\xe7\x95\x8c"));
+      terminal.refresh();
+      const auto& cells = terminal.screen.cells;
+
+      check(cells[9].length == 1 && cells[9].text[0] == ' ');
+      check(cells[10].width == CellWidth::wide && cells[10].length == 3);
+      check(std::ranges::equal(std::span{cells[10].text}.first(3), bytes("\xe7\x95\x8c")));
+    }
+
+    {
+      Terminal terminal{adapter, size};
+
+      terminal.feed(bytes("\x1b]4;1;rgb:ff/00/00\x1b\\\x1b]10;rgb:11/22/33\x1b\\\x1b]11;rgb:44/55/66\x1b\\\x1b[31mR\x1b[0mD"));
+      terminal.refresh();
+      const auto& cells = terminal.screen.cells;
+
+      check(cells[0].style.foreground == rgb(0xff, 0, 0));
+      check(cells[1].style.foreground == rgb(0x11, 0x22, 0x33) && cells[1].style.background == rgb(0x44, 0x55, 0x66));
+    }
+
+    Terminal terminal{adapter, size};
+
+    terminal.feed(bytes("\x1b[?5hD"));
+    terminal.refresh();
+    check(terminal.screen.cells[0].style.foreground.kind == CellColor::Kind::rgb);
+    check(terminal.screen.cells[0].style.background.kind == CellColor::Kind::rgb);
+  }
+
+  // The default colours a pane changes apply to the whole screen, rows already drawn
+  // included: reverse video (DECSCNM, a visual bell) and OSC 10/11 recolour every cell
+  // that uses them, not only the rows the pane writes next.
+  void testDefaultColorsRepaint() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    constexpr TerminalSize size{10, 4, 0, 0};
+
+    for (const std::string_view change : {"\x1b[?5h", "\x1b]10;rgb:11/22/33\x1b\\\x1b]11;rgb:44/55/66\x1b\\"}) {
+      Terminal terminal{adapter, size};
+
+      terminal.feed(bytes("D\r\n"));
+      terminal.refresh();
+      check(terminal.screen.cells[0].style.foreground.kind == CellColor::Kind::default_color);
+      terminal.feed(bytes(change));
+      terminal.refresh();
+      telar::testing::expect(terminal.screen.cells[0].style.foreground.kind == CellColor::Kind::rgb, change.substr(2, 3));
+      telar::testing::expect(terminal.screen.cells[0].style.background.kind == CellColor::Kind::rgb, change.substr(2, 3));
+    }
+  }
+
   const telar::testing::Case case_terminal{"terminal.terminal", testTerminal};
   const telar::testing::Case case_terminal_storage{"terminal.terminal_storage", testTerminalStorage};
   const telar::testing::Case case_clear_at_prompt{"terminal.clear_at_prompt", testClearAtPrompt};
   const telar::testing::Case case_scrollback_origin{"terminal.scrollback_origin", testScrollbackOrigin};
+  const telar::testing::Case case_title_sanitized{"terminal.title_sanitized", testTitleSanitized};
+  const telar::testing::Case case_title_report_strips_controls{"terminal.title_report_strips_controls", testTitleReportStripsControls};
+  const telar::testing::Case case_cwd_rejects_malformed_uri{"terminal.cwd_rejects_malformed_uri", testCwdRejectsMalformedUri};
+  const telar::testing::Case case_cell_projection_colors{"terminal.cell_projection_colors", testCellProjectionColors};
+  const telar::testing::Case case_default_colors_repaint{"terminal.default_colors_repaint", testDefaultColorsRepaint};
 
 }

@@ -45,12 +45,9 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.execution_service;
-import telar.runtime.runtime.runtime;
 import telar.wire.clients;
 import telar.wire.execution;
 import telar.wire.runtime;
@@ -114,6 +111,21 @@ namespace {
 
     check(!repeated.created && repeated.worktree == added.worktree);
     check(worktrees.find(added.worktree)->title.view() == "Updated");
+
+    // A dispatch that registers the path again links it to its new brief and coordinator, and a
+    // request without a title keeps the one it has.
+    request.title = {};
+    request.brief = "Fix the parser";
+    request.coordinator = CoordinatorReference{.session_id = {9}, .pane_id = 4, .pane_generation = 2};
+    const auto dispatched = worktrees.registerEntry(request);
+    const auto* entry = worktrees.find(added.worktree);
+
+    check(!dispatched.created && dispatched.worktree == added.worktree);
+    check(entry->title.view() == "Updated" && entry->brief.view() == "Fix the parser");
+    check(entry->coordinator && entry->coordinator->pane_id == 4 && entry->coordinator->pane_generation == 2);
+    request.title = "Updated";
+    request.brief = {};
+    request.coordinator.reset();
     check(worktrees.containing("/tmp/worktree/src") != nullptr);
     check(worktrees.containing("/tmp/worktree-other") == nullptr);
     worktrees.remove(added.worktree);
@@ -213,6 +225,166 @@ namespace {
     testExecutions(memory);
   }
 
+  // The code a request was refused with, and its message, or nothing when it was accepted.
+  template <typename Service, typename Model>
+  std::optional<std::pair<FailureCode, std::string>> refusal(Service& executions, Model& model, ClientPeer& owner, const ExecutionRequest& request) {
+    try {
+      executions.request(model, owner.session(), request);
+      owner.receive<ExecutionReply>();
+      return std::nullopt;
+    } catch (const RequestError& error) {
+      return std::pair{error.code(), std::string{error.what()}};
+    }
+  }
+
+  // Runs the service's children until none is running.
+  template <typename Service, typename Model, typename Poller>
+  void settleExecutions(Service& executions, Model& model, Poller& poller) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    std::array<Event, Poller::event_capacity> ready{};
+
+    while (executions.refresh(model)) {
+      check(std::chrono::steady_clock::now() < deadline);
+      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+        executions.event(event);
+      }
+    }
+  }
+
+  void testExecutionCapacity() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    ExecutionService executions{memory, poller, limits};
+    ClientPeer owner{memory, model, clients, ClientRole::control};
+    const std::array<std::string_view, 1> done{"/usr/bin/true"};
+    const auto start = [&](std::uint64_t identity) {
+      return refusal(executions, model, owner, ExecutionRequest{.request_id = identity, .action = ExecutionAction::start, .execution_id = identity, .cwd = "/tmp", .arguments = done});
+    };
+
+    // Finished executions stay until their client forgets them, up to the service's capacity.
+    std::uint64_t identity = 1;
+
+    for (std::optional<std::pair<FailureCode, std::string>> refused; identity <= 64 && !(refused = start(identity)); ++identity) {
+    }
+
+    const auto retained = identity - 1;
+
+    settleExecutions(executions, model, poller);
+    const auto past = start(1000);
+
+    check(retained >= 1 && retained < 64 && past && past->first == FailureCode::resource_limit, "an execution past the capacity was started");
+
+    // Forgetting one makes room for the next.
+    check(!refusal(executions, model, owner, ExecutionRequest{.request_id = 2000, .action = ExecutionAction::forget, .execution_id = 1}));
+    check(!start(1001), "a forgotten execution kept its place");
+  }
+
+  void testAdministrationWorkspaceFromHome() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    ExecutionService executions{memory, poller, limits};
+    ClientPeer owner{memory, model, clients, ClientRole::control};
+    std::array<char, 64> home{};
+
+    std::strcpy(home.data(), "/tmp/telar-home-XXXXXX");
+    check(::mkdtemp(home.data()) != nullptr);
+    const auto canonical = std::filesystem::canonical(home.data()).string();
+
+    // An execution with no workspace and no directory runs in the user's home.
+    check(::setenv("HOME", canonical.c_str(), 1) == 0);
+    const std::array<std::string_view, 2> pwd{"/bin/pwd", "-P"};
+
+    check(!refusal(executions, model, owner, ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 1, .arguments = pwd}));
+    settleExecutions(executions, model, poller);
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 2, .action = ExecutionAction::status, .execution_id = 1});
+    const auto status = owner.receive<ExecutionReply>();
+
+    check(std::string_view{reinterpret_cast<const char*>(status.stdout_bytes.data()), status.stdout_bytes.size()} == canonical + "\n");
+    check(model.workspaces.size() == 0, "the workspace made for the execution outlived it");
+
+    // Without a home there is nowhere to run it.
+    check(::unsetenv("HOME") == 0);
+    const auto refused = refusal(executions, model, owner, ExecutionRequest{.request_id = 3, .action = ExecutionAction::start, .execution_id = 2, .arguments = pwd});
+
+    check(refused && refused->first == FailureCode::invalid_request);
+    std::filesystem::remove_all(canonical);
+  }
+
+  void testExecutionInputRefusals() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    ExecutionService executions{memory, poller, limits};
+    ClientPeer owner{memory, model, clients, ClientRole::control};
+    const std::array<std::string_view, 1> echo{"/bin/cat"};
+
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 81, .stdin_open = true, .cwd = "/tmp", .arguments = echo});
+    owner.receive<ExecutionReply>();
+    const auto input = [&](std::uint64_t request, std::uint64_t offset, std::string_view text) {
+      return refusal(executions, model, owner, ExecutionRequest{.request_id = request, .action = ExecutionAction::input, .execution_id = 81, .input_offset = offset, .bytes = {reinterpret_cast<const Byte*>(text.data()), text.size()}});
+    };
+
+    check(!input(2, 0, "ab"));
+    // Past what was written, overlapping and longer, and after the end of input: refused.
+    check(input(3, 5, "gap")->first == FailureCode::invalid_request);
+    check(input(4, 1, "xyz")->first == FailureCode::invalid_request);
+    check(!input(5, 2, "cd\n"));
+    check(!refusal(executions, model, owner, ExecutionRequest{.request_id = 6, .action = ExecutionAction::eof, .execution_id = 81}));
+    check(input(7, 5, "late")->first == FailureCode::invalid_request);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+    std::array<Event, decltype(poller)::event_capacity> ready{};
+
+    while (executions.refresh(model)) {
+      check(std::chrono::steady_clock::now() < deadline);
+      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+        executions.event(event);
+      }
+    }
+
+    // The child read exactly what was accepted, in order.
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 8, .action = ExecutionAction::status, .execution_id = 81});
+    const auto status = owner.receive<ExecutionReply>();
+
+    check(std::string_view{reinterpret_cast<const char*>(status.stdout_bytes.data()), status.stdout_bytes.size()} == "abcd\n");
+
+    // A child that does not read fills its queue; the CLI retries on exactly this refusal.
+    const std::array<std::string_view, 3> stalled{"/bin/sh", "-c", "exec sleep 30"};
+
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 9, .action = ExecutionAction::start, .execution_id = 82, .stdin_open = true, .cwd = "/tmp", .arguments = stalled});
+    owner.receive<ExecutionReply>();
+    const std::string chunk(4096, 'x');
+    std::uint64_t offset = 0;
+    std::optional<std::pair<FailureCode, std::string>> busy;
+
+    for (std::uint64_t request = 10; !busy && request < 10'000; ++request) {
+      busy = refusal(executions, model, owner, ExecutionRequest{.request_id = request, .action = ExecutionAction::input, .execution_id = 82, .input_offset = offset, .bytes = {reinterpret_cast<const Byte*>(chunk.data()), chunk.size()}});
+      if (!busy) {
+        offset += chunk.size();
+      }
+    }
+
+    check(busy && busy->second == "ExecutionBusy");
+    executions.request(model, owner.session(), ExecutionRequest{.request_id = 10'001, .action = ExecutionAction::cancel, .execution_id = 82});
+  }
+
   const telar::testing::Case case_control_services{"control_services.control_services", testControlServices};
+  const telar::testing::Case case_execution_input_refusals{"control_services.execution_input_refusals", testExecutionInputRefusals};
+  const telar::testing::Case case_execution_capacity{"control_services.execution_capacity", testExecutionCapacity};
+  const telar::testing::Case case_administration_workspace_from_home{"control_services.administration_workspace_from_home", testAdministrationWorkspaceFromHome};
 
 }

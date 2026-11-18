@@ -17,13 +17,9 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 
 import telar.git.checkout;
-import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
 import telar.runtime.runtime.client_control;
@@ -191,7 +187,38 @@ namespace {
     check(model.worktrees.containing("/managed/15") != nullptr);
   }
 
+  // A pane in a worktree's workspace that moves into another linked worktree registers it under
+  // the repository the first one came from, not under the worktree's own workspace.
+  void testSourceFollowsWorktreeWorkspace() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
+    constexpr std::uint64_t source = 3;
+    constexpr std::uint64_t worktree_workspace = 7;
+    const auto first = model.worktrees.registerEntry(RegisterWorktree{.source = source, .path = "/repository-first", .branch = "first"});
+
+    model.worktrees.find(first.worktree)->workspace = worktree_workspace;
+    model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = worktree_workspace}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    auto& pane = *model.panes.find(1);
+    GatedWorktreeDetector probe;
+    WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
+
+    pane.cwd = "/repository-second";
+    ++pane.cwd_revision;
+    probe.release();
+    service.tick(model);
+    collect(model, service);
+    const auto* second = model.worktrees.containing("/repository-second");
+
+    check(second != nullptr && second->id != first.worktree);
+    check(second->source == source, "the worktree was registered under the first worktree's workspace");
+  }
+
   const telar::testing::Case case_linked_files{"worktree_detection.linked_files", testLinkedFiles};
   const telar::testing::Case case_detection_lifecycle{"worktree_detection.detection_lifecycle", testDetectionLifecycle};
+  const telar::testing::Case case_source_follows_worktree_workspace{"worktree_detection.source_follows_worktree_workspace", testSourceFollowsWorktreeWorkspace};
 
 }

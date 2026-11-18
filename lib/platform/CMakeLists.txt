@@ -10,3 +10,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_libraries(telar-platform PUBLIC util)
 endif()
 target_compile_options(telar-platform PRIVATE ${TELAR_WARNINGS})
+
+if(BUILD_TESTING)
+  telar_add_tests(telar-platform-tests LABEL lib.platform LINK telar::platform)
+endif()

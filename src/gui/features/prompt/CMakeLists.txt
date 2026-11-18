@@ -9,3 +9,7 @@ telar_add_domain(gui features/prompt
     prompt-specs.cpp
     prompt-text.cpp
   DEPS foundation/core foundation/text foundation/keys)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(features/prompt)
+endif()

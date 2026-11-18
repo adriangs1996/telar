@@ -199,8 +199,8 @@ The root `.clangd-build.json` refreshes the same pinned configuration on save.
 Build the relevant test targets before running their CTest entries:
 
 ```sh
-tools/cpp build -- --target gui-core-test gui-config-test
-tools/cpp test -- -R '^gui-(core|config)$'
+tools/cpp build -- --target gui-application-tests
+tools/cpp test -- -R '^gui\.application\.(core|configuration)\.'
 ```
 
 Native integration tests use owned temporary runtimes and private clipboard/display

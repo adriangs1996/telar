@@ -36,7 +36,6 @@ static_assert(true);
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
-import telar.gui.features.machines;
 import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
 import telar.gui.features.components;
@@ -45,7 +44,6 @@ namespace {
 
   using namespace telar::gui;
 
-  using namespace telar::gui::features::machines;
 
   using namespace telar::gui::features::status_bar;
   using namespace telar::gui::qt;

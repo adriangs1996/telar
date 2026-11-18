@@ -38,6 +38,10 @@ import telar.platform.net;
 import telar.runtime.exchange_capture.producer;
 import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.traffic.control_protocol;
+import telar.runtime.http2.direction_observer;
+import telar.runtime.http2.frame_reader;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.http2.tests.http2_fixture;
 
 namespace {
 
@@ -144,6 +148,24 @@ namespace {
         check(std::ranges::equal(stream.output, expected));
         check(control.forwarded == stream.output);
       }
+    }
+
+    // A hook deletes a chunk by replacing it with nothing: none of it is written, the write reports
+    // it consumed, and the next chunk goes to the hook again.
+    {
+      Control control{memory};
+      FlowState gate;
+
+      gate.open(&control, 3, -1, -1, "fixture.test");
+      PartialStream stream;
+      const std::array<Byte, 3> original{'o', 0, 'd'};
+
+      check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked);
+      control.broker.decide(control.ticket, Verdict::replace, {});
+      const auto deleted = gate.write(traffic::Direction::outbound, stream, original);
+
+      check(deleted.state == StreamResult::State::data && deleted.bytes == original.size() && stream.output.empty());
+      check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked && control.requests == 2);
     }
 
     {
@@ -420,6 +442,89 @@ namespace {
     }
   }
 
+  // What the relay makes of a plain connection's first bytes: the origin receives them unchanged
+  // whatever they are, and only HTTP is captured as HTTP.
+  void protocolSniffing(ConcurrentMemory& memory) {
+    struct Sniffed {
+      std::string forwarded;
+      std::vector<CaptureProtocol> captured;
+    };
+
+    auto relayed = [&](const std::string& request, const std::string& response) {
+      ProxyCaptureLimits limits;
+
+      limits.enabled = true;
+      CaptureProducer captures{memory, limits};
+      ProxyCounters counters;
+      Sniffed sniffed;
+
+      {
+        ApplicationRelay relay{memory, ConnectionObservation{counters, &captures, 32}, "fixture.test"};
+        TestByteStream child, origin;
+
+        child.input = request;
+        child.read_limit = 1000;
+        origin.visible = 0;
+        for (std::size_t round = 0; round < 4096 && origin.output != child.input; ++round) {
+          relay.advance(child, origin, TunnelReadiness::available(), nullptr);
+        }
+
+        origin.input = response;
+        origin.visible = response.size();
+        for (std::size_t round = 0; round < 4096 && child.output != origin.input; ++round) {
+          relay.advance(child, origin, TunnelReadiness::available(), nullptr);
+        }
+
+        check(child.output == response);
+        sniffed.forwarded = origin.output;
+      }
+
+      while (const auto half = captures.tryReceive()) {
+        sniffed.captured.push_back((*half)->protocol);
+      }
+
+      return sniffed;
+    };
+
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 4> request_fields{{
+        {":method", "GET"},
+        {":scheme", "http"},
+        {":authority", "fixture.test"},
+        {":path", "/prior-knowledge"},
+    }};
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 1> response_fields{{{":status", "200"}}};
+    const auto http2 = std::string{Http2DirectionObserver<SystemAllocator>::client_preface} + http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, 5, 1, hpackFields(request_fields));
+    const auto prior = relayed(http2, http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, 5, 1, hpackFields(response_fields)));
+
+    check(prior.forwarded == http2 && !prior.captured.empty());
+    check(std::ranges::all_of(prior.captured, [](CaptureProtocol protocol) {
+      return protocol == CaptureProtocol::http2;
+    }));
+
+    const auto binary = std::string{"GET /\0binary", 13};
+    const auto opaque = relayed(binary, "reply");
+
+    check(opaque.forwarded == binary && opaque.captured.empty());
+
+    std::string unterminated = "GET /";
+
+    unterminated.resize(StreamPrefix::capacity, 'a');
+    unterminated += "\r\n\r\nafter the prefix";
+    const auto filled = relayed(unterminated, "reply");
+
+    check(filled.forwarded == unterminated && filled.captured.empty());
+  }
+
+  const telar::testing::Case case_protocol_sniffing{
+      "traffic_flow.protocol_sniffing",
+      [] {
+        SystemAllocator system;
+        MemoryAdapter adapter{system};
+        ConcurrentMemory& memory = adapter;
+
+        protocolSniffing(memory);
+      },
+  };
   const telar::testing::Case case_gates{
       "traffic_flow.gates",
       [] {

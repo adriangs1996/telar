@@ -54,12 +54,13 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 - DO NOT SCOPE CREEP. Keep tasks scoped to what the user ask for.
 
 - Tests: a test lives with what it checks, in `<process>/<domain>/tests/` or
-  `lib/<library>/tests/`, and only one that crosses domains goes in
+  `lib/<library>/tests/`, a GUI test of `src/gui/ui` in the `ui/` folder whose
+  headers it includes, and only one that crosses domains goes in
   `<process>/tests/`; `tools/check-cpp-modules.py` names the right folder. A C++
-  case registers with `telar.testing` (`lib/testing/testing.cppm`) and runs as its
-  own CTest test, `<label>.<suite>.<case>`: select by label
-  (`ctest -L '^runtime\.terminal$'`), or one case with `-R`. Probes and
-  benchmarks are tools, in `<process>/tools/`.
+  case registers with `telar.testing` (`lib/testing/testing.cppm`; a QtTest slot
+  through `src/gui/tests/qt_case.hpp`) and runs as its own CTest test,
+  `<label>.<suite>.<case>`: select by label (`ctest -L '^runtime\.terminal$'`), or
+  one case with `-R`. Probes and benchmarks are tools, in `<process>/tools/`.
 
 - Code layout: before writing or editing C++, read `docs/code-style.md`. It covers
   line breaks, trailing commas and blank lines between logical blocks.

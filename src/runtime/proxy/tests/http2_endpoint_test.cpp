@@ -15,7 +15,6 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
-import telar.platform.primitives;
 import telar.testing;
 import telar.testing.test_byte_stream;
 import telar.runtime.proxy.runtime;
@@ -122,8 +121,11 @@ namespace {
 
     class Peer {
     public:
+      using Fields = std::vector<std::pair<std::string, std::string>>;
+
       struct Stream {
         std::vector<std::pair<std::string, std::string>> headers;
+        Fields trailers;
         std::string body, outgoing;
         std::size_t sent = 0;
         bool complete = false, responded = false;
@@ -173,6 +175,33 @@ namespace {
         return static_cast<std::int32_t>(id);
       }
 
+      // A request with exactly `fields`, as a client that sends what it likes would.
+      auto request(const Fields& fields, std::string body) -> std::int32_t {
+        const auto id = nghttp2_session_get_next_stream_id(session_);
+        auto& stream = streams[id];
+
+        stream.outgoing = std::move(body);
+        const auto native = nativeFields(fields);
+        const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
+
+        check(nghttp2_submit_request2(session_, nullptr, native.data(), native.size(), &provider, nullptr) == static_cast<std::int32_t>(id));
+        return static_cast<std::int32_t>(id);
+      }
+
+      // A response with exactly `fields`, then `body` and, when given, `trailers`.
+      void respond(std::int32_t id, const Fields& fields, std::string body, Fields trailers = {}) {
+        auto& stream = streams.at(id);
+
+        stream.outgoing = std::move(body);
+        stream.trailers = std::move(trailers);
+        stream.sent = 0;
+        stream.responded = true;
+        const auto native = nativeFields(fields);
+        const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
+
+        check(nghttp2_submit_response2(session_, id, native.data(), native.size(), &provider) == 0);
+      }
+
       void respond(std::int32_t id, std::string body) {
         auto& stream = streams.at(id);
 
@@ -189,10 +218,17 @@ namespace {
 
       void echo() {
         for (auto& [id, stream] : streams) {
-          if (stream.complete && !stream.responded && !stream.reset) {
+          if (echoing && stream.complete && !stream.responded && !stream.reset) {
             respond(id, std::string{"origin\0", 7} + stream.body);
           }
         }
+      }
+
+      // An informational response, which precedes the final one on the same stream.
+      void inform(std::int32_t id, const Fields& fields) {
+        const auto native = nativeFields(fields);
+
+        check(nghttp2_submit_headers(session_, NGHTTP2_FLAG_NONE, id, nullptr, native.data(), native.size(), nullptr) >= 0);
       }
 
       void ping() {
@@ -237,8 +273,19 @@ namespace {
 
       std::map<std::int32_t, Stream> streams;
       bool pong = false;
+      bool echoing = true;
 
     private:
+      static auto nativeFields(const Fields& fields) -> std::vector<nghttp2_nv> {
+        std::vector<nghttp2_nv> native;
+
+        for (const auto& [name, value] : fields) {
+          native.push_back({reinterpret_cast<std::uint8_t*>(const_cast<char*>(name.data())), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), name.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
+        }
+
+        return native;
+      }
+
       template <std::size_t Size>
       static auto nativeFields(const std::array<std::pair<std::string_view, std::string_view>, Size>& fields) -> std::array<nghttp2_nv, Size> {
         std::array<nghttp2_nv, Size> native;
@@ -252,7 +299,7 @@ namespace {
         return native;
       }
 
-      static nghttp2_ssize read(nghttp2_session*, std::int32_t, std::uint8_t* output, std::size_t capacity, std::uint32_t* flags, nghttp2_data_source* source, void*) noexcept {
+      static nghttp2_ssize read(nghttp2_session* session, std::int32_t id, std::uint8_t* output, std::size_t capacity, std::uint32_t* flags, nghttp2_data_source* source, void*) noexcept {
         auto& stream = *static_cast<Stream*>(source->ptr);
         const auto bytes = std::string_view{stream.outgoing}.substr(stream.sent, capacity);
 
@@ -260,6 +307,12 @@ namespace {
         stream.sent += bytes.size();
         if (stream.sent == stream.outgoing.size()) {
           *flags |= NGHTTP2_DATA_FLAG_EOF;
+          if (!stream.trailers.empty()) {
+            const auto native = nativeFields(stream.trailers);
+
+            *flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+            check(nghttp2_submit_trailer(session, id, native.data(), native.size()) == 0);
+          }
         }
 
         return static_cast<nghttp2_ssize>(bytes.size());
@@ -522,8 +575,325 @@ namespace {
         check(original_head ? fixture.client.streams[stream].body.empty() : fixture.client.streams[stream].body == std::string{"response\0", 9});
       }
     }
+
+    using Fields = Peer::Fields;
+
+    // The origin's stream for the request whose path ends with `suffix`, once the request is complete.
+    auto originStream(Fixture& fixture, std::string_view suffix) -> std::optional<std::int32_t> {
+      for (const auto& [id, stream] : fixture.server.streams) {
+        if (stream.complete && stream.field(":path").ends_with(suffix)) {
+          return id;
+        }
+      }
+
+      return std::nullopt;
+    }
+
+    bool settled(const Peer::Stream& stream) {
+      return stream.complete || stream.reset != 0;
+    }
+
+    bool reported(const Owner& owner, std::string_view reason) {
+      return !owner.errors.empty() && std::ranges::all_of(owner.errors, [&](const std::string& error) {
+        return error == reason;
+      });
+    }
+
+    // An intercepted stream whose body cannot be held whole, a declared length past the buffer, an
+    // event stream or a tunnel, follows the policy: closed resets it before either peer sees it,
+    // open forwards it unchanged; both report why.
+    void unavailablePolicy() {
+      for (const bool closed : {false, true}) {
+        {
+          Fixture fixture{closed};
+          const std::string body(2 * HttpMessageLimits::body_bytes, 'b');
+          const auto stream = fixture.client.request(Fields{{":method", "POST"}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", "/large"}, {"content-length", std::to_string(body.size())}}, body);
+
+          fixture.until([&] {
+            fixture.automatic(0, false);
+            return settled(fixture.client.streams[stream]);
+          });
+
+          check(reported(fixture.owner, "http2_body_limit"));
+          if (closed) {
+            check(fixture.client.streams[stream].reset != 0 && fixture.server.streams.empty());
+          } else {
+            check(fixture.client.streams[stream].complete && fixture.client.streams[stream].body == std::string{"origin\0", 7} + body);
+          }
+        }
+
+        {
+          Fixture fixture{closed};
+
+          fixture.server.echoing = false;
+          const auto stream = fixture.client.request("/events", {}, "GET");
+
+          fixture.until([&] {
+            fixture.automatic(0, false);
+            return originStream(fixture, "/events").has_value();
+          });
+
+          fixture.server.respond(*originStream(fixture, "/events"), Fields{{":status", "200"}, {"content-type", "text/event-stream"}}, "data: x\n\n");
+          fixture.until([&] {
+            fixture.automatic(0, false);
+            return settled(fixture.client.streams[stream]);
+          });
+
+          const auto& received = fixture.client.streams[stream];
+
+          check(fixture.owner.errors == std::vector<std::string>{"http2_streaming_body"});
+          if (closed) {
+            check(received.reset != 0 && received.field(":status").empty() && received.body.empty());
+          } else {
+            check(received.complete && received.field("content-type") == "text/event-stream" && received.body == "data: x\n\n");
+          }
+        }
+
+        {
+          Fixture fixture{closed};
+
+          fixture.server.echoing = false;
+          const auto stream = fixture.client.request(Fields{{":method", "CONNECT"}, {":authority", "fixture.test:443"}}, "tunnel");
+
+          fixture.until([&] {
+            return closed ? fixture.client.streams[stream].reset != 0 : !fixture.server.streams.empty() && fixture.server.streams.begin()->second.complete;
+          });
+
+          check(fixture.owner.errors.front() == "http2_tunnel_body");
+          if (closed) {
+            check(fixture.server.streams.empty());
+          } else {
+            const auto& tunneled = fixture.server.streams.begin()->second;
+
+            check(tunneled.field(":method") == "CONNECT" && tunneled.body == "tunnel");
+          }
+        }
+      }
+    }
+
+    // nghttp2 accepts a comma in an authority, which names two hosts to a reader of the Host field,
+    // and a status of 600; the endpoint refuses both, for that stream alone.
+    void invalidMessages() {
+      Fixture fixture;
+      const auto listed = fixture.client.request(Fields{{":method", "GET"}, {":scheme", "https"}, {":authority", "fixture.test,other.test"}, {":path", "/listed"}}, {});
+
+      fixture.until([&] {
+        return fixture.client.streams[listed].reset != 0;
+      });
+
+      check(fixture.server.streams.empty() && fixture.owner.errors == std::vector<std::string>{"http2_message_failed"});
+      fixture.server.echoing = false;
+      const auto status = fixture.client.request("/status", {}, "GET");
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return originStream(fixture, "/status").has_value();
+      });
+
+      fixture.server.respond(*originStream(fixture, "/status"), Fields{{":status", "600"}}, "out of range");
+      fixture.until([&] {
+        return settled(fixture.client.streams[status]);
+      });
+
+      check(fixture.client.streams[status].reset != 0 && fixture.client.streams[status].field(":status").empty());
+      check(fixture.owner.errors == std::vector<std::string>{"http2_message_failed", "http2_invalid_headers"});
+      fixture.server.echoing = true;
+      const auto next = fixture.client.request("/next", "next");
+
+      fixture.until([&] {
+        fixture.automatic();
+        return fixture.client.streams[next].complete;
+      });
+
+      check(!fixture.connection.finished());
+    }
+
+    // A plugin's replacement that does not decode resets its own stream; the connection and its
+    // other streams carry on.
+    void invalidDecision() {
+      Fixture fixture;
+      const auto broken = fixture.client.request("/broken", "body");
+
+      fixture.until([&] {
+        return !fixture.owner.requests.empty();
+      });
+
+      const std::array<Byte, 3> garbage{1, 2, 3};
+
+      fixture.owner.broker.decide(fixture.owner.requests.front().ticket, Verdict::replace, garbage);
+      fixture.owner.requests.clear();
+      fixture.until([&] {
+        return settled(fixture.client.streams[broken]);
+      });
+
+      check(fixture.client.streams[broken].reset != 0 && fixture.server.streams.empty());
+      check(fixture.owner.errors == std::vector<std::string>{"http2_invalid_decision"});
+      const auto next = fixture.client.request("/next", "next");
+
+      fixture.until([&] {
+        fixture.automatic();
+        return fixture.client.streams[next].complete;
+      });
+
+      check(!fixture.connection.finished() && fixture.server.streams.size() == 1);
+    }
+
+    // gRPC carries its status in response trailers: an intercepted response keeps them.
+    void responseTrailers() {
+      Fixture fixture;
+
+      fixture.server.echoing = false;
+      const auto stream = fixture.client.request("/grpc", "call");
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return originStream(fixture, "/grpc").has_value();
+      });
+
+      fixture.server.respond(*originStream(fixture, "/grpc"), Fields{{":status", "200"}, {"content-type", "application/grpc"}}, "reply", Fields{{"grpc-status", "0"}, {"grpc-message", "done"}});
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return settled(fixture.client.streams[stream]);
+      });
+
+      const auto& received = fixture.client.streams[stream];
+
+      check(received.complete && received.body == "reply" && fixture.owner.errors.empty());
+      check(received.field("grpc-status") == "0" && received.field("grpc-message") == "done");
+    }
+
+    // The `:status` of every response block a stream received, in order.
+    auto statuses(const Peer::Stream& stream) -> std::vector<std::string> {
+      std::vector<std::string> result;
+
+      for (const auto& [name, value] : stream.headers) {
+        if (name == ":status") {
+          result.push_back(value);
+        }
+      }
+
+      return result;
+    }
+
+    // A child that opens with something other than the HTTP/2 preface fails the connection, before
+    // any request reaches the origin.
+    void badClientMagic() {
+      Fixture fixture;
+
+      fixture.child.input = "PRI * HTTP/2.0\r\n\r\nXX\r\n\r\n";
+      fixture.until([&] {
+        return fixture.connection.finished();
+      });
+
+      check(fixture.owner.errors == std::vector<std::string>{"http2_connection_failed"});
+      check(fixture.server.streams.empty() && fixture.owner.requests.empty());
+    }
+
+    // Early hints reach the client ahead of the final response, which still follows; an origin that
+    // keeps sending informational responses has the stream reset.
+    void informationalResponses() {
+      {
+        Fixture fixture;
+
+        fixture.server.echoing = false;
+        const auto stream = fixture.client.request("/hints", {}, "GET");
+
+        fixture.until([&] {
+          fixture.automatic(0, false);
+          return originStream(fixture, "/hints").has_value();
+        });
+
+        const auto origin = *originStream(fixture, "/hints");
+
+        fixture.server.inform(origin, Fields{{":status", "103"}, {"link", "</style.css>; rel=preload"}});
+        fixture.server.respond(origin, Fields{{":status", "200"}}, "final");
+        fixture.until([&] {
+          fixture.automatic(0, false);
+          return settled(fixture.client.streams[stream]);
+        });
+
+        const auto& received = fixture.client.streams[stream];
+
+        check(received.complete && statuses(received) == std::vector<std::string>{"103", "200"});
+        check(received.field("link") == "</style.css>; rel=preload" && received.body == "final" && fixture.owner.errors.empty());
+      }
+
+      {
+        Fixture fixture;
+
+        fixture.server.echoing = false;
+        const auto stream = fixture.client.request("/chatty", {}, "GET");
+
+        fixture.until([&] {
+          fixture.automatic(0, false);
+          return originStream(fixture, "/chatty").has_value();
+        });
+
+        const auto origin = *originStream(fixture, "/chatty");
+
+        for (unsigned count = 0; count < 9; ++count) {
+          fixture.server.inform(origin, Fields{{":status", "103"}});
+        }
+
+        fixture.until([&] {
+          return settled(fixture.client.streams[stream]);
+        });
+
+        check(fixture.client.streams[stream].reset != 0 && fixture.owner.errors == std::vector<std::string>{"http2_informational_limit"});
+      }
+    }
+
+    // An intercepted request that expects 100-continue gets it before the hook decides, and the
+    // origin receives the request without the expectation.
+    void expectContinue() {
+      Fixture fixture;
+      const auto stream = fixture.client.request(Fields{{":method", "POST"}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", "/expect"}, {"expect", "100-continue"}}, "body");
+
+      fixture.until([&] {
+        return !fixture.owner.requests.empty() && fixture.client.streams[stream].field(":status") == "100";
+      });
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return fixture.client.streams[stream].complete;
+      });
+
+      const auto origin = originStream(fixture, "/expect");
+
+      check(origin && fixture.server.streams[*origin].field("expect").empty());
+      check(statuses(fixture.client.streams[stream]) == std::vector<std::string>{"100", "200"});
+    }
+
+    // The origin closing with a request still unanswered resets that stream, so the client does not
+    // wait on it forever.
+    void originEofInflight() {
+      Fixture fixture;
+
+      fixture.server.echoing = false;
+      const auto stream = fixture.client.request("/pending", "body");
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return originStream(fixture, "/pending").has_value();
+      });
+
+      fixture.origin.ended = true;
+      fixture.until([&] {
+        return settled(fixture.client.streams[stream]);
+      });
+
+      check(fixture.client.streams[stream].reset != 0 && !fixture.client.streams[stream].complete);
+    }
   }
 
+  const telar::testing::Case case_unavailable_policy{"http2_endpoint.unavailable_policy", unavailablePolicy};
+  const telar::testing::Case case_invalid_messages{"http2_endpoint.invalid_messages", invalidMessages};
+  const telar::testing::Case case_invalid_decision{"http2_endpoint.invalid_decision", invalidDecision};
+  const telar::testing::Case case_response_trailers{"http2_endpoint.response_trailers", responseTrailers};
+  const telar::testing::Case case_bad_client_magic{"http2_endpoint.bad_client_magic", badClientMagic};
+  const telar::testing::Case case_informational_responses{"http2_endpoint.informational_responses", informationalResponses};
+  const telar::testing::Case case_expect_continue{"http2_endpoint.expect_continue", expectContinue};
+  const telar::testing::Case case_origin_eof_inflight{"http2_endpoint.origin_eof_inflight", originEofInflight};
   const telar::testing::Case case_multiplexed{
       "http2_endpoint.multiplexed",
       [] {

@@ -1,0 +1,452 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "foundation/core/memory.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_wire/protocol/pane_io.hpp"
+#include "telar_wire/protocol/runtime.hpp"
+#include "telar_wire/serializers/telar_messages.hpp"
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <utility>
+#include <variant>
+
+import telar.testing;
+import telar.gui.application.tests.session_fixture;
+import telar.gui.features.workbench;
+import telar.gui.application;
+import telar.wire.layout;
+import telar.wire.runtime;
+import telar.gui.foundation.model;
+
+namespace {
+
+  using telar::testing::check;
+  using namespace telar;
+  using namespace telar::gui;
+  using namespace telar::gui::features::workbench;
+  using namespace telar::gui::application::tests::session_fixture;
+
+  constexpr WorkspaceLocation first_workspace{.kind = WorkspaceLocation::Kind::workspace, .id = 1};
+  constexpr WorkspaceLocation second_workspace{.kind = WorkspaceLocation::Kind::workspace, .id = 2};
+  constexpr WorkspaceLocation project_workspace{.kind = WorkspaceLocation::Kind::workspace, .id = 9};
+  constexpr WorkspaceLocation unknown_workspace{.kind = WorkspaceLocation::Kind::workspace, .id = 78};
+  constexpr std::uint64_t first_worktree = 31;
+  constexpr std::uint64_t second_worktree = 32;
+  constexpr std::array entries{
+      WorkspaceListEntry{.workspace = first_workspace.id, .name = "Current", .path = "/current"},
+      WorkspaceListEntry{.workspace = second_workspace.id, .name = "Other", .path = "/other"},
+      WorkspaceListEntry{.workspace = project_workspace.id, .name = "Project", .path = "/project"},
+  };
+  constexpr std::array worktrees{
+      WorktreeListEntry{.worktree = first_worktree, .source = project_workspace.id, .workspace = first_workspace.id, .path = "/current", .branch = "current"},
+      WorktreeListEntry{.worktree = second_worktree, .source = project_workspace.id, .workspace = second_workspace.id, .path = "/other", .branch = "other"},
+  };
+
+  template <typename Client>
+  void finishWorkspaceArrival(Client& client, Transport& transport, TabLocation location, std::uint64_t pane_id) {
+    const auto opening = transport.last<OpenPane>();
+
+    deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
+    const std::array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+
+    deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
+    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+
+    deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "Visited", .tabs = tabs});
+    check(!client.requestsPending(), "The fixture must finish both canonical arrival requests");
+  }
+
+  void aWorkspaceReturnRestoresItsTreeAfterCanonicalMembership() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    const auto source = client.activeTab()->location;
+
+    check(application::workbench::split(client, ClientLayoutAxis::vertical), "The fixture must own a non-default split tree");
+    const auto split = transport.last<CreatePane>();
+    constexpr std::uint64_t remembered_pane = 3;
+
+    deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = remembered_pane, .location = source, .created = true, .pane_generation = 1});
+    application::workbench::toggleFullscreen(client);
+    application::workbench::selectWorkspace(client, second_workspace);
+    finishWorkspaceArrival(client, transport, {.workspace = second_workspace, .tab_id = second_workspace.id}, second_workspace.id);
+    application::workbench::selectWorkspace(client, first_workspace);
+    const auto returning = transport.last<OpenPane>();
+
+    check(returning.target.kind == PaneTarget::Kind::pane && returning.target.id == remembered_pane && !returning.launch, "Returning must reopen the remembered focus instead of selecting the runtime's default tab");
+    deliver(client, PaneOpened{.request_id = returning.request_id, .pane_id = remembered_pane, .location = source, .pane_generation = 1});
+    check(client.activeTab()->layout.nodes().size() == 1 && !client.activeTab()->fullscreen, "Canonical arrival must stage a single provisional root before restoring remembered presentation");
+    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = remembered_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+
+    deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = source, .panes = panes});
+    const auto* axis = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
+
+    check(axis != nullptr && axis->axis == ClientLayoutAxis::vertical && client.activeTab()->fullscreen && client.activeTab()->focused_pane == remembered_pane, "Canonical membership must restore the remembered split, fullscreen and focused pane together");
+  }
+
+  void aMissingBookmarkRetriesItsWorkspaceOnlyOnce() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    application::workbench::selectWorkspace(client, second_workspace);
+    finishWorkspaceArrival(client, transport, {.workspace = second_workspace, .tab_id = second_workspace.id}, second_workspace.id);
+    application::workbench::selectWorkspace(client, first_workspace);
+    const auto returning = transport.last<OpenPane>();
+
+    check(returning.target.kind == PaneTarget::Kind::pane && returning.target.id == 1, "The first return must use its remembered pane");
+    deliver(client, RequestFailed{.request_id = returning.request_id, .code = FailureCode::pane_not_found, .message = "The pane is gone"});
+    const auto fallback = transport.last<OpenPane>();
+
+    check(fallback.request_id != returning.request_id && fallback.target.kind == PaneTarget::Kind::workspace && fallback.target.id == first_workspace.id && !fallback.launch, "A missing remembered pane must fall back to that exact workspace once");
+    const auto openings = transport.count(ClientTag::open_pane);
+
+    deliver(client, RequestFailed{.request_id = fallback.request_id, .code = FailureCode::pane_not_found, .message = "No fallback pane"});
+    check(!client.requestsPending() && transport.count(ClientTag::open_pane) == openings, "Failure of the fallback must not repeat an open indefinitely");
+  }
+
+  void canonicalArrivalUsesTheSavedTreeOfItsActualTab() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    client.connected(1);
+    const TabLocation remembered{.workspace = first_workspace, .tab_id = 1};
+    const TabLocation arrived{.workspace = first_workspace, .tab_id = 2};
+    constexpr std::uint64_t remembered_pane = 3;
+    constexpr std::uint64_t arrived_pane = 11;
+    constexpr std::uint64_t arrived_focus = 12;
+    const std::array<ClientLayoutNode, 1> remembered_nodes{ClientLayoutPane{remembered_pane}};
+    const std::array<ClientLayoutNode, 3> arrived_nodes{ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = PaneLayout::ratio_half}, ClientLayoutPane{arrived_pane}, ClientLayoutPane{arrived_focus}};
+    const std::array layouts{
+        ClientTabLayout{.location = remembered, .focused_pane = remembered_pane, .fullscreen = true, .workspace_active = true, .nodes = remembered_nodes},
+        ClientTabLayout{.location = arrived, .focused_pane = arrived_focus, .nodes = arrived_nodes},
+    };
+
+    deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_width = decltype(client)::default_sidebar_columns, .active_tab = remembered, .tabs = layouts});
+    const auto opening = transport.last<OpenPane>();
+
+    check(opening.target.id == remembered_pane, "Bootstrap must first request its remembered pane");
+    deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = arrived_pane, .location = arrived, .pane_generation = 1});
+    check(client.activeTab()->layout.nodes().size() == 1 && !client.activeTab()->fullscreen, "A different canonical arrival must still stage a provisional root");
+    const std::array panes{PaneDescriptor{.pane_id = arrived_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = arrived_focus, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+
+    deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = arrived, .panes = panes});
+    const auto* axis = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
+
+    check(axis != nullptr && axis->axis == ClientLayoutAxis::vertical && client.activeTab()->focused_pane == arrived_focus && !client.activeTab()->fullscreen, "The actual tab's saved tree and focus must win over another tab's workspace bookmark");
+  }
+
+  void aNewConnectionForgetsPreviousNavigationAndSavedTrees() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    check(application::workbench::split(client, ClientLayoutAxis::vertical), "The previous connection must own a non-default remembered tree");
+    const auto split = transport.last<CreatePane>();
+    constexpr std::uint64_t old_focus = 3;
+
+    deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = old_focus, .location = client.activeTab()->location, .created = true, .pane_generation = 1});
+    application::workbench::toggleFullscreen(client);
+    application::workbench::selectWorkspace(client, second_workspace);
+    finishWorkspaceArrival(client, transport, {.workspace = second_workspace, .tab_id = second_workspace.id}, second_workspace.id);
+    client.disconnected();
+    client.connected(2);
+    const auto messages = transport.sent.size();
+
+    check(!application::workbench::selectWorkspace(client, first_workspace) && transport.sent.size() == messages, "A new connection must wait for a fresh workspace replica");
+    const TabLocation current{.workspace = second_workspace, .tab_id = second_workspace.id};
+    const std::array<ClientLayoutNode, 1> current_nodes{ClientLayoutPane{second_workspace.id}};
+    const std::array current_layouts{ClientTabLayout{.location = current, .focused_pane = second_workspace.id, .workspace_active = true, .nodes = current_nodes}};
+
+    deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_width = decltype(client)::default_sidebar_columns, .active_tab = current, .tabs = current_layouts});
+    finishWorkspaceArrival(client, transport, current, second_workspace.id);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    check(application::workbench::selectWorkspace(client, first_workspace), "Fresh canonical metadata must admit navigation again");
+    const auto opening = transport.last<OpenPane>();
+
+    check(opening.target.kind == PaneTarget::Kind::workspace && opening.target.id == first_workspace.id, "A new connection must not reopen the previous connection's remembered pane");
+    const TabLocation arrived{.workspace = first_workspace, .tab_id = first_workspace.id};
+
+    deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = 1, .location = arrived, .pane_generation = 2});
+    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 2}, PaneDescriptor{.pane_id = old_focus, .lifecycle = PaneLifecycle::running, .pane_generation = 2}};
+
+    deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = arrived, .panes = panes});
+    const auto* axis = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
+
+    check(axis != nullptr && axis->axis == ClientLayoutAxis::horizontal && !client.activeTab()->fullscreen && client.activeTab()->focused_pane == 1, "Reused tab/pane IDs must not resurrect an old connection's saved tree, fullscreen or focus");
+  }
+
+  void lateMetadataCannotActivateTheDepartedWorkspace() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    const auto source = client.activeTab()->location;
+
+    application::workbench::selectWorkspace(client, second_workspace);
+    const auto openings = transport.count(ClientTag::open_pane);
+    const std::array tabs{TabDescriptor{.tab_id = source.tab_id, .pane_count = 1}};
+
+    deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = source.workspace, .name = "Late source", .tabs = tabs});
+    check(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == openings, "Late source metadata must not replace an outstanding canonical workspace arrival");
+  }
+
+  void linkedCheckoutsDoNotConsumeProjectPositions() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
+    const auto messages = transport.sent.size();
+    constexpr std::size_t checkout_position = 2;
+
+    application::workbench::selectWorkspaceAt(client, checkout_position);
+    check(transport.sent.size() == messages, "Project-position shortcuts must exclude linked checkout workspaces");
+  }
+
+  TabLocation historyLocation(std::uint64_t identity) {
+    return {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = identity}, .tab_id = identity};
+  }
+
+  NavigationHistory::Layout completeLayout(std::uint64_t first) {
+    PaneLayout layout;
+
+    for (std::size_t index = 0; index < PaneLayout::maximum_panes; ++index) {
+      check(layout.add(first + index, ClientLayoutAxis::vertical, first), "The fixture must build a full valid tree");
+    }
+
+    return NavigationHistory::Layout{layout.nodes()};
+  }
+
+  void boundedHistoryUpdatesAndReusesFreeSlots() {
+    NavigationHistory history;
+
+    for (std::size_t index = 0; index < NavigationHistory::capacity; ++index) {
+      const auto location = historyLocation(index + 1);
+
+      history.remember({.location = location, .pane_id = location.tab_id});
+    }
+
+    const auto overflow = historyLocation(NavigationHistory::capacity + 1);
+
+    history.remember({.location = overflow, .pane_id = overflow.tab_id});
+    check(history.find(overflow.workspace) == nullptr, "A full bookmark table must preserve its admitted workspaces");
+    constexpr std::uint64_t changed_pane = 900;
+
+    history.remember({.location = historyLocation(1), .pane_id = changed_pane});
+    check(history.find(first_workspace)->pane_id == changed_pane, "Updating an existing bookmark must work at capacity");
+    history.forget(second_workspace);
+    history.remember({.location = overflow, .pane_id = overflow.tab_id});
+    check(history.find(overflow.workspace) != nullptr && history.find(second_workspace) == nullptr, "Forgetting must release one bounded bookmark slot");
+    history.clear();
+    check(history.find(first_workspace) == nullptr && history.find(overflow.workspace) == nullptr, "A new session must discard all admitted bookmarks");
+  }
+
+  void savedLayoutOverflowIsAtomicAndEvictsTheOldestTree() {
+    SavedLayouts layouts;
+    constexpr std::uint64_t first_identity = 100;
+    const auto tree = completeLayout(first_identity);
+    constexpr auto rows_that_fit = SavedLayouts::node_capacity / PaneLayout::maximum_nodes;
+
+    for (std::size_t index = 0; index < rows_that_fit; ++index) {
+      check(layouts.remember({.location = historyLocation(index + 1), .pane_id = first_identity, .focused_pane = first_identity, .nodes = tree.view()}), "The node pool must admit complete valid trees while space remains");
+    }
+
+    const auto before_nodes = layouts.nodeCount();
+    const auto rejected = historyLocation(rows_that_fit + 1);
+
+    check(!layouts.remember({.location = rejected, .pane_id = first_identity, .focused_pane = first_identity, .nodes = tree.view()}), "Node exhaustion must reject an atomic saved-layout insertion");
+    check(layouts.size() == rows_that_fit && layouts.nodeCount() == before_nodes && layouts.find(historyLocation(1)).has_value(), "A refused insertion must preserve every admitted row and node");
+    layouts.retain({.location = rejected, .pane_id = first_identity, .focused_pane = first_identity, .nodes = tree.view()});
+    check(layouts.size() == rows_that_fit && layouts.nodeCount() == before_nodes && !layouts.find(historyLocation(1)) && layouts.find(rejected), "Navigation retention must evict only the oldest required complete tree");
+    constexpr std::uint64_t replacement_identity = 700;
+    const std::array<ClientLayoutNode, 1> replacement{ClientLayoutPane{replacement_identity}};
+
+    layouts.retain({.location = rejected, .pane_id = replacement_identity, .focused_pane = replacement_identity, .fullscreen = true, .nodes = replacement});
+    const auto updated = layouts.find(rejected);
+
+    check(updated && updated->fullscreen && updated->focused_pane == replacement_identity && updated->nodes.size() == 1, "Updating a saved row must replace presentation and compact its old tree together");
+    layouts.forget(historyLocation(2));
+    const auto remaining = layouts.find(rejected);
+
+    check(!layouts.find(historyLocation(2)) && remaining && remaining->nodes.size() == 1, "Removing an older tree must preserve compacted later row offsets");
+  }
+
+  void savedLayoutRetentionOwnsAnAliasedTreeBeforeEviction() {
+    SavedLayouts layouts;
+    constexpr auto rows_that_fit = SavedLayouts::node_capacity / PaneLayout::maximum_nodes;
+    constexpr std::uint64_t identity_stride = 100;
+
+    for (std::size_t index = 0; index < rows_that_fit; ++index) {
+      const auto first = (index + 1) * identity_stride;
+      const auto tree = completeLayout(first);
+
+      layouts.retain({.location = historyLocation(index + 1), .pane_id = first, .focused_pane = first, .nodes = tree.view()});
+    }
+
+    auto borrowed = layouts.at(0);
+    const auto original_tail = std::get<ClientLayoutPane>(borrowed.nodes.back()).pane_id;
+
+    borrowed.location = historyLocation(rows_that_fit + 1);
+    layouts.retain(borrowed);
+    const auto retained = layouts.find(borrowed.location);
+
+    check(retained && std::get<ClientLayoutPane>(retained->nodes.back()).pane_id == original_tail, "Evicting an aliased source row must not substitute the following tree's nodes");
+  }
+
+  void savedLayoutRowsAreBoundedIndependentlyOfTheirNodePool() {
+    SavedLayouts layouts;
+    constexpr std::uint64_t pane_id = 1;
+    const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
+
+    for (std::size_t index = 0; index < SavedLayouts::capacity; ++index) {
+      check(layouts.remember({.location = historyLocation(index + 1), .pane_id = pane_id, .focused_pane = pane_id, .nodes = nodes}), "Each available row must admit one valid pane");
+    }
+
+    const auto overflow = historyLocation(SavedLayouts::capacity + 1);
+
+    check(!layouts.remember({.location = overflow, .pane_id = pane_id, .focused_pane = pane_id, .nodes = nodes}), "Row exhaustion must reject even while the node pool has room");
+    layouts.retain({.location = overflow, .pane_id = pane_id, .focused_pane = pane_id, .nodes = nodes});
+    check(layouts.size() == SavedLayouts::capacity && !layouts.find(historyLocation(1)) && layouts.find(overflow), "Retention at row capacity must evict the oldest row without exceeding either bound");
+    layouts.clear();
+    check(layouts.size() == 0 && layouts.nodeCount() == 0 && !layouts.find(overflow), "New session adoption must release saved row and node ownership");
+    check(layouts.remember({.location = overflow, .nodes = {}}), "The original saved table may retain a default empty layout row");
+    check(layouts.size() == 1 && layouts.nodeCount() == 0 && !layouts.find(overflow), "An empty retained row must not be exposed as a reconstructable saved layout");
+  }
+
+  void unknownSelectionDoesNotContactTheRuntime() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    const auto messages = transport.sent.size();
+
+    application::workbench::selectWorkspace(client, unknown_workspace);
+    check(transport.sent.size() == messages && client.focusedPane()->id == 1, "An unknown workspace must not request metadata or leave the current pane");
+  }
+
+  void selectingTheActiveWorkspaceIsAnIdleNoOp() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    const auto messages = transport.sent.size();
+
+    application::workbench::selectWorkspace(client, first_workspace);
+    check(transport.sent.size() == messages && !client.requestsPending(), "Selecting the active workspace must preserve the idle request tracker");
+  }
+
+  void uncachedSelectionOpensTheRuntimeWorkspaceAfterDetaching() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    const auto first = transport.sent.size();
+    const auto openings = transport.count(ClientTag::open_pane);
+
+    application::workbench::selectWorkspace(client, second_workspace);
+    check(transport.count(ClientTag::open_pane) == openings + 1, "An uncached known workspace must open through the runtime instead of requesting metadata alone");
+    const auto request = transport.last<OpenPane>();
+
+    check(request.target.kind == PaneTarget::Kind::workspace && request.target.id == second_workspace.id && !request.launch, "Workspace selection must attach an authoritative existing target without sending a launch command");
+    const auto messages = std::span{transport.sent}.subspan(first);
+    const auto detach = std::ranges::find_if(messages, [](const auto& bytes) {
+      return bytes.front() == static_cast<Byte>(ClientTag::detach_pane);
+    });
+
+    const auto opening = std::ranges::find_if(messages, [](const auto& bytes) {
+      return bytes.front() == static_cast<Byte>(ClientTag::open_pane);
+    });
+
+    check(detach < opening && opening != messages.end(), "Every departure must reach the runtime before its target open");
+    check(client.activeTab() == nullptr && client.panes().empty() && client.requestsPending(), "A queued workspace handoff must await canonical arrival without retaining the previous screen");
+  }
+
+  void aPendingOperationFencesWorkspaceSelection() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    check(application::workbench::createTab(client, "Pending") == application::TabCreationOutcome::requested, "The fixture must own an outstanding tab request");
+    const auto messages = transport.sent.size();
+
+    application::workbench::selectWorkspace(client, second_workspace);
+    check(transport.sent.size() == messages && client.focusedPane()->id == 1 && client.focusedPane()->attached, "Pending requests must fence workspace selection before any departure or metadata query");
+  }
+
+  void disconnectedSelectionDoesNotUseRetainedMetadata() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries});
+    client.disconnected();
+    const auto messages = transport.sent.size();
+
+    application::workbench::selectWorkspace(client, second_workspace);
+    check(transport.sent.size() == messages, "A disconnected client must not navigate using its retained workspace list");
+  }
+
+  void worktreeActionsUseTheSharedRuntimeHandoff() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
+    const auto openings = transport.count(ClientTag::open_pane);
+
+    check(application::workbench::leaveWorktree(client), "A linked checkout must select its source project");
+    check(transport.count(ClientTag::open_pane) == openings + 1, "Leaving a checkout must hand off to its source project instead of only reading its metadata");
+    const auto request = transport.last<OpenPane>();
+
+    check(request.target.kind == PaneTarget::Kind::workspace && request.target.id == project_workspace.id && !request.launch, "The project source must remain the exact runtime target of leaving a worktree");
+  }
+
+  const telar::testing::Case case_bounded_history_updates_and_reuses_free_slots{"workspace_navigation.bounded_history_updates_and_reuses_free_slots", boundedHistoryUpdatesAndReusesFreeSlots};
+  const telar::testing::Case case_saved_layout_overflow_is_atomic_and_evicts_the_oldest_tree{"workspace_navigation.saved_layout_overflow_is_atomic_and_evicts_the_oldest_tree", savedLayoutOverflowIsAtomicAndEvictsTheOldestTree};
+  const telar::testing::Case case_saved_layout_retention_owns_an_aliased_tree_before_eviction{"workspace_navigation.saved_layout_retention_owns_an_aliased_tree_before_eviction", savedLayoutRetentionOwnsAnAliasedTreeBeforeEviction};
+  const telar::testing::Case case_saved_layout_rows_are_bounded_independently_of_their_node_pool{"workspace_navigation.saved_layout_rows_are_bounded_independently_of_their_node_pool", savedLayoutRowsAreBoundedIndependentlyOfTheirNodePool};
+  const telar::testing::Case case_a_workspace_return_restores_its_tree_after_canonical_membership{"workspace_navigation.a_workspace_return_restores_its_tree_after_canonical_membership", aWorkspaceReturnRestoresItsTreeAfterCanonicalMembership};
+  const telar::testing::Case case_canonical_arrival_uses_the_saved_tree_of_its_actual_tab{"workspace_navigation.canonical_arrival_uses_the_saved_tree_of_its_actual_tab", canonicalArrivalUsesTheSavedTreeOfItsActualTab};
+  const telar::testing::Case case_a_new_connection_forgets_previous_navigation_and_saved_trees{"workspace_navigation.a_new_connection_forgets_previous_navigation_and_saved_trees", aNewConnectionForgetsPreviousNavigationAndSavedTrees};
+  const telar::testing::Case case_a_missing_bookmark_retries_its_workspace_only_once{"workspace_navigation.a_missing_bookmark_retries_its_workspace_only_once", aMissingBookmarkRetriesItsWorkspaceOnlyOnce};
+  const telar::testing::Case case_late_metadata_cannot_activate_the_departed_workspace{"workspace_navigation.late_metadata_cannot_activate_the_departed_workspace", lateMetadataCannotActivateTheDepartedWorkspace};
+  const telar::testing::Case case_linked_checkouts_do_not_consume_project_positions{"workspace_navigation.linked_checkouts_do_not_consume_project_positions", linkedCheckoutsDoNotConsumeProjectPositions};
+  const telar::testing::Case case_unknown_selection_does_not_contact_the_runtime{"workspace_navigation.unknown_selection_does_not_contact_the_runtime", unknownSelectionDoesNotContactTheRuntime};
+  const telar::testing::Case case_selecting_the_active_workspace_is_an_idle_no_op{"workspace_navigation.selecting_the_active_workspace_is_an_idle_no_op", selectingTheActiveWorkspaceIsAnIdleNoOp};
+  const telar::testing::Case case_uncached_selection_opens_the_runtime_workspace_after_detaching{"workspace_navigation.uncached_selection_opens_the_runtime_workspace_after_detaching", uncachedSelectionOpensTheRuntimeWorkspaceAfterDetaching};
+  const telar::testing::Case case_a_pending_operation_fences_workspace_selection{"workspace_navigation.a_pending_operation_fences_workspace_selection", aPendingOperationFencesWorkspaceSelection};
+  const telar::testing::Case case_disconnected_selection_does_not_use_retained_metadata{"workspace_navigation.disconnected_selection_does_not_use_retained_metadata", disconnectedSelectionDoesNotUseRetainedMetadata};
+  const telar::testing::Case case_worktree_actions_use_the_shared_runtime_handoff{"workspace_navigation.worktree_actions_use_the_shared_runtime_handoff", worktreeActionsUseTheSharedRuntimeHandoff};
+
+}

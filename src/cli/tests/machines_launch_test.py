@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from check_machines_launch import outcomes
+from check_machines_launch import contracts, outcomes
 
 
 def summary(case):
@@ -26,7 +26,8 @@ def main():
         if reference != observed:
             failures.append({'expected': reference, 'actual': observed})
     assert not failures, json.dumps(failures, indent=2)
-    print(f'{len(actual)} machine, installation and startup contracts passed')
+    count = contracts(args.telar.resolve())
+    print(f'{len(actual) + count} machine, installation and startup contracts passed')
 
 
 if __name__ == '__main__':

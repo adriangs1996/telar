@@ -82,7 +82,7 @@ namespace telar::runtime::redirect {
     String<Memory> lock_name{name_, AllocatorRef<char, Memory>{memory}};
 
     lock_name += ".lock";
-    lock_.reset(::openat(directory_.get(), lock_name.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600));
+    lock_ = openLockFile(directory_.get(), lock_name.c_str());
     if (!directory_ || !lock_) {
       throw SystemError{"Open redirect recovery lock"};
     }

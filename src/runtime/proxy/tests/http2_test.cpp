@@ -10,7 +10,6 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.http2.tests.http2_fixture;
 import telar.testing.test_byte_stream;
@@ -263,6 +262,50 @@ namespace {
       check(budget.liveBytes() == 0);
     }
 
+    // Clients cancel streams routinely, and a rapid-reset peer cancels each one it opens: a reset
+    // stream must leave the connection's in-flight set, or the tracker fills and the connection
+    // never goes idle.
+    void testResetReleasesStream() {
+      SystemAllocator system;
+      BudgetAllocator budget{system, 1024 * 1024};
+      MemoryAdapter adapter{budget};
+      Memory& memory = adapter;
+      ProxyCounters counters;
+      const std::string cancel{"\x00\x00\x00\x08", 4};
+
+      {
+        Http2Connection connection{memory, counters};
+        TestByteStream child;
+        TestByteStream origin;
+
+        child.input = std::string{Http2DirectionObserver<SystemAllocator>::client_preface};
+        for (std::uint32_t index = 0; index <= Http2StreamTracker::capacity; ++index) {
+          const auto stream = 2 * index + 1;
+
+          child.input += http2Frame(Http2FrameKind::headers, 5, stream, "\x82\x84");
+          child.input += http2Frame(Http2FrameKind::reset_stream, 0, stream, cancel);
+        }
+
+        for (unsigned iteration = 0; iteration < 1024 && origin.output.size() != child.input.size(); ++iteration) {
+          connection.advance(child, origin, TunnelReadiness::available());
+        }
+
+        check(origin.output == child.input && connection.inflight() == 0);
+
+        const auto last = 2 * (Http2StreamTracker::capacity + 1) + 1;
+
+        child.input += http2Frame(Http2FrameKind::headers, 5, last, "\x82\x84");
+        for (unsigned iteration = 0; iteration < 256 && origin.output.size() != child.input.size(); ++iteration) {
+          connection.advance(child, origin, TunnelReadiness::available());
+        }
+
+        check(origin.output == child.input && connection.inflight() == 1);
+      }
+
+      check(counters.read(ProxyCounter::h2_stream_untracked) == 0 && counters.read(ProxyCounter::h2_decode_failure) == 0);
+      check(budget.liveBytes() == 0);
+    }
+
   }
 
   void testHttp2() {
@@ -274,5 +317,6 @@ namespace {
   }
 
   const telar::testing::Case case_http2{"http2.http2", testHttp2};
+  const telar::testing::Case case_reset_releases_stream{"http2_connection.reset_releases_stream", testResetReleasesStream};
 
 }

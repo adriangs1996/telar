@@ -1,0 +1,333 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include <cstddef>
+#include <cstdint>
+
+import std;
+import telar.testing;
+import telar.gui.foundation.terminal;
+import telar.gui.features.terminal.copy_mode;
+import telar.gui.foundation.core;
+import telar.gui.foundation.keys;
+import telar.wire.vocabulary;
+
+namespace {
+
+  using telar::testing::check;
+  using namespace telar::gui;
+  using namespace telar::gui::features::terminal::copy_mode;
+
+  namespace feature = telar::gui::features::terminal::copy_mode;
+
+  // The copy mode the assertions drive, through the feature's use cases.
+  class CopyMode {
+  public:
+    bool enter(std::uint64_t pane_id, const CopyGrid& grid, const telar::Cursor& cursor) noexcept {
+      return feature::enter(state_, pane_id, grid, cursor);
+    }
+
+    [[nodiscard]] std::optional<CopyPlan> key(const TerminalKey& key, const CopyGrid& grid) {
+      return feature::key(state_, key, grid);
+    }
+
+    [[nodiscard]] CopyPlan leave(const CopyGrid& grid) const noexcept {
+      return feature::leave(state_, grid);
+    }
+
+    [[nodiscard]] bool current(const CopyPlan& plan) const noexcept {
+      return feature::current(state_, plan);
+    }
+
+    bool commit(const CopyPlan& plan) noexcept {
+      return feature::commit(state_, plan);
+    }
+
+    // The matches of a search the runtime answered.
+    [[nodiscard]] std::optional<CopyPlan> search(std::span<const telar::PaneMatch> results, const CopyGrid& grid) {
+      return feature::receive(state_, {.request_id = 0, .pane_id = state() ? state()->pane_id : 0, .matches = results}, grid);
+    }
+
+    void onFrame(std::uint32_t previous_offset, const CopyGrid& grid) noexcept {
+      feature::follow(state_, previous_offset, grid);
+    }
+
+    bool beginPointer(CopyPress press, const CopyGrid& grid) noexcept {
+      return feature::press(state_, press, grid);
+    }
+
+    [[nodiscard]] std::optional<CopyPlan> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
+      return feature::drag(state_, local, grid, released);
+    }
+
+    bool clearPointer() noexcept {
+      return feature::clearPointer(state_);
+    }
+
+    void finishPointer() noexcept {
+      feature::release(state_);
+    }
+
+    void reset() noexcept {
+      feature::close(state_);
+    }
+
+    [[nodiscard]] const std::optional<CopyState>& state() const noexcept {
+      return feature::view(state_).state();
+    }
+
+    [[nodiscard]] bool active() const noexcept {
+      return feature::view(state_).active();
+    }
+
+    [[nodiscard]] std::span<const telar::PaneMatch> matches() const noexcept {
+      return feature::view(state_).matches();
+    }
+
+    [[nodiscard]] std::optional<CopyPointerOwner> pointerOwner() const noexcept {
+      return feature::view(state_).pointerOwner();
+    }
+
+  private:
+    feature::State state_;
+  };
+
+  template <typename Value>
+  const Value& requiredValue(const std::optional<Value>& value) {
+    check(value.has_value(), "Expected an engaged copy-mode test value");
+
+    return *value;
+  }
+
+  struct GridFixture {
+    static constexpr std::uint16_t columns = 10;
+    static constexpr std::uint16_t rows = 4;
+    static constexpr std::uint16_t separator_column = 5;
+    static constexpr std::uint16_t last_text_column = 8;
+    static constexpr std::size_t cell_count = static_cast<std::size_t>(columns) * rows;
+    std::array<CellValue, cell_count> cells{};
+
+    GridFixture() {
+      constexpr std::string_view text = "  foo/bar "
+                                        "baz   end "
+                                        "          "
+                                        "last row  ";
+
+      for (std::size_t index = 0; index < cells.size(); ++index) {
+        cells[index].text[0] = static_cast<telar::Byte>(text[index]);
+      }
+    }
+
+    [[nodiscard]] CopyGrid grid() const noexcept {
+      return {.cells = cells, .columns = columns, .rows = rows, .scroll = {.total_rows = rows}};
+    }
+  };
+
+  void motionAndSelection() {
+    const GridFixture fixture;
+    const auto grid = fixture.grid();
+    CopyMode mode;
+
+    check(mode.enter(1, grid, {.visible = true, .x = 2}), "copy mode must start at the terminal cursor");
+    const auto word = mode.key({.codepoint = 'w'}, grid);
+
+    check(word && requiredValue(word).next && requiredValue(requiredValue(word).next).cursor == CopyPoint{.x = GridFixture::separator_column, .y = 0}, "word motion must distinguish punctuation from letters");
+    check(mode.commit(requiredValue(word)), "current copy plans must commit");
+    const auto select = mode.key({.codepoint = 'v'}, grid);
+
+    check(select && mode.commit(requiredValue(select)), "character selection must start at the copy cursor");
+    const auto end = mode.key({.codepoint = '$'}, grid);
+
+    check(end && mode.commit(requiredValue(end)) && requiredValue(mode.state()).cursor.x == GridFixture::last_text_column, "line-end motion must ignore trailing padding");
+    const auto copy = mode.key({.codepoint = 'y'}, grid);
+
+    check(copy && !requiredValue(copy).next && requiredValue(copy).selection && requiredValue(requiredValue(copy).selection).start_x == GridFixture::separator_column && requiredValue(requiredValue(copy).selection).end_x == GridFixture::last_text_column && !requiredValue(requiredValue(copy).selection).linewise, "copy must retain inclusive history coordinates before leaving");
+    check(mode.commit(requiredValue(copy)) && !mode.active() && !mode.commit(requiredValue(copy)), "a copy plan must apply at most once");
+  }
+
+  void viewportAndPruning() {
+    const GridFixture fixture;
+    auto grid = fixture.grid();
+    constexpr std::uint32_t total_rows = 100;
+    constexpr std::uint32_t offset = 96;
+
+    grid.scroll = {.total_rows = total_rows, .offset = offset};
+    CopyMode mode;
+
+    check(mode.enter(1, grid, {.visible = false}) && requiredValue(mode.state()).cursor.y == total_rows - 1, "a hidden terminal cursor must start at the viewport's last row");
+    const auto top = mode.key({.codepoint = 'g'}, grid);
+
+    check(top && requiredValue(top).viewport && requiredValue(requiredValue(top).viewport).offset == 0 && mode.commit(requiredValue(top)), "top motion must request history row zero");
+    grid.scroll.offset = 0;
+    const auto leave = mode.leave(grid);
+
+    check(leave.viewport && leave.viewport.value().offset == offset, "leaving keyboard copy mode must restore its entry viewport");
+    mode.reset();
+    grid.scroll.offset = offset;
+    check(mode.enter(1, grid, {.visible = true, .y = 2}), "copy mode must allow a new activation");
+    const auto selection = mode.key({.codepoint = 'v'}, grid);
+
+    check(selection && mode.commit(requiredValue(selection)), "pruning fixture must establish an anchor");
+    grid.scroll = {.total_rows = total_rows - GridFixture::rows, .offset = offset - GridFixture::rows};
+    mode.onFrame(offset, grid);
+    check(requiredValue(mode.state()).cursor.y == total_rows - GridFixture::rows - 2 && requiredValue(mode.state()).anchor == requiredValue(mode.state()).cursor, "pruned history must move both selection endpoints");
+  }
+
+  // A match is shown clear of the view's edges, which a pinned separator and a docked line
+  // cover; a selection under way stretches to it, and none begins without one.
+  void searchRevealsMatchesWithMargin() {
+    constexpr std::uint32_t total = 100;
+    constexpr std::uint32_t match_row = 10;
+    const GridFixture fixture;
+    auto grid = fixture.grid();
+
+    grid.scroll = {.total_rows = total, .offset = total - GridFixture::rows};
+    CopyMode mode;
+
+    check(mode.enter(1, grid, {.visible = true}), "margin fixture must enter copy mode");
+    const auto search = mode.key({.codepoint = '?'}, grid);
+
+    check(search && mode.commit(requiredValue(search)), "backward search must request input");
+    const std::array matches{telar::PaneMatch{.x = 1, .y = match_row, .len = 2}};
+    const auto found = mode.search(matches, grid);
+
+    check(found && mode.commit(requiredValue(found)), "a match far above the view must apply");
+    const auto& state = requiredValue(mode.state());
+
+    check(state.cursor == CopyPoint{.x = 1, .y = match_row} && !state.anchor, "a match takes the cursor to its start without selecting");
+    check(state.viewport_offset == match_row - (GridFixture::rows / 2), "a match out of view comes to the view's middle");
+    const auto select = mode.key({.codepoint = 'v'}, grid);
+
+    check(select && mode.commit(requiredValue(select)), "a selection must start at the match");
+    const std::array later{telar::PaneMatch{.x = 0, .y = match_row - 2, .len = 2}};
+    const auto stretched = mode.search(later, grid);
+
+    check(stretched && mode.commit(requiredValue(stretched)) && requiredValue(mode.state()).anchor == CopyPoint{.x = 1, .y = match_row}, "a search stretches a selection under way to its match");
+
+    // Without a selection, y copies the match the cursor stands on.
+    CopyMode plain;
+
+    check(plain.enter(1, grid, {.visible = true}) && plain.commit(requiredValue(plain.key({.codepoint = '?'}, grid))), "a second search must begin");
+    check(plain.commit(requiredValue(plain.search(matches, grid))), "its match must apply");
+    const auto copy = plain.key({.codepoint = 'y'}, grid);
+    const auto& copied = requiredValue(requiredValue(copy).selection);
+
+    check(copied.start_x == 1 && copied.end_x == 2 && copied.start_y == match_row && copied.end_y == match_row && !copied.linewise, "y copies the current match");
+  }
+
+  void searchAndTransactionalPlans() {
+    const GridFixture fixture;
+    const auto grid = fixture.grid();
+    CopyMode mode;
+
+    check(mode.enter(1, grid, {.visible = true}), "search fixture must enter copy mode");
+    const auto search = mode.key({.codepoint = '/'}, grid);
+
+    check(search && requiredValue(search).effect.search == CopyDirection::forward && mode.commit(requiredValue(search)), "forward search must request input even when its direction is unchanged");
+    const std::array matches{telar::PaneMatch{.x = 2, .y = 0, .len = 3}, telar::PaneMatch{.x = 0, .y = 1, .len = 3}};
+    const auto found = mode.search(matches, grid);
+
+    check(found && mode.matches().empty(), "planning search results must preserve existing match ownership");
+    check(mode.commit(requiredValue(found)) && mode.matches().size() == matches.size() && requiredValue(mode.state()).cursor == CopyPoint{.x = 2, .y = 0} && !requiredValue(mode.state()).anchor, "committing matches must move to the first result strictly after the cursor, at its start, without selecting");
+    const auto next = mode.key({.codepoint = 'n'}, grid);
+
+    check(next && mode.commit(requiredValue(next)) && requiredValue(mode.state()).cursor == CopyPoint{.x = 0, .y = 1}, "search navigation must advance to the next match");
+    const auto wrapped = mode.key({.codepoint = 'n'}, grid);
+
+    check(wrapped && mode.commit(requiredValue(wrapped)) && requiredValue(mode.state()).cursor == CopyPoint{.x = 2, .y = 0}, "search navigation must wrap around");
+    const auto stale = mode.key({.codepoint = 'v'}, grid);
+
+    mode.onFrame(0, grid);
+    check(stale && mode.current(requiredValue(stale)), "an unchanged frame must preserve a current copy plan");
+    auto changed_grid = grid;
+
+    changed_grid.scroll = {.total_rows = GridFixture::rows + 1, .offset = 1};
+    mode.onFrame(0, changed_grid);
+    check(stale && !mode.commit(requiredValue(stale)), "a frame must invalidate an outstanding navigation plan");
+  }
+
+  void pointerAndProjection() {
+    const GridFixture fixture;
+    const auto grid = fixture.grid();
+    CopyState state{.pane_id = 1, .cursor = {.x = 3, .y = 0}};
+
+    state.beginPointer(CopyGranularity::word, grid);
+    check(state.anchor == CopyPoint{.x = 2, .y = 0} && state.cursor == CopyPoint{.x = GridFixture::last_text_column, .y = 0}, "pointer words must preserve paths and punctuation");
+    state.movePointer({.x = 1, .y = 1}, grid);
+    check(state.anchor == CopyPoint{.x = 2, .y = 0} && state.cursor == CopyPoint{.x = 2, .y = 1}, "word dragging must retain the original word boundary");
+    const auto selected = state.selection(grid);
+
+    check(selected.contains(2) && selected.contains(GridFixture::columns + 2) && !selected.contains(1), "copy highlighting must project inclusive absolute coordinates");
+    state.toggleSelection(true);
+    const auto line = state.selection(grid);
+
+    check(line.contains(GridFixture::columns) && line.contains((GridFixture::columns * 2) - 1), "linewise selection must cover the complete terminal row");
+  }
+
+  void clickTiming() {
+    ClickTracker clicks;
+    constexpr CopyPoint position{.x = 2, .y = 1};
+
+    check(clicks.press(position, 0) == CopyGranularity::character, "the first press must select characters");
+    check(clicks.press(position, ClickTracker::interval_ns) == CopyGranularity::word, "a press at the inclusive interval boundary must select a word");
+    check(clicks.press({.x = position.x + 1, .y = position.y}, ClickTracker::interval_ns) == CopyGranularity::line, "one cell of horizontal motion must preserve a triple click");
+    check(clicks.press(position, 0) == CopyGranularity::line, "clock regression must use saturating elapsed time");
+    check(clicks.press(position, ClickTracker::interval_ns + 1) == CopyGranularity::character, "a late click must begin another gesture");
+    check(clicks.press({.x = position.x, .y = position.y + 1}, ClickTracker::interval_ns + 1) == CopyGranularity::character, "changing rows must restart click counting");
+  }
+
+  void pointerOwnership() {
+    const GridFixture fixture;
+    const auto grid = fixture.grid();
+    CopyMode mode;
+
+    check(mode.beginPointer({.pane_id = 1, .position = {.x = 2}}, grid), "a valid press must acquire pointer ownership");
+    const auto released = mode.pointer({.x = 4}, grid, true);
+
+    check(released && released->selection && mode.commit(*released), "a drag release must stage an inclusive runtime copy");
+    mode.finishPointer();
+    const auto retained = mode.pointerOwner();
+
+    check(retained && !retained->dragging && !mode.active(), "completed highlighting must remain disposable without capturing the keyboard");
+    check(mode.clearPointer() && !mode.state(), "typing must discard retained highlighting");
+    check(mode.beginPointer({.pane_id = 1, .position = {.x = 2}, .now_ns = 1}, grid), "a subsequent press must remain on the same click timeline");
+    check(mode.state() && mode.state()->pointer && mode.state()->pointer->granularity == CopyGranularity::word, "a second click must expand the original word");
+    auto resized = grid;
+
+    --resized.columns;
+    mode.onFrame(0, resized);
+    const auto quarantined = mode.pointerOwner();
+
+    check(!mode.state() && quarantined && quarantined->dragging, "resizing must clear highlighting while retaining the physical release owner");
+    mode.finishPointer();
+    check(!mode.pointerOwner(), "the delayed release must retire the quarantined owner");
+  }
+
+  void wheelFractionsAndBounds() {
+    WheelAccumulator wheel;
+    constexpr double first_fraction = 0.4;
+    constexpr double crossing_fraction = 0.7;
+    constexpr double almost_one_line = 0.9;
+    constexpr double small_fraction = 0.2;
+
+    check(wheel.consume({.delta = first_fraction}) == 0 && wheel.consume({.delta = crossing_fraction}) == 1, "fractional scroll samples must accumulate before producing a line");
+    check(wheel.consume({.delta = almost_one_line, .phase = ScrollPhase::begin}) == 0, "a new scroll gesture must reset the previous fraction");
+    check(wheel.consume({.phase = ScrollPhase::cancel}) == 0 && wheel.consume({.delta = small_fraction}) == 0, "cancelled momentum must not leak into the next gesture");
+    wheel.reset();
+    check(wheel.consume({.delta = 1, .cell_height = 2, .precise = true}) == 0 && wheel.consume({.delta = 1, .cell_height = 2, .precise = true}) == 1, "precise samples must use cell height before viewport row scaling");
+    check(wheel.consume({.delta = std::numeric_limits<double>::max()}) == WheelAccumulator::maximum_lines, "a single event must have bounded scroll work");
+    check(wheel.consume({.delta = std::numeric_limits<double>::quiet_NaN()}) == 0, "nonfinite host input must not enter integer conversion");
+  }
+
+  const telar::testing::Case case_motion_and_selection{"copy_mode.motion_and_selection", motionAndSelection};
+  const telar::testing::Case case_viewport_and_pruning{"copy_mode.viewport_and_pruning", viewportAndPruning};
+  const telar::testing::Case case_search_and_transactional_plans{"copy_mode.search_and_transactional_plans", searchAndTransactionalPlans};
+  const telar::testing::Case case_search_reveals_matches_with_margin{"copy_mode.search_reveals_matches_with_margin", searchRevealsMatchesWithMargin};
+  const telar::testing::Case case_pointer_and_projection{"copy_mode.pointer_and_projection", pointerAndProjection};
+  const telar::testing::Case case_click_timing{"copy_mode.click_timing", clickTiming};
+  const telar::testing::Case case_pointer_ownership{"copy_mode.pointer_ownership", pointerOwnership};
+  const telar::testing::Case case_wheel_fractions_and_bounds{"copy_mode.wheel_fractions_and_bounds", wheelFractionsAndBounds};
+
+}

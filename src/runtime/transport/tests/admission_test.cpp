@@ -9,6 +9,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
+import telar.platform.error;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.transport.connection;
@@ -126,8 +127,35 @@ namespace {
     testRefusal(true);
   }
 
+  // A client that sends half its hello and leaves fails the handshake at once, which frees its
+  // admission slot instead of holding it until the handshake expires.
+  void testPeerClosesMidHello() {
+    int descriptors[2];
+
+    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) == 0);
+    FileDescriptor peer{descriptors[1]};
+
+    setNonblocking(descriptors[0]);
+    ClientHandshake pending{FileDescriptor{descriptors[0]}, false};
+    const auto frame = helloFrame();
+
+    check(::write(peer.get(), frame.data(), frame.size() / 2) == static_cast<ssize_t>(frame.size() / 2));
+    pending.read();
+    peer.reset();
+    bool failed = false;
+
+    try {
+      pending.read();
+    } catch (const SystemError&) {
+      failed = true;
+    }
+
+    check(failed && pending.stage() != ClientHandshake::Stage::reply && pending.stage() != ClientHandshake::Stage::accepted);
+  }
+
   const telar::testing::Case case_admission{"admission.admission", testAdmission};
   const telar::testing::Case case_fragmented_hello{"admission.fragmented_hello", testFragmentedHello};
   const telar::testing::Case case_malformed_hello{"admission.malformed_hello", testMalformedHello};
+  const telar::testing::Case case_peer_closes_mid_hello{"admission.peer_closes_mid_hello", testPeerClosesMidHello};
 
 }

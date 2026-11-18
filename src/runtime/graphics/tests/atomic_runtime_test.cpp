@@ -21,7 +21,6 @@ import std;
 import telar.base.memory.allocators;
 import telar.config.core;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
@@ -203,6 +202,27 @@ namespace {
       ImageAllocation reserved{allocator, 24};
 
       check(static_cast<bool>(reserved));
+    }
+
+    check(budget.used() == 0);
+
+    // A reservation charges the media budget for the image it stands for: while one holds
+    // most of it, a second is refused, and releasing the first makes room for it.
+    {
+      ImageAllocation first{allocator, 6000};
+
+      check(static_cast<bool>(first) && budget.used() >= 6000);
+
+      {
+        ImageAllocation second{allocator, 6000};
+
+        check(!second);
+      }
+
+      first.reset();
+      ImageAllocation second{allocator, 6000};
+
+      check(static_cast<bool>(second));
     }
 
     check(budget.used() == 0);

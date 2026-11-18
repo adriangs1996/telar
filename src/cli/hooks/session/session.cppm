@@ -53,6 +53,7 @@ export {
       std::optional<ReportAgentProgress> progress;
       FixedText<96> event;
       FixedText<96> step;
+      FixedText<96> title_text;
       FixedText<2048> message;
       LinkedWorktree worktree;
 

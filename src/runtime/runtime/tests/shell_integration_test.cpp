@@ -18,7 +18,6 @@ import telar.testing;
 import telar.ebnf.matcher;
 import telar.runtime.command_capture.tracker;
 import telar.runtime.shell_integration;
-import telar.runtime.runtime.client_control;
 import telar.runtime.shell_integration.git_context;
 import telar.runtime.shell_integration.words;
 import telar.wire.content;

@@ -64,7 +64,11 @@ class Fixture:
         self.topology = False
         self.texts = []
         self.trees = []
+        self.coordinators = {}
         self.tree = 0
+        self.agents = []
+        self.panes = [(17, 0, 29)]
+        self.tabs = [5]
         self.generation = 29
         self.bump_on_send = False
         self.ack_ignored = False
@@ -99,8 +103,10 @@ class Fixture:
                         send(connection, b'\x84' + request + integer(self.refusal[1], 'H') + b'refused')
                     elif tag == 0x1c:
                         status = self.states.pop(0) if self.states else self.status
-                        entry = agent(status, self.title, self.generation, self.tree)
-                        send(connection, b'\x96' + integer(11) + integer(2 if self.duplicate else 1, 'H') + entry * (2 if self.duplicate else 1))
+                        entries = [agent(status, self.title, self.generation, self.tree)] * (2 if self.duplicate else 1)
+                        if self.agents:
+                            entries = [agent(status, self.title, self.generation, tree) for status, tree in self.agents]
+                        send(connection, b'\x96' + integer(11) + integer(len(entries), 'H') + b''.join(entries))
                     elif tag == 0x1d:
                         value = self.texts.pop(0) if self.texts else 'hello\n\b\f\x7f'
                         send(connection, b'\xa0' + request + frame[9:17] + b'\x01' + text(value, 'I') + b'\x01' + integer(7, 'i'))
@@ -116,14 +122,14 @@ class Fixture:
                         send(connection, b'\xa8' + request + b'\0' + integer(19))
                     elif tag == 0x14:
                         entry = integer(3) + text('Workspace') + text('/fixture') + integer(1, 'H') + text('') + b'\0'
-                        trees = b''.join(integer(identity) + integer(3) + b'\0\0\0\0' + text('/fixture/tree') + text(branch) + text('main') + text(title) + text('') + text('') + b'\0' + integer(0, 'I') * 4 + text('') + b'\0' + integer(0, 'i') for identity, branch, title in self.trees)
+                        trees = b''.join(integer(identity) + integer(3) + b'\0\0\0\0' + text('/fixture/tree') + text(branch) + text('main') + text(title) + text('') + text('') + self.coordinator(identity) + integer(0, 'I') * 4 + text('') + b'\0' + integer(0, 'i') for identity, branch, title in self.trees)
                         send(connection, b'\x98' + integer(1) + integer(int(self.topology), 'H') + (entry if self.topology else b'') + integer(len(self.trees), 'H') + trees)
                     elif tag == 0x0c:
-                        tab = integer(5) + integer(0, 'H') + integer(1, 'H') + text('Tab') + integer(0, 'H')
-                        send(connection, b'\x88' + request + frame[9:18] + text('Workspace') + integer(1, 'H') + tab)
+                        tabs = b''.join(integer(tab) + integer(0, 'H') + integer(1, 'H') + text('Tab') + integer(0, 'H') for tab in self.tabs)
+                        send(connection, b'\x88' + request + frame[9:18] + text('Workspace') + integer(len(self.tabs), 'H') + tabs)
                     elif tag == 0x08:
-                        pane = integer(17) + b'\0' + integer(29)
-                        send(connection, b'\x86' + request + frame[9:26] + integer(1, 'H') + pane)
+                        panes = b''.join(integer(pane) + bytes([lifecycle]) + integer(generation) for pane, lifecycle, generation in self.panes)
+                        send(connection, b'\x86' + request + frame[9:26] + integer(len(self.panes), 'H') + panes)
                     elif tag == 0x1b:
                         if not self.ack_ignored:
                             self.status = 3
@@ -135,6 +141,12 @@ class Fixture:
             pass
         except Exception as error:
             self.errors.append(error)
+
+    def coordinator(self, identity):
+        if identity not in self.coordinators:
+            return b'\0'
+        session, pane, generation = self.coordinators[identity]
+        return b'\x01' + session + integer(pane) + integer(generation)
 
     def close(self):
         self.stop.set()
@@ -159,9 +171,9 @@ def check(binary, root):
     fixture = Fixture(root)
     count = 0
 
-    def run(*args, status=0, stdin=None, extra=None):
+    def run(*args, status=0, stdin=None, extra=None, cwd=None):
         nonlocal count
-        result = subprocess.run([str(binary), *args, '--socket', str(fixture.path)], env=env | (extra or {}), input=stdin, capture_output=True, timeout=12)
+        result = subprocess.run([str(binary), *args, '--socket', str(fixture.path)], env=env | (extra or {}), input=stdin, capture_output=True, timeout=30, cwd=cwd)
         assert result.returncode == status, (args, result.returncode, result.stdout, result.stderr)
         count += 1
         return result
@@ -181,7 +193,19 @@ def check(binary, root):
         run('agent', 'get', 'worktree:tItLe', '--json')
         fixture.trees.append((73, 'fix', 'Other'))
         assert b'more than one worktree' in run('agent', 'get', 'worktree:fix', status=1).stderr
+        # A coordinator reads which agents work in its worktree and who coordinates it.
+        fixture.trees = [(71, 'fix', 'Title'), (73, 'other', 'Other')]
+        fixture.coordinators = {71: (bytes(range(16, 32)), 41, 43)}
+        fixture.agents = [(3, 71), (1, 73), (5, 71)]
+        listed = json.loads(run('worktree', 'list', '--json', cwd=root).stdout)
+        assert [tree['worktree_id'] for tree in listed] == [71, 73], listed
+        assert listed[0]['coordinator'] == {'session_id': bytes(range(16, 32)).hex(), 'pane_id': 41, 'pane_generation': 43}, listed[0]
+        assert listed[1]['coordinator'] is None, listed[1]
+        assert [(member['pane_id'], member['status'], member['session_id']) for member in listed[0]['agents']] == [(17, 'ready', bytes(range(16)).hex()), (17, 'done', bytes(range(16)).hex())], listed[0]
+        assert [member['status'] for member in listed[1]['agents']] == ['working'], listed[1]
         fixture.trees = []
+        fixture.coordinators = {}
+        fixture.agents = []
         fixture.tree = 0
         assert b'no agent matches' in run('agent', 'get', 'missing', status=2).stderr
         assert b'no tracked worktree' in run('agent', 'get', 'worktree:missing', status=2).stderr
@@ -195,12 +219,30 @@ def check(binary, root):
         assert sends[-2][1][25] == 0 and sends[-2][1][30:35] == b'hello'
         assert sends[-1][1][25] == 2
         run('pane', 'send-keys', '17', '--stdin', stdin=b'\n', status=1)
+        # Standard input of 1 to 65536 bytes goes whole in one frame; more is refused unsent.
+        before = len(fixture.frames)
+        run('pane', 'send-keys', '17', '--stdin', stdin=b'k' * 65537, status=1)
+        assert not [frame for _, frame in fixture.frames[before:] if frame[0] == 0x1e]
+        run('pane', 'send-keys', '17', '--stdin', stdin=b'k' * 65536)
+        sends = [frame for _, frame in fixture.frames[before:] if frame[0] == 0x1e]
+        assert len(sends) == 1 and sends[0][26:30] == integer(65536, 'I') and sends[0][30:30 + 65536] == b'k' * 65536, len(sends)
         for code, message in [(1, b'pane not found'), (10, b'pane already exited'), (12, b'focus')]:
             fixture.refusal = (0x1e, code)
             run('pane', 'send-keys', '17', 'hello', status=2 if code in (1, 10) else 1)
         fixture.refusal = None
         for action, extra in [('get', []), ('wait', ['--until', 'idle']), ('interrupt', []), ('acknowledge', []), ('prompt', ['hello']), ('report-session', ['session-1'])]:
             run('agent', action, '17', *extra, '--json')
+        # The agent named resolves to its pane and generation, and only it is interrupted.
+        before = len(fixture.frames)
+        run('agent', 'interrupt', '17', '--json')
+        mutating = [frame for _, frame in fixture.frames[before:] if frame[0] not in (0x1c, 0x14, 0x0c, 0x08, 0x1d)]
+        assert [(frame[0], frame[9:17], frame[17:25]) for frame in mutating] == [(0x3f, integer(17), integer(29))], mutating
+        # A pane named outside it reports for that pane at its current generation.
+        before = len(fixture.frames)
+        result = run('agent', 'report-state', '17', 'blocked', '--blocked-reason', 'permission', '--json')
+        assert json.loads(result.stdout) == {'pane_id': 17, 'pane_generation': 29, 'accepted': True}, result.stdout
+        reports = [frame for _, frame in fixture.frames[before:] if frame[0] == 0x20]
+        assert [(frame[9:17], frame[17:25]) for frame in reports] == [(integer(17), integer(29))], reports
         for action, extra in [('report-title', ['Hello']), ('report-state', ['working']), ('report-command', ['started', 'printf hello', '--provider', 'claude'])]:
             result = run('agent', action, '--current', *extra, '--json', extra={'TELAR_PANE_ID': '17', 'TELAR_PANE_GENERATION': '29'})
             assert json.loads(result.stdout) == {'pane_id': 17, 'pane_generation': 29, 'accepted': True}
@@ -228,6 +270,13 @@ def check(binary, root):
         run('agent', 'prompt', '17', 'hello', '--wait', status=1)
         fixture.states = [1, 1, 3, 1, 5]
         run('agent', 'prompt', '17', 'hello', '--interrupt', '--wait')
+        # An interrupt that leaves the agent working types nothing into it.
+        fixture.status = 1
+        before = len(fixture.frames)
+        run('agent', 'prompt', '17', 'hello', '--interrupt', status=1)
+        assert not [frame for _, frame in fixture.frames[before:] if frame[0] == 0x1e]
+        # --wait ends at --timeout while the agent keeps working, as a timeout.
+        run('agent', 'prompt', '17', 'hello', '--wait', '--timeout', '1s', status=3)
         fixture.status = 3
         assert b'did not start working within 5s' in run('agent', 'prompt', '17', 'hello', '--wait', status=3).stderr
         assert run('pane', 'list', '--json').stdout == b'[]\n'
@@ -250,6 +299,26 @@ def check(binary, root):
         run('agent', 'prompt', '17', '', status=1)
         run('pane', 'copy', '17', '0,1:2,3:4,5', '--client', '41', status=1)
         run('pane', 'list', '--tab', '5', status=1)
+        # Scripts read every pane of a split tab, and which of them exited.
+        fixture.panes = [(17, 0, 29), (19, 1, 31)]
+        tab = json.loads(run('tab', 'get', '5', '--workspace', '3', '--json').stdout)
+        assert tab['panes'] == [{'pane_id': 17, 'pane_generation': 29, 'lifecycle': 'running'}, {'pane_id': 19, 'pane_generation': 31, 'lifecycle': 'exited'}], tab
+        # Each tab numbers its own panes from 0.
+        fixture.tabs = [5, 6]
+        panes = json.loads(run('pane', 'list', '--json').stdout)
+        assert [(pane['tab_id'], pane['pane_id'], pane['position']) for pane in panes] == [(5, 17, 0), (5, 19, 1), (6, 17, 0), (6, 19, 1)], panes
+        # --tab lists that tab alone; --current reads the pane's own workspace.
+        panes = json.loads(run('pane', 'list', '--workspace', '3', '--tab', '5', '--json').stdout)
+        assert [(pane['tab_id'], pane['pane_id']) for pane in panes] == [(5, 17), (5, 19)], panes
+        panes = json.loads(run('pane', 'list', '--workspace', '--current', '--tab', '--current', '--json', extra={'TELAR_WORKSPACE_ID': '3', 'TELAR_TAB_ID': '6'}).stdout)
+        assert {pane['tab_id'] for pane in panes} == {6}, panes
+        run('pane', 'list', '--workspace', '--current', '--json', status=1)
+        fixture.tabs = [5]
+        # Scripts parse the whole listing, however many agents it holds.
+        fixture.duplicate = True
+        listed = json.loads(run('agent', 'list', '--json').stdout)
+        assert [entry['pane_id'] for entry in listed['agents']] == [17, 17], listed
+        fixture.duplicate = False
     finally:
         fixture.close()
     print(f'{count} pane/agent CLI contract cases passed')

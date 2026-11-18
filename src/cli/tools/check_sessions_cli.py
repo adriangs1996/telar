@@ -156,6 +156,25 @@ class Stack:
         self.results[name] = result
         return json.loads(result['stdout']) if '--json' in words and result['stdout'] else result['stdout']
 
+    def answer(self, name, reply, *words, status=0):
+        """Runs telar with a terminal as stdin, where a person types `reply` at its prompt."""
+        args = [str(self.binary), *map(str, words), '--socket', str(self.socket)]
+        primary, secondary = os.openpty()
+        try:
+            process = subprocess.Popen(args, env=self.env, cwd=self.repo, stdin=secondary, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            os.close(secondary)
+            secondary = None
+            os.write(primary, reply + b'\n')
+            stdout, stderr = process.communicate(timeout=45)
+        finally:
+            if secondary is not None:
+                os.close(secondary)
+            os.close(primary)
+        result = {'status': process.returncode, 'stdout': stdout.decode('utf-8', 'backslashreplace'), 'stderr': stderr.decode('utf-8', 'backslashreplace')}
+        assert result['status'] == status, (name, words, result)
+        self.results[name] = result
+        return result
+
     def start(self):
         self.git('init', '-b', 'main')
         (self.repo / 'file.txt').write_text('base\n')
@@ -214,6 +233,11 @@ class Stack:
             assert time.monotonic() < deadline, ('workspace Git probe did not settle', observed)
             time.sleep(.05)
         self.call('workspace-list', 'workspace', 'list', '--json')
+        extra = self.call('workspace-create-second', 'workspace', 'create', '--directory', str(self.repo), '--name', 'Second', '--json')
+        listed = self.call('workspace-list-many', 'workspace', 'list', '--json')
+        assert sorted(entry['workspace_id'] for entry in listed) == sorted([created['workspace_id'], extra['workspace_id']]), listed
+        assert all(set(entry) >= {'workspace_id', 'name', 'path', 'tab_count', 'branch', 'dirty'} for entry in listed), listed
+        self.call('workspace-close-second', 'tab', 'close', str(extra['tab_id']), '--workspace', str(extra['workspace_id']), '--json')
         self.call('workspace-get', 'workspace', 'get', wid, '--json')
         self.call('workspace-get-text', 'workspace', 'get', wid)
         self.call('workspace-rename', 'workspace', 'rename', wid, 'Quoted "name" ñ', '--json')
@@ -237,11 +261,32 @@ class Stack:
         second_id = str(second['tab_id'])
         self.call('tab-rename', 'tab', 'rename', second_id, 'Name "quoted"', '--workspace', wid, '--json')
         self.call('tab-rename-text', 'tab', 'rename', second_id, 'Text tab', '--workspace', wid)
-        self.call('tab-move', 'tab', 'move', second_id, 'previous', '--workspace', wid, '--json')
+        def order(name):
+            return [str(entry['tab_id']) for entry in self.call(name, 'tab', 'list', '--workspace', wid, '--json')]
+
+        assert order('tab-list-before-move') == [tid, second_id]
+        moved = self.call('tab-move', 'tab', 'move', second_id, 'previous', '--workspace', wid, '--json')
+        assert moved['position'] == 0 and order('tab-list-moved') == [second_id, tid], moved
+        # --relative-to moves a tab next to the named one, not one position.
+        third_id = str(self.call('tab-create-third', 'tab', 'create', '--background', '--workspace', wid, '--json')['tab_id'])
+        relative = self.call('tab-move-before', 'tab', 'move', third_id, 'previous', '--relative-to', second_id, '--workspace', wid, '--json')
+        assert relative['position'] == 0 and order('tab-list-before') == [third_id, second_id, tid], relative
+        self.call('tab-close-third', 'tab', 'close', third_id, '--workspace', wid, '--json')
         self.call('tab-move-relative', 'tab', 'move', second_id, 'next', '--relative-to', tid, '--workspace', wid)
-        self.call('tab-list-after-move', 'tab', 'list', '--workspace', wid, '--json')
+        assert order('tab-list-after-move') == [tid, second_id]
+        # A tab opened from anywhere starts in its workspace's directory.
+        elsewhere = invoke(self.binary, ['tab', 'create', '--background', '--workspace', wid, '--json'], self.env, self.root, self.socket)
+        assert elsewhere['status'] == 0, elsewhere
+        opened = json.loads(elsewhere['stdout'])
+        self.call('tab-pwd', 'pane', 'send-keys', str(opened['pane_id']), 'pwd', '--enter')
+        deadline = time.monotonic() + 10
+        while str(self.repo) not in invoke(self.binary, ['pane', 'read', str(opened['pane_id'])], self.env, self.repo, self.socket)['stdout'].splitlines():
+            assert time.monotonic() < deadline, 'the new tab did not start in the workspace directory'
+            time.sleep(.05)
+        self.call('tab-close-elsewhere', 'tab', 'close', str(opened['tab_id']), '--workspace', wid, '--json')
         self.call('tab-get-missing', 'tab', 'get', '999999', '--workspace', wid, '--json', status=1)
-        self.call('tab-close', 'tab', 'close', second_id, '--workspace', wid, '--json')
+        closed = self.call('tab-close', 'tab', 'close', second_id, '--workspace', wid, '--json')
+        assert closed == {'workspace_id': int(wid), 'tab_id': int(second_id), 'closed': True, 'workspace_closed': False}, closed
         self.call('workspace-select-client-missing', 'workspace', 'select', wid, '--client', '999999', '--json', status=2)
         self.call('tab-next-client-missing', 'tab', 'next', '--client', '999999', '--json', status=2)
         self.call('tab-previous-client-missing', 'tab', 'previous', '--client', '999999', status=2)
@@ -266,9 +311,14 @@ class Stack:
         self.call('worktree-diff-stat', 'worktree', 'diff', 'fix/test', '--stat')
         self.call('worktree-remove-dirty', 'worktree', 'remove', 'fix/test', status=1)
         self.call('worktree-remove-force-no-tty', 'worktree', 'remove', 'fix/test', '--force', status=1)
+        for index, reply in enumerate((b'n', b'', b'nope')):
+            self.answer(f'worktree-remove-force-declined-{index}', reply, 'worktree', 'remove', 'fix/test', '--force', status=1)
+            assert (checkout / 'file.txt').read_text() == 'base\nchanged\n'
         self.git('checkout', '--', 'file.txt', cwd=checkout)
-        self.call('worktree-resolve', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--json')
-        self.call('worktree-resolve-selected', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--workspace', wid)
+        resolved = self.call('worktree-resolve', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--json')
+        assert resolved == {'repository': 'example.invalid/team/repo', 'path': str(self.repo)}, resolved
+        selected = self.call('worktree-resolve-selected', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--workspace', wid)
+        assert selected == str(self.repo) + '\n', selected
         self.call('worktree-resolve-wrong', 'worktree', 'resolve', '--repository', 'other/repo', '--workspace', wid, status=1)
         self.call('worktree-resolve-missing', 'worktree', 'resolve', '--repository', 'other/repo', status=1)
         self.call('worktree-remove', 'worktree', 'remove', 'Fix task', '--delete-branch', '--json')
@@ -281,11 +331,39 @@ class Stack:
         self.git('commit', '-qm', 'Unmerged work', cwd=other_path)
         self.call('worktree-delete-unmerged-no-tty', 'worktree', 'remove', 'unmerged', '--delete-branch', status=1)
         assert other_path.is_dir()
+        self.answer('worktree-delete-unmerged-declined', b'N', 'worktree', 'remove', 'unmerged', '--delete-branch', status=1)
+        assert other_path.is_dir() and self.git('branch', '--list', 'unmerged').strip()
         self.call('worktree-remove-keep-branch', 'worktree', 'remove', 'unmerged', '--json')
         assert self.git('branch', '--list', 'unmerged').strip()
         self.call('worktree-list-empty', 'worktree', 'list', '--json')
         self.call('worktree-list-empty-text', 'worktree', 'list')
         self.git('worktree', 'add', '-qb', 'manual', str(self.root / 'manual'))
+        # Two tracked worktrees whose titles differ only in case, beside the untracked one.
+        titled = [self.call(f'worktree-create-titled-{branch}', 'worktree', 'create', branch, '--title', title, '--json') for branch, title in (('titled-a', 'Fix'), ('titled-b', 'fix'))]
+        listed = self.call('worktree-list-many', 'worktree', 'list', '--json')
+        assert sorted((entry['branch'], entry['origin']) for entry in listed if entry['worktree_id'] is not None) == [('titled-a', 'telar'), ('titled-b', 'telar')], listed
+        assert [(entry['branch'], entry['origin']) for entry in listed if entry['worktree_id'] is None] == [('manual', 'untracked')], listed
+        self.call('worktree-remove-ambiguous-title', 'worktree', 'remove', 'fix', status=1)
+        assert all(Path(entry['path']).is_dir() for entry in titled)
+        self.call('worktree-remove-titled-a', 'worktree', 'remove', 'titled-a')
+        self.call('worktree-remove-titled-b', 'worktree', 'remove', 'titled-b')
+        # Git refuses a locked checkout although it is clean: it stays on disk and stays tracked.
+        locked = Path(self.call('worktree-create-locked', 'worktree', 'create', 'locked', '--json')['path'])
+        self.git('worktree', 'lock', str(locked))
+        self.call('worktree-remove-locked', 'worktree', 'remove', 'locked', status=1)
+        assert locked.is_dir()
+        tracked = self.call('worktree-list-locked', 'worktree', 'list', '--json')
+        assert [entry['branch'] for entry in tracked if entry['worktree_id'] is not None] == ['locked'], tracked
+        self.git('worktree', 'unlock', str(locked))
+        self.call('worktree-remove-unlocked', 'worktree', 'remove', 'locked')
+        assert not locked.exists()
+        # A person who confirms at the terminal discards the changes and the unmerged commits.
+        doomed = Path(self.call('worktree-create-confirmed', 'worktree', 'create', 'confirmed', '--json')['path'])
+        (doomed / 'file.txt').write_text('discarded\n')
+        self.git('commit', '-qam', 'Unmerged and discarded', cwd=doomed)
+        (doomed / 'file.txt').write_text('uncommitted\n')
+        self.answer('worktree-remove-confirmed', b'y\nyes', 'worktree', 'remove', 'confirmed', '--force', '--delete-branch', '--json')
+        assert not doomed.exists() and not self.git('branch', '--list', 'confirmed').strip()
         self.call('worktree-list-untracked', 'worktree', 'list', '--json')
         self.call('worktree-list-untracked-text', 'worktree', 'list')
         self.call('worktree-adopt-diff', 'worktree', 'diff', 'manual')
@@ -295,6 +373,7 @@ class Stack:
         self.call('worktree-missing', 'worktree', 'diff', 'missing', status=2)
         self.call('worktree-open-missing', 'worktree', 'open', 'missing', status=2)
         self.call('worktree-remove-missing', 'worktree', 'remove', 'missing', status=2)
+        self.exercise_worktree_options(wid)
         (self.repo / '.telar').mkdir()
         (self.repo / '.telar/setup.json').write_text('{"version":1,"argv":["/bin/sh","-c","printf setup-output; touch setup-ready"]}')
         self.git('add', '.telar/setup.json')
@@ -348,15 +427,97 @@ class Stack:
         canonical = self.call('workspace-create-symlink', 'workspace', 'create', '--directory', str(linked), '--name', 'Linked', '--json')
         assert canonical['directory'] == str(self.repo)
         self.call('workspace-close-symlink', 'tab', 'close', str(canonical['tab_id']), '--workspace', str(canonical['workspace_id']), '--json')
-        self.call('tab-close-last', 'tab', 'close', tid, '--workspace', wid, '--json')
+        assert self.call('tab-close-last', 'tab', 'close', tid, '--workspace', wid, '--json')['workspace_closed'] is True
         self.call('workspace-list-after-close', 'workspace', 'list', '--json')
         self.call('worktree-resolve-explicit-closed', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--workspace', str(self.repo), '--json')
         self.call('worktree-resolve-history', 'worktree', 'resolve', '--repository', 'example.invalid/team/repo', '--json')
+        self.exercise_opened_source()
         if self.gui:
             created = self.call('gui-fixture-workspace', 'workspace', 'create', '--directory', str(self.repo), '--json')
             self.call('gui-fixture-worktree', 'worktree', 'create', 'gui-task', '--title', 'GUI task', '--json')
             self.exercise_gui(str(created['workspace_id']), str(created['tab_id']))
         return self.results
+
+    def listed(self, name, *words):
+        return {entry['branch']: entry for entry in self.call(name, 'worktree', 'list', *words, '--json') if entry['worktree_id'] is not None}
+
+    def exercise_worktree_options(self, wid):
+        # The first pane runs the command after `--`, not the login shell.
+        command = self.call('workspace-create-command', 'workspace', 'create', '--directory', str(self.repo), '--name', 'Command', '--json',
+                            '--', '/bin/sh', '-c', 'echo marker-$((6*7)); exec sleep 60')
+        deadline = time.monotonic() + 10
+        while 'marker-42' not in invoke(self.binary, ['pane', 'read', str(command['pane_id'])], self.env, self.repo, self.socket)['stdout']:
+            assert time.monotonic() < deadline, 'the command after -- did not run in the first pane'
+            time.sleep(.05)
+        self.call('workspace-close-command', 'tab', 'close', str(command['tab_id']), '--workspace', str(command['workspace_id']), '--json')
+
+        # --from starts the branch at another base and --directory puts the checkout elsewhere.
+        tree = self.git('rev-parse', 'HEAD^{tree}').decode().strip()
+        dev = self.git('commit-tree', tree, '-p', 'HEAD', '-m', 'Dev base').decode().strip()
+        self.git('update-ref', 'refs/heads/dev', dev)
+        elsewhere = self.root / 'elsewhere' / 'from-dev'
+        created = self.call('worktree-create-from', 'worktree', 'create', 'from-dev', '--from', 'dev', '--directory', str(elsewhere), '--json')
+        assert created['path'] == str(elsewhere) and created['base'] == 'dev', created
+        assert self.git('rev-parse', 'HEAD', cwd=elsewhere).decode().strip() == dev
+
+        # The brief keeps the prompt's text: no control byte, at most 512 bytes, no split character.
+        prompt = 'do\x01 it ' + 'x' * 505 + 'é' * 800
+        self.call('worktree-create-brief', 'worktree', 'create', 'briefed', '--title', 'Briefed', '--dispatched-from', 'laptop', '--json',
+                  '--', '/bin/echo', prompt)
+        tracked = self.listed('worktree-list-brief')
+        brief = tracked['briefed']['brief']
+        assert brief and len(brief.encode()) <= 512 and prompt.replace('\x01', '').startswith(brief), brief
+        assert tracked['briefed']['dispatched_from'] == 'laptop', tracked['briefed']
+
+        # After a commit on the worktree, a commit on the base and an uncommitted edit, the diff
+        # shows the branch's work since the merge base, and --uncommitted only the edit.
+        diffed = Path(self.call('worktree-create-diffed', 'worktree', 'create', 'diffed', '--json')['path'])
+        (diffed / 'committed.txt').write_text('branch work\n')
+        self.git('add', 'committed.txt', cwd=diffed)
+        self.git('commit', '-qm', 'Branch work', cwd=diffed)
+        (diffed / 'file.txt').write_text('base\nuncommitted\n')
+        (self.repo / 'main-only.txt').write_text('main work\n')
+        self.git('add', 'main-only.txt')
+        self.git('commit', '-qm', 'Main work')
+        work = self.call('worktree-diff-work', 'worktree', 'diff', 'diffed')
+        assert 'committed.txt' in work and 'main-only.txt' not in work, work
+        uncommitted = self.call('worktree-diff-uncommitted', 'worktree', 'diff', 'diffed', '--uncommitted')
+        assert '+uncommitted' in uncommitted and 'committed.txt' not in uncommitted, uncommitted
+        stat = self.call('worktree-diff-stat-work', 'worktree', 'diff', 'diffed', '--stat')
+        assert 'committed.txt |' in stat and '+++' not in stat, stat
+        self.git('checkout', '--', 'file.txt', cwd=diffed)
+
+        # In an agent's pane, TELAR_WORKSPACE_ID names the repository, whatever the directory.
+        other = self.root / 'other'
+        other.mkdir()
+        self.git('init', '-q', '-b', 'main', cwd=other)
+        self.git('commit', '-q', '--allow-empty', '-m', 'Other', cwd=other)
+        current = invoke(self.binary, ['worktree', 'create', 'current-ws', '--json'], dict(self.env, TELAR_WORKSPACE_ID=wid), other, self.socket)
+        assert current['status'] == 0, current
+        assert Path(json.loads(current['stdout'])['path']).parent == self.root / 'repo-worktrees', current
+
+        # --workspace keeps only the worktrees of that repository, by id or directory.
+        opened = self.call('workspace-create-other', 'workspace', 'create', '--directory', str(other), '--json')
+        made = invoke(self.binary, ['worktree', 'create', 'other-task', '--json'], self.env, other, self.socket)
+        assert made['status'] == 0, made
+        for name, words in (('worktree-list-source-id', ('--workspace', wid)), ('worktree-list-source-path', ('--workspace', str(self.repo)))):
+            assert 'other-task' not in self.listed(name, *words) and 'briefed' in self.listed(name, *words)
+        assert set(self.listed('worktree-list-other-id', '--workspace', str(opened['workspace_id']))) == {'other-task'}
+        self.call('worktree-list-unknown-source', 'worktree', 'list', '--workspace', str(self.root / 'nowhere'), '--json', status=2)
+
+        for branch in ('from-dev', 'briefed', 'diffed', 'current-ws'):
+            self.call('worktree-remove-option-' + branch, 'worktree', 'remove', branch, '--json')
+        assert invoke(self.binary, ['worktree', 'remove', 'other-task'], self.env, other, self.socket)['status'] == 0
+        self.call('workspace-close-other', 'tab', 'close', str(opened['tab_id']), '--workspace', str(opened['workspace_id']), '--json')
+
+    def exercise_opened_source(self):
+        # With no workspace on the repository, `worktree create` opens one on its root.
+        assert not [entry for entry in self.call('workspace-list-before-source', 'workspace', 'list', '--json') if entry['path'] == str(self.repo)]
+        self.call('worktree-create-opens-source', 'worktree', 'create', 'sourced', '--json')
+        source = self.listed('worktree-list-sourced')['sourced']['source_workspace_id']
+        workspaces = {entry['workspace_id']: entry['path'] for entry in self.call('workspace-list-sourced', 'workspace', 'list', '--json')}
+        assert workspaces.get(source) == str(self.repo), (source, workspaces)
+        self.call('worktree-remove-sourced', 'worktree', 'remove', 'sourced')
 
     def exercise_gui(self, wid, tid):
         env = dict(self.env, TELAR_SOCKET=str(self.socket), TELAR_SOCKET_PATH=str(self.socket))

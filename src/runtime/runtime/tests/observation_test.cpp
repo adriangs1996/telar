@@ -31,8 +31,6 @@ import telar.base.memory.containers;
 import telar.config.runtime;
 import telar.base.text.utf8;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing;
 import telar.runtime.observation.processor;
@@ -127,6 +125,40 @@ namespace {
     feedObserver(observer, "\x1b[20;1H\x1b[2K\x1b[22;3H");
     result = observe(observer, AgentProvider::codex);
     check(result.signal && result.signal->status == AgentStatus::ready);
+  }
+
+  void testOversizedOutputDropsBatch(ConcurrentMemory& memory) {
+    PaneObserver observer{memory, TerminalSize{80, 24, 8, 16}};
+    const std::vector<Byte> filler(100 * 1024, 'a');
+    const std::vector<Byte> overflow(40 * 1024, 'b');
+
+    feedObserver(observer, "\x1b[22;1H› ");
+    check(observer.seal());
+    // Output that no longer fits the batch drops it, and the drop names the byte limit.
+    observer.bytes(ObservationKind::output, filler, false);
+    observer.bytes(ObservationKind::output, overflow, false);
+    const auto drop = observer.takeDrop();
+
+    check(drop && drop->name == "history.observer_batch_bytes" && drop->value == ObservationBatch::byte_capacity);
+    check(drop->requested == filler.size() + overflow.size());
+    check(!observer.takeDrop());
+
+    // A single chunk larger than the whole batch is dropped too.
+    const std::vector<Byte> oversized(ObservationBatch::byte_capacity + 1, 'c');
+
+    observer.bytes(ObservationKind::output, oversized, false);
+    const auto oversized_drop = observer.takeDrop();
+
+    check(oversized_drop && oversized_drop->name == "history.observer_batch_bytes");
+    auto result = observer.observe(builtin_manifests, AgentProvider::codex);
+
+    check(result.signal && result.signal->status == AgentStatus::ready);
+    observer.complete();
+
+    // After the drop the screen is rebuilt from what follows, so the agent's state is read again.
+    feedObserver(observer, "\x1b[2J\x1b[20;1HWorking (1s)\x1b[22;1H› \x1b[22;3H");
+    result = observe(observer, AgentProvider::codex);
+    check(result.signal && result.signal->status == AgentStatus::working);
   }
 
   void testManifests() {
@@ -493,6 +525,12 @@ namespace {
 
   const telar::testing::Case case_observation{"observation.observation", testObservation};
   const telar::testing::Case case_manifests{"observation.manifests", testManifests};
+  const telar::testing::Case case_oversized_output_drops_batch{"observation.oversized_output_drops_batch", [] {
+                                                                 SystemAllocator system;
+                                                                 MemoryAdapter adapter{system};
+
+                                                                 testOversizedOutputDropsBatch(adapter);
+                                                               }};
   const telar::testing::Case case_completion_wakeups{"observation.completion_wakeups", testCompletionWakeups};
 
 }

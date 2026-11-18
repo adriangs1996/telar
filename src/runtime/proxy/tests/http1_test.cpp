@@ -9,7 +9,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform.primitives;
 import telar.testing;
 import telar.testing.test_byte_stream;
 import telar.runtime.http1.head;

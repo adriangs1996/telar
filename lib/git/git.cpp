@@ -820,18 +820,15 @@ namespace telar::git {
       tracking.assign({merge.view()});
     } else {
       bool matched = false;
-      bool excluded = false;
       const auto remotes = [&](const ConfigEntry& entry) {
         if (!asciiEqualIgnoreCase(entry.section, "remote") || entry.subsection != remote.view() || !asciiEqualIgnoreCase(entry.key, "fetch") || !entry.value) {
           return true;
         }
 
+        // A negative refspec only keeps refs out of a fetch; git still names the branch the
+        // positive ones map to as the upstream.
         auto spec = *entry.value;
         if (spec.starts_with('^')) {
-          spec.remove_prefix(1);
-          PathName ignored;
-
-          excluded = excluded || (spec.contains('*') ? mapRefspec(spec, "*", merge.view(), ignored) : spec == merge.view());
           return true;
         }
 
@@ -851,7 +848,7 @@ namespace telar::git {
         return;
       }
 
-      if (!matched || excluded) {
+      if (!matched) {
         return;
       }
     }

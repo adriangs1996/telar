@@ -52,6 +52,11 @@ import telar.platform.net;
 import telar.runtime.platform.event_loop;
 import telar.runtime.platform.name_resolutions;
 import telar.runtime.proxy.authenticate;
+import telar.runtime.redirect.ingress;
+import telar.runtime.tls.tests.hello_fixture;
+import telar.runtime.tls.interception;
+import telar.tls;
+import telar.tls.tests.tls_fixture;
 
 namespace {
 
@@ -463,10 +468,203 @@ namespace {
     testDuplexWorkBound<64 * 1024>();
   }
 
+  // A redirected TLS connection to an intercepted host is inspected before any byte reaches the
+  // origin: a hello the proxy cannot act on, encrypted or malformed, closes it, and so does a hello
+  // left unfinished past its 3 s window.
+  void testTransparentHelloRefusals() {
+    using namespace telar::runtime::tls_test;
+    using Handshake = ConnectHandshake<Memory, FailedResolver>;
+    using State = Handshake::State;
+
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    ProxyOptions options{memory};
+    const auto secret = ProxySecret::generate();
+    ProxyCounters counters;
+
+    options.transparent_tls = true;
+    check(options.intercept_hosts.append("origin.test"));
+    options.intercept_hosts.finish();
+
+    struct Inspected {
+      State state;
+      std::string failure;
+      bool intercept;
+      std::string forwarded;
+    };
+
+    // Sends `bytes` from the child and advances the handshake at `start`, then at each of `later`.
+    auto inspect = [&](std::span<const std::uint8_t> bytes, std::initializer_list<std::chrono::milliseconds> later = {}) {
+      SocketPair child, origin;
+      redirect::Connection connection{.child = std::move(child.local), .origin = std::move(origin.local)};
+
+      connection.target.host.assign("192.0.2.1");
+      Handshake handshake{memory, std::move(connection), options, secret, counters};
+
+      sendBytes(child.remote.get(), {reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+      const auto start = ProxyConnectionPolicy::Clock::now();
+
+      handshake.advance(false, start);
+      for (const auto delay : later) {
+        handshake.advance(false, start + delay);
+      }
+
+      return Inspected{handshake.state(), std::string{handshake.failure()}, handshake.intercept(), receiveBytes(origin.remote.get())};
+    };
+
+    const auto accepted = inspect(helloRecord(std::array{serverName("origin.test"), protocols()}));
+
+    check(accepted.state == State::established && accepted.intercept);
+
+    const auto unread = inspect(helloRecord(std::array{serverName("other.test"), protocols(), encryptedHello()}));
+
+    check(unread.state == State::established && !unread.intercept);
+
+    const auto encrypted = inspect(helloRecord(std::array{serverName("origin.test"), protocols(), encryptedHello()}));
+
+    check(encrypted.state == State::closed && encrypted.failure == "tls_ech_not_supported" && encrypted.forwarded.empty());
+
+    const auto invalid = inspect(helloRecord(std::array{serverName("origin.test"), protocols(), protocols()}));
+
+    check(invalid.state == State::closed && invalid.failure == "tls_client_hello_invalid" && invalid.forwarded.empty());
+
+    const auto hello = helloRecord(std::array{serverName("origin.test"), protocols()});
+    const auto partial = std::span{hello}.first(10);
+    const auto waiting = inspect(partial, {std::chrono::milliseconds{2900}});
+
+    check(waiting.state == State::probing);
+
+    const auto stalled = inspect(partial, {std::chrono::milliseconds{3000}});
+
+    check(stalled.state == State::closed && stalled.failure == "tls_client_hello_timeout" && stalled.forwarded.empty());
+  }
+
+  // Answers only once released, as a resolver stuck on an unreachable DNS server would.
+  class StalledResolver {
+  public:
+    static ResolutionSummary resolve(const char*, std::span<NetworkAddress>) noexcept {
+      while (!released.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+      }
+
+      return {.error = EAI_NONAME};
+    }
+
+    static void release() {
+      released.store(true);
+      const auto deadline = ProxyConnectionPolicy::Clock::now() + std::chrono::seconds{5};
+
+      while (NameResolutions<StalledResolver>::pending() != 0) {
+        check(ProxyConnectionPolicy::Clock::now() < deadline);
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+      }
+    }
+
+    inline static std::atomic<bool> released = false;
+  };
+
+  // A client that connects and never sends its CONNECT holds an unauthenticated slot only until the
+  // head timeout closes the connection.
+  void testConnectHeadTimeout() {
+    using Policy = ProxyConnectionPolicy;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    ProxyOptions options{memory};
+    const auto secret = ProxySecret::generate();
+    ProxyCounters counters;
+    SocketPair sockets;
+    const auto opened = Policy::Clock::now();
+    ProxyConnection<FailedResolver> connection{memory, std::move(sockets.local), options, secret, counters};
+
+    connection.expire(opened + Policy::head_timeout - std::chrono::milliseconds{1});
+    check(!connection.closed());
+
+    connection.expire(Policy::Clock::now() + Policy::head_timeout);
+    check(connection.closed() && counters.read(ProxyCounter::connect_head_timeout) == 1);
+  }
+
+  // A CONNECT whose origin never resolves is answered 504 once the establishment timeout passes,
+  // instead of leaving the client waiting on a socket nobody answers.
+  void testEstablishmentTimeout(TlsTestMemory& memory, const TlsLibrary& library) {
+    using Policy = ProxyConnectionPolicy;
+    TlsTrustStore trust{memory, library};
+    TlsContexts contexts{memory, library, trust};
+    const TlsInterception interception{contexts, nullptr};
+    ProxyObservations observations{memory, {}};
+    ProxyOptions options{memory};
+    const auto secret = ProxySecret::generate();
+    ProxyCounters counters;
+
+    {
+      SocketPair sockets;
+      ProxyConnection<StalledResolver> connection{memory, std::move(sockets.local), options, secret, counters};
+
+      sendBytes(sockets.remote.get(), "CONNECT stalled.test:443 HTTP/1.1\r\n" + authorization(secret) + "\r\n");
+      connection.advance(interception, observations, TunnelReadiness::available(), Policy::Clock::now());
+      check(!connection.closed() && receiveBytes(sockets.remote.get()).empty());
+
+      connection.expire(Policy::Clock::now() + Policy::establishment_timeout);
+      std::string response;
+      const auto deadline = Policy::Clock::now() + std::chrono::seconds{5};
+
+      while (!connection.closed()) {
+        check(Policy::Clock::now() < deadline);
+        connection.advance(interception, observations, TunnelReadiness::available(), Policy::Clock::now());
+        response += receiveBytes(sockets.remote.get());
+      }
+
+      response += receiveBytes(sockets.remote.get());
+      check(response == "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n");
+      check(counters.read(ProxyCounter::establish_timeout) == 1);
+    }
+
+    StalledResolver::release();
+  }
+
+  // With every name resolution slot taken, a CONNECT to a hostname is answered 503 at once, instead
+  // of waiting on a resolution that was never started.
+  void testResolutionRefused() {
+    using Resolutions = NameResolutions<StalledResolver>;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    ProxyOptions options{memory};
+    const auto secret = ProxySecret::generate();
+    ProxyCounters counters;
+    std::array<std::optional<Resolutions::Ticket>, Resolutions::capacity> tickets;
+
+    for (std::size_t index = 0; index < tickets.size(); ++index) {
+      tickets[index] = Resolutions::request("host" + std::to_string(index) + ".test");
+      check(tickets[index].has_value());
+    }
+
+    {
+      SocketPair sockets;
+      ConnectHandshake<Memory, StalledResolver> handshake{memory, std::move(sockets.local), options, secret, counters};
+
+      sendBytes(sockets.remote.get(), "CONNECT refused.test:443 HTTP/1.1\r\n" + authorization(secret) + "\r\n");
+      finishHandshake(handshake);
+      check(receiveBytes(sockets.remote.get()) == "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+      check(counters.read(ProxyCounter::resolution_refusal) == 1);
+    }
+
+    for (auto& ticket : tickets) {
+      ticket.reset();
+    }
+
+    StalledResolver::release();
+  }
+
   const telar::testing::Case case_proxy_transport{"proxy_transport.proxy_transport", testProxyTransport};
   const telar::testing::Case case_connect_head{"proxy_transport.connect_head", testConnectHead};
   const telar::testing::Case case_handshake{"proxy_transport.handshake", testHandshake};
   const telar::testing::Case case_connection_policy{"proxy_transport.connection_policy", testConnectionPolicy};
   const telar::testing::Case case_socket_watch{"proxy_transport.socket_watch", testSocketWatch};
+  const telar::testing::Case case_transparent_hello_refusals{"proxy_transport.transparent_hello_refusals", testTransparentHelloRefusals};
+  const telar::testing::Case case_connect_head_timeout{"proxy_transport.connect_head_timeout", testConnectHeadTimeout};
+  const telar::testing::Case case_establishment_timeout{"proxy_transport.establishment_timeout", withTlsLibrary<testEstablishmentTimeout>};
+  const telar::testing::Case case_resolution_refused{"proxy_transport.resolution_refused", testResolutionRefused};
 
 }

@@ -95,14 +95,14 @@ jobs:
       - name: Build GUI and focused regression tests
         run: |
           tools/cpp build ci -- --parallel 3 \
-            --target telar-gui gui-status-bar-test gui-native-pointer-events-test
-          tools/cpp test ci -- -R '^gui-(qt-dependency|status-bar|native-pointer-events)$'
+            --target telar-gui gui-status-bar-test gui-ui-foundation-tests
+          tools/cpp test ci -- -R '^(gui-(qt-dependency|status-bar)$|gui\.ui\.foundation\.native_pointer_events\.)'
 
       - name: Test native macOS navigation
         if: runner.os == 'macOS'
         run: |
-          tools/cpp build ci -- --parallel 3 --target gui-native-window-appearance-test
-          QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui-native-window-appearance$'
+          tools/cpp build ci -- --parallel 3 --target gui-platform-tests
+          QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui\.platform\.native_window_appearance\.'
 
       - name: Check lifetimes
         if: matrix.configuration == 'Release'

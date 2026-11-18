@@ -85,10 +85,12 @@ def main():
 
 
 def load_sources(rev, repository):
-    """Return {path: text} of the C++ and QML files in the folders of ui/ at `rev`, in git order."""
+    """Return {path: text} of the C++ and QML files in the folders of ui/ at `rev`, in git order.
+    A tests/ folder is no node: its tests use the folder they live in, and its parents."""
     listing = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', rev, UI],
                                       cwd=repository, text=True).split()
-    paths = [path for path in listing if path.endswith(SOURCE_SUFFIXES) and '/' in path[len(UI):]]
+    paths = [path for path in listing if path.endswith(SOURCE_SUFFIXES) and '/' in path[len(UI):]
+             and '/tests/' not in path[len(UI) - 1:]]
     if not paths:
         return {}
 

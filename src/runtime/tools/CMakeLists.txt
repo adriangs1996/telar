@@ -1,10 +1,11 @@
 # Probes run by hand or by the scripts of this folder, never by CTest: building them on every
 # test run costs a full module compile each. `cmake --build out --target runtime-probes` builds
-# them. runtime-tools-support holds the protocol peer and the fixtures they share.
+# them. runtime-tools-support holds the fixtures they share; the protocol peer comes from the
+# runtime's test support, whose tests drive a runtime through it too.
 telar_process_settings(runtime_settings)
 telar_add_test(runtime-tools-support STATIC
-  SOURCES protocol_peer/protocol_peer.cppm control_png_pty_inputs/control_png_pty_inputs.cppm
-  LIBRARIES ${runtime_settings} telar::base telar::client telar::platform telar::vocabulary telar::wire telar::testing)
+  SOURCES control_png_pty_inputs/control_png_pty_inputs.cppm
+  LIBRARIES ${runtime_settings} runtime-runtime-tests-support telar::base telar::client telar::platform telar::vocabulary telar::wire telar::testing)
 target_compile_options(runtime-tools-support PUBLIC ${TELAR_PROCESS_OPTIONS})
 
 telar_add_test(plugin-exchange-probe PROBE SOURCES plugin_exchange_probe.cpp LIBRARIES runtime-vocabulary runtime-plugins runtime-tools-support)

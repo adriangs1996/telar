@@ -33,7 +33,6 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
-import telar.platform.primitives;
 import telar.testing;
 import telar.tls.tests.tls_fixture;
 import telar.platform.error;

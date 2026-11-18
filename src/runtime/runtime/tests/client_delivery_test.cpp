@@ -40,14 +40,11 @@ static_assert(true);
 #include <sys/stat.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.render.document;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.model.client_layouts;
@@ -587,6 +584,83 @@ namespace {
       }
     }
 
+    // A program that begins a synchronized update and never ends it still gets its screen drawn.
+    void syncOutputReleased() {
+      SystemAllocator system;
+      MemoryAdapter adapter{system};
+      ConcurrentMemory& memory = adapter;
+      RuntimeModel model{memory};
+      ClientStore clients{memory};
+      LimitService limits;
+      NativeEventLoop<ConcurrentMemory> poller{memory};
+      PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/sync-delivery.sock"}};
+      WorkspaceService<decltype(poller)> workspaces{memory};
+      ClientPeer peer{memory, model, clients, ClientRole::interactive};
+      auto& client = peer.session();
+      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+
+      workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+      const auto opened = peer.receive<PaneOpened>();
+      auto& pane = panes.require(model.panes, opened.pane_id);
+      auto timeout = std::chrono::nanoseconds::max();
+      const auto start = std::chrono::steady_clock::now() + std::chrono::minutes{1};
+      const auto frame = [&](std::chrono::steady_clock::time_point now) {
+        AttachmentDelivery delivery{model, client};
+
+        if (!delivery.prepare(model, client, DeliveryLane::cells, now, timeout)) {
+          return false;
+        }
+
+        check(client.attachment(pane.id)->frames.acknowledge(peer.receive<PaneFrame>().frame_id));
+        return true;
+      };
+
+      frame(start);
+      constexpr std::string_view update = "\x1b[?2026hhalf-drawn";
+
+      pane.terminal.feed({reinterpret_cast<const Byte*>(update.data()), update.size()}, *pane.media);
+      check(!frame(start + std::chrono::milliseconds{100}), "a frame went out in the middle of a synchronized update");
+      check(frame(start + std::chrono::seconds{2}), "a synchronized update that never ends held the screen back");
+    }
+
+    // More workspace changes than the runtime queues between deliveries: every client that watches a
+    // changed workspace still resynchronizes it, though its change was not queued.
+    void noticeOverflowResyncsObservers() {
+      SystemAllocator system;
+      MemoryAdapter adapter{system};
+      ConcurrentMemory& memory = adapter;
+      RuntimeModel model{memory};
+      ClientStore clients{memory};
+      LimitService limits;
+      NativeEventLoop<ConcurrentMemory> poller{memory};
+      PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/notice-delivery.sock"}};
+      WorkspaceService<decltype(poller)> workspaces{memory};
+      ClientPeer owner{memory, model, clients, ClientRole::interactive};
+      ClientPeer observer{memory, model, clients, ClientRole::interactive};
+      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const Launch launch{.cwd = "/tmp", .arguments = arguments};
+
+      workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = launch});
+      const auto busy = owner.receive<PaneOpened>().location.workspace;
+
+      workspaces.createWorkspace(model, panes, clients, observer.session().id, CreateWorkspace{.request_id = 2, .size = {80, 24, 0, 0}, .name = "Watched", .launch = launch});
+      const auto watched = observer.receive<PaneOpened>().location.workspace;
+
+      for (std::uint64_t request = 3; request < 1003; ++request) {
+        workspaces.renameWorkspace(model, owner.session(), RenameWorkspace{.request_id = request, .workspace = busy, .name = "Busy"});
+        owner.receive<WorkspaceSnapshot>();
+      }
+
+      workspaces.renameWorkspace(model, owner.session(), RenameWorkspace{.request_id = 1003, .workspace = watched, .name = "Renamed"});
+      owner.receive<WorkspaceSnapshot>();
+      workspaces.deliverNotices(clients);
+      ClientDelivery delivery{memory, model};
+      NoState state;
+
+      delivery.write(observer.session(), state, std::chrono::steady_clock::now());
+      check(observer.receive<ResyncRequired>().workspace.id == watched.id, "the watched workspace's change was lost");
+    }
+
   }
 
   void testClientDelivery() {
@@ -599,5 +673,7 @@ namespace {
   }
 
   const telar::testing::Case case_client_delivery{"client_delivery.client_delivery", testClientDelivery};
+  const telar::testing::Case case_sync_output_released{"client_delivery.sync_output_released_after_one_second", syncOutputReleased};
+  const telar::testing::Case case_notice_overflow_resyncs_observers{"client_delivery.notice_overflow_resyncs_observers", noticeOverflowResyncsObservers};
 
 }

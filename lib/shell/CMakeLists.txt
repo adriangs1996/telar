@@ -5,6 +5,6 @@ if(BUILD_TESTING)
   target_compile_options(telar-shell-tests PRIVATE ${TELAR_WARNINGS})
 
   # Not a test: prints what lexing typical lines costs. Use a Release build.
-  add_executable(telar-shell-bench tests/syntax_bench.cpp)
+  add_executable(telar-shell-bench tools/syntax_bench.cpp)
   target_link_libraries(telar-shell-bench PRIVATE telar::shell)
 endif()

@@ -436,6 +436,204 @@ namespace {
       check(owner.ticket == 0 && origin.output.empty());
       check(owner.errors == std::vector<std::string>{"http_interception_rejected"});
     }
+
+    // A head the lax framing parser accepts but the strict one refuses is where smuggling lives:
+    // closed, nothing reaches the origin; open, the original bytes pass untouched.
+    void invalidHeadPolicy(ConcurrentMemory& memory) {
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 15, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "GET /duplicate HTTP/1.1\r\nHost: fixture.test\r\nHost: other.test\r\n\r\n";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output == child.input;
+        });
+
+        check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_invalid_head"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // A third-party plugin's replacement that does not decode, or that names a method no HTTP/1
+    // peer accepts, fails the exchange instead of reaching the origin in part.
+    void invalidDecision(ConcurrentMemory& memory) {
+      for (const bool truncated : {false, true}) {
+        HttpOwner owner{memory};
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 16, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /decision HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return owner.ticket != 0;
+        });
+
+        if (truncated) {
+          owner.replace({});
+          owner.replacement.pop_back();
+        } else {
+          owner.replace({}, {}, "BAD METHOD");
+        }
+
+        pump(connection, child, origin, [&] {
+          return connection.finished();
+        });
+
+        check(origin.output.empty() && owner.errors == std::vector<std::string>{"http_invalid_decision"});
+      }
+    }
+
+    // Chunk extensions cost wire bytes without adding body: a body far under its limit can still
+    // carry a wire past the buffer's bound, which is refused instead of buffered.
+    void chunkFramingAmplification(ConcurrentMemory& memory) {
+      const std::string chunk = "1;" + std::string(1000, 'e') + "\r\nx\r\n";
+      constexpr std::size_t wire_bound = HttpMessageLimits::body_bytes + 2 * Http1Head::capacity;
+      const auto chunks = wire_bound / chunk.size() + 16;
+
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 17, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /extensions HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n";
+        for (std::size_t index = 0; index < chunks; ++index) {
+          child.input += chunk;
+        }
+
+        child.input += "0\r\n\r\n";
+        check(chunks < HttpMessageLimits::body_bytes);
+        child.read_limit = 16384;
+        origin.visible = 0;
+        origin.write_limit = 4096;
+        origin.alternating_writes = true;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output.size() == child.input.size();
+        });
+
+        check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_wire_limit"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // Trailers come from the peer like any field: one without a colon or with an invalid name is
+    // refused, not written again unchecked.
+    void invalidTrailers(ConcurrentMemory& memory) {
+      for (const std::string_view trailer : {"NoColon", "Bad Name: x"}) {
+        HttpOwner owner{memory};
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 18, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /trailers HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n" + std::string{trailer} + "\r\n\r\n";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return connection.finished();
+        });
+
+        check(owner.ticket == 0 && origin.output.empty() && owner.errors == std::vector<std::string>{"http_invalid_trailer"});
+      }
+    }
+
+    // A declared length past the buffer is settled from the head alone: closed, the origin gets
+    // nothing and the client need not send the body; open, the head reaches the origin before any
+    // body byte exists.
+    void contentLengthOverLimit(ConcurrentMemory& memory) {
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 19, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /large HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: " + std::to_string(2 * HttpMessageLimits::body_bytes) + "\r\n\r\nabc";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output == child.input;
+        });
+
+        check(owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_body_limit"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // An event stream has no end to wait for: an intercepted one reaches the client event by event,
+    // with the reason reported.
+    void eventStreamResponse(ConcurrentMemory& memory) {
+      HttpOwner owner{memory};
+
+      owner.fail_closed = false;
+      ProxyCounters counters;
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 20, .host = "fixture.test"})}};
+      TestByteStream child, origin;
+
+      child.input = "GET /events HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
+      origin.visible = 0;
+      pump(connection, child, origin, [&] {
+        return owner.ticket != 0;
+      });
+
+      owner.answer = Verdict::allow;
+      pump(connection, child, origin, [&] {
+        return origin.output == child.input;
+      });
+
+      origin.input = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: first\n\n";
+      origin.visible = origin.input.size();
+      pump(connection, child, origin, [&] {
+        return child.output == origin.input;
+      });
+
+      check(!origin.ended && owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_streaming_body"});
+    }
+
+    // Only 100-continue is understood: another expectation gets no interim response, and the request
+    // passes unchanged when open and not at all when closed.
+    void unsupportedExpectation(ConcurrentMemory& memory) {
+      for (const bool closed : {false, true}) {
+        HttpOwner owner{memory};
+
+        owner.fail_closed = closed;
+        ProxyCounters counters;
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 21, .host = "fixture.test"})}};
+        TestByteStream child, origin;
+
+        child.input = "POST /expect HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\nExpect: foo\r\n\r\nabc";
+        origin.visible = 0;
+        pump(connection, child, origin, [&] {
+          return closed ? connection.finished() : origin.output == child.input;
+        });
+
+        check(child.output.empty() && owner.ticket == 0 && owner.errors == std::vector<std::string>{"http_unsupported_expectation"});
+        check(closed ? origin.output.empty() : origin.output == child.input);
+      }
+    }
+
+    // A chunk-size line past the line limit fails the intercepted message: closed, the origin gets
+    // none of it.
+    void chunkLineLimit(ConcurrentMemory& memory) {
+      HttpOwner owner{memory};
+      ProxyCounters counters;
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 22, .host = "fixture.test"})}};
+      TestByteStream child, origin;
+
+      child.input = "POST /line HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n1;" + std::string(2048, 'e') + "\r\nx\r\n0\r\n\r\n";
+      origin.visible = 0;
+      pump(connection, child, origin, [&] {
+        return connection.finished();
+      });
+
+      check(owner.ticket == 0 && origin.output.empty() && owner.errors == std::vector<std::string>{"http_line_limit"});
+    }
   }
 
   void testHttpInterception() {
@@ -454,6 +652,22 @@ namespace {
     limits(memory);
   }
 
+  template <void (*body)(ConcurrentMemory&)>
+  void withMemory() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+
+    body(adapter);
+  }
+
   const telar::testing::Case case_http_interception{"http_interception.http_interception", testHttpInterception};
+  const telar::testing::Case case_invalid_head_policy{"http_interception.invalid_head_policy", withMemory<invalidHeadPolicy>};
+  const telar::testing::Case case_invalid_decision{"http_interception.invalid_decision", withMemory<invalidDecision>};
+  const telar::testing::Case case_chunk_framing_amplification{"http_interception.chunk_framing_amplification", withMemory<chunkFramingAmplification>};
+  const telar::testing::Case case_invalid_trailers{"http_interception.invalid_trailers", withMemory<invalidTrailers>};
+  const telar::testing::Case case_content_length_over_limit{"http_interception.content_length_over_limit", withMemory<contentLengthOverLimit>};
+  const telar::testing::Case case_event_stream_response{"http_interception.event_stream_response", withMemory<eventStreamResponse>};
+  const telar::testing::Case case_unsupported_expectation{"http_interception.unsupported_expectation", withMemory<unsupportedExpectation>};
+  const telar::testing::Case case_chunk_line_limit{"http_interception.chunk_line_limit", withMemory<chunkLineLimit>};
 
 }

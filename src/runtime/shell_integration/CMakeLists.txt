@@ -13,3 +13,7 @@ add_dependencies(runtime-shell_integration command-specs)
 # A spec is one string literal of up to ~115 KB, past the 64 KB the standard asks every compiler to
 # accept; clang, the only compiler of this tree, takes it whole.
 set_source_files_properties(words/words.cpp PROPERTIES COMPILE_OPTIONS "-Wno-overlength-strings")
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(shell_integration LINK telar::base telar::platform telar::wire)
+endif()

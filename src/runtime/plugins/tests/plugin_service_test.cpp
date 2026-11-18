@@ -31,14 +31,17 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
+import telar.platform.fs;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.plugins.service;
+import telar.platform.fs;
 import telar.platform.process;
 import telar.config.runtime;
 import telar.plugins;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.plugins.worker;
+import telar.runtime.platform.signals;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
 
@@ -377,6 +380,225 @@ namespace {
       check(budget.liveBytes() == 0 && quota.used() == 0);
     }
 
+    // A worker the trust file grants, by name and package digest.
+    tap::ServiceSpec trusted(std::string_view name) {
+      auto result = specification("echo");
+
+      result.name.assign(name);
+      result.digest.fill(0x5a);
+      return result;
+    }
+
+    // Replaces the trust file whole, as `telar plugin` saves it, readable by its owner only.
+    void writeTrust(const std::string& path, std::string_view grants, mode_t mode = 0600) {
+      const auto staged = path + ".new";
+
+      {
+        std::ofstream file{staged};
+
+        file << "{\"version\":1,\"grants\":[" << grants << "]}";
+        check(file.good());
+      }
+
+      check(::chmod(staged.c_str(), mode) == 0 && ::rename(staged.c_str(), path.c_str()) == 0);
+    }
+
+    std::string grant(std::string_view name, char digest = 'a') {
+      std::string hex;
+
+      for (std::size_t index = 0; index < tap::PackageDigest{}.size(); ++index) {
+        hex.append({'5', digest});
+      }
+
+      return "{\"plugin\":\"" + std::string{name} + "\",\"digest\":\"" + hex + "\",\"capabilities\":[\"proxy.tap\",\"notifications\"]}";
+    }
+
+    // Withdrawing a plugin's grant, or granting another package under its name, stops the
+    // running worker: it no longer listens, takes no new exchange, and the runtime drops
+    // what it had already produced.
+    void testTrustRevocationStopsWorker() {
+      SystemAllocator system;
+      BudgetAllocator budget{system, 8 * 1024 * 1024};
+      SynchronizedAllocator synchronized{budget};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
+      CaptureQuota quota{65536};
+      const ExecutablePath executable;
+      TemporaryDirectory directory{"/tmp/telar-plugin-trust.XXXXXX"};
+      const auto path = std::string{directory.path()} + "/trust.json";
+
+      for (const auto& replacement : {std::string{}, grant("trusted", 'b')}) {
+        writeTrust(path, grant("trusted"));
+        const std::array specifications{trusted("trusted")};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+
+        service.watchTrust(path);
+        check(service.listening());
+        auto exchange = captured(memory, quota);
+
+        service.submit(exchange);
+        pollfd ready{service.descriptor(), POLLIN, 0};
+
+        check(::poll(&ready, 1, 3000) == 1);
+        writeTrust(path, replacement);
+        awaitCondition([&] {
+          return !service.listening();
+        });
+
+        auto ignored = captured(memory, quota);
+
+        service.submit(ignored);
+        check(quota.used() == 0);
+        service.collect([](const tap::EffectBatch&) {
+          check(false);
+        });
+      }
+
+      check(budget.liveBytes() == 0 && quota.used() == 0);
+    }
+
+    // A trust file that is gone, unreadable as JSON or open to other users keeps no grant
+    // alive: watching it revokes every worker at once.
+    void testUnreadableTrustRevokesAll() {
+      SystemAllocator system;
+      BudgetAllocator budget{system, 8 * 1024 * 1024};
+      SynchronizedAllocator synchronized{budget};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
+      const ExecutablePath executable;
+      TemporaryDirectory directory{"/tmp/telar-plugin-trust.XXXXXX"};
+      const auto path = std::string{directory.path()} + "/trust.json";
+      auto second = trusted("second");
+
+      second.package_index = 1;
+      second.plugin_id = 18;
+      const std::array specifications{trusted("first"), second};
+      const auto both = grant("first") + "," + grant("second");
+
+      for (const auto damage : {0, 1, 2, 3}) {
+        writeTrust(path, both);
+        if (damage == 1) {
+          check(::unlink(path.c_str()) == 0);
+        } else if (damage == 2) {
+          writeTrust(path, both + ",");
+        } else if (damage == 3) {
+          writeTrust(path, both, 0644);
+        }
+
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+
+        service.watchTrust(path);
+        check(service.listening() == (damage == 0), std::to_string(damage));
+      }
+
+      check(budget.liveBytes() == 0);
+    }
+  }
+
+  // Replaces trust.json at `path` in one rename, as `telar plugin trust` does, with one grant
+  // for the tapper plugin.
+  void writeTapperTrust(const std::string& path, std::string_view capabilities) {
+    const auto staged = path + ".staged";
+
+    {
+      std::ofstream output{staged, std::ios::binary};
+
+      output << R"({"version":1,"grants":[{"plugin":"tapper","digest":")" << std::string(64, '1') << R"(","capabilities":)" << capabilities << "}]}";
+      check(output.good());
+    }
+
+    check(::chmod(staged.c_str(), 0600) == 0);
+    std::filesystem::rename(staged, path);
+  }
+
+  // A running tap plugin keeps only the capabilities trust.json still grants it: narrowing its
+  // grant stops it, while keeping or widening the grant leaves it running.
+  void testTrustNarrowingStopsPlugin() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 8 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    const ExecutablePath executable;
+    TemporaryDirectory directory{"/tmp/telar-plugin-trust-XXXXXX"};
+    const auto path = std::string{directory.path()} + "/trust.json";
+
+    {
+      auto granted = specification("echo");
+
+      granted.name.assign("tapper");
+      granted.digest.fill(0x11);
+      writeTapperTrust(path, R"(["proxy.tap","notifications"])");
+      tap::Service service{memory, std::span<const tap::ServiceSpec>{&granted, 1}, executable.c_str()};
+
+      service.watchTrust(path);
+      check(service.listening());
+      writeTapperTrust(path, R"(["proxy.tap","notifications","history.read"])");
+      std::this_thread::sleep_for(tap::Limits::trust_check_interval * 4);
+      check(service.listening());
+      writeTapperTrust(path, R"(["proxy.tap"])");
+      awaitCondition([&] {
+        return !service.listening();
+      });
+
+      service.stop();
+    }
+
+    check(budget.liveBytes() == 0);
+  }
+
+  // A plugin that stops answering costs one timeout: the worker counts it, starts a new
+  // session, and the next exchange gets its result.
+  void testTimeoutRestartsSession() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 8 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    CaptureQuota quota{65536};
+    const ExecutablePath executable;
+    TemporaryDirectory directory{"/tmp/tlr-timeout-once.XXXXXX"};
+    const auto mode = "timeout-once:" + std::string{directory.path()} + "/stalled";
+    const auto identity = specification(mode.c_str());
+    tap::ResultQueue<ConcurrentMemory> results;
+    tap::TapBudget held;
+    CancellationSignal cancellation;
+
+    results.activate();
+    {
+      tap::Worker<> worker{memory, identity, results, held, tap::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{500}}};
+      const auto submit = [&](std::uint64_t event_id) {
+        auto exchange = captured(memory, quota);
+        auto charge = held.charge(tap::SharedExchange::capturedBytes(exchange));
+
+        check(charge.has_value());
+        worker.submit(std::make_shared<tap::SharedExchange>(std::move(*charge), event_id, std::move(exchange)));
+      };
+
+      submit(1);
+      awaitCondition([&] {
+        return worker.metrics().timeouts == 1;
+      });
+
+      submit(2);
+      unsigned delivered = 0;
+
+      awaitCondition([&] {
+        results.collect([&](const auto& result) {
+          check(result.event_id == 2);
+          ++delivered;
+        });
+
+        return delivered == 1;
+      });
+
+      const auto metrics = worker.metrics();
+
+      check(metrics.timeouts == 1 && !metrics.disabled);
+      worker.stop();
+    }
+
+    check(quota.used() == 0);
   }
 
   void testPluginService() {
@@ -388,5 +610,9 @@ namespace {
   }
 
   const telar::testing::Case case_plugin_service{"plugin_service.plugin_service", testPluginService};
+  const telar::testing::Case case_trust_revocation_stops_worker{"plugin_service.trust_revocation_stops_worker", testTrustRevocationStopsWorker};
+  const telar::testing::Case case_unreadable_trust_revokes_all{"plugin_service.unreadable_trust_revokes_all", testUnreadableTrustRevokesAll};
+  const telar::testing::Case case_trust_narrowing{"plugin_service.trust_narrowing_stops_plugin", testTrustNarrowingStopsPlugin};
+  const telar::testing::Case case_timeout_restarts_session{"plugin_service.timeout_restarts_session", testTimeoutRestartsSession};
 
 }

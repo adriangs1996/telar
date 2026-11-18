@@ -204,8 +204,107 @@ namespace {
     });
   }
 
+  // Whether a plugin keeps running after the user's grants change: it holds only what it both
+  // declared and was granted, so only losing one of those revokes it.
+  void testServiceSpecStillAuthorized() {
+    auto capabilities = [](std::initializer_list<tap::Capability> list) {
+      tap::Capabilities result;
+
+      for (const auto capability : list) {
+        result.insert(capability);
+      }
+
+      return result;
+    };
+
+    using enum tap::Capability;
+    tap::ServiceSpec both{.declared = capabilities({proxy_tap, notifications}), .granted = capabilities({proxy_tap, notifications})};
+
+    check(both.stillAuthorized(capabilities({proxy_tap, notifications})));
+    check(!both.stillAuthorized(capabilities({proxy_tap})));
+
+    tap::ServiceSpec ungranted{.declared = capabilities({proxy_tap, notifications}), .granted = capabilities({proxy_tap})};
+
+    check(ungranted.stillAuthorized(capabilities({proxy_tap})));
+
+    tap::ServiceSpec undeclared{.declared = capabilities({proxy_tap}), .granted = capabilities({proxy_tap, notifications})};
+
+    check(undeclared.stillAuthorized(capabilities({proxy_tap})));
+  }
+
+  // A plugin's reply frame and each effect in it say what they are: a frame of another kind, or an
+  // effect of a kind the runtime does not know, is refused instead of read as a notification.
+  void testEffectsRejectUnknownKinds() {
+    std::array<Byte, tap::Limits::effect_bytes> buffer;
+
+    auto reply = [&](tap::FrameKind frame, Byte effect) {
+      tap::FrameWriter writer{buffer};
+
+      writer.tag(frame);
+      writer.integer(std::uint64_t{1});
+      writer.integer(Byte{1});
+      writer.integer(effect);
+      writer.tag(NotificationLevel::info);
+      writer.integer(std::uint32_t{0});
+      writer.text("title");
+      writer.text("message");
+      return writer.finish();
+    };
+
+    const auto notification = static_cast<Byte>(tap::EffectKind::notification);
+
+    check(tap::Protocol::decodeEffects(reply(tap::FrameKind::effects, notification)).batch.count == 1);
+    for (const Byte effect : {0, 4, 255}) {
+      rejects([&] {
+        tap::Protocol::decodeEffects(reply(tap::FrameKind::effects, effect));
+      });
+    }
+
+    for (const auto frame : {tap::FrameKind::error, tap::FrameKind::exchange}) {
+      rejects([&] {
+        tap::Protocol::decodeEffects(reply(frame, notification));
+      });
+    }
+  }
+
+  // An exchange cut to the part limit tells the plugin so, which must not take a cut body for the
+  // whole one.
+  void testPartLimitMarksTruncation() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    CaptureQuota quota{4096};
+    const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
+    std::array<Byte, 4096> buffer;
+    CapturedExchange exchange{memory};
+    auto half = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 0}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test"});
+
+    half->setMethod("POST");
+    half->setTarget("/");
+    half->append(half->headPart(), "0123456789");
+    half->append(half->bodyPart(), "abcdefghij");
+    half->finish(CaptureOutcome::finished, 1);
+    exchange.include(std::move(half));
+
+    auto text = [](std::span<const std::uint8_t> bytes) {
+      return std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    };
+
+    const auto cut = tap::Protocol::decodeExchange(tap::Protocol::encodeExchange(buffer, {1, 1}, exchange, 4));
+
+    check(cut.request && text(cut.request->head) == "0123" && text(cut.request->body) == "abcd");
+    check(cut.request->head_truncated && cut.request->body_truncated);
+
+    const auto whole = tap::Protocol::decodeExchange(tap::Protocol::encodeExchange(buffer, {1, 1}, exchange, 10));
+
+    check(whole.request && text(whole.request->body) == "abcdefghij" && !whole.request->head_truncated && !whole.request->body_truncated);
+  }
+
   const telar::testing::Case case_exchange_protocol{"plugin.exchange_protocol", testExchangeProtocol};
   const telar::testing::Case case_effect_protocol{"plugin.effect_protocol", testEffectProtocol};
   const telar::testing::Case case_error_protocol{"plugin.error_protocol", testErrorProtocol};
+  const telar::testing::Case case_service_spec_still_authorized{"plugin.service_spec_still_authorized", testServiceSpecStillAuthorized};
+  const telar::testing::Case case_effects_reject_unknown_kinds{"plugin.effects_reject_unknown_kinds", testEffectsRejectUnknownKinds};
+  const telar::testing::Case case_part_limit_marks_truncation{"plugin.part_limit_marks_truncation", testPartLimitMarksTruncation};
 
 }

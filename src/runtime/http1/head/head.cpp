@@ -96,8 +96,13 @@ namespace telar::runtime {
         continue;
       }
 
-      const auto name = trimText(line->substr(0, colon), " \t");
+      const auto name = line->substr(0, colon);
       const auto value = trimText(line->substr(colon + 1), " \t");
+
+      // RFC 9112 5.1: whitespace around a field name is rejected, never trimmed into a framing field.
+      if (trimText(name, " \t").size() != name.size()) {
+        return std::nullopt;
+      }
 
       if (equals(name, "transfer-encoding")) {
         if (transfer_encoding || value.empty()) {

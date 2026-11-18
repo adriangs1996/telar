@@ -39,7 +39,7 @@ namespace telar::runtime {
     return 4;
   }
 
-  void CellProjection::updateColors(GhosttyTerminal terminal, GhosttyRenderState render_state) {
+  bool CellProjection::updateColors(GhosttyTerminal terminal, GhosttyRenderState render_state) {
     checkGhostty(ghostty_render_state_get(render_state, GHOSTTY_RENDER_STATE_DATA_COLORS, &colors_));
     checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES, palette_overrides_.data()));
 
@@ -51,6 +51,8 @@ namespace telar::runtime {
 
     checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_MODE, &reverse));
 
+    const auto previous = default_style_;
+
     default_style_ = {};
     if (reverse.value || foreground_result == GHOSTTY_SUCCESS) {
       default_style_.foreground = rgbColor(colors_.foreground);
@@ -59,6 +61,8 @@ namespace telar::runtime {
     if (reverse.value || background_result == GHOSTTY_SUCCESS) {
       default_style_.background = rgbColor(colors_.background);
     }
+
+    return default_style_ != previous;
   }
 
   CellColor CellProjection::paletteColor(Byte index) const noexcept {

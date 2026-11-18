@@ -4,3 +4,7 @@ telar_add_domain(gui features/palette
     palette-query.cpp
     palette-presentation.cpp
   DEPS foundation/core foundation/text foundation/actions foundation/model)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(features/palette)
+endif()

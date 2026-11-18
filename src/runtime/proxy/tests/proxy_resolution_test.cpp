@@ -17,7 +17,6 @@ static_assert(true);
 import std;
 import telar.platform.primitives;
 import telar.testing;
-import telar.runtime.proxy.relay_direction;
 import telar.platform.net;
 import telar.runtime.platform.name_resolutions;
 import telar.runtime.platform.signals;

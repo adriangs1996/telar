@@ -46,6 +46,7 @@ static_assert(true);
 import telar.testing;
 import telar.runtime.plugins.run_worker;
 import telar.base.text.utf8;
+import telar.platform.fs;
 import telar.plugins;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
@@ -227,6 +228,33 @@ end}
     std::filesystem::remove_all(root);
   }
 
+  // A callback's effects fill a batch of `Limits::effects`: one that returns that many gets
+  // them all, and one that returns more gets an error for its event, never a cut batch.
+  void testEffectBatchBounded() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/telar-plugin-effects.XXXXXX"};
+    const auto path = std::string{directory.path()} + "/main.lua";
+    std::array<Byte, tap::Limits::effect_bytes> output;
+    const auto exchange = sampleExchange();
+
+    for (const std::size_t count : {tap::Limits::effects, tap::Limits::effects + 1, std::size_t{200}}) {
+      writePlugin(path, "local telar = require('telar') return {on_exchange = function() local effects = {} for index = 1, " + std::to_string(count) + " do effects[index] = telar.effect.notification{title = tostring(index)} end return effects end}");
+      tap::Host host{memory, path.c_str()};
+      const auto reply = host.invoke(exchange, output);
+
+      if (count <= tap::Limits::effects) {
+        const auto effects = tap::Protocol::decodeEffects(reply);
+
+        check(effects.batch.count == count && effects.batch.notifications[count - 1].title == std::to_string(count));
+      } else {
+        check(tap::Protocol::decodeError(reply).event_id == 21);
+      }
+    }
+  }
+
   const telar::testing::Case case_plugin_host{"plugin_host.plugin_host", testPluginHost};
+  const telar::testing::Case case_effect_batch_bounded{"plugin_host.effect_batch_bounded", testEffectBatchBounded};
 
 }

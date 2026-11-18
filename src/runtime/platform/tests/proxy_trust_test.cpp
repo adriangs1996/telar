@@ -251,12 +251,31 @@ namespace {
         });
       }
 
-      for (const auto replacement : {"", "1.5", "-1", "256", "null", "true"}) {
+      for (const auto replacement : {"", "1.5", "-1", "256", "null", "true", "2", "0"}) {
         std::string source{valid};
 
         source.replace(source.find("1,"), 1, replacement);
         rejects([&] {
           proxy_trust::Record::parse(memory, source);
+        });
+      }
+
+      const auto withFields = [](std::string_view fingerprint, std::string_view store) {
+        return std::string{R"({"version":1,"backend":"update-ca-certificates","fingerprint":")"} + std::string{fingerprint} + R"(","store_path":")" + std::string{store} + R"("})";
+      };
+      constexpr std::string_view fingerprint = "aBcDEF0123456789012345678901234567890123";
+
+      check(proxy_trust::Record::parse(memory, withFields(fingerprint, "/fixture")).store.view() == "/fixture");
+      for (const auto malformed : {fingerprint.substr(0, 39), std::string_view{"aBcDEF01234567890123456789012345678901234"}, std::string_view{"GBcDEF0123456789012345678901234567890123"}}) {
+        rejects([&] {
+          proxy_trust::Record::parse(memory, withFields(malformed, "/fixture"));
+        });
+      }
+
+      // The store path reaches `sudo rm -f`, so a record that names no absolute file is refused.
+      for (const auto store : {"", "fixture", "/fix\\u0000ture"}) {
+        rejects([&] {
+          proxy_trust::Record::parse(memory, withFields(fingerprint, store));
         });
       }
 
@@ -315,6 +334,15 @@ namespace {
         rejects([&] {
           service.uninstall(forged);
         });
+
+        rejects([&] {
+          service.install(forged);
+        });
+
+        // A tampered record never reaches the privileged commands: none of them names its path.
+        check(std::ranges::none_of(commands.commands, [](const auto& command) {
+          return std::ranges::contains(command, std::string_view{"/etc/passwd"});
+        }));
       }
     }
 

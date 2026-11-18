@@ -8,3 +8,7 @@ telar_add_domain(gui features/notifications
     notifications-stack.cpp
     notifications-text.cpp
   DEPS foundation/core foundation/text foundation/model)
+
+if(BUILD_TESTING)
+  telar_add_domain_tests(features/notifications)
+endif()

@@ -39,12 +39,9 @@ static_assert(true);
 #include <sys/stat.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.runtime;
@@ -225,6 +222,7 @@ namespace {
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
     WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
+    ClientPeer spectator{memory, model, clients, ClientRole::interactive};
     const auto identity = model.workspaces.nextId();
     auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
 
@@ -240,6 +238,20 @@ namespace {
         FailureCode::invalid_request,
         "cwd source pane is unavailable");
     check(stored.tabs.size() == 1);
+
+    // The client whose CreateTab failed still sizes the workspace, so another client's tab waits.
+    const CreateTab valid{.request_id = 2, .workspace = {.id = identity}, .label = "Valid", .size = size, .launch = {.cwd = "/", .arguments = arguments}};
+
+    expectFailure([&] {
+      workspaces.createTab(model, panes, clients, spectator.session().id, valid);
+    },
+        FailureCode::resource_limit,
+        "workspace geometry is leased by another client");
+
+    // Once the owner leaves, as when it disconnects, the other client creates its tab.
+    releaseAllGeometry(model.workspaces, clients, owner.session().id);
+    workspaces.createTab(model, panes, clients, spectator.session().id, valid);
+    check(spectator.receive<TabCreated>().request_id == 2);
   }
 
   void testPaneReuseAndBackgroundColors(ConcurrentMemory& memory) {

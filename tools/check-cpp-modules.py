@@ -74,7 +74,8 @@ def main():
     upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
     domains = check_domain_targets(inventory['process_layers'], owned, lambda path: (ROOT / path).read_text())
     tests = check_test_placement(inventory['process_layers'], inventory['library_layers'], owned,
-                                 lambda path: (ROOT / path).read_text(errors='replace'))
+                                 lambda path: (ROOT / path).read_text(errors='replace'),
+                                 inventory.get('import_rules', {}).get('src/gui/ui', ()))
     check_cycles(imports)
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
@@ -326,20 +327,47 @@ def check_domain_targets(layers, files, read):
 
 TEST_FILE_RE = re.compile(r'_test\.(cpp|mm)$')
 TEST_UNIT_SUFFIXES = ('.cpp', '.cppm', '.mm')
-# The processes whose tests live with their domains; the GUI's join when src/gui is cut by use case.
-DOMAIN_TESTS = ('runtime', 'cli')
+# The processes whose tests live with their domains.
+DOMAIN_TESTS = ('runtime', 'cli', 'gui')
 # Every test program links the harness, whatever its folder.
 HARNESS = 'telar.testing'
+# src/gui/ui is no domain: its folders are one QML module, and a UI test is placed by the
+# headers of ui/ it includes. Its trees, the one a test checks first.
+UI_TREES = ('app', 'design', 'foundation')
+UI_INCLUDE_RE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"(ui/[^"]+)/[^/"]+"', re.M)
 
 
-def check_test_placement(layers, library_layers, files, read):
+def ui_folder(text):
+    """The ui/ folder a GUI test checks: of the folders whose headers it includes, those of the
+    tree it reaches first in UI_TREES (an app folder uses design and foundation, a design one
+    foundation), and the deepest folder that holds them all. None without a ui/ include."""
+    folders = [folder.split('/') for folder in UI_INCLUDE_RE.findall(text)]
+    for tree in UI_TREES:
+        checked = [folder for folder in folders if len(folder) > 1 and folder[1] == tree]
+        if checked:
+            common = checked[0]
+            for folder in checked[1:]:
+                length = 0
+                while length < min(len(common), len(folder)) and common[length] == folder[length]:
+                    length += 1
+                common = common[:length]
+
+            return '/'.join(common)
+
+    return None
+
+
+def check_test_placement(layers, library_layers, files, read, ui_rules=()):
     """Rule 9: a test lives with what it checks, so where a test goes follows from what it
     imports. A test of a domain lives in src/<process>/<domain>/tests/ and imports that domain,
     the domains below it that its DEPS reach and libraries. A test that needs more is an
     integration test of the process, in src/<process>/tests/, and one there that fits a single
     domain belongs to that domain. A test of a library lives in lib/<library>/tests/ and imports
     no process and no library that builds on it (library_layers): it may borrow utilities from
-    any other. Every *_test file lives in a tests/ folder, and any test may import the harness."""
+    any other. Every *_test file lives in a tests/ folder, and any test may import the harness.
+    A test of src/gui/ui lives in the folder whose headers it includes (ui_folder); one that
+    imports what ui/ may not (`ui_rules`, the import rules of src/gui/ui) is an integration
+    test of the GUI."""
     deps = {}
     for path in sorted(name for name in files if name.endswith('CMakeLists.txt')):
         for process, domain, arguments in domain_declarations(path, read(path)):
@@ -362,6 +390,12 @@ def check_test_placement(layers, library_layers, files, read):
     def libraries(library):
         return reach(lambda name: library_layers.get(name, []), library) | {library}
 
+    fixtures = {}
+    for path in sorted(name for name in files if name.startswith('src/') and '/tests/' in name and name.endswith('.cppm')):
+        text = COMMENTS_RE.sub('', read(path))
+        if declaration := DECLARATION_RE.search(text):
+            fixtures[declaration[2]] = imports_of('', text)
+
     errors, count = [], 0
     for path in sorted(name for name in files if name.endswith(TEST_UNIT_SUFFIXES)):
         if '/tests/' not in path:
@@ -375,6 +409,32 @@ def check_test_placement(layers, library_layers, files, read):
             owner = None
         elif process and process[1] in DOMAIN_TESTS:
             owner = process[2]
+            if process[1] == 'gui' and TEST_FILE_RE.search(path):
+                text = COMMENTS_RE.sub('', read(path))
+                checked = ui_folder(text)
+                # A shared fixture of src/gui/tests counts by what it imports itself.
+                gui = [name for imported in imports_of('', text)
+                       for name in (fixtures.get(imported, ()) if imported.startswith('telar.gui.tests.') else (imported,))
+                       if name.startswith('telar.gui.') and not name.startswith('telar.gui.tests.')]
+                ui_imports = all(name.startswith(tuple(ui_rules)) for name in gui)
+                if owner is not None and owner.split('/')[0] == 'ui':
+                    count += 1
+                    if checked is None:
+                        errors.append(f'{path} includes no header of ui/: a UI test lives with the ui/ folder it includes')
+                    elif owner != checked:
+                        errors.append(f'{path} includes the headers of {checked}: it belongs in src/gui/{checked}/tests/')
+                    continue
+                if checked is not None:
+                    if owner is None and ui_imports:
+                        errors.append(f'{path} includes the headers of {checked} and imports only what ui/ builds on: '
+                                      f'it belongs in src/gui/{checked}/tests/')
+                        continue
+                    if owner is not None:
+                        errors.append(f'{path} includes headers of ui/, which no domain builds on: '
+                                      f'it belongs in src/gui/{checked}/tests/ or, with what ui/ does not import, in src/gui/tests/')
+                        continue
+                    count += 1
+                    continue
             if owner is not None:
                 domains = sorted((name for name in layers.get(process[1], []) if owner == name or owner.startswith(name + '/')),
                                  key=len)
@@ -406,6 +466,9 @@ def check_test_placement(layers, library_layers, files, read):
                 if name not in allowed:
                     errors.append(f'{path} imports the {name} domain, which {owner} does not build on: '
                                   f'as an integration test it belongs in src/{process[1]}/tests/')
+        elif not TEST_FILE_RE.search(path):
+            # Support shared by the process's integration tests, placed by the tests that use it.
+            continue
         elif not reached:
             errors.append(f'{path} imports no domain of {process[1]}: it belongs with the library it checks')
         else:
@@ -1137,7 +1200,8 @@ def check_import_rules(files, rules, read):
     """Rule 9: below a folder of `import_rules`, a file imports, of its process's modules, only its
     own module and the ones whose names start with a listed prefix. In src/gui a feature imports
     only foundation, application imports features and foundation, and ui imports application and
-    foundation, so a feature never reaches another one and ui never reaches a feature."""
+    foundation, so a feature never reaches another one and ui never reaches a feature. A test
+    also imports the domain it checks, the support beside it and that of src/<process>/tests."""
     errors, count = [], 0
     for path in sorted(files):
         if not path.endswith(('.cppm', '.cpp', '.hpp', '.h', '.mm')):
@@ -1146,6 +1210,9 @@ def check_import_rules(files, rules, read):
         if not folders:
             continue
         allowed = rules[max(folders, key=len)]
+        tested = re.match(r'src/([^/]+)/(.+?)/tests/', path)
+        if tested:
+            allowed = [*allowed, f'telar.{tested[1]}.{tested[2].replace("/", ".")}', f'telar.{tested[1]}.tests']
         text = COMMENTS_RE.sub('', read(path))
         declaration = DECLARATION_RE.search(text)
         own = declaration[2] if declaration else None
@@ -1243,20 +1310,52 @@ def unit_names(text):
     return names, namespaces, imports, module[1] if module else None
 
 
+# A qualifier, as `runtime::` in `runtime::Terminal`.
+QUALIFIER_RE = re.compile(rb'\b(\w+)\s*::')
+
+
+def test_names(text):
+    """What a test names outside comments, literals, its preamble, using-directives and
+    namespace aliases, and the names it uses only to qualify another, as `runtime` in
+    `runtime::Terminal`."""
+    text = UNIT_JUNK_RE.sub(b' ', text)
+    # The preamble ends at the last import or module declaration, not at the last `import` in
+    # a name such as import_history.
+    preamble = [match.end() for match in UNIT_DECLARATION_RE.finditer(text)]
+    code = NAMESPACE_USE_RE.sub(b' ', text[preamble[-1] if preamble else 0:])
+    qualifiers = set(QUALIFIER_RE.findall(code))
+    names = set(code.translate(IDENTIFIER_BYTES).split()) | {qualifier + b'::' for qualifier in qualifiers}
+    alone = set(QUALIFIER_RE.sub(b' ', code).translate(IDENTIFIER_BYTES).split())
+
+    return names, qualifiers - alone
+
+
 def unused_import_sites(units, provided):
     """The imports of each unit that name nothing their module provides, as spelled. `units`
     maps each file to its bytes. std is left out, and so is a module the inventory does not
-    know: the checker cannot tell what it declares."""
+    know: the checker cannot tell what it declares. A test must name something the module
+    declares: a using-directive of a namespace many modules share, such as telar::runtime, does
+    not count, because where a test lives follows from what it imports (rule 9)."""
     sites = {}
     for name, text in units.items():
         names, namespaces, imports, module = unit_names(text)
+        test = '/tests/' in name
         for spelling in imports:
             target = (module or b'') + spelling if spelling.startswith(b':') else spelling
             found = provided.get(target.decode())
             if spelling == b'std' or found is None:
                 continue
 
-            if found[0].isdisjoint(names) and found[1].isdisjoint(namespaces):
+            if test:
+                # A namespace the module shares with others names it neither in a
+                # using-directive nor as the qualifier of a name another module declares.
+                # A namespace only this module declares does name it (provided_names).
+                named, qualifying = test_names(text)
+                shared = {space for space in found[1] & qualifying if space + b'::' not in found[0]}
+                unused = not (found[0] & named) - shared
+            else:
+                unused = found[0].isdisjoint(names) and found[1].isdisjoint(namespaces)
+            if unused:
                 sites.setdefault(name, set()).add(spelling.decode())
 
     return sites

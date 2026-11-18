@@ -41,7 +41,7 @@ namespace telar::runtime::cli::machine {
     auto parent = openPrivateParent(absolute.string());
     const auto name = absolute.filename().string();
     const auto lock_name = name + ".lock";
-    FileDescriptor lock{::openat(parent.get(), lock_name.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
+    const auto lock = openLockFile(parent.get(), lock_name.c_str());
     struct stat state{};
     if (!lock || ::fstat(lock.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & 0077) != 0) {
       throw CommandError{"InsecureFile"};
@@ -601,11 +601,27 @@ fetch() {
       return true;
     }
 
-    static bool owned(std::string_view remote) {
+    // What telar installs in an agent's directory itself, which setup leaves to the other
+    // machine's telar. `remote` names a file from the home; each path is from an agent's root,
+    // or from the parent of a shared root such as .agents/skills.
+    bool owned(std::string_view remote) const {
       static constexpr auto paths = std::to_array<std::string_view>({"skills/telar", "skills/telar-coordinator", "extensions/telar.ts", "plugins/telar.ts"});
+      const auto matches = [](std::string_view relative) {
+        return std::ranges::any_of(paths, [&](auto path) {
+          return relative == path || below(relative, path);
+        });
+      };
 
-      return std::ranges::any_of(paths, [&](auto path) {
-        return remote == path || below(remote, path);
+      return std::ranges::any_of(roots_, [&](const Root& root) {
+        if (!below(remote, root.remote)) {
+          return false;
+        }
+
+        const auto relative = remote.substr(root.remote.size() + 1);
+        const std::string_view base{root.remote};
+        const auto parent = base.substr(base.rfind('/') + 1);
+
+        return matches(relative) || matches(std::string{parent} + "/" + std::string{relative});
       });
     }
 

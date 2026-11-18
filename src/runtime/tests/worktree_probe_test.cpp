@@ -135,6 +135,46 @@ namespace {
     check(!probe.observe(request).present);
   }
 
+  // A worktree another tool created registers with no base: the probe finds the main checkout's
+  // branch and measures the distance from it, deletions included.
+  void testLinkedWorktreeAgainstMain() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<char, 64> directory{};
+
+    std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
+    check(::mkdtemp(directory.data()) != nullptr);
+    const std::string root{directory.data()};
+    const auto main = root + "/main";
+    const auto linked = root + "/linked";
+
+    std::filesystem::create_directory(main);
+    runGit(memory, main, {"init", "--quiet", "--initial-branch=trunk", "--template="});
+    std::ofstream{main + "/file.txt"} << "one\ntwo\nthree\nfour\n";
+    runGit(memory, main, {"add", "file.txt"});
+    runGit(memory, main, {"commit", "--quiet", "-m", "Initial fixture"});
+    runGit(memory, main, {"worktree", "add", "--quiet", "-b", "feature", linked});
+
+    // The feature deletes two committed lines and leaves one uncommitted change.
+    std::ofstream{linked + "/file.txt"} << "one\nfour\n";
+    runGit(memory, linked, {"commit", "--quiet", "-am", "Remove lines"});
+    std::ofstream{linked + "/other.txt"} << "uncommitted\n";
+    WorktreeGitProbe probe{memory};
+    WorktreeProbeRequest request{};
+
+    request.identity = 4;
+    request.path.assign(linked);
+    const auto result = probe.observe(request);
+
+    check(result.present && result.branch.view() == "feature");
+    check(result.base.view() == "trunk", "an external worktree has no base to measure against");
+    check(result.measured && result.ahead == 1);
+    check(result.removed == 2 && result.added == 0, "deleted lines are not counted");
+    std::filesystem::remove_all(root);
+  }
+
   const telar::testing::Case case_worktree_probe{"worktree_probe.worktree_probe", testWorktreeProbe};
+  const telar::testing::Case case_linked_worktree_against_main{"worktree_probe.linked_worktree_against_main", testLinkedWorktreeAgainstMain};
 
 }

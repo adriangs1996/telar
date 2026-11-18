@@ -67,6 +67,18 @@ class UiGraph(unittest.TestCase):
             (UI + 'app/chrome/sidebar.hpp', 'app/chrome', 'app/chrome/activity', 'agent_card.hpp'),
         ])
 
+    def test_a_tests_folder_is_no_node(self):
+        rev = self.tree({
+            'app/chrome/sidebar.hpp': '',
+            'app/chrome/activity/tests/agent_card_test.cpp': include('app/chrome/sidebar.hpp'),
+            'app/tests/window_test.cpp': include('app/chrome/activity/agent_card.hpp'),
+        })
+
+        sources = graph.load_sources(rev, self.repository)
+
+        self.assertEqual(list(sources), [UI + 'app/chrome/sidebar.hpp'])
+        self.assertEqual(graph.include_edges(sources), [])
+
     def test_counts_root_users_shared_headers_and_cycles(self):
         lines, code = self.run_report({
             'app/application_controller.hpp': include('chrome/sidebar.hpp') + include('app/projection.hpp'),

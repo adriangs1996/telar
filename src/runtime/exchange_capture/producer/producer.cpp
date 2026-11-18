@@ -253,9 +253,12 @@ namespace telar::runtime {
       while (const auto needed = ZSTD_nextSrcSizeToDecompress(state_)) {
         const auto kind = ZSTD_nextInputType(state_);
         const auto remaining = limit - produced;
+        // Storage sized by a declared content size ends before `limit`: a block that reaches the limit
+        // there carries more than the frame declares, so it is rejected before any write.
+        const bool fits = remaining <= output.size() - produced;
 
         if (needed > input.size()) {
-          if ((kind == ZSTDnit_block || kind == ZSTDnit_lastBlock) && block.kind == ZstdBlock::Kind::raw && input.size() >= remaining && needed > remaining) {
+          if ((kind == ZSTDnit_block || kind == ZSTDnit_lastBlock) && block.kind == ZstdBlock::Kind::raw && input.size() >= remaining && needed > remaining && fits) {
             std::copy_n(input.data(), remaining, output.data() + produced);
             return Result{limit, true};
           }
@@ -278,6 +281,10 @@ namespace telar::runtime {
 
           requires_block_capacity = literals->has_sequences;
           if (!literals->has_sequences && literals->regenerated_size > remaining) {
+            if (!fits) {
+              return std::nullopt;
+            }
+
             const auto copied = copyLiteralPrefix(input.first(needed), output.subspan(produced, remaining), frame.blockSizeMax);
 
             return copied ? std::optional{Result{produced + *copied, true}} : std::nullopt;
@@ -286,6 +293,10 @@ namespace telar::runtime {
 
         // A full capture stops at the writer boundary before later frame validation.
         if ((kind == ZSTDnit_block || kind == ZSTDnit_lastBlock) && block.kind != ZstdBlock::Kind::compressed && block.size > remaining) {
+          if (!fits) {
+            return std::nullopt;
+          }
+
           if (block.kind == ZstdBlock::Kind::raw) {
             std::copy_n(input.data(), remaining, output.data() + produced);
           } else if (block.kind == ZstdBlock::Kind::repeated) {

@@ -248,7 +248,7 @@ namespace telar::runtime::cli::repository {
 
   FileDescriptor lockRepository(int parent, const std::string& name) {
     const auto lock_name = name + ".lock";
-    FileDescriptor file{::openat(parent, lock_name.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
+    auto file = openLockFile(parent, lock_name.c_str());
     struct stat state{};
     if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::getuid() || state.st_nlink != 1 || (state.st_mode & 0077) != 0) {
       throw std::runtime_error{"UnsafeRepositoryLock"};
@@ -1508,17 +1508,18 @@ namespace telar::runtime::cli::sessions {
         throw Failure{"removal cancelled"};
       }
 
-      session_.template exchange<RequestCompleted>(ForgetWorktree{.worktree = entry->worktree});
       if (root) {
         if (options_.force) {
           git_.run({"git", "-C", *root, "worktree", "remove", "--force", "--", entry->path}, "git worktree remove failed");
         } else {
           git_.run({"git", "-C", *root, "worktree", "remove", "--", entry->path}, "git worktree remove failed");
         }
+      }
 
-        if (options_.delete_branch) {
-          git_.run({"git", "-C", *root, "branch", merged ? "-d" : "-D", "--", entry->branch}, "git branch deletion failed; the branch may not be merged");
-        }
+      // Only a checkout that is gone leaves the runtime's catalog; one Git kept stays tracked.
+      session_.template exchange<RequestCompleted>(ForgetWorktree{.worktree = entry->worktree});
+      if (root && options_.delete_branch) {
+        git_.run({"git", "-C", *root, "branch", merged ? "-d" : "-D", "--", entry->branch}, "git branch deletion failed; the branch may not be merged");
       }
 
       if (options_.json) {

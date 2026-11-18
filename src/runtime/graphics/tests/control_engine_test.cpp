@@ -16,9 +16,9 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
+import telar.base.text;
+import telar.render.document;
 import telar.config.runtime;
-import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.testing.one_shot_allocator;
@@ -65,8 +65,8 @@ namespace {
 
       terminal.feed(bytes("abc\x1b[6n\x1b[5;9H\x1b[6n"));
       check(drain(terminal) == "\x1b[1;4R\x1b[5;9R");
-      terminal.feed(bytes("\x1b[18t\x1b[19t\x1b[16t"));
-      check(drain(terminal) == "\x1b[8;24;80t\x1b[9;24;80t\x1b[6;0;0t");
+      terminal.feed(bytes("\x1b[18t\x1b[19t\x1b[16t\x1b[14t"));
+      check(drain(terminal) == "\x1b[8;24;80t\x1b[9;24;80t\x1b[6;0;0t\x1b[4;0;0t");
 
       terminal.controlPolicy().title_report = true;
       terminal.feed(bytes("\x1b]2;Títulø界\x1b\\\x1b[21t"));
@@ -1037,14 +1037,20 @@ namespace {
     }
 
     void noForeignQueries(ConcurrentMemory& memory) {
-      for (const auto purpose : {TerminalPurpose::separate_media, TerminalPurpose::observation}) {
+      for (const auto purpose : {TerminalPurpose::interactive, TerminalPurpose::separate_media, TerminalPurpose::observation}) {
         Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, purpose};
 
         terminal.controlPolicy().clipboard_write = control::Access::deny;
         checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void*>(&foreignReply)));
         checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE, reinterpret_cast<const void*>(&foreignClipboard)));
-        const std::array<std::string_view, 5> requests{
+        const std::array<std::string_view, 11> requests{
             "\x1b[5n\x1b[c\x1b]10;?\x1b\\\x1bP+q544E\x1b\\",
+            "\x1b_Ga=q,i=1,s=1,v=1;AAAAAA==\x1b\\",
+            "\x1b_Gab=1,a=q,i=1,s=1,v=1;AAAAAA==\x1b\\",
+            "\x1b_Gi=123456789012,a=q,s=1,v=1;AAAAAA==\x1b\\",
+            "\x1b]052;c;aGVsbG8=\x1b\\",
+            "\x1b]010;?\x1b\\",
+            "\x1b]65588;c;aGVsbG8=\x1b\\",
             "\x1bP+\x00q544E\x1b\\"sv,
             "\x1b]5\x00"
             "2;c;aGVsbG8=\x1b\\"sv,
@@ -1550,6 +1556,148 @@ namespace {
     check(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
   }
 
+  // ENQ is answered with the configured answerback and nothing else, even from inside a
+  // sequence, and waits with the rest of the input while the pty's queue is full.
+  void enquiryAnswerback(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+
+    terminal.feed(bytes("\x05"));
+    check(drain(terminal).empty());
+
+    constexpr std::string_view answerback = "telar";
+    auto& policy = terminal.controlPolicy();
+
+    std::ranges::copy(answerback, policy.answerback.begin());
+    policy.answerback_length = static_cast<std::uint16_t>(answerback.size());
+    terminal.feed(bytes("\x05"));
+    check(drain(terminal) == answerback);
+    terminal.feed(bytes("\x1b[5\x05n"));
+    check(drain(terminal) == "telar\x1b[0n");
+
+    std::string request;
+    std::string expected;
+
+    for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+      request.append("\x1b[5n");
+      expected.append("\x1b[0n");
+    }
+
+    request.append("\x05\x1b[5n");
+    expected.append("telar\x1b[0n");
+    terminal.feed(bytes(request));
+    check(terminal.hasPendingControl());
+    check(drain(terminal, 1) == expected);
+    check(!terminal.hasPendingControl());
+  }
+
+  // DA2 and XTVERSION identify the terminal to the programs that ask, and only a pane
+  // that answers queries answers them.
+  void secondaryAttributesAndVersion(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+    Terminal observer{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::observation};
+
+    terminal.feed(bytes("\x1b[>c\x1b[>0c\x1b[>q"));
+    check(drain(terminal) == "\x1b[>1;0;0c\x1b[>1;0;0c\x1bP>|telar " + std::string{control::program_version} + "\x1b\\");
+    observer.feed(bytes("\x1b[>c\x1b[>q"));
+    check(drain(observer).empty());
+  }
+
+  // DECRQM answers ANSI and DEC modes from the terminal's state: set, reset, permanently
+  // reset for ANSI modes a terminal never has, and 0 for a mode it does not know.
+  void ansiAndDecModeReports(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+    const auto report = [&](std::string_view request) {
+      terminal.feed(bytes("\x1b[" + std::string{request} + "$p"));
+      return drain(terminal);
+    };
+
+    check(report("4") == "\x1b[4;2$y");
+    check(report("20") == "\x1b[20;2$y");
+    terminal.feed(bytes("\x1b[4h"));
+    check(report("4") == "\x1b[4;1$y");
+    check(report("1") == "\x1b[1;4$y");
+    check(report("99") == "\x1b[99;0$y");
+    check(report("?1") == "\x1b[?1;2$y");
+    check(report("?25") == "\x1b[?25;1$y");
+    check(report("?1000") == "\x1b[?1000;2$y");
+    terminal.feed(bytes("\x1b[?1h\x1b[?25l\x1b[?1000h"));
+    check(report("?1") == "\x1b[?1;1$y");
+    check(report("?25") == "\x1b[?25;2$y");
+    check(report("?1000") == "\x1b[?1000;1$y");
+    check(report("?117") == "\x1b[?117;4$y");
+    check(report("?9999") == "\x1b[?9999;0$y");
+  }
+
+  // DECRQSS answers with the setting a program can send back to restore it.
+  void statusStringVariants(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+    const auto status = [&](std::string_view setting, std::string_view request) {
+      terminal.feed(bytes(std::string{setting} + "\x1bP$q" + std::string{request} + "\x1b\\"));
+      return drain(terminal);
+    };
+
+    check(status("\x1b[2 q", " q") == "\x1bP1$r2 q\x1b\\");
+    check(status("\x1b[4 q", " q") == "\x1bP1$r4 q\x1b\\");
+    check(status("\x1b[5 q", " q") == "\x1bP1$r5 q\x1b\\");
+    check(status("\x1b[3;20r", "r") == "\x1bP1$r3;20r\x1b\\");
+    check(status("", "s") == "\x1bP0$r\x1b\\");
+    check(status("\x1b[?69h\x1b[5;60s", "s") == "\x1bP1$r5;60s\x1b\\");
+    check(status("\x1b[0;1;4:3;7;31;102m", "m") == "\x1bP1$r0;1;4:3;7;31;102m\x1b\\");
+    check(status("\x1b[0;38;5;196;48;2;1;2;3m", "m") == "\x1bP1$r0;38:5:196;48:2::1:2:3m\x1b\\");
+    check(status("", "x") == "\x1bP0$r\x1b\\");
+  }
+
+  // XTGETTCAP reads names in either hex case; a name that is not valid hex, or longer than
+  // any capability, is unknown, and the names after it are still answered.
+  void xtgettcapNameForms(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+    constexpr std::string_view name = "\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\";
+
+    terminal.feed(bytes("\x1bP+q544e\x1b\\"));
+    check(drain(terminal) == name);
+
+    // "437G" would read as "Co" if a non-hex digit counted as -1.
+    terminal.feed(bytes("\x1bP+q437G;544;7878;" + std::string(66, '4') + ";544E\x1b\\"));
+    check(drain(terminal) == name);
+  }
+
+  // OSC 21 answers each colour under the key it was asked by, and a long OSC 10 colour
+  // still reaches the terminal.
+  void kittyColorNamedKeys(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+
+    terminal.feed(bytes("\x1b]10;rgb:11/22/33\x1b\\\x1b]11;rgb:44/55/66\x1b\\\x1b]12;rgb:77/88/99\x1b\\"));
+    terminal.feed(bytes("\x1b]21;foreground=?;background=?;cursor=?\x1b\\"));
+    check(drain(terminal) == "\x1b]21;foreground=rgb:11/22/33;background=rgb:44/55/66;cursor=rgb:77/88/99\x1b\\");
+
+    const std::string long_color = "rgbi:0." + std::string(60, '0') + "/1.0/0.0";
+
+    terminal.feed(bytes("\x1b]10;" + long_color + "\x1b\\\x1b]10;?\x1b\\"));
+    check(drain(terminal) == "\x1b]10;rgb:0000/ffff/0000\x1b\\");
+  }
+
+  // A document a program cannot hand over whole, because its base64 is invalid or it is
+  // larger than a document may be, opens nothing, and the text that follows stays.
+  void documentRejectedInput(ConcurrentMemory& memory) {
+    Terminal terminal{memory, TerminalSize{80, 24, 0, 0}, TerminalPurpose::separate_media};
+    const std::string oversized = std::string{"\x1b]"} + std::string{::telar::render::sequence_begin} + std::string(::telar::render::max_sequence_body - ::telar::render::sequence_begin.size() + 4, 'A') + "\x1b\\";
+
+    for (const std::string& begin : {std::string{"\x1b]7780;begin;!!!!\x1b\\"}, oversized}) {
+      terminal.feed(bytes(begin + "first\r\n\x1b]7780;end\x1b\\"));
+      terminal.refresh();
+      check(terminal.effects.inline_documents.empty());
+      check(terminal.screen.cells[0].text[0] == 'f');
+
+      terminal.feed(bytes("\x1b[?1049h" + begin));
+      check(terminal.effects.document.empty());
+      terminal.feed(bytes("\x1b[?1049l\x1b"
+                          "c"));
+    }
+
+    terminal.feed(bytes("\x1b[?1049h\x1b]7780;begin;AAECAw==\x1b\\"));
+    check(terminal.effects.document.size() == 4);
+  }
+
   // Each case owns the budget its calls share and leaves nothing allocated there.
   template <auto body>
   void budgeted() {
@@ -1596,5 +1744,12 @@ namespace {
   const telar::testing::Case case_reports{"control_engine.reports", budgeted<reports>};
   const telar::testing::Case case_report_lifecycle{"control_engine.report_lifecycle", budgeted<reportLifecycle>};
   const telar::testing::Case case_report_queue_resume{"control_engine.report_queue_resume", budgeted<reportQueueResume>};
+  const telar::testing::Case case_enquiry_answerback{"control_engine.enquiry_answerback", budgeted<enquiryAnswerback>};
+  const telar::testing::Case case_secondary_attributes_and_version{"control_engine.secondary_attributes_and_version", budgeted<secondaryAttributesAndVersion>};
+  const telar::testing::Case case_ansi_and_dec_mode_reports{"control_engine.ansi_and_dec_mode_reports", budgeted<ansiAndDecModeReports>};
+  const telar::testing::Case case_status_string_variants{"control_engine.status_string_variants", budgeted<statusStringVariants>};
+  const telar::testing::Case case_xtgettcap_name_forms{"control_engine.xtgettcap_name_forms", budgeted<xtgettcapNameForms>};
+  const telar::testing::Case case_kitty_color_named_keys{"control_engine.kitty_color_named_keys", budgeted<kittyColorNamedKeys>};
+  const telar::testing::Case case_document_rejected_input{"control_engine.document_rejected_input", budgeted<documentRejectedInput>};
 
 }

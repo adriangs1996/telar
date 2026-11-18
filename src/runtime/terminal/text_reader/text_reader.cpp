@@ -592,7 +592,8 @@ namespace telar::runtime {
       : screen(memory),
         effects(memory),
         graphics(memory),
-        allocator_(memory),
+        ghostty_memory_{.memory = memory},
+        allocator_(ghostty_memory_),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
         response_outbox_(memory, responses_),
         control_(memory, *responses_, purpose != TerminalPurpose::observation, resources),
@@ -777,10 +778,11 @@ namespace telar::runtime {
     auto iterator = row_iterator_.get();
 
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &iterator));
-    projection_.updateColors(terminal_.get(), render_state_.get());
+    const bool recolored = projection_.updateColors(terminal_.get(), render_state_.get());
 
     ++screen.revision;
-    const bool all_rows = force_ || damage == GHOSTTY_RENDER_STATE_DIRTY_FULL;
+    // Rows drawn with the previous default colors are projected again, with every other row.
+    const bool all_rows = force_ || recolored || damage == GHOSTTY_RENDER_STATE_DIRTY_FULL;
     bool rebuild_links = all_rows;
     bool metadata_changed = all_rows;
     std::uint16_t row = 0;
@@ -1042,8 +1044,9 @@ namespace telar::runtime {
 
     bool processing_error = false;
 
+    // A processing error stays set once raised; the pane fails only when its memory ran out.
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
-    if (processing_error) {
+    if (processing_error && ghostty_memory_.refusals.load(std::memory_order_relaxed) != 0) {
       throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
     }
   }

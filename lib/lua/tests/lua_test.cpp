@@ -5,6 +5,9 @@ static_assert(true);
 
 #include <cstring>
 #include <lua.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory.allocators;
@@ -142,6 +145,73 @@ return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and ta
     testLuaJson(system);
   }
 
+  bool fails(lua::Vm<Memory>& vm, std::string_view source) {
+    try {
+      vm.execute(source, "@chunk");
+    } catch (const lua::Error&) {
+      lua_settop(vm.state(), 0);
+      return true;
+    }
+
+    lua_settop(vm.state(), 0);
+    return false;
+  }
+
+  // The deadline stops a script the instruction budget would let run, and resetBudget installs
+  // the limits it is given.
+  void testDeadlineBudget() {
+    SystemAllocator system;
+    MemoryAdapter erased{system};
+    constexpr auto unlimited = std::numeric_limits<std::uint64_t>::max();
+    lua::Vm<Memory> vm{erased, lua::Limits{.instructions = unlimited, .deadline = std::chrono::milliseconds{50}}};
+
+    vm.resetBudget();
+    check(fails(vm, "while true do end"));
+
+    lua::Vm<Memory> raised{erased, lua::Limits{.instructions = 1000, .deadline = std::chrono::hours{1}}};
+
+    raised.resetBudget(unlimited, std::chrono::milliseconds{50});
+    check(!fails(raised, "for i = 1, 100000 do end"));
+    raised.resetBudget(unlimited, std::chrono::milliseconds{50});
+    check(fails(raised, "while true do end"));
+  }
+
+  // A configuration's `require` loads only a regular file named by a valid module name from its
+  // own directory: anything else fails at once, a FIFO included, rather than blocking the load.
+  void testRequireFailures() {
+    std::array<char, 64> temporary{};
+
+    std::strcpy(temporary.data(), "/tmp/telar-lua-require-XXXXXX");
+    check(::mkdtemp(temporary.data()) != nullptr);
+    const auto root = std::filesystem::canonical(temporary.data()).string();
+
+    // `.x` and `a..b` would name these files were the names not refused.
+    std::ofstream{root + "/ok.lua"} << "return 7\n";
+    std::ofstream{root + "/x.lua"} << "return 1\n";
+    std::filesystem::create_directory(root + "/a");
+    std::ofstream{root + "/a/b.lua"} << "return 1\n";
+    std::filesystem::create_directory(root + "/d.lua");
+    check(::mkfifo((root + "/p.lua").c_str(), 0600) == 0);
+
+    {
+      SystemAllocator system;
+      MemoryAdapter erased{system};
+      lua::Vm<Memory> vm{erased};
+      const lua::LocalModules<lua::ModuleDomain::configuration> modules{vm.state(), root};
+
+      vm.execute("return require('ok') == 7", "@chunk");
+      check(lua_toboolean(vm.state(), -1));
+      lua_settop(vm.state(), 0);
+      for (const auto source : {"require('missing')", "require('.x')", "require('a..b')", "require(1)", "require('d')", "require('p')"}) {
+        check(fails(vm, source), source);
+      }
+    }
+
+    std::filesystem::remove_all(root);
+  }
+
   const telar::testing::Case case_lua{"lua.lua", testLua};
+  const telar::testing::Case case_deadline{"lua.deadline_budget", testDeadlineBudget};
+  const telar::testing::Case case_require{"lua.require_failures", testRequireFailures};
 
 }

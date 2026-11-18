@@ -710,6 +710,321 @@ namespace {
       }
     }
 
+    std::string rawId(const std::string& hex_id) {
+      std::string bytes;
+
+      for (std::size_t index = 0; index + 1 < hex_id.size(); index += 2) {
+        bytes += static_cast<char>(std::stoi(hex_id.substr(index, 2), nullptr, 16));
+      }
+
+      return bytes;
+    }
+
+    std::string sha1(std::string_view bytes) {
+      std::array<unsigned char, SHA_DIGEST_LENGTH> digest{};
+
+      SHA1(reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size(), digest.data());
+      return {reinterpret_cast<const char*>(digest.data()), digest.size()};
+    }
+
+    std::string hexBytes(std::string_view bytes) {
+      std::string text;
+
+      for (const auto byte : bytes) {
+        text += std::format("{:02x}", static_cast<unsigned char>(byte));
+      }
+
+      return text;
+    }
+
+    // Writes `bytes` as a loose object of `kind` without git's checks of its contents.
+    std::string literalObject(const std::string& directory, std::string_view kind, std::string_view bytes) {
+      const auto path = directory + "/.git/literal";
+
+      write(path, bytes);
+      const auto id = trimmed(run(directory, "git hash-object -t " + std::string{kind} + " --literally -w " + quote(path)));
+
+      run(directory, "rm -f " + quote(path));
+      return id;
+    }
+
+    // Points main at a new commit of `tree`, so the staged comparison reads that tree.
+    void commitTree(const std::string& directory, const std::string& tree) {
+      const auto commit = literalObject(directory, "commit", "tree " + tree + "\nauthor T <t@example.com> 0 +0000\ncommitter T <t@example.com> 0 +0000\n\nhostile\n");
+
+      run(directory, "git update-ref refs/heads/main " + commit);
+    }
+
+    // A cloned repository can hold a tree that git itself would refuse: its entries are never a
+    // path outside the tree, never out of order, with an unknown mode or with a short object id.
+    // The staged comparison against such a HEAD is unknown, never a count.
+    void testHostileTreeEntries(Reader&) {
+      const auto directory = initialize("hostile-trees");
+
+      write(directory + "/a.txt", "alpha\n");
+      commitAll(directory, "base");
+      const auto blob = rawId(trimmed(run(directory, "git rev-parse HEAD:a.txt")));
+      const auto entry = [&](std::string_view mode, std::string_view name) {
+        return std::string{mode} + " " + std::string{name} + '\0' + blob;
+      };
+
+      const auto valid = literalObject(directory, "tree", entry("100644", "a.txt") + entry("100644", "b.txt"));
+
+      commitTree(directory, valid);
+      Reader control{system_memory};
+
+      check(control.read(directory).staged == git::Accuracy::exact, "a well-formed tree is compared");
+      for (const auto& [label, tree] : std::initializer_list<std::pair<std::string_view, std::string>>{
+               {"dot-dot entry", entry("100644", "..") + entry("100644", "a.txt")},
+               {"dot entry", entry("100644", ".") + entry("100644", "a.txt")},
+               {"slash in a name", entry("100644", "a.txt") + entry("100644", "a/b")},
+               {"unsorted entries", entry("100644", "b.txt") + entry("100644", "a.txt")},
+               {"unknown mode", entry("100600", "a.txt")},
+               {"truncated object id", "100644 a.txt" + std::string(1, '\0') + blob.substr(0, 10)},
+           }) {
+        commitTree(directory, literalObject(directory, "tree", tree));
+        Reader fresh_reader{system_memory};
+        const auto& status = fresh_reader.read(directory);
+
+        check(status.repository == git::RepositoryState::ready && status.staged == git::Accuracy::unknown, std::string{label} + " makes the staged comparison unknown");
+      }
+    }
+
+    std::string deflated(std::string_view bytes) {
+      auto length = compressBound(static_cast<uLong>(bytes.size()));
+      std::string output(length, '\0');
+
+      compress(reinterpret_cast<Bytef*>(output.data()), &length, reinterpret_cast<const Bytef*>(bytes.data()), static_cast<uLong>(bytes.size()));
+      output.resize(length);
+      return output;
+    }
+
+    // The type and size header of a pack entry.
+    std::string entryHeader(unsigned kind, std::size_t size) {
+      std::string header;
+      auto byte = static_cast<unsigned char>((kind << 4) | (size & 0x0f));
+
+      size >>= 4;
+      while (size != 0) {
+        header += static_cast<char>(byte | 0x80);
+        byte = static_cast<unsigned char>(size & 0x7f);
+        size >>= 7;
+      }
+
+      return header + static_cast<char>(byte);
+    }
+
+    std::string deltaSize(std::size_t size) {
+      std::string bytes;
+
+      do {
+        auto byte = static_cast<unsigned char>(size & 0x7f);
+
+        size >>= 7;
+        bytes += static_cast<char>(size != 0 ? byte | 0x80 : byte);
+      } while (size != 0);
+
+      return bytes;
+    }
+
+    // Writes a pack of a tree `base` and an OFS or REF delta against it whose result claims the
+    // id `target`, with its .idx, so the object database resolves `target` through `delta`. A
+    // delta's result has its base's type, so the result is a tree too.
+    void writeDeltaPack(const std::string& directory, std::string_view base, const std::string& target, std::string_view delta, bool reference) {
+      const auto base_id = sha1("tree " + std::to_string(base.size()) + '\0' + std::string{base});
+      std::string pack = "PACK";
+
+      for (const std::uint32_t word : {2u, 2u}) {
+        for (int shift = 24; shift >= 0; shift -= 8) {
+          pack += static_cast<char>(word >> shift);
+        }
+      }
+
+      const auto base_offset = pack.size();
+
+      pack += entryHeader(2, base.size()) + deflated(base);
+      const auto delta_offset = pack.size();
+
+      if (reference) {
+        pack += entryHeader(7, delta.size()) + base_id;
+      } else {
+        auto distance = delta_offset - base_offset;
+        std::string encoded(1, static_cast<char>(distance & 0x7f));
+
+        while ((distance >>= 7) != 0) {
+          --distance;
+          encoded.insert(encoded.begin(), static_cast<char>(0x80 | (distance & 0x7f)));
+        }
+
+        pack += entryHeader(6, delta.size()) + encoded;
+      }
+
+      pack += deflated(delta);
+      const auto checksum = sha1(pack);
+
+      pack += checksum;
+      const auto entry_crc = [&](std::size_t begin, std::size_t end) {
+        return static_cast<std::uint32_t>(crc32(0, reinterpret_cast<const Bytef*>(pack.data() + begin), static_cast<uInt>(end - begin)));
+      };
+
+      std::vector<std::tuple<std::string, std::uint32_t, std::uint32_t>> objects{
+          {base_id, entry_crc(base_offset, delta_offset), static_cast<std::uint32_t>(base_offset)},
+          {target, entry_crc(delta_offset, pack.size() - checksum.size()), static_cast<std::uint32_t>(delta_offset)},
+      };
+
+      std::ranges::sort(objects);
+      std::string index = "\xfftOc";
+      const auto word = [&](std::uint32_t value) {
+        for (int shift = 24; shift >= 0; shift -= 8) {
+          index += static_cast<char>(value >> shift);
+        }
+      };
+
+      word(2);
+      for (unsigned first = 0; first < 256; ++first) {
+        word(static_cast<std::uint32_t>(std::ranges::count_if(objects, [&](const auto& object) {
+          return static_cast<unsigned char>(std::get<0>(object)[0]) <= first;
+        })));
+      }
+
+      for (const auto& object : objects) {
+        index += std::get<0>(object);
+      }
+
+      for (const auto& object : objects) {
+        word(std::get<1>(object));
+      }
+
+      for (const auto& object : objects) {
+        word(std::get<2>(object));
+      }
+
+      index += checksum;
+      index += sha1(index);
+      const auto name = directory + "/.git/objects/pack/pack-" + hexBytes(checksum);
+
+      shell("mkdir -p " + quote(directory + "/.git/objects/pack"));
+      write(name + ".pack", pack);
+      write(name + ".idx", index);
+    }
+
+    // A pack from a cloned repository can hold a delta whose zlib stream is valid but whose
+    // instructions are not: a copy outside the base, an insert past the result, opcode 0 or
+    // a source size other than the base's. Resolving it makes the staged comparison unknown and
+    // never writes or reads outside either buffer.
+    void testHostilePackDelta(Reader&) {
+      for (const bool reference : {false, true}) {
+        for (const auto& [label, delta, accepted] : std::initializer_list<std::tuple<std::string_view, std::string, bool>>{
+                 {"a delta within both buffers", "copy", true},
+                 {"a copy just past the base", "outside", false},
+                 {"a copy far outside the base", "far", false},
+                 {"an insert past the result", "insert", false},
+                 {"opcode 0", "zero", false},
+                 {"another source size", "source", false},
+             }) {
+          const auto directory = initialize(reference ? "hostile-delta-ref" : "hostile-delta-ofs");
+
+          write(directory + "/a.txt", "alpha\n");
+          commitAll(directory, "base");
+          // The base and the tree a correct delta makes of it: a.txt with blobs other than the
+          // committed one, so the comparison counts it. The delta copies the entry's mode and
+          // name from the base and inserts the new id.
+          const std::string prefix = "100644 a.txt" + std::string(1, '\0');
+          const auto base = prefix + sha1("zero");
+          const auto id = sha1("other");
+          const auto tree = prefix + id;
+          const auto tree_id = sha1("tree " + std::to_string(tree.size()) + '\0' + tree);
+          const std::string copy = "\x90" + std::string(1, static_cast<char>(prefix.size()));
+          const auto insert = std::string(1, static_cast<char>(id.size())) + id;
+          std::string instructions;
+
+          if (delta == "copy") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + copy + insert;
+          } else if (delta == "outside") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + "\x91" + static_cast<char>(base.size() - 3) + static_cast<char>(prefix.size()) + insert;
+          } else if (delta == "far") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + "\x9f" + std::string(3, '\0') + "\x40" + static_cast<char>(prefix.size()) + insert;
+          } else if (delta == "insert") {
+            instructions = deltaSize(base.size()) + deltaSize(prefix.size()) + copy + insert;
+          } else if (delta == "zero") {
+            instructions = deltaSize(base.size()) + deltaSize(tree.size()) + copy + std::string(1, '\0') + insert;
+          } else {
+            instructions = deltaSize(base.size() + 1) + deltaSize(tree.size()) + copy + insert;
+          }
+
+          writeDeltaPack(directory, base, tree_id, instructions, reference);
+          commitTree(directory, hexBytes(tree_id));
+          Reader fresh_reader{system_memory};
+          const auto& status = fresh_reader.read(directory);
+          const auto expected = accepted ? git::Accuracy::exact : git::Accuracy::unknown;
+
+          check(status.repository == git::RepositoryState::ready && status.staged == expected, std::string{label} + (reference ? " (REF_DELTA)" : " (OFS_DELTA)"));
+          if (accepted) {
+            check(status.changes.staged_modified == 1, "the resolved tree is compared");
+          }
+        }
+      }
+    }
+
+    // Changes the owner of `path` to a user other than the caller.
+    void giveAway(const std::string& path, uid_t owner) {
+      check(::lchown(path.c_str(), owner, static_cast<gid_t>(-1)) == 0, "chown " + path);
+    }
+
+    // A repository another user can write is never read: its config and objects are that user's
+    // (the class of CVE-2022-24765). Without root, root's own "/" is the directory someone else
+    // owns; as root, the test hands each directory of a repository to another user in turn.
+    void testNotOwnedRepository(Reader& reader) {
+      const auto not_owned = [&](const std::string& directory, std::string_view label) {
+        Reader fresh_reader{system_memory};
+
+        check(fresh_reader.read(directory).repository == git::RepositoryState::not_owned, std::string{label} + " is not owned");
+      };
+
+      if (::geteuid() != 0) {
+        const auto gitdir = fresh("foreign-common-gitdir");
+        const auto worktree = fresh("foreign-common-worktree");
+
+        shell("mkdir -p " + quote(gitdir + "/objects") + " " + quote(gitdir + "/refs"));
+        write(gitdir + "/HEAD", "ref: refs/heads/main\n");
+        write(gitdir + "/commondir", "/\n");
+        write(worktree + "/.git", "gitdir: " + gitdir + "\n");
+        not_owned(worktree, "a common directory another user owns");
+
+        const auto configured = initialize("foreign-configured-worktree");
+
+        write(configured + "/a.txt", "alpha\n");
+        commitAll(configured, "base");
+        run(configured, "git config core.worktree /");
+        not_owned(configured + "/.git", "a configured worktree another user owns");
+        return;
+      }
+
+      constexpr uid_t other = 65534;
+      const auto directory = initialize("foreign-owner");
+
+      write(directory + "/a.txt", "alpha\n");
+      commitAll(directory, "base");
+      agrees(reader, directory, "owned repository");
+      giveAway(directory, other);
+      not_owned(directory, "a worktree another user owns");
+      giveAway(directory, 0);
+      giveAway(directory + "/.git", other);
+      not_owned(directory, "a git directory another user owns");
+      giveAway(directory + "/.git", 0);
+
+      const auto gitdir = fresh("foreign-gitfile-target");
+      const auto linked = fresh("foreign-gitfile");
+
+      run(gitdir, "git init -q --bare .");
+      write(linked + "/.git", "gitdir: " + gitdir + "\n");
+      giveAway(linked + "/.git", other);
+      not_owned(linked, "a .git file another user owns");
+      giveAway(linked + "/.git", 0);
+      giveAway(gitdir, other);
+      not_owned(linked, "a gitdir another user owns");
+    }
+
     void testConflict(Reader& reader) {
       const auto directory = initialize("conflict");
 
@@ -882,6 +1197,189 @@ namespace {
       }
     }
 
+    // An origin with one commit on main, and a configured clone of it at root/<name>.
+    std::string cloneWithOrigin(const std::string& name) {
+      const auto origin = fresh(name + "-origin.git");
+
+      run(origin, "git init -q --bare -b main .");
+      const auto seed = initialize(name + "-seed");
+
+      write(seed + "/base.txt", "base\n");
+      commitAll(seed, "base");
+      run(seed, "git remote add origin " + quote(origin) + " && git push -q origin main");
+      const auto work = root + "/" + name;
+
+      shell("rm -rf " + quote(work) + " && git clone -q " + quote(origin) + " " + quote(work));
+      configure(work);
+      return work;
+    }
+
+    // A tree over 64 KiB stored as a delta copies its base in runs of 0x10000 bytes, which the
+    // delta writes with no size bytes; the staged comparison reads that tree.
+    void testLargeTreeDelta(Reader& reader) {
+      const auto directory = initialize("large-tree");
+
+      run(directory, "mkdir big && cd big && i=0 && while [ $i -lt 2600 ]; do : > entry-with-a-name-long-enough-$i; i=$((i + 1)); done && : > zz-last");
+      backdate(directory);
+      commitAll(directory, "large tree");
+      // The smaller tree deltifies against the larger one, so HEAD's tree is the delta.
+      run(directory, "git rm -q big/zz-last && git commit -q -m smaller && git repack -q -a -d -f --window=50 --depth=50");
+      const auto tree = trimmed(run(directory, "git rev-parse HEAD:big"));
+      const auto fields = trimmed(run(directory, "git verify-pack -v .git/objects/pack/*.idx | awk '$1 == \"" + tree + "\" { print NF }'"));
+
+      check(fields == "7", "HEAD:big is stored as a delta");
+      check(std::stoul(trimmed(run(directory, "git cat-file -s " + tree))) > 2 * 0x10000, "the tree spans several 0x10000 copies");
+      write(directory + "/big/entry-with-a-name-long-enough-7", "staged\n");
+      run(directory, "git add big");
+      agrees(reader, directory, "large tree delta");
+    }
+
+    // Config syntax git reads: a BOM, CRLF lines, quoted and concatenated values, escapes, inline
+    // comments and the legacy [section.Subsection] form, which git lowercases.
+    void testConfigSyntax(Reader& reader) {
+      const auto work = cloneWithOrigin("config-syntax");
+      const auto url = trimmed(run(work, "git config remote.origin.url"));
+      const auto config = [&](std::string_view branches) {
+        return "\xEF\xBB\xBF[core]\r\n\trepositoryformatversion = 0\r\n\tbare = false\r\n[user]\r\n\tname = \"Te\\tst \\\"q\\\"\" ; escapes\r\n[remote \"origin\"]\r\n\turl = " + url + "\r\n\tfetch = +refs/heads/*:refs/remotes/origin/*\r\n" + std::string{branches};
+      };
+
+      write(work + "/.git/config", config("[branch \"main\"]\r\n\tremote = origin ; an inline comment\r\n\tmerge = \"refs/heads/\"main # a quoted part\r\n"));
+      check(trimmed(run(work, "git rev-parse --abbrev-ref '@{u}'")) == "origin/main", "git reads the quoted value");
+      agrees(reader, work, "quoted value");
+
+      write(work + "/.git/config", config("[branch.Main]\r\n\tremote = origin\r\n\tmerge = refs/heads/main\r\n"));
+      check(trimmed(run(work, "git rev-parse --abbrev-ref '@{u}'")) == "origin/main", "git reads the legacy section");
+      agrees(reader, work, "legacy subsection");
+
+      write(work + "/.git/config", config("[branch.Main]\r\n\tremote = origin\r\n\tmerge = \"refs/heads/ma\\qin\"\r\n"));
+      check(trimmed(run(work, "git status >/dev/null; echo $?")) != "0", "git refuses an unknown escape");
+      check(reader.read(work).repository == git::RepositoryState::invalid, "an unknown escape is invalid");
+    }
+
+    // HEAD names its branch with a reference name the reader accepts exactly when
+    // `git check-ref-format` does.
+    void testReferenceNames(Reader& reader) {
+      const auto directory = initialize("reference-names");
+
+      write(directory + "/a.txt", "a\n");
+      commitAll(directory, "a");
+      const auto head = slurp(directory + "/.git/HEAD");
+
+      for (const std::string_view name : {"a b", "a~1", "a^", "a:b", "a?", "a*", "a[", "a\\b", "a@{1}", "a\x01", "a\x7f", ".h", "x.lock", "a/", "a.", "feat/x", "a@b", "a.b", "@"}) {
+        const auto reference = "refs/heads/" + std::string{name};
+        const bool git_accepts = run(directory, "git check-ref-format " + quote(reference) + " && echo valid", false) == "valid\n";
+
+        write(directory + "/.git/HEAD", "ref: " + reference + "\n");
+        const auto state = reader.read(directory).head;
+
+        check((state != git::HeadState::unknown) == git_accepts, "HEAD naming " + reference + (git_accepts ? " is valid for git" : " is invalid for git"));
+      }
+
+      write(directory + "/.git/HEAD", head);
+      agrees(reader, directory, "restored HEAD");
+    }
+
+    // With extensions.worktreeConfig, config.worktree adds to the repository's config, as git
+    // reads it; a malformed one makes the repository invalid, as it makes git fail.
+    void testWorktreeConfigExtension(Reader& reader) {
+      const auto work = cloneWithOrigin("worktree-config");
+
+      run(work, "git config core.repositoryformatversion 1 && git config extensions.worktreeConfig true && git config --unset branch.main.remote && git config --unset branch.main.merge");
+      write(work + "/.git/config.worktree", "[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n");
+      check(trimmed(run(work, "git rev-parse --abbrev-ref '@{u}'")) == "origin/main", "git reads the upstream from config.worktree");
+      agrees(reader, work, "upstream from config.worktree");
+
+      write(work + "/.git/config.worktree", "[core]\n\tbare = true\n");
+      check(reader.read(work).bare == (trimmed(run(work, "git rev-parse --is-bare-repository")) == "true"), "core.bare from config.worktree, as git reads it");
+
+      write(work + "/.git/config.worktree", "[core\n");
+      check(trimmed(run(work, "git rev-parse --git-dir >/dev/null; echo $?")) != "0", "git refuses a malformed config.worktree");
+      check(reader.read(work).repository == git::RepositoryState::invalid, "a malformed config.worktree is invalid");
+    }
+
+    // A negative refspec that excludes the merge ref: the upstream is what git status reports.
+    void testNegativeRefspec(Reader& reader) {
+      const auto work = cloneWithOrigin("negative-refspec");
+
+      run(work, "git config --add remote.origin.fetch '^refs/heads/main'");
+      agrees(reader, work, "negative refspec");
+    }
+
+    // A shallow clone's walk stops at the shallow commits, whose parents are not there: ahead and
+    // behind match git's, and an unreadable shallow file makes them unknown.
+    void testShallowDivergence(Reader& reader) {
+      const auto origin = initialize("shallow-origin");
+
+      for (int index = 0; index < 5; ++index) {
+        write(origin + "/file.txt", std::format("origin {}\n", index));
+        commitAll(origin, std::format("origin {}", index));
+      }
+
+      const auto work = root + "/shallow";
+
+      shell("rm -rf " + quote(work) + " && git clone -q --depth 3 " + quote("file://" + origin) + " " + quote(work));
+      configure(work);
+      check(slurp(work + "/.git/shallow").size() > 0, "the clone is shallow");
+      for (int index = 0; index < 2; ++index) {
+        write(work + "/local.txt", std::format("local {}\n", index));
+        commitAll(work, std::format("local {}", index));
+        write(origin + "/file.txt", std::format("origin more {}\n", index));
+        commitAll(origin, std::format("origin more {}", index));
+      }
+
+      run(work, "git fetch -q origin");
+      agrees(reader, work, "shallow clone");
+
+      write(work + "/.git/shallow", slurp(work + "/.git/shallow") + "not an object id\n");
+      Reader fresh_reader{system_memory};
+
+      check(fresh_reader.read(work).divergence == git::Accuracy::unknown, "a corrupt shallow file makes divergence unknown");
+    }
+
+    // An octopus merge keeps its third and later parents in the commit-graph's EDGE chunk.
+    void testOctopusCommitGraph(Reader& reader) {
+      const auto work = cloneWithOrigin("octopus");
+
+      for (const auto* branch : {"one", "two", "three"}) {
+        run(work, std::format("git checkout -q -b {} main", branch));
+        write(work + "/" + branch + ".txt", std::string{branch} + "\n");
+        commitAll(work, branch);
+      }
+
+      run(work, "git checkout -q main && git merge -q --no-edit one two three");
+      check(trimmed(run(work, "git rev-list --parents -n 1 HEAD | awk '{ print NF }'")) == "4", "the merge has three parents");
+      run(work, "git gc -q && git commit-graph write --reachable");
+      check(shell("ls " + quote(work + "/.git/objects/info")).contains("commit-graph"), "commit-graph written");
+      agrees(reader, work, "octopus merge in the commit-graph");
+    }
+
+    void setTime(const std::string& path, std::time_t seconds) {
+      const std::array<timespec, 2> times{{{seconds, 0}, {seconds, 0}}};
+
+      check(::utimensat(AT_FDCWD, path.c_str(), times.data(), AT_SYMLINK_NOFOLLOW) == 0, "set the time of " + path);
+    }
+
+    // A symlink whose stat data no longer matches its index entry is judged by the hash of its
+    // target, as git does: the same target is clean, a retargeted link of the same length is
+    // modified even when its time equals the index's.
+    void testRacySymlink(Reader& reader) {
+      const auto directory = initialize("racy-symlink");
+
+      check(::symlink("target-a", (directory + "/link").c_str()) == 0, "symlink");
+      commitAll(directory, "link");
+      setTime(directory + "/link", 1'600'000'000);
+      agrees(reader, directory, "link touched, target unchanged");
+
+      ::unlink((directory + "/link").c_str());
+      check(::symlink("target-b", (directory + "/link").c_str()) == 0, "retarget");
+      setTime(directory + "/link", 1'700'000'000);
+      setTime(directory + "/.git/index", 1'700'000'000);
+      const auto& status = reader.read(directory);
+
+      check(status.unstaged == git::Accuracy::exact && status.changes.unstaged_modified == 1, "the retargeted link is modified");
+      agrees(reader, directory, "retargeted link");
+    }
+
     int timeReads(const char* directory) {
       telar::SystemAllocator allocator;
       telar::MemoryAdapter memory{allocator};
@@ -992,5 +1490,16 @@ namespace {
   const telar::testing::Case case_long_history{"git.long_history", readsWithGit<testLongHistory>};
   const telar::testing::Case case_corruption{"git.corruption", withGit<testCorruption>};
   const telar::testing::Case case_hostile{"git.hostile", readsWithGit<testHostile>};
+  const telar::testing::Case case_hostile_tree_entries{"git.hostile_tree_entries", readsWithGit<testHostileTreeEntries>};
+  const telar::testing::Case case_hostile_pack_delta{"git.hostile_pack_delta", readsWithGit<testHostilePackDelta>};
+  const telar::testing::Case case_large_tree_delta{"git.large_tree_delta", readsWithGit<testLargeTreeDelta>};
+  const telar::testing::Case case_config_syntax{"git.config_syntax_agrees", readsWithGit<testConfigSyntax>};
+  const telar::testing::Case case_reference_names{"git.reference_names", readsWithGit<testReferenceNames>};
+  const telar::testing::Case case_worktree_config{"git.worktree_config_extension", readsWithGit<testWorktreeConfigExtension>};
+  const telar::testing::Case case_negative_refspec{"git.negative_refspec", readsWithGit<testNegativeRefspec>};
+  const telar::testing::Case case_shallow_divergence{"git.shallow_divergence", readsWithGit<testShallowDivergence>};
+  const telar::testing::Case case_octopus_commit_graph{"git.octopus_commit_graph", readsWithGit<testOctopusCommitGraph>};
+  const telar::testing::Case case_racy_symlink{"git.racy_symlink", readsWithGit<testRacySymlink>};
+  const telar::testing::Case case_not_owned_repository{"git.not_owned_repository", readsWithGit<testNotOwnedRepository>};
 
 }

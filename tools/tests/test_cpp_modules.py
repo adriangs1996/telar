@@ -3,6 +3,7 @@ and no import a unit does not use."""
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('check_cpp_modules', ROOT / 'tools/check-cpp-modules.py')
@@ -138,6 +139,17 @@ class UnusedImports(unittest.TestCase):
         }
 
         self.assertEqual(sites(uses, interfaces), {'src/gui/view/qualified.cpp': {'telar.base.geometry'}})
+
+    def test_a_test_must_name_what_the_module_declares(self):
+        # Where a test lives follows from its imports, so a using-directive of a namespace that
+        # many modules share does not make an import of one of them used.
+        units = {
+            'src/gui/view/tests/view_test.cpp': unit('using namespace telar;\n', 'telar.base.geometry'),
+            'src/gui/view/tests/size_test.cpp': unit('using namespace telar;\nSize size{};\n',
+                                                     'telar.base.geometry'),
+        }
+
+        self.assertEqual(sites(units, self.interfaces), {'src/gui/view/tests/view_test.cpp': {'telar.base.geometry'}})
 
     def test_a_qualifier_counts_when_only_that_module_declares_the_namespace(self):
         cells = ('telar.runtime.terminal.grid', 'export module telar.runtime.terminal.grid;\n'
@@ -410,6 +422,14 @@ class ImportRules(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, r'ui/app/history.hpp imports telar.gui.features.history'):
             import_rules({'src/gui/ui/app/history.hpp': '#pragma once\nimport telar.gui.features.history;\n'})
 
+    def test_a_test_imports_the_domain_it_checks_and_the_shared_support(self):
+        self.assertEqual(import_rules({
+            'src/gui/features/history/tests/cards_test.cpp': 'import telar.gui.features.history.cards;\n'
+                                                             'import telar.gui.tests.json_fixture;\nimport telar.gui.foundation.core;\n',
+        }), 1)
+        with self.assertRaisesRegex(RuntimeError, r'cards_test.cpp imports telar.gui.features.palette'):
+            import_rules({'src/gui/features/history/tests/cards_test.cpp': 'import telar.gui.features.palette;\n'})
+
     def test_ignores_files_outside_the_ruled_folders(self):
         self.assertEqual(import_rules({'src/gui/tests/history_test.cpp': 'import telar.gui.features.history;\n'}), 0)
 
@@ -431,6 +451,62 @@ def placed(extra):
 
 def test_unit(*imports):
     return ''.join(f'import {name};\n' for name in ('telar.testing', *imports))
+
+
+GUI_LAYERS = {'gui': ['foundation/core', 'features/history', 'application', 'tests']}
+UI_RULES = ('telar.gui.foundation', 'telar.gui.application')
+
+
+def placed_gui(extra):
+    """The GUI's foundation, a feature over it and the application over both, with the tests of
+    `extra`, its tests placed with its domains."""
+    files = {
+        'src/gui/foundation/core/CMakeLists.txt': 'telar_add_domain(gui foundation/core)\n',
+        'src/gui/features/history/CMakeLists.txt': 'telar_add_domain(gui features/history DEPS foundation/core)\n',
+        'src/gui/application/CMakeLists.txt': 'telar_add_domain(gui application DEPS features/history foundation/core)\n',
+    }
+    files.update(extra)
+    with mock.patch.object(checker, 'DOMAIN_TESTS', ('runtime', 'cli', 'gui')):
+        return checker.check_test_placement(GUI_LAYERS, LIBRARY_LAYERS, set(files), files.__getitem__, UI_RULES)
+
+
+def ui_unit(includes, *imports):
+    return ''.join(f'#include "{name}"\n' for name in includes) + test_unit(*imports)
+
+
+class UiPlacement(unittest.TestCase):
+    def test_a_ui_test_lives_in_the_deepest_folder_of_the_tree_it_checks_first(self):
+        self.assertEqual(placed_gui({
+            'src/gui/ui/app/chrome/tests/tabs_test.cpp': ui_unit(
+                ['ui/app/chrome/tabs/strip.hpp', 'ui/app/chrome/bar.hpp', 'ui/design/controls/button.hpp']),
+            'src/gui/ui/design/controls/tests/button_test.cpp': ui_unit(
+                ['ui/design/controls/button.hpp', 'ui/foundation/fonts/font.hpp'], 'telar.gui.foundation.core'),
+            'src/gui/ui/app/tests/window_test.cpp': ui_unit(['ui/app/window.hpp', 'ui/app/panes/pane.hpp'], 'telar.gui.application'),
+        }), 3)
+
+    def test_a_ui_test_in_another_folder_names_the_right_one(self):
+        with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/chrome/tabs/tests/'):
+            placed_gui({'src/gui/ui/app/chrome/tests/tabs_test.cpp': ui_unit(['ui/app/chrome/tabs/strip.hpp'])})
+        with self.assertRaisesRegex(RuntimeError, r'includes no header of ui/'):
+            placed_gui({'src/gui/ui/app/tests/empty_test.cpp': ui_unit([])})
+
+    def test_a_gui_integration_test_imports_what_ui_does_not(self):
+        integration = ui_unit(['ui/app/window.hpp'], 'telar.gui.features.history.cards')
+        self.assertEqual(placed_gui({'src/gui/tests/window_test.cpp': integration}), 1)
+        with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/tests/'):
+            placed_gui({'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.application')})
+
+    def test_a_shared_fixture_counts_by_what_it_imports(self):
+        fixture = {'src/gui/tests/cards/cards.cppm': 'export module telar.gui.tests.cards;\nimport telar.gui.features.history.cards;\n'}
+        self.assertEqual(placed_gui({**fixture, 'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.tests.cards')}), 2)
+        with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/tests/'):
+            placed_gui({'src/gui/tests/plain/plain.cppm': 'export module telar.gui.tests.plain;\nimport telar.gui.foundation.core;\n',
+                        'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.tests.plain')})
+
+    def test_a_domain_test_includes_no_ui_header(self):
+        self.assertEqual(placed_gui({'src/gui/features/history/tests/cards_test.cpp': test_unit('telar.gui.features.history.cards')}), 1)
+        with self.assertRaisesRegex(RuntimeError, r'includes headers of ui/, which no domain builds on'):
+            placed_gui({'src/gui/application/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.application')})
 
 
 class TestPlacement(unittest.TestCase):
@@ -470,11 +546,11 @@ class TestPlacement(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'src/runtime/proxy/relay_test.cpp is a test outside a tests/ folder'):
             placed({'src/runtime/proxy/relay_test.cpp': test_unit('telar.runtime.proxy.relay')})
 
-    def test_leaves_the_gui_and_tbc_to_their_own_layout(self):
-        self.assertEqual(placed({
-            'src/gui/tests/view_test.cpp': test_unit('telar.gui.core.metrics'),
-            'lib/tbc/tests/spec/places.cpp': 'import telar.runtime.proxy.relay;\n',
-        }), 0)
+    def test_leaves_tbc_to_its_own_layout(self):
+        self.assertEqual(placed({'lib/tbc/tests/spec/places.cpp': 'import telar.runtime.proxy.relay;\n'}), 0)
+
+    def test_support_of_the_process_tests_is_no_test(self):
+        self.assertEqual(placed({'src/runtime/tests/peer/peer.cppm': 'export module telar.runtime.tests.peer;\n'}), 1)
 
 
 if __name__ == '__main__':
