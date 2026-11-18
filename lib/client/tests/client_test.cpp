@@ -61,6 +61,26 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  bool initRefused(const std::string& path) {
+    try {
+      static_cast<void>(Client::init(path.c_str()));
+    } catch (const SocketError&) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // A socket path that cannot fit sockaddr_un with its terminator is refused before it is
+  // copied there.
+  void testInitRejectsLongSocketPath() {
+    const auto capacity = sizeof(sockaddr_un{}.sun_path);
+
+    check(initRefused("/" + std::string(capacity - 1, 'a')));
+    check(initRefused("/" + std::string(4095, 'a')));
+  }
+
   const telar::testing::Case case_client_socket{"client.socket_lifetime", testClientSocket};
+  const telar::testing::Case case_long_socket_path{"client.init_rejects_long_socket_path", testInitRejectsLongSocketPath};
 
 }
