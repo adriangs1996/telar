@@ -16,6 +16,7 @@ import telar.testing;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
 
 namespace {
 
@@ -188,10 +189,86 @@ namespace {
     }
   }
 
+  // Calls `read` and returns how it failed: the FileReadError's failure, or none.
+  template <typename Read>
+  std::optional<FileReadFailure> readFailure(Read&& read) {
+    try {
+      read();
+    } catch (const FileReadError& error) {
+      return error.failure();
+    }
+
+    return std::nullopt;
+  }
+
+  // readFile reads a regular file of at most `maximum_bytes`, opened without following a final
+  // link: the configuration and plugin package caps rest on it.
+  void testReadFileEnforcesBoundAndType() {
+    SystemAllocator memory;
+    TemporaryDirectory temporary{"/tmp/telar-read-file-XXXXXX"};
+    const std::string base{temporary.path()};
+    const auto exact = base + "/exact";
+    const auto fifo = base + "/fifo";
+    const auto link = base + "/link";
+
+    write(exact, "12345678");
+    check(::mkfifo(fifo.c_str(), 0600) == 0);
+    check(::symlink(exact.c_str(), link.c_str()) == 0);
+    check(readFile(memory, exact.c_str(), 8) == "12345678");
+    check(readFailure([&] {
+      static_cast<void>(readFile(memory, exact.c_str(), 7));
+    }) == FileReadFailure::invalid_size);
+
+    for (const auto& path : {base, fifo}) {
+      check(readFailure([&] {
+        static_cast<void>(readFile(memory, path.c_str(), 8));
+      }) == FileReadFailure::invalid_size,
+          path);
+    }
+
+    bool refused = false;
+
+    try {
+      static_cast<void>(readFile(memory, link.c_str(), 8));
+    } catch (const SystemError&) {
+      refused = true;
+    }
+
+    check(refused);
+  }
+
+  String<SystemAllocator> relative(SystemAllocator& memory, std::string_view path, std::string_view directory) {
+    String<SystemAllocator> resolved{path, AllocatorRef<char, SystemAllocator>{memory}};
+
+    resolveRelativePath(resolved, directory);
+    return resolved;
+  }
+
+  // A relative path from the configuration resolves lexically beneath its directory, and `..`
+  // at the root stays at the root instead of leaving an empty or relative path.
+  void testResolveRelativePathClampsAtRoot() {
+    SystemAllocator memory;
+
+    check(relative(memory, "../../x", "/a") == "/x");
+    check(relative(memory, "..", "/") == "/");
+    check(relative(memory, "./b/../c", "/a") == "/a/c");
+    check(relative(memory, "/abs/../path", "/a") == "/abs/../path");
+
+    std::array<char, PATH_MAX> current{};
+
+    check(::getcwd(current.data(), current.size()) != nullptr);
+    String<SystemAllocator> path{"rel", AllocatorRef<char, SystemAllocator>{memory}};
+
+    resolveAbsolutePath(path);
+    check(std::string_view{path} == std::string{current.data()} + "/rel");
+  }
+
   const telar::testing::Case case_private_directory{"fs.private_directory", testPrivateDirectory};
   const telar::testing::Case case_open_beneath{"fs.open_beneath_refuses_escape", testOpenBeneathRefusesEscape};
   const telar::testing::Case case_write_private_file{"fs.write_private_file_rejects_path_names", testWritePrivateFileRejectsPathNames};
   const telar::testing::Case case_private_file_refuses{"fs.private_file_refuses_link_and_oversize", testPrivateFileRefusesLinkAndOversize};
   const telar::testing::Case case_lock_file_created_at_once{"fs.lock_file_created_at_once", testLockFileCreatedAtOnce};
+  const telar::testing::Case case_read_file{"fs.read_file_enforces_bound_and_type", testReadFileEnforcesBoundAndType};
+  const telar::testing::Case case_resolve_relative{"fs.resolve_relative_path_clamps_at_root", testResolveRelativePathClampsAtRoot};
 
 }

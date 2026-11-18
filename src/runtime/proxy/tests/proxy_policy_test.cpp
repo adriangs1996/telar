@@ -120,11 +120,16 @@ namespace {
       check(options.enabled && options.intercept_hosts.patterns().size() == 2 && options.capture.total_bytes == 3);
       readProxy(memory, options, "return {capture={max_part_bytes=67108864,max_exchange_bytes=67108864,max_total_bytes=1073741824,join_timeout_ms=3600000}}");
       check(options.capture.join_timeout == std::chrono::hours{1});
+
+      ProxyOptions everything{memory};
+
+      readProxy(memory, everything, "return {enabled=true,network_capture=true,network_control=true,stream_interception=true,transparent_redirect=true,transparent_tls=true}");
+      check(everything.network_control && everything.stream_interception && everything.transparent_redirect && everything.transparent_tls);
     }
 
     check(memory.liveBytes() == 0);
 
-    for (const auto expression : {"false", "{enabled=1}", "{anonymous_tunnels='yes'}", "{pane_https_proxy='no'}", "{unknown=true}", "{ca_dir=''}", "{ca_dir='a\\0b'}", "{ca_dir=string.rep('a',1025)}", "{intercept_hosts=true}", "{intercept_hosts={[2]='example.com'}}", "{intercept_hosts={'a..b'}}", "{capture=false}", "{capture={enabled='yes'}}", "{capture={max_part_bytes=0}}", "{capture={max_part_bytes=2.5}}", "{capture={max_part_bytes=math.huge}}", "{capture={max_exchange_bytes=1}}", "{capture={max_exchange_bytes=67108865}}", "{capture={max_total_bytes=1073741825}}", "{capture={join_timeout_ms=3600001}}", "{capture={max_total_bytes=1}}", "{capture={bytes=1}}"}) {
+    for (const auto expression : {"false", "{enabled=1}", "{anonymous_tunnels='yes'}", "{pane_https_proxy='no'}", "{unknown=true}", "{ca_dir=''}", "{ca_dir='a\\0b'}", "{ca_dir=string.rep('a',1025)}", "{intercept_hosts=true}", "{intercept_hosts={[2]='example.com'}}", "{intercept_hosts={'a..b'}}", "{capture=false}", "{capture={enabled='yes'}}", "{capture={max_part_bytes=0}}", "{capture={max_part_bytes=2.5}}", "{capture={max_part_bytes=math.huge}}", "{capture={max_exchange_bytes=1}}", "{capture={max_exchange_bytes=67108865}}", "{capture={max_total_bytes=1073741825}}", "{capture={join_timeout_ms=3600001}}", "{capture={max_total_bytes=1}}", "{capture={bytes=1}}", "{network_control=true}", "{enabled=true,transparent_tls=true}", "{stream_interception=true,enabled=true}", "{transparent_redirect=true}"}) {
       bool rejected = false;
 
       try {

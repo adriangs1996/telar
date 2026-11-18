@@ -251,7 +251,7 @@ namespace {
         });
       }
 
-      for (const auto replacement : {"", "1.5", "-1", "256", "null", "true"}) {
+      for (const auto replacement : {"", "1.5", "-1", "256", "null", "true", "2", "0"}) {
         std::string source{valid};
 
         source.replace(source.find("1,"), 1, replacement);

@@ -11,6 +11,9 @@ import telar.vocabulary;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.clients;
+import telar.wire.editor;
+import telar.wire.execution;
+import telar.wire.history;
 import telar.wire.graphics;
 import telar.wire.layout;
 import telar.wire.pane_io;
@@ -541,6 +544,67 @@ namespace {
     check(refused<GraphicsImage>(patched(bytes, length, wrong)));
   }
 
+  OpenPane openPane(const Launch& launch) {
+    return {
+        .request_id = 7,
+        .target = {},
+        .size = {.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16},
+        .launch = launch,
+    };
+  }
+
+  // Launch text reaches execve as C strings, so an argument or cwd with an embedded NUL is
+  // refused on decode rather than cut short there.
+  void testLaunchTextRejectsEmbeddedNul() {
+    const std::array<std::string_view, 2> arguments{"sh", "nul-sentinel"};
+    const auto bytes = encoded(openPane(Launch{.cwd = "/nul-cwd-sentinel", .arguments = arguments}));
+
+    check(!refused<OpenPane>(bytes));
+    check(refused<OpenPane>(patched(bytes, text("nul-sentinel"), text(std::string_view{"nul\0sentinel", 12}))));
+    check(refused<OpenPane>(patched(bytes, text("nul-cwd-sentinel"), text(std::string_view{"nul\0cwd-sentinel", 16}))));
+  }
+
+  // A message whose body would pass the frame limit is refused when encoded, rather than sent
+  // as a frame every peer drops along with the connection: a page of history results whose
+  // commands are each at their 64 KiB bound passes it after 64 entries.
+  void testOversizedEncodeIsRefused() {
+    const std::string command(64 * 1024, 'a');
+    std::vector<HistoryEntry> entries(64, HistoryEntry{.id = 1, .pane_id = 1, .command = command});
+
+    check(encodeRefused(HistoryResults{.request_id = 1, .entries = entries}));
+    check(!encodeRefused(HistoryResults{.request_id = 1, .entries = std::span{entries}.first(60)}));
+  }
+
+  // Codec::decode holds a decoded message to the invariants its sender's encode checks: each
+  // case is a valid encoding with one field patched to a value encode refuses.
+  void testDecodeEnforcesMessageInvariants() {
+    const auto session = encoded(ReportAgentSession{.request_id = 1, .pane_id = 1, .pane_generation = 1, .session = "zession_a"});
+
+    check(!refused<ReportAgentSession>(session));
+    check(refused<ReportAgentSession>(patched(session, text("zession_a"), text("-ession_a"))));
+    check(refused<ReportAgentSession>(patched(session, text("zession_a"), text("zession/a"))));
+
+    const std::array<std::string_view, 2> arguments{"argv0-sentinel", "-c"};
+    const std::array<EnvironmentEntry, 1> environment{{{"ENVQNAME", "1"}}};
+    const auto pane = encoded(openPane(Launch{.cwd = "/", .arguments = arguments, .environment_mode = EnvironmentMode::replace, .environment = environment}));
+    const Bytes empty_argument{0, 0};
+
+    check(!refused<OpenPane>(pane));
+    check(refused<OpenPane>(patched(pane, text("ENVQNAME"), text("ENV=NAME"))));
+    check(refused<OpenPane>(patched(pane, concatenated({{14, 0}, text("argv0-sentinel")}), empty_argument)));
+
+    const std::array<std::string_view, 1> command{"exec-sentinel"};
+    const auto execution = encoded(ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 1, .cwd = "/", .arguments = command});
+
+    check(!refused<ExecutionRequest>(execution));
+    check(refused<ExecutionRequest>(patched(execution, concatenated({{1, 13, 0}, text("exec-sentinel")}), Bytes{0})));
+
+    const auto editor = encoded(OpenEditor{.request_id = 1, .pane_id = 1, .pane_generation = 1, .editor = "vim", .path = "/editor-sentinel"});
+
+    check(!refused<OpenEditor>(editor));
+    check(refused<OpenEditor>(patched(editor, text("/editor-sentinel"), text("xeditor-sentinel"))));
+  }
+
   const telar::testing::Case case_truncated{"wire.truncated_payload_is_rejected_at_every_cut", testTruncatedPayloadIsRejectedAtEveryCut};
   const telar::testing::Case case_storage{"wire.decode_storage_exhaustion_is_refused", testDecodeStorageExhaustionIsRefused};
   const telar::testing::Case case_enum_bytes{"wire.enum_bytes_beyond_range_are_rejected", testEnumBytesBeyondRangeAreRejected};
@@ -551,5 +615,8 @@ namespace {
   const telar::testing::Case case_cell_reader{"wire.cell_reader_rejects_malformed_runs", testCellReaderRejectsMalformedRuns};
   const telar::testing::Case case_client_layout{"wire.client_layout_rejects_malformed_trees", testClientLayoutRejectsMalformedTrees};
   const telar::testing::Case case_image_description{"wire.image_description_rejects_mismatched_length", testImageDescriptionRejectsMismatchedLength};
+  const telar::testing::Case case_launch_nul{"wire.launch_text_rejects_embedded_nul", testLaunchTextRejectsEmbeddedNul};
+  const telar::testing::Case case_oversized_encode{"wire.oversized_encode_is_refused", testOversizedEncodeIsRefused};
+  const telar::testing::Case case_message_invariants{"wire.decode_enforces_message_invariants", testDecodeEnforcesMessageInvariants};
 
 }

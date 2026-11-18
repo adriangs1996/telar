@@ -62,6 +62,33 @@ namespace {
     }
   }
 
+  // The runtime splices the action into the worker's Lua source, so parse admits only a name
+  // made of letters, digits, `_`, `-` and `.`.
+  void testPluginWorkerRejectsInvalidActions() {
+    const auto parsed = [](std::string action) {
+      std::array<std::string, config::PluginWorkerOptions::argument_count> words{"/plugins/demo/main.lua", std::move(action), "1", "1", "0", "1", "1"};
+      std::array<char*, config::PluginWorkerOptions::argument_count> argv{};
+
+      for (std::size_t index = 0; index < argv.size(); ++index) {
+        argv[index] = words[index].data();
+      }
+
+      try {
+        static_cast<void>(config::PluginWorkerOptions::parse(argv));
+      } catch (const std::invalid_argument&) {
+        return false;
+      }
+
+      return true;
+    };
+
+    for (const auto action : {"a\"]..os.exit()..[\"", "a b", "../x", ""}) {
+      check(!parsed(action), action);
+    }
+
+    check(parsed("open_panel-1.x"));
+  }
+
   // A command tab reference turns back into the argv the GUI launches: an argument longer than
   // 255 bytes needs both bytes of its length, and the label follows every argument.
   void testCommandTabReferenceLoadsLongArguments() {
@@ -109,6 +136,44 @@ namespace {
     consume(result);
   }
 
+  // The chord a binding's key names, or none when the reader refuses it.
+  std::optional<config::KeyChord> keyChord(std::string_view text) {
+    std::optional<config::KeyChord> chord;
+
+    withResult(std::string{"return [["} + std::string{text} + "]]", [&](const lua::Value& result) {
+      try {
+        chord = config::KeyChordValidator::parse(result);
+      } catch (const lua::Error&) {
+      }
+    });
+
+    return chord;
+  }
+
+  // Spellings of one keystroke read as the same chord, and a malformed chord is refused rather
+  // than read as another key, which would fire a binding on the wrong keystroke.
+  void testKeyChordSpellings() {
+    const std::array<std::pair<std::string_view, std::string_view>, 4> same{{
+        {"ctrl+A", "ctrl+a"},
+        {"shift+a", "A"},
+        {"shift+tab", "backtab"},
+        {"space", " "},
+    }};
+
+    for (const auto& [left, right] : same) {
+      const auto first = keyChord(left);
+      const auto second = keyChord(right);
+
+      check(first.has_value() && second.has_value() && *first == *second, left);
+    }
+
+    check(*keyChord("ctrl+a") != *keyChord("a"));
+
+    for (const auto malformed : {"ctrl+ctrl+a", "ctrl+", "+a", "a+ctrl", "ctrl+shift+a", "shift+1", "ab", ""}) {
+      check(!keyChord(malformed).has_value(), malformed);
+    }
+  }
+
   bool decisionRefused(std::string_view source) {
     bool refused = false;
 
@@ -140,7 +205,9 @@ namespace {
   }
 
   const telar::testing::Case case_plugin_worker_arguments{"client.plugin_worker_arguments_round_trip", testPluginWorkerArgumentsRoundTrip};
+  const telar::testing::Case case_plugin_worker_invalid_actions{"client.plugin_worker_rejects_invalid_actions", testPluginWorkerRejectsInvalidActions};
   const telar::testing::Case case_command_tab_long_arguments{"client.command_tab_reference_loads_long_arguments", testCommandTabReferenceLoadsLongArguments};
+  const telar::testing::Case case_key_chord_spellings{"client.key_chord_spellings", testKeyChordSpellings};
   const telar::testing::Case case_input_decision_bounds{"client.input_decision_bounds", testInputDecisionBounds};
 
 }
