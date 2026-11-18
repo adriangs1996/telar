@@ -48,12 +48,13 @@ export {
   namespace telar::runtime::cli::repository {
 
     struct PreparedRepository {
-      std::string path;
-      std::string commit;
-      std::string repository;
+      Text path;
+      Text commit;
+      Text repository;
       bool reused;
 
-      std::string json(bool receiver = false) const;
+      // Writes the repository as one JSON line to standard output.
+      void print(bool receiver = false) const;
     };
 
     template <Allocator Memory>
@@ -70,13 +71,13 @@ export {
     // tips of the clone `receive` would update, one per line, or nothing without
     // a clone. A clone `receive` published has only its detached HEAD.
     template <Allocator Memory>
-    std::string tips(Memory& memory, const RepositoryOptions& options);
+    Text tips(Memory& memory, const RepositoryOptions& options);
 
     // Runs the given telar words on the other machine with the descriptor as
     // stdin (-1 for none) and returns their stdout.
     class RepositoryCapture {
     public:
-      virtual std::string operator()(std::span<const std::string_view> words, int input) = 0;
+      virtual Text operator()(std::span<const std::string_view> words, int input) = 0;
 
     protected:
       ~RepositoryCapture() = default;

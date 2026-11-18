@@ -80,7 +80,7 @@ namespace telar::runtime::cli {
       case Family::cli:
         return runCliCommand(options);
       case Family::completions:
-        return runCompletionsCommand(options);
+        return runCompletionsCommand(memory, options);
       case Family::gui:
         return runWindowCommand(memory, options, true);
       case Family::hook:
@@ -166,7 +166,12 @@ namespace telar::runtime::cli {
       }
 
       if (!words.empty() && std::string_view{words.front()} == "dispatch-argv") {
-        return dispatchArguments(words.subspan(1), runResolved);
+        // The decoded words outlive the command they run.
+        SystemAllocator system;
+        BudgetAllocator budget{system, memory_budget};
+        MemoryAdapter budget_memory{budget};
+
+        return dispatchArguments(budget_memory, words.subspan(1), runResolved);
       }
 
       if (const auto routed = RoutedOptions::parse(words)) {

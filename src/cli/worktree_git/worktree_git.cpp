@@ -12,7 +12,7 @@ import telar.base.ds;
 
 namespace telar::runtime::cli::repository {
 
-  std::string normalize(std::string_view url) {
+  Text normalize(Memory& memory, std::string_view url) {
     url = trimText(url, " \t\r\n");
     std::string_view scheme = "ssh";
     std::string_view authority;
@@ -22,7 +22,7 @@ namespace telar::runtime::cli::repository {
       scheme = url.substr(0, separator);
       const auto rest = url.substr(separator + std::string_view{"://"}.size());
       const auto slash = rest.find('/');
-      if (asciiLowerCopy(scheme) == "file" || slash == rest.npos) {
+      if (asciiEqualIgnoreCase(scheme, "file") || slash == rest.npos) {
         throw std::runtime_error{"UnsupportedOrigin"};
       }
 
@@ -59,8 +59,7 @@ namespace telar::runtime::cli::repository {
 
     if (colon != host.npos && colon < host.size()) {
       const auto port = host.substr(colon + 1);
-      const auto lower_scheme = asciiLowerCopy(scheme);
-      if ((lower_scheme == "ssh" && port == "22") || (lower_scheme == "https" && port == "443") || (lower_scheme == "http" && port == "80")) {
+      if ((asciiEqualIgnoreCase(scheme, "ssh") && port == "22") || (asciiEqualIgnoreCase(scheme, "https") && port == "443") || (asciiEqualIgnoreCase(scheme, "http") && port == "80")) {
         host = host.starts_with('[') ? host.substr(1, colon - 2) : host.substr(0, colon);
       }
     }
@@ -83,10 +82,10 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{"OriginTooLong"};
     }
 
-    return asciiLowerCopy(host) + '/' + std::string{path};
+    return ds::format(memory, "{}/{}", AsciiLower{host}, path);
   }
 
-  std::string sanitized(std::string_view origin) {
+  Text sanitized(Memory& memory, std::string_view origin) {
     if (origin.find_first_of("?#\r\n\t ") != origin.npos) {
       throw std::runtime_error{"UnsupportedOrigin"};
     }
@@ -101,12 +100,12 @@ namespace telar::runtime::cli::repository {
 
       const auto authority = origin.substr(start, slash - start);
       const auto at = authority.rfind('@');
-      if (at != authority.npos && !(asciiLowerCopy(origin.substr(0, separator)) == "ssh" && !authority.substr(0, at).contains(':'))) {
-        return std::string{origin.substr(0, start)} + std::string{origin.substr(start + at + 1)};
+      if (at != authority.npos && !(asciiEqualIgnoreCase(origin.substr(0, separator), "ssh") && !authority.substr(0, at).contains(':'))) {
+        return ds::format(memory, "{}{}", origin.substr(0, start), origin.substr(start + at + 1));
       }
     }
 
-    return std::string{origin};
+    return Text{memory, origin};
   }
 
   void ready(Git& git, std::string_view commit) {
@@ -115,7 +114,7 @@ namespace telar::runtime::cli::repository {
     }
 
     const auto config = git.read({"config", "--local", "--name-only", "--list"});
-    if (config.contains("extensions.partialclone") || config.contains(".promisor")) {
+    if (config.view().contains("extensions.partialclone") || config.view().contains(".promisor")) {
       throw std::runtime_error{"PartialRepositoryUnsupported"};
     }
 
@@ -139,7 +138,7 @@ namespace telar::runtime::cli::repository {
           }
 
           const auto attributes = git.read({"cat-file", "blob", line.substr(space + 1, tab - space - 1)});
-          if (attributes.contains("filter=lfs") || attributes.contains("filter = lfs")) {
+          if (attributes.view().contains("filter=lfs") || attributes.view().contains("filter = lfs")) {
             throw std::runtime_error{"LfsRepositoryUnsupported"};
           }
         }
@@ -216,19 +215,19 @@ namespace telar::runtime::cli::sessions {
     field = value;
   }
 
-  std::string realDirectory(std::string_view path) {
-    std::error_code error;
-    auto resolved = std::filesystem::canonical(path, error);
-
-    if (error) {
-      throw Failure{sys::errorName(error.value())};
+  Text realDirectory(Memory& memory, std::string_view path) {
+    const Text given{memory, path};
+    ds::Array<char, PATH_MAX> resolved{};
+    if (::realpath(given.data(), resolved.dataMut()) == nullptr) {
+      throw Failure{sys::errorName(sys::lastError())};
     }
 
-    if (!std::filesystem::is_directory(resolved, error)) {
+    struct stat state{};
+    if (::stat(resolved.data(), &state) != 0 || !S_ISDIR(state.st_mode)) {
       throw Failure{"NotDir"};
     }
 
-    return resolved.string();
+    return Text{memory, std::string_view{resolved.data()}};
   }
 
   void wireTabLabel(std::string_view value, bool empty) {
@@ -293,8 +292,9 @@ namespace telar::runtime::cli::sessions {
       Output output{memory};
 
       if (options.action == Action::create) {
-        const auto directory = realDirectory(*options.directory);
-        const auto default_name = std::filesystem::path{directory}.filename().string();
+        const auto directory = realDirectory(memory, *options.directory);
+        // The directory's own name, after its last separator; empty for the root.
+        const auto default_name = directory.view().substr(directory.view().rfind('/') + 1);
         const auto name = options.name.valueOr(default_name);
         if (name.empty()) {
           throw Failure{"MissingWorkspaceName"};
@@ -440,7 +440,6 @@ namespace telar::runtime::cli::repository {
 
 namespace telar::runtime::cli::sessions {
 
-  template void appendWorktreeCheckout<std::string>(std::string& path, std::string_view root, std::string_view branch);
   template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, std::string_view root, std::string_view branch);
 
 }
@@ -458,11 +457,11 @@ namespace telar::runtime::cli::repository {
         });
   }
 
-  std::string Git::read(std::initializer_list<std::string_view> arguments) {
+  Text Git::read(std::initializer_list<std::string_view> arguments) {
     return read(std::span{arguments.begin(), arguments.size()});
   }
 
-  std::string Git::read(std::span<const std::string_view> arguments) {
+  Text Git::read(std::span<const std::string_view> arguments) {
     auto [status, output] = git_.with(arguments, [&](Command<Memory>& command) {
       return execute(command, true);
     });
@@ -470,16 +469,17 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{"GitFailed"};
     }
 
-    return std::string{trimText(output, " \r\n")};
+    return Text{memory_, trimText(output, " \r\n")};
   }
 
   void Git::bundle(std::span<const std::string_view> revisions, int descriptor) {
-    std::vector<std::string_view> args{"bundle", "create", "-"};
+    ds::Vec<std::string_view, Memory> args{memory_};
 
-    args.insert(args.end(), revisions.begin(), revisions.end());
+    args.extend(ds::Array<std::string_view, 3>{"bundle", "create", "-"}.view());
+    args.extend(revisions);
     CommandOutput output{memory_, max_git_output};
     std::size_t total = 0;
-    const auto status = git_.with(args, [&](Command<Memory>& command) {
+    const auto status = git_.with(args.view(), [&](Command<Memory>& command) {
       return output.stream(command, std::chrono::steady_clock::now() + git_timeout, [&](std::span<const Byte> bytes) {
         total += bytes.size();
         if (total > max_bundle_bytes) {
@@ -496,7 +496,7 @@ namespace telar::runtime::cli::repository {
     }
   }
 
-  std::pair<int, std::string> Git::execute(Command<Memory>& command, bool bounded) {
+  std::pair<int, Text> Git::execute(Command<Memory>& command, bool bounded) {
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};
     const auto status = output.run(command, std::chrono::steady_clock::now() + git_timeout, true);
@@ -509,7 +509,7 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{bounded ? "RepositoryGitOutputLimit" : "GitFailed"};
     }
 
-    return {status, std::string{output.text()}};
+    return {status, Text{memory_, output.text()}};
   }
 
 }
@@ -791,7 +791,7 @@ namespace telar::runtime::cli::sessions {
   WorktreeGit::WorktreeGit(Memory& memory)
       : memory_(memory) {}
 
-  std::string WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) {
+  Text WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
 
     for (const auto& [name, value] : environment) {
@@ -807,7 +807,7 @@ namespace telar::runtime::cli::sessions {
     constexpr unsigned git_timeout_seconds = 300;
     RetainedStream diagnostics{memory_, diagnostic_bytes};
     CommandOutput output{memory_, listing_bytes};
-    std::string kept;
+    Text kept{memory_};
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{git_timeout_seconds};
     const auto status = output.streamDiagnostics(command, deadline, [&](std::span<const Byte> bytes) {
       if (stream) {
@@ -817,7 +817,7 @@ namespace telar::runtime::cli::sessions {
           throw Failure{"StreamTooLong"};
         }
 
-        kept.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        kept.append({reinterpret_cast<const char*>(bytes.data()), bytes.size()});
       }
 
       return true;
@@ -848,37 +848,37 @@ namespace telar::runtime::cli::sessions {
     return kept;
   }
 
-  std::string WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) {
+  Text WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) {
     return run(std::span{arguments.begin(), arguments.size()}, failure, stream, hardened);
   }
 
-  std::string WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) {
-    auto value = run(arguments, "NotARepository", false, hardened);
-    const auto start = value.find_first_not_of(" \r\n"), end = value.find_last_not_of(" \r\n");
-    if (start == std::string::npos) {
+  Text WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) {
+    const auto value = run(arguments, "NotARepository", false, hardened);
+    const auto trimmed = trimText(value.view(), " \r\n");
+    if (trimmed.empty()) {
       throw Failure{"NotARepository"};
     }
 
-    return value.substr(start, end - start + 1);
+    return Text{memory_, trimmed};
   }
 
-  std::string WorktreeGit::root(std::string_view directory) {
+  Text WorktreeGit::root(std::string_view directory) {
     auto common = line({"git", "-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"});
 
-    while (common.ends_with('/')) {
-      common.pop_back();
+    while (common.view().ends_with('/')) {
+      common.truncate(common.size() - 1);
     }
 
     constexpr std::string_view suffix = "/.git";
-    if (!common.starts_with('/') || !common.ends_with(suffix) || common.size() <= suffix.size()) {
+    if (!common.view().starts_with('/') || !common.view().ends_with(suffix) || common.size() <= suffix.size()) {
       throw Failure{"not inside a git repository"};
     }
 
-    common.resize(common.size() - suffix.size());
+    common.truncate(common.size() - suffix.size());
     return common;
   }
 
-  std::string WorktreeGit::currentBranch(std::string_view directory) {
+  Text WorktreeGit::currentBranch(std::string_view directory) {
     return line({"git", "-C", directory, "rev-parse", "--abbrev-ref", "HEAD"});
   }
 
@@ -892,7 +892,7 @@ namespace telar::runtime::cli::sessions {
   }
 
   void WorktreeGit::add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) {
-    const auto reference = "refs/heads/" + std::string{branch};
+    const auto reference = ds::format(memory_, "refs/heads/{}", branch);
     if (succeeds({"git", "-C", root, "rev-parse", "--verify", "--quiet", reference})) {
       run({"git", "-C", root, "worktree", "add", "--", directory, branch}, "git worktree add failed");
     } else {
@@ -903,14 +903,14 @@ namespace telar::runtime::cli::sessions {
   bool WorktreeGit::merged(std::string_view root, std::string_view branch) {
     try {
       repository::Git git{memory_, root};
-      std::string against = "HEAD";
+      Text against{memory_, "HEAD"};
 
       try {
-        against = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", std::string{branch} + "@{upstream}"});
+        against = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", ds::format(memory_, "{}@{{upstream}}", branch)});
       } catch (const std::exception&) {
       }
 
-      git.read({"merge-base", "--is-ancestor", "refs/heads/" + std::string{branch}, against});
+      git.read({"merge-base", "--is-ancestor", ds::format(memory_, "refs/heads/{}", branch), against});
       return true;
     } catch (const std::exception&) {
       return false;
@@ -1072,10 +1072,10 @@ namespace telar::runtime::cli::sessions {
     return self;
   }
 
-  std::vector<GitWorktree> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) {
+  ds::Vec<GitWorktree, Memory> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) {
     const auto main = root(directory);
     const auto bytes = run({"git", "-C", main, "worktree", "list", "--porcelain"});
-    std::vector<GitWorktree> result;
+    ds::Vec<GitWorktree, Memory> result{memory_};
     std::string_view path, branch;
     constexpr std::size_t maximum_untracked = 256;
     bool first = true;
@@ -1092,7 +1092,7 @@ namespace telar::runtime::cli::sessions {
         branch = line.substr(std::string_view{"branch refs/heads/"}.size());
       } else if (line.empty()) {
         if (!first && !path.empty() && !branch.empty() && keep(path) && result.size() < maximum_untracked) {
-          result.push_back(GitWorktree{.path = std::string{path}, .branch = std::string{branch}});
+          result.push(GitWorktree{.path = Text{memory_, path}, .branch = Text{memory_, branch}});
         }
 
         first = false;

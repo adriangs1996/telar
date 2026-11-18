@@ -7,16 +7,6 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  std::string asciiLowerCopy(std::string_view text) {
-    std::string result{text};
-
-    for (auto& byte : result) {
-      byte = asciiLower(byte);
-    }
-
-    return result;
-  }
-
   bool constantTimeEqual(std::string_view left, std::string_view right) noexcept {
     if (left.size() != right.size()) {
       return false;

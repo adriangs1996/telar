@@ -28,9 +28,11 @@ import telar.base.ds;
 export {
   namespace telar::runtime::cli::repository {
 
-    std::string normalize(std::string_view url);
+    // The origin as `host/path`, lowercase host, default port, `.git` and slashes dropped.
+    Text normalize(Memory& memory, std::string_view url);
 
-    std::string sanitized(std::string_view origin);
+    // The origin without the credentials an authority may carry.
+    Text sanitized(Memory& memory, std::string_view origin);
 
   }
 }
@@ -47,15 +49,15 @@ export {
     public:
       Git(Memory& memory, std::string_view root);
 
-      std::string read(std::initializer_list<std::string_view> arguments);
+      Text read(std::initializer_list<std::string_view> arguments);
 
-      std::string read(std::span<const std::string_view> arguments);
+      Text read(std::span<const std::string_view> arguments);
 
       // `revisions` are rev-list arguments: the ref, then any exclusions.
       void bundle(std::span<const std::string_view> revisions, int descriptor);
 
     private:
-      std::pair<int, std::string> execute(Command<Memory>& command, bool bounded);
+      std::pair<int, Text> execute(Command<Memory>& command, bool bounded);
 
       Memory& memory_;
       HardenedGit<Memory> git_;
@@ -91,7 +93,6 @@ export {
     template <typename Text>
     void appendWorktreeCheckout(Text& path, std::string_view root, std::string_view branch);
     extern template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, std::string_view root, std::string_view branch);
-    extern template void appendWorktreeCheckout<std::string>(std::string& path, std::string_view root, std::string_view branch);
 
     void branch(std::string_view value);
 
@@ -149,7 +150,8 @@ export {
 export {
   namespace telar::runtime::cli::sessions {
 
-    std::string realDirectory(std::string_view path);
+    // The canonical path of a directory that exists.
+    Text realDirectory(Memory& memory, std::string_view path);
 
     void wireTabLabel(std::string_view value, bool empty = false);
 
@@ -214,7 +216,7 @@ export {
   namespace telar::runtime::cli::sessions {
 
     struct GitWorktree {
-      std::string path, branch;
+      Text path, branch;
     };
 
     // Decides which worktrees `WorktreeGit::listed` keeps, by path.
@@ -232,21 +234,21 @@ export {
 
       // Mutations retain only the tail of diagnostics; diff streams both byte
       // streams. Every invocation uses literal argv and a bounded deadline.
-      std::string run(std::span<const std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {});
+      Text run(std::span<const std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {});
 
-      std::string run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false);
+      Text run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false);
 
-      std::string line(std::initializer_list<std::string_view> arguments, bool hardened = false);
+      Text line(std::initializer_list<std::string_view> arguments, bool hardened = false);
 
-      std::string root(std::string_view directory);
+      Text root(std::string_view directory);
 
-      std::string currentBranch(std::string_view directory);
+      Text currentBranch(std::string_view directory);
 
       bool succeeds(std::initializer_list<std::string_view> arguments, bool hardened = false);
 
       void add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base);
 
-      std::vector<GitWorktree> listed(std::string_view directory, const WorktreeFilter& keep);
+      ds::Vec<GitWorktree, Memory> listed(std::string_view directory, const WorktreeFilter& keep);
 
       // The merge check runs through the untrusted Git: hooks, filters and lazy
       // fetches off. A clone that could still fetch lazily, on a Git too old to

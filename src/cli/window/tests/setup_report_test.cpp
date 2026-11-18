@@ -22,7 +22,8 @@ namespace {
                      "b\x7f\r\n"};
 
     text.append(600, 'c');
-    const auto shown = SetupReport::bounded(text);
+    const auto line = SetupReport::bounded(text);
+    const auto shown = line.view();
 
     check(shown.size() <= SetupReport::max_text_bytes);
     check(shown.starts_with('a'));
@@ -34,7 +35,7 @@ namespace {
   int finished(std::initializer_list<std::pair<Step, Status>> steps) {
     SystemAllocator system;
     MemoryAdapter adapter{system};
-    SetupReport report{.json = false};
+    SetupReport report{adapter, false};
 
     for (const auto& [step, status] : steps) {
       report.end(step, status, "fixture");

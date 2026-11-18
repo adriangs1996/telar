@@ -51,6 +51,7 @@ import telar.vocabulary;
 import telar.cli.command_limit;
 import telar.platform.process;
 import telar.cli.worktree_git;
+import telar.cli.command_limit;
 import telar.base.ds;
 
 namespace {
@@ -95,13 +96,14 @@ namespace {
         : memory_(memory),
           binary_(binary) {}
 
-    std::string operator()(std::span<const std::string_view> words, int descriptor) override {
+    telar::runtime::cli::Text operator()(std::span<const std::string_view> words, int descriptor) override {
       using namespace telar;
       using namespace telar::runtime;
       using namespace telar::runtime::cli;
 
       ds::Option<MappedBundle> bundle;
-      std::vector<std::string_view> input;
+      ds::Array<std::string_view, 1> bundle_text{};
+      std::span<const std::string_view> input;
 
       if (descriptor >= 0) {
         if (::lseek(descriptor, 0, SEEK_CUR) != 0) {
@@ -109,14 +111,16 @@ namespace {
         }
 
         bundle.emplace(descriptor);
-        input.push_back(bundle->text());
-        writeText("repository-prepare-probe: bundle " + std::to_string(bundle->text().size()) + " bytes\n", STDERR_FILENO);
+        bundle_text.atMut(0) = bundle->text();
+        input = bundle_text.view();
+        writeFormatted(STDERR_FILENO, "repository-prepare-probe: bundle {} bytes\n", bundle->text().size());
       }
 
-      std::vector<std::string_view> arguments{binary_};
+      ds::Vec<std::string_view, telar::Memory> arguments{memory_};
 
-      arguments.insert(arguments.end(), words.begin(), words.end());
-      Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
+      arguments.push(binary_);
+      arguments.extend(words);
+      Command command{memory_, Launch{.arguments = arguments.view()}, CommandPurpose::configured_helper};
       constexpr std::size_t max_reply = 4 * 1024 * 1024;
       CommandOutput output{memory_, max_reply};
       const auto status = output.runWithInputDiagnostics(command, std::chrono::steady_clock::now() + repository::git_timeout, input, [](std::span<const Byte> bytes) {
@@ -127,7 +131,7 @@ namespace {
         throw std::runtime_error{"RepositoryTransferFailed"};
       }
 
-      return std::string{output.text()};
+      return telar::runtime::cli::Text{memory_, output.text()};
     }
 
   private:
@@ -158,10 +162,10 @@ int main(int argc, char** argv) {
     LocalCapture capture{memory, binary};
     const auto prepared = repository::prepare(memory, options, binary, capture);
 
-    writeText(prepared.json());
+    prepared.print();
     return 0;
   } catch (const std::exception& error) {
-    writeText("telar repository: " + std::string{error.what()} + "\n", STDERR_FILENO);
+    std::fprintf(stderr, "telar repository: %s\n", error.what());
     return 1;
   }
 }

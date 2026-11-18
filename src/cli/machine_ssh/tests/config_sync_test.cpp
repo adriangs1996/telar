@@ -10,6 +10,7 @@ import telar.testing;
 import telar.base.text.json;
 import telar.cli.machine_ssh;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 
@@ -17,6 +18,18 @@ namespace {
   using telar::testing::expect;
 
   using namespace telar::runtime::cli;
+  using telar::Memory;
+  namespace ds = telar::ds;
+
+  // Memory for the texts a test builds, released with it.
+  struct TestMemory {
+    telar::SystemAllocator system;
+    telar::MemoryAdapter<telar::SystemAllocator> adapter{system};
+
+    Memory& get() noexcept {
+      return adapter;
+    }
+  };
 
   // The sync writes, and sends, only files under an agent's configuration root: never a
   // shell profile, an SSH key list, another tool's configuration or an absolute path.
@@ -80,7 +93,9 @@ namespace {
              "$HOME `id` \\n; exit 3",
              "",
          }) {
-      expect(printed(launch::quote(value)) == value, value);
+      TestMemory memory;
+
+      expect(printed(std::string{launch::quote(memory.get(), value).view()}) == value, value);
     }
   }
 
@@ -128,58 +143,66 @@ namespace {
   void tomlDropsMultilineSecretValue() {
     for (const std::string_view delimiter : {"\"\"\"", "'''"}) {
       const auto source = std::format("# kept comment\napi_key = {0}\nS1\nS2\n{0}\nmodel = \"x\"\n", delimiter);
-      std::vector<std::string> dropped;
-      const auto output = machine::filter::toml(source, dropped);
+      TestMemory memory;
+      machine::filter::Notes dropped{memory.get()};
+      const auto output = machine::filter::toml(memory.get(), source, dropped);
+      const auto text = output.view();
 
-      expect(output.contains("model = \"x\"") && output.contains("# kept comment"), output);
-      expect(!output.contains("S1") && !output.contains("S2") && !output.contains("api_key"), output);
-      expect(dropped == std::vector<std::string>{"api_key"}, output);
+      expect(text.contains("model = \"x\"") && text.contains("# kept comment"), text);
+      expect(!text.contains("S1") && !text.contains("S2") && !text.contains("api_key"), text);
+      expect(std::ranges::equal(dropped, ds::Array<std::string_view, 1>{"api_key"}), text);
     }
 
-    std::vector<std::string> dropped;
-    const auto output = machine::filter::toml("[[mcp_servers]]\nurl = \"private\"\n[features]\nsafe = true\n", dropped);
+    TestMemory memory;
+    machine::filter::Notes dropped{memory.get()};
+    const auto output = machine::filter::toml(memory.get(), "[[mcp_servers]]\nurl = \"private\"\n[features]\nsafe = true\n", dropped);
+    const auto text = output.view();
 
-    expect(!output.contains("private") && output.contains("[features]\nsafe = true"), output);
-    expect(dropped == std::vector<std::string>{"mcp_servers"}, output);
+    expect(!text.contains("private") && text.contains("[features]\nsafe = true"), text);
+    expect(std::ranges::equal(dropped, ds::Array<std::string_view, 1>{"mcp_servers"}), text);
   }
 
   // Containers that span lines or nest keep the keys after them in step: an inline table
   // under a secret key leaves whole, and a multi-line array under a safe key stays whole.
   void tomlInlineAndMultilineContainers() {
-    std::vector<std::string> dropped;
-    const auto output = machine::filter::toml("env = { KEY = \"v\" }\nheaders = [\n  \"Authorization: x\",\n]\nargs = [\n  \"a\",\n]\nmodel = \"x\"\n", dropped);
+    TestMemory memory;
+    machine::filter::Notes dropped{memory.get()};
+    const auto output = machine::filter::toml(memory.get(), "env = { KEY = \"v\" }\nheaders = [\n  \"Authorization: x\",\n]\nargs = [\n  \"a\",\n]\nmodel = \"x\"\n", dropped);
+    const auto text = output.view();
 
-    expect(!output.contains("KEY") && !output.contains("env"), output);
-    expect(!output.contains("Authorization") && !output.contains("headers"), output);
-    expect(output.starts_with("args = [\n  \"a\",\n]\nmodel = \"x\""), output);
-    expect(dropped == std::vector<std::string>{"env", "headers"}, output);
+    expect(!text.contains("KEY") && !text.contains("env"), text);
+    expect(!text.contains("Authorization") && !text.contains("headers"), text);
+    expect(text.starts_with("args = [\n  \"a\",\n]\nmodel = \"x\""), text);
+    expect(std::ranges::equal(dropped, ds::Array<std::string_view, 2>{"env", "headers"}), text);
   }
 
   // The local home becomes the remote one only where it is a whole path component, so a
   // sibling home that shares its prefix keeps its name.
   void rewriteHomeOnlyAtPathBoundary() {
-    const auto output = machine::filter::rewriteHome("/Users/al/x \"/Users/al\" /Users/alice", "/Users/al", "/home/r");
+    TestMemory memory;
+    const auto output = machine::filter::rewriteHome(memory.get(), "/Users/al/x \"/Users/al\" /Users/alice", "/Users/al", "/home/r");
 
-    check(output == "/home/r/x \"/home/r\" /Users/alice", output);
+    check(output == "/home/r/x \"/home/r\" /Users/alice", output.view());
   }
 
   // Comments and trailing commas leave; what looks like a comment inside a string, after an
   // escaped quote or in a URL, is the string's own text.
   void stripJsoncRespectsStrings() {
-    const auto plain = machine::filter::stripJsonc("{\"a\":\"x\\\"//y\", /* c */ \"b\":1 ,\n// end\n\"c\":\"https://x\"\n,}");
+    TestMemory memory;
+    const auto plain = machine::filter::stripJsonc(memory.get(), "{\"a\":\"x\\\"//y\", /* c */ \"b\":1 ,\n// end\n\"c\":\"https://x\"\n,}");
     const auto value = telar::runtime::JsonValue::parse(plain);
     const auto a = value.field("a");
     const auto b = value.field("b");
     const auto c = value.field("c");
 
-    check(a && a->encoded() == "\"x\\\"//y\"", plain);
-    check(b && b->encoded() == "1", plain);
-    check(c && c->encoded() == "\"https://x\"", plain);
+    check(a && a->encoded() == "\"x\\\"//y\"", plain.view());
+    check(b && b->encoded() == "1", plain.view());
+    check(c && c->encoded() == "\"https://x\"", plain.view());
 
     std::string error;
 
     try {
-      machine::filter::stripJsonc("{\"a\":1 /* open");
+      machine::filter::stripJsonc(memory.get(), "{\"a\":1 /* open");
     } catch (const std::exception& thrown) {
       error = thrown.what();
     }

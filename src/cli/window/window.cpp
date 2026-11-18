@@ -594,11 +594,16 @@ namespace telar::runtime::cli {
     if (family == Family::config) {
       window::ConfigCheckOptions::parse(words);
       const ExecutablePath helper{"telar-config-check"};
-      std::vector<char*> arguments{const_cast<char*>(helper.c_str())};
+      // The options parsed: at most a path and a profile, so the arguments fit.
+      ds::Array<char*, 8> arguments{};
+      if (words.size() + 2 > arguments.size()) {
+        throw std::invalid_argument{"TooManyConfigArguments"};
+      }
 
-      arguments.insert(arguments.end(), words.begin(), words.end());
-      arguments.push_back(nullptr);
-      ::execv(helper.c_str(), arguments.data());
+      // execv takes char* const[] for C's sake and never writes through them.
+      arguments.atMut(0) = const_cast<char*>(helper.c_str());
+      std::ranges::copy(words, arguments.viewMut().begin() + 1);
+      ::execv(helper.c_str(), arguments.dataMut());
       throw SystemError{"Execute telar-config-check"};
     }
 

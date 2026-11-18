@@ -28,7 +28,7 @@ namespace telar::runtime::cli {
   int runWindowCommand(Memory& memory, std::span<char* const> words, bool gui) {
     const auto options = WindowOptions::parse(words, gui);
     if (options.login_shell) {
-      relaunchLogin(words);
+      relaunchLogin(memory, words);
     }
 
     return openWindow(memory, options);
@@ -115,17 +115,23 @@ namespace telar::runtime::cli {
     return target ? machine::forward(memory, *target, command) : dispatch(command);
   }
 
-  int dispatchArguments(std::span<char* const> words, Dispatch dispatch) {
-    std::vector<std::string> decoded;
+  int dispatchArguments(Memory& memory, std::span<char* const> words, Dispatch dispatch) {
+    launch::Argv decoded{memory};
+    ds::Vec<char*, Memory> arguments{memory};
 
+    decoded.reserve(words.size());
     for (const std::string_view word : words) {
-      decoded.push_back(machine::decode(word));
+      decoded.push(machine::decode(memory, word));
     }
 
-    auto arguments = launch::pointers(decoded);
+    // The pointers are taken once every word is in place, so none moves after; the commands
+    // read their arguments and never write through them.
+    arguments.reserve(decoded.size());
+    for (const auto& word : decoded) {
+      arguments.push(const_cast<char*>(word.data()));
+    }
 
-    arguments.pop_back();
-    return dispatch(arguments);
+    return dispatch(arguments.view());
   }
 
 }

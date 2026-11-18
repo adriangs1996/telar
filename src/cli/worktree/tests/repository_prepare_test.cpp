@@ -11,6 +11,7 @@ import std;
 import telar.testing;
 import telar.base.memory.allocators;
 import telar.cli.worktree;
+import telar.cli.command_limit;
 import telar.base.ds;
 
 namespace {
@@ -56,21 +57,23 @@ namespace {
   // commit it was asked to receive; it has no clone to list tips from.
   class Receiver final : public repository::RepositoryCapture {
   public:
-    explicit Receiver(std::string (*reply)(std::string_view commit))
-        : reply_(reply) {}
+    Receiver(Memory& memory, std::string (*reply)(std::string_view commit))
+        : memory_(memory),
+          reply_(reply) {}
 
-    std::string operator()(std::span<const std::string_view> words, int) override {
+    Text operator()(std::span<const std::string_view> words, int) override {
       if (std::ranges::find(words, "receive") == words.end()) {
-        return {};
+        return Text{memory_};
       }
 
       const auto commit = std::ranges::find(words, "--commit");
 
       check(commit != words.end() && commit + 1 != words.end());
-      return reply_(*(commit + 1));
+      return Text{memory_, reply_(*(commit + 1))};
     }
 
   private:
+    Memory& memory_;
     std::string (*reply_)(std::string_view commit);
   };
 
@@ -83,7 +86,7 @@ namespace {
     try {
       const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
 
-      return repository::prepare(memory, options, "telar", receiver).path;
+      return std::string{repository::prepare(memory, options, "telar", receiver).path.view()};
     } catch (const std::exception& error) {
       return error.what();
     }
@@ -103,12 +106,12 @@ namespace {
     };
 
     // The fixture is sound: a ready clone of the commit is accepted.
-    check(prepared(memory, Receiver{[](std::string_view commit) {
+    check(prepared(memory, Receiver{memory, [](std::string_view commit) {
       return reply("/srv/clones/repo", commit, true);
     }}) == "/srv/clones/repo");
 
     // A reply that does not parse is refused by the parser, under its own name.
-    check(!prepared(memory, Receiver{[](std::string_view) {
+    check(!prepared(memory, Receiver{memory, [](std::string_view) {
       return std::string{"not json"};
     }}).starts_with('/'));
     check(transfers().empty());
@@ -126,7 +129,7 @@ namespace {
     };
 
     for (const auto answer : refused) {
-      check(prepared(memory, Receiver{answer}) == "InvalidPreparationResult");
+      check(prepared(memory, Receiver{memory, answer}) == "InvalidPreparationResult");
       check(transfers().empty());
     }
 
@@ -137,7 +140,10 @@ namespace {
   // receive` keeps the words of every call and the bundle it was sent.
   class Recorder final : public repository::RepositoryCapture {
   public:
-    std::string operator()(std::span<const std::string_view> words, int input) override {
+    explicit Recorder(Memory& memory)
+        : memory_(memory) {}
+
+    Text operator()(std::span<const std::string_view> words, int input) override {
       calls.emplace_back(words.begin(), words.end());
       if (std::ranges::find(words, "tips") != words.end()) {
         throw std::runtime_error{"tips unavailable"};
@@ -153,9 +159,10 @@ namespace {
       const auto commit = std::ranges::find(words, "--commit");
 
       check(commit != words.end() && commit + 1 != words.end());
-      return reply("/srv/clones/repo", *(commit + 1), true);
+      return Text{memory_, reply("/srv/clones/repo", *(commit + 1), true)};
     }
 
+    Memory& memory_;
     std::vector<std::vector<std::string>> calls;
     std::string bundle;
   };
@@ -168,7 +175,7 @@ namespace {
     const auto root = enterRepository();
 
     shell("cd '" + root + "' && git -c commit.gpgsign=false -c user.name=fixture -c user.email=fixture@example.invalid commit -q --allow-empty -m second");
-    Recorder recorder;
+    Recorder recorder{adapter};
     const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
 
     check(repository::prepare(adapter, options, "telar", recorder).path == "/srv/clones/repo");
@@ -187,7 +194,7 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     const auto root = enterRepository();
-    Recorder recorder;
+    Recorder recorder{adapter};
     const RepositoryOptions options{.action = RepositoryOptions::Action::prepare, .workspace = "/w"};
 
     static_cast<void>(repository::prepare(adapter, options, "telar", recorder));

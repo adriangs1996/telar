@@ -9,6 +9,7 @@ import telar.tbc;
 import telar.client;
 
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
 import telar.base.ds;
@@ -72,7 +73,7 @@ export {
 
     private:
       FailureCode code_;
-      std::string message_;
+      ErrorText<1023> message_;
     };
 
     // One conversation with the runtime, as every command that addresses panes, tabs,

@@ -4,6 +4,7 @@ import telar.sys.posix;
 import telar.base.text.utf8;
 import telar.cli.command_limit;
 import telar.base.ds;
+import telar.base.text;
 
 // The bodies of the window interface that cli-window carries, since
 // telar-config-check parses its options too; window.cpp builds only into the
@@ -140,54 +141,63 @@ namespace telar::runtime::cli::window {
 
 namespace telar::runtime::cli::machine {
 
-  std::string SetupReport::bounded(std::string text) {
-    text.resize(std::min(text.size(), max_text_bytes));
-    for (auto& byte : text) {
-      if ((static_cast<unsigned char>(byte) < 0x20 && byte != '\t') || byte == 0x7f) {
-        byte = ' ';
-      }
+  SetupReport::SetupReport(Memory& memory, bool json)
+      : json(json),
+        notes(memory) {}
+
+  SetupReport::Line SetupReport::bounded(std::string_view text) {
+    ds::Array<char, max_text_bytes> bytes;
+    const auto size = std::min(text.size(), max_text_bytes);
+
+    for (std::size_t index = 0; index < size; ++index) {
+      const auto byte = text[index];
+
+      bytes.atMut(index) = (static_cast<unsigned char>(byte) < 0x20 && byte != '\t') || byte == 0x7f ? ' ' : byte;
     }
 
-    const auto begin = text.find_first_not_of(' ');
+    Line line;
 
-    return begin == std::string::npos ? std::string{} : text.substr(begin, text.find_last_not_of(' ') + 1 - begin);
+    line.assign(trimText({bytes.data(), size}, " "));
+    return line;
   }
 
-  void SetupReport::end(Step step, Status status, std::string detail) {
+  void SetupReport::printNotes(Step step) const {
+    for (const auto& note : notes) {
+      if (note.step == step) {
+        std::printf("      %.*s\n", static_cast<int>(note.text.view().size()), note.text.view().data());
+      }
+    }
+  }
+
+  void SetupReport::endLine(Step step, Status status, const Line& detail) {
     const auto index = static_cast<std::size_t>(step);
     auto& result = results.atCheckedMut(index);
 
     result.status = status;
-    result.detail = bounded(std::move(detail));
+    result.detail = detail;
     if (!json) {
-      std::printf("%2zu. %-14s %-10s %s\n", index + 1, titles[index], statuses[static_cast<std::size_t>(status)], result.detail.c_str());
-      for (const auto& note : result.notes) {
-        std::printf("      %s\n", note.c_str());
-      }
-
+      std::printf("%2zu. %-14s %-10s %.*s\n", index + 1, titles[index], statuses[static_cast<std::size_t>(status)], static_cast<int>(detail.view().size()), detail.view().data());
+      printNotes(step);
       std::fflush(stdout);
     }
   }
 
-  void SetupReport::note(Step step, std::string detail) {
-    if (note_count == max_notes) {
+  void SetupReport::noteLine(Step step, const Line& text) {
+    if (notes.size() == max_notes) {
       ++omitted_notes;
       return;
     }
 
-    ++note_count;
-    auto& result = results.atCheckedMut(static_cast<std::size_t>(step));
-
-    result.notes.push_back(bounded(std::move(detail)));
-    if (!json && result.status) {
-      std::printf("      %s\n", result.notes.back().c_str());
+    notes.push(Note{.step = step, .text = text});
+    if (!json && results.atCheckedMut(static_cast<std::size_t>(step)).status) {
+      std::printf("      %.*s\n", static_cast<int>(text.view().size()), text.view().data());
       std::fflush(stdout);
     }
   }
 
-  void SetupReport::progress(const std::string& text) const {
+  void SetupReport::progressLine(const Line& text) const {
     if (!json) {
-      std::printf("    ... %s\n", bounded(text).c_str());
+      std::printf("    ... %.*s\n", static_cast<int>(text.view().size()), text.view().data());
       std::fflush(stdout);
     }
   }
@@ -198,9 +208,9 @@ namespace telar::runtime::cli::machine {
     });
   }
 
-  int SetupReport::refuse(Memory& memory, const std::string& label, const std::string& destination, std::string_view reason) const {
+  int SetupReport::refuse(Memory& memory, std::string_view label, std::string_view destination, std::string_view reason) const {
     if (!json) {
-      std::printf("telar machine setup %s: %.*s.\n", label.c_str(), static_cast<int>(reason.size()), reason.data());
+      std::printf("telar machine setup %.*s: %.*s.\n", static_cast<int>(label.size()), label.data(), static_cast<int>(reason.size()), reason.data());
     } else {
       ds::String<Memory> output{memory};
 
@@ -217,7 +227,7 @@ namespace telar::runtime::cli::machine {
     return 1;
   }
 
-  int SetupReport::finish(Memory& memory, const std::string& label, const std::string& destination) const {
+  int SetupReport::finish(Memory& memory, std::string_view label, std::string_view destination) const {
     const bool failed = has(Status::failed);
     const bool pending = has(Status::pending);
     const bool changed = has(Status::changed);
@@ -227,7 +237,7 @@ namespace telar::runtime::cli::machine {
                                                                               : changed   ? "is ready"
                                                                                           : "was already set up; nothing changed";
 
-      std::printf("%s %s.\n", label.c_str(), verdict);
+      std::printf("%.*s %s.\n", static_cast<int>(label.size()), label.data(), verdict);
       return failed ? 1 : 0;
     }
 
@@ -244,8 +254,7 @@ namespace telar::runtime::cli::machine {
     output.append(",\"changed\":");
     output.append(changed ? "true" : "false");
     if (omitted_notes != 0) {
-      output.append(",\"omitted_notes\":");
-      output.append(std::to_string(omitted_notes));
+      ds::formatTo(output, ",\"omitted_notes\":{}", omitted_notes);
     }
 
     output.append(",\"steps\":[");
@@ -267,17 +276,21 @@ namespace telar::runtime::cli::machine {
       output.append("\",\"status\":\"");
       output.append(statuses[static_cast<std::size_t>(*result.status)]);
       output.append("\",\"detail\":");
-      appendJsonText(output, result.detail, JsonEscapes::control);
+      appendJsonText(output, result.detail.view(), JsonEscapes::control);
       output.append(",\"notes\":[");
       bool first_note = true;
 
-      for (const auto& note : result.notes) {
+      for (const auto& note : notes) {
+        if (note.step != static_cast<Step>(index)) {
+          continue;
+        }
+
         if (!first_note) {
           output.push(',');
         }
 
         first_note = false;
-        appendJsonText(output, note, JsonEscapes::control);
+        appendJsonText(output, note.text.view(), JsonEscapes::control);
       }
 
       output.append("]}");

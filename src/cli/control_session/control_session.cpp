@@ -51,7 +51,7 @@ namespace telar::runtime::cli {
   }
 
   std::string_view ControlFailure::message() const noexcept {
-    return message_;
+    return message_.view();
   }
 
   ControlSession::ControlSession(Memory& memory, const char* socket, std::size_t reply_bytes, std::size_t request_bytes)

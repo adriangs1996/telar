@@ -10,6 +10,7 @@ import telar.platform.error;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.base.memory.containers;
 
 namespace telar::runtime::cli {
 
@@ -46,6 +47,24 @@ namespace telar::runtime::cli {
     return client_.receiveFrame(buffer);
   }
 
+  namespace {
+
+    // The runtime refused to stop; its own words say why.
+    class StopRefused final : public std::exception {
+    public:
+      explicit StopRefused(std::string_view message) noexcept
+          : message_(message) {}
+
+      const char* what() const noexcept override {
+        return message_.c_str();
+      }
+
+    private:
+      ErrorText<1023> message_;
+    };
+
+  }
+
   void RuntimeConnection::requestStop() {
     const timeval timeout{.tv_sec = 10, .tv_usec = 0};
     if (::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
@@ -61,7 +80,7 @@ namespace telar::runtime::cli {
     if (!response.empty() && response.front() == static_cast<Byte>(ServerTag::request_failed)) {
       const auto failure = Codec::decode<RequestFailed>(response, storage);
 
-      throw std::runtime_error{std::string{failure.message}};
+      throw StopRefused{failure.message};
     }
 
     Codec::decode<RuntimeStopping>(response, storage);

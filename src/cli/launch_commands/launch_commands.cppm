@@ -13,10 +13,11 @@ export {
 
     int runMachineCommand(Memory& memory, std::span<char* const> words);
     int runCliCommand(std::span<char* const> words);
-    int runCompletionsCommand(std::span<char* const> words);
+    int runCompletionsCommand(Memory& memory, std::span<char* const> words);
     int runWindowCommand(Memory& memory, std::span<char* const> words, bool gui);
     int dispatchMachine(std::span<char* const> words, Dispatch dispatch);
-    int dispatchArguments(std::span<char* const> words, Dispatch dispatch);
+    // Decodes the words `dispatch-argv` carries, into `memory`, and runs them.
+    int dispatchArguments(Memory& memory, std::span<char* const> words, Dispatch dispatch);
 
   }
 }

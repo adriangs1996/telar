@@ -12,6 +12,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.cli.machine_ssh;
+import telar.cli.command_limit;
 import telar.machines;
 import telar.base.ds;
 
@@ -63,10 +64,12 @@ namespace {
 
   // A remote command that hangs ends at its deadline instead of holding setup or check.
   void captureTimeoutThrows() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
 
     check(failure([&] {
-      launch::capture(memory, {"/bin/sleep", "5"}, {}, std::chrono::seconds{1});
+      launch::capture(memory, launch::words(memory, {"/bin/sleep", "5"}).view(), {}, std::chrono::seconds{1});
     }) == "Timeout");
   }
 
@@ -74,14 +77,16 @@ namespace {
   // listing is never read as complete. Input and output are pumped together: a large input
   // to a program that echoes it does not deadlock.
   void captureKeepsTailAndCountsDropped() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
     std::string input(launch::output_limit + 44 * 1024, '\0');
 
     for (std::size_t index = 0; index < input.size(); ++index) {
       input[index] = static_cast<char>('a' + index * 7 % 26);
     }
 
-    const auto result = launch::capture(memory, {"/bin/cat"}, input, std::chrono::seconds{10});
+    const auto result = launch::capture(memory, launch::words(memory, {"/bin/cat"}).view(), input, std::chrono::seconds{10});
 
     check(result.status == 0);
     check(result.dropped == input.size() - launch::output_limit);
@@ -91,8 +96,12 @@ namespace {
   // A program killed by a signal is a failure: `telar --machine X cmd` does not exit 0 when
   // ssh was killed.
   void inheritSignalIsFailure() {
-    check(launch::inherit({"/bin/sh", "-c", "kill -9 $$"}) == launch::ssh_failure);
-    check(launch::inherit({"/bin/sh", "-c", "exit 3"}) == 3);
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+
+    check(launch::inherit(launch::words(memory, {"/bin/sh", "-c", "kill -9 $$"}).view()) == launch::ssh_failure);
+    check(launch::inherit(launch::words(memory, {"/bin/sh", "-c", "exit 3"}).view()) == 3);
   }
 
   // Git reaches a machine over the same SSH options as the dispatch, each one a single word
@@ -108,13 +117,17 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     Memory& memory = adapter;
-    const auto words = shellWords(machine::gitSshCommand(memory, "dev@host"));
+    const auto words = shellWords(std::string{machine::gitSshCommand(memory, "dev@host").view()});
     auto dispatch = machine::ssh(memory, "dev@host", "x");
 
-    std::erase(dispatch, "-T");
-    dispatch.resize(dispatch.size() - 3);
+    dispatch.retain([](const auto& word) {
+      return word != "-T";
+    });
+    dispatch.truncate(dispatch.size() - 3);
     check(dispatch.back() != "--");
-    expect(words == dispatch);
+    expect(std::ranges::equal(words, dispatch, [](const std::string& word, const Text& argument) {
+      return argument == std::string_view{word};
+    }));
     expect(std::ranges::find(words, "ForwardAgent=no") != words.end());
     expect(std::ranges::find(words, "BatchMode=yes") != words.end());
 
@@ -143,7 +156,7 @@ namespace {
     Memory& memory = adapter;
     const auto profiles = machines::MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"dev@host","enabled":true}]})");
     const auto& profile = profiles.rows().front();
-    const std::vector<std::string> words{"worktree", "list"};
+    const ds::Array<std::string_view, 2> words{"worktree", "list"};
 
     const auto capture = [&](std::string_view body) {
       const auto ssh = root + "/ssh";
@@ -154,7 +167,7 @@ namespace {
       std::fclose(script);
       check(::chmod(ssh.c_str(), 0700) == 0);
       return failure([&] {
-        check(machine::capture(memory, profile, words, "RemoteFailed") == "listed\n");
+        check(machine::capture(memory, profile, std::span<const std::string_view>{words.view()}, "RemoteFailed") == "listed\n");
       });
     };
 
@@ -164,7 +177,8 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
-  WindowOptions windowOptions(std::vector<std::string> words, bool gui = false) {
+  // Parses `words` as the command line; the options view them, so the caller keeps them.
+  WindowOptions windowOptions(std::vector<std::string>& words, bool gui = false) {
     std::vector<char*> pointers;
 
     for (auto& word : words) {
@@ -177,13 +191,15 @@ namespace {
   // The words after `--` are the command the window runs, options and all; --login-shell
   // belongs to `telar gui` alone, and a window command has at most 64 words.
   void windowOptionsCommandAfterSeparator() {
-    const auto fresh = windowOptions({"--fresh", "--", "htop", "-d"});
+    std::vector<std::string> fresh_words{"--fresh", "--", "htop", "-d"};
+    const auto fresh = windowOptions(fresh_words);
 
-    check(fresh.fresh && fresh.command == std::vector<std::string>{"htop", "-d"});
+    check(fresh.fresh && std::ranges::equal(fresh.command(), ds::Array<std::string_view, 2>{"htop", "-d"}));
 
-    const auto gui = windowOptions({"--login-shell", "--theme", "shade"}, true);
+    std::vector<std::string> gui_words{"--login-shell", "--theme", "Mocha"};
+    const auto gui = windowOptions(gui_words, true);
 
-    check(gui.login_shell && gui.theme == "shade" && gui.command.empty());
+    check(gui.login_shell && gui.theme == ds::Option<std::string_view>{"catppuccin"} && gui.command().empty(), "a theme alias is its canonical name, whatever its case");
 
     std::vector<std::string> long_command{"--"};
 
@@ -195,7 +211,7 @@ namespace {
       windowOptions(long_command);
     }).empty());
     long_command.pop_back();
-    check(windowOptions(long_command).command.size() == 64);
+    check(windowOptions(long_command).command().size() == 64);
   }
 
   const telar::testing::Case case_capture_timeout{"launch.capture_timeout_throws", captureTimeoutThrows};

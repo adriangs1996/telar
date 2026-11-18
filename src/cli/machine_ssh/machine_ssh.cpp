@@ -32,14 +32,17 @@ namespace telar::runtime::cli::config_receive {
     static constexpr auto credential_names = ds::Array<std::string_view, 15>{".claude.json", ".credentials.json", "auth.json", "mcp-auth.json", "credentials", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".vault-token", ".git-credentials", "hosts.yml", "models.json", "keys.json", "sa.json"};
     static constexpr auto extensions = ds::Array<std::string_view, 11>{".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db", ".jsonl", ".db", ".sqlite", ".sqlite3", ".log"};
     static constexpr auto fragments = ds::Array<std::string_view, 5>{"credential", "secret", "token", "password", "passwd"};
-    const auto name = asciiLowerCopy(path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1));
-    if (std::ranges::find(credential_names, name) != credential_names.end() || std::ranges::any_of(extensions, [&](auto extension) {
-          return name.ends_with(extension);
+    const auto name = path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1);
+    const auto is = [&](std::string_view candidate) {
+      return asciiEqualIgnoreCase(name, candidate);
+    };
+    if (std::ranges::any_of(credential_names, is) || std::ranges::any_of(extensions, [&](auto extension) {
+          return asciiEndsWithIgnoreCase(name, extension);
         }) ||
         std::ranges::any_of(fragments, [&](auto fragment) {
-          return name.contains(fragment);
+          return asciiContainsIgnoreCase(name, fragment);
         }) ||
-        name == ".env" || name.starts_with(".env.") || name.ends_with(".env") || name.starts_with("id_rsa") || name.starts_with("id_ed25519") || name.starts_with("id_ecdsa") || name.starts_with("id_dsa")) {
+        is(".env") || asciiStartsWithIgnoreCase(name, ".env.") || asciiEndsWithIgnoreCase(name, ".env") || asciiStartsWithIgnoreCase(name, "id_rsa") || asciiStartsWithIgnoreCase(name, "id_ed25519") || asciiStartsWithIgnoreCase(name, "id_ecdsa") || asciiStartsWithIgnoreCase(name, "id_dsa")) {
       return false;
     }
 
@@ -49,15 +52,19 @@ namespace telar::runtime::cli::config_receive {
       }
 
       auto tail = path.substr(root.size());
-      const auto first = asciiLowerCopy(tail.substr(0, tail.find('/')));
-      if (std::ranges::find(session_directories, first) != session_directories.end()) {
+      const auto first = tail.substr(0, tail.find('/'));
+      if (std::ranges::any_of(session_directories, [&](auto directory) {
+            return asciiEqualIgnoreCase(first, directory);
+          })) {
         return false;
       }
 
       while (!tail.empty()) {
         const auto separator = tail.find('/');
         const auto component = tail.substr(0, separator);
-        if (component.empty() || component.front() == '.' || std::ranges::find(credential_directories, asciiLowerCopy(component)) != credential_directories.end()) {
+        if (component.empty() || component.front() == '.' || std::ranges::any_of(credential_directories, [&](auto directory) {
+              return asciiEqualIgnoreCase(component, directory);
+            })) {
           return false;
         }
 
@@ -74,28 +81,43 @@ namespace telar::runtime::cli::config_receive {
     return false;
   }
 
-  std::string line() {
-    std::string result;
+  FixedText<max_line_bytes> line() {
+    ds::Array<char, max_line_bytes> bytes;
+    std::size_t size = 0;
     char byte;
 
     while (std::cin.get(byte)) {
       if (byte == '\n') {
+        FixedText<max_line_bytes> result;
+
+        result.assign({bytes.data(), size});
         return result;
       }
 
-      if (result.size() == max_line_bytes) {
+      if (size == max_line_bytes) {
         throw CommandError{"InvalidConfigStream"};
       }
 
-      result += byte;
+      bytes.atMut(size++) = byte;
     }
 
     throw CommandError{"InvalidConfigStream"};
   }
 
+  // `name` as a C string, which a path component no longer than NAME_MAX always fits.
+  ds::Array<char, NAME_MAX + 1> component(std::string_view name) {
+    ds::Array<char, NAME_MAX + 1> bytes{};
+    if (name.size() > NAME_MAX) {
+      throw fileError(ENAMETOOLONG);
+    }
+
+    std::ranges::copy(name, bytes.dataMut());
+    return bytes;
+  }
+
   // Each directory is held by descriptor and opened with O_NOFOLLOW. A symlink
   // swapped in while receiving can never redirect the write outside HOME.
-  bool place(int home, const std::string& path, std::string_view bytes, mode_t mode) {
+  bool place(int home, std::string_view path, std::string_view bytes, mode_t mode) {
     FileDescriptor parent{::openat(home, ".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (!parent) {
       throw fileError(sys::lastError());
@@ -109,14 +131,14 @@ namespace telar::runtime::cli::config_receive {
         break;
       }
 
-      const std::string component{tail.substr(0, slash)};
-      auto next = ::openat(parent.get(), component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+      const auto directory = component(tail.substr(0, slash));
+      auto next = ::openat(parent.get(), directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
       if (next < 0 && sys::lastError() == ENOENT) {
-        if (::mkdirat(parent.get(), component.c_str(), 0700) != 0 && sys::lastError() != EEXIST) {
+        if (::mkdirat(parent.get(), directory.data(), 0700) != 0 && sys::lastError() != EEXIST) {
           throw fileError(sys::lastError());
         }
 
-        next = ::openat(parent.get(), component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        next = ::openat(parent.get(), directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
       }
 
       if (next < 0) {
@@ -131,15 +153,15 @@ namespace telar::runtime::cli::config_receive {
       tail.remove_prefix(slash + 1);
     }
 
-    const std::string name{tail};
+    const auto name = component(tail);
     struct stat state{};
-    if (::fstatat(parent.get(), name.c_str(), &state, AT_SYMLINK_NOFOLLOW) == 0) {
+    if (::fstatat(parent.get(), name.data(), &state, AT_SYMLINK_NOFOLLOW) == 0) {
       if (!S_ISREG(state.st_mode)) {
         throw CommandError{"NotARegularFile"};
       }
 
       if (state.st_size == static_cast<off_t>(bytes.size()) && (state.st_mode & 0777) == mode) {
-        FileDescriptor existing{::openat(parent.get(), name.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
+        FileDescriptor existing{::openat(parent.get(), name.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
         if (!existing) {
           throw fileError(sys::lastError());
         }
@@ -201,7 +223,7 @@ namespace telar::runtime::cli::config_receive {
       }
 
       file.reset();
-      if (::renameat(parent.get(), temporary.data(), parent.get(), name.c_str()) != 0) {
+      if (::renameat(parent.get(), temporary.data(), parent.get(), name.data()) != 0) {
         throw fileError(sys::lastError());
       }
     } catch (...) {
@@ -212,7 +234,7 @@ namespace telar::runtime::cli::config_receive {
     return true;
   }
 
-  int run() {
+  int run(Memory& memory) {
     const auto* home_path = std::getenv("HOME");
     if (!home_path) {
       throw CommandError{"HomeUnavailable"};
@@ -223,22 +245,23 @@ namespace telar::runtime::cli::config_receive {
       throw fileError(sys::lastError());
     }
 
-    if (line() != "telar-config 1") {
+    if (line().view() != "telar-config 1") {
       throw CommandError{"InvalidConfigStream"};
     }
 
     std::size_t files = 0;
     std::size_t total = 0;
-    std::string output;
+    DescriptorWriter output{STDOUT_FILENO};
+    Text bytes{memory};
 
     for (;;) {
-      auto header = line();
-      if (header == "end") {
-        std::fwrite(output.data(), 1, output.size(), stdout);
+      const auto header = line();
+      if (header.view() == "end") {
+        output.flush();
         return 0;
       }
 
-      std::string_view fields{header};
+      std::string_view fields = header.view();
       ds::Array<std::string_view, 3> prefix;
 
       for (auto& field : prefix.viewMut()) {
@@ -251,7 +274,7 @@ namespace telar::runtime::cli::config_receive {
         fields.remove_prefix(end + 1);
       }
 
-      const std::string path{fields};
+      const auto path = fields;
 
       if (prefix[0] != "file") {
         throw CommandError{"InvalidConfigStream"};
@@ -276,28 +299,22 @@ namespace telar::runtime::cli::config_receive {
         throw CommandError{"InvalidConfigStream"};
       }
 
-      std::string bytes(size, '\0');
+      bytes.resizeForOverwrite(size);
       char separator = 0;
-      if (!std::cin.read(bytes.data(), static_cast<std::streamsize>(size)) || !std::cin.get(separator) || separator != '\n') {
+      if (!std::cin.read(bytes.dataMut(), static_cast<std::streamsize>(size)) || !std::cin.get(separator) || separator != '\n') {
         throw CommandError{"InvalidConfigStream"};
       }
 
       if (!acceptable(path)) {
-        output += "refused " + path + ": not a path the sync may write\n";
+        output.print("refused {}: not a path the sync may write\n", path);
       } else {
         try {
           const auto written = place(home.get(), path, bytes, mode);
 
-          output += std::string{written ? "written " : "unchanged "} + path + "\n";
+          output.print("{} {}\n", written ? "written" : "unchanged", path);
         } catch (const std::exception& error) {
-          output += "refused " + path + ": " + error.what() + "\n";
+          output.print("refused {}: {}\n", path, error.what());
         }
-      }
-
-      constexpr std::size_t output_buffer = 4096;
-      if (output.size() >= output_buffer) {
-        std::fwrite(output.data(), 1, output.size(), stdout);
-        output.clear();
       }
     }
   }
@@ -308,33 +325,51 @@ namespace telar::runtime::cli::launch {
 
   constexpr std::size_t error_limit = 64 * 1024;
 
-  std::vector<char*> pointers(const std::vector<std::string>& arguments) {
-    std::vector<char*> result;
+  Argv words(Memory& memory, std::initializer_list<std::string_view> words) {
+    Argv result{memory};
 
-    result.reserve(arguments.size() + 1);
-    for (const auto& argument : arguments) {
-      result.push_back(const_cast<char*>(argument.c_str()));
+    result.reserve(words.size());
+    for (const auto word : words) {
+      result.emplace(memory, word);
     }
 
-    result.push_back(nullptr);
     return result;
   }
 
-  [[noreturn]] void replace(const std::vector<std::string>& arguments) {
+  // The pointers exec takes, into the arguments' own bytes, which end with a NUL; the list ends
+  // with a null pointer. They live in the first argument's allocator.
+  ds::Vec<char*, Memory> pointers(std::span<const Text> arguments) {
+    if (arguments.empty()) {
+      throw CommandError{"MissingProgram"};
+    }
+
+    ds::Vec<char*, Memory> result{arguments.front().memory()};
+
+    result.reserve(arguments.size() + 1);
+    for (const auto& argument : arguments) {
+      // exec takes char* const[] for C's sake and never writes through them.
+      result.push(const_cast<char*>(argument.data()));
+    }
+
+    result.push(nullptr);
+    return result;
+  }
+
+  [[noreturn]] void replace(std::span<const Text> arguments) {
     const auto argv = pointers(arguments);
 
     ::execvp(argv.front(), argv.data());
     throw CommandError{sys::errorName(sys::lastError())};
   }
 
-  int inherit(const std::vector<std::string>& arguments) {
-    const auto argv = pointers(arguments);
+  int inherit(std::span<const Text> arguments) {
+    auto argv = pointers(arguments);
     SpawnOptions spawn{0};
 
     spawn.keepStandardStreams();
 
     pid_t process = -1;
-    if (const auto failure = ::posix_spawnp(&process, argv.front(), &spawn.actions, &spawn.attributes, argv.data(), environ); failure != 0) {
+    if (const auto failure = ::posix_spawnp(&process, argv.front(), &spawn.actions, &spawn.attributes, argv.dataMut(), environ); failure != 0) {
       throw SystemError{"Start child process", failure};
     }
 
@@ -349,23 +384,32 @@ namespace telar::runtime::cli::launch {
     return WIFEXITED(status) ? WEXITSTATUS(status) : ssh_failure;
   }
 
-  template <Allocator Memory>
-  std::string retained(const RetainedStream<Memory>& stream) {
-    std::string text(static_cast<std::size_t>(stream.total() - stream.retainedOffset()), '\0');
+  Text retained(Memory& memory, const RetainedStream<Memory>& stream) {
+    Text text{memory};
 
-    static_cast<void>(stream.read(stream.retainedOffset(), {reinterpret_cast<Byte*>(text.data()), text.size()}));
+    text.resizeForOverwrite(static_cast<std::size_t>(stream.total() - stream.retainedOffset()));
+    static_cast<void>(stream.read(stream.retainedOffset(), {reinterpret_cast<Byte*>(text.dataMut()), text.size()}));
     return text;
   }
 
-  template <Allocator Memory>
-  Output capture(Memory& memory, const std::vector<std::string>& arguments, std::string_view input, std::chrono::seconds timeout) {
-    const std::vector<std::string_view> words(arguments.begin(), arguments.end());
-    Command command{memory, Launch{.arguments = words}, CommandPurpose::configured_helper};
+  Output::Output(Memory& memory)
+      : out(memory),
+        err(memory) {}
+
+  Output capture(Memory& memory, std::span<const Text> arguments, std::string_view input, std::chrono::seconds timeout) {
+    ds::Vec<std::string_view, Memory> words{memory};
+
+    words.reserve(arguments.size());
+    for (const auto& argument : arguments) {
+      words.push(argument.view());
+    }
+
+    Command command{memory, Launch{.arguments = words.view()}, CommandPurpose::configured_helper};
     RetainedStream out{memory, output_limit};
     RetainedStream err{memory, error_limit};
     CommandOutput<Memory> process{memory, 0};
     const ds::Array pieces{input};
-    Output result;
+    Output result{memory};
 
     try {
       result.status = process.streamWithInput(
@@ -384,13 +428,13 @@ namespace telar::runtime::cli::launch {
       throw CommandError{"Timeout"};
     }
 
-    result.out = retained(out);
-    result.err = retained(err);
+    result.out = retained(memory, out);
+    result.err = retained(memory, err);
     result.dropped = static_cast<std::size_t>(out.retainedOffset());
     return result;
   }
 
-  Output captureFile(Memory& memory, const std::vector<std::string>& arguments, int file, std::chrono::seconds timeout) {
+  Output captureFile(Memory& memory, std::span<const Text> arguments, int file, std::chrono::seconds timeout) {
     if (file < 0) {
       return capture(memory, arguments, {}, timeout);
     }
@@ -409,35 +453,45 @@ namespace telar::runtime::cli::launch {
     return capture(memory, arguments, {reinterpret_cast<const char*>(mapped.bytes().data()), size}, timeout);
   }
 
-  std::string quote(std::string_view value) {
-    std::string result = "'";
-
+  void appendQuoted(Text& output, std::string_view value) {
+    output.push('\'');
     for (const auto byte : value) {
-      result += byte == '\'' ? "'\\''" : std::string(1, byte);
+      if (byte == '\'') {
+        output.append("'\\''");
+      } else {
+        output.push(byte);
+      }
     }
 
-    return result + "'";
+    output.push('\'');
+  }
+
+  Text quote(Memory& memory, std::string_view value) {
+    Text result{memory};
+
+    appendQuoted(result, value);
+    return result;
   }
 
 }
 
 namespace telar::runtime::cli::machine {
 
-  std::string profilesPath() {
-    SystemAllocator memory;
-    const auto directory = RuntimePaths<SystemAllocator>::configHome(memory, ProcessEnvironment{});
-    if (directory.empty()) {
+  Text profilesPath(Memory& memory) {
+    auto path = RuntimePaths<Memory>::configHome(memory, ProcessEnvironment{});
+    if (path.empty()) {
       throw CommandError{"HomeUnavailable"};
     }
 
-    return std::string{directory} + "/machines.json";
+    path.append("/machines.json");
+    return path;
   }
 
-  MachineProfiles load(Memory& memory, const std::string& path) {
+  MachineProfiles load(Memory& memory, const Text& path) {
     ds::Vec<unsigned char, Memory> source{memory};
 
     try {
-      if (!readPrivateFile(AT_FDCWD, path, source, MachineLimits::file_bytes)) {
+      if (!readPrivateFile(AT_FDCWD, path.data(), source, MachineLimits::file_bytes)) {
         return {};
       }
     } catch (const SystemError& error) {
@@ -455,18 +509,22 @@ namespace telar::runtime::cli::machine {
     return MachineProfileCodec::parse(memory, {reinterpret_cast<const char*>(source.data()), source.size()});
   }
 
-  std::string localLabel(const MachineProfiles& profiles) {
+  LocalLabel localLabel(const MachineProfiles& profiles) {
+    LocalLabel result;
+
     if (const auto label = profiles.localLabel()) {
-      return std::string{*label};
+      result.assign(*label);
+      return result;
     }
 
     ds::Array<char, 256> name{};
 
-    return ::gethostname(name.dataMut(), name.size()) == 0 ? std::string{name.data()} : "localhost";
+    result.assign(::gethostname(name.dataMut(), name.size() - 1) == 0 ? std::string_view{name.data()} : std::string_view{"localhost"});
+    return result;
   }
 
   void requireNotLocal(const MachineProfiles& profiles, std::string_view label) {
-    if (label == localLabel(profiles)) {
+    if (label == localLabel(profiles).view()) {
       throw MachineFailure{MachineError::duplicate_label};
     }
   }
@@ -531,7 +589,7 @@ namespace telar::runtime::cli::machine {
       ds::String<Memory> output{memory};
 
       output.append("{\"local\":");
-      appendJsonText(output, localLabel(profiles));
+      appendJsonText(output, localLabel(profiles).view());
       output.append(",\"machines\":[");
       bool first = true;
 
@@ -547,7 +605,9 @@ namespace telar::runtime::cli::machine {
       output.append("]}\n");
       std::fwrite(output.data(), 1, output.size(), stdout);
     } else {
-      std::printf("%s\tlocal\n", localLabel(profiles).c_str());
+      const auto local = localLabel(profiles);
+
+      std::printf("%.*s\tlocal\n", static_cast<int>(local.view().size()), local.view().data());
       for (const auto& profile : profiles.rows()) {
         std::printf("%.*s\t%.*s\t%s", static_cast<int>(profile.label().size()), profile.label().data(), static_cast<int>(profile.destination().size()), profile.destination().data(), profile.enabled() ? "enabled" : "disabled");
         if (const auto color = profile.color()) {
@@ -573,8 +633,8 @@ namespace telar::runtime::cli::machine {
   constexpr auto endpoint_timeout = std::chrono::seconds{30};
   constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-  std::string encode(std::string_view argument) {
-    std::string result{"a"};
+  void appendEncoded(Text& result, std::string_view argument) {
+    result.push('a');
     unsigned value = 0;
     unsigned bits = 0;
 
@@ -583,18 +643,16 @@ namespace telar::runtime::cli::machine {
       bits += 8;
       while (bits >= 6) {
         bits -= 6;
-        result += alphabet[(value >> bits) & 63];
+        result.push(alphabet[(value >> bits) & 63]);
       }
     }
 
     if (bits != 0) {
-      result += alphabet[(value << (6 - bits)) & 63];
+      result.push(alphabet[(value << (6 - bits)) & 63]);
     }
-
-    return result;
   }
 
-  std::string decode(std::string_view word) {
+  Text decode(Memory& memory, std::string_view word) {
     if (word.empty() || word.front() != 'a') {
       throw CommandError{"InvalidDispatchArgument"};
     }
@@ -604,7 +662,7 @@ namespace telar::runtime::cli::machine {
       throw CommandError{"InvalidDispatchArgument"};
     }
 
-    std::string result;
+    Text result{memory};
     unsigned value = 0;
     unsigned bits = 0;
 
@@ -623,7 +681,7 @@ namespace telar::runtime::cli::machine {
           throw CommandError{"InvalidDispatchArgument"};
         }
 
-        result += decoded;
+        result.push(decoded);
       }
     }
 
@@ -636,8 +694,7 @@ namespace telar::runtime::cli::machine {
 
   // The options every connection to `destination` shares, including the
   // control master that keeps one SSH session per machine.
-  template <Allocator Memory>
-  std::vector<std::string> sshOptions(Memory& memory, std::string_view destination) {
+  void appendSshOptions(Memory& memory, Argv& argv, std::string_view destination) {
     MachineFieldRules::destination(destination);
     const RuntimePaths paths{memory, ServerOptions{}, process_environment};
 
@@ -657,45 +714,49 @@ namespace telar::runtime::cli::machine {
     ds::Array<char, 32> name;
 
     std::snprintf(name.dataMut(), name.size(), "/ssh-%012llx", static_cast<unsigned long long>(hash >> control_hash_shift));
-    return {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=" + std::string{directory} + name.data()};
+    for (const auto word : {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o"}) {
+      argv.emplace(memory, word);
+    }
+
+    argv.push(ds::format(memory, "ControlPath={}{}", directory, std::string_view{name.data()}));
   }
 
-  std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal) {
-    auto argv = sshOptions(memory, destination);
+  Argv ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal) {
+    auto argv = launch::words(memory, {"ssh", terminal ? "-t" : "-T"});
 
-    argv.insert(argv.begin(), {"ssh", terminal ? "-t" : "-T"});
-    argv.insert(argv.end(), {"--", std::string{destination}, std::string{command}});
+    appendSshOptions(memory, argv, destination);
+    argv.emplace(memory, "--");
+    argv.emplace(memory, destination);
+    argv.emplace(memory, command);
     return argv;
   }
 
-  std::string gitSshCommand(Memory& memory, std::string_view destination) {
-    std::string command{"ssh"};
+  Text gitSshCommand(Memory& memory, std::string_view destination) {
+    Argv options{memory};
+    Text command{memory, "ssh"};
 
-    for (const auto& word : sshOptions(memory, destination)) {
-      if (word.contains('\'')) {
+    appendSshOptions(memory, options, destination);
+    for (const auto& word : options) {
+      if (word.view().contains('\'')) {
         throw CommandError{"UnquotableSshOption"};
       }
 
-      command += " '";
-      command += word;
-      command += '\'';
+      ds::formatTo(command, " '{}'", word);
     }
 
     return command;
   }
 
   template <typename Words>
-  std::string remoteCommand(const MachineProfile& profile, const Words& words) {
-    std::string command = std::string{profile.program().valueOr("telar")} + " dispatch-argv";
+  Text remoteCommand(Memory& memory, const MachineProfile& profile, const Words& words) {
+    auto command = ds::format(memory, "{} dispatch-argv", profile.program().valueOr("telar"));
 
     for (const std::string_view word : words) {
-      const auto encoded = encode(word);
-      if (command.size() + 1 + encoded.size() > command_limit) {
+      command.push(' ');
+      appendEncoded(command, word);
+      if (command.size() > command_limit) {
         throw CommandError{"MachineCommandTooLong"};
       }
-
-      command += ' ';
-      command += encoded;
     }
 
     return command;
@@ -708,29 +769,29 @@ namespace telar::runtime::cli::machine {
     // given when both ends here are a terminal; anyone else gets none, as before.
     const bool terminal = ::isatty(STDIN_FILENO) && ::isatty(STDOUT_FILENO);
 
-    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words), terminal));
+    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(memory, profile, words), terminal).view());
   }
 
-  template <Allocator Memory, typename Words>
-  std::string capture(Memory& memory, const MachineProfile& profile, const Words& words, const char* failure, int input) {
+  template <typename Words>
+  Text capture(Memory& memory, const MachineProfile& profile, const Words& words, const char* failure, int input) {
     constexpr auto capture_timeout = std::chrono::seconds{900};
-    const auto result = launch::captureFile(memory, ssh(memory, profile.destination(), remoteCommand(profile, words)), input, capture_timeout);
+    auto result = launch::captureFile(memory, ssh(memory, profile.destination(), remoteCommand(memory, profile, words)).view(), input, capture_timeout);
 
     std::fwrite(result.err.data(), 1, result.err.size(), stderr);
     if (result.status != 0 || result.dropped != 0) {
       throw CommandError{failure};
     }
 
-    return result.out;
+    return std::move(result.out);
   }
 
   ds::Option<MachineProfile> resolve(Memory& memory, std::string_view label) {
-    const auto profiles = load(memory, profilesPath());
+    const auto profiles = load(memory, profilesPath(memory));
     if (const auto index = profiles.find(label)) {
       return profiles.rows()[*index];
     }
 
-    if (label != localLabel(profiles)) {
+    if (label != localLabel(profiles).view()) {
       throw CommandError{"UnknownMachine"};
     }
 
@@ -738,7 +799,7 @@ namespace telar::runtime::cli::machine {
   }
 
   MachineError sshFailure(const launch::Output& output) {
-    if (output.err.contains("telar protocol mismatch")) {
+    if (output.err.view().contains("telar protocol mismatch")) {
       return MachineError::remote_runtime_incompatible;
     }
 
@@ -747,11 +808,11 @@ namespace telar::runtime::cli::machine {
     }
 
     if (output.status == launch::ssh_failure) {
-      if (output.err.contains("Host key verification failed") || output.err.contains("REMOTE HOST IDENTIFICATION HAS CHANGED")) {
+      if (output.err.view().contains("Host key verification failed") || output.err.view().contains("REMOTE HOST IDENTIFICATION HAS CHANGED")) {
         return MachineError::host_key_rejected;
       }
 
-      if (output.err.contains("Permission denied (") || output.err.contains("Too many authentication failures")) {
+      if (output.err.view().contains("Permission denied (") || output.err.view().contains("Too many authentication failures")) {
         return MachineError::authentication_failed;
       }
     }
@@ -759,11 +820,11 @@ namespace telar::runtime::cli::machine {
     return MachineError::endpoint_unavailable;
   }
 
-  Discovery discover(Memory& memory, const MachineProfile& profile, std::string& detail) {
-    launch::Output output;
+  Discovery discover(Memory& memory, const MachineProfile& profile, Text& detail) {
+    launch::Output output{memory};
 
     try {
-      output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()), {}, endpoint_timeout);
+      output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()).view(), {}, endpoint_timeout);
     } catch (const std::exception&) {
       throw MachineFailure{MachineError::endpoint_unavailable};
     }
@@ -773,19 +834,19 @@ namespace telar::runtime::cli::machine {
     if (output.status != 0) {
       const auto failure = sshFailure(output);
       if (failure == MachineError::remote_program_missing) {
-        detail = "telar is not on the PATH of non-interactive SSH sessions there: ";
+        detail.assign("telar is not on the PATH of non-interactive SSH sessions there: ");
       } else if (failure == MachineError::remote_runtime_incompatible) {
-        detail = "the runtime there is another telar build; run `telar server stop` there: ";
+        detail.assign("the runtime there is another telar build; run `telar server stop` there: ");
       }
 
       if (failure == MachineError::host_key_rejected) {
-        std::string_view lines{output.err};
+        std::string_view lines = output.err.view();
 
         while (!lines.empty()) {
           const auto end = lines.find('\n');
           const auto line = lines.substr(0, end);
           if (line.contains("you have requested strict checking") || line.contains("Host key verification failed")) {
-            detail += std::string{trimText(line, " \t\r\n")} + " ";
+            ds::formatTo(detail, "{} ", trimText(line, " \t\r\n"));
           }
 
           if (end == std::string_view::npos) {
@@ -795,10 +856,10 @@ namespace telar::runtime::cli::machine {
           lines.remove_prefix(end + 1);
         }
       } else {
-        detail += output.err;
+        detail.append(output.err);
       }
 
-      detail.resize(std::min(detail.size(), detail_limit));
+      detail.truncate(std::min(detail.size(), detail_limit));
       throw MachineFailure{failure};
     }
 
@@ -809,13 +870,13 @@ namespace telar::runtime::cli::machine {
 
       return Discovery::parse(output.out);
     } catch (const MachineFailure&) {
-      detail = "`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet";
+      detail.assign("`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet");
       throw;
     }
   }
 
   int check(Memory& memory, const MachineProfile& profile, bool json) {
-    std::string detail;
+    Text detail{memory};
     ds::Option<Discovery> found;
 
     try {
@@ -839,15 +900,15 @@ namespace telar::runtime::cli::machine {
       return 1;
     }
 
-    const auto schema = std::string{found->schema().begin(), found->schema().end()};
-    const auto local_schema = std::string{handshake::schema_id.begin(), handshake::schema_id.end()};
+    const std::string_view schema{reinterpret_cast<const char*>(found->schema().data()), found->schema().size()};
+    const std::string_view local_schema{reinterpret_cast<const char*>(handshake::schema_id.data()), handshake::schema_id.size()};
 
     if (json) {
       ds::String<Memory> output{memory};
 
       output.append("{\"label\":");
       appendJsonText(output, profile.label(), JsonEscapes::control);
-      output.append(",\"reachable\":true,\"schema\":\"" + schema + "\",\"local_schema\":\"" + local_schema + "\",\"compatible\":");
+      ds::formatTo(output, ",\"reachable\":true,\"schema\":\"{}\",\"local_schema\":\"{}\",\"compatible\":", schema, local_schema);
       output.append(found->compatible() ? "true" : "false");
       for (const auto& [name, value] : ds::Array<std::pair<std::string_view, std::string_view>, 3>{{{"home", found->home()}, {"shell", found->shell()}, {"socket", found->endpoint()}}}) {
         output.append(",\"");
@@ -859,7 +920,16 @@ namespace telar::runtime::cli::machine {
       output.append("}\n");
       std::fwrite(output.data(), 1, output.size(), stdout);
     } else {
-      std::printf("%.*s\t%.*s\treachable\n  home\t%.*s\n  shell\t%.*s\n  socket\t%.*s\n  schema\t%s (%s)\n", static_cast<int>(profile.label().size()), profile.label().data(), static_cast<int>(profile.destination().size()), profile.destination().data(), static_cast<int>(found->home().size()), found->home().data(), static_cast<int>(found->shell().size()), found->shell().data(), static_cast<int>(found->endpoint().size()), found->endpoint().data(), schema.c_str(), found->compatible() ? "matches this telar" : ("does not match this telar " + local_schema + "; update telar on one side").c_str());
+      DescriptorWriter output{STDOUT_FILENO};
+
+      output.print("{}\t{}\treachable\n  home\t{}\n  shell\t{}\n  socket\t{}\n  schema\t{} (", profile.label(), profile.destination(), found->home(), found->shell(), found->endpoint(), schema);
+      if (found->compatible()) {
+        output.print("matches this telar)\n");
+      } else {
+        output.print("does not match this telar {}; update telar on one side)\n", local_schema);
+      }
+
+      output.flush();
     }
 
     return found->compatible() ? 0 : 1;
@@ -873,9 +943,9 @@ namespace telar::runtime::cli::machine::filter {
     return byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' || byte == '\v' || byte == '\f';
   }
 
-  void noteOnce(std::vector<std::string>& notes, std::string_view name) {
+  void noteOnce(Notes& notes, std::string_view name) {
     if (std::ranges::find(notes, name) == notes.end()) {
-      notes.emplace_back(name);
+      notes.emplace(notes.memory(), name);
     }
   }
 
@@ -888,60 +958,58 @@ namespace telar::runtime::cli::machine::filter {
   bool secretKey(std::string_view name, Kind kind) {
     static constexpr auto dropped = ds::Array<std::string_view, 21>{"env", "environment", "headers", "http_headers", "env_http_headers", "auth", "authInfo", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "mcpServers", "mcp", "mcp_servers", "token", "accessToken", "access_token", "refreshToken", "refresh_token", "idToken", "id_token"};
     static constexpr auto fragments = ds::Array<std::string_view, 12>{"secret", "password", "passphrase", "apikey", "api_key", "api-key", "credential", "bearer", "private_key", "privatekey", "authorization", "cookie"};
-    const auto text = asciiLowerCopy(name);
-
     return std::ranges::find(dropped, name) != dropped.end() || std::ranges::any_of(fragments, [&](auto fragment) {
-      return text.contains(fragment);
-    }) || (kind != Kind::scalar && (text.contains("token") || text.contains("auth")));
+      return asciiContainsIgnoreCase(name, fragment);
+    }) || (kind != Kind::scalar && (asciiContainsIgnoreCase(name, "token") || asciiContainsIgnoreCase(name, "auth")));
   }
 
-  std::string rewriteHome(std::string_view bytes, std::string_view from, std::string_view to) {
+  Text rewriteHome(Memory& memory, std::string_view bytes, std::string_view from, std::string_view to) {
     if (from.empty()) {
       throw CommandError{"HomeUnavailable"};
     }
 
-    std::string output;
+    Text output{memory};
 
     for (;;) {
       const auto at = bytes.find(from);
       if (at == std::string_view::npos) {
-        output += bytes;
+        output.append(bytes);
         return output;
       }
 
       const auto after = at + from.size();
       const bool ends = after == bytes.size() || bytes[after] == '/' || bytes[after] == '"' || bytes[after] == '\'' || whitespace(bytes[after]);
 
-      output += bytes.substr(0, at);
-      output += ends ? to : from;
+      output.append(bytes.substr(0, at));
+      output.append(ends ? to : from);
       bytes.remove_prefix(after);
     }
   }
 
-  std::string stripJsonc(std::string_view bytes) {
-    std::string result;
+  Text stripJsonc(Memory& memory, std::string_view bytes) {
+    Text result{memory};
     bool string = false;
 
     for (std::size_t index = 0; index < bytes.size(); ++index) {
       const auto byte = bytes[index];
 
       if (string) {
-        result += byte;
+        result.push(byte);
         if (byte == '\\' && index + 1 < bytes.size()) {
-          result += bytes[++index];
+          result.push(bytes[++index]);
         } else if (byte == '"') {
           string = false;
         }
       } else if (byte == '"') {
         string = true;
-        result += byte;
+        result.push(byte);
       } else if (bytes.substr(index).starts_with("//")) {
         index = bytes.find('\n', index);
         if (index == std::string_view::npos) {
           break;
         }
 
-        result += '\n';
+        result.push('\n');
       } else if (bytes.substr(index).starts_with("/*")) {
         const auto end = bytes.find("*/", index + 2);
         if (end == std::string_view::npos) {
@@ -950,26 +1018,26 @@ namespace telar::runtime::cli::machine::filter {
 
         index = end + 1;
       } else {
-        result += byte;
+        result.push(byte);
       }
     }
 
-    std::string plain;
+    Text plain{memory};
 
     string = false;
     for (std::size_t index = 0; index < result.size(); ++index) {
       const auto byte = result[index];
 
       if (string) {
-        plain += byte;
+        plain.push(byte);
         if (byte == '\\' && index + 1 < result.size()) {
-          plain += result[++index];
+          plain.push(result[++index]);
         } else if (byte == '"') {
           string = false;
         }
       } else if (byte == '"') {
         string = true;
-        plain += byte;
+        plain.push(byte);
       } else if (byte == ',') {
         auto next = index + 1;
 
@@ -978,17 +1046,17 @@ namespace telar::runtime::cli::machine::filter {
         }
 
         if (next == result.size() || (result[next] != '}' && result[next] != ']')) {
-          plain += byte;
+          plain.push(byte);
         }
       } else {
-        plain += byte;
+        plain.push(byte);
       }
     }
 
     return plain;
   }
 
-  void json(Memory& memory, const JsonValue& value, ds::String<Memory>& output, std::vector<std::string>& dropped) {
+  void json(Memory& memory, const JsonValue& value, ds::String<Memory>& output, Notes& dropped) {
     const auto source = value.encoded();
     ds::String<Memory> scratch{memory};
 
@@ -1094,18 +1162,20 @@ namespace telar::runtime::cli::machine::filter {
     }
   };
 
-  ds::Option<std::string> tomlSecret(std::string_view path, Kind last) {
+  // The part of a dotted TOML key that makes it secret, as a view of `path`.
+  ds::Option<std::string_view> tomlSecret(std::string_view path, Kind last) {
     constexpr std::size_t max_components = 16;
-    std::vector<std::string_view> components;
+    ds::Array<std::string_view, max_components> components;
+    std::size_t count = 0;
     std::size_t start = 0;
 
     for (std::size_t index = 0; index <= path.size();) {
       if (index == path.size() || path[index] == '.') {
-        if (components.size() == max_components) {
-          return std::string{path};
+        if (count == max_components) {
+          return path;
         }
 
-        components.push_back(trimText(trimText(path.substr(start, index - start), " \t"), "\"'"));
+        components.atMut(count++) = trimText(trimText(path.substr(start, index - start), " \t"), "\"'");
         start = ++index;
       } else {
         index = path[index] == '"' || path[index] == '\'' ? skipQuoted(path, index) + 1 : index + 1;
@@ -1114,24 +1184,24 @@ namespace telar::runtime::cli::machine::filter {
 
     static constexpr auto tables = ds::Array<std::string_view, 3>{"mcp_servers", "projects", "shell_environment_policy"};
     if (std::ranges::find(tables, components.front()) != tables.end()) {
-      return std::string{components.front()};
+      return components.front();
     }
 
-    for (std::size_t index = 0; index < components.size(); ++index) {
-      if (secretKey(components[index], index + 1 == components.size() ? last : Kind::container)) {
-        return std::string{components[index]};
+    for (std::size_t index = 0; index < count; ++index) {
+      if (secretKey(components[index], index + 1 == count ? last : Kind::container)) {
+        return components[index];
       }
     }
 
     return ds::none;
   }
 
-  std::string toml(std::string_view bytes, std::vector<std::string>& dropped) {
+  Text toml(Memory& memory, std::string_view bytes, Notes& dropped) {
     bool skipping_table = false;
     bool dropping_value = false;
     bool first = true;
     TomlValue value;
-    std::string output;
+    Text output{memory};
 
     for (;;) {
       const auto newline = bytes.find('\n');
@@ -1190,11 +1260,11 @@ namespace telar::runtime::cli::machine::filter {
 
       if (keep) {
         if (!first) {
-          output += '\n';
+          output.push('\n');
         }
 
         first = false;
-        output += line;
+        output.append(line);
       }
 
       if (newline == std::string_view::npos) {
@@ -1220,17 +1290,19 @@ namespace telar::runtime::cli::machine::filter {
       return false;
     }
 
-    const auto text = asciiLowerCopy(name);
+    const auto text = name;
     static constexpr auto names = ds::Array<std::string_view, 4>{"key", "auth", "pat", "pwd"};
     static constexpr auto fragments = ds::Array<std::string_view, 13>{"token", "secret", "passw", "api_key", "apikey", "api-key", "access_key", "accesskey", "private_key", "authorization", "credential", "webhook", "cookie"};
     static constexpr auto suffixes = ds::Array<std::string_view, 6>{"_key", "-key", "_header", "-header", "_app", "-app"};
 
-    return std::ranges::find(names, text) != names.end() || std::ranges::any_of(fragments, [&](auto fragment) {
-      return text.contains(fragment);
+    return std::ranges::any_of(names, [&](auto candidate) {
+      return asciiEqualIgnoreCase(text, candidate);
+    }) || std::ranges::any_of(fragments, [&](auto fragment) {
+      return asciiContainsIgnoreCase(text, fragment);
     }) || std::ranges::any_of(suffixes, [&](auto suffix) {
-      return text.ends_with(suffix);
-    }) || text.starts_with("auth_") ||
-           text.starts_with("auth-");
+      return asciiEndsWithIgnoreCase(text, suffix);
+    }) || asciiStartsWithIgnoreCase(text, "auth_") ||
+           asciiStartsWithIgnoreCase(text, "auth-");
   }
 
   ds::Option<std::string_view> nextWord(std::string_view& rest) {
@@ -1256,8 +1328,8 @@ namespace telar::runtime::cli::machine::filter {
       return false;
     }
 
-    const auto scheme = asciiLowerCopy(*word);
-    if (scheme == "bearer" || scheme == "basic" || scheme == "token" || scheme == "digest") {
+    const auto scheme = *word;
+    if (asciiEqualIgnoreCase(scheme, "bearer") || asciiEqualIgnoreCase(scheme, "basic") || asciiEqualIgnoreCase(scheme, "token") || asciiEqualIgnoreCase(scheme, "digest")) {
       word = nextWord(rest);
     }
 
@@ -1265,8 +1337,8 @@ namespace telar::runtime::cli::machine::filter {
       return false;
     }
 
-    const auto text = asciiLowerCopy(*word);
-    if (text == "true" || text == "false" || text == "null" || text == "none" || text == "undefined") {
+    const auto text = *word;
+    if (asciiEqualIgnoreCase(text, "true") || asciiEqualIgnoreCase(text, "false") || asciiEqualIgnoreCase(text, "null") || asciiEqualIgnoreCase(text, "none") || asciiEqualIgnoreCase(text, "undefined")) {
       return false;
     }
 
@@ -1276,7 +1348,6 @@ namespace telar::runtime::cli::machine::filter {
   }
 
   ds::Option<std::string_view> finding(std::string_view line) {
-    const auto lowered = asciiLowerCopy(line);
 
     if (line.contains("PRIVATE KEY-----")) {
       return "a private key";
@@ -1284,7 +1355,7 @@ namespace telar::runtime::cli::machine::filter {
 
     static constexpr auto webhooks = ds::Array<std::string_view, 11>{"hooks.slack.com/services/", "hooks.slack.com/workflows/", "hooks.slack.com/triggers/", "discord.com/api/webhooks/", "discordapp.com/api/webhooks/", ".webhook.office.com/", "outlook.office.com/webhook", "hooks.zapier.com/hooks/", "api.telegram.org/bot", "chat.googleapis.com/v1/spaces/", "ntfy.sh/"};
     if (std::ranges::any_of(webhooks, [&](auto marker) {
-          return lowered.contains(marker);
+          return asciiContainsIgnoreCase(line, marker);
         })) {
       return "a webhook URL, whose path is its key";
     }
@@ -1316,8 +1387,8 @@ namespace telar::runtime::cli::machine::filter {
     }
 
     for (std::size_t start = 0;;) {
-      const auto at = lowered.find("bearer", start);
-      if (at == std::string::npos) {
+      const auto at = asciiFindIgnoreCase(line, "bearer", start);
+      if (at == std::string_view::npos) {
         break;
       }
 
@@ -1360,7 +1431,7 @@ namespace telar::runtime::cli::machine::filter {
       }
     }
 
-    const bool database = lowered.contains("mysql") || lowered.contains("mariadb");
+    const bool database = asciiContainsIgnoreCase(line, "mysql") || asciiContainsIgnoreCase(line, "mariadb");
     auto words = line;
     bool after_user = false;
 
@@ -1424,7 +1495,7 @@ namespace telar::runtime::cli::machine::filter {
         continue;
       }
 
-      if (secretName(name) && literalValue(line.substr(cursor), !asciiLowerCopy(name).contains("token"))) {
+      if (secretName(name) && literalValue(line.substr(cursor), !asciiContainsIgnoreCase(name, "token"))) {
         return "a value assigned to a secret-looking name";
       }
     }
@@ -1454,13 +1525,13 @@ namespace telar::runtime::cli::machine::filter {
 
 namespace telar::runtime::cli {
 
-  std::string guiProgram() {
+  Text guiProgram(Memory& memory) {
     const auto found = ExecutablePath::sibling({"telar-gui", "../../MacOS/telar-gui"});
 
-    return found ? std::string{found->view()} : std::string{"telar-gui"};
+    return Text{memory, found ? found->view() : std::string_view{"telar-gui"}};
   }
 
-  void relaunchLogin(std::span<char* const> words) {
+  void relaunchLogin(Memory& memory, std::span<char* const> words) {
     if (std::getenv("TELAR_LOGIN_SHELL")) {
       return;
     }
@@ -1471,16 +1542,16 @@ namespace telar::runtime::cli {
       return;
     }
 
-    std::vector<std::string> arguments{std::string{shell.view()}, "-l", "-c", std::string{script}, ExecutablePath{}.c_str(), "gui"};
+    auto arguments = launch::words(memory, {shell.view(), "-l", "-c", script, ExecutablePath{}.c_str(), "gui"});
 
     for (const std::string_view word : words) {
       if (word != "--login-shell") {
-        arguments.emplace_back(word);
+        arguments.emplace(memory, word);
       }
     }
 
     ::setenv("TELAR_LOGIN_SHELL", "1", 1);
-    launch::replace(arguments);
+    launch::replace(arguments.view());
   }
 
   int openWindow(Memory& memory, const WindowOptions& options) {
@@ -1500,8 +1571,8 @@ namespace telar::runtime::cli {
 
     if (options.machine) {
       try {
-        const auto profiles = machine::load(memory, machine::profilesPath());
-        if (!profiles.find(*options.machine) && machine::localLabel(profiles) != *options.machine) {
+        const auto profiles = machine::load(memory, machine::profilesPath(memory));
+        if (!profiles.find(*options.machine) && machine::localLabel(profiles).view() != *options.machine) {
           std::fputs("telar gui: no saved machine or local label has that name; see telar machine list\n", stderr);
           return 1;
         }
@@ -1513,9 +1584,9 @@ namespace telar::runtime::cli {
 
     ServerOptions server;
 
-    server.config = options.config ? std::string_view{*options.config} : std::string_view{};
+    server.config = options.config.valueOr(std::string_view{});
     server.no_config = options.no_config;
-    server.profile = options.profile ? std::string_view{*options.profile} : std::string_view{};
+    server.profile = options.profile.valueOr(std::string_view{});
     server.fresh = options.fresh;
     const RuntimePaths paths{memory, server, process_environment};
     ds::Option<RuntimeConnection> connection;
@@ -1542,29 +1613,41 @@ namespace telar::runtime::cli {
     }
 
     connection.reset();
-    std::vector<std::string> arguments{guiProgram(), "--socket", std::string{paths.socket}, "--cwd", std::filesystem::current_path().string()};
+    ds::Array<char, PATH_MAX> cwd{};
+    if (::getcwd(cwd.dataMut(), cwd.size()) == nullptr) {
+      throw SystemError{"Read the working directory"};
+    }
 
-    for (const auto& [flag, value] : ds::Array<std::pair<std::string_view, const ds::Option<std::string>*>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
+    launch::Argv arguments{memory};
+
+    arguments.push(guiProgram(memory));
+    for (const auto word : {std::string_view{"--socket"}, paths.socket.view(), std::string_view{"--cwd"}, std::string_view{cwd.data()}}) {
+      arguments.emplace(memory, word);
+    }
+
+    for (const auto& [flag, value] : ds::Array<std::pair<std::string_view, const ds::Option<std::string_view>*>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
       if (*value) {
-        arguments.emplace_back(flag);
-        arguments.push_back(**value);
+        arguments.emplace(memory, flag);
+        arguments.emplace(memory, **value);
       }
     }
 
     if (options.no_config) {
-      arguments.emplace_back("--no-config");
+      arguments.emplace(memory, "--no-config");
     }
 
     if (options.fresh) {
-      arguments.emplace_back("--fresh");
+      arguments.emplace(memory, "--fresh");
     }
 
-    if (!options.command.empty()) {
-      arguments.emplace_back("--");
-      arguments.insert(arguments.end(), options.command.begin(), options.command.end());
+    if (!options.command().empty()) {
+      arguments.emplace(memory, "--");
+      for (const auto word : options.command()) {
+        arguments.emplace(memory, word);
+      }
     }
 
-    launch::replace(arguments);
+    launch::replace(arguments.view());
   }
 
 }
@@ -1579,18 +1662,11 @@ namespace telar::runtime::cli {
 
 }
 
-namespace telar::runtime::cli::launch {
-
-  template Output capture<Memory>(Memory& memory, const std::vector<std::string>& arguments, std::string_view input, std::chrono::seconds timeout);
-
-}
-
 namespace telar::runtime::cli::machine {
 
-  template std::string remoteCommand<std::vector<std::string>>(const MachineProfile& profile, const std::vector<std::string>& words);
-  template int forward<std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words);
-  template std::string capture<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words, const char* failure, int input);
-  template std::string capture<Memory, std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words, const char* failure, int input);
+  template Text remoteCommand<std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words);
+  template int forward<std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words);
+  template Text capture<std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words, const char* failure, int input);
 
 }
 
@@ -1605,14 +1681,16 @@ namespace telar::runtime::cli::machine {
 namespace telar::runtime::cli::launch {
 
   std::string_view Output::errorLine() const {
-    const auto end = err.find_last_not_of(" \r\n");
-    if (end == std::string::npos) {
+    const auto text = err.view();
+    const auto end = text.find_last_not_of(" \r\n");
+    if (end == std::string_view::npos) {
       return {};
     }
 
-    const auto start = err.rfind('\n', end);
+    const auto start = text.rfind('\n', end);
+    const auto begin = start == std::string_view::npos ? 0 : start + 1;
 
-    return std::string_view{err}.substr(start == std::string::npos ? 0 : start + 1, end + 1 - (start == std::string::npos ? 0 : start + 1));
+    return text.substr(begin, end + 1 - begin);
   }
 
 }
@@ -1716,23 +1794,28 @@ namespace telar::runtime::cli {
     return result;
   }
 
-  std::string WindowOptions::canonicalTheme(std::string_view name) {
-    const auto text = asciiLowerCopy(name);
-
+  std::string_view WindowOptions::canonicalTheme(std::string_view name) {
     static constexpr auto aliases = ds::Array<std::pair<std::string_view, std::string_view>, 8>{{{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}}};
 
     for (const auto& [alias, canonical] : aliases) {
-      if (text == alias) {
-        return std::string{canonical};
+      if (asciiEqualIgnoreCase(name, alias)) {
+        return canonical;
       }
     }
 
     static constexpr auto names = ds::Array<std::string_view, 11>{"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn"};
-    if (std::ranges::find(names, text) == names.end()) {
+    const auto found = std::ranges::find_if(names, [&](auto candidate) {
+      return asciiEqualIgnoreCase(name, candidate);
+    });
+    if (found == names.end()) {
       throw std::invalid_argument{"UnknownTheme"};
     }
 
-    return text;
+    return *found;
+  }
+
+  std::span<const std::string_view> WindowOptions::command() const noexcept {
+    return command_words.view().first(command_count);
   }
 
   WindowOptions WindowOptions::parse(std::span<char* const> input, bool gui) {
@@ -1743,22 +1826,28 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"a command telar launches takes at most 64 arguments"};
     }
 
-    std::vector<std::string_view> args;
+    // The options take each flag once, and the command at most maximum_arguments words.
+    ds::Array<std::string_view, 2 * maximum_arguments> args;
+    std::size_t count = 0;
 
     for (const std::string_view word : input) {
       if (gui && word == "--login-shell") {
         result.login_shell = true;
+      } else if (count == args.size()) {
+        throw std::invalid_argument{"a command telar launches takes at most 64 arguments"};
       } else {
-        args.push_back(word);
+        args.atMut(count++) = word;
       }
     }
 
+    const auto words = args.view().first(count);
+
     std::size_t index = 0;
 
-    for (; index < args.size(); ++index) {
-      const auto word = args[index];
+    for (; index < words.size(); ++index) {
+      const auto word = words[index];
       if (word == "--") {
-        if (++index == args.size()) {
+        if (++index == words.size()) {
           throw std::invalid_argument{"MissingCommand"};
         }
 
@@ -1785,7 +1874,7 @@ namespace telar::runtime::cli {
 
       const auto equals = word.find('=');
       const auto flag = word.substr(0, equals);
-      ds::Option<std::string>* value = nullptr;
+      ds::Option<std::string_view>* value = nullptr;
       const char* missing = nullptr;
       const char* duplicate = nullptr;
 
@@ -1825,22 +1914,22 @@ namespace telar::runtime::cli {
           throw std::invalid_argument{missing};
         }
       } else {
-        if (++index == args.size()) {
+        if (++index == words.size()) {
           throw std::invalid_argument{missing};
         }
 
-        text = args[index];
+        text = words[index];
       }
 
-      *value = flag == "--theme" ? canonicalTheme(text) : std::string{text};
+      *value = flag == "--theme" ? canonicalTheme(text) : text;
     }
 
-    if (args.size() - index > maximum_arguments) {
+    if (words.size() - index > maximum_arguments) {
       throw std::invalid_argument{"a command telar launches takes at most 64 arguments"};
     }
 
-    for (; index < args.size(); ++index) {
-      result.command.emplace_back(args[index]);
+    for (; index < words.size(); ++index) {
+      result.command_words.atMut(result.command_count++) = words[index];
     }
 
     if (result.no_config && result.profile) {
@@ -1868,8 +1957,4 @@ namespace telar::runtime::cli::machine {
 
 }
 
-namespace telar::runtime::cli::launch {
 
-  template Output capture<SystemAllocator>(SystemAllocator& memory, const std::vector<std::string>& arguments, std::string_view input, std::chrono::seconds timeout);
-
-}

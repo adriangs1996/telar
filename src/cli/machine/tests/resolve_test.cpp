@@ -19,9 +19,9 @@ namespace {
   using namespace telar::runtime::cli;
   using namespace telar::runtime::machines;
 
-  std::string failure(const MachineProfiles& profiles, const MachineOptions& options) {
+  std::string failure(Memory& memory, const MachineProfiles& profiles, const MachineOptions& options) {
     try {
-      machine::resolve(profiles, options);
+      machine::resolve(memory, profiles, options);
     } catch (const std::exception& error) {
       return error.what();
     }
@@ -38,13 +38,13 @@ namespace {
     Memory& memory = adapter;
     const auto profiles = MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"dev@host","enabled":true}]})");
 
-    check(failure(profiles, {.action = MachineOptions::Action::setup, .label = "_svc"}) == "MachineLabelNeeded");
+    check(failure(memory, profiles, {.action = MachineOptions::Action::setup, .label = "_svc"}) == "MachineLabelNeeded");
 
-    const auto named = machine::resolve(profiles, {.action = MachineOptions::Action::setup, .label = "_svc", .new_label = "svc"});
+    const auto named = machine::resolve(memory, profiles, {.action = MachineOptions::Action::setup, .label = "_svc", .new_label = "svc"});
 
     check(named.label == "svc" && named.destination == "_svc" && !named.saved);
 
-    const auto saved = machine::resolve(profiles, {.action = MachineOptions::Action::setup, .label = "dev@host"});
+    const auto saved = machine::resolve(memory, profiles, {.action = MachineOptions::Action::setup, .label = "dev@host"});
 
     check(saved.label == "box" && saved.destination == "dev@host" && saved.saved && saved.saved->label() == "box");
   }

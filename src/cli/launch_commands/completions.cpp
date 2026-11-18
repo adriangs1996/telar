@@ -3,6 +3,9 @@ module telar.cli.launch_commands;
 import std;
 import telar.sys.posix;
 import telar.ebnf.matcher;
+import telar.base.memory.allocators;
+import telar.platform.primitives;
+import telar.cli.command_limit;
 
 namespace telar::runtime::cli {
 
@@ -17,8 +20,8 @@ namespace telar::runtime::cli {
       });
     }
 
-    int fail(const std::filesystem::path& path, std::string_view reason) {
-      std::fprintf(stderr, "telar completions: %s: %.*s\n", path.c_str(), static_cast<int>(reason.size()), reason.data());
+    int fail(std::string_view path, std::string_view reason) {
+      std::fprintf(stderr, "telar completions: %.*s: %.*s\n", static_cast<int>(path.size()), path.data(), static_cast<int>(reason.size()), reason.data());
       return 1;
     }
 
@@ -26,7 +29,7 @@ namespace telar::runtime::cli {
 
   // telar completions check FILE: compiles a command's completion spec with the matcher the
   // runtime uses, so a spec that would be skipped says why before anyone relies on it.
-  int runCompletionsCommand(std::span<char* const> words) {
+  int runCompletionsCommand(Memory& memory, std::span<char* const> words) {
     if (words.empty()) {
       throw std::invalid_argument{"MissingCompletionsAction"};
     }
@@ -39,29 +42,47 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"telar completions check takes one FILE"};
     }
 
-    const std::filesystem::path path{words[1]};
-    if (path.extension() != ".ebnf" || !commandName(path.stem().string())) {
+    // The path views the command line, so it ends with a NUL.
+    const std::string_view path{words[1]};
+    const auto name = path.substr(path.rfind('/') + 1);
+    constexpr std::string_view extension = ".ebnf";
+    if (!name.ends_with(extension) || !commandName(name.substr(0, name.size() - extension.size()))) {
       return fail(path, "name the file after its command, as nmap.ebnf");
     }
 
-    std::error_code error;
-    const auto size = std::filesystem::file_size(path, error);
-
-    if (error) {
-      return fail(path, error.message());
+    FileDescriptor file{::open(words[1], O_RDONLY | O_CLOEXEC)};
+    struct stat state{};
+    if (!file || ::fstat(file.get(), &state) != 0) {
+      return fail(path, std::strerror(sys::lastError()));
     }
 
-    if (size > maximum_spec) {
+    if (static_cast<std::uintmax_t>(state.st_size) > maximum_spec) {
       return fail(path, "larger than 256 KiB");
     }
 
-    std::ifstream file{path, std::ios::binary};
-    const std::string source{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+    Text source{memory};
 
-    if (!file && !file.eof()) {
-      return fail(path, "could not be read");
+    source.resizeForOverwrite(static_cast<std::size_t>(state.st_size));
+    std::size_t done = 0;
+
+    while (done < source.size()) {
+      const auto count = ::read(file.get(), source.dataMut() + done, source.size() - done);
+      if (count < 0 && sys::lastError() == EINTR) {
+        continue;
+      }
+
+      if (count < 0) {
+        return fail(path, "could not be read");
+      }
+
+      if (count == 0) {
+        break;
+      }
+
+      done += static_cast<std::size_t>(count);
     }
 
+    source.truncate(done);
     try {
       static_cast<void>(ebnf::command_spec::compile(source));
     } catch (const std::exception& exception) {

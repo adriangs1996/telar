@@ -163,8 +163,10 @@ export {
       return value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value;
     }
 
-    // `text` with its ASCII capitals lowered.
-    std::string asciiLowerCopy(std::string_view text);
+    // `text` with its ASCII capitals lowered where it is formatted, with no copy built apart.
+    struct AsciiLower {
+      std::string_view text;
+    };
 
     inline constexpr bool asciiEqualIgnoreCase(std::string_view left, std::string_view right) noexcept {
       if (left.size() != right.size()) {
@@ -178,6 +180,29 @@ export {
       }
 
       return true;
+    }
+
+    inline constexpr bool asciiStartsWithIgnoreCase(std::string_view text, std::string_view prefix) noexcept {
+      return text.size() >= prefix.size() && asciiEqualIgnoreCase(text.substr(0, prefix.size()), prefix);
+    }
+
+    inline constexpr bool asciiEndsWithIgnoreCase(std::string_view text, std::string_view suffix) noexcept {
+      return text.size() >= suffix.size() && asciiEqualIgnoreCase(text.substr(text.size() - suffix.size()), suffix);
+    }
+
+    // Where `fragment` first occurs in `text` from `from` on, ignoring ASCII case, or npos.
+    inline constexpr std::size_t asciiFindIgnoreCase(std::string_view text, std::string_view fragment, std::size_t from = 0) noexcept {
+      for (std::size_t start = from; start + fragment.size() <= text.size(); ++start) {
+        if (asciiEqualIgnoreCase(text.substr(start, fragment.size()), fragment)) {
+          return start;
+        }
+      }
+
+      return std::string_view::npos;
+    }
+
+    inline constexpr bool asciiContainsIgnoreCase(std::string_view text, std::string_view fragment) noexcept {
+      return asciiFindIgnoreCase(text, fragment) != std::string_view::npos;
     }
 
   }
@@ -344,6 +369,24 @@ export {
 
   }
 }
+
+template <>
+struct std::formatter<telar::runtime::AsciiLower, char> {
+  constexpr auto parse(std::format_parse_context& context) {
+    return context.begin();
+  }
+
+  template <typename Context>
+  auto format(const telar::runtime::AsciiLower& lower, Context& context) const {
+    auto output = context.out();
+
+    for (const char character : lower.text) {
+      *output++ = telar::runtime::asciiLower(character);
+    }
+
+    return output;
+  }
+};
 
 template <>
 struct std::formatter<telar::runtime::LowerHex, char> {

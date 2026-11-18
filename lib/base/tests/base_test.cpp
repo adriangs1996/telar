@@ -12,6 +12,7 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <new>
 #include <optional>
 #include <span>
@@ -243,6 +244,18 @@ namespace {
       return encoded;
     }
 
+    // ASCII comparisons ignore the case of letters only, and need no copy of either text.
+    void testAsciiIgnoreCase() {
+      using namespace telar::runtime;
+
+      check(asciiStartsWithIgnoreCase("Id_RSA.pub", "id_rsa") && !asciiStartsWithIgnoreCase("id", "id_rsa"));
+      check(asciiEndsWithIgnoreCase("server.PEM", ".pem") && !asciiEndsWithIgnoreCase("pem", ".pem"));
+      check(asciiContainsIgnoreCase("MyApiKeyHelper", "apikey") && asciiContainsIgnoreCase("x", "") && !asciiContainsIgnoreCase("api_ke", "api_key"));
+      check(asciiFindIgnoreCase("a Bearer b BEARER", "bearer") == 2 && asciiFindIgnoreCase("a Bearer b BEARER", "bearer", 3) == 11 && asciiFindIgnoreCase("bear", "bearer") == std::string_view::npos);
+      check(!asciiContainsIgnoreCase("\xc3\x89T\xc3\x89", "\xc3\xa9"), "bytes past ASCII compare exactly");
+      check(std::format("{}", AsciiLower{"MiXeD-Case 9"}) == "mixed-case 9");
+    }
+
     void testNumbers() {
       using telar::runtime::NumberError;
       using telar::runtime::parseExact;
@@ -293,6 +306,7 @@ namespace {
     const telar::testing::Case bracketed_paste{"base.bracketed_paste", testBracketedPaste};
     const telar::testing::Case error_text{"base.error_text", testErrorText};
     const telar::testing::Case numbers{"base.numbers", testNumbers};
+    const telar::testing::Case ascii_ignore_case{"base.ascii_ignore_case", testAsciiIgnoreCase};
     const telar::testing::Case retained_stream{"base.retained_stream", testRetainedStream};
     const telar::testing::Case limits{"base.limits", testLimits};
     const telar::testing::Case json{"base.json", testJson};

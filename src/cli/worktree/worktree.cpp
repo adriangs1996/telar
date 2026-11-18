@@ -19,12 +19,13 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.base.ds;
+import telar.base.memory.containers;
 
 namespace telar::runtime::cli::repository {
 
   struct Catalog {
-    std::vector<std::pair<std::uint64_t, std::string>> workspaces;
-    std::vector<std::string> worktrees;
+    ds::Vec<std::pair<std::uint64_t, Text>, Memory> workspaces;
+    ds::Vec<Text, Memory> worktrees;
   };
 
   template <Allocator Memory>
@@ -50,51 +51,46 @@ namespace telar::runtime::cli::repository {
 
       DecodeStorage storage{decoded.viewMut()};
       const auto list = Codec::decode<WorkspaceList>(frame, storage);
-      Catalog result;
+      Catalog result{.workspaces = ds::Vec<std::pair<std::uint64_t, Text>, Memory>{memory}, .worktrees = ds::Vec<Text, Memory>{memory}};
 
       for (const auto& entry : list.entries) {
-        result.workspaces.emplace_back(entry.workspace, entry.path);
+        result.workspaces.push({entry.workspace, Text{memory, entry.path}});
       }
 
       for (const auto& entry : list.worktrees) {
-        result.worktrees.emplace_back(entry.path);
+        result.worktrees.emplace(memory, entry.path);
       }
 
       return result;
     }
   }
 
-  std::string managedPath(std::string_view identity) {
+  Text managedPath(Memory& memory, std::string_view identity) {
     const ProcessEnvironment environment;
     // A later lookup may overwrite the storage an earlier one returned.
-    const std::string home{environment.lookup("HOME")};
+    const Text home{memory, environment.lookup("HOME")};
     if (home.empty()) {
       throw std::runtime_error{"HomeDirectoryUnavailable"};
     }
 
     const auto configured = environment.lookup("XDG_DATA_HOME");
-    const auto base = configured.empty() ? std::string{home} + "/.local/share" : std::string{configured};
-    if (!base.starts_with('/')) {
+    auto result = configured.empty() ? ds::format(memory, "{}/.local/share", home) : Text{memory, configured};
+    if (!result.view().starts_with('/')) {
       throw std::runtime_error{"InvalidDataDirectory"};
     }
 
     ds::Array<unsigned char, SHA256_DIGEST_LENGTH> digest;
 
     ::SHA256(reinterpret_cast<const unsigned char*>(identity.data()), identity.size(), digest.dataMut());
-    auto result = base + "/telar/repositories/";
-
-    for (const auto byte : digest) {
-      result += std::format("{:02x}", byte);
-    }
-
+    ds::formatTo(result, "/telar/repositories/{}", lowerHex(digest.view()));
     return result;
   }
 
   template <Allocator Memory>
-  std::string mainRoot(Memory& memory, std::string_view path) {
+  Text mainRoot(Memory& memory, std::string_view path) {
     Git git{memory, path};
     const auto common = git.read({"rev-parse", "--path-format=absolute", "--git-common-dir"});
-    auto trimmed = std::string_view{common};
+    auto trimmed = common.view();
 
     while (trimmed.ends_with('/')) {
       trimmed.remove_suffix(1);
@@ -110,16 +106,16 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{"NotARepository"};
     }
 
-    return std::string{trimmed};
+    return Text{memory, trimmed};
   }
 
   template <Allocator Memory>
-  ds::Option<std::string> matching(Memory& memory, std::string_view path, std::string_view identity) {
+  ds::Option<Text> matching(Memory& memory, std::string_view path, std::string_view identity) {
     if (path.contains('\0') || path.size() >= PATH_MAX) {
       return ds::none;
     }
 
-    std::string root;
+    Text root{memory};
 
     try {
       root = mainRoot(memory, path);
@@ -131,21 +127,21 @@ namespace telar::runtime::cli::repository {
 
     try {
       Git git{memory, root};
-      if (normalize(git.read({"config", "--get", "remote.origin.url"})) != identity) {
+      if (normalize(memory, git.read({"config", "--get", "remote.origin.url"})) != identity) {
         return ds::none;
       }
     } catch (const std::exception&) {
       return ds::none;
     }
 
-    return root;
+    return std::move(root);
   }
 
   // Repository discovery: the main checkout whose origin is
   // `identity` among the runtime's workspaces and worktrees, the workspaces
   // history recorded and the managed clone. It starts the runtime if needed.
   template <Allocator Memory>
-  ds::Option<std::string> find(Memory& memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
+  ds::Option<Text> find(Memory& memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
     const ProcessEnvironment environment;
     ServerOptions server;
 
@@ -159,15 +155,15 @@ namespace telar::runtime::cli::repository {
     const auto available = catalog(memory, paths.socket.data());
 
     if (selected) {
-      std::string path{*selected};
+      Text path{memory, *selected};
 
       if (const auto id = maybeUnsigned(*selected)) {
-        const auto found = std::ranges::find(available.workspaces, *id, &std::pair<std::uint64_t, std::string>::first);
+        const auto found = std::ranges::find(available.workspaces, *id, &std::pair<std::uint64_t, Text>::first);
         if (found == available.workspaces.end()) {
           throw std::runtime_error{"WorkspaceNotFound"};
         }
 
-        path = found->second;
+        path = found->second.clone();
       }
 
       auto result = matching(memory, path, identity);
@@ -186,19 +182,19 @@ namespace telar::runtime::cli::repository {
             identity_(identity) {}
 
       void operator()(std::string_view path) override {
-        const auto candidate = matching(memory_, path, identity_);
+        auto candidate = matching(memory_, path, identity_);
         if (!candidate) {
           return;
         }
 
-        if (result && result != candidate) {
+        if (result && *result != *candidate) {
           throw std::runtime_error{"AmbiguousRepository"};
         }
 
-        result = candidate;
+        result = std::move(candidate);
       }
 
-      ds::Option<std::string> result;
+      ds::Option<Text> result;
 
     private:
       Memory& memory_;
@@ -220,26 +216,26 @@ namespace telar::runtime::cli::repository {
     storage_paths.resolveStorage(ServerOptions{}, environment);
     historyPaths(storage_paths.history.data(), consider);
 
-    consider(managedPath(identity));
-    return consider.result;
+    consider(managedPath(memory, identity));
+    return std::move(consider.result);
   }
 
   class StagingDirectory {
   public:
-    explicit StagingDirectory(std::string path)
+    explicit StagingDirectory(Text path)
         : path_(std::move(path)) {}
 
     ~StagingDirectory() {
       std::error_code ignored;
 
-      std::filesystem::remove_all(path_, ignored);
+      std::filesystem::remove_all(path_.view(), ignored);
     }
 
     StagingDirectory(const StagingDirectory&) = delete;
     StagingDirectory& operator=(const StagingDirectory&) = delete;
 
   private:
-    std::string path_;
+    Text path_;
   };
 
   bool validCommit(std::string_view commit) {
@@ -251,9 +247,9 @@ namespace telar::runtime::cli::repository {
     });
   }
 
-  FileDescriptor lockRepository(int parent, const std::string& name) {
-    const auto lock_name = name + ".lock";
-    auto file = openLockFile(parent, lock_name.c_str());
+  FileDescriptor lockRepository(Memory& memory, int parent, std::string_view name) {
+    const auto lock_name = ds::format(memory, "{}.lock", name);
+    auto file = openLockFile(parent, lock_name.data());
     struct stat state{};
     if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::getuid() || state.st_nlink != 1 || (state.st_mode & 0077) != 0) {
       throw std::runtime_error{"UnsafeRepositoryLock"};
@@ -269,9 +265,9 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  void clearPriorStage(Memory& memory, const std::string& stage, std::string_view identity) {
+  void clearPriorStage(Memory& memory, const Text& stage, std::string_view identity) {
     struct stat state{};
-    if (::lstat(stage.c_str(), &state) != 0) {
+    if (::lstat(stage.data(), &state) != 0) {
       if (sys::lastError() == ENOENT) {
         return;
       }
@@ -289,7 +285,7 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{"UnownedRepositoryStage"};
     }
 
-    std::filesystem::remove_all(stage);
+    std::filesystem::remove_all(stage.view());
   }
 
   void receiveBundle(int descriptor, std::uint64_t expected) {
@@ -325,25 +321,25 @@ namespace telar::runtime::cli::repository {
 
   template <Allocator Memory>
   PreparedRepository receive(Memory& memory, const RepositoryOptions& options) {
-    if (normalize(options.transport) != options.identity || !validCommit(options.commit) || !options.ref.starts_with("refs/telar/transfer/") || options.bytes == 0 || options.bytes > max_bundle_bytes) {
+    if (normalize(memory, options.transport) != options.identity || !validCommit(options.commit) || !options.ref.starts_with("refs/telar/transfer/") || options.bytes == 0 || options.bytes > max_bundle_bytes) {
       throw std::runtime_error{"InvalidRepositoryTransfer"};
     }
 
-    const auto managed = managedPath(options.identity);
-    const auto slash = managed.rfind('/');
-    const auto base = managed.substr(slash + 1);
-    auto parent = file_transfer::openDirectory(std::string_view{managed}.substr(0, slash), true);
-    auto lock = lockRepository(parent.get(), base);
+    const auto managed = managedPath(memory, options.identity);
+    const auto slash = managed.view().rfind('/');
+    const auto base = managed.view().substr(slash + 1);
+    auto parent = file_transfer::openDirectory(managed.view().substr(0, slash), true);
+    auto lock = lockRepository(memory, parent.get(), base);
     const auto existing = find(memory, options.identity, options.workspace);
-    const auto stage = managed + ".stage";
+    const auto stage = ds::format(memory, "{}.stage", managed);
 
     clearPriorStage(memory, stage, options.identity);
-    const auto stage_name = base + ".stage";
-    if (::mkdirat(parent.get(), stage_name.c_str(), 0700) != 0) {
+    const auto stage_name = ds::format(memory, "{}.stage", base);
+    if (::mkdirat(parent.get(), stage_name.data(), 0700) != 0) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
     }
 
-    StagingDirectory cleanup{stage};
+    StagingDirectory cleanup{stage.clone()};
     auto directory = file_transfer::openDirectory(stage);
     FileDescriptor owner{::openat(directory.get(), "owner", O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
     if (!owner) {
@@ -357,9 +353,9 @@ namespace telar::runtime::cli::repository {
     }
 
     receiveBundle(bundle.get(), options.bytes);
-    const auto bundle_path = stage + "/history.bundle";
-    const auto staged_repository = stage + "/repository";
-    const auto root = existing.valueOr(staged_repository);
+    const auto bundle_path = ds::format(memory, "{}/history.bundle", stage);
+    const auto staged_repository = ds::format(memory, "{}/repository", stage);
+    const std::string_view root = existing ? existing->view() : staged_repository.view();
 
     if (!existing && ::mkdirat(directory.get(), "repository", 0700) != 0) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
@@ -381,48 +377,49 @@ namespace telar::runtime::cli::repository {
     if (!existing) {
       git.read({"config", "remote.origin.url", options.transport});
       git.read({"checkout", "--detach", options.commit});
-      const auto relative = stage_name + "/repository";
+      const auto relative = ds::format(memory, "{}/repository", stage_name);
+      const Text published{memory, base};
 
       try {
-        file_transfer::publish(parent.get(), relative.c_str(), base.c_str());
+        file_transfer::publish(parent.get(), relative.data(), published.data());
       } catch (const std::runtime_error& error) {
         throw std::runtime_error{std::string_view{error.what()} == "PathAlreadyExists" ? "RepositoryDestinationOccupied" : "RepositoryPublicationFailed"};
       }
     }
 
-    return {.path = existing.valueOr(managed), .commit = std::string{options.commit}, .repository = std::string{options.identity}, .reused = existing.hasValue()};
+    return {.path = existing ? existing->clone() : managed.clone(), .commit = Text{memory, options.commit}, .repository = Text{memory, options.identity}, .reused = existing.hasValue()};
   }
 
   constexpr std::size_t max_transfer_tips = 256;
 
   template <Allocator Memory>
-  std::string tips(Memory& memory, const RepositoryOptions& options) {
+  Text tips(Memory& memory, const RepositoryOptions& options) {
+    Text listing{memory};
     const auto found = find(memory, options.identity, options.workspace);
     if (!found) {
-      return {};
+      return listing;
     }
 
     Git git{memory, *found};
-    std::string listing;
 
     try {
-      listing = git.read({"rev-parse", "--verify", "--quiet", "HEAD"}) + '\n';
+      ds::formatTo(listing, "{}\n", git.read({"rev-parse", "--verify", "--quiet", "HEAD"}));
     } catch (const std::exception&) {
     }
 
-    const auto refs = git.read({"for-each-ref", "--sort=-committerdate", std::format("--count={}", max_transfer_tips), "--format=%(objectname)"});
+    const auto refs = git.read({"for-each-ref", "--sort=-committerdate", ds::format(memory, "--count={}", max_transfer_tips), "--format=%(objectname)"});
     if (!refs.empty()) {
-      listing += refs + '\n';
+      ds::formatTo(listing, "{}\n", refs);
     }
 
     return listing;
   }
 
-  void appendHashes(std::vector<std::string>& hashes, std::string_view listing) {
+  void appendHashes(ds::Vec<Text, Memory>& hashes, std::string_view listing) {
     for (const auto line : std::views::split(listing, '\n')) {
       const std::string_view hash{line.begin(), line.end()};
       if (hashes.size() < max_transfer_tips && validCommit(hash)) {
-        hashes.emplace_back(hash);
+        hashes.emplace(hashes.memory(), hash);
       }
     }
   }
@@ -430,24 +427,28 @@ namespace telar::runtime::cli::repository {
   // What the bundle leaves out: the machine's tips, which its clone holds with
   // all their history. When they already reach `commit`, its parents instead,
   // since Git refuses an empty bundle. Only hashes pass, never an option.
-  std::vector<std::string> exclusions(Git& git, std::string_view commit, std::string_view listing) {
-    std::vector<std::string> tips;
+  ds::Vec<Text, Memory> exclusions(Memory& memory, Git& git, std::string_view commit, std::string_view listing) {
+    ds::Vec<Text, Memory> tips{memory};
 
     appendHashes(tips, listing);
     if (tips.empty()) {
       return tips;
     }
 
-    std::vector<std::string_view> count{"rev-list", "--count", "--ignore-missing", commit, "--not"};
+    ds::Vec<std::string_view, Memory> count{memory};
 
-    count.insert(count.end(), tips.begin(), tips.end());
-    if (git.read(count) != "0") {
+    count.extend(ds::Array<std::string_view, 5>{"rev-list", "--count", "--ignore-missing", commit, "--not"}.view());
+    for (const auto& tip : tips) {
+      count.push(tip.view());
+    }
+
+    if (git.read(count.view()) != "0") {
       return tips;
     }
 
-    std::vector<std::string> parents;
+    ds::Vec<Text, Memory> parents{memory};
 
-    appendHashes(parents, git.read({"rev-parse", std::string{commit} + "^@"}));
+    appendHashes(parents, git.read({"rev-parse", ds::format(memory, "{}^@", commit)}));
     return parents;
   }
 
@@ -463,60 +464,61 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{"InvalidPreparationResult"};
     }
 
-    return {.path = std::string{path->text()}, .commit = std::string{commit}, .repository = std::string{identity}, .reused = reused->text() == "true"};
+    return {.path = Text{memory, path->text()}, .commit = Text{memory, commit}, .repository = Text{memory, identity}, .reused = reused->text() == "true"};
   }
 
   PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture) {
-    const auto cwd = std::filesystem::canonical(".").string();
+    const auto cwd = sessions::realDirectory(memory, ".");
     const auto root = mainRoot(memory, cwd);
     Git git{memory, root};
-    std::string commit;
+    Text commit{memory};
 
     try {
-      commit = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", std::string{options.from} + "^{commit}"});
+      commit = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", ds::format(memory, "{}^{{commit}}", options.from)});
     } catch (const std::exception&) {
       throw std::runtime_error{"UnknownRevision"};
     }
 
     ready(git, commit);
     const auto origin = git.read({"config", "--get", "remote.origin.url"});
-    const auto identity = normalize(origin);
-    const auto transport = sanitized(origin);
+    const auto identity = normalize(memory, origin);
+    const auto transport = sanitized(memory, origin);
     const auto status = git.read({"status", "--porcelain"});
     if (!status.empty()) {
-      const auto dirty = static_cast<std::size_t>(std::count(status.begin(), status.end(), '\n')) + 1;
+      const auto dirty = static_cast<std::size_t>(std::ranges::count(status.view(), '\n')) + 1;
 
-      writeText(std::format("telar repository: {} uncommitted files stay on this machine\n", dirty), STDERR_FILENO);
+      writeFormatted(STDERR_FILENO, "telar repository: {} uncommitted files stay on this machine\n", dirty);
     }
 
     // Through `exec` like `receive`, so discovery there sees what it will see.
-    std::vector<std::string_view> query{"exec", "--no-stdin", "--", remote_program, "repository", "tips", "--identity", identity};
+    ds::Vec<std::string_view, Memory> query{memory};
 
+    query.extend(ds::Array<std::string_view, 8>{"exec", "--no-stdin", "--", remote_program, "repository", "tips", "--identity", identity}.view());
     if (options.workspace) {
-      query.push_back("--workspace");
-      query.push_back(*options.workspace);
+      query.push("--workspace");
+      query.push(*options.workspace);
     }
 
     // Without an answer the whole history travels, as to a new clone.
-    std::string listing;
+    Text listing{memory};
 
     try {
-      listing = capture(std::span<const std::string_view>{query}, -1);
+      listing = capture(query.view(), -1);
     } catch (const std::exception&) {
     }
 
-    const auto excluded = exclusions(git, commit, listing);
+    const auto excluded = exclusions(memory, git, commit, listing);
     const ProcessEnvironment environment;
     const auto base = environment.lookup("TMPDIR");
-    const auto temporary = std::format("{}/telar-transfer-{:016x}{:016x}", base.empty() ? "/tmp" : base, randomIdentity(), randomIdentity());
-    if (::mkdir(temporary.c_str(), 0700) != 0) {
+    const auto temporary = ds::format(memory, "{}/telar-transfer-{:016x}{:016x}", base.empty() ? "/tmp" : base, randomIdentity(), randomIdentity());
+    if (::mkdir(temporary.data(), 0700) != 0) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
     }
 
-    StagingDirectory cleanup{temporary};
+    StagingDirectory cleanup{temporary.clone()};
     // TMPDIR may sit behind a symlink (macOS's /var); only the directory just
     // created, private to this process, must not be one.
-    FileDescriptor directory{::open(temporary.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+    FileDescriptor directory{::open(temporary.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (!directory) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
     }
@@ -526,7 +528,7 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{sys::errorName(sys::lastError())};
     }
 
-    const auto ref = "refs/telar/transfer/" + std::filesystem::path{temporary}.filename().string();
+    const auto ref = ds::format(memory, "refs/telar/transfer/{}", temporary.view().substr(temporary.view().rfind('/') + 1));
 
     git.read({"update-ref", ref, commit, ""});
     const auto delete_ref = [&] {
@@ -537,14 +539,18 @@ namespace telar::runtime::cli::repository {
     };
 
     try {
-      std::vector<std::string_view> revisions{ref};
+      ds::Vec<std::string_view, Memory> revisions{memory};
 
+      revisions.push(ref.view());
       if (!excluded.empty()) {
-        revisions.insert(revisions.end(), {"--ignore-missing", "--not"});
-        revisions.insert(revisions.end(), excluded.begin(), excluded.end());
+        revisions.push("--ignore-missing");
+        revisions.push("--not");
+        for (const auto& hash : excluded) {
+          revisions.push(hash.view());
+        }
       }
 
-      git.bundle(revisions, bundle.get());
+      git.bundle(revisions.view(), bundle.get());
       struct stat inode{};
       if (::fstat(bundle.get(), &inode) != 0) {
         throw std::runtime_error{sys::errorName(sys::lastError())};
@@ -554,15 +560,16 @@ namespace telar::runtime::cli::repository {
         throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
-      const auto size = std::to_string(inode.st_size);
-      std::vector<std::string_view> words{"exec", "--", remote_program, "repository", "receive", "--identity", identity, "--transport", transport, "--commit", commit, "--ref", ref, "--bytes", size};
+      const auto size = ds::format(memory, "{}", inode.st_size);
+      ds::Vec<std::string_view, Memory> words{memory};
 
+      words.extend(ds::Array<std::string_view, 15>{"exec", "--", remote_program, "repository", "receive", "--identity", identity, "--transport", transport, "--commit", commit, "--ref", ref, "--bytes", size}.view());
       if (options.workspace) {
-        words.push_back("--workspace");
-        words.push_back(*options.workspace);
+        words.push("--workspace");
+        words.push(*options.workspace);
       }
 
-      const auto output = capture(std::span<const std::string_view>{words}, bundle.get());
+      const auto output = capture(words.view(), bundle.get());
       auto result = parsePrepared(memory, output, commit, identity);
 
       delete_ref();
@@ -581,7 +588,7 @@ namespace telar::runtime::cli::repository {
         : memory_(memory),
           profile_(profile) {}
 
-    std::string operator()(std::span<const std::string_view> words, int input) override {
+    Text operator()(std::span<const std::string_view> words, int input) override {
       return machine::capture(memory_, profile_, words, "RepositoryTransferFailed", input);
     }
 
@@ -599,7 +606,7 @@ namespace telar::runtime::cli::repository {
   int run(Memory& memory, const RepositoryOptions& options) {
     try {
       if (options.action == RepositoryOptions::Action::receive) {
-        writeText(receive(memory, options).json(true));
+        receive(memory, options).print(true);
       } else if (options.action == RepositoryOptions::Action::tips) {
         writeText(tips(memory, options));
       } else {
@@ -608,12 +615,12 @@ namespace telar::runtime::cli::repository {
           throw std::runtime_error{"PreparationNeedsAnotherMachine"};
         }
 
-        writeText(prepare(memory, options, *profile).json());
+        prepare(memory, options, *profile).print();
       }
 
       return 0;
     } catch (const std::exception& error) {
-      writeText("telar repository: " + std::string{error.what()} + "\n", STDERR_FILENO);
+      std::fprintf(stderr, "telar repository: %s\n", error.what());
       return 1;
     }
   }
@@ -656,11 +663,11 @@ namespace telar::runtime::cli::sessions {
           options_(options),
           profile_(profile),
           git_(memory),
-          root_(git_.root(std::filesystem::canonical(".").string())) {}
+          root_(git_.root(realDirectory(memory, "."))) {}
 
     int create() {
       const auto branch = *options_.branch;
-      const bool continued = git_.succeeds({"git", "-C", root_, "rev-parse", "--verify", "--quiet", "refs/heads/" + std::string{branch}});
+      const bool continued = git_.succeeds({"git", "-C", root_, "rev-parse", "--verify", "--quiet", ds::format(memory_, "refs/heads/{}", branch)});
       const auto source = continued ? branch : options_.from.valueOr("HEAD");
       const auto commit = commitOf(source);
       const RepositoryOptions prepare_options{
@@ -671,52 +678,58 @@ namespace telar::runtime::cli::sessions {
 
       const auto clone = repository::prepare(memory_, prepare_options, profile_).path;
 
-      transfer(clone, commit + ":refs/heads/" + std::string{branch}, GitDirection::push);
-      const auto profiles = machine::load(memory_, machine::profilesPath());
-      const auto local = machine::localLabel(profiles).substr(0, machines::MachineLimits::label_bytes);
+      transfer(clone, ds::format(memory_, "{}:refs/heads/{}", commit, branch), GitDirection::push);
+      const auto profiles = machine::load(memory_, machine::profilesPath(memory_));
+      const auto local_label = machine::localLabel(profiles);
+      const auto local = local_label.view().substr(0, machines::MachineLimits::label_bytes);
       const auto coordinator = options_.coordinator ? options_.coordinator : sourceCoordinator();
-      std::vector<std::string> words{"worktree", "create", std::string{branch}, "--workspace", clone, "--dispatched-from", std::string{local}};
-      const auto optional = [&](std::string_view flag, ds::Option<std::string> value) {
+      const auto coordinator_text = coordinator ? ds::Option{formatCoordinator(*coordinator)} : ds::none;
+      ds::Vec<std::string_view, Memory> words{memory_};
+
+      words.extend(ds::Array<std::string_view, 7>{"worktree", "create", branch, "--workspace", clone, "--dispatched-from", local}.view());
+      const auto optional = [&](std::string_view flag, ds::Option<std::string_view> value) {
         if (value) {
-          words.emplace_back(flag);
-          words.push_back(std::move(value.getMut()));
+          words.push(flag);
+          words.push(*value);
         }
       };
 
-      optional("--title", options_.title ? ds::Option<std::string>{*options_.title} : ds::none);
-      optional("--label", options_.label ? ds::Option<std::string>{*options_.label} : ds::none);
-      optional("--coordinator", coordinator ? ds::Option{formatCoordinator(*coordinator)} : ds::none);
-      optional("--from", continued ? ds::none : ds::Option{commit});
+      optional("--title", options_.title);
+      optional("--label", options_.label);
+      optional("--coordinator", coordinator_text ? ds::Option{coordinator_text->view()} : ds::none);
+      optional("--from", continued ? ds::none : ds::Option{commit.view()});
       if (options_.setup) {
-        words.emplace_back("--setup");
+        words.push("--setup");
       }
 
       if (options_.json) {
-        words.emplace_back("--json");
+        words.push("--json");
       }
 
       if (!options_.command.empty()) {
-        words.emplace_back("--");
-        words.insert(words.end(), options_.command.begin(), options_.command.end());
+        words.push("--");
+        for (const std::string_view word : options_.command) {
+          words.push(word);
+        }
       }
 
-      return machine::forward(memory_, profile_, words);
+      return machine::forward(memory_, profile_, std::span<const std::string_view>{words.view()});
     }
 
     int fetch() {
       const auto branch = *options_.branch;
       const auto label = *options_.machine;
       const auto clone = findClone();
-      const auto ref = std::format("refs/remotes/{}/{}", label, branch);
+      const auto ref = ds::format(memory_, "refs/remotes/{}/{}", label, branch);
 
-      transfer(clone, std::format("+refs/heads/{}:{}", branch, ref), GitDirection::fetch);
+      transfer(clone, ds::format(memory_, "+refs/heads/{}:{}", branch, ref), GitDirection::fetch);
       const auto commit = commitOf(ref);
       Output output{memory_};
 
       if (options_.json) {
         output.text("{\"machine\":").json(label).text(",\"branch\":").json(branch).text(",\"ref\":").json(ref).text(",\"commit\":").json(commit).text("}\n");
       } else {
-        output.text(std::format("fetched {} from {} into {} at {}\n", branch, label, ref, commit));
+        output.text(ds::format(memory_, "fetched {} from {} into {} at {}\n", branch, label, ref, commit));
       }
 
       output.flush();
@@ -724,16 +737,16 @@ namespace telar::runtime::cli::sessions {
     }
 
   private:
-    std::string commitOf(std::string_view revision) {
+    Text commitOf(std::string_view revision) {
       try {
-        return git_.line({"git", "-C", root_, "rev-parse", "--verify", "--quiet", "--end-of-options", std::string{revision} + "^{commit}"});
+        return git_.line({"git", "-C", root_, "rev-parse", "--verify", "--quiet", "--end-of-options", ds::format(memory_, "{}^{{commit}}", revision)});
       } catch (const std::exception&) {
         throw Failure{"UnknownRevision"};
       }
     }
 
-    std::string originIdentity() {
-      std::string url;
+    Text originIdentity() {
+      Text url{memory_};
 
       try {
         url = git_.line({"git", "-C", root_, "config", "--get", "remote.origin.url"});
@@ -741,19 +754,20 @@ namespace telar::runtime::cli::sessions {
         throw Failure{"NoOriginRemote"};
       }
 
-      return repository::normalize(url);
+      return repository::normalize(memory_, url);
     }
 
     // Asks the other machine which of its workspaces holds this repository.
-    std::string findClone() {
-      const std::vector<std::string> words{"worktree", "resolve", "--repository", originIdentity(), "--json"};
-      const auto output = machine::capture(memory_, profile_, words, "MachineCommandFailed");
+    Text findClone() {
+      const auto identity = originIdentity();
+      const ds::Array<std::string_view, 5> words{"worktree", "resolve", "--repository", identity, "--json"};
+      const auto output = machine::capture(memory_, profile_, std::span<const std::string_view>{words.view()}, "MachineCommandFailed");
 
       try {
         const auto resolved = JsonNode<Memory>::parse(memory_, output);
         const auto* path = resolved.find("path");
         if (path != nullptr && path->kind() == JsonKind::string && path->text().starts_with('/')) {
-          return std::string{path->text()};
+          return Text{memory_, path->text()};
         }
       } catch (const std::exception&) {
       }
@@ -769,7 +783,7 @@ namespace telar::runtime::cli::sessions {
         throw Failure{"DestinationNotUsableByGit"};
       }
 
-      const auto url = std::format("ssh://{}{}", destination, clone);
+      const auto url = ds::format(memory_, "ssh://{}{}", destination, clone);
       const auto ssh = machine::gitSshCommand(memory_, destination);
       const ds::Array<std::pair<std::string_view, std::string_view>, 2> environment{{{"GIT_SSH_COMMAND", ssh}, {"GIT_TERMINAL_PROMPT", "0"}}};
 
@@ -812,25 +826,24 @@ namespace telar::runtime::cli::sessions {
       return ds::none;
     }
 
-    static std::string formatCoordinator(const CoordinatorReference& reference) {
-      std::string text;
-
-      for (const auto byte : reference.session_id) {
-        text += std::format("{:02x}", static_cast<unsigned>(byte));
-      }
-
-      return std::format("{}:{}:{}", text, reference.pane_id, reference.pane_generation);
+    Text formatCoordinator(const CoordinatorReference& reference) {
+      return ds::format(memory_, "{}:{}:{}", lowerHex(reference.session_id.view()), reference.pane_id, reference.pane_generation);
     }
 
     Memory& memory_;
     const WorktreeOptions& options_;
     const machines::MachineProfile& profile_;
     WorktreeGit git_;
-    std::string root_;
+    Text root_;
   };
 
-  std::string hexSession(const ds::Array<Byte, 16>& session) {
-    return std::format("{}", lowerHex(session));
+  // A session id as the 32 hexadecimal digits it is written in.
+  FixedText<32> hexSession(const ds::Array<Byte, 16>& session) {
+    ds::Array<char, 32> digits;
+    FixedText<32> text;
+
+    text.assign(encodeLowerHex(session.view(), digits.viewMut()));
+    return text;
   }
 
   std::string_view agentStatus(AgentStatus status) {
@@ -872,7 +885,7 @@ namespace telar::runtime::cli::sessions {
   void worktreeAgent(Output& output, const AgentSnapshotEntry& agent) {
     constexpr auto escapes = JsonEscapes::control;
 
-    output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id), escapes).text("}");
+    output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id).view(), escapes).text("}");
   }
 
   std::string_view worktreeState(WorktreeState state) {
@@ -913,7 +926,7 @@ namespace telar::runtime::cli::sessions {
 
     output.text("{\"worktree_id\":").number(entry.worktree).text(",\"branch\":").json(entry.branch, escapes).text(",\"title\":").json(entry.title, escapes).text(",\"brief\":").json(entry.brief, escapes).text(",\"base\":").json(entry.base, escapes).text(",\"dispatched_from\":").json(entry.dispatched_from, escapes).text(",\"coordinator\":");
     if (entry.coordinator) {
-      output.text("{\"session_id\":").json(hexSession(entry.coordinator->session_id)).text(",\"pane_id\":").number(entry.coordinator->pane_id).text(",\"pane_generation\":").number(entry.coordinator->pane_generation).text("}");
+      output.text("{\"session_id\":").json(hexSession(entry.coordinator->session_id).view()).text(",\"pane_id\":").number(entry.coordinator->pane_id).text(",\"pane_generation\":").number(entry.coordinator->pane_generation).text("}");
     } else {
       output.text("null");
     }
@@ -983,14 +996,9 @@ namespace telar::runtime::cli::sessions {
       return false;
     }
 
-    std::string answer{buffer.data()};
-    const auto begin = answer.find_first_not_of(" \r\t\n"), end = answer.find_last_not_of(" \r\t\n");
-    if (begin == std::string::npos) {
-      return false;
-    }
+    const auto answer = trimText(std::string_view{buffer.data()}, " \r\t\n");
 
-    answer = asciiLowerCopy(answer.substr(begin, end - begin + 1));
-    return answer == "y" || answer == "yes";
+    return asciiEqualIgnoreCase(answer, "y") || asciiEqualIgnoreCase(answer, "yes");
   }
 
   class WorktreeCommand {
@@ -1002,7 +1010,10 @@ namespace telar::runtime::cli::sessions {
           catalog_(catalog_channel_.catalog()),
           session_(memory, options.socket, false),
           git_(memory),
-          output_(memory) {}
+          output_(memory),
+          adopted_path_(memory),
+          adopted_branch_(memory),
+          adopted_base_(memory) {}
 
     WorktreeCommand(const WorktreeCommand&) = delete;
     WorktreeCommand& operator=(const WorktreeCommand&) = delete;
@@ -1095,7 +1106,7 @@ namespace telar::runtime::cli::sessions {
       return found;
     }
 
-    std::string originDirectory() {
+    Text originDirectory() {
       if (options_.workspace) {
         if (const auto id = maybeUnsigned(*options_.workspace)) {
           const auto entry = workspace(*id);
@@ -1103,19 +1114,19 @@ namespace telar::runtime::cli::sessions {
             throw Failure{"workspace not found", 2};
           }
 
-          return std::string{entry->path};
+          return Text{memory_, entry->path};
         }
 
-        return realDirectory(*options_.workspace);
+        return realDirectory(memory_, *options_.workspace);
       }
 
       if (const auto id = currentWorkspace()) {
         if (const auto entry = workspace(*id)) {
-          return std::string{entry->path};
+          return Text{memory_, entry->path};
         }
       }
 
-      return realDirectory(".");
+      return realDirectory(memory_, ".");
     }
 
     std::uint64_t sourceWorkspace(std::string_view root) {
@@ -1140,7 +1151,7 @@ namespace telar::runtime::cli::sessions {
         return entry->workspace;
       }
 
-      const auto name = std::filesystem::path{root}.filename().string();
+      const auto name = root.substr(root.rfind('/') + 1);
       const auto login = loginShell();
       const ds::Array shell{login.view()};
       const auto opened = session_.template exchange<PaneOpened>(CreateWorkspace{.size = workspace_size, .name = name, .launch = {.cwd = root, .arguments = shell}});
@@ -1189,12 +1200,12 @@ namespace telar::runtime::cli::sessions {
       return ds::none;
     }
 
-    std::string brief() const {
-      std::string result;
+    Text brief() const {
+      Text result{memory_};
 
       for (std::size_t index = 1; index < options_.command.size(); ++index) {
         if (index != 1 && result.size() < brief_bytes) {
-          result += ' ';
+          result.push(' ');
         }
 
         for (const unsigned char byte : std::string_view{options_.command[index]}) {
@@ -1203,7 +1214,7 @@ namespace telar::runtime::cli::sessions {
           }
 
           if ((byte >= ' ' && byte != 0x7f) || byte == '\n' || byte == '\t') {
-            result += static_cast<char>(byte);
+            result.push(static_cast<char>(byte));
           }
         }
       }
@@ -1213,7 +1224,7 @@ namespace telar::runtime::cli::sessions {
           validateUtf8(result);
           break;
         } catch (const EncodingError&) {
-          result.pop_back();
+          result.truncate(result.size() - 1);
         }
       }
 
@@ -1221,34 +1232,34 @@ namespace telar::runtime::cli::sessions {
     }
 
     PaneOpened launch(std::uint64_t id, std::string_view directory) {
-      std::vector<std::string_view> argv;
+      ds::Vec<std::string_view, Memory> argv{memory_};
       const auto login = loginShell();
       const auto shell = login.view();
 
       if (options_.command.empty()) {
-        argv.push_back(shell);
+        argv.push(shell);
       } else {
         const auto line = loginShellScript(shell);
         if (!line.empty()) {
-          argv = {shell, "-l", "-i", "-c", line};
+          argv.extend(ds::Array<std::string_view, 5>{shell, "-l", "-i", "-c", line}.view());
         }
 
-        for (const auto word : options_.command) {
-          argv.push_back(word);
+        for (const std::string_view word : options_.command) {
+          argv.push(word);
         }
       }
 
-      return session_.template exchange<PaneOpened>(LaunchWorktree{.worktree = id, .label = options_.label.valueOr(""), .size = launch_size, .launch = {.cwd = directory, .arguments = argv}});
+      return session_.template exchange<PaneOpened>(LaunchWorktree{.worktree = id, .label = options_.label.valueOr(""), .size = launch_size, .launch = {.cwd = directory, .arguments = argv.view()}});
     }
 
     void create() {
       const auto directory = originDirectory();
       const auto root = git_.root(directory);
       const auto branch = *options_.branch;
-      std::string checkout;
+      Text checkout{memory_};
 
       if (options_.directory) {
-        checkout = *options_.directory;
+        checkout.assign(*options_.directory);
       } else {
         sessions::appendWorktreeCheckout(checkout, root, branch);
       }
@@ -1259,7 +1270,7 @@ namespace telar::runtime::cli::sessions {
         }
       }
 
-      const auto base = options_.from ? std::string{*options_.from} : git_.currentBranch(root);
+      const auto base = options_.from ? Text{memory_, *options_.from} : git_.currentBranch(root);
 
       try {
         sessions::branch(base);
@@ -1285,7 +1296,7 @@ namespace telar::runtime::cli::sessions {
       worktreeLaunch(output_, WorktreeLaunch{.setup = setup, .worktree = registered.worktree, .path = checkout, .branch = branch, .base = base, .opened = opened}, options_.json);
     }
 
-    std::vector<GitWorktree> untracked() {
+    ds::Vec<GitWorktree, Memory> untracked() {
       // Keeps the worktrees the runtime does not track.
       class Untracked final : public WorktreeFilter {
       public:
@@ -1302,15 +1313,11 @@ namespace telar::runtime::cli::sessions {
         const WorkspaceList& catalog_;
       };
 
-      std::vector<GitWorktree> entries;
-
       try {
-        entries = git_.listed(realDirectory("."), Untracked{catalog_});
+        return git_.listed(realDirectory(memory_, "."), Untracked{catalog_});
       } catch (const std::exception&) {
-        return {};
+        return ds::Vec<GitWorktree, Memory>{memory_};
       }
-
-      return entries;
     }
 
     WorktreeListEntry findOrAdopt() {
@@ -1325,8 +1332,8 @@ namespace telar::runtime::cli::sessions {
 
         const auto root = git_.root(entry.path);
 
-        adopted_path_ = entry.path;
-        adopted_branch_ = entry.branch;
+        adopted_path_ = entry.path.clone();
+        adopted_branch_ = entry.branch.clone();
         adopted_base_ = git_.currentBranch(root);
         const auto source = sourceWorkspace(root);
         const auto pane = attributedPane();
@@ -1476,15 +1483,16 @@ namespace telar::runtime::cli::sessions {
 
     void diff() {
       const auto entry = findOrAdopt();
-      const auto against = options_.uncommitted ? std::string{"HEAD"} : git_.line({"git", "-C", entry.path, "merge-base", entry.base.empty() ? "HEAD" : entry.base, "HEAD"});
-      std::vector<std::string_view> argv{"git", "-C", entry.path, "--no-pager", "diff"};
+      const auto against = options_.uncommitted ? Text{memory_, "HEAD"} : git_.line({"git", "-C", entry.path, "merge-base", entry.base.empty() ? "HEAD" : entry.base, "HEAD"});
+      ds::Vec<std::string_view, Memory> argv{memory_};
 
+      argv.extend(ds::Array<std::string_view, 5>{"git", "-C", entry.path, "--no-pager", "diff"}.view());
       if (options_.stat) {
-        argv.push_back("--stat");
+        argv.push("--stat");
       }
 
-      argv.push_back(against);
-      git_.run(argv, "GitDiffFailed", true);
+      argv.push(against.view());
+      git_.run(argv.view(), "GitDiffFailed", true);
     }
 
     void remove() {
@@ -1493,7 +1501,7 @@ namespace telar::runtime::cli::sessions {
         throw Failure{"no tracked worktree matches that branch or title", 2};
       }
 
-      ds::Option<std::string> root;
+      ds::Option<Text> root;
 
       try {
         root = git_.root(entry->path);
@@ -1543,7 +1551,7 @@ namespace telar::runtime::cli::sessions {
           {"NotARepository", "not inside a git repository"},
       }};
 
-      ds::Option<std::string> found;
+      ds::Option<Text> found;
 
       try {
         found = repository::find(memory_, *options_.repository, options_.workspace, options_.socket);
@@ -1576,7 +1584,7 @@ namespace telar::runtime::cli::sessions {
     WorktreeGit git_;
     Output output_;
     std::uint64_t verified_generation_ = 0;
-    std::string adopted_path_, adopted_branch_, adopted_base_;
+    Text adopted_path_, adopted_branch_, adopted_base_;
   };
 
   int worktree(Memory& memory, const WorktreeOptions& options) {
@@ -1683,10 +1691,18 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::repository {
 
-  std::string PreparedRepository::json(bool receiver) const {
-    const auto prefix = std::format("{{\"path\":{},\"commit\":{},\"repository\":{},", quoteJson(path), quoteJson(commit), quoteJson(repository));
+  void PreparedRepository::print(bool receiver) const {
+    DescriptorWriter output{STDOUT_FILENO};
 
-    return prefix + (receiver ? "\"repository_ready\":true,\"reused\":" + std::string{jsonBoolean(reused)} : "\"reused\":" + std::string{jsonBoolean(reused)} + ",\"repository_ready\":true") + ",\"environment\":\"not_run\"}\n";
+    output.print("{{\"path\":{},\"commit\":{},\"repository\":{},", quoteJson(path), quoteJson(commit), quoteJson(repository));
+    if (receiver) {
+      output.print("\"repository_ready\":true,\"reused\":{}", jsonBoolean(reused));
+    } else {
+      output.print("\"reused\":{},\"repository_ready\":true", jsonBoolean(reused));
+    }
+
+    output.print(",\"environment\":\"not_run\"}}\n");
+    output.flush();
   }
 
 }
