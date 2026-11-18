@@ -76,9 +76,11 @@ def peer(listener, fixture, frames):
                     if action == 29:
                         items = [{'index': 0, 'path': 'fixture', 'id': 'test', 'version': '1', 'requested_enabled': True, 'enabled': True}] if value == 0 else [{'index': 1, 'path': 'disabled', 'id': '', 'version': '', 'requested_enabled': False, 'enabled': False}]
                     else:
-                        items = [{'path': 'fixture', 'id': 'test', 'capabilities': []}] if value == 0 else ['run']
+                        # One entry a page: the manifest, then each action.
+                        actions = fixture.get('actions', ['run'])
+                        items = [{'path': 'fixture', 'id': 'test', 'capabilities': []}] if value == 0 else [actions[value - 1]]
                     result = json.dumps({'generation': fixture.get('generation', 3), 'entries': items}, separators=(',', ':'))
-                    result_value = 1 if value == 0 else -1
+                    result_value = 1 if value == 0 else value + 1 if action == 30 and value < len(fixture.get('actions', ['run'])) else -1
                 identity = frame[9:25] if not fixture.get('bad_route') else struct.pack('<QQ', 9, 11)
                 send(connection, b'\xaf' + request + identity + bytes([action, status]) + struct.pack('<Qq', target, result_value) + text(result))
             elif frame[0] == 0x29:
@@ -99,7 +101,7 @@ def run_fixture(binary, root, words, fixture):
         listener.bind(str(path))
         listener.listen()
         future = executor.submit(peer, listener, fixture, frames)
-        result = subprocess.run([str(binary), *words, '--socket', str(path)], env=environment(root), input=b'', capture_output=True, timeout=fixture.get('timeout',10))
+        result = subprocess.run([str(binary), *words, '--socket', str(path)], env=environment(root) | fixture.get('env', {}), input=b'', capture_output=True, timeout=fixture.get('timeout',10))
         future.result(timeout=fixture.get('timeout',10))
     return {'status': result.returncode, 'stdout': result.stdout.decode(), 'stderr': result.stderr.decode(), 'frames': frames}
 
@@ -131,6 +133,10 @@ def cases():
     yield ['plugin', 'list', '--client', '7'], {'generation': 0}, 1, '', None
     for status in range(4):
         yield ['command', 'suggest', '23', 'list files', '--json'], {'suggestion': status, 'text': 'ls' if status == 0 else ''}, 3 if status == 2 else 0 if status == 0 else 1, None, None
+    yield ['plugin', 'get', 'test', '--client', '7', '--json'], {'actions': ['a', 'b']}, 0, None, None
+    # Without --json a person reads the suggestion alone, and nothing when there is none.
+    yield ['command', 'suggest', '23', 'list files'], {'suggestion': 0, 'text': 'ls'}, 0, 'ls\n', None
+    yield ['command', 'suggest', '23', 'list files'], {'suggestion': 1, 'text': ''}, 1, '', None
     yield ['client', 'clipboard', 'copy', 'x'*4097, '--client', '7'], {}, 1, '', None
     yield ['sidebar', 'hide', '--client', '7', '--json'], {'text': 'a\b\f\x7fé', 'value': -9223372036854775808}, 0, None, None
     yield ['notification', 'show', 'bad\ntext'], {}, 1, '', None
@@ -150,6 +156,7 @@ def check(binary, root):
             commands = [frame for frame in map(bytes.fromhex, result['frames']) if frame[0] == 0x35]
             action, target, value = route
             assert commands and all(frame[25] == action for frame in commands), (words, result['frames'])
+            assert all(struct.unpack('<QQ', frame[9:25]) == (7, 11) for frame in commands), (words, result['frames'])
             sent_target, sent_value = struct.unpack('<Qq', commands[0][27:43])
             assert target is None or sent_target == target, (words, sent_target)
             assert value is None or sent_value == value, (words, sent_value)
@@ -158,13 +165,73 @@ def check(binary, root):
         if '--json' in words and status == 0:
             parsed = json.loads(result['stdout'])
             if words[:2] == ['plugin', 'get']:
-                assert parsed['actions'] == ['run']
+                assert parsed['actions'] == fixture.get('actions', ['run']), parsed
             if words[:2] == ['plugin', 'list']:
                 assert len(parsed) == 2
             if words[:2] == ['client', 'list'] and fixture.get('second'):
                 assert [entry['id'] for entry in parsed] == [7, 8], parsed
         count += 1
     return count
+
+
+def check_frames(binary, root):
+    """What reaches the window for a notification cut at its bound, and for `command suggest --current`."""
+    title = 'a' * 95 + 'é'
+    result = run_fixture(binary, root, ['notification', 'show', title], {})
+    shown = [frame for frame in map(bytes.fromhex, result['frames']) if frame[0] == 0x19]
+    assert len(shown) == 1, result
+    start = shown[0].index(b'a' * 95)
+    sent = shown[0][start:start + struct.unpack('<H', shown[0][start - 2:start])[0]]
+    assert len(sent) <= 96 and title.encode().startswith(sent) and sent.decode() == 'a' * 95, sent
+
+    result = run_fixture(binary, root, ['command', 'suggest', '--current', 'list files'], {'text': 'ls', 'env': {'TELAR_PANE_ID': '23'}})
+    suggested = [frame for frame in map(bytes.fromhex, result['frames']) if frame[0] == 0x29]
+    assert result['status'] == 0 and len(suggested) == 1 and struct.unpack('<Q', suggested[0][9:17])[0] == 23, result
+    missing = subprocess.run([str(binary), 'command', 'suggest', '--current', 'list files', '--socket', str(root / 'absent.sock')],
+                             env=environment(root), capture_output=True, timeout=10)
+    assert missing.returncode == 1 and not missing.stdout, missing
+    return 3
+
+
+def check_configuration(binary, root):
+    """`config check` validates the keymap the runtime would build, under the profile and prefix it would use."""
+    env = environment(root)
+    package = root / 'plugin-package'
+    package.mkdir(mode=0o700, exist_ok=True)
+    source = Path(__file__).resolve().parents[3] / 'examples/plugins/sample'
+    for name in ('plugin.json', 'plugin.lua'):
+        (package / name).write_bytes((source / name).read_bytes())
+        (package / name).chmod(0o600)
+    duplicate = 't.bind({"x"},"detach"),t.bind({"x"},"detach")'
+    plugin = 'plugins={t.plugin({path=%s})},' % json.dumps(str(package))
+    cases = [
+        # A profile's keybindings replace the base's: the check follows --profile.
+        ('profiles={work={client={keybindings={%s}}}}' % duplicate, ['--profile', 'work'], 1, b'DuplicateBinding'),
+        ('profiles={work={client={keybindings={%s}}}}' % duplicate, [], 0, b'telar config: OK'),
+        ('client={keybindings={t.bind({"x"},"detach"),t.bind({"x","y"},"detach")}}', [], 1, b'AmbiguousBindingPrefix'),
+        # A prefixed binding starts with the configured prefix, not the default one.
+        ('client={prefix="ctrl+a",keybindings={t.bind({"x"},"detach"),t.bind_global({"ctrl+a","x"},"detach")}}', [], 1, b'DuplicateBinding'),
+        ('client={prefix="ctrl+b",keybindings={t.bind({"x"},"detach"),t.bind_global({"ctrl+a","x"},"detach")}}', [], 0, b'telar config: OK'),
+        (plugin + 'client={keybindings={t.bind({"o"},t.action.plugin({plugin="dev.telar.sample",action="toggle"}))}}', [], 0, b'telar config: OK'),
+        (plugin + 'client={keybindings={t.bind({"o"},t.action.plugin({plugin="dev.telar.sample",action="nope"}))}}', [], 1, b'UnknownPluginAction'),
+    ]
+    config = root / 'checked.lua'
+    for fields, options, status, diagnostic in cases:
+        config.write_text('local t=require("telar");return {api_version=2,%s}' % fields)
+        result = subprocess.run([str(binary), 'config', 'check', str(config), *options], env=env, capture_output=True, timeout=10)
+        assert result.returncode == status and diagnostic in (result.stdout if status == 0 else result.stderr), (fields, options, result)
+    for source, error in (('return {api_version=2', b'LuaLoadFailed'), ('error("x")', b'LuaRuntimeFailed')):
+        config.write_text(source)
+        result = subprocess.run([str(binary), 'config', 'check', str(config)], env=env, capture_output=True, timeout=10)
+        assert result.returncode == 1 and error in result.stderr, (source, result)
+    # Without a path, the check reads the user's config under XDG_CONFIG_HOME.
+    default = Path(env['XDG_CONFIG_HOME']) / 'telar/config.lua'
+    default.parent.mkdir(parents=True, exist_ok=True)
+    default.write_text('local t=require("telar");return {api_version=2,client={keybindings={%s}}}' % duplicate)
+    result = subprocess.run([str(binary), 'config', 'check'], env=env, capture_output=True, timeout=10)
+    assert result.returncode == 1 and b'DuplicateBinding' in result.stderr, result
+    default.unlink()
+    return len(cases) + 3
 
 
 def check_validation(binary, root):
@@ -187,7 +254,9 @@ def main():
     parser.add_argument('--scratch', type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='window-', dir=args.scratch) as directory:
-        print(f'{check(args.telar.resolve(), Path(directory)) + check_validation(args.telar.resolve(), Path(directory))} window CLI cases passed')
+        binary, root = args.telar.resolve(), Path(directory)
+        count = check(binary, root) + check_frames(binary, root) + check_validation(binary, root) + check_configuration(binary, root)
+        print(f'{count} window CLI cases passed')
 
 
 if __name__ == '__main__':

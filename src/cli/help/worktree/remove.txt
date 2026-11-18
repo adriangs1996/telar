@@ -8,9 +8,10 @@ Arguments:
   --delete-branch  Also delete the branch. Merged into its upstream (or HEAD): deleted
                    without asking. Otherwise it asks on the terminal, like --force.
 
-Effects: tells the runtime to forget the worktree, which closes the panes of its
-workspace, then runs `git worktree remove`. Only tracked worktrees. A checkout that
-is already gone is only forgotten. Starts the local runtime when none runs.
+Effects: runs `git worktree remove`, then tells the runtime to forget the worktree,
+which closes the panes of its workspace. A checkout Git keeps (locked) stays tracked.
+Only tracked worktrees. A checkout that is already gone is only forgotten. Starts the
+local runtime when none runs.
 
 Results: `removed BRANCH at PATH`; JSON `worktree_id`, `path`, `branch_deleted`.
 Exit 0; 1 when refused (changes present, no terminal to confirm, Git failed).

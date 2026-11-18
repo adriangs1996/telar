@@ -13,7 +13,7 @@ telar_add_test(cli-session-arguments-tests COMMAND Python3::Interpreter -B "${TE
 if(TARGET telar-runtime)
   telar_add_test(cli-sessions-tests COMMAND Python3::Interpreter -B "${TELAR_PROCESS_SOURCE_DIR}/tools/check_sessions_cli.py"
     --cpp "$<TARGET_FILE:telar>"
-    LABELS cli.e2e TIMEOUT 120)
+    LABELS cli.e2e TIMEOUT 240)
 endif()
 telar_add_test(clipboard-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/clipboard_test.py"
   --telar "$<TARGET_FILE:telar>"

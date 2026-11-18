@@ -15,6 +15,7 @@ from check_hook_cli import run_case
 VERIFY_PANE_DESCENT = 0x42
 REPORTS = {0x20, 0x2a, 0x2b, 0x40}
 REPORT_AGENT_COMMAND = 0x2a
+REGISTER_WORKTREE = 0x3c
 CLAUDE = 1
 
 
@@ -76,18 +77,28 @@ def git(*args, cwd, env):
     return subprocess.run(['git', *args], cwd=cwd, env=env, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def worktree_create_prints_path(binary, root):
-    """Claude opens the path the WorktreeCreate hook prints: stdout is that path and nothing else."""
+def git_environment(root):
     env = {key: value for key, value in os.environ.items() if not key.startswith(('TELAR_', 'GIT_'))}
-    env.update({'HOME': str(root), 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull,
+    env.update({'HOME': str(root), 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CEILING_DIRECTORIES': str(root),
                 'GIT_AUTHOR_NAME': 'fixture', 'GIT_AUTHOR_EMAIL': 'fixture@example.invalid',
                 'GIT_COMMITTER_NAME': 'fixture', 'GIT_COMMITTER_EMAIL': 'fixture@example.invalid'})
+    return env
+
+
+def fixture_repository(root, env):
     repository = root / 'repository'
     repository.mkdir()
     git('init', '-q', '-b', 'main', cwd=repository, env=env)
     (repository / 'tracked.txt').write_text('base\n')
     git('add', 'tracked.txt', cwd=repository, env=env)
     git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'base', cwd=repository, env=env)
+    return repository
+
+
+def worktree_create_prints_path(binary, root):
+    """Claude opens the path the WorktreeCreate hook prints: stdout is that path and nothing else."""
+    env = git_environment(root)
+    repository = fixture_repository(root, env)
     head = git('rev-parse', 'HEAD', cwd=repository, env=env)
 
     def create():
@@ -116,12 +127,77 @@ def worktree_create_prints_path(binary, root):
     assert git('rev-parse', '--abbrev-ref', 'HEAD', cwd=reused, env=env) == 'feat/x'
 
 
+def create_worktree(binary, root, env, cwd, name):
+    event = {'session_id': 'fixture', 'hook_event_name': 'WorktreeCreate', 'cwd': str(cwd), 'name': name}
+    return subprocess.run([str(binary), 'hook', 'claude', '--socket', str(root / 'absent.sock')], input=json.dumps(event).encode(),
+                          env=env, capture_output=True, timeout=30)
+
+
+def worktree_branch_name_sanitized(binary, root):
+    """A name the agent chose becomes a branch Git accepts and that no Git command reads as an option."""
+    env = git_environment(root)
+    repository = fixture_repository(root, env)
+    result = create_worktree(binary, root, env, repository, '-rf ../x y~z')
+    assert result.returncode == 0, result
+    path = Path(result.stdout.decode().strip())
+    branch = git('rev-parse', '--abbrev-ref', 'HEAD', cwd=path, env=env)
+    assert branch and not branch.startswith(('-', '.')) and '..' not in branch and not {' ', '~'} & set(branch), branch
+    assert path.parent == repository.parent / 'repository-worktrees', path
+
+    # A name with nothing usable creates no worktree and no output for Claude to open.
+    refused = create_worktree(binary, root, env, repository, '...')
+    assert refused.returncode == 1 and refused.stdout == b'', refused
+    listed = git('worktree', 'list', '--porcelain', cwd=repository, env=env)
+    assert listed.count('worktree ') == 2, listed
+
+
+def worktree_create_outside_repo_fails(binary, root):
+    """Outside a repository the hook fails without a path, so Claude does not carry on without a worktree."""
+    env = git_environment(root)
+    plain = root / 'plain'
+    plain.mkdir()
+    result = create_worktree(binary, root, env, plain, 'feature')
+    assert result.returncode != 0 and result.stdout == b'', result
+
+
+def worktree_registered_with_runtime(binary, root):
+    """The runtime tracks a worktree the hook creates; a failed registration still leaves Claude its worktree."""
+    env = git_environment(root)
+    repository = fixture_repository(root, env)
+
+    def create(name, workspace, refusal=None):
+        event = {'session_id': 'fixture', 'hook_event_name': 'WorktreeCreate', 'cwd': str(repository), 'name': name}
+        environment = {key: value for key, value in env.items() if key.startswith('GIT_')} | {'TELAR_WORKSPACE_ID': workspace}
+        result, _ = run_case(binary, root, {'provider': 'claude', 'input': event, 'environment': environment, 'refusal': refusal})
+        assert result['status'] == 0, result
+        path = bytes.fromhex(result['stdout']).decode().strip()
+        assert Path(path).is_dir(), result
+        return path, [frame for frame in frames(result) if frame[0] == REGISTER_WORKTREE]
+
+    path, registered = create('feat/y', '3')
+    assert len(registered) == 1, registered
+    frame = registered[0]
+    assert struct.unpack('<Q', frame[9:17])[0] == 3 and frame[17] == 1 and struct.unpack('<Q', frame[18:26])[0] == 17, frame.hex()
+    fields, offset = [], 27
+    for _ in range(3):
+        length = struct.unpack('<H', frame[offset:offset + 2])[0]
+        fields.append(frame[offset + 2:offset + 2 + length].decode())
+        offset += 2 + length
+    assert fields == [path, 'feat/y', 'main'], fields
+
+    _, refused = create('feat/z', '3', refusal=REGISTER_WORKTREE)
+    assert len(refused) == 1, refused
+    _, untracked = create('feat/w', '0')
+    assert not untracked, untracked
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--telar', type=Path, required=True)
     args = parser.parse_args()
     binary = args.telar.resolve()
-    for check in (reports_own_pane, never_fails_the_agent, worktree_create_prints_path):
+    for check in (reports_own_pane, never_fails_the_agent, worktree_create_prints_path, worktree_branch_name_sanitized,
+                  worktree_create_outside_repo_fails, worktree_registered_with_runtime):
         with tempfile.TemporaryDirectory(prefix='hook-cli-', dir=os.environ.get('TMPDIR')) as directory:
             check(binary, Path(directory).resolve())
     print('hook cli cases passed')

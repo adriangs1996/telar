@@ -63,7 +63,18 @@ namespace {
     check(sanitized("https://h/r x") == "UnsupportedOrigin");
   }
 
+  // An origin with no host and path another machine can clone from has no identity: dispatch
+  // says why instead of looking for a clone that cannot exist there.
+  void normalizeRejectsNonRemoteOrigins() {
+    for (const auto origin : {"file:///srv/r.git", "file://host/srv/r.git", "/srv/r", "https://host", "ssh://[::1/x"}) {
+      check(normalized(origin) == "UnsupportedOrigin", origin);
+    }
+
+    check(normalized("host:" + std::string(2048, 'p')) == "OriginTooLong");
+  }
+
   const telar::testing::Case case_normalize_equivalent_origins{"repository.normalize_equivalent_origins", normalizeEquivalentOrigins};
   const telar::testing::Case case_sanitized_strips_credentials{"repository.sanitized_strips_credentials", sanitizedStripsCredentials};
+  const telar::testing::Case case_normalize_rejects_non_remote_origins{"repository.normalize_rejects_non_remote_origins", normalizeRejectsNonRemoteOrigins};
 
 }
