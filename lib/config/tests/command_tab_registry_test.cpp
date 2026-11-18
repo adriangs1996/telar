@@ -10,6 +10,7 @@ import telar.base.memory.allocators;
 import telar.testing;
 import telar.config.client;
 import telar.config.core;
+import telar.base.text.utf8;
 
 namespace {
 
@@ -71,6 +72,55 @@ namespace {
     check(memory.liveBytes() == 0);
   }
 
+  // A row past CommandTabView's bounds would be encoded past the row buffer; keepReference
+  // refuses it and keeps nothing.
+  void testCommandTabRejectsInvalidRows() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 128 * 1024};
+
+    {
+      auto commands = makeOwned<config::CommandTabRegistry>(memory);
+      config::LimitNotices limits;
+      const std::array<std::string_view, 1> kept{"echo"};
+
+      check(commands->keep(kept, {}, limits));
+      const auto saved = commands->checkpoint();
+      const std::array<std::string_view, 33> too_many{"a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a"};
+      const std::string long_label(33, 'l');
+      const std::array<std::string_view, 2> empty_argument{"echo", ""};
+      const std::array<std::string_view, 2> nul_argument{"echo", std::string_view{"a\0b", 3}};
+      const std::string half(2048, 'x');
+      const std::string other_half(2049, 'y');
+      const std::array<std::string_view, 2> too_long{half, other_half};
+
+      const auto refused = [&](std::span<const std::string_view> arguments, std::string_view label) {
+        try {
+          static_cast<void>(commands->keepReference(arguments, label, limits));
+        } catch (const EncodingError&) {
+          const auto after = commands->checkpoint();
+
+          return after.rows == saved.rows && after.bytes == saved.bytes;
+        }
+
+        return false;
+      };
+
+      check(refused({}, {}));
+      check(refused(too_many, {}));
+      check(refused(kept, long_label));
+      check(refused(empty_argument, {}));
+      check(refused(nul_argument, {}));
+      check(refused(too_long, {}));
+      check(commands->keep(std::span{too_many}.first(32), std::string_view{long_label}.substr(1), limits));
+      const std::array<std::string_view, 2> fits{half, std::string_view{other_half}.substr(1)};
+
+      check(commands->keep(fits, {}, limits));
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
   const telar::testing::Case case_command_tab_registry{"command_tab_registry.limits", testCommandTabRegistry};
+  const telar::testing::Case case_command_tab_invalid_rows{"command_tab_registry.rejects_invalid_rows", testCommandTabRejectsInvalidRows};
 
 }
