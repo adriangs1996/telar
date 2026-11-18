@@ -45,7 +45,7 @@ namespace telar::runtime::checkpoint {
       throw SystemError{"Session lock path is too long", ENAMETOOLONG};
     }
 
-    FileDescriptor file{::openat(parent_.get(), name.data(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
+    auto file = openLockFile(parent_.get(), name.data());
     struct stat state{};
     if (!file || ::fstat(file.get(), &state) != 0) {
       throw SystemError{"Open session lock"};

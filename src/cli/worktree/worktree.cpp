@@ -248,7 +248,7 @@ namespace telar::runtime::cli::repository {
 
   FileDescriptor lockRepository(int parent, const std::string& name) {
     const auto lock_name = name + ".lock";
-    FileDescriptor file{::openat(parent, lock_name.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
+    auto file = openLockFile(parent, lock_name.c_str());
     struct stat state{};
     if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::getuid() || state.st_nlink != 1 || (state.st_mode & 0077) != 0) {
       throw std::runtime_error{"UnsafeRepositoryLock"};
