@@ -1197,6 +1197,189 @@ namespace {
       }
     }
 
+    // An origin with one commit on main, and a configured clone of it at root/<name>.
+    std::string cloneWithOrigin(const std::string& name) {
+      const auto origin = fresh(name + "-origin.git");
+
+      run(origin, "git init -q --bare -b main .");
+      const auto seed = initialize(name + "-seed");
+
+      write(seed + "/base.txt", "base\n");
+      commitAll(seed, "base");
+      run(seed, "git remote add origin " + quote(origin) + " && git push -q origin main");
+      const auto work = root + "/" + name;
+
+      shell("rm -rf " + quote(work) + " && git clone -q " + quote(origin) + " " + quote(work));
+      configure(work);
+      return work;
+    }
+
+    // A tree over 64 KiB stored as a delta copies its base in runs of 0x10000 bytes, which the
+    // delta writes with no size bytes; the staged comparison reads that tree.
+    void testLargeTreeDelta(Reader& reader) {
+      const auto directory = initialize("large-tree");
+
+      run(directory, "mkdir big && cd big && i=0 && while [ $i -lt 2600 ]; do : > entry-with-a-name-long-enough-$i; i=$((i + 1)); done && : > zz-last");
+      backdate(directory);
+      commitAll(directory, "large tree");
+      // The smaller tree deltifies against the larger one, so HEAD's tree is the delta.
+      run(directory, "git rm -q big/zz-last && git commit -q -m smaller && git repack -q -a -d -f --window=50 --depth=50");
+      const auto tree = trimmed(run(directory, "git rev-parse HEAD:big"));
+      const auto fields = trimmed(run(directory, "git verify-pack -v .git/objects/pack/*.idx | awk '$1 == \"" + tree + "\" { print NF }'"));
+
+      check(fields == "7", "HEAD:big is stored as a delta");
+      check(std::stoul(trimmed(run(directory, "git cat-file -s " + tree))) > 2 * 0x10000, "the tree spans several 0x10000 copies");
+      write(directory + "/big/entry-with-a-name-long-enough-7", "staged\n");
+      run(directory, "git add big");
+      agrees(reader, directory, "large tree delta");
+    }
+
+    // Config syntax git reads: a BOM, CRLF lines, quoted and concatenated values, escapes, inline
+    // comments and the legacy [section.Subsection] form, which git lowercases.
+    void testConfigSyntax(Reader& reader) {
+      const auto work = cloneWithOrigin("config-syntax");
+      const auto url = trimmed(run(work, "git config remote.origin.url"));
+      const auto config = [&](std::string_view branches) {
+        return "\xEF\xBB\xBF[core]\r\n\trepositoryformatversion = 0\r\n\tbare = false\r\n[user]\r\n\tname = \"Te\\tst \\\"q\\\"\" ; escapes\r\n[remote \"origin\"]\r\n\turl = " + url + "\r\n\tfetch = +refs/heads/*:refs/remotes/origin/*\r\n" + std::string{branches};
+      };
+
+      write(work + "/.git/config", config("[branch \"main\"]\r\n\tremote = origin ; an inline comment\r\n\tmerge = \"refs/heads/\"main # a quoted part\r\n"));
+      check(trimmed(run(work, "git rev-parse --abbrev-ref '@{u}'")) == "origin/main", "git reads the quoted value");
+      agrees(reader, work, "quoted value");
+
+      write(work + "/.git/config", config("[branch.Main]\r\n\tremote = origin\r\n\tmerge = refs/heads/main\r\n"));
+      check(trimmed(run(work, "git rev-parse --abbrev-ref '@{u}'")) == "origin/main", "git reads the legacy section");
+      agrees(reader, work, "legacy subsection");
+
+      write(work + "/.git/config", config("[branch.Main]\r\n\tremote = origin\r\n\tmerge = \"refs/heads/ma\\qin\"\r\n"));
+      check(trimmed(run(work, "git status >/dev/null; echo $?")) != "0", "git refuses an unknown escape");
+      check(reader.read(work).repository == git::RepositoryState::invalid, "an unknown escape is invalid");
+    }
+
+    // HEAD names its branch with a reference name the reader accepts exactly when
+    // `git check-ref-format` does.
+    void testReferenceNames(Reader& reader) {
+      const auto directory = initialize("reference-names");
+
+      write(directory + "/a.txt", "a\n");
+      commitAll(directory, "a");
+      const auto head = slurp(directory + "/.git/HEAD");
+
+      for (const std::string_view name : {"a b", "a~1", "a^", "a:b", "a?", "a*", "a[", "a\\b", "a@{1}", "a\x01", "a\x7f", ".h", "x.lock", "a/", "a.", "feat/x", "a@b", "a.b", "@"}) {
+        const auto reference = "refs/heads/" + std::string{name};
+        const bool git_accepts = run(directory, "git check-ref-format " + quote(reference) + " && echo valid", false) == "valid\n";
+
+        write(directory + "/.git/HEAD", "ref: " + reference + "\n");
+        const auto state = reader.read(directory).head;
+
+        check((state != git::HeadState::unknown) == git_accepts, "HEAD naming " + reference + (git_accepts ? " is valid for git" : " is invalid for git"));
+      }
+
+      write(directory + "/.git/HEAD", head);
+      agrees(reader, directory, "restored HEAD");
+    }
+
+    // With extensions.worktreeConfig, config.worktree adds to the repository's config, as git
+    // reads it; a malformed one makes the repository invalid, as it makes git fail.
+    void testWorktreeConfigExtension(Reader& reader) {
+      const auto work = cloneWithOrigin("worktree-config");
+
+      run(work, "git config core.repositoryformatversion 1 && git config extensions.worktreeConfig true && git config --unset branch.main.remote && git config --unset branch.main.merge");
+      write(work + "/.git/config.worktree", "[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n");
+      check(trimmed(run(work, "git rev-parse --abbrev-ref '@{u}'")) == "origin/main", "git reads the upstream from config.worktree");
+      agrees(reader, work, "upstream from config.worktree");
+
+      write(work + "/.git/config.worktree", "[core]\n\tbare = true\n");
+      check(reader.read(work).bare == (trimmed(run(work, "git rev-parse --is-bare-repository")) == "true"), "core.bare from config.worktree, as git reads it");
+
+      write(work + "/.git/config.worktree", "[core\n");
+      check(trimmed(run(work, "git rev-parse --git-dir >/dev/null; echo $?")) != "0", "git refuses a malformed config.worktree");
+      check(reader.read(work).repository == git::RepositoryState::invalid, "a malformed config.worktree is invalid");
+    }
+
+    // A negative refspec that excludes the merge ref: the upstream is what git status reports.
+    void testNegativeRefspec(Reader& reader) {
+      const auto work = cloneWithOrigin("negative-refspec");
+
+      run(work, "git config --add remote.origin.fetch '^refs/heads/main'");
+      agrees(reader, work, "negative refspec");
+    }
+
+    // A shallow clone's walk stops at the shallow commits, whose parents are not there: ahead and
+    // behind match git's, and an unreadable shallow file makes them unknown.
+    void testShallowDivergence(Reader& reader) {
+      const auto origin = initialize("shallow-origin");
+
+      for (int index = 0; index < 5; ++index) {
+        write(origin + "/file.txt", std::format("origin {}\n", index));
+        commitAll(origin, std::format("origin {}", index));
+      }
+
+      const auto work = root + "/shallow";
+
+      shell("rm -rf " + quote(work) + " && git clone -q --depth 3 " + quote("file://" + origin) + " " + quote(work));
+      configure(work);
+      check(slurp(work + "/.git/shallow").size() > 0, "the clone is shallow");
+      for (int index = 0; index < 2; ++index) {
+        write(work + "/local.txt", std::format("local {}\n", index));
+        commitAll(work, std::format("local {}", index));
+        write(origin + "/file.txt", std::format("origin more {}\n", index));
+        commitAll(origin, std::format("origin more {}", index));
+      }
+
+      run(work, "git fetch -q origin");
+      agrees(reader, work, "shallow clone");
+
+      write(work + "/.git/shallow", slurp(work + "/.git/shallow") + "not an object id\n");
+      Reader fresh_reader{system_memory};
+
+      check(fresh_reader.read(work).divergence == git::Accuracy::unknown, "a corrupt shallow file makes divergence unknown");
+    }
+
+    // An octopus merge keeps its third and later parents in the commit-graph's EDGE chunk.
+    void testOctopusCommitGraph(Reader& reader) {
+      const auto work = cloneWithOrigin("octopus");
+
+      for (const auto* branch : {"one", "two", "three"}) {
+        run(work, std::format("git checkout -q -b {} main", branch));
+        write(work + "/" + branch + ".txt", std::string{branch} + "\n");
+        commitAll(work, branch);
+      }
+
+      run(work, "git checkout -q main && git merge -q --no-edit one two three");
+      check(trimmed(run(work, "git rev-list --parents -n 1 HEAD | awk '{ print NF }'")) == "4", "the merge has three parents");
+      run(work, "git gc -q && git commit-graph write --reachable");
+      check(shell("ls " + quote(work + "/.git/objects/info")).contains("commit-graph"), "commit-graph written");
+      agrees(reader, work, "octopus merge in the commit-graph");
+    }
+
+    void setTime(const std::string& path, std::time_t seconds) {
+      const std::array<timespec, 2> times{{{seconds, 0}, {seconds, 0}}};
+
+      check(::utimensat(AT_FDCWD, path.c_str(), times.data(), AT_SYMLINK_NOFOLLOW) == 0, "set the time of " + path);
+    }
+
+    // A symlink whose stat data no longer matches its index entry is judged by the hash of its
+    // target, as git does: the same target is clean, a retargeted link of the same length is
+    // modified even when its time equals the index's.
+    void testRacySymlink(Reader& reader) {
+      const auto directory = initialize("racy-symlink");
+
+      check(::symlink("target-a", (directory + "/link").c_str()) == 0, "symlink");
+      commitAll(directory, "link");
+      setTime(directory + "/link", 1'600'000'000);
+      agrees(reader, directory, "link touched, target unchanged");
+
+      ::unlink((directory + "/link").c_str());
+      check(::symlink("target-b", (directory + "/link").c_str()) == 0, "retarget");
+      setTime(directory + "/link", 1'700'000'000);
+      setTime(directory + "/.git/index", 1'700'000'000);
+      const auto& status = reader.read(directory);
+
+      check(status.unstaged == git::Accuracy::exact && status.changes.unstaged_modified == 1, "the retargeted link is modified");
+      agrees(reader, directory, "retargeted link");
+    }
+
     int timeReads(const char* directory) {
       telar::SystemAllocator allocator;
       telar::MemoryAdapter memory{allocator};
@@ -1309,6 +1492,14 @@ namespace {
   const telar::testing::Case case_hostile{"git.hostile", readsWithGit<testHostile>};
   const telar::testing::Case case_hostile_tree_entries{"git.hostile_tree_entries", readsWithGit<testHostileTreeEntries>};
   const telar::testing::Case case_hostile_pack_delta{"git.hostile_pack_delta", readsWithGit<testHostilePackDelta>};
+  const telar::testing::Case case_large_tree_delta{"git.large_tree_delta", readsWithGit<testLargeTreeDelta>};
+  const telar::testing::Case case_config_syntax{"git.config_syntax_agrees", readsWithGit<testConfigSyntax>};
+  const telar::testing::Case case_reference_names{"git.reference_names", readsWithGit<testReferenceNames>};
+  const telar::testing::Case case_worktree_config{"git.worktree_config_extension", readsWithGit<testWorktreeConfigExtension>};
+  const telar::testing::Case case_negative_refspec{"git.negative_refspec", readsWithGit<testNegativeRefspec>};
+  const telar::testing::Case case_shallow_divergence{"git.shallow_divergence", readsWithGit<testShallowDivergence>};
+  const telar::testing::Case case_octopus_commit_graph{"git.octopus_commit_graph", readsWithGit<testOctopusCommitGraph>};
+  const telar::testing::Case case_racy_symlink{"git.racy_symlink", readsWithGit<testRacySymlink>};
   const telar::testing::Case case_not_owned_repository{"git.not_owned_repository", readsWithGit<testNotOwnedRepository>};
 
 }
