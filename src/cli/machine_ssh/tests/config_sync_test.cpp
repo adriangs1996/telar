@@ -7,6 +7,7 @@ static_assert(true);
 
 import std;
 import telar.testing;
+import telar.base.text.json;
 import telar.cli.machine_ssh;
 
 namespace {
@@ -141,10 +142,57 @@ namespace {
     expect(dropped == std::vector<std::string>{"mcp_servers"}, output);
   }
 
+  // Containers that span lines or nest keep the keys after them in step: an inline table
+  // under a secret key leaves whole, and a multi-line array under a safe key stays whole.
+  void tomlInlineAndMultilineContainers() {
+    std::vector<std::string> dropped;
+    const auto output = machine::filter::toml("env = { KEY = \"v\" }\nheaders = [\n  \"Authorization: x\",\n]\nargs = [\n  \"a\",\n]\nmodel = \"x\"\n", dropped);
+
+    expect(!output.contains("KEY") && !output.contains("env"), output);
+    expect(!output.contains("Authorization") && !output.contains("headers"), output);
+    expect(output.starts_with("args = [\n  \"a\",\n]\nmodel = \"x\""), output);
+    expect(dropped == std::vector<std::string>{"env", "headers"}, output);
+  }
+
+  // The local home becomes the remote one only where it is a whole path component, so a
+  // sibling home that shares its prefix keeps its name.
+  void rewriteHomeOnlyAtPathBoundary() {
+    const auto output = machine::filter::rewriteHome("/Users/al/x \"/Users/al\" /Users/alice", "/Users/al", "/home/r");
+
+    check(output == "/home/r/x \"/home/r\" /Users/alice", output);
+  }
+
+  // Comments and trailing commas leave; what looks like a comment inside a string, after an
+  // escaped quote or in a URL, is the string's own text.
+  void stripJsoncRespectsStrings() {
+    const auto plain = machine::filter::stripJsonc("{\"a\":\"x\\\"//y\", /* c */ \"b\":1 ,\n// end\n\"c\":\"https://x\"\n,}");
+    const auto value = telar::runtime::JsonValue::parse(plain);
+    const auto a = value.field("a");
+    const auto b = value.field("b");
+    const auto c = value.field("c");
+
+    check(a && a->encoded() == "\"x\\\"//y\"", plain);
+    check(b && b->encoded() == "1", plain);
+    check(c && c->encoded() == "\"https://x\"", plain);
+
+    std::string error;
+
+    try {
+      machine::filter::stripJsonc("{\"a\":1 /* open");
+    } catch (const std::exception& thrown) {
+      error = thrown.what();
+    }
+
+    check(error == "UnterminatedComment");
+  }
+
   const telar::testing::Case case_outside_roots{"config_sync.receive_refuses_paths_outside_agent_roots", receiveRefusesPathsOutsideAgentRoots};
   const telar::testing::Case case_credential_names{"config_sync.receive_refuses_credential_names", receiveRefusesCredentialNames};
   const telar::testing::Case case_quote{"config_sync.quote_survives_the_shell", quoteSurvivesTheShell};
   const telar::testing::Case case_secrets{"config_sync.finds_secrets", findsSecrets};
   const telar::testing::Case case_toml{"config_sync.toml_drops_multiline_secret_value", tomlDropsMultilineSecretValue};
+  const telar::testing::Case case_toml_containers{"config_sync.toml_inline_and_multiline_containers", tomlInlineAndMultilineContainers};
+  const telar::testing::Case case_rewrite_home{"config_sync.rewrite_home_only_at_path_boundary", rewriteHomeOnlyAtPathBoundary};
+  const telar::testing::Case case_strip_jsonc{"config_sync.strip_jsonc_respects_strings", stripJsoncRespectsStrings};
 
 }

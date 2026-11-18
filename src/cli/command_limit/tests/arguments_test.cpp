@@ -8,6 +8,7 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.cli.command_limit;
+import telar.wire.vocabulary;
 
 namespace {
 
@@ -130,10 +131,23 @@ namespace {
       }) == "MissingSocketPath");
     }
 
+    // A word picks the protocol value at its position among the names; any other word is the
+    // command's usage error, never a value past the enum's last.
+    void choiceMapsWords() {
+      constexpr std::array<std::string_view, 4> directions{"left", "right", "up", "down"};
+
+      check(choice<telar::PaneDirection, 4>("down", "InvalidPaneDirection", directions) == telar::PaneDirection::down);
+      check(choice<telar::PaneDirection, 4>("left", "InvalidPaneDirection", directions) == telar::PaneDirection::left);
+      check(outcome([&] {
+        return static_cast<int>(choice<telar::PaneDirection, 4>("sideways", "InvalidPaneDirection", directions));
+      }) == "InvalidPaneDirection");
+    }
+
   }
 
   const telar::testing::Case case_parses_integers{"arguments.parses_integers", parsesIntegers};
   const telar::testing::Case case_maps_errors{"arguments.maps_errors", mapsErrors};
   const telar::testing::Case case_walks_words{"arguments.walks_words", walksWords};
+  const telar::testing::Case case_choice_maps_words{"arguments.choice_maps_words", choiceMapsWords};
 
 }
