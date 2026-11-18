@@ -613,14 +613,41 @@ def repositories(f, prepare_probe=None):
     f.invoke("repository/unowned-stage", *args, data=content, code=1)
     assert stage.exists()
     shutil.rmtree(stage)
+    # A lock another local user could redirect or share is refused, and nothing is written through it.
+    lock = Path(str(path) + ".lock")
+    lock.unlink(missing_ok=True)
+    redirected = f.root / "redirected.lock"
+    lock.symlink_to(redirected)
+    f.invoke("repository/symlink-lock", *args, data=content, code=1)
+    assert not redirected.exists() and lock.is_symlink()
+    lock.unlink()
+    lock.write_bytes(b"")
+    lock.chmod(0o644)
+    f.invoke("repository/shared-lock", *args, data=content, code=1)
+    lock.unlink()
+    # A receive killed mid-transfer leaves its own stage behind; the next receive clears it.
+    process = subprocess.Popen([str(f.binary), *map(str, args)], env=f.env, cwd=f.root, stdin=subprocess.PIPE,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    process.stdin.write(content[:len(content) // 2])
+    process.stdin.flush()
+    deadline = time.monotonic() + 10
+    while not (stage / "history.bundle").exists() or (stage / "history.bundle").stat().st_size < len(content) // 2:
+        assert time.monotonic() < deadline, "the receive did not stage the bundle"
+        time.sleep(.02)
+    process.kill()
+    process.wait()
+    process.stdin.close()
+    assert (stage / "owner").exists()
+    f.invoke("repository/after-crash", *args, data=content)
+    assert not list(path.parent.glob("*.stage"))
 
 
 def dispatch(f):
     """A dispatch to another machine never overwrites commits its clone's branch holds."""
     bindir = f.root / "ssh-bin"
     bindir.mkdir(mode=0o700)
-    # The other machine is this one: the remote command runs locally, as sshd would run it.
-    (bindir / "ssh").write_text('#!/bin/sh\nfor command; do :; done\nexec /bin/sh -c "$command"\n')
+    # The other machine is this one: the remote command runs locally, as sshd would run it, in HOME.
+    (bindir / "ssh").write_text('#!/bin/sh\nfor command; do :; done\ncd "$HOME" || exit 255\nexec /bin/sh -c "$command"\n')
     (bindir / "ssh").chmod(0o700)
     profiles = Path(f.env["XDG_CONFIG_HOME"]) / "telar/machines.json"
     profiles.parent.mkdir(mode=0o700, exist_ok=True)
@@ -645,6 +672,26 @@ def dispatch(f):
         result = f.invoke("dispatch/diverged", "worktree", "create", "feature", "--machine", "box", cwd=source, code=None)
         assert f.git(clone, "rev-parse", "refs/heads/feature").decode().strip() == remote
         assert result.returncode == 1, (result.returncode, result.stderr)
+        # A new branch starts on the other machine at this machine's commit, with its title.
+        local = f.git(source, "rev-parse", "HEAD").decode().strip()
+        f.invoke("dispatch/create", "worktree", "create", "fresh", "--machine", "box", "--title", "Remote task", cwd=source)
+        assert f.git(clone, "rev-parse", "refs/heads/fresh").decode().strip() == local
+        listed = json.loads(f.invoke("dispatch/list", "worktree", "list", "--json", cwd=clone).stdout)
+        assert [entry["title"] for entry in listed if entry["branch"] == "fresh"] == ["Remote task"], listed
+        # Fetching brings the other machine's branch under refs/remotes/MACHINE/.
+        fetched = json.loads(f.invoke("dispatch/fetch", "worktree", "fetch", "fresh", "--machine", "box", "--json", cwd=source).stdout)
+        assert fetched == {"machine": "box", "branch": "fresh", "ref": "refs/remotes/box/fresh", "commit": local}, fetched
+        assert f.git(source, "rev-parse", "refs/remotes/box/fresh").decode().strip() == local
+        # A destination Git would split into host, port and path fetches nothing, though the
+        # machine names its clone.
+        remote_telar = bindir / "telar-colon"
+        remote_telar.write_text("#!/bin/sh\nprintf '%s\\n' '" + json.dumps({"path": str(clone)}) + "'\n")
+        remote_telar.chmod(0o700)
+        machines = json.loads(profiles.read_text())
+        machines["machines"].append({"id": "m-0123456789ac", "label": "colon", "destination": "user@host:22", "telar_path": str(remote_telar)})
+        profiles.write_text(json.dumps(machines))
+        f.invoke("dispatch/fetch-colon", "worktree", "fetch", "fresh", "--machine", "colon", cwd=source, code=1)
+        assert not f.git(source, "for-each-ref", "refs/remotes/colon/").strip()
     finally:
         f.env["PATH"] = path
 
