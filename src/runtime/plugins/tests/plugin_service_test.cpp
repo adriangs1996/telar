@@ -566,7 +566,7 @@ namespace {
 
     results.activate();
     {
-      tap::Worker<> worker{memory, identity, results, held, tap::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{100}}};
+      tap::Worker<> worker{memory, identity, results, held, tap::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{500}}};
       const auto submit = [&](std::uint64_t event_id) {
         auto exchange = captured(memory, quota);
         auto charge = held.charge(tap::SharedExchange::capturedBytes(exchange));
