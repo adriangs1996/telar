@@ -1,5 +1,7 @@
 module telar.runtime.platform.proc_file;
+
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime {
 

@@ -5,6 +5,7 @@ static_assert(true);
 
 #include <cerrno>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/socket.h>

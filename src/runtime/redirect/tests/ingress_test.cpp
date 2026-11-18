@@ -5,6 +5,7 @@ static_assert(true);
 
 #include <arpa/inet.h>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <netinet/in.h>
 #include <poll.h>

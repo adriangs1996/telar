@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <cstdlib>
 #include <cstring>
 #include <pcap/pcap.h>
 #include <poll.h>

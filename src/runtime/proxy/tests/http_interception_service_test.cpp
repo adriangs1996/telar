@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <cstdlib>
 #include <cstring>
 #include <poll.h>
 #include <sys/socket.h>

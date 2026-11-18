@@ -100,8 +100,8 @@ namespace telar::runtime {
     }
 
     if (!signal_reader_) {
-      int descriptors[2];
-      if (::pipe2(descriptors, O_CLOEXEC | O_NONBLOCK) != 0) {
+      ds::Array<int, 2> descriptors{};
+      if (::pipe2(descriptors.dataMut(), O_CLOEXEC | O_NONBLOCK) != 0) {
         throw SystemError{"Create runtime signal pipe"};
       }
       signal_reader_.reset(descriptors[0]);
