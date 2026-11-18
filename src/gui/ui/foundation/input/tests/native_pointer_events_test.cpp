@@ -1,4 +1,3 @@
-#include "assertions.hpp"
 #include "foundation/core/application_memory.hpp"
 #include "ui/foundation/input/native_pointer_events.hpp"
 #include <QCoreApplication>
@@ -18,12 +17,14 @@
 #include <span>
 #include <utility>
 
+import telar.testing;
+
 namespace {
 
   using telar::gui::ApplicationAllocator;
   using telar::gui::ApplicationMemory;
   using telar::gui::qt::NativePointerEvents;
-  using telar::gui::test::require;
+  using telar::testing::check;
 
   struct Observation {
     QEvent::Type type = QEvent::None;
@@ -43,7 +44,7 @@ namespace {
 
     bool eventFilter([[maybe_unused]] QObject* watched, QEvent* event) override {
       if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease) {
-        require(count_ < observations_.size(), "native delivery must retain its bounded event trace");
+        check(count_ < observations_.size(), "native delivery must retain its bounded event trace");
         observations_[count_++] = {.type = event->type(), .moving = events_.moving()};
       }
 
@@ -84,12 +85,12 @@ namespace {
     deliver(window, QEvent::MouseMove, last, Qt::NoButton, Qt::NoButton);
     constexpr std::size_t expected_deliveries = 5;
 
-    require(recorder.observations().size() == expected_deliveries, "the observer must preserve both native events and Qt's extra move before a changed-position press");
-    require(recorder.observations()[0].moving && recorder.observations()[4].moving, "actual native motion must be observable during delivery");
-    require(recorder.observations()[1].type == QEvent::MouseMove && !recorder.observations()[1].moving, "Qt's button-position synchronization must not become an observed hover motion");
-    require(recorder.observations()[2].type == QEvent::MouseButtonPress && !recorder.observations()[2].moving, "the original press must still reach its recipient unchanged");
-    require(recorder.observations()[3].type == QEvent::MouseButtonRelease && !recorder.observations()[3].moving, "the original release must still reach its recipient unchanged");
-    require(!events.moving(), "native-event scope must retire immediately after synchronous dispatch");
+    check(recorder.observations().size() == expected_deliveries, "the observer must preserve both native events and Qt's extra move before a changed-position press");
+    check(recorder.observations()[0].moving && recorder.observations()[4].moving, "actual native motion must be observable during delivery");
+    check(recorder.observations()[1].type == QEvent::MouseMove && !recorder.observations()[1].moving, "Qt's button-position synchronization must not become an observed hover motion");
+    check(recorder.observations()[2].type == QEvent::MouseButtonPress && !recorder.observations()[2].moving, "the original press must still reach its recipient unchanged");
+    check(recorder.observations()[3].type == QEvent::MouseButtonRelease && !recorder.observations()[3].moving, "the original release must still reach its recipient unchanged");
+    check(!events.moving(), "native-event scope must retire immediately after synchronous dispatch");
   }
 
   void observersMayRetireOutOfOrder(ApplicationAllocator& memory) {
@@ -101,7 +102,7 @@ namespace {
 
     second.reset();
     first.reset();
-    require(QWindowSystemInterfacePrivate::eventHandler == head, "retiring earlier windows must preserve the live observer chain head");
+    check(QWindowSystemInterfacePrivate::eventHandler == head, "retiring earlier windows must preserve the live observer chain head");
     QWindow window;
 
     window.show();
@@ -112,10 +113,10 @@ namespace {
     constexpr QPointF point{80, 80};
 
     deliver(window, QEvent::MouseMove, point, Qt::NoButton, Qt::NoButton);
-    require(recorder.observations().size() == 1 && recorder.observations()[0].moving, "a live observer must dispatch safely after its predecessors have retired");
+    check(recorder.observations().size() == 1 && recorder.observations()[0].moving, "a live observer must dispatch safely after its predecessors have retired");
     window.removeEventFilter(&recorder);
     third.reset();
-    require(QWindowSystemInterfacePrivate::eventHandler == original, "the final observer must restore the previous Qt handler");
+    check(QWindowSystemInterfacePrivate::eventHandler == original, "the final observer must restore the previous Qt handler");
   }
 
   class RetiringObserver final : public QObject {
@@ -131,7 +132,7 @@ namespace {
 
     bool eventFilter([[maybe_unused]] QObject* watched, QEvent* event) override {
       if (event->type() == QEvent::MouseMove) {
-        require(events_.has_value() && events_->moving(), "the retiring observer must see its active native motion");
+        check(events_.has_value() && events_->moving(), "the retiring observer must see its active native motion");
         events_.reset();
       }
 
@@ -155,24 +156,20 @@ namespace {
     constexpr QPointF point{100, 100};
 
     deliver(window, QEvent::MouseMove, point, Qt::NoButton, Qt::NoButton);
-    require(!events.has_value(), "native dispatch must survive the recipient destroying its observer");
-    require(QWindowSystemInterfacePrivate::eventHandler == original, "synchronous retirement must restore Qt's previous handler");
+    check(!events.has_value(), "native dispatch must survive the recipient destroying its observer");
+    check(QWindowSystemInterfacePrivate::eventHandler == original, "synchronous retirement must restore Qt's previous handler");
   }
 
-}
+  // Runs `test` with an application memory of its own.
+  template <void (*test)(ApplicationAllocator&)>
+  void withMemory() {
+    ApplicationMemory application_memory;
 
-int main(int argc, char** argv) try {
-  const QGuiApplication application{argc, argv};
-  ApplicationMemory application_memory;
-  ApplicationAllocator& memory = application_memory.memory();
+    test(application_memory.memory());
+  }
 
-  rawMotionExcludesQtButtonSplitting(memory);
-  observersMayRetireOutOfOrder(memory);
-  observerMayRetireDuringDelivery(memory);
+  const telar::testing::Case case_raw_motion{"native_pointer_events.raw_motion_excludes_qt_button_splitting", withMemory<rawMotionExcludesQtButtonSplitting>};
+  const telar::testing::Case case_out_of_order{"native_pointer_events.observers_may_retire_out_of_order", withMemory<observersMayRetireOutOfOrder>};
+  const telar::testing::Case case_during_delivery{"native_pointer_events.observer_may_retire_during_delivery", withMemory<observerMayRetireDuringDelivery>};
 
-  return 0;
-} catch (const std::exception& failure) {
-  std::cerr << failure.what() << '\n';
-
-  return 1;
 }

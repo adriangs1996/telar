@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "foundation/core/memory.hpp"
 #include "platform/font.h"
+#include "qt_case.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/font_cache.hpp"
@@ -49,6 +50,10 @@ namespace {
     Q_OBJECT
 
   private:
+    Q_SLOT static void initTestCase() {
+      bundledFonts();
+    }
+
     Q_SLOT static void fallbackFacesCanBeRasterized() {
       std::size_t checked = 0;
 
@@ -525,15 +530,24 @@ namespace {
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QGuiApplication application{argc, argv};
+  const QtCase<FontResolverTest, "fallbackFacesCanBeRasterized"> case_fallback_faces_can_be_rasterized{"font_resolver.fallback_faces_can_be_rasterized"};
+  const QtCase<FontResolverTest, "nativeFallbackHonorsClientValidation"> case_native_fallback_honors_client_validation{"font_resolver.native_fallback_honors_client_validation"};
+  const QtCase<FontResolverTest, "preservesPhysicalBaseline"> case_preserves_physical_baseline{"font_resolver.preserves_physical_baseline"};
+  const QtCase<FontResolverTest, "preservesFractionalScaleAndLineSpacing"> case_preserves_fractional_scale_and_line_spacing{"font_resolver.preserves_fractional_scale_and_line_spacing"};
+  const QtCase<FontResolverTest, "respectsAllocatorOwnershipAndFailure"> case_respects_allocator_ownership_and_failure{"font_resolver.respects_allocator_ownership_and_failure"};
+  const QtCase<FontResolverTest, "preservesShapingAndRasterAfterSizeCacheEviction"> case_preserves_shaping_and_raster_after_size_cache_eviction{"font_resolver.preserves_shaping_and_raster_after_size_cache_eviction"};
+  const QtCase<FontResolverTest, "thickeningChangesInkWithoutChangingShapingOrMetrics"> case_thickening_changes_ink_without_changing_shaping_or_metrics{"font_resolver.thickening_changes_ink_without_changing_shaping_or_metrics"};
+  const QtCase<FontResolverTest, "retainsOneSourceAcrossPanelsAndScales"> case_retains_one_source_across_panels_and_scales{"font_resolver.retains_one_source_across_panels_and_scales"};
+  const QtCase<FontResolverTest, "matchesCaseInsensitiveBundledNames"> case_matches_case_insensitive_bundled_names{"font_resolver.matches_case_insensitive_bundled_names"};
+  const QtCase<FontResolverTest, "defaultsToBundledFormaAcrossRenderers"> case_defaults_to_bundled_forma_across_renderers{"font_resolver.defaults_to_bundled_forma_across_renderers"};
+  const QtCase<FontResolverTest, "loadsBundledFormaFromResources"> case_loads_bundled_forma_from_resources{"font_resolver.loads_bundled_forma_from_resources"};
+  const QtCase<FontResolverTest, "rejectsUnavailableBundledFormaStyles"> case_rejects_unavailable_bundled_forma_styles{"font_resolver.rejects_unavailable_bundled_forma_styles"};
+  const QtCase<FontResolverTest, "appliesVariableMetricsAndNamedInstances"> case_applies_variable_metrics_and_named_instances{"font_resolver.applies_variable_metrics_and_named_instances"};
+  const QtCase<FontResolverTest, "sizesCellsByAsciiInsteadOfWidestGlyph"> case_sizes_cells_by_ascii_instead_of_widest_glyph{"font_resolver.sizes_cells_by_ascii_instead_of_widest_glyph"};
+  const QtCase<FontResolverTest, "selectsCollectionFacesAndRejectsMissingNames"> case_selects_collection_faces_and_rejects_missing_names{"font_resolver.selects_collection_faces_and_rejects_missing_names"};
 
-  bundledFonts();
-  FontResolverTest test;
-
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "font_resolver_test.moc"

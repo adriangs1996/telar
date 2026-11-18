@@ -38,8 +38,6 @@ if(TELAR_GUI_NATIVE)
   set(CMAKE_AUTOUIC ON)
   telar_add_test(gui-surface-command-test SOURCES surface_command_test.cpp LIBRARIES gui-surface-command
     TEST gui-surface-command LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-native-pointer-events-test SOURCES native_pointer_events_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/input/native_pointer_events.cpp LIBRARIES gui-foundation-core Qt6::Gui Qt6::GuiPrivate
-    TEST gui-native-pointer-events LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   if(APPLE)
     telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-platform gui-application
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
@@ -61,17 +59,6 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-features-terminal-attachments gui-features-terminal-graphics gui-application Qt6::Gui
     TEST gui-attachment-preview LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-attachment-preview-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
-
-  if(APPLE)
-    if(NOT DEFINED CMAKE_OBJC_COMPILER AND "$ENV{OBJC}" STREQUAL "" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      set(CMAKE_OBJC_COMPILER "${CMAKE_CXX_COMPILER}")
-    endif()
-
-    enable_language(OBJC)
-    telar_add_test(gui-optical-text-test SOURCES optical_text_test.cpp LIBRARIES gui-quick
-      TEST gui-optical-text LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-    target_include_directories(gui-optical-text-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}/platform/macos")
-  endif()
   telar_add_test(gui-qt-dependency COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/test_qt_dependency.py"
     LABELS gui.platform ENVIRONMENT "TELAR_GUI_QT_CACHE=${CMAKE_BINARY_DIR}/CMakeCache.txt" TIMEOUT 30)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Test
@@ -121,6 +108,21 @@ if(TELAR_GUI_NATIVE)
     LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation TIMEOUT 30)
   set_target_properties(gui-ui-app-tests PROPERTIES AUTOMOC ON)
   target_include_directories(gui-ui-app-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  # native_pointer_events observes Qt's private window system interface, and on macOS
+  # optical_text compares against the CoreText rasterizer of platform/macos.
+  telar_add_tests(gui-ui-foundation-tests LABEL gui.ui.foundation DIRECTORY ../ui/foundation RECURSE QT MAIN gui-testing-main
+    LINK gui-quick gui-quickplugin Qt6::Test Qt6::GuiPrivate TIMEOUT 30)
+  set_target_properties(gui-ui-foundation-tests PROPERTIES AUTOMOC ON)
+  target_include_directories(gui-ui-foundation-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  if(APPLE)
+    target_include_directories(gui-ui-foundation-tests PRIVATE "${TELAR_PROCESS_SOURCE_DIR}/platform/macos")
+  endif()
+  qt_add_resources(gui-ui-foundation-tests gui-font-fixtures
+    PREFIX "/telar/test-fonts"
+    BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures"
+    FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures/metrics-variable.ttf"
+          "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures/metrics-collection.ttc"
+          "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures/metrics-wide-glyph.ttf")
   # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.
   include("${TELAR_ROOT}/cmake/openssl.cmake")
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
@@ -211,23 +213,12 @@ if(TELAR_GUI_NATIVE)
     TEST gui-task-card LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-window-test QT SOURCES window_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-window LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-font-resolver-test QT SOURCES font_resolver_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
-    TEST gui-font-resolver LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  qt_add_resources(gui-font-resolver-test gui-font-fixtures
-    PREFIX "/telar/test-fonts"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
-    FILES fixtures/metrics-variable.ttf fixtures/metrics-collection.ttc fixtures/metrics-wide-glyph.ttf)
   telar_add_test(gui-configuration-source-test QT SOURCES configuration_source_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-configuration-source LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-configuration-reload-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/configuration_reload_probe.cpp LIBRARIES gui-quick gui-quickplugin
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-test-fixtures
     CHECKS lint lifetime blank_lines)
-  telar_add_test(gui-key-adapter-test SOURCES key_adapter_test.cpp LIBRARIES gui-foundation-actions gui-foundation-keys gui-foundation-core gui-foundation-system gui-keyboard gui-platform
-    TEST gui-key-adapter LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-link-opener-test QT SOURCES link_opener_test.cpp LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-system gui-foundation-text gui-features-history gui-features-terminal-links gui-platform gui-application deps::ghostty_vt Qt6::Gui Qt6::Test
-    TEST gui-link-opener LABELS gui.ui TIMEOUT 30)
-  target_include_directories(gui-link-opener-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-features-plugins gui-application
     TEST gui-plugin-worker LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-plugin-worker-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
@@ -237,9 +228,6 @@ if(TELAR_GUI_NATIVE)
     TEST gui-host-effects LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-scene-test QT SOURCES scene_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-scene LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 60)
-  telar_add_test(gui-list-model-test SOURCES list_model_test.cpp LIBRARIES Qt6::Gui Qt6::Test telar::build_flags
-    TEST gui-list-model LABELS gui.ui TIMEOUT 30)
-  target_include_directories(gui-list-model-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-history-controls-test QT SOURCES history_controls_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
     TEST gui-history-controls LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-pane-motion-test QT SOURCES pane_motion_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
