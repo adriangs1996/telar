@@ -232,11 +232,35 @@ namespace {
     check(refused == FailureCode::pane_not_found, "a client read rows of a pane it does not show");
   }
 
+  // A program shows more images than a screen keeps: the runtime reports the documented limit.
+  void testGraphicsLimitReported() {
+    RuntimeHost host;
+    ProtocolPeer control{host.socket()};
+    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=1; while [ $i -le 48 ]; do printf '\\033_Ga=T,i=%d,f=24,s=1,v=1;AAAA\\033\\\\' $i; i=$((i+1)); done; echo images-sent; exec cat"};
+    const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+
+    screenShowing(control, opened.pane_id, "images-sent");
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+
+    for (std::uint64_t request = 2;; ++request) {
+      const auto limits = control.exchange<LimitList>(QueryLimits{.request_id = request});
+      if (std::ranges::any_of(limits.entries, [](const LimitListEntry& entry) {
+            return entry.reach.name == "graphics.images_per_screen";
+          })) {
+        return;
+      }
+
+      check(std::chrono::steady_clock::now() < deadline, "the images past a screen's limit were not reported");
+      std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
+  }
+
   const telar::testing::Case case_copy_selection_clipboard_limit{"pane_wire.copy_selection_clipboard_limit", testCopySelectionClipboardLimit};
   const telar::testing::Case case_attach_second_workspace_refused{"pane_wire.attach_second_workspace_refused", testAttachSecondWorkspaceRefused};
   const telar::testing::Case case_command_types_bracketed_and_requires_attachment{"pane_wire.command_types_bracketed_and_requires_attachment", testCommandTypesBracketedAndRequiresAttachment};
   const telar::testing::Case case_input_and_resize_require_attachment{"pane_wire.input_and_resize_require_attachment", testInputAndResizeRequireAttachment};
   const telar::testing::Case case_search_supersedes_and_requires_attachment{"pane_wire.search_supersedes_and_requires_attachment", testSearchSupersedesAndRequiresAttachment};
   const telar::testing::Case case_read_rows_requires_attachment{"pane_wire.read_rows_requires_attachment", testReadRowsRequiresAttachment};
+  const telar::testing::Case case_graphics_limit_reported{"pane_wire.graphics_limit_reported", testGraphicsLimitReported};
 
 }

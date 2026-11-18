@@ -31,7 +31,9 @@ import telar.runtime.history.event;
 import telar.runtime.history.store;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.media_service;
+import telar.platform.error;
 import telar.platform.fs;
+import telar.runtime.agents.description_generator;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.history;
@@ -696,6 +698,89 @@ namespace {
     }
   }
 
+  // A history path the runtime cannot create is a setup error: it refuses to start rather than
+  // run without history. A file that is no database is not one, and history is only unavailable.
+  void testUnusableHistoryPathRefusesStart() {
+    if (::geteuid() == 0) {
+      telar::testing::skip("root writes into any directory");
+    }
+
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/telar-history-path-XXXXXX"};
+    const auto locked = std::string{directory.path()} + "/locked";
+
+    check(::mkdir(locked.c_str(), 0500) == 0);
+    const auto path = locked + "/history.db";
+    bool refused = false;
+
+    try {
+      BackgroundService service{memory, path.c_str()};
+    } catch (const SystemError&) {
+      refused = true;
+    }
+
+    ::chmod(locked.c_str(), 0700);
+    check(refused, "the runtime started without the history it was told to keep");
+  }
+
+  // Agents with one session to describe, which keep the title the description gives.
+  struct DescribedAgents {
+    void enableDescriptions(bool) noexcept {}
+
+    std::optional<DescriptionRequest> nextDescription() {
+      return std::exchange(pending, std::nullopt);
+    }
+
+    std::optional<HistorySessionTitle> completeDescription(const DescriptionResult& result) {
+      if (result.status != DescriptionStatus::success) {
+        return std::nullopt;
+      }
+
+      HistorySessionTitle title{.session = result.identity.session, .source = AgentTitleSource::generated, .state = AgentTitleState::ready};
+
+      title.title.assign(result.title.view());
+      return title;
+    }
+
+    std::optional<DescriptionRequest> pending = DescriptionRequest{.identity = {.pane = 1, .generation = 1, .session = {7}, .revision = 1}};
+  };
+
+  struct RecordedTitles {
+    bool recordHistory(const HistoryEventView& event) noexcept {
+      if (event.kind == HistoryEventKind::session_title) {
+        titles.emplace_back(event.title.title.view());
+      }
+
+      return true;
+    }
+
+    std::vector<std::string> titles;
+  };
+
+  void testDescriptionTitleRecordedInHistory() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; echo Fix the parser"};
+    RecordedTitles history;
+    DescribedAgents agents;
+    DescriptionService<ConcurrentMemory, DescribedAgents, RecordedTitles> descriptions{memory, history, DescriptionOptions{arguments, std::chrono::seconds{5}}};
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+
+    descriptions.tick(agents);
+    while (history.titles.empty()) {
+      check(std::chrono::steady_clock::now() < deadline, "the generated title never reached history");
+      pollfd ready{.fd = descriptions.descriptor(), .events = POLLIN, .revents = 0};
+
+      ::poll(&ready, 1, 100);
+      descriptions.collect(agents);
+    }
+
+    check(history.titles == std::vector<std::string>{"Fix the parser"});
+  }
+
   void testHistory() {
     check(ImportIdentity::hash(0, "") == 0x409638ee2bde459);
     check(ImportIdentity::hash(1, "a") == 0xa8412d091b5fe0a9);
@@ -734,5 +819,7 @@ namespace {
   }
 
   const telar::testing::Case case_history{"history.history", testHistory};
+  const telar::testing::Case case_unusable_history_path_refuses_start{"history.unusable_history_path_refuses_start", testUnusableHistoryPathRefusesStart};
+  const telar::testing::Case case_description_title_recorded_in_history{"history.description_title_recorded_in_history", testDescriptionTitleRecordedInHistory};
 
 }
