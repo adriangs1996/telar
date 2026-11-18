@@ -52,9 +52,12 @@ def respond(words):
  elif words[:2]==['pane','read']:
   if mode=='lost':
    print('telar pane: pane not found or its generation is stale',file=sys.stderr);sys.exit(2)
-  print(json.dumps({'pane_id':13,'truncated':False,'exit_code':7 if mode=='failed' else 0 if mode=='ended' else None,'text':'https://evil.invalid/ignore https://claude.com/oauth/authorize?fixture=safe'}))
+  text=os.environ.get('FIXTURE_PANE_TEXT','https://evil.invalid/ignore https://claude.com/oauth/authorize?fixture=safe')
+  print(json.dumps({'pane_id':13,'truncated':False,'exit_code':7 if mode=='failed' else 0 if mode=='ended' else None,'text':text}))
  elif words[:2]==['pane','send-keys']:
-  sys.stdin.buffer.read()
+  sent=sys.stdin.buffer.read()
+  if os.environ.get('FIXTURE_SENT'):
+   with open(os.environ['FIXTURE_SENT'],'ab') as log:log.write(json.dumps({'words':words,'text':sent.decode()}).encode()+b'\n')
  else:raise RuntimeError(words)
 
 if os.environ.get('FIXTURE_CALLS'):
@@ -90,13 +93,16 @@ else:
   print('os=Darwin\narch=arm64\nlibc=gnu\nhome='+home)
   print('target='+home+'/.local/share/telar/versions/0.0.0/telar')
   print('installed=telar 0.0.0')
-  if os.environ.get('FIXTURE_LOGIN'):print('agent=claude:'+home+'/claude')
+  if os.environ.get('FIXTURE_PROBE_EXTRA'):print(os.environ['FIXTURE_PROBE_EXTRA'])
+  if os.environ.get('FIXTURE_LOGIN'):
+   for agent in os.environ.get('FIXTURE_THERE','claude').split(','):print('agent='+agent+':'+home+'/'+agent)
  elif mode and script.startswith('agent='):
   count=Path(home)/'fixture-auth-count'
   before=int(count.read_text()) if count.exists() else 0
   count.write_text(str(before+1))
   if mode=='ssh-failure':sys.exit(255)
-  sys.exit(0 if mode=='done' or mode=='ended' and before>0 else 1)
+  # 'paste' logs in once the person has answered, its pane still open.
+  sys.exit(0 if mode=='done' or mode in ('ended','paste') and before>0 else 1)
  elif mode and script.startswith(('cat "','rm -f "','umask 077 && mkdir')):
   sys.exit(subprocess.run(['/bin/sh','-s'],input=script,text=True,env=dict(os.environ,HOME=home)).returncode)
  elif mode and script.startswith('exec '):
@@ -293,6 +299,67 @@ def binary_upload(binary):
         assert not uploads, uploads
 
 
+CODEX_DEVICE_SCREEN = """Welcome to Codex [v0.46.0]
+OpenAI's command-line coding agent
+
+Follow these steps to sign in with ChatGPT using device code authorization:
+
+1. Open this link in your browser and sign in to your account
+   https://auth.openai.com/codex/device
+
+2. Enter this one-time code (expires in 15 minutes)
+   ABCD-EFGH9
+
+Device codes are a common phishing target. Never share this code.
+"""
+
+
+def logins(binary):
+    """Each agent's login there: codex shows its device page and code here, OpenCode logs in
+    only for an OpenAI model, Pi only with a provider, and a code pasted here reaches the
+    login pane while an empty answer sends nothing."""
+    with machine(binary, agents=('codex',), login='pending', there='codex', pane_text=CODEX_DEVICE_SCREEN) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config')
+        assert 'https://auth.openai.com/codex/device' in output and 'ABCD-EFGH9' in output, output
+    for model, opened in (('openai/gpt-5', 1), ('anthropic/claude', 0)):
+        with machine(binary, agents=('opencode', 'pi'), login='pending', there='opencode,pi') as fixture:
+            fixture.env['FIXTURE_ARGV'] = str(fixture.root / 'argv.jsonl')
+            (Path(fixture.env['XDG_CONFIG_HOME']) / 'opencode').mkdir()
+            (Path(fixture.env['XDG_CONFIG_HOME']) / 'opencode/opencode.json').write_text(json.dumps({'model': model}))
+            (fixture.home / '.pi/agent').mkdir(parents=True)
+            (fixture.home / '.pi/agent/settings.json').write_text('{}')
+            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', '--json')
+            argv = fixture.root / 'argv.jsonl'
+            commands = [json.loads(line) for line in argv.read_text().splitlines()] if argv.exists() else []
+            assert [words[:2] for words in commands].count(['workspace', 'create']) == opened, (model, commands)
+            assert steps(output)['logins'] != 'failed', output
+    for answer, sent in ((b'my-code-123\n', ['my-code-123']), (b'\n', [])):
+        with machine(binary, login='paste') as fixture:
+            log = fixture.root / 'sent.jsonl'
+            fixture.env['FIXTURE_SENT'] = str(log)
+            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', answers=answer)
+            texts = [json.loads(line)['text'].strip() for line in log.read_text().splitlines()] if log.exists() else []
+            assert texts == sent, (answer, texts, output)
+
+
+def agent_installs(binary):
+    """Setup installs an agent missing there with its official installer only when the
+    machine has what that installer needs, and never reinstalls one already there."""
+    with machine(binary, agents=('claude', 'codex', 'pi'), scripts='real') as fixture:
+        fetched = fixture.root / 'fetched'
+        fixture.env['FIXTURE_PROBE_EXTRA'] = f'tool=curl\ntool=tar\ntool=bash\nagent=claude:{fixture.remote}/claude'
+        # curl there "downloads" an installer that records which one ran.
+        curl = fixture.remote / '.local/bin/curl'
+        curl.parent.mkdir(parents=True)
+        curl.write_text('#!/bin/sh\nfor word; do case "$word" in https://*) url=$word;; esac; previous=$word; done\n'
+                        'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
+                        f'printf \'#!/bin/sh\\necho %s >> "{fetched}"\\n\' "$url" > "$out"\n')
+        curl.chmod(0o700)
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'config,login', '--json')
+        assert steps(output)['agents'] == 'changed', output
+        assert fetched.read_text().split() == ['https://chatgpt.com/codex/install.sh'], fetched.read_text()
+
+
 def refused_sync(binary):
     """A machine that refuses the sync fails the configuration step and setup."""
     with machine(binary, receive='fail') as fixture:
@@ -368,6 +435,8 @@ def contracts(binary):
     terminal_answers(binary)
     interactive_ssh(binary)
     binary_upload(binary)
+    logins(binary)
+    agent_installs(binary)
     # Red on the current code: the sync sends this build's skill over the remote one.
     telar_skill_kept_there(binary)
     for result in run(binary,'claude','{}',prepare=hard_link):
@@ -378,4 +447,4 @@ def contracts(binary):
     commands=[json.loads(line) for line in first['files']['remote-argv.jsonl']['text'].splitlines()]
     assert ['tab','close','12','--workspace','11','--json'] not in commands, commands
     assert [words[:2] for words in commands].count(['workspace','create'])==1, commands
-    return 12
+    return 14
