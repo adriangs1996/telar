@@ -105,6 +105,79 @@ namespace {
     check(accepted.actions[plugins::PackageLimits::actions - 1].view() == "a63");
   }
 
+  // A manifest that differs from a valid one only in `api_version` and `entry`, written as raw JSON.
+  std::string manifestWith(std::string_view api_version, std::string_view entry) {
+    return std::string{R"({"api_version":)"} + std::string{api_version} + R"(,"id":"demo","version":"1","entry":)" + std::string{entry} + R"(,"source":{"url":"test","revision":"1"}})";
+  }
+
+  // The entry is opened beneath the package directory, so the manifest refuses any entry that is
+  // not a relative path of plain components, whichever separator it uses.
+  void testManifestRejectsUnsafeEntrypoints() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+
+    for (const std::string_view entry : {R"("/abs.lua")", R"("")", R"("./main.lua")", R"("lib//x.lua")", R"("lib/../main.lua")", R"("lib\\..\\x.lua")", R"("..")"}) {
+      check(refused([&] {
+        static_cast<void>(plugins::Manifest::parse(memory, manifestWith("1", entry)));
+      }),
+          entry);
+    }
+
+    check(plugins::Manifest::parse(memory, manifestWith("1", R"("lib/main.lua")")).entry.view() == "lib/main.lua");
+  }
+
+  // A manifest written for another plugin API, or whose version is not the plain number 1, does
+  // not load into this runtime.
+  void testManifestRefusesOtherApiVersions() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+
+    for (const std::string_view version : {"0", "2", R"("1")", "1.0", "65536"}) {
+      check(refused([&] {
+        static_cast<void>(plugins::Manifest::parse(memory, manifestWith(version, R"("main.lua")")));
+      }),
+          version);
+    }
+
+    check(!refused([&] {
+      static_cast<void>(plugins::Manifest::parse(memory, manifestWith("1", R"("main.lua")")));
+    }));
+  }
+
+  // plugin.json and trust.json name capabilities with these spellings, so each one reads back as
+  // its own capability and is written back the same.
+  void testCapabilityNamesAreStable() {
+    using plugins::Capability;
+    const std::array<std::pair<std::string_view, Capability>, 15> names{{
+        {"workspace.read", Capability::workspace_read},
+        {"workspace.write", Capability::workspace_write},
+        {"process.spawn", Capability::process_spawn},
+        {"network", Capability::network},
+        {"clipboard.read", Capability::clipboard_read},
+        {"clipboard.write", Capability::clipboard_write},
+        {"notifications", Capability::notifications},
+        {"history.read", Capability::history_read},
+        {"history.write", Capability::history_write},
+        {"proxy.tap", Capability::proxy_tap},
+        {"runtime.control", Capability::runtime_control},
+        {"traffic.observe", Capability::traffic_observe},
+        {"traffic.intercept", Capability::traffic_intercept},
+        {"traffic.control", Capability::traffic_control},
+        {"traffic.record", Capability::traffic_record},
+    }};
+
+    for (const auto& [name, capability] : names) {
+      check(plugins::Capabilities::parseName(name) == capability, name);
+      check(plugins::Capabilities::name(capability) == name, name);
+    }
+
+    check(refused([] {
+      static_cast<void>(plugins::Capabilities::parseName("traffic"));
+    }));
+  }
+
   std::string digest(char digit) {
     return std::string(64, digit);
   }
@@ -201,6 +274,9 @@ namespace {
 
   const telar::testing::Case case_unsafe_ids{"manifest.rejects_ids_unsafe_as_path_components", testManifestRejectsUnsafeIds};
   const telar::testing::Case case_too_many_actions{"manifest.refuses_more_actions_than_capacity", testManifestRefusesMoreActionsThanCapacity};
+  const telar::testing::Case case_unsafe_entrypoints{"manifest.rejects_unsafe_entrypoints", testManifestRejectsUnsafeEntrypoints};
+  const telar::testing::Case case_api_versions{"manifest.refuses_other_api_versions", testManifestRefusesOtherApiVersions};
+  const telar::testing::Case case_capability_names{"capabilities.public_names_are_stable", testCapabilityNamesAreStable};
   const telar::testing::Case case_malformed_trust{"trust_store.refuses_malformed_or_oversized_stores", testTrustStoreRefusesMalformedStores};
   const telar::testing::Case case_trust_updates{"trust_store.updates_replace_and_round_trip", testTrustUpdatesReplaceAndRoundTrip};
 
