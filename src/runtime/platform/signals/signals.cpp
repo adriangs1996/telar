@@ -7,8 +7,8 @@ import telar.base.ds;
 namespace telar::runtime {
 
   CompletionSignal::CompletionSignal() {
-    int descriptors[2];
-    if (::pipe(descriptors) != 0) {
+    ds::Array<int, 2> descriptors{};
+    if (::pipe(descriptors.dataMut()) != 0) {
       throw SystemError{"Create completion pipe"};
     }
 

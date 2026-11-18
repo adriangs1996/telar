@@ -61,7 +61,7 @@ namespace telar::runtime::redirect {
     InterfaceRequest request{};
     constexpr std::string_view loopback = "lo0";
 
-    std::copy(loopback.begin(), loopback.end(), request.name);
+    std::ranges::copy(loopback, request.name.viewMut().begin());
     request.flags = skip_flag;
     const auto operation = skipped ? Operation::set_flags : Operation::clear_flags;
     if (::ioctl(device.get(), static_cast<unsigned long>(operation), &request) != 0) {

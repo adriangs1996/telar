@@ -11,6 +11,7 @@ import telar.tbc;
 
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -52,11 +53,11 @@ namespace telar::runtime {
   }
 
   void Kqueue::remove(int descriptor) noexcept {
-    struct kevent events[2]{};
+    ds::Array<struct kevent, 2> events{};
 
-    EV_SET(&events[0], descriptor, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    EV_SET(&events[1], descriptor, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    ::kevent(queue_.get(), events, 2, nullptr, 0, nullptr);
+    EV_SET(&events.atMut(0), descriptor, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    EV_SET(&events.atMut(1), descriptor, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+    ::kevent(queue_.get(), events.data(), static_cast<int>(events.size()), nullptr, 0, nullptr);
   }
 
   void Kqueue::watchSignal(int signal_number) {

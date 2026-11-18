@@ -99,8 +99,8 @@ namespace telar::runtime {
     }
 
     moveAboveStandardStreams(directory);
-    int pipe_descriptors[2];
-    if (::pipe(pipe_descriptors) < 0) {
+    ds::Array<int, 2> pipe_descriptors{};
+    if (::pipe(pipe_descriptors.dataMut()) < 0) {
       throw SystemError{"create spawn status pipe"};
     }
 

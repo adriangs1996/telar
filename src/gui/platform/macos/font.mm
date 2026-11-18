@@ -1,5 +1,6 @@
 #include "platform/font.h"
 #include "cf_reference.hpp"
+#include "telar_base/ds/values.hpp"
 #import <CoreText/CoreText.h>
 #import <Foundation/Foundation.h>
 #include <math.h>
@@ -149,11 +150,14 @@ enum {
 };
 
 static bool covers(CTFontRef font, NSString* text) {
-  unichar units[max_query_units];
-  CGGlyph glyphs[max_query_units];
+  telar::ds::Array<unichar, max_query_units> units{};
+  telar::ds::Array<CGGlyph, max_query_units> glyphs{};
+  if (text.length > units.size()) {
+    return false;
+  }
 
-  [text getCharacters:units range:NSMakeRange(0, text.length)];
-  return CTFontGetGlyphsForCharacters(font, units, glyphs, (CFIndex)text.length);
+  [text getCharacters:units.dataMut() range:NSMakeRange(0, text.length)];
+  return CTFontGetGlyphsForCharacters(font, units.data(), glyphs.dataMut(), (CFIndex)text.length);
 }
 
 static bool monochrome(CTFontRef font) {

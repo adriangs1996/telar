@@ -42,7 +42,8 @@ export {
       // limited to DIOCSETIFFLAG/DIOCCLRIFFLAG and the PFI_IFLAG_SKIP bit on lo0.
       // https://github.com/apple-oss-distributions/xnu/blob/main/bsd/net/pfvar.h
       struct InterfaceRequest {
-        char name[IFNAMSIZ]{};
+        // A C array's layout: Array is one.
+        ds::Array<char, IFNAMSIZ> name{};
         alignas(8) void* buffer = nullptr;
         alignas(8) int element_size = 0;
         int size = 0;

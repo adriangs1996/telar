@@ -776,7 +776,7 @@ namespace telar::runtime {
   }
 
   std::span<const std::pair<std::string_view, std::string_view>> shippedSpecs() noexcept {
-    return shipped::specs;
+    return shipped::specs.view();
   }
 
   ds::String<ConcurrentMemory> WordReader::userSpec(std::string_view name) {

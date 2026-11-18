@@ -14,25 +14,28 @@ static_assert(true);
 import std;
 import telar.platform.process;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 
-  bool adoptHome(const char* const* environment) {
+  using Text = telar::ds::String<telar::SystemAllocator>;
+
+  bool adoptHome(telar::SystemAllocator& memory, const char* const* environment) {
     constexpr std::string_view prefix = "HOME=";
 
     for (const auto* entry = environment; *entry != nullptr; ++entry) {
       const std::string_view value{*entry};
       if (value.starts_with(prefix)) {
-        const std::string home{value.substr(prefix.size())};
+        const Text home{memory, value.substr(prefix.size())};
 
-        return ::chdir(home.c_str()) == 0;
+        return ::chdir(home.data()) == 0;
       }
     }
 
     return true;
   }
 
-  int launch(std::span<char*> input, const char* const* environment) {
+  int launch(telar::SystemAllocator& memory, std::span<char*> input, const char* const* environment) {
     telar::ds::Array<char, PATH_MAX> path{};
     auto size = static_cast<std::uint32_t>(path.size());
     if (_NSGetExecutablePath(path.dataMut(), &size) != 0) {
@@ -41,37 +44,42 @@ namespace {
       return EXIT_FAILURE;
     }
 
-    const auto program = (std::filesystem::path{path.data()}.parent_path() / "telar-gui").lexically_normal().string();
-    const std::string shell{telar::runtime::loginShell().view()};
+    const auto gui = (std::filesystem::path{path.data()}.parent_path() / "telar-gui").lexically_normal();
+    const std::string_view program{gui.native()};
+    const auto login = telar::runtime::loginShell();
+    const auto shell = login.view();
 
-    if (input.size() == 1 && !adoptHome(environment)) {
+    if (input.size() == 1 && !adoptHome(memory, environment)) {
       std::perror("Telar C++: cannot open home directory");
 
       return EXIT_FAILURE;
     }
 
     const auto script = telar::runtime::loginShellScript(shell);
-    std::vector<std::string> arguments;
+    // Each argument NUL-terminated, as execv reads it.
+    telar::ds::Vec<Text, telar::SystemAllocator> arguments{memory};
 
     if (!script.empty()) {
-      arguments = {shell, "-l", "-c", std::string{script}, program};
-    } else {
-      arguments = {program};
+      for (const auto word : {shell, std::string_view{"-l"}, std::string_view{"-c"}, script}) {
+        arguments.emplace(memory, word);
+      }
     }
 
+    arguments.emplace(memory, program);
     for (std::size_t index = 1; index < input.size(); ++index) {
-      arguments.emplace_back(input[index]);
+      arguments.emplace(memory, std::string_view{input[index]});
     }
 
-    std::vector<char*> command;
+    telar::ds::Vec<char*, telar::SystemAllocator> command{memory};
 
     command.reserve(arguments.size() + 1);
-    for (auto& argument : arguments) {
-      command.push_back(argument.data());
+    for (const auto& argument : arguments) {
+      // execv takes char* const[] for C's sake and writes none of it.
+      command.push(const_cast<char*>(argument.data()));
     }
 
-    command.push_back(nullptr);
-    ::execv(command.front(), command.data());
+    command.push(nullptr);
+    ::execv(command[0], command.data());
     std::perror("Telar C++: cannot start login shell or GUI");
 
     return EXIT_FAILURE;
@@ -81,7 +89,9 @@ namespace {
 
 int main(int argc, char** argv, char* const* environment) {
   try {
-    return launch({argv, static_cast<std::size_t>(argc)}, environment);
+    telar::SystemAllocator memory;
+
+    return launch(memory, {argv, static_cast<std::size_t>(argc)}, environment);
   } catch (const std::exception& error) {
     std::cerr << "Telar C++: " << error.what() << '\n';
 
