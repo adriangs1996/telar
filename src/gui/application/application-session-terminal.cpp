@@ -176,8 +176,9 @@ namespace telar::gui::application {
     }
 
     using Inline = typename Pane<Memory>::InlineDocument;
-    const auto found = std::ranges::find(pane->inline_documents, id, &Inline::id);
-    if (found == pane->inline_documents.end() || found->view_rows == rows) {
+    const auto documents = pane->inline_documents.viewMut();
+    const auto found = std::ranges::find(documents, id, &Inline::id);
+    if (found == documents.end() || found->view_rows == rows) {
       return false;
     }
 
@@ -285,7 +286,7 @@ namespace telar::gui::application {
 
     pane->git_branch.assign(message.branch);
     pane->git = message;
-    pane->git.branch = pane->git_branch;
+    pane->git.branch = pane->git_branch.view();
     changed_pane_ = pane->id;
     ++chrome_revision_;
     return Change::model;
@@ -297,15 +298,15 @@ namespace telar::gui::application {
       return Change::none;
     }
 
-    const auto previous_host = pane->shell_host;
+    const bool host_changed = pane->shell_host.view() != message.host;
     const auto previous = std::exchange(pane->shell, message);
 
     pane->shell_host.assign(message.host);
-    pane->shell.host = pane->shell_host;
+    pane->shell.host = pane->shell_host.view();
     pane->shell_directory.assign(message.directory);
-    pane->shell.directory = pane->shell_directory;
+    pane->shell.directory = pane->shell_directory.view();
     // The pane's header names the host and the link.
-    chrome_changed_ |= previous.remote != message.remote || previous_host != pane->shell_host || previous.link_ms != message.link_ms;
+    chrome_changed_ |= previous.remote != message.remote || host_changed || previous.link_ms != message.link_ms;
     if (chrome_changed_) {
       ++chrome_revision_;
     }
@@ -360,25 +361,21 @@ namespace telar::gui::application {
 
   Change Session::applyInline(Pane<Memory>& pane, const PaneDocument& message) {
     using Inline = typename Pane<Memory>::InlineDocument;
-    auto found = std::ranges::find(pane.inline_documents, message.id, &Inline::id);
+    const auto documents = pane.inline_documents.viewMut();
+    const auto found = std::ranges::find(documents, message.id, &Inline::id);
 
     if (message.size == 0) {
-      if (found == pane.inline_documents.end()) {
+      if (found == documents.end()) {
         return Change::none;
       }
 
-      pane.inline_documents.erase(found);
+      static_cast<void>(pane.inline_documents.remove(static_cast<std::size_t>(found - documents.begin())));
     } else {
-      if (found == pane.inline_documents.end()) {
-        if (message.offset != 0) {
-          return Change::none;
-        }
-
-        pane.inline_documents.emplace_back(memory_, message.id);
-        found = std::prev(pane.inline_documents.end());
+      if (found == documents.end() && message.offset != 0) {
+        return Change::none;
       }
 
-      auto& document = *found;
+      auto& document = found == documents.end() ? pane.inline_documents.emplace(memory_, message.id) : *found;
       if (!document.whole) {
         if (message.offset != document.parts.size()) {
           return Change::none;
@@ -420,11 +417,11 @@ namespace telar::gui::application {
       const auto dropped = message.trimmed - pane->scrollback_trimmed;
 
       pane->scrollback_dropped += dropped;
-      std::erase_if(pane->blocks, [dropped](const CommandBlock& block) {
-        return block.row < dropped;
-      });
+      static_cast<void>(pane->blocks.retain([dropped](const CommandBlock& block) {
+        return block.row >= dropped;
+      }));
 
-      for (auto& block : pane->blocks) {
+      for (auto& block : pane->blocks.viewMut()) {
         block.row -= static_cast<std::uint32_t>(dropped);
       }
 
@@ -437,7 +434,7 @@ namespace telar::gui::application {
       pane->refold.clear();
       for (std::size_t index = 0; index < pane->blocks.size(); ++index) {
         if (std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end()) {
-          pane->refold.push_back(index);
+          pane->refold.push(index);
         }
       }
 

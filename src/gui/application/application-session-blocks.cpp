@@ -41,9 +41,9 @@ namespace telar::gui::application {
     }
 
     if (fold) {
-      pane->folded.push_back(key);
+      pane->folded.push(key);
     } else {
-      pane->folded.erase(found);
+      static_cast<void>(pane->folded.remove(static_cast<std::size_t>(found - pane->folded.begin())));
     }
 
     refreshFolds(*pane);
@@ -59,7 +59,7 @@ namespace telar::gui::application {
     pane->folded.clear();
     for (std::size_t index = 0; fold && index < pane->blocks.size(); ++index) {
       if (pane->blocks[index].state != CommandBlockState::running) {
-        pane->folded.push_back(blockKey(*pane, index));
+        pane->folded.push(blockKey(*pane, index));
       }
     }
 
@@ -139,33 +139,33 @@ namespace telar::gui::application {
       return;
     }
 
-    std::vector<typename FoldMap<>::Span> spans;
+    ds::Vec<typename FoldMap<>::Span, Memory> spans{memory_};
 
     // Each document drawn in place of its rows, in the rows the view measured it in, while the
     // rows are numbered as the runtime numbered them for it.
     for (const auto& document : pane.inline_documents) {
       if (document.shown && document.view_rows != 0 && document.generation == pane.scrollback_generation && document.first_row >= pane.scrollback_trimmed && document.first_row - pane.scrollback_trimmed <= std::numeric_limits<std::uint32_t>::max()) {
-        spans.push_back({.first = static_cast<std::uint32_t>(document.first_row - pane.scrollback_trimmed), .count = document.rows, .shown = document.view_rows});
+        spans.push({.first = static_cast<std::uint32_t>(document.first_row - pane.scrollback_trimmed), .count = document.rows, .shown = document.view_rows});
       }
     }
 
-    std::vector<std::uint64_t> kept;
+    ds::Vec<std::uint64_t, Memory> kept{memory_};
 
     for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
       if (std::ranges::find(pane.folded, blockKey(pane, index)) == pane.folded.end()) {
         continue;
       }
 
-      kept.push_back(blockKey(pane, index));
+      kept.push(blockKey(pane, index));
       const auto [first, end] = blockRows(pane, index);
       if (end > first) {
-        spans.push_back({.first = first, .count = end - first});
+        spans.push({.first = first, .count = end - first});
       }
     }
 
     pane.folded = std::move(kept);
-    if (!std::ranges::equal(pane.folds.spans(), spans)) {
-      pane.folds.assign(spans);
+    if (!std::ranges::equal(pane.folds.spans(), spans.view())) {
+      pane.folds.assign(spans.view());
       ++pane.fold_revision;
     }
   }
@@ -184,12 +184,13 @@ namespace telar::gui::application {
 
     pane->blocks_text.clear();
     pane->blocks_text.reserve(bytes);
-    pane->blocks.assign(message.blocks.begin(), message.blocks.end());
-    for (auto& block : pane->blocks) {
+    pane->blocks.clear();
+    pane->blocks.extend(message.blocks);
+    for (auto& block : pane->blocks.viewMut()) {
       const auto start = pane->blocks_text.size();
 
       pane->blocks_text.append(block.command);
-      block.command = std::string_view{pane->blocks_text}.substr(start, block.command.size());
+      block.command = pane->blocks_text.view().substr(start, block.command.size());
     }
 
     // A command that ran without the shell finding it missing (status 127) exists, though the
@@ -204,7 +205,7 @@ namespace telar::gui::application {
     if (!pane->refold.empty()) {
       for (const auto index : pane->refold) {
         if (index < pane->blocks.size()) {
-          pane->folded.push_back(blockKey(*pane, index));
+          pane->folded.push(blockKey(*pane, index));
         }
       }
 

@@ -283,7 +283,7 @@ namespace telar::gui::qt {
     auto target = (static_cast<double>(folds.display(anchor)) * cell) + part;
 
     if (folds.hides(anchor)) {
-      const auto& blocks = current->blocks;
+      const auto blocks = current->blocks.view();
       const auto found = std::ranges::find_if(blocks.rbegin(), blocks.rend(), [anchor](const CommandBlock& block) {
         return block.row <= anchor;
       });

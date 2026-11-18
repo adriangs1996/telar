@@ -469,7 +469,7 @@ namespace telar::gui::qt {
 
     ds::Option<FoldMotion> fold_motion_;
     // The folds as drawn while one moves: its output shown down to the moving edge.
-    application::FoldMap<> transit_folds_;
+    application::FoldMap<> transit_folds_{adapter_};
     std::size_t fold_shown_ = 0;
     double fold_height_ = 0;
     int fold_fade_row_ = -1;

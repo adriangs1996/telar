@@ -396,7 +396,9 @@ namespace {
       constexpr std::uint64_t top = 4;
       constexpr std::int64_t above = 6;
       constexpr std::int64_t below = 20;
-      application::FoldMap<> folds;
+      SystemAllocator system;
+      MemoryAdapter<SystemAllocator> memory{system};
+      application::FoldMap<> folds{memory};
       const ds::Array spans{application::FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
 
       folds.assign(spans);

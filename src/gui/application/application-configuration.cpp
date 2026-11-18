@@ -41,14 +41,14 @@ namespace telar::gui::application {
 
     result.themes.base = features::configuration::default_theme_values;
     runtime::config::ConfigurationLayers::each(root, profile, [&](const runtime::lua::Value& configuration) {
-      std::vector<PromptBinding> bindings;
+      PromptBindings bindings;
       const auto settings = runtime::config::ConfigurationLayers::read(configuration, [&](const runtime::config::PromptBindingSetting& binding) {
-        bindings.push_back({.key = static_cast<std::uint8_t>(binding.chord.key), .character = binding.chord.character, .modifiers = binding.chord.modifiers, .action = binding.action, .normal = binding.normal});
+        bindings.push({.key = static_cast<std::uint8_t>(binding.chord.key), .character = binding.chord.character, .modifiers = binding.chord.modifiers, .action = binding.action, .normal = binding.normal});
       });
 
       features::configuration::ThemeReader::apply(settings.themes, result.themes);
       client(settings.client, result);
-      prompt(settings.client.prompt, std::move(bindings), result.prompt);
+      prompt(settings.client.prompt, bindings, result.prompt);
       gui(settings.gui, result);
     });
 
@@ -123,9 +123,9 @@ namespace telar::gui::application {
     policy.needs_input = settings.needs_input.valueOr(policy.needs_input);
   }
 
-  void ConfigurationReader::prompt(const runtime::config::PromptSettings& settings, std::vector<PromptBinding> bindings, PromptConfiguration& prompt) {
+  void ConfigurationReader::prompt(const runtime::config::PromptSettings& settings, const PromptBindings& bindings, PromptConfiguration& prompt) {
     if (settings.bindings) {
-      prompt.bindings = std::move(bindings);
+      prompt.bindings = bindings;
     }
 
     if (settings.mode) {

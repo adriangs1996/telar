@@ -36,7 +36,9 @@ namespace {
     constexpr std::uint64_t after_later = later_fold + later_rows + 1;
     constexpr std::uint64_t indexes = 40;
     constexpr std::uint64_t total = 50;
-    application::FoldMap<> folds;
+    SystemAllocator system;
+    telar::MemoryAdapter memory{system};
+    application::FoldMap<> folds{memory};
 
     check(folds.display(any_row) == any_row && folds.row(any_row) == any_row, "without folds rows are their own display index");
     const ds::Array<application::FoldMap<>::Span, 3> spans{{{.first = later_fold, .count = later_rows}, {.first = first_fold, .count = fold_rows}, {.first = overlapping, .count = fold_rows}}};
@@ -88,7 +90,11 @@ namespace {
   // A document shows its rows in display rows of its own, more or fewer than it stands for,
   // beside folds that hide theirs.
   void documentsShowTheirOwnRows() {
-    application::FoldMap<> folds;
+    SystemAllocator system;
+    telar::BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter memory{budget};
+    ds::Option<application::FoldMap<>> held{std::in_place, memory};
+    auto& folds = held.getMut();
     const ds::Array<application::FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
 
     folds.assign(spans);
@@ -104,6 +110,9 @@ namespace {
 
     folds.assign(covered);
     check(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == 10, "a fold over a document hides it");
+
+    held.reset();
+    check(budget.liveBytes() == 0, "the folds give their memory back");
   }
 
   void rowCacheKeepsRowsByStableNumber() {

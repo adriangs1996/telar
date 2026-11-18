@@ -2,6 +2,9 @@ export module telar.gui.application:fold_map;
 
 import std;
 
+import telar.base.ds;
+import telar.base.memory.allocators;
+
 export namespace telar::gui::application {
 
   // The rows of a pane's scrollback a folded command hides, and how the rows left shown are
@@ -12,7 +15,7 @@ export namespace telar::gui::application {
   // document drawn in place of the text it stands for: its rows map to those display rows in
   // order, the last one taking the rest, and when it shows more rows than it has, its last row
   // stands for the display rows past them.
-  template <typename Allocator = std::allocator<std::uint32_t>>
+  template <Allocator Memory = telar::Memory>
   class FoldMap {
   public:
     struct Span {
@@ -29,29 +32,28 @@ export namespace telar::gui::application {
       bool operator==(const Span&) const = default;
     };
 
-    using SpanAllocator = std::allocator_traits<Allocator>::template rebind_alloc<Span>;
-    using CountAllocator = std::allocator_traits<Allocator>::template rebind_alloc<std::int64_t>;
-
-    FoldMap() = default;
-
-    explicit FoldMap(const Allocator& allocator)
-        : spans_(SpanAllocator{allocator}),
-          hidden_before_(CountAllocator{allocator}) {}
+    explicit FoldMap(Memory& memory)
+        : spans_(memory),
+          hidden_before_(memory) {}
 
     // Takes `spans`, which may come unordered, overlapping or empty: they are sorted, adjacent or
     // overlapping folds joined, and a fold over a span that shows rows hides it all.
     void assign(std::span<const Span> spans) {
-      spans_.assign(spans.begin(), spans.end());
-      std::erase_if(spans_, [](const Span& span) {
-        return span.count == 0;
-      });
+      spans_.clear();
+      for (const auto& span : spans) {
+        if (span.count != 0) {
+          spans_.push(span);
+        }
+      }
 
-      std::ranges::sort(spans_, {}, &Span::first);
+      const auto all = spans_.viewMut();
+
+      std::ranges::sort(all, {}, &Span::first);
       std::size_t kept = 0;
 
-      for (const auto& span : spans_) {
+      for (const auto span : all) {
         if (kept != 0) {
-          auto& previous = spans_[kept - 1];
+          auto& previous = all[kept - 1];
           const bool folds = previous.shown == 0 && span.shown == 0;
           if (span.first < previous.end() || (folds && span.first == previous.end())) {
             if (previous.shown == 0 || span.shown == 0) {
@@ -65,13 +67,14 @@ export namespace telar::gui::application {
           }
         }
 
-        spans_[kept++] = span;
+        all[kept++] = span;
       }
 
-      spans_.resize(kept);
-      hidden_before_.assign(spans_.size() + 1, 0);
+      spans_.truncate(kept);
+      hidden_before_.clear();
+      hidden_before_.resize(spans_.size() + 1, 0);
       for (std::size_t index = 0; index < spans_.size(); ++index) {
-        hidden_before_[index + 1] = hidden_before_[index] + static_cast<std::int64_t>(spans_[index].count) - spans_[index].shown;
+        hidden_before_.atMut(index + 1) = hidden_before_[index] + static_cast<std::int64_t>(spans_[index].count) - spans_[index].shown;
       }
     }
 
@@ -85,7 +88,7 @@ export namespace telar::gui::application {
     }
 
     [[nodiscard]] std::span<const Span> spans() const noexcept {
-      return spans_;
+      return spans_.view();
     }
 
     // Whether `row` is hidden: under a fold, or past the rows a span shows.
@@ -180,7 +183,7 @@ export namespace telar::gui::application {
       return row < spans_[index].end() ? index : spans_.size();
     }
 
-    std::vector<Span, SpanAllocator> spans_;
+    ds::Vec<Span, Memory> spans_;
 
     // The first display row of span `index`.
     [[nodiscard]] std::uint64_t start(std::size_t index) const noexcept {
@@ -198,7 +201,7 @@ export namespace telar::gui::application {
 
     // Display rows less than rows before each span: a fold adds its rows, a span that shows rows
     // its rows less what it shows.
-    std::vector<std::int64_t, CountAllocator> hidden_before_;
+    ds::Vec<std::int64_t, Memory> hidden_before_;
   };
 
 }

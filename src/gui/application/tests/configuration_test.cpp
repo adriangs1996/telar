@@ -93,6 +93,35 @@ namespace {
     }
   }
 
+  // The bindings are a value of fixed size: equal by the keys they bind, full at the most the
+  // configuration reads.
+  void promptBindingsValue() {
+    const PromptBinding first{.key = 1, .character = 'j', .action = 2};
+    const PromptBinding second{.key = 1, .character = 'H', .action = 8, .normal = true};
+    PromptBindings built;
+
+    built.push(first);
+    built.push(second);
+    check(built == PromptBindings{first, second} && built.size() == 2 && built[1].normal, "bindings pushed one by one equal the same listed");
+    check(!(built == PromptBindings{first}) && PromptBindings{} == PromptBindings{}, "a binding more or less tells them apart");
+
+    PromptBindings full;
+
+    for (std::size_t index = 0; index < PromptBindings::capacity; ++index) {
+      full.push(first);
+    }
+
+    bool refused = false;
+
+    try {
+      full.push(second);
+    } catch (const std::length_error&) {
+      refused = true;
+    }
+
+    check(refused && full.size() == PromptBindings::capacity, "a binding past the capacity is refused");
+  }
+
   void historyPreferences() {
     const auto configuration = read({.source = R"(return {api_version = 2, client = {history = {show_agent_commands = true, enter = "run", match = "fts"}}, profiles = {paste = {client = {history = {enter = "paste"}}}}})", .profile = "paste"});
 
@@ -368,6 +397,7 @@ namespace {
 
   const telar::testing::Case case_history_preferences{"configuration.history_preferences", historyPreferences};
   const telar::testing::Case case_prompt_preferences{"configuration.prompt_preferences", promptPreferences};
+  const telar::testing::Case case_prompt_bindings_value{"configuration.prompt_bindings_value", promptBindingsValue};
   const telar::testing::Case case_independent_background_opacity{"configuration.independent_background_opacity", independentBackgroundOpacity};
   const telar::testing::Case case_editor_preferences{"configuration.editor_preferences", editorPreferences};
   const telar::testing::Case case_window_title_preferences{"configuration.window_title_preferences", windowTitlePreferences};

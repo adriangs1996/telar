@@ -75,6 +75,58 @@ export {
       bool operator==(const PromptBinding&) const = default;
     };
 
+    // The bindings `client.prompt.bindings` lists, at most as many as the configuration reads: a
+    // value of fixed size, copied and compared with the configuration it is part of.
+    class PromptBindings {
+    public:
+      static constexpr std::size_t capacity = 256;
+
+      PromptBindings() = default;
+
+      PromptBindings(std::initializer_list<PromptBinding> bindings) {
+        for (const auto& binding : bindings) {
+          push(binding);
+        }
+      }
+
+      void push(const PromptBinding& binding) {
+        if (count_ == capacity) {
+          throw std::length_error{"more prompt bindings than the configuration reads"};
+        }
+
+        entries_.atMut(count_++) = binding;
+      }
+
+      [[nodiscard]] std::span<const PromptBinding> view() const noexcept {
+        return entries_.view().first(count_);
+      }
+
+      [[nodiscard]] std::size_t size() const noexcept {
+        return count_;
+      }
+
+      [[nodiscard]] const PromptBinding& operator[](std::size_t index) const noexcept {
+        return entries_[index];
+      }
+
+      [[nodiscard]] const PromptBinding* begin() const noexcept {
+        return entries_.data();
+      }
+
+      [[nodiscard]] const PromptBinding* end() const noexcept {
+        return entries_.data() + count_;
+      }
+
+      // Equal when they bind the same keys, whatever the slots past them held.
+      friend bool operator==(const PromptBindings& left, const PromptBindings& right) noexcept {
+        return std::ranges::equal(left.view(), right.view());
+      }
+
+    private:
+      ds::Array<PromptBinding, capacity> entries_{};
+      std::size_t count_ = 0;
+    };
+
     // `client.prompt`: the shell prompt as the shell draws it, or telar's own command editor.
     struct PromptConfiguration {
       static constexpr std::uint8_t default_max_lines = 12;
@@ -85,7 +137,7 @@ export {
       PromptKeymap keymap = PromptKeymap::emacs;
       bool ghost = true;
       std::uint8_t max_lines = default_max_lines;
-      std::vector<PromptBinding> bindings;
+      PromptBindings bindings;
 
       bool operator==(const PromptConfiguration&) const = default;
     };

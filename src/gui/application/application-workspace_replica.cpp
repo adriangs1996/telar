@@ -20,7 +20,16 @@ namespace telar::gui::application {
         cwd(memory),
         foreground(memory),
         document(memory),
-        document_parts(memory) {}
+        document_parts(memory),
+        inline_documents(memory),
+        git_branch(memory),
+        shell_host(memory),
+        shell_directory(memory),
+        blocks(memory),
+        blocks_text(memory),
+        folded(memory),
+        folds(memory),
+        refold(memory) {}
 
   template <Allocator Memory>
   Pane<Memory>::InlineDocument::InlineDocument(Memory& memory, std::uint64_t identity)

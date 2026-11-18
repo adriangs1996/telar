@@ -109,22 +109,22 @@ export {
 
       // Oldest first, as the runtime keeps them; `inline_version` changes whenever one comes, goes,
       // moves or is measured.
-      std::vector<InlineDocument> inline_documents;
+      ds::Vec<InlineDocument, Memory> inline_documents;
       std::uint64_t inline_version = 0;
       // The repository the integrated shell works in; `branch` owns the text the message viewed.
       PaneGit git{};
-      std::string git_branch;
+      ds::String<Memory> git_branch;
       // The host a remote shell runs on and where it works there, which `shell.host` and
       // `shell.directory` view.
-      std::string shell_host;
-      std::string shell_directory;
+      ds::String<Memory> shell_host;
+      ds::String<Memory> shell_directory;
       // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines.
-      std::vector<CommandBlock> blocks;
-      std::string blocks_text;
+      ds::Vec<CommandBlock, Memory> blocks;
+      ds::String<Memory> blocks_text;
       // The commands folded, by the stable number of their first row, and the rows their output
       // hides from the view.
-      std::vector<std::uint64_t> folded;
-      FoldMap<> folds;
+      ds::Vec<std::uint64_t, Memory> folded;
+      FoldMap<Memory> folds;
       // Changes whenever the rows the folds hide do.
       std::uint64_t fold_revision = 0;
       // The shown row at the top of the pane's view, folds counted, while the view draws its own
@@ -133,7 +133,7 @@ export {
       // The row the live prompt starts on, as the view last showed it.
       ds::Option<std::uint32_t> live_prompt_row;
       // The folded blocks by index while renumbered rows wait for the blocks numbered anew.
-      std::vector<std::size_t> refold;
+      ds::Vec<std::size_t, Memory> refold;
     };
 
     // The application a tab shows: the pane's foreground, else the one the tab remembers for its

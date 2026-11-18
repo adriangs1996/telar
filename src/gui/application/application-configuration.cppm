@@ -43,6 +43,7 @@ export {
       static_assert(Configuration::maximum_padding == GuiBounds::padding.maximum && Configuration::maximum_background_blur == GuiBounds::background_blur.maximum);
       static_assert(Configuration::minimum_fps == GuiBounds::max_fps.minimum && Configuration::maximum_fps == GuiBounds::max_fps.maximum);
       static_assert(PromptConfiguration::maximum_max_lines == runtime::config::PromptBounds::max_lines.maximum);
+      static_assert(PromptBindings::capacity == runtime::config::PromptBounds::bindings);
       // The enums follow the configuration's name tables.
       static_assert(std::to_underlying(FontHinting::full) == std::to_underlying(runtime::config::FontHinting::full));
       static_assert(std::to_underlying(PromptMode::telar) == std::to_underlying(runtime::config::PromptMode::telar));
@@ -66,7 +67,7 @@ export {
       static void gui(const runtime::config::GuiSettings& gui, Configuration& configuration);
       static void client(const ClientSettings& settings, Configuration& configuration);
       static void sound(const ClientSettings::Sound& settings, SoundPolicy& policy) noexcept;
-      static void prompt(const runtime::config::PromptSettings& settings, std::vector<PromptBinding> bindings, PromptConfiguration& prompt);
+      static void prompt(const runtime::config::PromptSettings& settings, const PromptBindings& bindings, PromptConfiguration& prompt);
       static void history(const ClientSettings::History& settings, HistoryConfiguration& history) noexcept;
       static void font(const runtime::config::GuiSettings::Font& settings, FontConfiguration& font);
       static void window(const runtime::config::GuiSettings::Window& settings, Configuration& configuration);
