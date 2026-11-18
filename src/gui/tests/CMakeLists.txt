@@ -112,6 +112,11 @@ if(TELAR_GUI_NATIVE)
     BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons"
     FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons/folder-small.png"
           "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/icons/unknown-status.png")
+  qt_add_resources(gui-ui-design-tests gui-shape-fixtures
+    PREFIX "/telar/test-shapes"
+    BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes"
+    FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes/cases.json"
+          "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes/rounded-rectangles.png")
   telar_add_tests(gui-ui-app-tests LABEL gui.ui.app DIRECTORY ../ui/app RECURSE QT MAIN gui-testing-main
     LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation TIMEOUT 30)
   set_target_properties(gui-ui-app-tests PROPERTIES AUTOMOC ON)
@@ -166,20 +171,12 @@ if(TELAR_GUI_NATIVE)
       LIBRARIES Qt6::Gui PRIVATE Qt6::GuiPrivate telar::build_flags)
   endif()
 
-  telar_add_test(gui-chrome-text-test QT SOURCES chrome_text_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
-    TEST gui-chrome-text LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-text-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/text_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-terminal-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/terminal_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin
     CHECKS lint lifetime blank_lines)
   telar_add_test(gui-status-bar-test QT SOURCES status_bar_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-status-bar LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-rounded-rectangle-test QT SOURCES rounded_rectangle_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
-    TEST gui-rounded-rectangle LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  qt_add_resources(gui-rounded-rectangle-test gui-shape-fixtures
-    PREFIX "/telar/test-shapes"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/shapes"
-    FILES fixtures/shapes/cases.json fixtures/shapes/rounded-rectangles.png)
   telar_add_test(gui-mode-bar-test QT SOURCES mode_bar_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-mode-bar LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-tab-activity-scene-test QT SOURCES tab_activity_scene_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
@@ -240,15 +237,11 @@ if(TELAR_GUI_NATIVE)
     TEST gui-host-effects LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-scene-test QT SOURCES scene_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-scene LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 60)
-  telar_add_test(gui-form-field-test QT SOURCES form_field_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
-    TEST gui-form-field LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-list-model-test SOURCES list_model_test.cpp LIBRARIES Qt6::Gui Qt6::Test telar::build_flags
     TEST gui-list-model LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-list-model-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-history-controls-test QT SOURCES history_controls_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
     TEST gui-history-controls LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-modal-reveal-test QT SOURCES modal_reveal_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
-    TEST gui-modal-reveal LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-pane-motion-test QT SOURCES pane_motion_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
     TEST gui-pane-motion LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   target_compile_options(gui-pane-motion-test PRIVATE -ffp-contract=off)

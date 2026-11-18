@@ -1,3 +1,4 @@
+#include "qt_case.hpp"
 #include "shape_atlas.hpp"
 #include "ui/design/controls/native_rounded_rectangle.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -379,7 +380,14 @@ namespace {
     }
   };
 
+  using telar::gui::test::QtCase;
+
+  const QtCase<RoundedRectangleTest, "originalShaderAtlas"> case_original_shader_atlas{"rounded_rectangle.original_shader_atlas"};
+  const QtCase<RoundedRectangleTest, "backgroundReplacementKeepsFinalAlphaAndOpaqueInk"> case_background_replacement_keeps_final_alpha_and_opaque_ink{"rounded_rectangle.background_replacement_keeps_final_alpha_and_opaque_ink"};
+  const QtCase<RoundedRectangleTest, "projectiveParentUsesHomogeneousOrigin"> case_projective_parent_uses_homogeneous_origin{"rounded_rectangle.projective_parent_uses_homogeneous_origin"};
+  const QtCase<RoundedRectangleTest, "mutationsAndEmptyGeometry"> case_mutations_and_empty_geometry{"rounded_rectangle.mutations_and_empty_geometry"};
+  const QtCase<RoundedRectangleTest, "geometricClipAndReset"> case_geometric_clip_and_reset{"rounded_rectangle.geometric_clip_and_reset"};
+
 }
 
-QTEST_MAIN(RoundedRectangleTest)
 #include "rounded_rectangle_test.moc"

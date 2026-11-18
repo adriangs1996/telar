@@ -11,7 +11,7 @@ opaque alpha atlas and a BGRA8-unorm target. That shader and the reference
 tool are gone, so the fixture is frozen: change it only with a new reference.
 
 The committed fixture supports tests on both platforms.
-`gui-rounded-rectangle-test` keeps physical shapes constant while adapting
+`rounded_rectangle_test.cpp` keeps physical shapes constant while adapting
 logical coordinates to each device scale. It checks the atlas, parent
 clipping/reparenting, invalid properties, empty geometry and restoration after
 style changes. The capture window has fixed size hints so a compositor

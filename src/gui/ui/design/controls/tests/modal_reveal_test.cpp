@@ -1,5 +1,6 @@
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
+#include "qt_case.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
 #include <QGuiApplication>
 #include <QPointer>
@@ -117,7 +118,12 @@ namespace {
     }
   };
 
+  using telar::gui::test::QtCase;
+
+  const QtCase<ModalRevealTest, "entranceStartsAtZeroAndSettles"> case_entrance_starts_at_zero_and_settles{"modal_reveal.entrance_starts_at_zero_and_settles"};
+  const QtCase<ModalRevealTest, "onlyANewGenerationRestartsTheEntrance"> case_only_a_new_generation_restarts_the_entrance{"modal_reveal.only_a_new_generation_restarts_the_entrance"};
+  const QtCase<ModalRevealTest, "destructionDuringTheFirstFrameRetiresTheClockEntry"> case_destruction_during_the_first_frame_retires_the_clock_entry{"modal_reveal.destruction_during_the_first_frame_retires_the_clock_entry"};
+
 }
 
-QTEST_MAIN(ModalRevealTest)
 #include "modal_reveal_test.moc"
