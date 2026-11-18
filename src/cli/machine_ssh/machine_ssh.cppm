@@ -192,7 +192,7 @@ export {
 
     std::string stripJsonc(std::string_view bytes);
 
-    void json(Memory& memory, const JsonValue& value, String<Memory>& output, std::vector<std::string>& dropped);
+    void json(Memory& memory, const JsonValue& value, ds::String<Memory>& output, std::vector<std::string>& dropped);
 
     std::string toml(std::string_view bytes, std::vector<std::string>& dropped);
 

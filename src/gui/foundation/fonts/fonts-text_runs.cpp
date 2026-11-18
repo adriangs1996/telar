@@ -11,7 +11,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
   template <Allocator Memory>
   TextRuns<Memory>::TextRuns(Memory& memory)
-      : columns_(AllocatorRef<Column, Memory>{memory}) {}
+      : columns_(memory) {}
 
   template <Allocator Memory>
   void TextRuns<Memory>::reserve(std::size_t columns) {
@@ -33,7 +33,7 @@ namespace telar::gui::inline foundation::inline fonts {
     const auto limit = reach == 0 || reach > maximum_cells ? maximum_cells : reach;
     auto since = far;
 
-    for (auto& column : columns_) {
+    for (auto& column : columns_.viewMut()) {
       if (!column.joins) {
         since = far;
       }
@@ -44,8 +44,8 @@ namespace telar::gui::inline foundation::inline fonts {
 
     auto until = far;
 
-    for (auto iterator = columns_.rbegin(); iterator != columns_.rend(); ++iterator) {
-      auto& column = *iterator;
+    for (auto index = columns_.size(); index-- != 0;) {
+      auto& column = columns_.atMut(index);
 
       until = distanceFromInput(column.role, until);
       column.kept = column.role != fonts::LigatureRole::none && std::min(column.since, until) < limit;

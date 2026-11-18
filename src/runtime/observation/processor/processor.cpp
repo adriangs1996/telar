@@ -16,8 +16,8 @@ namespace telar::runtime {
   PaneObserver::PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
       : terminal_(memory, size, TerminalPurpose::observation),
         tracker_(memory, terminal_, directory, capture_output, shell_token),
-        workspace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
-        shell_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        workspace_path_(memory),
+        shell_(memory),
         initial_size_(size) {}
 
   void PaneObserver::configureHistory(const HistorySession& session, bool capture_output) {

@@ -28,7 +28,7 @@ namespace telar::gui::features::peek {
     [[nodiscard]] ds::Option<std::size_t> store(const PaneText& reply);
 
   private:
-    String<Memory> text_;
+    ds::String<Memory> text_;
     ds::Option<PeekTarget> target_;
     std::uint64_t request_id_ = 0;
   };

@@ -125,7 +125,7 @@ namespace telar::gui::application {
       return session.memory_;
     }
 
-    [[nodiscard]] static constexpr String<Memory>& clipboard(Session& session) noexcept {
+    [[nodiscard]] static constexpr ds::String<Memory>& clipboard(Session& session) noexcept {
       return session.clipboard_;
     }
 
@@ -233,7 +233,7 @@ namespace telar::gui::application {
     }
 
     // What the session answers a command of the CLI with, until the next one.
-    [[nodiscard]] static constexpr String<Memory>& commandResponse(Session& session) noexcept {
+    [[nodiscard]] static constexpr ds::String<Memory>& commandResponse(Session& session) noexcept {
       return session.command_response_;
     }
 

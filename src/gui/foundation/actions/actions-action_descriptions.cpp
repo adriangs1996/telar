@@ -7,7 +7,7 @@ namespace telar::gui::inline foundation::inline actions {
 
   template <Allocator Memory>
   ActionDescriptions<Memory>::ActionDescriptions(Memory& memory)
-      : extended_(AllocatorRef<ExtendedActionDescription, Memory>{memory}) {}
+      : extended_(memory) {}
 
   template <Allocator Memory>
   void ActionDescriptions<Memory>::replaceBindings() noexcept {
@@ -29,7 +29,7 @@ namespace telar::gui::inline foundation::inline actions {
       throw std::invalid_argument{"Action does not name a panel or pick"};
     }
 
-    extended_[static_cast<std::size_t>(index)] = definition;
+    extended_.atMut(static_cast<std::size_t>(index)) = definition;
   }
 
   template <Allocator Memory>
@@ -40,7 +40,7 @@ namespace telar::gui::inline foundation::inline actions {
 
     const auto index = extended_.size();
 
-    extended_.push_back(description);
+    extended_.push(description);
 
     return static_cast<std::int32_t>(index);
   }

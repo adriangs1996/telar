@@ -335,7 +335,7 @@ namespace telar::runtime::lua {
 
   template <Allocator Memory>
   JsonDecoder<Memory>::JsonDecoder(Memory& memory)
-      : text_(AllocatorRef<char, Memory>{memory}) {}
+      : text_(memory) {}
 
   template <Allocator Memory>
   int JsonDecoder<Memory>::decode(lua_State* state) {
@@ -405,8 +405,8 @@ namespace telar::runtime::lua {
       object(state, value, depth);
       break;
     default:
-      text_ = value.encoded();
-      if (lua_stringtonumber(state, text_.c_str()) != text_.size() + 1) {
+      text_.assign(value.encoded());
+      if (lua_stringtonumber(state, text_.data()) != text_.size() + 1) {
         throw Error{"JSON number is outside its bounds"};
       }
     }

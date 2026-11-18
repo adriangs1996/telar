@@ -1271,7 +1271,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   CommandOutputTail<Memory>::CommandOutputTail(Memory& memory, bool enabled)
-      : bytes_(AllocatorRef<std::uint8_t, Memory>{memory}) {
+      : bytes_(memory) {
     if (enabled) {
       enable();
     }
@@ -1284,7 +1284,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void CommandOutputTail<Memory>::append(std::span<const std::uint8_t> bytes) noexcept {
-    window_.append(bytes_, bytes);
+    window_.append(bytes_.viewMut(), bytes);
   }
 
   template <Allocator Memory>
@@ -1308,9 +1308,9 @@ namespace telar::runtime {
     return {terminal.handle(), terminal.screen.cols};
   }
 
-  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination) {
+  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, ds::Vec<Byte, ConcurrentMemory>& destination) {
     destination.resize(CommandSelection::buffer_bytes);
-    CommandTextWriter writer{destination};
+    CommandTextWriter writer{destination.viewMut()};
 
     formatTerminalSelection(terminal, selection, true, TrailingSpaces::trimmed, writer.ghostty());
     const auto captured = writer.finish();
@@ -1322,7 +1322,7 @@ namespace telar::runtime {
   CommandBlocks::CommandBlocks(ConcurrentMemory& memory, Terminal& terminal)
       : CommandBlockRing(terminal.handle()),
         terminal_(terminal),
-        text_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
+        text_(memory) {}
 
   CommandScreen CommandBlocks::screen() const noexcept {
     return commandScreen(terminal_);
@@ -1339,9 +1339,9 @@ namespace telar::runtime {
   CommandTracker::CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
       : CommandTrackerCore(terminal.handle(), directory, shell_token),
         terminal_(terminal),
-        output_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
-        command_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        submitted_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
+        output_(memory),
+        command_(memory),
+        submitted_(memory) {
     if (capture_output) {
       enableOutputCapture();
     }
@@ -1352,7 +1352,8 @@ namespace telar::runtime {
   }
 
   void CommandTracker::submitCommand(std::span<const Byte> text) {
-    submitted_.assign(text.begin(), text.end());
+    submitted_.clear();
+    submitted_.extend({text.begin(), text.end()});
   }
 
   CommandScreen CommandTracker::screen() const noexcept {
@@ -1381,7 +1382,7 @@ namespace telar::runtime {
       return false;
     }
 
-    command_.swap(submitted_);
+    std::swap(command_, submitted_);
     submitted_.clear();
     return true;
   }
@@ -1391,7 +1392,7 @@ namespace telar::runtime {
   }
 
   std::span<std::uint8_t> CommandTracker::outputStorage() noexcept {
-    return output_;
+    return output_.viewMut();
   }
 
 }

@@ -89,7 +89,7 @@ namespace telar::runtime {
 #if TELAR_DIAGNOSTICS
         storage_(memory, history_path),
 #endif
-        decode_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
+        decode_(memory) {
     decode_.resize(decode_capacity);
     try {
       history_.template emplace<HistoryStore>(memory, history_path, filters);
@@ -113,7 +113,7 @@ namespace telar::runtime {
     TELAR_TRACE("background_service.process");
     TELAR_DIAGNOSTIC(idle());
     const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
-      DecodeStorage storage{decode_};
+      DecodeStorage storage{decode_.viewMut()};
 
       execute(Codec::decode<Message>(payload, storage), reply, context);
     });

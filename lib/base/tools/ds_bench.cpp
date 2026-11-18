@@ -258,7 +258,7 @@ namespace {
     });
 
     const auto vector = nanoseconds(count, [&] {
-      Vector<Value, SystemAllocator> values{AllocatorRef<Value, SystemAllocator>{system}};
+      std::vector<Value, AllocatorRef<Value, SystemAllocator>> values{AllocatorRef<Value, SystemAllocator>{system}};
 
       for (std::size_t index = 0; index < count; ++index) {
         values.push_back(make(index));
@@ -284,7 +284,7 @@ namespace {
   void reads(std::size_t count) {
     SystemAllocator system;
     ds::Vec<std::uint32_t, SystemAllocator> mine{system};
-    Vector<std::uint32_t, SystemAllocator> vector{AllocatorRef<std::uint32_t, SystemAllocator>{system}};
+    std::vector<std::uint32_t, AllocatorRef<std::uint32_t, SystemAllocator>> vector{AllocatorRef<std::uint32_t, SystemAllocator>{system}};
     std::vector<std::uint32_t> standard;
 
     for (std::size_t index = 0; index < count; ++index) {
@@ -671,6 +671,6 @@ int main() {
   functions("function construct+call, string_view", count, std::string_view{"capture"});
   functions("function construct+call, std::string", count, std::string{"capture"});
   calls(count);
-  std::println("sizeof Option<uint64> {} optional {}; Vec<int> {} telar::Vector {} std::vector {}", sizeof(ds::Option<std::uint64_t>), sizeof(ds::Option<std::uint64_t>), sizeof(ds::Vec<int, SystemAllocator>), sizeof(Vector<int, SystemAllocator>), sizeof(std::vector<int>));
+  std::println("sizeof Option<uint64> {} optional {}; Vec<int> {} std::vector+AllocatorRef {} std::vector {}", sizeof(ds::Option<std::uint64_t>), sizeof(ds::Option<std::uint64_t>), sizeof(ds::Vec<int, SystemAllocator>), sizeof(std::vector<int, AllocatorRef<int, SystemAllocator>>), sizeof(std::vector<int>));
   std::println("sizeof String {} std::string {}; Map {} std::unordered_map {}; Function {} std::function {}", sizeof(ds::String<SystemAllocator>), sizeof(std::string), sizeof(ds::Map<std::uint64_t, std::uint64_t, SystemAllocator>), sizeof(std::unordered_map<std::uint64_t, std::uint64_t>), sizeof(ds::Function<void()>), sizeof(std::function<void()>));
 }

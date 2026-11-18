@@ -62,17 +62,17 @@ export {
 
     private:
       // The bytes are storage of the allocator, region `a`.
-      static tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const std::filesystem::path& path) {
+      static tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const std::filesystem::path& path) {
         const auto data = runtime::readFile(memory, path.c_str(), telar_font_max_bytes);
 
-        return {data.cbegin(), data.cend(), AllocatorRef<std::uint8_t, Memory>{memory}};
+        return ds::Vec<std::uint8_t, Memory>{memory, {reinterpret_cast<const std::uint8_t*>(data.data()), data.size()}};
       }
 
-      tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> regular_bytes_;
-      tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> emphasized_bytes_;
-      tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> primary_bytes_;
-      tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> text_bytes_;
-      tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> symbols_bytes_;
+      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> regular_bytes_;
+      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> emphasized_bytes_;
+      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> primary_bytes_;
+      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> text_bytes_;
+      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> symbols_bytes_;
       // The faces read the bytes stored beside them.
       tbc::view<fonts::Face, tbc::lt::self> regular_;
       tbc::view<fonts::Face, tbc::lt::self> emphasized_;

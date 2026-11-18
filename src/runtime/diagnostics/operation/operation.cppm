@@ -5,6 +5,7 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 // Interface: diagnostics/file_storage.cppm
 export {
@@ -22,7 +23,7 @@ export {
 
     private:
       static constexpr auto sample_interval = std::chrono::seconds{1};
-      String<Memory> path_;
+      ds::String<Memory> path_;
       Clock::time_point next_sample_{};
       std::atomic<std::uint64_t> bytes_{0};
     };

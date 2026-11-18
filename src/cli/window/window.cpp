@@ -25,7 +25,7 @@ import telar.base.ds;
 
 namespace telar::runtime::cli::window {
 
-  using Text = String<Memory>;
+  using Text = ds::String<Memory>;
   using Session = ControlSession;
   constexpr std::size_t memory_budget = 32 * 1024 * 1024;
   constexpr unsigned receive_timeout = 30;
@@ -50,42 +50,42 @@ namespace telar::runtime::cli::window {
     ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer;
     const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
-    output.append(buffer.data(), end);
+    output.append(std::string_view{buffer.data(), end});
   }
 
   void signedNumber(Text& output, std::int64_t value) {
     ds::Array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer;
     const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
-    output.append(buffer.data(), end);
+    output.append(std::string_view{buffer.data(), end});
   }
 
   void descriptor(Text& output, const ClientDescriptor& entry, bool json) {
     if (json) {
-      output += "{\"id\":";
+      output.append("{\"id\":");
       number(output, entry.id);
-      output += ",\"generation\":";
+      output.append(",\"generation\":");
       number(output, entry.generation);
-      output += ",\"identity\":";
+      output.append(",\"identity\":");
       number(output, entry.identity);
-      output += ",\"attachments\":";
+      output.append(",\"attachments\":");
       number(output, entry.attachments);
-      output += ",\"last_input_pane\":";
+      output.append(",\"last_input_pane\":");
       number(output, entry.last_input_pane);
-      output += ",\"last_input_sequence\":";
+      output.append(",\"last_input_sequence\":");
       number(output, entry.last_input_sequence);
-      output += '}';
+      output.push('}');
     } else {
       number(output, entry.id);
-      output += '\t';
+      output.push('\t');
       number(output, entry.generation);
-      output += '\t';
+      output.push('\t');
       number(output, entry.identity);
-      output += '\t';
+      output.push('\t');
       number(output, entry.attachments);
-      output += '\t';
+      output.push('\t');
       number(output, entry.last_input_pane);
-      output += '\n';
+      output.push('\n');
     }
   }
 
@@ -93,12 +93,12 @@ namespace telar::runtime::cli::window {
     const auto list = session.exchange<ClientList>(QueryClients{});
 
     if (options.action == ClientOptions::Action::list) {
-      output += options.json ? "[" : "CLIENT\tGENERATION\tIDENTITY\tATTACHMENTS\tLAST INPUT PANE\n";
+      output.append(options.json ? "[" : "CLIENT\tGENERATION\tIDENTITY\tATTACHMENTS\tLAST INPUT PANE\n");
       bool first = true;
 
       for (const auto& entry : list.entries) {
         if (options.json && !first) {
-          output += ',';
+          output.push(',');
         }
 
         descriptor(output, entry, options.json);
@@ -106,7 +106,7 @@ namespace telar::runtime::cli::window {
       }
 
       if (options.json) {
-        output += "]\n";
+        output.append("]\n");
       }
 
       return;
@@ -124,20 +124,20 @@ namespace telar::runtime::cli::window {
         });
 
         if (options.json) {
-          output += "{\"id\":";
+          output.append("{\"id\":");
           number(output, entry.id);
-          output += ",\"generation\":";
+          output.append(",\"generation\":");
           number(output, entry.generation);
-          output += ",\"detached\":true}\n";
+          output.append(",\"detached\":true}\n");
         } else {
-          output += "client ";
+          output.append("client ");
           number(output, entry.id);
-          output += " detached\n";
+          output.append(" detached\n");
         }
       } else {
         descriptor(output, entry, options.json);
         if (options.json) {
-          output += '\n';
+          output.push('\n');
         }
       }
 
@@ -158,7 +158,7 @@ namespace telar::runtime::cli::window {
 
   // Collect owned pages before printing: a concurrent reload must never mix generations.
   void plugins(Session& session, ClientCommand command, ClientCommandResult reply, Text& output) {
-    Vector<Text, Memory> entries{AllocatorRef<Text, Memory>{output.get_allocator().memory()}};
+    ds::Vec<Text, Memory> entries{output.memory()};
     ds::Option<std::int64_t> generation;
     const std::int64_t limit = command.action == ClientAction::plugin_get ? 65 : 32;
 
@@ -194,10 +194,10 @@ namespace telar::runtime::cli::window {
           throw Failure{"InvalidPluginPage"};
         }
 
-        Text entry{output.get_allocator()};
+        Text entry{output.memory()};
 
         appendJson(entry, item, false);
-        entries.push_back(std::move(entry));
+        entries.push(std::move(entry));
       });
 
       if (reply.value == -1) {
@@ -218,37 +218,37 @@ namespace telar::runtime::cli::window {
     }
 
     if (command.action == ClientAction::plugin_get) {
-      if (entries.empty() || !entries.front().starts_with('{')) {
+      if (entries.empty() || !entries.front().view().starts_with('{')) {
         throw Failure{"InvalidPluginPage"};
       }
 
-      output = entries.front();
-      output.pop_back();
-      output += output.size() == 1 ? "\"actions\":[" : ",\"actions\":[";
+      output.assign(entries.front());
+      output.truncate(output.size() - 1);
+      output.append(output.size() == 1 ? "\"actions\":[" : ",\"actions\":[");
       for (std::size_t index = 1; index < entries.size(); ++index) {
-        if (!entries[index].starts_with('"')) {
+        if (!entries[index].view().starts_with('"')) {
           throw Failure{"InvalidPluginPage"};
         }
 
         if (index > 1) {
-          output += ',';
+          output.push(',');
         }
 
-        output += entries[index];
+        output.append(entries[index]);
       }
 
-      output += "]}\n";
+      output.append("]}\n");
     } else {
-      output += '[';
+      output.push('[');
       for (std::size_t index = 0; index < entries.size(); ++index) {
         if (index != 0) {
-          output += ',';
+          output.push(',');
         }
 
-        output += entries[index];
+        output.append(entries[index]);
       }
 
-      output += "]\n";
+      output.append("]\n");
     }
   }
 
@@ -287,54 +287,54 @@ namespace telar::runtime::cli::window {
       plugins(session, command, reply, output);
     } else if (reply.action == ClientAction::config_show) {
       appendJson(output, JsonValue::parse(reply.text), !options.json);
-      output += '\n';
+      output.push('\n');
     } else if (reply.action == ClientAction::layout_get) {
       if (options.json) {
-        output += R"({"encoding":"telar-layout-hex","data":)";
+        output.append(R"({"encoding":"telar-layout-hex","data":)");
         appendJsonText(output, reply.text, JsonEscapes::standard);
-        output += '}';
+        output.push('}');
       } else {
-        output += reply.text;
+        output.append(reply.text);
       }
 
-      output += '\n';
+      output.push('\n');
     } else if (reply.action == ClientAction::sidebar_get) {
       if (options.json) {
-        output += reply.text == "visible" ? R"({"visible":true,"width":)" : R"({"visible":false,"width":)";
+        output.append(reply.text == "visible" ? R"({"visible":true,"width":)" : R"({"visible":false,"width":)");
         signedNumber(output, reply.value);
-        output += "}\n";
+        output.append("}\n");
       } else {
-        output += reply.text;
-        output += ' ';
+        output.append(reply.text);
+        output.push(' ');
         signedNumber(output, reply.value);
-        output += " columns\n";
+        output.append(" columns\n");
       }
     } else if (options.json) {
-      output += "{\"client_id\":";
+      output.append("{\"client_id\":");
       number(output, reply.route.id);
-      output += ",\"client_generation\":";
+      output.append(",\"client_generation\":");
       number(output, reply.route.generation);
-      output += ",\"action\":";
+      output.append(",\"action\":");
       appendJsonText(output, clientActionName(reply.action), JsonEscapes::standard);
-      output += ",\"status\":";
+      output.append(",\"status\":");
       appendJsonText(output, statusName(reply.status), JsonEscapes::standard);
-      output += ",\"target_id\":";
+      output.append(",\"target_id\":");
       number(output, reply.target_id);
-      output += ",\"value\":";
+      output.append(",\"value\":");
       signedNumber(output, reply.value);
-      output += ",\"text\":";
+      output.append(",\"text\":");
       appendJsonText(output, reply.text, JsonEscapes::standard);
-      output += "}\n";
+      output.append("}\n");
     } else {
-      output += clientActionName(reply.action);
-      output += ": ";
-      output += statusName(reply.status);
+      output.append(clientActionName(reply.action));
+      output.append(": ");
+      output.append(statusName(reply.status));
       if (!reply.text.empty()) {
-        output += ' ';
-        output += reply.text;
+        output.push(' ');
+        output.append(reply.text);
       }
 
-      output += '\n';
+      output.push('\n');
     }
 
     return 0;
@@ -350,14 +350,14 @@ namespace telar::runtime::cli::window {
     const auto* const status = statuses.at(static_cast<std::size_t>(reply.status));
 
     if (options.json) {
-      output += "{\"status\":";
+      output.append("{\"status\":");
       appendJsonText(output, status, JsonEscapes::standard);
-      output += ",\"command\":";
+      output.append(",\"command\":");
       appendJsonText(output, reply.text, JsonEscapes::standard);
-      output += "}\n";
+      output.append("}\n");
     } else if (reply.status == SuggestionStatus::ready) {
-      output += reply.text;
-      output += '\n';
+      output.append(reply.text);
+      output.push('\n');
     } else {
       std::println(stderr, "telar command suggest: {}", status);
     }
@@ -480,10 +480,10 @@ namespace telar::runtime::cli::window {
       }
 
       const RuntimePaths paths{memory, server, process_environment};
-      Session session{memory, paths.socket.c_str()};
+      Session session{memory, paths.socket.data()};
 
       session.receiveTimeout(receive_timeout);
-      Text output{AllocatorRef<char, Memory>{memory}};
+      Text output{memory};
       const auto result = execute(session, output);
 
       if (std::fwrite(output.data(), 1, output.size(), stdout) != output.size()) {

@@ -213,7 +213,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ResponseOutbox<Memory>::ResponseOutbox(Memory& memory, std::shared_ptr<PtyResponseQueue> queue)
-      : overflow_(AllocatorRef<std::uint8_t, Memory>{memory}),
+      : overflow_(memory),
         queue_(std::move(queue)) {}
 
   template <Allocator Memory>
@@ -242,13 +242,13 @@ namespace telar::runtime {
       }
 
       if (overflow_.empty()) {
-        overflow_.insert(overflow_.end(), inline_.begin(), inline_.begin() + size_);
+        overflow_.extend({inline_.begin(), inline_.begin() + size_});
       }
 
       const auto* header = reinterpret_cast<const std::uint8_t*>(&length);
 
-      overflow_.insert(overflow_.end(), header, header + header_bytes);
-      overflow_.insert(overflow_.end(), response.begin(), response.end());
+      overflow_.extend({header, header + header_bytes});
+      overflow_.extend({response.begin(), response.end()});
     }
 
     size_ = required;
@@ -282,7 +282,7 @@ namespace telar::runtime {
   void ResponseOutbox<Memory>::discard() noexcept {
     size_ = 0;
     consumed_ = 0;
-    Vector<std::uint8_t, Memory>{overflow_.get_allocator()}.swap(overflow_);
+    overflow_ = ds::Vec<std::uint8_t, Memory>{overflow_.memory()};
     if (priority_) {
       queue_->releaseWorkerPriority();
       priority_ = false;

@@ -434,7 +434,7 @@ namespace telar::runtime::cli::machine {
   }
 
   MachineProfiles load(Memory& memory, const std::string& path) {
-    Vector<unsigned char, Memory> source{AllocatorRef<unsigned char, Memory>{memory}};
+    ds::Vec<unsigned char, Memory> source{memory};
 
     try {
       if (!readPrivateFile(AT_FDCWD, path, source, MachineLimits::file_bytes)) {
@@ -528,23 +528,23 @@ namespace telar::runtime::cli::machine {
 
   int list(Memory& memory, const MachineProfiles& profiles, bool json) {
     if (json) {
-      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> output{memory};
 
-      output += "{\"local\":";
+      output.append("{\"local\":");
       appendJsonText(output, localLabel(profiles));
-      output += ",\"machines\":[";
+      output.append(",\"machines\":[");
       bool first = true;
 
       for (const auto& profile : profiles.rows()) {
         if (!first) {
-          output += ',';
+          output.push(',');
         }
 
         first = false;
         MachineProfileCodec::appendProfile(output, profile);
       }
 
-      output += "]}\n";
+      output.append("]}\n");
       std::fwrite(output.data(), 1, output.size(), stdout);
     } else {
       std::printf("%s\tlocal\n", localLabel(profiles).c_str());
@@ -642,7 +642,7 @@ namespace telar::runtime::cli::machine {
     const RuntimePaths paths{memory, ServerOptions{}, process_environment};
 
     paths.prepareSocket();
-    const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.rfind('/'));
+    const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.view().rfind('/'));
     ds::Array<unsigned char, SHA256_DIGEST_LENGTH> digest;
 
     ::SHA256(reinterpret_cast<const unsigned char*>(destination.data()), destination.size(), digest.dataMut());
@@ -822,15 +822,15 @@ namespace telar::runtime::cli::machine {
       found = discover(memory, profile, detail);
     } catch (const MachineFailure& error) {
       if (json) {
-        String<Memory> output{AllocatorRef<char, Memory>{memory}};
+        ds::String<Memory> output{memory};
 
-        output += "{\"label\":";
+        output.append("{\"label\":");
         appendJsonText(output, profile.label(), JsonEscapes::control);
-        output += ",\"reachable\":false,\"error\":";
+        output.append(",\"reachable\":false,\"error\":");
         appendJsonText(output, error.what(), JsonEscapes::control);
-        output += ",\"detail\":";
+        output.append(",\"detail\":");
         appendJsonText(output, trimText(detail, " \t\r\n"), JsonEscapes::control);
-        output += "}\n";
+        output.append("}\n");
         std::fwrite(output.data(), 1, output.size(), stdout);
       } else {
         std::fprintf(stderr, "telar machine: %.*s (%.*s) is not reachable: %s\n%.*s\n", static_cast<int>(profile.label().size()), profile.label().data(), static_cast<int>(profile.destination().size()), profile.destination().data(), error.what(), static_cast<int>(trimText(detail, " \t\r\n").size()), trimText(detail, " \t\r\n").data());
@@ -843,20 +843,20 @@ namespace telar::runtime::cli::machine {
     const auto local_schema = std::string{handshake::schema_id.begin(), handshake::schema_id.end()};
 
     if (json) {
-      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> output{memory};
 
-      output += "{\"label\":";
+      output.append("{\"label\":");
       appendJsonText(output, profile.label(), JsonEscapes::control);
-      output += ",\"reachable\":true,\"schema\":\"" + schema + "\",\"local_schema\":\"" + local_schema + "\",\"compatible\":";
-      output += found->compatible() ? "true" : "false";
+      output.append(",\"reachable\":true,\"schema\":\"" + schema + "\",\"local_schema\":\"" + local_schema + "\",\"compatible\":");
+      output.append(found->compatible() ? "true" : "false");
       for (const auto& [name, value] : ds::Array<std::pair<std::string_view, std::string_view>, 3>{{{"home", found->home()}, {"shell", found->shell()}, {"socket", found->endpoint()}}}) {
-        output += ",\"";
-        output += name;
-        output += "\":";
+        output.append(",\"");
+        output.append(name);
+        output.append("\":");
         appendJsonText(output, value, JsonEscapes::control);
       }
 
-      output += "}\n";
+      output.append("}\n");
       std::fwrite(output.data(), 1, output.size(), stdout);
     } else {
       std::printf("%.*s\t%.*s\treachable\n  home\t%.*s\n  shell\t%.*s\n  socket\t%.*s\n  schema\t%s (%s)\n", static_cast<int>(profile.label().size()), profile.label().data(), static_cast<int>(profile.destination().size()), profile.destination().data(), static_cast<int>(found->home().size()), found->home().data(), static_cast<int>(found->shell().size()), found->shell().data(), static_cast<int>(found->endpoint().size()), found->endpoint().data(), schema.c_str(), found->compatible() ? "matches this telar" : ("does not match this telar " + local_schema + "; update telar on one side").c_str());
@@ -988,12 +988,12 @@ namespace telar::runtime::cli::machine::filter {
     return plain;
   }
 
-  void json(Memory& memory, const JsonValue& value, String<Memory>& output, std::vector<std::string>& dropped) {
+  void json(Memory& memory, const JsonValue& value, ds::String<Memory>& output, std::vector<std::string>& dropped) {
     const auto source = value.encoded();
-    String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> scratch{memory};
 
     if (source.starts_with('{')) {
-      output += '{';
+      output.push('{');
       bool first = true;
 
       value.eachMember([&](JsonValue key, JsonValue child) {
@@ -1007,32 +1007,32 @@ namespace telar::runtime::cli::machine::filter {
         }
 
         if (!first) {
-          output += ',';
+          output.push(',');
         }
 
         first = false;
-        output += key.encoded();
-        output += ':';
+        output.append(key.encoded());
+        output.push(':');
         json(memory, child, output, dropped);
       });
 
-      output += '}';
+      output.push('}');
     } else if (source.starts_with('[')) {
-      output += '[';
+      output.push('[');
       bool first = true;
 
       value.eachElement([&](JsonValue child) {
         if (!first) {
-          output += ',';
+          output.push(',');
         }
 
         first = false;
         json(memory, child, output, dropped);
       });
 
-      output += ']';
+      output.push(']');
     } else {
-      output += source;
+      output.append(source);
     }
   }
 
@@ -1519,7 +1519,7 @@ namespace telar::runtime::cli {
     server.fresh = options.fresh;
     const RuntimePaths paths{memory, server, process_environment};
     ds::Option<RuntimeConnection> connection;
-    if (connectExisting(connection, paths.socket.c_str()) && options.fresh) {
+    if (connectExisting(connection, paths.socket.data()) && options.fresh) {
       std::fprintf(stderr, "telar: a runtime is already running; stop it first (telar server stop) or drop --fresh\n");
       throw CommandError{"RuntimeAlreadyRunning"};
     }
@@ -1531,7 +1531,7 @@ namespace telar::runtime::cli {
       constexpr auto retry_interval = std::chrono::milliseconds{10};
       const auto deadline = std::chrono::steady_clock::now() + start_timeout;
 
-      while (!connectExisting(connection, paths.socket.c_str())) {
+      while (!connectExisting(connection, paths.socket.data())) {
         int status = 0;
         if (::waitpid(child, &status, WNOHANG) == child || std::chrono::steady_clock::now() >= deadline) {
           throw CommandError{"RuntimeUnavailable"};

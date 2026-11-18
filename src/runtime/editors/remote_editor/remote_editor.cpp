@@ -14,9 +14,9 @@ namespace telar::runtime {
   RemoteEditor::RemoteEditor(ConcurrentMemory& memory)
       : memory_(memory),
         output_(memory, output_limit),
-        expression_(AllocatorRef<char, ConcurrentMemory>{memory}),
-        path_(AllocatorRef<char, ConcurrentMemory>{memory}),
-        editor_(AllocatorRef<char, ConcurrentMemory>{memory}) {
+        expression_(memory),
+        path_(memory),
+        editor_(memory) {
     expression_.reserve(10 * 1024);
   }
 
@@ -27,7 +27,7 @@ namespace telar::runtime {
     struct stat status{};
     EditorOpened result{.request_id = request.request_id, .outcome = EditorOutcome::unavailable};
 
-    if (::stat(path_.c_str(), &status) != 0 || !S_ISREG(status.st_mode)) {
+    if (::stat(path_.data(), &status) != 0 || !S_ISREG(status.st_mode)) {
       result.outcome = EditorOutcome::missing;
       reply.send(result);
       return;
@@ -166,7 +166,7 @@ namespace telar::runtime {
 
   void RemoteEditor::discoverVim(Session& session) {
     const ds::Array<std::string_view, 2> arguments{editor_, "--serverlist"};
-    String<ConcurrentMemory> names{AllocatorRef<char, ConcurrentMemory>{memory_}};
+    ds::String<ConcurrentMemory> names{memory_};
 
     try {
       names.assign(command(session, arguments));
@@ -208,26 +208,26 @@ namespace telar::runtime {
   void RemoteEditor::quote(std::string_view value, bool lisp) {
     const char delimiter = lisp ? '"' : '\'';
 
-    expression_.push_back(delimiter);
+    expression_.push(delimiter);
     for (const char byte : value) {
       if (lisp && (byte == '"' || byte == '\\')) {
-        expression_.push_back('\\');
+        expression_.push('\\');
       }
 
-      expression_.push_back(byte);
+      expression_.push(byte);
       if (!lisp && byte == '\'') {
-        expression_.push_back('\'');
+        expression_.push('\'');
       }
     }
 
-    expression_.push_back(delimiter);
+    expression_.push(delimiter);
   }
 
   void RemoteEditor::number(std::uint32_t value) {
     ds::Array<char, 16> bytes;
     const auto result = std::to_chars(bytes.dataMut(), bytes.dataMut() + bytes.size(), value);
 
-    expression_.append(bytes.dataMut(), result.ptr);
+    expression_.append(std::string_view{bytes.dataMut(), result.ptr});
   }
 
   void RemoteEditor::vimEndpoint(Session& session, std::string_view endpoint) {
@@ -262,22 +262,22 @@ namespace telar::runtime {
       return;
     }
 
-    expression_ = "getpid() == ";
+    expression_.assign("getpid() == ");
     number(pid);
-    expression_ += " && hostname() == ";
+    expression_.append(" && hostname() == ");
     quote(host.data(), false);
-    expression_ += " ? [execute('drop ' . fnameescape(";
+    expression_.append(" ? [execute('drop ' . fnameescape(");
     quote(session.request.path, false);
-    expression_ += "))";
+    expression_.append("))");
     if (session.request.line != 0) {
-      expression_ += ", cursor(";
+      expression_.append(", cursor(");
       number(session.request.line);
-      expression_ += ", ";
+      expression_.append(", ");
       number(std::max(session.request.column, 1u));
-      expression_ += ')';
+      expression_.push(')');
     }
 
-    expression_ += ", 1][-1] : 0";
+    expression_.append(", 1][-1] : 0");
     const ds::Array<std::string_view, 5> arguments{editor_, option, endpoint, "--remote-expr", expression_};
     if (trimText(command(session, arguments), " \r\n\t") != "1") {
       throw RequestError{FailureCode::internal, "Editor rejected open"};
@@ -322,7 +322,7 @@ namespace telar::runtime {
     const auto slash = session.request.editor.rfind('/');
 
     editor_.assign(slash == std::string_view::npos ? std::string_view{} : session.request.editor.substr(0, slash + 1));
-    editor_ += "emacsclient";
+    editor_.append("emacsclient");
     const ds::Array<std::string_view, 6> identity_arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)"};
     std::string_view identity;
 
@@ -353,24 +353,24 @@ namespace telar::runtime {
         continue;
       }
 
-      expression_ = "(if (and (= (emacs-pid) ";
+      expression_.assign("(if (and (= (emacs-pid) ");
       number(pid);
-      expression_ += ") (equal (system-name) ";
+      expression_.append(") (equal (system-name) ");
       quote(host.data(), true);
-      expression_ += ")) (let ((f (catch 'found (dolist (f (frame-list)) (when (and (not (display-graphic-p f)) (equal (terminal-name (frame-terminal f)) (concat \"/dev/\" ";
+      expression_.append(")) (let ((f (catch 'found (dolist (f (frame-list)) (when (and (not (display-graphic-p f)) (equal (terminal-name (frame-terminal f)) (concat \"/dev/\" ");
       quote(terminal.view().substr(sizeof("/dev/") - 1), true);
-      expression_ += "))) (throw 'found f)))))) (if f (with-selected-frame f (find-file (concat \"/:\" ";
+      expression_.append("))) (throw 'found f)))))) (if f (with-selected-frame f (find-file (concat \"/:\" ");
       quote(session.request.path, true);
-      expression_ += "))";
+      expression_.append("))");
       if (session.request.line != 0) {
-        expression_ += " (goto-char (point-min)) (forward-line ";
+        expression_.append(" (goto-char (point-min)) (forward-line ");
         number(session.request.line - 1);
-        expression_ += ") (move-to-column ";
+        expression_.append(") (move-to-column ");
         number(session.request.column == 0 ? 0 : session.request.column - 1);
-        expression_ += ')';
+        expression_.push(')');
       }
 
-      expression_ += " 1) 0)) 0)";
+      expression_.append(" 1) 0)) 0)");
       const ds::Array<std::string_view, 6> arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression_};
       const auto result = trimText(command(session, arguments), " \r\n\t");
       if (result == "1") {

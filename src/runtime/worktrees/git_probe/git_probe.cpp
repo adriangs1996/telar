@@ -10,6 +10,7 @@ import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.git.checkout;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -43,9 +44,9 @@ namespace telar::runtime {
     GitDistance result;
 
     parseDiff(difference.view(), result);
-    String<ConcurrentMemory> range{ancestor.view(), AllocatorRef<char, ConcurrentMemory>{memory_}};
+    ds::String<ConcurrentMemory> range{memory_, ancestor.view()};
 
-    range += "..HEAD";
+    range.append("..HEAD");
     const auto count = line<32>(root, deadline, {"rev-list", "--count", range, "--"});
     const auto text = count.view();
     const auto ahead = parseExact<decltype(result.ahead)>(text);
@@ -124,9 +125,9 @@ namespace telar::runtime {
     Result result{.identity = request.identity};
 
     try {
-      String<ConcurrentMemory> path{request.path.view(), AllocatorRef<char, ConcurrentMemory>{memory_}};
+      ds::String<ConcurrentMemory> path{memory_, request.path.view()};
       struct stat filesystem_status{};
-      if (::stat(path.c_str(), &filesystem_status) != 0 || !S_ISDIR(filesystem_status.st_mode)) {
+      if (::stat(path.data(), &filesystem_status) != 0 || !S_ISDIR(filesystem_status.st_mode)) {
         return result;
       }
 

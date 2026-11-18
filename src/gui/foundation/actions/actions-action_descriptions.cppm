@@ -7,6 +7,7 @@ import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import :binding;
 import :binding_effects;
+import telar.base.ds;
 
 // Interface: config/action_descriptions.cppm
 export {
@@ -31,7 +32,7 @@ export {
       static constexpr std::size_t compiled_client_sections = 2;
       static constexpr std::size_t maximum_callbacks = compiled_client_sections * BindingLimits::bindings;
 
-      Vector<ExtendedActionDescription, Memory> extended_;
+      ds::Vec<ExtendedActionDescription, Memory> extended_;
       std::size_t callbacks_ = 0;
     };
 

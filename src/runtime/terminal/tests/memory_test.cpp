@@ -152,7 +152,7 @@ namespace {
     BudgetAllocator memory{system, 1024};
 
     {
-      Vector<std::uint64_t, decltype(memory)> numbers{AllocatorRef<std::uint64_t, decltype(memory)>{memory}};
+      ds::Vec<std::uint64_t, decltype(memory)> numbers{memory};
 
       numbers.resize(16, 42);
       check(memory.liveBytes() == 16 * sizeof(std::uint64_t));

@@ -125,10 +125,10 @@ export namespace telar::gui::inline foundation::inline terminal {
     // Keeps only the targets of links still held.
     void compactUris();
 
-    Vector<CellValue, Memory> cells_;
-    Vector<Slot, Memory> slots_;
-    Vector<Link, Memory> links_;
-    Vector<Byte, Memory> uris_;
+    ds::Vec<CellValue, Memory> cells_;
+    ds::Vec<Slot, Memory> slots_;
+    ds::Vec<Link, Memory> links_;
+    ds::Vec<Byte, Memory> uris_;
     ds::Array<Pending, maximum_pending> pending_{};
     std::uint64_t generation_ = 0;
     std::uint64_t revision_ = 0;

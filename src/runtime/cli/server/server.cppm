@@ -8,13 +8,14 @@ import telar.config.runtime;
 import telar.platform.paths;
 import telar.base.memory.allocators;
 import telar.config.core;
+import telar.base.ds;
 
 export namespace telar::runtime::cli {
 
   using PluginWorkerOptions = config::PluginWorkerOptions;
 
   // Keep the reference worker lexical scope and its mutable Lua binding factory.
-  String<Memory> pluginCallbackSource(Memory& memory, std::string_view source, std::string_view action);
+  ds::String<Memory> pluginCallbackSource(Memory& memory, std::string_view source, std::string_view action);
 
   int retainPluginCallback(lua_State* state, const config::RetainedActionValidator& validator, config::LimitNotices& limits);
 

@@ -55,7 +55,7 @@ namespace telar::git {
   };
 
   // Sizes `string` without zeroing it; the inflater overwrites every byte.
-  void resizeForOverwrite(String<Memory>& string, std::size_t size);
+  void resizeForOverwrite(ds::String<Memory>& string, std::size_t size);
 
   struct CommitHeader {
     ObjectId tree;
@@ -64,7 +64,7 @@ namespace telar::git {
 
   // Parses the header of a commit, or of its first bytes: the tree, the
   // parents (appended to `parents`) and the committer time.
-  bool parseCommit(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, Vector<ObjectId, Memory>& parents);
+  bool parseCommit(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, ds::Vec<ObjectId, Memory>& parents);
 
   inline constexpr std::uint32_t mode_type_mask = 0170000;
   inline constexpr std::uint32_t mode_directory = 0040000;
@@ -129,7 +129,7 @@ namespace telar::git {
 
     // Reads object `id` into `output`. With a non-zero `prefix`, only its first
     // `prefix` bytes are kept, and an undeltified object is inflated no further.
-    Lookup read(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix = 0);
+    Lookup read(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix = 0);
 
     // Releases buffers that one large object grew, so the cache stays small.
     void trim();
@@ -163,8 +163,8 @@ namespace telar::git {
     Lookup locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset);
     bool entryAt(const Pack& pack, std::uint64_t offset, Entry& entry) noexcept;
     bool inflatePacked(const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole);
-    Lookup readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, String<Memory>& output, std::size_t prefix);
-    Lookup readLoose(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix);
+    Lookup readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
+    Lookup readLoose(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
 
     // Counts bytes against the per-read budget, so that a crafted delta chain
     // cannot make one read inflate gigabytes.
@@ -176,13 +176,13 @@ namespace telar::git {
     FileDescriptor objects_;
     Fingerprint packs_identity_;
     Inflater inflater_;
-    Vector<Pack, Memory> packs_;
-    Vector<Link, Memory> chain_;
+    ds::Vec<Pack, Memory> packs_;
+    ds::Vec<Link, Memory> chain_;
     std::size_t last_pack_ = 0;
-    String<Memory> compressed_;
-    String<Memory> base_;
-    String<Memory> target_;
-    String<Memory> delta_;
+    ds::String<Memory> compressed_;
+    ds::String<Memory> base_;
+    ds::String<Memory> target_;
+    ds::String<Memory> delta_;
     ds::Array<std::uint8_t, 8192> block_;
     ds::Array<std::uint8_t, 16384> chunk_;
   };
@@ -252,8 +252,8 @@ namespace telar::git {
     // Validates the header, the chunk table and the fanout of one layer.
     bool addLayer(int objects, const char* path);
 
-    Vector<Layer, Memory> layers_;
-    String<Memory> chain_;
+    ds::Vec<Layer, Memory> layers_;
+    ds::String<Memory> chain_;
     Fingerprint single_;
     Fingerprint chain_identity_;
     ObjectFormat format_ = ObjectFormat::sha1;

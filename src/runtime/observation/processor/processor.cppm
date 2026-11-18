@@ -236,8 +236,8 @@ export {
       // Reads terminal_.
       tbc::view<CommandTracker, tbc::lt::self> tracker_;
       tbc::view<HistorySession, tbc::lt::self> session_;
-      String<ConcurrentMemory> workspace_path_;
-      String<ConcurrentMemory> shell_;
+      ds::String<ConcurrentMemory> workspace_path_;
+      ds::String<ConcurrentMemory> shell_;
       TerminalSize initial_size_;
       AgentScreenInference inference_;
       bool reset_needed_ = false;

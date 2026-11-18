@@ -62,17 +62,17 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  void appendLowerHex(String<Memory>& output, std::span<const std::uint8_t> bytes) {
+  void appendLowerHex(ds::String<Memory>& output, std::span<const std::uint8_t> bytes) {
     const auto start = output.size();
 
     output.resize(start + 2 * bytes.size());
-    static_cast<void>(encodeLowerHex(bytes, std::span{output}.subspan(start)));
+    static_cast<void>(encodeLowerHex(bytes, std::span{output.dataMut(), output.size()}.subspan(start)));
   }
 
-  template void appendLowerHex<Memory>(String<Memory>& output, std::span<const std::uint8_t> bytes);
-  template void appendLowerHex<ConcurrentMemory>(String<ConcurrentMemory>& output, std::span<const std::uint8_t> bytes);
-  template void appendLowerHex<SystemAllocator>(String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
-  template void appendLowerHex<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<Memory>(ds::String<Memory>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<ConcurrentMemory>(ds::String<ConcurrentMemory>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<SystemAllocator>(ds::String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
 
   std::string lowerHex(std::span<const std::uint8_t> bytes) {
     std::string text(2 * bytes.size(), '\0');
@@ -183,12 +183,12 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   bool SchemaVersion<Memory>::isOne(Memory& memory, const JsonValue& value) {
-    String<Memory> text{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> text{memory};
 
     if (value.encoded().starts_with('"')) {
       value.string(text);
     } else {
-      text = value.encoded();
+      text.assign(value.encoded());
     }
 
     return SchemaVersion{memory}.parse(text);
@@ -196,7 +196,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   SchemaVersion<Memory>::SchemaVersion(Memory& memory)
-      : digits_(AllocatorRef<char, Memory>{memory}) {}
+      : digits_(memory) {}
 
   template <Allocator Memory>
   bool SchemaVersion<Memory>::parse(std::string_view text) {
@@ -227,8 +227,8 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto first = digits_.find_first_not_of('0');
-    if (first == String<Memory>::npos) {
+    const auto first = digits_.view().find_first_not_of('0');
+    if (first == std::string_view::npos) {
       return false;
     }
 
@@ -297,10 +297,10 @@ namespace telar::runtime {
 
       if (base == 16) {
         for (unsigned shift = 4; shift != 0; --shift) {
-          digits_ += static_cast<char>('0' + ((value >> (shift - 1)) & 1));
+          digits_.push(static_cast<char>('0' + ((value >> (shift - 1)) & 1)));
         }
       } else {
-        digits_ += byte;
+        digits_.push(byte);
       }
 
       if (!point) {

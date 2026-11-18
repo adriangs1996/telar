@@ -47,7 +47,8 @@ namespace {
     HttpMessage request{fixture.memory};
 
     request.readHttp1Head("POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 4\r\n\r\n");
-    request.body.assign({'b', 'o', 'd', 'y'});
+    request.body.clear();
+      request.body.extend(ds::Array<std::uint8_t, 4>{'b', 'o', 'd', 'y'}.view());
     std::vector<Byte> buffer(HttpMessageLimits::message_bytes);
     const auto original = HttpMessageCodec::encodeMessage(std::span{buffer}, request);
     const auto view = HttpMessageCodec::decode(original);
@@ -141,10 +142,10 @@ namespace {
       auto message = std::make_unique<HttpMessage<Memory>>(fixture.memory);
 
       message->version = HttpVersion::http2;
-      message->method = method;
-      message->scheme = scheme;
-      message->authority = "fixture.test";
-      message->target = target;
+      message->method.assign(method);
+      message->scheme.assign(scheme);
+      message->authority.assign("fixture.test");
+      message->target.assign(target);
       return message;
     };
 
@@ -156,7 +157,7 @@ namespace {
 
     auto userinfo = request("GET", "https", "/");
 
-    userinfo->authority = "user@fixture.test";
+    userinfo->authority.assign("user@fixture.test");
     check(rejected(*userinfo));
 
     auto transfer = request("POST", "https", "/");
@@ -227,7 +228,8 @@ namespace {
       HttpMessage message{fixture.memory};
 
       message.readHttp1Head("POST /upload HTTP/1.1\r\nHost: fixture.test\r\nConnection: keep-alive, x-hop\r\nContent-Length: 1\r\n\r\n");
-      message.body.assign({'b'});
+      message.body.clear();
+      message.body.push('b');
       message.trailers.append(trailer, "value");
       return !throws<std::invalid_argument>([&] {
         static_cast<void>(message.serializeHttp1());

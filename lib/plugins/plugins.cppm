@@ -230,7 +230,7 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    void appendInspection(String<Memory>& output, const Package& package);
+    void appendInspection(ds::String<Memory>& output, const Package& package);
 
   }
 }
@@ -270,7 +270,7 @@ export {
     class PackageFiles {
     public:
       struct Entry {
-        String<Memory> path;
+        ds::String<Memory> path;
         bool directory;
       };
 
@@ -279,10 +279,10 @@ export {
       std::span<const Entry> entries() const noexcept;
 
     private:
-      void scan(DirectoryStream& iterator, String<Memory>& prefix);
+      void scan(DirectoryStream& iterator, ds::String<Memory>& prefix);
 
       Memory& memory_;
-      Vector<Entry, Memory> entries_;
+      ds::Vec<Entry, Memory> entries_;
     };
 
     template <Allocator Memory>
@@ -464,10 +464,10 @@ export {
 namespace telar::runtime::plugins {
 
   template <Allocator Memory>
-  void registerPackages(Vector<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
+  void registerPackages(ds::Vec<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
 
-  extern template void registerPackages<Memory>(Vector<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
-  extern template void registerPackages<ConcurrentMemory>(Vector<Package, ConcurrentMemory>& packages, ConcurrentMemory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(ConcurrentMemory& memory, std::string_view directory, std::string_view path));
+  extern template void registerPackages<Memory>(ds::Vec<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
+  extern template void registerPackages<ConcurrentMemory>(ds::Vec<Package, ConcurrentMemory>& packages, ConcurrentMemory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(ConcurrentMemory& memory, std::string_view directory, std::string_view path));
 
 }
 
@@ -480,7 +480,7 @@ export {
     class PackageRegistryStorage {
     public:
       TBC_GENERIC explicit PackageRegistryStorage(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications)
-          : packages_(AllocatorRef<Package, Memory>{memory}) {
+          : packages_(memory) {
         registerPackages<Memory>(packages_, memory, directory, specifications, [](Memory& memory, std::string_view directory, std::string_view path) {
           return Inspector::inspectConfigured(memory, directory, path);
         });
@@ -491,7 +491,7 @@ export {
       }
 
     private:
-      Vector<Package, Memory> packages_;
+      ds::Vec<Package, Memory> packages_;
     };
 
   }
@@ -521,25 +521,25 @@ export {
     public:
       // Generic over the caller's environment, so it stays here and hands the path to trustFile.
       template <Allocator Memory, EnvironmentLookup Environment>
-      TBC_GENERIC static String<Memory> trust(Memory& memory, const Environment& environment) {
+      TBC_GENERIC static ds::String<Memory> trust(Memory& memory, const Environment& environment) {
         return trustFile(cli::RuntimePaths<Memory>::configHome(memory, environment));
       }
 
       // Generic over the caller's environment, so it stays here and hands the path to installationDirectory.
       template <Allocator Memory, EnvironmentLookup Environment>
-      TBC_GENERIC static String<Memory> installation(Memory& memory, const Environment& environment, const Package& package) {
+      TBC_GENERIC static ds::String<Memory> installation(Memory& memory, const Environment& environment, const Package& package) {
         return installationDirectory(cli::xdgDirectory(memory, environment, "XDG_DATA_HOME", "/.local/share"), package);
       }
 
     private:
       template <Allocator Memory>
-      static String<Memory> trustFile(String<Memory> home);
+      static ds::String<Memory> trustFile(ds::String<Memory> home);
 
-      static String<Memory> installationDirectory(String<Memory> data, const Package& package);
+      static ds::String<Memory> installationDirectory(ds::String<Memory> data, const Package& package);
     };
 
-    extern template String<Memory> Paths::trustFile<Memory>(String<Memory> home);
-    extern template String<ConcurrentMemory> Paths::trustFile<ConcurrentMemory>(String<ConcurrentMemory> home);
+    extern template ds::String<Memory> Paths::trustFile<Memory>(ds::String<Memory> home);
+    extern template ds::String<ConcurrentMemory> Paths::trustFile<ConcurrentMemory>(ds::String<ConcurrentMemory> home);
 
   }
 }
@@ -568,7 +568,7 @@ export {
       void upsert(const Manifest& manifest, const PackageDigest& digest, Capabilities capabilities);
       bool revoke(std::string_view id);
 
-      String<Memory> json(Memory& memory) const;
+      ds::String<Memory> json(Memory& memory) const;
 
       static PackageDigest parseDigest(std::string_view text);
 
@@ -591,11 +591,11 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    void saveTrust(Memory& memory, const TrustStore& store, String<Memory> path);
+    void saveTrust(Memory& memory, const TrustStore& store, ds::String<Memory> path);
 
-    void updateTrust(Memory& memory, const Package& package, Capabilities capabilities, String<Memory> path);
+    void updateTrust(Memory& memory, const Package& package, Capabilities capabilities, ds::String<Memory> path);
 
-    void revokeTrust(Memory& memory, std::string_view id, String<Memory> path);
+    void revokeTrust(Memory& memory, std::string_view id, ds::String<Memory> path);
 
   }
 }

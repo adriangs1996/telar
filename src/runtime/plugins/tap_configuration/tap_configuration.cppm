@@ -305,10 +305,10 @@ export {
           specification.name = copied.manifest.id;
           specification.declared = copied.manifest.capabilities;
           specification.granted = granted;
-          String<Memory> entry{copied.root.view(), AllocatorRef<char, Memory>{memory}};
+          ds::String<Memory> entry{memory, copied.root.view()};
 
-          entry += '/';
-          entry += copied.manifest.entry.view();
+          entry.push('/');
+          entry.append(copied.manifest.entry.view());
           specification.entry.assign(entry);
           ++count_;
         }

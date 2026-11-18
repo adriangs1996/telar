@@ -7,6 +7,7 @@ import std;
 import telar.platform.paths;
 import telar.base.memory.allocators;
 import telar.config.runtime;
+import telar.base.ds;
 
 export namespace telar::runtime::config {
 
@@ -24,7 +25,7 @@ export namespace telar::runtime::config {
     void load(const cli::ServerOptions& options, const Environment& environment);
 
   private:
-    String<Memory> readSource(const char* path) const;
+    ds::String<Memory> readSource(const char* path) const;
 
     Memory& memory_;
     RuntimeValues<Memory>& values_;

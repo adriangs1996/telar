@@ -142,17 +142,17 @@ export {
     public:
       explicit PfIdentity(Memory& memory, std::string_view endpoint);
 
-      String<Memory> anchor;
-      String<Memory> label;
+      ds::String<Memory> anchor;
+      ds::String<Memory> label;
     };
 
     extern template class PfIdentity<Memory>;
     extern template class PfIdentity<ConcurrentMemory>;
 
     template <Allocator Memory>
-    String<Memory> pfRules(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
-    extern template String<Memory> pfRules<Memory>(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
-    extern template String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
+    ds::String<Memory> pfRules(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
+    extern template ds::String<Memory> pfRules<Memory>(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
+    extern template ds::String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
 
   }
 }

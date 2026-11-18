@@ -230,7 +230,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   DeferredReport<Memory>::DeferredReport(Memory& memory)
-      : payload(AllocatorRef<Byte, Memory>{memory}) {}
+      : payload(memory) {}
 
   template <Allocator Memory>
   bool DeferredReport<Memory>::rechecked(std::uint32_t completed) const noexcept {

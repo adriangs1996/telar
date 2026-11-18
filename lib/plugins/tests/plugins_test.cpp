@@ -240,7 +240,7 @@ namespace {
     TemporaryDirectory directory{"/tmp/telar-plugins-trust-XXXXXX"};
     const auto path = std::string{directory.path()} + "/config/trust.json";
     const auto file = [&] {
-      return String<Memory>{path, AllocatorRef<char, Memory>{memory}};
+      return ds::String<Memory>{memory, path};
     };
 
     plugins::Package package;

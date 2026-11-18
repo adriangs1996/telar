@@ -179,7 +179,7 @@ export {
 #if TELAR_DIAGNOSTICS
       diagnostics::FileStorage<ConcurrentMemory> storage_;
 #endif
-      Vector<Byte, ConcurrentMemory> decode_;
+      ds::Vec<Byte, ConcurrentMemory> decode_;
       [[no_unique_address]] HistoryCounters counters_;
     };
 

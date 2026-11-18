@@ -262,7 +262,7 @@ namespace {
     telar::ds::Array<char, ConfigurationQuery::capacity> output{};
     const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output.viewMut());
     const auto parsed = telar::runtime::JsonValue::parse(encoded);
-    String<telar::ConcurrentMemory> decoded{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
+    telar::ds::String<telar::ConcurrentMemory> decoded{memory};
 
     requiredJsonField(parsed, "history_path").string(decoded);
     constexpr std::size_t path_length = 512;

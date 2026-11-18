@@ -165,7 +165,7 @@ export {
       static constexpr std::size_t maximum_bytes = PtyResponseQueue::total_byte_capacity;
       static constexpr std::size_t header_bytes = sizeof(std::uint16_t);
       ds::Array<std::uint8_t, inline_bytes> inline_;
-      Vector<std::uint8_t, Memory> overflow_;
+      ds::Vec<std::uint8_t, Memory> overflow_;
       std::shared_ptr<PtyResponseQueue> queue_;
       std::size_t size_ = 0;
       std::size_t consumed_ = 0;

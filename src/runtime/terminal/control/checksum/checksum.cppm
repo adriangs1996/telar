@@ -68,7 +68,7 @@ export namespace telar::runtime::control {
     static constexpr std::size_t maximum_grapheme_points = std::numeric_limits<std::uint16_t>::max();
     static constexpr std::size_t maximum_batch_columns = 256;
     static constexpr std::size_t batch_points = 256;
-    Vector<std::uint32_t, ConcurrentMemory> graphemes_;
+    ds::Vec<std::uint32_t, ConcurrentMemory> graphemes_;
   };
 
 }

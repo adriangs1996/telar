@@ -17,8 +17,8 @@ namespace telar::git {
   }
 
   ShallowCommits::ShallowCommits(Memory& memory) noexcept
-      : ids_(AllocatorRef<ObjectId, Memory>{memory}),
-        bytes_(AllocatorRef<char, Memory>{memory}) {}
+      : ids_(memory),
+        bytes_(memory) {}
 
   bool ShallowCommits::load(int common, ObjectFormat format, const Limits& limits) {
     const auto identity = fingerprintAt(common, "shallow");
@@ -51,11 +51,11 @@ namespace telar::git {
         return false;
       }
 
-      ids_.push_back(*id);
+      ids_.push(*id);
       lines.remove_prefix(end == std::string_view::npos ? lines.size() : end + 1);
     }
 
-    std::ranges::sort(ids_, [](const ObjectId& left, const ObjectId& right) {
+    std::ranges::sort(ids_.viewMut(), [](const ObjectId& left, const ObjectId& right) {
       return compareBytes(left.view(), right.view()) < 0;
     });
 
@@ -74,12 +74,12 @@ namespace telar::git {
   }
 
   DivergenceWalk::DivergenceWalk(Memory& memory) noexcept
-      : nodes_(AllocatorRef<Node, Memory>{memory}),
-        slots_(AllocatorRef<std::uint32_t, Memory>{memory}),
-        parents_(AllocatorRef<ObjectId, Memory>{memory}),
-        graph_parents_(AllocatorRef<std::uint32_t, Memory>{memory}),
-        heap_(AllocatorRef<Queued, Memory>{memory}),
-        object_(AllocatorRef<char, Memory>{memory}) {}
+      : nodes_(memory),
+        slots_(memory),
+        parents_(memory),
+        graph_parents_(memory),
+        heap_(memory),
+        object_(memory) {}
 
   ds::Option<Divergence> DivergenceWalk::count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right) {
     if (left == right) {
@@ -125,11 +125,11 @@ namespace telar::git {
         remaining_slop = slop;
       }
 
-      std::ranges::pop_heap(heap_, std::less{}, &Queued::key);
+      std::ranges::pop_heap(heap_.viewMut(), std::less{}, &Queued::key);
       const auto index = heap_.back().node;
 
-      heap_.pop_back();
-      auto& node = nodes_[index];
+      heap_.truncate(heap_.size() - 1);
+      auto& node = nodes_.atMut(index);
 
       node.queued = false;
       if (node.flags != both) {
@@ -151,27 +151,31 @@ namespace telar::git {
     ahead_ = 0;
     behind_ = 0;
     interesting_ = 0;
-    slots_.assign(initial_slots, 0);
+    slots_.clear();
+    slots_.resize(initial_slots, 0);
   }
 
   void DivergenceWalk::release() {
     constexpr std::size_t retained = 4096;
     if (slots_.size() > retained) {
       slots_.clear();
-      slots_.shrink_to_fit();
+      slots_.shrinkToFit();
       graph_parents_.clear();
-      graph_parents_.shrink_to_fit();
+      graph_parents_.shrinkToFit();
       nodes_.clear();
-      nodes_.shrink_to_fit();
+      nodes_.shrinkToFit();
       parents_.clear();
-      parents_.shrink_to_fit();
+      parents_.shrinkToFit();
       heap_.clear();
-      heap_.shrink_to_fit();
+      heap_.shrinkToFit();
     }
   }
 
   void DivergenceWalk::grow() {
-    slots_.assign(slots_.size() * 2, 0);
+    const auto count = slots_.size() * 2;
+
+    slots_.clear();
+    slots_.resize(count, 0);
     const auto mask = slots_.size() - 1;
 
     for (std::size_t node = 0; node < nodes_.size(); ++node) {
@@ -181,7 +185,7 @@ namespace telar::git {
         index = (index + 1) & mask;
       }
 
-      slots_[index] = static_cast<std::uint32_t>(node + 1);
+      slots_.atMut(index) = static_cast<std::uint32_t>(node + 1);
     }
   }
 
@@ -195,7 +199,7 @@ namespace telar::git {
     const auto mask = slots_.size() - 1;
 
     for (auto index = static_cast<std::size_t>(hashOf(id)) & mask;; index = (index + 1) & mask) {
-      auto& entry = slots_[index];
+      auto& entry = slots_.atMut(index);
       if (entry == 0 || nodes_[entry - 1].id == id) {
         return entry;
       }
@@ -246,7 +250,7 @@ namespace telar::git {
       node.key = key(infinite_generation, header.time);
     }
 
-    nodes_.push_back(node);
+    nodes_.push(node);
     entry = static_cast<std::uint32_t>(nodes_.size());
     return entry - 1;
   }
@@ -284,7 +288,7 @@ namespace telar::git {
   }
 
   void DivergenceWalk::mark(std::uint32_t index, std::uint8_t flags) {
-    auto& node = nodes_[index];
+    auto& node = nodes_.atMut(index);
     const auto previous = node.flags;
     const auto next = static_cast<std::uint8_t>(previous | flags);
     if (next == previous) {
@@ -307,8 +311,8 @@ namespace telar::git {
       ++interesting_;
     }
 
-    heap_.push_back({node.key, index});
-    std::ranges::push_heap(heap_, std::less{}, &Queued::key);
+    heap_.push({node.key, index});
+    std::ranges::push_heap(heap_.viewMut(), std::less{}, &Queued::key);
   }
 
   bool DivergenceWalk::expand(std::uint32_t index) {
@@ -319,7 +323,7 @@ namespace telar::git {
 
       graph_parents_.clear();
       if (!commit || !graph_->parents(*commit, limits_->commit_parents, [&](std::uint32_t parent) {
-            graph_parents_.push_back(parent);
+            graph_parents_.push(parent);
           })) {
         return false;
       }

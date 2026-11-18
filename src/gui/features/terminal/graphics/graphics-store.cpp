@@ -116,8 +116,8 @@ namespace telar::gui::features::terminal::graphics {
   GraphicsStore<Memory>::GraphicsStore(Memory& memory, GraphicsBudget& budget)
       : memory_(memory),
         budget_(budget),
-        images_(AllocatorRef<Owned<Image, Memory>, Memory>{memory}),
-        placements_(AllocatorRef<GraphicsPlacement, Memory>{memory}) {}
+        images_(memory),
+        placements_(memory) {}
 
   template <Allocator Memory>
   GraphicsStore<Memory>::~GraphicsStore() {
@@ -150,8 +150,8 @@ namespace telar::gui::features::terminal::graphics {
       if (!images_[index]->ready()) {
         const auto key = images_[index]->description().key;
 
-        std::erase_if(placements_, [&](const auto& placement) {
-          return sameKey(placement.key, key);
+        placements_.retain([&](const auto& placement) {
+          return !sameKey(placement.key, key);
         });
 
         eraseImage(index);
@@ -203,7 +203,7 @@ namespace telar::gui::features::terminal::graphics {
 
     auto replacement = makeOwned<Image>(memory_, memory_, message.image);
 
-    images_.push_back(std::move(replacement));
+    images_.push(std::move(replacement));
     bytes_ += requested;
     budget_.used += requested;
 
@@ -248,17 +248,18 @@ namespace telar::gui::features::terminal::graphics {
     const auto& placement = message.placement;
 
     validatePlacement(placement);
-    const auto found = std::find_if(placements_.begin(), placements_.end(), [&](const auto& entry) {
+    const auto placements = placements_.viewMut();
+    const auto found = std::ranges::find_if(placements, [&](const auto& entry) {
       return entry.virtual_id == placement.virtual_id;
     });
-    if (found != placements_.end()) {
+    if (found != placements.end()) {
       *found = placement;
     } else {
       if (placements_.size() == placement_capacity) {
         reached(GraphicsLimitKind::placements);
       }
 
-      placements_.push_back(placement);
+      placements_.push(placement);
     }
 
     ++revision_;
@@ -278,8 +279,8 @@ namespace telar::gui::features::terminal::graphics {
     }
 
     image->retire();
-    std::erase_if(placements_, [&](const auto& placement) {
-      return sameKey(placement.key, message.key);
+    placements_.retain([&](const auto& placement) {
+      return !sameKey(placement.key, message.key);
     });
 
     collectRetired(message.key.image_id);
@@ -294,8 +295,8 @@ namespace telar::gui::features::terminal::graphics {
       return false;
     }
 
-    const auto removed = std::erase_if(placements_, [&](const auto& placement) {
-      return placement.virtual_id == message.virtual_id;
+    const auto removed = placements_.retain([&](const auto& placement) {
+      return placement.virtual_id != message.virtual_id;
     });
     if (removed == 0) {
       return false;
@@ -481,7 +482,7 @@ namespace telar::gui::features::terminal::graphics {
     bytes_ -= released;
     budget_.used -= released;
     released_bytes_ += released;
-    images_.erase(images_.begin() + index);
+    static_cast<void>(images_.remove(index));
   }
 
   template <Allocator Memory>

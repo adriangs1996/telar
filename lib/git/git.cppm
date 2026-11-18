@@ -12,6 +12,7 @@ import :objects;
 import :history;
 import telar.sys.posix;
 export import :worktree;
+import telar.base.ds;
 
 // A native, read-only reader of a repository's state: the branch, its
 // upstream and divergence, and the counts git status reports. It never runs
@@ -69,11 +70,11 @@ export namespace telar::git {
     bool linked_worktree = false;
 
     HeadState head = HeadState::unknown;
-    String<Memory> branch; // short name, such as "main"; empty when detached
+    ds::String<Memory> branch; // short name, such as "main"; empty when detached
     ObjectId head_id;
 
     UpstreamState upstream = UpstreamState::none;
-    String<Memory> upstream_name; // short name, such as "origin/main"
+    ds::String<Memory> upstream_name; // short name, such as "origin/main"
     ObjectId upstream_id;
 
     Accuracy divergence = Accuracy::not_applicable;
@@ -273,16 +274,16 @@ export namespace telar::git {
     ObjectId staged_head_;
     Fingerprint staged_index_;
     ChangeCounts staged_counts_;
-    String<Memory> config_bytes_;
-    String<Memory> worktree_config_bytes_;
-    String<Memory> config_scratch_;
-    String<Memory> packed_refs_;
-    String<Memory> head_reference_;
-    String<Memory> upstream_reference_;
-    String<Memory> commit_;
-    String<Memory> symbolic_{AllocatorRef<char, Memory>{memory_}};
-    String<Memory> configured_worktree_{AllocatorRef<char, Memory>{memory_}};
-    Vector<ObjectId, Memory> parents_;
+    ds::String<Memory> config_bytes_;
+    ds::String<Memory> worktree_config_bytes_;
+    ds::String<Memory> config_scratch_;
+    ds::String<Memory> packed_refs_;
+    ds::String<Memory> head_reference_;
+    ds::String<Memory> upstream_reference_;
+    ds::String<Memory> commit_;
+    ds::String<Memory> symbolic_{memory_};
+    ds::String<Memory> configured_worktree_{memory_};
+    ds::Vec<ObjectId, Memory> parents_;
   };
 
 }

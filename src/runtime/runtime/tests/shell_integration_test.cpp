@@ -83,10 +83,10 @@ namespace {
       TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
       const auto directory = ShellIntegration<ConcurrentMemory>::install(memory, home.path());
 
-      check(directory.starts_with(text(home.path()) + "/telar/shell-integration/"));
+      check(directory.view().starts_with(text(home.path()) + "/telar/shell-integration/"));
       struct stat state{};
 
-      check(::stat(directory.c_str(), &state) == 0 && (state.st_mode & 0077) == 0);
+      check(::stat(directory.data(), &state) == 0 && (state.st_mode & 0077) == 0);
       check(::stat((text(directory) + "/zsh/.zshenv").c_str(), &state) == 0 && (state.st_mode & 0777) == 0600);
       check(ShellIntegration<ConcurrentMemory>::install(memory, home.path()) == directory);
 

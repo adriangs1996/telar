@@ -27,20 +27,20 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  String<Memory> joinPath(Memory& memory, std::string_view directory, std::string_view name) {
-    String<Memory> path{directory, AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> joinPath(Memory& memory, std::string_view directory, std::string_view name) {
+    ds::String<Memory> path{memory, directory};
 
-    path += '/';
-    path += name;
-    if (path.size() >= PATH_MAX || path.contains('\0')) {
+    path.push('/');
+    path.append(name);
+    if (path.size() >= PATH_MAX || path.view().contains('\0')) {
       throw std::length_error{"Invalid integration file path"};
     }
 
     return path;
   }
 
-  ds::Option<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes) {
-    FileDescriptor file{::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
+  ds::Option<ds::String<Memory>> read(Memory& memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
+    FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
     if (!file) {
       if (sys::lastError() == ENOENT) {
         return ds::none;
@@ -58,13 +58,13 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  void createParents(const String<Memory>& path) {
+  void createParents(const ds::String<Memory>& path) {
     ds::Array<char, PATH_MAX> directory;
-    if (path.size() >= directory.size() || path.contains('\0')) {
+    if (path.size() >= directory.size() || path.view().contains('\0')) {
       throw std::length_error{"Invalid integration file path"};
     }
 
-    std::copy(path.begin(), path.end(), directory.dataMut());
+    std::ranges::copy(path.view(), directory.dataMut());
     directory.atMut(path.size()) = '\0';
     for (std::size_t index = 1; index < path.size(); ++index) {
       if (directory[index] == '/') {
@@ -79,27 +79,27 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  void write(Memory& memory, const String<Memory>& path, std::string_view source, bool preserve_settings) {
-    String<Memory> target{path, AllocatorRef<char, Memory>{memory}};
+  void write(Memory& memory, const ds::String<Memory>& path, std::string_view source, bool preserve_settings) {
+    ds::String<Memory> target{memory, path};
     ds::Option<mode_t> permissions;
 
     if (preserve_settings) {
       ds::Array<char, PATH_MAX> resolved;
-      if (::realpath(path.c_str(), resolved.dataMut()) != nullptr) {
-        target = resolved.data();
+      if (::realpath(path.data(), resolved.dataMut()) != nullptr) {
+        target.assign(resolved.data());
       }
 
       struct stat state{};
-      if (::stat(target.c_str(), &state) == 0) {
+      if (::stat(target.data(), &state) == 0) {
         permissions = state.st_mode & 07777;
       }
     }
 
     resolveAbsolutePath(target);
     createParents(target);
-    const auto separator = target.rfind('/');
-    String<Memory> parent{target.data(), separator == 0 ? 1 : separator, AllocatorRef<char, Memory>{memory}};
-    FileDescriptor directory{::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    const auto separator = target.view().rfind('/');
+    ds::String<Memory> parent{memory, std::string_view{target.data(), separator == 0 ? 1 : separator}};
+    FileDescriptor directory{::open(parent.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!directory) {
       throw SystemError{"Open integration directory"};
     }
@@ -109,7 +109,7 @@ namespace telar::runtime::cli::integration {
       throw SystemError{"Publish integration file", error};
     }
 
-    if (permissions && ::chmod(target.c_str(), *permissions) != 0) {
+    if (permissions && ::chmod(target.data(), *permissions) != 0) {
       throw SystemError{"Restore integration settings permissions"};
     }
   }
@@ -157,7 +157,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }};
 
   template <Allocator Memory>
-  String<Memory> skillPath(Memory& memory, std::string_view root, const Skill& skill) {
+  ds::String<Memory> skillPath(Memory& memory, std::string_view root, const Skill& skill) {
     auto path = joinPath(memory, root, "skills");
 
     path = joinPath(memory, path, skill.name);
@@ -165,9 +165,9 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }
 
   template <Allocator Memory>
-  Ownership skillOwnership(const String<Memory>& path, const Skill& skill) noexcept {
+  Ownership skillOwnership(const ds::String<Memory>& path, const Skill& skill) noexcept {
     struct stat state{};
-    if (::stat(path.c_str(), &state) != 0) {
+    if (::stat(path.data(), &state) != 0) {
       return sys::lastError() == ENOENT ? Ownership::absent : Ownership::foreign;
     }
 
@@ -189,17 +189,17 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     for (const auto& skill : skills) {
       const auto path = skillPath(memory, root, skill);
       if (skillOwnership(path, skill) == Ownership::foreign) {
-        std::printf("telar integration: skill %.*s at %s is not telar's; left untouched\n", static_cast<int>(skill.name.size()), skill.name.data(), path.c_str());
+        std::printf("telar integration: skill %.*s at %s is not telar's; left untouched\n", static_cast<int>(skill.name.size()), skill.name.data(), path.data());
         continue;
       }
 
-      String<Memory> contents{skill.header, AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> contents{memory, skill.header};
 
-      contents += skill.marker;
-      contents += '\n';
-      contents += skill.text;
+      contents.append(skill.marker);
+      contents.push('\n');
+      contents.append(skill.text);
       write(memory, path, contents, false);
-      std::printf("telar integration: skill %.*s written to %s\n", static_cast<int>(skill.name.size()), skill.name.data(), path.c_str());
+      std::printf("telar integration: skill %.*s written to %s\n", static_cast<int>(skill.name.size()), skill.name.data(), path.data());
     }
   }
 
@@ -208,7 +208,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     for (const auto& skill : skills) {
       const auto path = skillPath(memory, root, skill);
 
-      std::printf("skill %.*s: %s at %s\n", static_cast<int>(skill.name.size()), skill.name.data(), ownershipName(skillOwnership(path, skill)).data(), path.c_str());
+      std::printf("skill %.*s: %s at %s\n", static_cast<int>(skill.name.size()), skill.name.data(), ownershipName(skillOwnership(path, skill)).data(), path.data());
     }
   }
 
@@ -218,7 +218,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
       try {
         const auto path = skillPath(memory, root, skill);
         if (skillOwnership(path, skill) == Ownership::owned) {
-          ::unlink(path.c_str());
+          ::unlink(path.data());
         }
       } catch (...) {
       }
@@ -243,17 +243,17 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     }
 
     template <Allocator Memory>
-    String<Memory> render(Memory& memory, std::string_view executable) const {
+    ds::String<Memory> render(Memory& memory, std::string_view executable) const {
       constexpr std::string_view placeholder = "\"__TELAR_EXECUTABLE__\"";
       const auto offset = source.find(placeholder);
       if (offset == std::string_view::npos) {
         throw std::invalid_argument{"Integration template lacks its executable placeholder"};
       }
 
-      String<Memory> result{source.substr(0, offset), AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> result{memory, source.substr(0, offset)};
 
       appendJsonText(result, executable);
-      result += source.substr(offset + placeholder.size());
+      result.append(source.substr(offset + placeholder.size()));
       if (result.size() > maximum_bytes) {
         throw std::length_error{"Integration extension exceeds its bound"};
       }
@@ -269,16 +269,16 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     const auto provider = Provider::describe(options.provider);
     const auto extension = Extension::describe(options.provider);
     const auto root = provider.root(memory, environment);
-    const auto path = options.settings.empty() ? joinPath(memory, root, provider.file) : String<Memory>{options.settings, AllocatorRef<char, Memory>{memory}};
+    const auto path = options.settings.empty() ? joinPath(memory, root, provider.file) : ds::String<Memory>{memory, options.settings};
     const auto rendered = extension.render(memory, executable);
     const auto existing = read(memory, path, Extension::maximum_bytes);
-    const bool owned = existing && existing->starts_with(extension.marker);
+    const bool owned = existing && existing->view().starts_with(extension.marker);
 
     if (options.action == IntegrationAction::status) {
       const auto ownership = !existing ? Ownership::absent : owned ? Ownership::owned
                                                                    : Ownership::foreign;
 
-      std::printf("telar %s: %s at %s\n", extension.noun.data(), ownershipName(ownership).data(), path.c_str());
+      std::printf("telar %s: %s at %s\n", extension.noun.data(), ownershipName(ownership).data(), path.data());
       reportSkills(memory, root);
       return 0;
     }
@@ -287,7 +287,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
       const auto action = options.action == IntegrationAction::install ? "exists and is not telar's" : "is not telar's";
       const auto resolution = options.action == IntegrationAction::install ? "move it first" : "left untouched";
 
-      std::fprintf(stderr, "telar integration: %s %s %s; %s\n", path.c_str(), action, extension.noun.data(), resolution);
+      std::fprintf(stderr, "telar integration: %s %s %s; %s\n", path.data(), action, extension.noun.data(), resolution);
       return 1;
     }
 
@@ -299,19 +299,19 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
         state = existing ? "updated" : "installed";
       }
 
-      std::printf("telar integration: %s %s %s at %s\n", provider.name.data(), extension.noun.data(), state, path.c_str());
+      std::printf("telar integration: %s %s %s at %s\n", provider.name.data(), extension.noun.data(), state, path.data());
       installSkills(memory, root);
       return 0;
     }
 
     if (existing) {
-      if (::unlink(path.c_str()) != 0) {
+      if (::unlink(path.data()) != 0) {
         throw SystemError{"Remove integration extension"};
       }
 
-      std::printf("telar integration: %s %s removed from %s\n", provider.name.data(), extension.noun.data(), path.c_str());
+      std::printf("telar integration: %s %s removed from %s\n", provider.name.data(), extension.noun.data(), path.data());
     } else {
-      std::printf("telar integration: %s %s not present at %s\n", provider.name.data(), extension.noun.data(), path.c_str());
+      std::printf("telar integration: %s %s not present at %s\n", provider.name.data(), extension.noun.data(), path.data());
     }
 
     removeSkills(memory, root);
@@ -321,7 +321,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   constexpr std::size_t maximum_settings_bytes = 4 * 1024 * 1024;
 
   template <Allocator Memory, EnvironmentLookup Environment>
-  ds::Option<String<Memory>> legacySettings(Memory& memory, Provider provider, const Environment& environment) {
+  ds::Option<ds::String<Memory>> legacySettings(Memory& memory, Provider provider, const Environment& environment) {
     if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
       return ds::none;
     }
@@ -331,18 +331,18 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     ds::Array<char, PATH_MAX> legacy_path;
     ds::Array<char, PATH_MAX> current_path;
 
-    if (::realpath(legacy.c_str(), legacy_path.dataMut()) == nullptr) {
+    if (::realpath(legacy.data(), legacy_path.dataMut()) == nullptr) {
       return ds::none;
     }
 
-    if (::realpath(current.c_str(), current_path.dataMut()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
+    if (::realpath(current.data(), current_path.dataMut()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
       return ds::none;
     }
 
     return legacy;
   }
 
-  bool reportLegacy(Memory& memory, const String<Memory>& path, const HookSettings& hooks, Provider provider) {
+  bool reportLegacy(Memory& memory, const ds::String<Memory>& path, const HookSettings& hooks, Provider provider) {
     const auto source = read(memory, path, maximum_settings_bytes);
     if (!source) {
       return false;
@@ -359,7 +359,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     for (const auto events : {provider.events, provider.worktree_events}) {
       for (const auto event : events) {
         if (hooks.installed(*settings, event)) {
-          std::printf("telar integration: hooks remain in %s, which is not read while its directory variable is set; `telar integration uninstall %s --legacy` removes them\n", path.c_str(), provider.name.data());
+          std::printf("telar integration: hooks remain in %s, which is not read while its directory variable is set; `telar integration uninstall %s --legacy` removes them\n", path.data(), provider.name.data());
           return true;
         }
       }
@@ -371,7 +371,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   template <EnvironmentLookup Environment>
   int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
     const auto provider = Provider::describe(options.provider);
-    String<Memory> path{options.settings, AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> path{memory, options.settings};
     if (path.empty()) {
       if (options.legacy) {
         const auto legacy = legacySettings(memory, provider, environment);
@@ -380,7 +380,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
           return 1;
         }
 
-        path = *legacy;
+        path.assign(*legacy);
       } else {
         path = joinPath(memory, provider.root(memory, environment), provider.file);
       }
@@ -393,16 +393,16 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     try {
       settings.emplace(JsonNode<Memory>::parse(memory, source ? std::string_view{*source} : "{}"));
     } catch (const std::exception&) {
-      std::fprintf(stderr, "telar integration: %s is not valid JSON\n", path.c_str());
+      std::fprintf(stderr, "telar integration: %s is not valid JSON\n", path.data());
       return 1;
     }
 
     if (settings->kind() != JsonKind::object) {
-      std::fprintf(stderr, "telar integration: %s must contain a JSON object\n", path.c_str());
+      std::fprintf(stderr, "telar integration: %s must contain a JSON object\n", path.data());
       return 1;
     }
 
-    const auto separator = path.rfind('/');
+    const auto separator = path.view().rfind('/');
     const auto root = separator == std::string_view::npos ? std::string_view{} : std::string_view{path}.substr(0, separator == 0 ? 1 : separator);
     if (root.empty()) {
       throw std::invalid_argument{"Invalid integration settings path"};
@@ -434,7 +434,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     const char* state = installing ? changed ? "installed" : "already present" : changed ? "removed"
                                                                                          : "not present";
 
-    std::printf("telar integration: %s hooks %s in %s\n", provider.name.data(), state, path.c_str());
+    std::printf("telar integration: %s hooks %s in %s\n", provider.name.data(), state, path.data());
     if (installing) {
       installSkills(memory, root);
       if (!provider.launch_note.empty()) {
@@ -505,20 +505,20 @@ namespace telar::runtime::cli::integration {
   HookSettings::HookSettings(Memory& memory, Provider provider, std::string_view executable)
       : memory_(memory),
         provider_(provider),
-        marker_{" hook ", AllocatorRef<char, Memory>{memory}},
-        command_{AllocatorRef<char, Memory>{memory}},
-        worktree_command_{AllocatorRef<char, Memory>{memory}} {
+        marker_{memory, " hook "},
+        command_{memory},
+        worktree_command_{memory} {
     if (executable.contains('\'')) {
       throw std::invalid_argument{"Unsupported integration executable path"};
     }
 
-    marker_ += provider.name;
-    worktree_command_ = "telar_hook_bin=${TELAR_BIN_PATH:-'";
-    worktree_command_ += executable;
-    worktree_command_ += "'}; exec \"$telar_hook_bin\"";
-    worktree_command_ += marker_;
-    command_ = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; ";
-    command_ += worktree_command_;
+    marker_.append(provider.name);
+    worktree_command_.assign("telar_hook_bin=${TELAR_BIN_PATH:-'");
+    worktree_command_.append(executable);
+    worktree_command_.append("'}; exec \"$telar_hook_bin\"");
+    worktree_command_.append(marker_);
+    command_.assign("[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; ");
+    command_.append(worktree_command_);
   }
 
   bool HookSettings::installed(const JsonNode<Memory>& settings, std::string_view event) const noexcept {

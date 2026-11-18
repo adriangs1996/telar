@@ -85,7 +85,7 @@ namespace {
 
       for (const auto identity : due.ids()) {
         auto& client = *clients.find(identity);
-        Vector<Byte, ConcurrentMemory> payload{AllocatorRef<Byte, ConcurrentMemory>{memory}};
+        ds::Vec<Byte, ConcurrentMemory> payload{memory};
 
         reports.open(client, payload);
         if (!client.connection.closing) {

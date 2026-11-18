@@ -10,7 +10,7 @@ namespace telar::gui::application {
 
   template <Allocator Memory>
   FrameStream<Memory>::FrameStream(Memory& memory)
-      : payload_(AllocatorRef<Byte, Memory>{memory}) {}
+      : payload_(memory) {}
 
   template <Allocator Memory>
   void FrameStream<Memory>::reset() noexcept {
@@ -63,7 +63,7 @@ namespace telar::gui::application {
 
       const auto count = std::min(input.size(), expected_ - payload_.size());
 
-      payload_.insert(payload_.end(), input.begin(), input.begin() + count);
+      payload_.extend({input.begin(), input.begin() + count});
       input = input.subspan(count);
 
       if (payload_.size() == expected_) {

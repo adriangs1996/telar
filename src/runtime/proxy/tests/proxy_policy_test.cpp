@@ -107,15 +107,19 @@ namespace {
     BudgetAllocator memory{system, 1024 * 1024};
 
     {
+      constexpr std::string_view configuration = "return {enabled=true,anonymous_tunnels=true,ca_dir='relative/authority',intercept_hosts={'*.Example.com','API.example.org','api.example.org'},capture={enabled=true,max_part_bytes='1',max_exchange_bytes=2,max_total_bytes=3,join_timeout_ms=1}}";
       ProxyOptions options{memory};
 
-      readProxy(memory, options, "return {enabled=true,anonymous_tunnels=true,ca_dir='relative/authority',intercept_hosts={'*.Example.com','API.example.org','api.example.org'},capture={enabled=true,max_part_bytes='1',max_exchange_bytes=2,max_total_bytes=3,join_timeout_ms=1}}");
+      readProxy(memory, options, configuration);
       check(options.enabled && options.anonymous_tunnels && options.pane_https_proxy && options.authority_directory == "relative/authority");
       check(options.intercept_hosts.patterns().size() == 2 && options.intercept_hosts.contains("sub.example.com"));
       check(options.capture.enabled && options.capture.part_bytes == 1 && options.capture.exchange_bytes == 2 && options.capture.total_bytes == 3 && options.capture.join_timeout == std::chrono::milliseconds{1});
 
-      auto overlay = options;
+      // A reader overlays what it reads on the options it is given; the overlay starts from the
+      // same configuration.
+      ProxyOptions overlay{memory};
 
+      readProxy(memory, overlay, configuration);
       readProxy(memory, overlay, "return {enabled=false,pane_https_proxy=false,intercept_hosts={},capture={max_total_bytes=4}}");
       check(!overlay.enabled && !overlay.pane_https_proxy && overlay.intercept_hosts.patterns().empty() && overlay.capture.total_bytes == 4);
       check(options.enabled && options.intercept_hosts.patterns().size() == 2 && options.capture.total_bytes == 3);

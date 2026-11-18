@@ -46,14 +46,14 @@ namespace {
     telar::runtime::FixedText<MachineLimits::file_bytes> source;
 
     template <Allocator Memory>
-    telar::ds::Option<Vector<telar::Byte, Memory>> read(Memory& memory) const {
+    telar::ds::Option<telar::ds::Vec<telar::Byte, Memory>> read(Memory& memory) const {
       if (source.view().empty()) {
         return telar::ds::none;
       }
 
       const auto bytes = telar::byteView(source.view());
 
-      return Vector<telar::Byte, Memory>{bytes.begin(), bytes.end(), AllocatorRef<telar::Byte, Memory>{memory}};
+      return telar::ds::Vec<telar::Byte, Memory>{memory, bytes};
     }
 
     class Transaction {
@@ -74,7 +74,7 @@ namespace {
       Transaction& operator=(Transaction&&) = delete;
 
       template <Allocator Memory>
-      telar::ds::Option<Vector<telar::Byte, Memory>> read(Memory& memory) const {
+      telar::ds::Option<telar::ds::Vec<telar::Byte, Memory>> read(Memory& memory) const {
         check(file_.locked, "transaction reads must hold the file lock");
 
         return file_.read(memory);

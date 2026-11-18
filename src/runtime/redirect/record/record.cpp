@@ -71,7 +71,7 @@ namespace telar::runtime::redirect {
   template <Allocator Memory>
   RecordFile<Memory>::RecordFile(Memory& memory, std::string_view name, RecordLock mode)
       : memory_(memory),
-        name_(name, AllocatorRef<char, Memory>{memory}) {
+        name_(memory, name) {
     if (name.empty() || name.size() > 64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string_view::npos) {
       throw std::invalid_argument{"Invalid redirect record name"};
     }
@@ -80,10 +80,10 @@ namespace telar::runtime::redirect {
 
     createPrivateDirectory(directory);
     directory_.reset(::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
-    String<Memory> lock_name{name_, AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> lock_name{memory, name_};
 
-    lock_name += ".lock";
-    lock_ = openLockFile(directory_.get(), lock_name.c_str());
+    lock_name.append(".lock");
+    lock_ = openLockFile(directory_.get(), lock_name.data());
     if (!directory_ || !lock_) {
       throw SystemError{"Open redirect recovery lock"};
     }
@@ -101,8 +101,8 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  ds::Option<String<Memory>> RecordFile<Memory>::load() {
-    FileDescriptor file{::openat(directory_.get(), name_.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
+  ds::Option<ds::String<Memory>> RecordFile<Memory>::load() {
+    FileDescriptor file{::openat(directory_.get(), name_.data(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
     if (!file && sys::lastError() == ENOENT) {
       return ds::none;
     }
@@ -125,7 +125,7 @@ namespace telar::runtime::redirect {
 
   template <Allocator Memory>
   void RecordFile<Memory>::clear() {
-    if (::unlinkat(directory_.get(), name_.c_str(), 0) != 0 && sys::lastError() != ENOENT) {
+    if (::unlinkat(directory_.get(), name_.data(), 0) != 0 && sys::lastError() != ENOENT) {
       throw SystemError{"Remove redirect recovery record"};
     }
   }
@@ -141,7 +141,7 @@ namespace telar::runtime::redirect {
   template <Allocator Memory>
   LoopbackLeases<Memory>::LoopbackLeases(Memory& memory)
       : memory_(memory),
-        owners_(AllocatorRef<char, Memory>{memory}) {}
+        owners_(memory) {}
 
   template <Allocator Memory>
   void LoopbackLeases<Memory>::validateOwner(std::string_view owner) {
@@ -151,10 +151,10 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  String<Memory> LoopbackLeases<Memory>::ownerMarker(std::string_view owner) {
-    String<Memory> marker{owner, AllocatorRef<char, Memory>{memory_}};
+  ds::String<Memory> LoopbackLeases<Memory>::ownerMarker(std::string_view owner) {
+    ds::String<Memory> marker{memory_, owner};
 
-    marker += '\n';
+    marker.push('\n');
     return marker;
   }
 
@@ -226,7 +226,7 @@ namespace telar::runtime::redirect {
   template <Allocator Memory>
   Record<Memory>::Record(Memory& memory, const PfIdentity<Memory>& identity, std::string_view endpoint)
       : memory_(memory),
-        endpoint_(endpoint, AllocatorRef<char, Memory>{memory}),
+        endpoint_(memory, endpoint),
         file_(memory, identity.label) {}
 
   template <Allocator Memory>
@@ -236,8 +236,8 @@ namespace telar::runtime::redirect {
       return ds::none;
     }
 
-    const auto newline = content->find('\n');
-    if (newline == String<Memory>::npos || std::string_view{*content}.substr(0, newline) != endpoint_) {
+    const auto newline = content->view().find('\n');
+    if (newline == std::string_view::npos || std::string_view{*content}.substr(0, newline) != endpoint_) {
       throw std::runtime_error{"Redirect recovery record belongs to another endpoint"};
     }
 
@@ -265,18 +265,18 @@ namespace telar::runtime::redirect {
 
   template <Allocator Memory>
   void Record<Memory>::save(std::uint64_t token) {
-    String<Memory> content{endpoint_, AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> content{memory_, endpoint_};
 
-    content += '\n';
+    content.push('\n');
     ds::Array<char, 32> value{};
     const auto result = std::to_chars(value.dataMut(), value.dataMut() + value.size(), token);
 
-    content.append(value.data(), static_cast<std::size_t>(result.ptr - value.data()));
+    content.append(std::string_view{value.data(), static_cast<std::size_t>(result.ptr - value.data())});
     if (log_index_) {
-      content += '\n';
+      content.push('\n');
       const auto log = std::to_chars(value.dataMut(), value.dataMut() + value.size(), *log_index_);
 
-      content.append(value.data(), static_cast<std::size_t>(log.ptr - value.data()));
+      content.append(std::string_view{value.data(), static_cast<std::size_t>(log.ptr - value.data())});
     }
 
     file_.save(content);

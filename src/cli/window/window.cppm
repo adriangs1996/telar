@@ -91,7 +91,7 @@ export {
   namespace telar::runtime::cli::window {
 
     // Re-encode parsed JSON with the standard string escapes and two-space indentation.
-    void appendJson(String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth = 0);
+    void appendJson(ds::String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth = 0);
 
   }
 }

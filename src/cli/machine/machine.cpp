@@ -526,11 +526,11 @@ fetch() {
   void commands(Memory& memory, JsonValue value, std::vector<std::string>& output, bool inside = false) {
     if (value.encoded().starts_with('{')) {
       value.eachMember([&](JsonValue key, JsonValue child) {
-        String<Memory> name{AllocatorRef<char, Memory>{memory}};
+        ds::String<Memory> name{memory};
 
         key.string(name);
         if (inside && name == "command" && child.encoded().starts_with('"')) {
-          String<Memory> text{AllocatorRef<char, Memory>{memory}};
+          ds::String<Memory> text{memory};
 
           child.string(text);
           output.emplace_back(text);
@@ -824,7 +824,7 @@ fetch() {
 
             // Validate duplicates and UTF-8 before traversing JsonValue.
             static_cast<void>(JsonNode<Memory>::parse(memory_, plain));
-            String<Memory> filtered{AllocatorRef<char, Memory>{memory_}};
+            ds::String<Memory> filtered{memory_};
 
             filter::json(memory_, JsonValue::parse(plain, config_json_depth), filtered, dropped);
             bringCommands(JsonValue::parse(filtered, config_json_depth));
@@ -890,46 +890,46 @@ fetch() {
       }
     }
 
-    String<Memory> rewriteJson(JsonValue value) {
-      String<Memory> output{AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> rewriteJson(JsonValue value) {
+      ds::String<Memory> output{memory_};
       const auto encoded = value.encoded();
       if (encoded.starts_with('"')) {
-        String<Memory> text{AllocatorRef<char, Memory>{memory_}};
+        ds::String<Memory> text{memory_};
 
         value.string(text);
         appendJsonText(output, filter::rewriteHome(text, home_, remote_home_), JsonEscapes::standard);
       } else if (encoded.starts_with('{')) {
-        output += '{';
+        output.push('{');
         bool first = true;
 
         value.eachMember([&](JsonValue key, JsonValue child) {
           if (!first) {
-            output += ',';
+            output.push(',');
           }
 
           first = false;
-          output += key.encoded();
-          output += ':';
-          output += rewriteJson(child);
+          output.append(key.encoded());
+          output.push(':');
+          output.append(rewriteJson(child));
         });
 
-        output += '}';
+        output.push('}');
       } else if (encoded.starts_with('[')) {
-        output += '[';
+        output.push('[');
         bool first = true;
 
         value.eachElement([&](JsonValue child) {
           if (!first) {
-            output += ',';
+            output.push(',');
           }
 
           first = false;
-          output += rewriteJson(child);
+          output.append(rewriteJson(child));
         });
 
-        output += ']';
+        output.push(']');
       } else {
-        output += encoded;
+        output.append(encoded);
       }
 
       return output;
@@ -1351,7 +1351,7 @@ fetch() {
     }
 
     std::string string(JsonValue value) {
-      String<Memory> result{AllocatorRef<char, Memory>{memory_}};
+      ds::String<Memory> result{memory_};
 
       value.string(result);
       return std::string{result};
@@ -1546,7 +1546,7 @@ fetch() {
 
       for (const auto& name : filenames) {
         try {
-          String<Memory> path{root + "/" + name, AllocatorRef<char, Memory>{memory_}};
+          ds::String<Memory> path{memory_, root + "/" + name};
           const auto bytes = integration::read(memory_, path, launch::output_limit);
           if (!bytes) {
             continue;
@@ -1670,7 +1670,7 @@ fetch() {
 
       try {
         const RuntimePaths paths{memory_, ServerOptions{}, process_environment};
-        ControlSession session{memory_, paths.socket.c_str()};
+        ControlSession session{memory_, paths.socket.data()};
 
         session.receiveTimeout(static_cast<unsigned>(status_timeout.count()));
         const auto result = session.template exchange<NotificationShown>(ShowNotification{.notification = {.duration_ms = max_notification_duration_ms, .title = utf8Prefix(plan.title, max_notification_title_bytes), .message = utf8Prefix(body, max_notification_message_bytes), .link = found.url}});

@@ -760,9 +760,9 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "make test\nnext command";
-      entry.cwd = "/work/project";
-      entry.provider = "custom-agent";
+      entry.command.assign("make test\nnext command");
+      entry.cwd.assign("/work/project");
+      entry.provider.assign("custom-agent");
       entry.author = telar::HistoryAuthor::agent;
       entry.exit_code = 1;
       constexpr std::int64_t two_days_ms = 2 * application::history::HistoryLabels::seconds_per_day * application::history::HistoryLabels::milliseconds_per_second;
@@ -822,7 +822,7 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "first command";
+      entry.command.assign("first command");
       auto record = historyRecord(entry, {});
       QQuickWindow window;
       QQmlEngine engine;
@@ -862,7 +862,7 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "git build";
+      entry.command.assign("git build");
       auto record = historyRecord(entry, {});
       QQuickWindow window;
       QQmlEngine engine;
@@ -951,7 +951,7 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "abc";
+      entry.command.assign("abc");
       auto record = historyRecord(entry, {});
       const auto colors = themeColors({});
       QQuickWindow window;
@@ -1070,7 +1070,7 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "first command\nsecond command\nthird command";
+      entry.command.assign("first command\nsecond command\nthird command");
       const auto record = historyRecord(entry, {});
       constexpr int card_height = 300;
       QQuickWindow window;
@@ -1139,7 +1139,7 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "sleep 10";
+      entry.command.assign("sleep 10");
       entry.status = telar::HistoryStatus::running;
       const auto record = historyRecord(entry, {});
       QQuickWindow window;
@@ -1239,9 +1239,9 @@ namespace {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
-      entry.command = "failed command";
-      entry.cwd = "/work/project";
-      entry.provider = "custom-agent";
+      entry.command.assign("failed command");
+      entry.cwd.assign("/work/project");
+      entry.provider.assign("custom-agent");
       entry.author = telar::HistoryAuthor::agent;
       entry.exit_code = 1;
       constexpr int metadata_height = 28;

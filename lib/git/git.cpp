@@ -79,8 +79,8 @@ namespace telar::git {
   }
 
   Status::Status(Memory& memory)
-      : branch(AllocatorRef<char, Memory>{memory}),
-        upstream_name(AllocatorRef<char, Memory>{memory}) {}
+      : branch(memory),
+        upstream_name(memory) {}
 
   StatusReader::StatusReader(Memory& memory, Limits limits)
       : memory_(memory),
@@ -93,14 +93,14 @@ namespace telar::git {
         index_(memory),
         staged_(memory),
         unstaged_(memory),
-        config_bytes_(AllocatorRef<char, Memory>{memory}),
-        worktree_config_bytes_(AllocatorRef<char, Memory>{memory}),
-        config_scratch_(AllocatorRef<char, Memory>{memory}),
-        packed_refs_(AllocatorRef<char, Memory>{memory}),
-        head_reference_(AllocatorRef<char, Memory>{memory}),
-        upstream_reference_(AllocatorRef<char, Memory>{memory}),
-        commit_(AllocatorRef<char, Memory>{memory}),
-        parents_(AllocatorRef<ObjectId, Memory>{memory}) {}
+        config_bytes_(memory),
+        worktree_config_bytes_(memory),
+        config_scratch_(memory),
+        packed_refs_(memory),
+        head_reference_(memory),
+        upstream_reference_(memory),
+        commit_(memory),
+        parents_(memory) {}
 
   const Status& StatusReader::read(std::string_view directory) noexcept {
     try {
@@ -145,7 +145,7 @@ namespace telar::git {
     }
 
     try {
-      String<Memory> log{AllocatorRef<char, Memory>{memory_}};
+      ds::String<Memory> log{memory_};
       if (readWhole(common_.get(), "logs/refs/stash", log, limits_.packed_refs, nullptr) != ReadStatus::ok) {
         return 0;
       }
@@ -705,7 +705,7 @@ namespace telar::git {
     constexpr std::size_t retained = 1 << 20;
     if (packed_refs_.capacity() > retained) {
       packed_refs_.clear();
-      packed_refs_.shrink_to_fit();
+      packed_refs_.shrinkToFit();
       packed_loaded_ = false;
     }
   }
@@ -774,7 +774,7 @@ namespace telar::git {
   }
 
   void StatusReader::readUpstream() {
-    if (!head_reference_.starts_with("refs/heads/")) {
+    if (!head_reference_.view().starts_with("refs/heads/")) {
       return;
     }
 

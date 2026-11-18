@@ -56,7 +56,7 @@ namespace {
           return bound == 0 ? 0 : static_cast<std::size_t>(random() % bound);
         };
 
-        switch (random() % 16) {
+        switch (random() % 17) {
         case 0:
         case 1:
         case 2: {
@@ -157,7 +157,23 @@ namespace {
         }
         case 14:
           mine.reserve(index(model.size() * 2 + 2));
+          if (random() % 4 == 0) {
+            mine.shrinkToFit();
+            check(mine.capacity() == mine.size());
+          }
+
           break;
+        case 15: {
+          const auto limit = index(41);
+          const auto keep = [limit](const std::string& value) {
+            return value.size() < limit;
+          };
+
+          check(mine.retain(keep) == std::erase_if(model, [&](const std::string& value) {
+            return !keep(value);
+          }));
+          break;
+        }
         default:
           if (random() % 64 == 0) {
             mine.clear();
@@ -220,6 +236,11 @@ namespace {
           break;
         case 6:
           mine.reserve(static_cast<std::size_t>(random() % 200));
+          if (random() % 4 == 0) {
+            mine.shrinkToFit();
+            check(mine.capacity() >= mine.size());
+          }
+
           break;
         case 7: {
           const auto copy = mine.clone();

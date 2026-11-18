@@ -85,7 +85,7 @@ namespace telar::gui::application {
 
       return Change::sidebar;
     case ClientAction::client_clipboard_copy:
-      clipboard_ = message.text;
+      clipboard_.assign(message.text);
       reply.text = {};
       reply.status = ClientCommandStatus::admitted;
 

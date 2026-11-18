@@ -162,7 +162,7 @@ namespace {
     const PemDocument root{system.certificate()};
 
     authority.writeBundle(descriptor, root.bytes());
-    Vector<unsigned char, ConcurrentMemory> bundle{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
+    ds::Vec<unsigned char, ConcurrentMemory> bundle{memory};
 
     check(readPrivateFile(descriptor, "ca-bundle.pem", bundle, PemDocument::maximum_bytes * 2));
     const PemDocument own{authority.certificate()};
@@ -192,10 +192,10 @@ namespace {
       CertificateAuthority::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local);
     });
 
-    Vector<unsigned char, ConcurrentMemory> retained{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
+    ds::Vec<unsigned char, ConcurrentMemory> retained{memory};
 
     check(readPrivateFile(descriptor, "ca-key.pem", retained, PemDocument::maximum_bytes) && std::ranges::equal(retained, other_key.bytes()));
-    eraseSensitive(retained.data(), retained.size());
+    eraseSensitive(retained.dataMut(), retained.size());
   }
 
   void testAuthorityValidation() {

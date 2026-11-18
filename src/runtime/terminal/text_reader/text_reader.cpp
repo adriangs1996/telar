@@ -15,9 +15,9 @@ import telar.base.ds;
 namespace telar::runtime {
 
   TextMetadataCapture::TextMetadataCapture(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
-      : links_(AllocatorRef<MetadataLink, ConcurrentMemory>{memory}),
-        runs_(AllocatorRef<MetadataRun, ConcurrentMemory>{memory}),
-        uris_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
+      : links_(memory),
+        runs_(memory),
+        uris_(memory) {
     links_.reserve(maximum_links);
     runs_.reserve(maximum_runs);
     uris_.reserve(maximum_uri_bytes);
@@ -81,8 +81,8 @@ namespace telar::runtime {
 
     const auto index = static_cast<std::uint16_t>(links_.size());
 
-    links_.push_back(MetadataLink{.offset = static_cast<std::uint32_t>(uris_.size()), .len = static_cast<std::uint16_t>(identity.uri.size())});
-    uris_.insert(uris_.end(), identity.uri.begin(), identity.uri.end());
+    links_.push(MetadataLink{.offset = static_cast<std::uint32_t>(uris_.size()), .len = static_cast<std::uint16_t>(identity.uri.size())});
+    uris_.extend({reinterpret_cast<const Byte*>(identity.uri.data()), identity.uri.size()});
     table.identities.atMut(index) = identity;
     table.slots.atMut(slot) = index + 1;
     return index;
@@ -121,9 +121,9 @@ namespace telar::runtime {
       }
 
       if (continuing && runs_.back().link_index == *index) {
-        ++runs_.back().len;
+        ++runs_.atMut(runs_.size() - 1).len;
       } else if (runs_.size() != maximum_runs) {
-        runs_.push_back(MetadataRun{.start = row_start + column, .len = 1, .link_index = *index});
+        runs_.push(MetadataRun{.start = row_start + column, .len = 1, .link_index = *index});
       } else {
         status_ = MetadataStatus::partial;
         return;
@@ -142,9 +142,9 @@ namespace telar::runtime {
   }
 
   Screen::Screen(ConcurrentMemory& memory)
-      : cells(AllocatorRef<ScreenCell, ConcurrentMemory>{memory}),
-        row_revisions(AllocatorRef<std::uint64_t, ConcurrentMemory>{memory}),
-        row_flags(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+      : cells(memory),
+        row_revisions(memory),
+        row_flags(memory),
         metadata(memory) {}
 
   void Screen::reserve(std::uint16_t columns, std::uint16_t lines) {
@@ -168,52 +168,55 @@ namespace telar::runtime {
     rows = lines;
     ++revision;
     ++metadata_revision;
-    std::fill(row_revisions.begin(), row_revisions.end(), revision);
+    std::ranges::fill(row_revisions.viewMut(), revision);
   }
 
   TerminalEffects::TerminalEffects(ConcurrentMemory& memory)
-      : clipboard(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        document(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        inline_documents(AllocatorRef<InlineDocument, ConcurrentMemory>{memory}) {}
+      : clipboard(memory),
+        document(memory),
+        inline_documents(memory) {}
 
-  void TerminalEffects::keepInline(Vector<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive) {
+  void TerminalEffects::keepInline(ds::Vec<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive) {
     while (!inline_documents.empty() && (inline_documents.size() >= ::telar::render::max_pane_documents || inline_bytes + bytes.size() > ::telar::render::max_pane_document_bytes)) {
       inline_bytes -= inline_documents.front().bytes.size();
-      inline_documents.erase(inline_documents.begin());
+      static_cast<void>(inline_documents.remove(0));
     }
 
     inline_bytes += bytes.size();
-    inline_documents.push_back(InlineDocument{.id = next_document_id++, .bytes = std::move(bytes), .first = std::move(first), .end = std::move(end), .end_inclusive = end_inclusive, .row = 0, .rows = 0, .contents = Vector<std::uint64_t, ConcurrentMemory>{inline_documents.get_allocator()}});
+    inline_documents.push(InlineDocument{.id = next_document_id++, .bytes = std::move(bytes), .first = std::move(first), .end = std::move(end), .end_inclusive = end_inclusive, .row = 0, .rows = 0, .contents = ds::Vec<std::uint64_t, ConcurrentMemory>{inline_documents.memory()}});
     ++inline_revision;
   }
 
   void TerminalEffects::placeInline(GhosttyTerminal terminal) noexcept {
-    for (auto document = inline_documents.begin(); document != inline_documents.end();) {
-      const auto first = document->first.row(terminal);
-      const auto end = document->end.row(terminal);
-      const auto last = end ? *end + (document->end_inclusive ? 1 : 0) : 0;
+    for (std::size_t index = 0; index < inline_documents.size();) {
+      auto& document = inline_documents.atMut(index);
+
+      const auto first = document.first.row(terminal);
+      const auto end = document.end.row(terminal);
+      const auto last = end ? *end + (document.end_inclusive ? 1 : 0) : 0;
       if (!first || !end || last <= *first) {
-        inline_bytes -= document->bytes.size();
-        document = inline_documents.erase(document);
+        inline_bytes -= document.bytes.size();
+        static_cast<void>(inline_documents.remove(index));
         ++inline_revision;
         continue;
       }
 
-      if (document->row != *first || document->rows != last - *first) {
-        document->row = *first;
-        document->rows = last - *first;
-        document->contents.assign(document->rows, 0);
+      if (document.row != *first || document.rows != last - *first) {
+        document.row = *first;
+        document.rows = last - *first;
+        document.contents.clear();
+        document.contents.resize(document.rows, 0);
         ++inline_revision;
       }
 
-      ++document;
+      ++index;
     }
   }
 
   void TerminalEffects::closeDocument() noexcept {
     if (!document.empty()) {
       document.clear();
-      document.shrink_to_fit();
+      document.shrinkToFit();
       ++document_revision;
     }
   }
@@ -369,12 +372,12 @@ namespace telar::runtime {
 
   FrameSync::FrameSync(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::uint64_t pane_id)
       : pane_id_(pane_id),
-        baseline_(AllocatorRef<ScreenCell, ConcurrentMemory>{memory}),
-        cell_bytes_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        payload_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        spans_(AllocatorRef<FrameSpan, ConcurrentMemory>{memory}),
-        metadata_bytes_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        previous_metadata_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
+        baseline_(memory),
+        cell_bytes_(memory),
+        payload_(memory),
+        spans_(memory),
+        metadata_bytes_(memory),
+        previous_metadata_(memory) {
     spans_.reserve(maximum_spans);
     metadata_bytes_.resize(maximum_metadata_bytes);
     previous_metadata_.reserve(maximum_metadata_bytes);
@@ -432,7 +435,7 @@ namespace telar::runtime {
     std::size_t metadata_size = previous_metadata_.size();
 
     if (full || screen.metadata_revision != metadata_revision_) {
-      auto output = std::span<Byte>{metadata_bytes_};
+      auto output = std::span<Byte>{metadata_bytes_.viewMut()};
 
       ValueCodec<TextMetadata>::encode(screen.metadata.view(screen.row_flags), output);
       metadata_size = metadata_bytes_.size() - output.size();
@@ -471,7 +474,7 @@ namespace telar::runtime {
       header.spans = spans_;
     }
 
-    auto output = std::span<Byte>{payload_};
+    auto output = std::span<Byte>{payload_.viewMut()};
 
     u8::encode(static_cast<Byte>(ServerTag::pane_frame), output);
     FrameSerializer::encodeBody(header, output);
@@ -480,11 +483,12 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(recordFrame(size, header.base_frame_id == 0));
 
     for (const auto& span : spans_) {
-      std::copy_n(screen.cells.begin() + span.start, span.count, baseline_.begin() + span.start);
+      std::copy_n(screen.cells.begin() + span.start, span.count, baseline_.dataMut() + span.start);
     }
 
     if (metadata_changed) {
-      previous_metadata_.assign(metadata_bytes_.begin(), metadata_bytes_.begin() + metadata_size);
+      previous_metadata_.clear();
+      previous_metadata_.extend({metadata_bytes_.begin(), metadata_bytes_.begin() + metadata_size});
     }
 
     metadata_revision_ = screen.metadata_revision;
@@ -563,13 +567,13 @@ namespace telar::runtime {
   }
 
   void FrameSync::appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t& written) {
-    auto output = std::span<Byte>{cell_bytes_}.subspan(written);
+    auto output = std::span<Byte>{cell_bytes_.viewMut()}.subspan(written);
     const Byte* begin = output.data();
 
     encodeScreenCells(cells, output);
     written = cell_bytes_.size() - output.size();
 
-    spans_.push_back(FrameSpan{
+    spans_.push(FrameSpan{
         .start = static_cast<std::uint32_t>(start),
         .count = static_cast<std::uint32_t>(cells.size()),
         .cells = {begin, static_cast<std::size_t>(output.data() - begin)},
@@ -789,15 +793,15 @@ namespace telar::runtime {
     std::uint16_t row = 0;
 
     while (all_rows ? ghostty_render_state_row_iterator_next(iterator) : ghostty_render_state_row_iterator_next_dirty(iterator, &row)) {
-      auto destination = std::span<ScreenCell>{screen.cells}.subspan(static_cast<std::size_t>(row) * screen.cols, screen.cols);
+      auto destination = std::span<ScreenCell>{screen.cells.viewMut()}.subspan(static_cast<std::size_t>(row) * screen.cols, screen.cols);
 
       projection_.copyRow(iterator, row_cells_.get(), destination);
-      screen.row_revisions[row] = screen.revision;
+      screen.row_revisions.atMut(row) = screen.revision;
       const auto flags = readRowFlags(iterator);
 
       rebuild_links |= ((screen.row_flags[row] | flags) & static_cast<Byte>(RowFlag::hyperlinks)) != 0;
       metadata_changed |= screen.row_flags[row] != flags;
-      screen.row_flags[row] = flags;
+      screen.row_flags.atMut(row) = flags;
 
       if (all_rows) {
         ++row;
@@ -992,8 +996,8 @@ namespace telar::runtime {
     }
 
     // A reflow moves the documents' text to other rows; what they hold is learnt anew.
-    for (auto& document : effects.inline_documents) {
-      document.contents.assign(document.contents.size(), 0);
+    for (auto& document : effects.inline_documents.viewMut()) {
+      std::ranges::fill(document.contents.viewMut(), 0);
     }
 
     screen.reserve(size.cols, size.rows);
@@ -1275,14 +1279,16 @@ namespace telar::runtime {
     const auto cols = static_cast<std::size_t>(screen.cols);
     auto& documents = effects.inline_documents;
 
-    for (auto document = documents.begin(); document != documents.end();) {
+    for (std::size_t index = 0; index < documents.size();) {
+      auto& document = documents.atMut(index);
+
       bool changed = false;
-      const auto first = std::max<std::uint64_t>(document->row, top);
-      const auto end = std::min<std::uint64_t>(static_cast<std::uint64_t>(document->row) + document->rows, top + rows);
+      const auto first = std::max<std::uint64_t>(document.row, top);
+      const auto end = std::min<std::uint64_t>(static_cast<std::uint64_t>(document.row) + document.rows, top + rows);
 
       for (auto row = first; row < end && !changed; ++row) {
         const auto screen_row = static_cast<std::size_t>(row - top);
-        auto& known = document->contents[static_cast<std::size_t>(row - document->row)];
+        auto& known = document.contents.atMut(static_cast<std::size_t>(row - document.row));
         if (known != 0 && screen.row_revisions[screen_row] != screen.revision) {
           continue;
         }
@@ -1295,13 +1301,13 @@ namespace telar::runtime {
       }
 
       if (changed) {
-        effects.inline_bytes -= document->bytes.size();
-        document = documents.erase(document);
+        effects.inline_bytes -= document.bytes.size();
+        static_cast<void>(documents.remove(index));
         ++effects.inline_revision;
         continue;
       }
 
-      ++document;
+      ++index;
     }
   }
 
@@ -1329,8 +1335,8 @@ namespace telar::runtime {
   }
 
   ScrollbackRows::ScrollbackRows(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
-      : cells_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        runs_(AllocatorRef<MetadataRun, ConcurrentMemory>{memory}) {}
+      : cells_(memory),
+        runs_(memory) {}
 
   tbc::view<PaneRows, tbc::lt::a> ScrollbackRows::read(tbc::view<Terminal&, tbc::lt::a> terminal, const ReadPaneRows& request) {
     terminal.followScrollback();
@@ -1362,7 +1368,7 @@ namespace telar::runtime {
     const auto cols = static_cast<std::size_t>(screen.cols);
 
     cells_.resize(static_cast<std::size_t>(count) * cols * maximum_cell_bytes);
-    auto output = std::span<Byte>{cells_};
+    auto output = std::span<Byte>{cells_.viewMut()};
 
     encodeScreenCells(std::span<const ScreenCell>{screen.cells}.subspan(static_cast<std::size_t>(skip) * cols, static_cast<std::size_t>(count) * cols), output);
 
@@ -1374,7 +1380,7 @@ namespace telar::runtime {
     runs_.clear();
     for (const auto& run : metadata.runs) {
       if (run.start >= first_cell && run.start < end_cell) {
-        runs_.push_back(MetadataRun{.start = static_cast<std::uint32_t>(run.start - first_cell), .len = run.len, .link_index = run.link_index});
+        runs_.push(MetadataRun{.start = static_cast<std::uint32_t>(run.start - first_cell), .len = run.len, .link_index = run.link_index});
       }
     }
 

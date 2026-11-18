@@ -257,7 +257,7 @@ export {
       static constexpr std::size_t result_header_bytes = sizeof(Byte) + sizeof(std::uint64_t) * 2 + sizeof(std::uint16_t) + sizeof(Byte);
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
       ByteQueue<ConcurrentMemory> text_;
-      tbc::view<Vector<HistoryEntry, ConcurrentMemory>, tbc::lt::self> entries_;
+      tbc::view<ds::Vec<HistoryEntry, ConcurrentMemory>, tbc::lt::self> entries_;
       std::size_t encoded_bytes_ = result_header_bytes;
     };
 
@@ -387,15 +387,15 @@ export {
       };
 
       void queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply);
-      String<ConcurrentMemory> string(std::string_view value) const;
+      ds::String<ConcurrentMemory> string(std::string_view value) const;
       static std::int64_t integer(std::uint64_t value);
       static void checkRow(Statement& statement);
       bool useIndex(std::string_view query) const noexcept;
-      void appendMatch(String<ConcurrentMemory>& sql, std::string_view query) const;
+      void appendMatch(ds::String<ConcurrentMemory>& sql, std::string_view query) const;
       void bindMatch(Statement& statement, std::string_view query) const;
-      static void appendScope(String<ConcurrentMemory>& sql, HistoryScope scope);
+      static void appendScope(ds::String<ConcurrentMemory>& sql, HistoryScope scope);
       static void bindScope(Statement& statement, HistoryScope scope, const HistoryScopeValue& value);
-      static void appendFilters(String<ConcurrentMemory>& sql, const QueryHistory& request);
+      static void appendFilters(ds::String<ConcurrentMemory>& sql, const QueryHistory& request);
       static void bindFilters(Statement& statement, const QueryHistory& request);
 
       ConcurrentMemory& memory_;

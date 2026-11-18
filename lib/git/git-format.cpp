@@ -250,7 +250,7 @@ namespace telar::git {
     return ReadStatus::ok;
   }
 
-  ReadStatus readWhole(int directory, const char* name, String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint) {
+  ReadStatus readWhole(int directory, const char* name, ds::String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint) {
     bytes.clear();
     FileDescriptor file;
     struct stat status{};
@@ -265,10 +265,8 @@ namespace telar::git {
 
     bool complete = false;
 
-    bytes.resize_and_overwrite(static_cast<std::size_t>(size), [&](char* destination, std::size_t count) {
-      complete = readExactly(file.get(), destination, count);
-      return complete ? count : 0;
-    });
+    bytes.resizeForOverwrite(static_cast<std::size_t>(size));
+    complete = readExactly(file.get(), bytes.dataMut(), bytes.size());
 
     if (!complete) {
       bytes.clear();

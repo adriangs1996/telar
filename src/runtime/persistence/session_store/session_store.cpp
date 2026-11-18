@@ -31,17 +31,17 @@ namespace telar::runtime::checkpoint {
   template <Allocator Memory>
   FileStore<Memory>::FileStore(Memory& memory, std::string_view path)
       : parent_(openPrivateParent(path)),
-        name_(path.substr(path.rfind('/') + 1), AllocatorRef<char, Memory>{memory}) {}
+        name_(memory, path.substr(path.rfind('/') + 1)) {}
 
   template <Allocator Memory>
-  bool FileStore<Memory>::load(Vector<Byte, Memory>& bytes) {
+  bool FileStore<Memory>::load(ds::Vec<Byte, Memory>& bytes) {
     return readPrivateFile(parent_.get(), name_, bytes, maximum_bytes);
   }
 
   template <Allocator Memory>
   FileDescriptor FileStore<Memory>::lock() const {
     ds::Array<char, NAME_MAX + 1> name;
-    const auto length = std::snprintf(name.dataMut(), name.size(), "%s.lock", name_.c_str());
+    const auto length = std::snprintf(name.dataMut(), name.size(), "%s.lock", name_.data());
     if (length < 0 || static_cast<std::size_t>(length) >= name.size()) {
       throw SystemError{"Session lock path is too long", ENAMETOOLONG};
     }
@@ -73,9 +73,9 @@ namespace telar::runtime::checkpoint {
   template <Allocator Memory>
   void FileStore<Memory>::quarantine() noexcept {
     ds::Array<char, NAME_MAX + 1> destination;
-    const auto length = std::snprintf(destination.dataMut(), destination.size(), "%s.corrupt", name_.c_str());
+    const auto length = std::snprintf(destination.dataMut(), destination.size(), "%s.corrupt", name_.data());
     if (length >= 0 && static_cast<std::size_t>(length) < destination.size()) {
-      ::renameat(parent_.get(), name_.c_str(), parent_.get(), destination.data());
+      ::renameat(parent_.get(), name_.data(), parent_.get(), destination.data());
     }
   }
 
@@ -85,11 +85,11 @@ namespace telar::runtime::checkpoint {
   template <Allocator Memory>
   void FileStore<Memory>::setAside(Memory& memory, std::string_view path) {
     const auto parent = openPrivateParent(path);
-    const String<Memory> name{path.substr(path.rfind('/') + 1), AllocatorRef<char, Memory>{memory}};
-    String<Memory> previous{name, AllocatorRef<char, Memory>{memory}};
+    const ds::String<Memory> name{memory, path.substr(path.rfind('/') + 1)};
+    ds::String<Memory> previous{memory, name};
 
-    previous += ".previous";
-    if (::renameat(parent.get(), name.c_str(), parent.get(), previous.c_str()) != 0 && sys::lastError() != ENOENT) {
+    previous.append(".previous");
+    if (::renameat(parent.get(), name.data(), parent.get(), previous.data()) != 0 && sys::lastError() != ENOENT) {
       throw SystemError{"Set previous session aside"};
     }
   }

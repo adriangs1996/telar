@@ -33,7 +33,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   Epoll<Memory>::Epoll(Memory& memory)
       : queue_(::epoll_create1(EPOLL_CLOEXEC)),
-        interests_(AllocatorRef<Interest, Memory>{memory}) {
+        interests_(memory) {
     if (!queue_) {
       throw SystemError{"Create runtime event queue"};
     }
@@ -56,7 +56,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   void Epoll<Memory>::watch(int descriptor, std::uint64_t token) {
     if (descriptor >= 0 && static_cast<std::size_t>(descriptor) < interests_.size()) {
-      auto& interest = interests_[descriptor];
+      auto& interest = interests_.atMut(descriptor);
       interest.mask = 0;
       ++interest.generation;
     }
@@ -79,7 +79,7 @@ namespace telar::runtime {
       return;
     }
 
-    auto& interest = interests_[descriptor];
+    auto& interest = interests_.atMut(descriptor);
     ::epoll_ctl(queue_.get(), EPOLL_CTL_DEL, descriptor, nullptr);
     interest.installed = false;
     interest.mask = 0;
@@ -182,7 +182,7 @@ namespace telar::runtime {
       interests_.resize(static_cast<std::size_t>(descriptor) + 1);
     }
 
-    auto& interest = interests_[descriptor];
+    auto& interest = interests_.atMut(descriptor);
     if (interest.token != token) {
       ++interest.generation;
     }

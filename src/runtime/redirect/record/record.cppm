@@ -133,7 +133,7 @@ export {
     public:
       explicit RecordFile(Memory& memory, std::string_view name, RecordLock mode = RecordLock::owner);
 
-      ds::Option<String<Memory>> load();
+      ds::Option<ds::String<Memory>> load();
 
       void save(std::string_view content);
 
@@ -143,7 +143,7 @@ export {
       static void validate(int descriptor);
 
       Memory& memory_;
-      String<Memory> name_;
+      ds::String<Memory> name_;
       FileDescriptor directory_;
       FileDescriptor lock_;
     };
@@ -193,12 +193,12 @@ export {
         validateOwner(owner);
         load(store);
         const auto marker = ownerMarker(owner);
-        const auto position = owners_.find(marker);
-        if (position == String<Memory>::npos) {
+        const auto position = owners_.view().find(marker);
+        if (position == std::string_view::npos) {
           return;
         }
 
-        owners_.erase(position, marker.size());
+        owners_.remove(position, marker.size());
         if (owners_.empty()) {
           if (restore_skip_) {
             interface.setSkipped(true);
@@ -216,7 +216,7 @@ export {
 
       static void validateOwner(std::string_view owner);
 
-      String<Memory> ownerMarker(std::string_view owner);
+      ds::String<Memory> ownerMarker(std::string_view owner);
 
       template <typename Store>
       TBC_GENERIC void load(Store& store) {
@@ -254,14 +254,14 @@ export {
 
       template <typename Store>
       TBC_GENERIC void save(Store& store) {
-        String<Memory> content{restore_skip_ ? "skip\n" : "filter\n", AllocatorRef<char, Memory>{memory_}};
+        ds::String<Memory> content{memory_, restore_skip_ ? "skip\n" : "filter\n"};
 
         content.append(owners_);
         store.save(content);
       }
 
       Memory& memory_;
-      String<Memory> owners_;
+      ds::String<Memory> owners_;
       bool restore_skip_ = false;
     };
 
@@ -422,7 +422,7 @@ export {
 
     private:
       Memory& memory_;
-      String<Memory> endpoint_;
+      ds::String<Memory> endpoint_;
       RecordFile<Memory> file_;
       ds::Option<unsigned> log_index_;
       ds::Option<std::uint64_t> last_token_;

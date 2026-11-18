@@ -19,13 +19,13 @@ namespace telar::git {
     ds::Option<std::string_view> value;
   };
 
-  bool parseConfigEntries(std::string_view text, String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&));
+  bool parseConfigEntries(std::string_view text, ds::String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&));
 
   // Visits each variable of `text` in order and returns false on the first
   // malformed line, as git refuses such a file. `scratch` holds the unescaped
   // subsection and value; it grows once to twice the file size.
   template <Allocator Memory, typename Visitor>
-  TBC_GENERIC bool parseConfig(std::string_view text, String<Memory>& scratch, Visitor&& visit) {
+  TBC_GENERIC bool parseConfig(std::string_view text, ds::String<Memory>& scratch, Visitor&& visit) {
     // Stays generic over the caller's visitor, which the parser calls through a function pointer.
     using Target = std::remove_reference_t<Visitor>;
 

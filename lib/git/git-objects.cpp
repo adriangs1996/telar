@@ -127,7 +127,7 @@ namespace telar::git {
     }
 
     std::span<std::uint8_t> writable(auto& string) noexcept {
-      return {reinterpret_cast<std::uint8_t*>(string.data()), string.size()};
+      return {reinterpret_cast<std::uint8_t*>(string.dataMut()), string.size()};
     }
 
     // Little-endian base-128 size of a delta header.
@@ -151,7 +151,7 @@ namespace telar::git {
 
     // Applies a git delta to `base`. Every copy is checked against both buffers.
     template <Allocator Memory>
-    bool applyDelta(std::span<const std::uint8_t> base, std::span<const std::uint8_t> delta, String<Memory>& output, std::size_t limit) {
+    bool applyDelta(std::span<const std::uint8_t> base, std::span<const std::uint8_t> delta, ds::String<Memory>& output, std::size_t limit) {
       std::size_t position = 0;
       std::uint64_t source_size = 0;
       std::uint64_t target_size = 0;
@@ -160,7 +160,7 @@ namespace telar::git {
       }
 
       resizeForOverwrite(output, static_cast<std::size_t>(target_size));
-      auto* target = reinterpret_cast<std::uint8_t*>(output.data());
+      auto* target = reinterpret_cast<std::uint8_t*>(output.dataMut());
       std::size_t written = 0;
 
       while (position < delta.size()) {
@@ -265,13 +265,11 @@ namespace telar::git {
     static_cast<CAllocationBlocks<Memory>*>(opaque)->release(address);
   }
 
-  void resizeForOverwrite(String<Memory>& string, std::size_t size) {
-    string.resize_and_overwrite(size, [](char*, std::size_t count) {
-      return count;
-    });
+  void resizeForOverwrite(ds::String<Memory>& string, std::size_t size) {
+    string.resizeForOverwrite(size);
   }
 
-  bool parseCommit(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, Vector<ObjectId, Memory>& parents) {
+  bool parseCommit(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, ds::Vec<ObjectId, Memory>& parents) {
     const auto tree = headerId(content, "tree ", format);
     if (!tree) {
       return false;
@@ -286,7 +284,7 @@ namespace telar::git {
         return false;
       }
 
-      parents.push_back(*parent);
+      parents.push(*parent);
     }
 
     while (!content.empty() && content.front() != '\n') {
@@ -414,12 +412,12 @@ namespace telar::git {
 
   ObjectDatabase::ObjectDatabase(Memory& memory) noexcept
       : inflater_(memory),
-        packs_(AllocatorRef<Pack, Memory>{memory}),
-        chain_(AllocatorRef<Link, Memory>{memory}),
-        compressed_(AllocatorRef<char, Memory>{memory}),
-        base_(AllocatorRef<char, Memory>{memory}),
-        target_(AllocatorRef<char, Memory>{memory}),
-        delta_(AllocatorRef<char, Memory>{memory}) {}
+        packs_(memory),
+        chain_(memory),
+        compressed_(memory),
+        base_(memory),
+        target_(memory),
+        delta_(memory) {}
 
   bool ObjectDatabase::open(int common, ObjectFormat format, const Limits& limits) {
     limits_ = &limits;
@@ -454,7 +452,7 @@ namespace telar::git {
     return format_;
   }
 
-  Lookup ObjectDatabase::read(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::read(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
     std::uint32_t pack = 0;
     std::uint64_t offset = 0;
     const auto located = locate(id, pack, offset);
@@ -476,7 +474,7 @@ namespace telar::git {
     for (auto* buffer : {&compressed_, &base_, &target_, &delta_}) {
       if (buffer->capacity() > retained) {
         buffer->clear();
-        buffer->shrink_to_fit();
+        buffer->shrinkToFit();
       }
     }
   }
@@ -516,7 +514,7 @@ namespace telar::git {
 
       Pack pack;
       if (openPack(directory.get(), name, pack)) {
-        packs_.push_back(std::move(pack));
+        packs_.push(std::move(pack));
       }
     }
 
@@ -773,7 +771,7 @@ namespace telar::git {
     return inflatePrefix(inflater_.stream(), source, output);
   }
 
-  Lookup ObjectDatabase::readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
     chain_.clear();
     Entry entry;
     bool loose_base = false;
@@ -792,7 +790,7 @@ namespace telar::git {
         return Lookup::invalid;
       }
 
-      chain_.push_back({pack, entry.data_offset, entry.size});
+      chain_.push({pack, entry.data_offset, entry.size});
       if (entry.kind == 6) {
         offset = entry.base_offset;
         continue;
@@ -850,7 +848,9 @@ namespace telar::git {
       type = static_cast<ObjectType>(entry.kind);
     }
 
-    for (auto link = chain_.rbegin(); link != chain_.rend(); ++link) {
+    for (auto index = chain_.size(); index-- != 0;) {
+      const auto* link = &chain_[index];
+
       if (!charge(link->size)) {
         return Lookup::invalid;
       }
@@ -861,10 +861,10 @@ namespace telar::git {
         return Lookup::invalid;
       }
 
-      base_.swap(target_);
+      std::swap(base_, target_);
     }
 
-    output.swap(base_);
+    std::swap(output, base_);
     if (prefix != 0 && output.size() > prefix) {
       output.resize(prefix);
     }
@@ -872,7 +872,7 @@ namespace telar::git {
     return Lookup::found;
   }
 
-  Lookup ObjectDatabase::readLoose(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::readLoose(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
     ds::Array<char, 2 * maximum_hash_size> hex;
     const auto digits = id.hex(hex.viewMut());
     PathName name;
@@ -942,7 +942,7 @@ namespace telar::git {
     resizeForOverwrite(output, wanted);
     const auto copied = std::min(ready, wanted);
 
-    std::memcpy(output.data(), head.data() + terminator + 1, copied);
+    std::memcpy(output.dataMut(), head.dataMut() + terminator + 1, copied);
     auto rest = writable(output).subspan(copied);
 
     if (first == Inflated::ended) {
@@ -970,8 +970,8 @@ namespace telar::git {
   }
 
   CommitGraph::CommitGraph(Memory& memory) noexcept
-      : layers_(AllocatorRef<Layer, Memory>{memory}),
-        chain_(AllocatorRef<char, Memory>{memory}) {}
+      : layers_(memory),
+        chain_(memory) {}
 
   void CommitGraph::load(int objects, ObjectFormat format, const Limits& limits, bool disabled) {
     if (disabled || objects < 0) {
@@ -1238,7 +1238,7 @@ namespace telar::git {
       return false;
     }
 
-    layers_.push_back(std::move(layer));
+    layers_.push(std::move(layer));
     return true;
   }
 

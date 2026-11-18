@@ -12,22 +12,22 @@ import telar.base.ds;
 namespace telar::runtime::cli::window {
 
   template <Allocator Memory>
-  void appendJsonNumber(String<Memory>& output, std::string_view encoded) {
+  void appendJsonNumber(ds::String<Memory>& output, std::string_view encoded) {
     if (encoded.find_first_of(".eE") == std::string_view::npos) {
-      output += encoded;
+      output.append(encoded);
       return;
     }
 
     double value = 0;
     const auto parsed = std::from_chars(encoded.data(), encoded.data() + encoded.size(), value);
     if (parsed.ec == std::errc::result_out_of_range) {
-      const String<Memory> terminated{encoded, output.get_allocator()};
+      const ds::String<Memory> terminated{output.memory(), encoded};
 
-      value = std::strtod(terminated.c_str(), nullptr);
+      value = std::strtod(terminated.data(), nullptr);
     }
 
     if (!std::isfinite(value)) {
-      output += encoded;
+      output.append(encoded);
       return;
     }
 
@@ -37,7 +37,7 @@ namespace telar::runtime::cli::window {
     const std::string_view number{buffer.data(), formatted.ptr};
     const auto exponent_at = number.find('e');
     if (exponent_at == std::string_view::npos) {
-      output += number;
+      output.append(number);
       return;
     }
 
@@ -51,38 +51,38 @@ namespace telar::runtime::cli::window {
 
     std::from_chars(exponent_text.data(), exponent_text.data() + exponent_text.size(), exponent);
     if (mantissa.starts_with('-')) {
-      output += '-';
+      output.push('-');
       mantissa.remove_prefix(1);
     }
 
     const auto dot = mantissa.find('.');
     const int decimal_position = static_cast<int>(dot == std::string_view::npos ? mantissa.size() : dot) + exponent;
-    String<Memory> digits{output.get_allocator()};
+    ds::String<Memory> digits{output.memory()};
 
     for (const auto byte : mantissa) {
       if (byte != '.') {
-        digits += byte;
+        digits.push(byte);
       }
     }
 
     if (decimal_position <= 0) {
-      output += "0.";
-      output.append(static_cast<std::size_t>(-decimal_position), '0');
-      output += digits;
+      output.append("0.");
+      output.resize(output.size() + static_cast<std::size_t>(-decimal_position), '0');
+      output.append(digits);
     } else if (static_cast<std::size_t>(decimal_position) >= digits.size()) {
-      output += digits;
-      output.append(static_cast<std::size_t>(decimal_position) - digits.size(), '0');
+      output.append(digits);
+      output.resize(output.size() + static_cast<std::size_t>(decimal_position) - digits.size(), '0');
     } else {
-      output.append(digits.data(), static_cast<std::size_t>(decimal_position));
-      output += '.';
-      output.append(digits.data() + decimal_position, digits.size() - static_cast<std::size_t>(decimal_position));
+      output.append(std::string_view{digits.data(), static_cast<std::size_t>(decimal_position)});
+      output.push('.');
+      output.append(std::string_view{digits.data() + decimal_position, digits.size() - static_cast<std::size_t>(decimal_position)});
     }
   }
 
-  void appendJson(String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth) {
+  void appendJson(ds::String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth) {
     const auto encoded = value.encoded();
     if (encoded.starts_with('"')) {
-      String<Memory> text{output.get_allocator()};
+      ds::String<Memory> text{output.memory()};
 
       value.string(text);
       appendJsonText(output, text, JsonEscapes::standard);
@@ -91,7 +91,7 @@ namespace telar::runtime::cli::window {
 
     if (!encoded.starts_with('{') && !encoded.starts_with('[')) {
       if (encoded == "true" || encoded == "false" || encoded == "null") {
-        output += encoded;
+        output.append(encoded);
       } else {
         appendJsonNumber(output, encoded);
       }
@@ -101,16 +101,16 @@ namespace telar::runtime::cli::window {
 
     const bool object = encoded.starts_with('{');
 
-    output += object ? '{' : '[';
+    output.push(object ? '{' : '[');
     std::size_t count = 0;
     const auto separator = [&] {
       if (count++ != 0) {
-        output += ',';
+        output.push(',');
       }
 
       if (pretty) {
-        output += '\n';
-        output.append((depth + 1) * 2, ' ');
+        output.push('\n');
+        output.resize(output.size() + (depth + 1) * 2, ' ');
       }
     };
 
@@ -118,7 +118,7 @@ namespace telar::runtime::cli::window {
       value.eachMember([&](const JsonValue& key, const JsonValue& member) {
         separator();
         appendJson(output, key, false);
-        output += pretty ? ": " : ":";
+        output.append(pretty ? ": " : ":");
         appendJson(output, member, pretty, depth + 1);
       });
     } else {
@@ -129,11 +129,11 @@ namespace telar::runtime::cli::window {
     }
 
     if (pretty && count != 0) {
-      output += '\n';
-      output.append(depth * 2, ' ');
+      output.push('\n');
+      output.resize(output.size() + depth * 2, ' ');
     }
 
-    output += object ? '}' : ']';
+    output.push(object ? '}' : ']');
   }
 
 }
@@ -202,15 +202,15 @@ namespace telar::runtime::cli::machine {
     if (!json) {
       std::printf("telar machine setup %s: %.*s.\n", label.c_str(), static_cast<int>(reason.size()), reason.data());
     } else {
-      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> output{memory};
 
-      output += "{\"label\":";
+      output.append("{\"label\":");
       appendJsonText(output, label, JsonEscapes::control);
-      output += ",\"destination\":";
+      output.append(",\"destination\":");
       appendJsonText(output, destination, JsonEscapes::control);
-      output += ",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":";
+      output.append(",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":");
       appendJsonText(output, reason, JsonEscapes::control);
-      output += ",\"steps\":[]}\n";
+      output.append(",\"steps\":[]}\n");
       std::fwrite(output.data(), 1, output.size(), stdout);
     }
 
@@ -231,24 +231,24 @@ namespace telar::runtime::cli::machine {
       return failed ? 1 : 0;
     }
 
-    String<Memory> output{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> output{memory};
 
-    output += "{\"label\":";
+    output.append("{\"label\":");
     appendJsonText(output, label, JsonEscapes::control);
-    output += ",\"destination\":";
+    output.append(",\"destination\":");
     appendJsonText(output, destination, JsonEscapes::control);
-    output += ",\"ready\":";
-    output += !failed && !pending ? "true" : "false";
-    output += ",\"pending\":";
-    output += pending ? "true" : "false";
-    output += ",\"changed\":";
-    output += changed ? "true" : "false";
+    output.append(",\"ready\":");
+    output.append(!failed && !pending ? "true" : "false");
+    output.append(",\"pending\":");
+    output.append(pending ? "true" : "false");
+    output.append(",\"changed\":");
+    output.append(changed ? "true" : "false");
     if (omitted_notes != 0) {
-      output += ",\"omitted_notes\":";
-      output += std::to_string(omitted_notes);
+      output.append(",\"omitted_notes\":");
+      output.append(std::to_string(omitted_notes));
     }
 
-    output += ",\"steps\":[";
+    output.append(",\"steps\":[");
     bool first = true;
 
     for (std::size_t index = 0; index < results.size(); ++index) {
@@ -258,32 +258,32 @@ namespace telar::runtime::cli::machine {
       }
 
       if (!first) {
-        output += ',';
+        output.push(',');
       }
 
       first = false;
-      output += "{\"step\":\"";
-      output += steps[index];
-      output += "\",\"status\":\"";
-      output += statuses[static_cast<std::size_t>(*result.status)];
-      output += "\",\"detail\":";
+      output.append("{\"step\":\"");
+      output.append(steps[index]);
+      output.append("\",\"status\":\"");
+      output.append(statuses[static_cast<std::size_t>(*result.status)]);
+      output.append("\",\"detail\":");
       appendJsonText(output, result.detail, JsonEscapes::control);
-      output += ",\"notes\":[";
+      output.append(",\"notes\":[");
       bool first_note = true;
 
       for (const auto& note : result.notes) {
         if (!first_note) {
-          output += ',';
+          output.push(',');
         }
 
         first_note = false;
         appendJsonText(output, note, JsonEscapes::control);
       }
 
-      output += "]}";
+      output.append("]}");
     }
 
-    output += "]}\n";
+    output.append("]}\n");
     std::fwrite(output.data(), 1, output.size(), stdout);
     return failed ? 1 : 0;
   }

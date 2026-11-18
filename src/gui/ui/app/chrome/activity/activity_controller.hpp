@@ -118,7 +118,7 @@ namespace telar::gui::qt {
     ListModel rows_;
     ds::Array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions_;
     ds::Option<Selection> selection_;
-    Vector<RowTarget, ApplicationAllocator> targets_;
+    ds::Vec<RowTarget, ApplicationAllocator> targets_;
     int agent_count_ = 0;
     std::uint64_t rebuilds_ = 0;
     QPointer<QQuickWindow> window_;

@@ -12,6 +12,7 @@ import telar.wire.editor;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.runtime.platform.process_probe;
+import telar.base.ds;
 
 // Interface: editors/remote_editor.cppm
 export {
@@ -57,9 +58,9 @@ export {
 
       ConcurrentMemory& memory_;
       CommandOutput<ConcurrentMemory> output_;
-      String<ConcurrentMemory> expression_;
-      String<ConcurrentMemory> path_;
-      String<ConcurrentMemory> editor_;
+      ds::String<ConcurrentMemory> expression_;
+      ds::String<ConcurrentMemory> path_;
+      ds::String<ConcurrentMemory> editor_;
       ProcessInspector inspector_;
     };
 

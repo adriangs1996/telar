@@ -56,9 +56,13 @@ namespace telar::runtime::cli {
 
   ControlSession::ControlSession(Memory& memory, const char* socket, std::size_t reply_bytes, std::size_t request_bytes)
       : connection_(socket),
-        outgoing_(request_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
-        incoming_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
-        decoded_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}) {}
+        outgoing_(memory),
+        incoming_(memory),
+        decoded_(memory) {
+    outgoing_.resize(request_bytes);
+    incoming_.resize(reply_bytes);
+    decoded_.resize(reply_bytes);
+  }
 
   void ControlSession::receiveTimeout(unsigned seconds) {
     connection_.receiveTimeout(seconds);

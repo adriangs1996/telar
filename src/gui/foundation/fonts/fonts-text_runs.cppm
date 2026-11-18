@@ -9,6 +9,7 @@ import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.gui.foundation.terminal;
 import :face;
+import telar.base.ds;
 
 // Interface: terminal/text_runs.cppm
 export {
@@ -43,7 +44,7 @@ export {
         const auto role = alone || !shapeable(cell) ? fonts::LigatureRole::none : coverage.role(cell.utf8());
         const auto joins = role != fonts::LigatureRole::none && !columns_.empty() && columns_.back().role != fonts::LigatureRole::none && inkStyle(previous_.style) == inkStyle(cell.style) && !typographic(previous_, cell);
 
-        columns_.push_back({.role = role, .joins = joins});
+        columns_.push({.role = role, .joins = joins});
         previous_ = cell;
         inputs_ += static_cast<std::size_t>(role == fonts::LigatureRole::input);
       }
@@ -70,7 +71,7 @@ export {
 
       [[nodiscard]] static bool typographic(const CellValue& previous, const CellValue& next) noexcept;
 
-      Vector<Column, Memory> columns_;
+      ds::Vec<Column, Memory> columns_;
       CellValue previous_;
       std::size_t inputs_ = 0;
     };

@@ -49,14 +49,14 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   Command<Memory>::Command(tbc::view<Memory&, tbc::lt::a> memory, const Launch& launch, CommandPurpose purpose)
-      : executable_(AllocatorRef<char, Memory>{memory}),
-        cwd_(launch.cwd, AllocatorRef<char, Memory>{memory}),
-        arguments_(AllocatorRef<String<Memory>, Memory>{memory}),
-        spawn_arguments_(AllocatorRef<String<Memory>, Memory>{memory}),
+      : executable_(memory),
+        cwd_(memory, launch.cwd),
+        arguments_(memory),
+        spawn_arguments_(memory),
         environment_memory_(memory),
-        environment_(AllocatorRef<String<SensitiveMemory>, SensitiveMemory>{environment_memory_}),
-        argument_pointers_(AllocatorRef<char*, Memory>{memory}),
-        environment_pointers_(AllocatorRef<char*, Memory>{memory}),
+        environment_(environment_memory_),
+        argument_pointers_(memory),
+        environment_pointers_(memory),
         memory_(memory),
         restorable_(launch.environment_mode == EnvironmentMode::inherit_runtime) {
     if (cwd_.empty()) {
@@ -69,16 +69,16 @@ namespace telar::runtime {
     }
 
     for (const auto argument : launch.arguments) {
-      arguments_.emplace_back(argument, AllocatorRef<char, Memory>{memory});
+      arguments_.emplace(memory, argument);
     }
 
     if (arguments_.empty()) {
-      arguments_.emplace_back(loginShell().view(), AllocatorRef<char, Memory>{memory});
+      arguments_.emplace(memory, loginShell().view());
     }
 
     if (launch.environment_mode == EnvironmentMode::inherit_runtime) {
       for (char** entry = environ; *entry != nullptr; ++entry) {
-        environment_.emplace_back(*entry, AllocatorRef<char, SensitiveMemory>{environment_memory_});
+        environment_.emplace(environment_memory_, *entry);
       }
     }
 
@@ -86,19 +86,23 @@ namespace telar::runtime {
       setEnvironment(entry.name, entry.value);
     }
 
-    std::erase_if(environment_, [purpose](const auto& entry) {
+    const auto drops = [purpose](const auto& entry) {
       if (purpose == CommandPurpose::configured_helper) {
         return false;
       }
 
-      const auto name = std::string_view{entry}.substr(0, entry.find('='));
+      const auto name = std::string_view{entry}.substr(0, entry.view().find('='));
 
       if (purpose == CommandPurpose::administration) {
         return name == "TELAR_PANE_ID" || name == "TELAR_PANE_GENERATION" || name == "TELAR_WORKSPACE_ID" || name == "TELAR_TAB_ID" || name == "SSH_AUTH_SOCK";
       }
 
       return name == "GHOSTTY_RESOURCES_DIR" || name == "TELAR_SOCKET" || name == "TERM_PROGRAM_VERSION";
-    });
+    };
+
+    static_cast<void>(environment_.retain([&drops](const auto& entry) {
+      return !drops(entry);
+    }));
 
     if (purpose == CommandPurpose::terminal) {
       setEnvironment("TERM_PROGRAM", control::program_name);
@@ -113,9 +117,9 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Command<Memory>::removeEnvironmentPrefix(std::string_view prefix) {
-    std::erase_if(environment_, [prefix](const auto& entry) {
-      return entry.starts_with(prefix);
-    });
+    static_cast<void>(environment_.retain([prefix](const auto& entry) {
+      return !entry.view().starts_with(prefix);
+    }));
   }
 
   template <Allocator Memory>
@@ -131,41 +135,45 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Command<Memory>::removeEnvironment(std::string_view name) {
-    std::erase_if(environment_, [name](auto& entry) {
-      if (!definesVariable(entry, name)) {
-        return false;
+    // The value may be a secret: its bytes are erased in place before the entry goes. An entry is
+    // never empty, `NAME=value`, so an erased one is told by its emptiness.
+    for (auto& entry : environment_.viewMut()) {
+      if (definesVariable(entry, name)) {
+        eraseSensitive(entry.dataMut(), entry.size());
+        entry.clear();
       }
+    }
 
-      eraseSensitive(entry.data(), entry.size());
-      return true;
-    });
+    static_cast<void>(environment_.retain([](const auto& entry) {
+      return !entry.empty();
+    }));
   }
 
   template <Allocator Memory>
   void Command<Memory>::replaceSpawnArguments(std::span<const std::string_view> arguments) {
     spawn_arguments_.clear();
     for (const auto argument : arguments) {
-      spawn_arguments_.emplace_back(argument, AllocatorRef<char, Memory>{memory_});
+      spawn_arguments_.emplace(memory_, argument);
     }
   }
 
   template <Allocator Memory>
   void Command<Memory>::setEnvironment(std::string_view name, std::string_view value) {
-    String<SensitiveMemory> entry{name, AllocatorRef<char, SensitiveMemory>{environment_memory_}};
+    ds::String<SensitiveMemory> entry{environment_memory_, name};
 
-    entry.push_back('=');
+    entry.push('=');
     entry.append(value);
 
-    for (auto& existing : environment_) {
-      const auto separator = existing.find('=');
+    for (auto& existing : environment_.viewMut()) {
+      const auto separator = existing.view().find('=');
       if (std::string_view{existing}.substr(0, separator) == name) {
-        eraseSensitive(existing.data(), existing.size());
+        eraseSensitive(existing.dataMut(), existing.size());
         existing = std::move(entry);
         return;
       }
     }
 
-    environment_.push_back(std::move(entry));
+    environment_.push(std::move(entry));
   }
 
   template <Allocator Memory>
@@ -173,22 +181,22 @@ namespace telar::runtime {
     argument_pointers_.clear();
     environment_pointers_.clear();
 
-    argument_pointers_.push_back(arguments_.front().data());
-    const auto rest = spawn_arguments_.empty() ? std::span<String<Memory>>{arguments_}.subspan(1) : std::span<String<Memory>>{spawn_arguments_};
+    argument_pointers_.push(arguments_.frontMut().dataMut());
+    const auto rest = spawn_arguments_.empty() ? arguments_.viewMut().subspan(1) : spawn_arguments_.viewMut();
 
     for (auto& argument : rest) {
-      argument_pointers_.push_back(argument.data());
+      argument_pointers_.push(argument.dataMut());
     }
 
-    for (auto& entry : environment_) {
-      environment_pointers_.push_back(entry.data());
+    for (auto& entry : environment_.viewMut()) {
+      environment_pointers_.push(entry.dataMut());
     }
 
-    argument_pointers_.push_back(nullptr);
-    environment_pointers_.push_back(nullptr);
+    argument_pointers_.push(nullptr);
+    environment_pointers_.push(nullptr);
     return SpawnSpec{
-        .executable = executable_.c_str(),
-        .cwd = cwd_.c_str(),
+        .executable = executable_.data(),
+        .cwd = cwd_.data(),
         .arguments = argument_pointers_.data(),
         .environment = environment_pointers_.data(),
         .size = size,
@@ -201,7 +209,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::span<const String<Memory>> Command<Memory>::arguments() const noexcept {
+  std::span<const ds::String<Memory>> Command<Memory>::arguments() const noexcept {
     return arguments_;
   }
 
@@ -218,8 +226,8 @@ namespace telar::runtime {
   template <Allocator Memory>
   void Command<Memory>::resolveExecutable() {
     const auto& program = arguments_.front();
-    if (program.find('/') != String<Memory>::npos) {
-      executable_ = program;
+    if (program.view().find('/') != std::string_view::npos) {
+      executable_.assign(program);
       return;
     }
 

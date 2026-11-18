@@ -469,7 +469,7 @@ namespace telar::runtime::traffic {
   }
 
   TcpFlows::Side::Side(Secure& memory)
-      : pending(AllocatorRef<Segment, Secure>{memory}) {}
+      : pending(memory) {}
 
   TcpFlows::Flow::Flow(Secure& memory, std::uint64_t id, bool reverse, bool offline)
       : id(id),

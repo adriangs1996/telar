@@ -128,7 +128,7 @@ namespace telar::runtime::cli {
     }
 
     const auto package = plugins::PackageInspector::inspect(memory, options.path);
-    String<Memory> output{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> output{memory};
 
     switch (options.action) {
     case PluginAction::inspect:
@@ -138,14 +138,14 @@ namespace telar::runtime::cli {
       const auto destination = plugins::Paths::installation(memory, environment, package);
 
       plugins::PackageInstallation{memory}.install(package, destination);
-      output = "telar plugin installed: ";
-      output += destination;
-      output += '\n';
+      output.assign("telar plugin installed: ");
+      output.append(destination);
+      output.push('\n');
       break;
     }
     case PluginAction::trust:
       plugins::updateTrust(memory, package, grantedCapabilities(package.manifest, options), plugins::Paths::trust(memory, environment));
-      output = "telar plugin trust updated\n";
+      output.assign("telar plugin trust updated\n");
       break;
     case PluginAction::untrust:
       break;
@@ -170,8 +170,8 @@ namespace telar::runtime::cli {
 
   template <EnvironmentLookup Environment>
   int runProxyTrust(ConcurrentMemory& memory, const ProxyTrustOptions& options, const Environment& environment) {
-    const auto directory = options.directory.empty() ? proxyAuthorityDirectory(memory, environment) : String<ConcurrentMemory>{options.directory, AllocatorRef<char, ConcurrentMemory>{memory}};
-    if (directory.empty() || directory.front() != '/') {
+    const auto directory = options.directory.empty() ? proxyAuthorityDirectory(memory, environment) : ds::String<ConcurrentMemory>{memory, options.directory};
+    if (directory.empty() || directory.view().front() != '/') {
       std::fputs("telar proxy trust: --ca-dir must be absolute\n", stderr);
       return 1;
     }
@@ -207,11 +207,11 @@ namespace telar::runtime::cli {
     const auto current = service.inspect();
     const auto certificate = paths.file(AuthorityFiles::forKind(AuthorityKind::system_trust).certificate);
     const auto print_notice = [&] {
-      std::printf("Firefox may use its own certificate store; import %s there if it does not honor OS trust.\n", certificate.c_str());
+      std::printf("Firefox may use its own certificate store; import %s there if it does not honor OS trust.\n", certificate.data());
     };
 
     if (options.action == ProxyTrustAction::status) {
-      std::printf("telar proxy trust: %s (%s)\n", proxy_trust::statusName(current.status).data(), directory.c_str());
+      std::printf("telar proxy trust: %s (%s)\n", proxy_trust::statusName(current.status).data(), directory.data());
       if (current.record) {
         const auto& record = *current.record;
 
@@ -225,13 +225,13 @@ namespace telar::runtime::cli {
     if (current.status == proxy_trust::Status::stale && !current.record) {
       const auto record = paths.file(proxy_trust::Record::filename);
 
-      std::printf("telar proxy trust: invalid trust record (%s)\n", record.c_str());
+      std::printf("telar proxy trust: invalid trust record (%s)\n", record.data());
       return 1;
     }
 
     if (options.action == ProxyTrustAction::install) {
       if (current.status == proxy_trust::Status::installed) {
-        std::printf("telar proxy trust: already installed (%s)\n", directory.c_str());
+        std::printf("telar proxy trust: already installed (%s)\n", directory.data());
       } else {
         const auto record = service.install(current.record);
 
@@ -243,7 +243,7 @@ namespace telar::runtime::cli {
     }
 
     if (!current.record) {
-      std::printf("telar proxy trust: not installed (%s)\n", directory.c_str());
+      std::printf("telar proxy trust: not installed (%s)\n", directory.data());
       return 0;
     }
 

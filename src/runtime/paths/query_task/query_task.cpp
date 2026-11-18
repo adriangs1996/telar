@@ -12,7 +12,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   FuzzyMatch<Memory>::FuzzyMatch(Memory& memory)
-      : matrix_(AllocatorRef<std::int32_t, Memory>{memory}) {
+      : matrix_(memory) {
     matrix_.resize(2 * maximum_needle * maximum_path);
   }
 
@@ -157,7 +157,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   std::span<std::int32_t> FuzzyMatch<Memory>::row(std::size_t index, bool best) noexcept {
-    return std::span{matrix_}.subspan((index * 2 + static_cast<unsigned>(best)) * maximum_path, maximum_path);
+    return matrix_.viewMut().subspan((index * 2 + static_cast<unsigned>(best)) * maximum_path, maximum_path);
   }
 
   template class FuzzyMatch<SystemAllocator>;
@@ -444,7 +444,7 @@ namespace telar::runtime {
   }
 
   PathIndex::PathIndex(ConcurrentMemory& memory)
-      : root_(AllocatorRef<char, ConcurrentMemory>{memory}),
+      : root_(memory),
         storage_(memory),
         builder_(memory, storage_),
         matcher_(memory) {
@@ -465,7 +465,7 @@ namespace telar::runtime {
   }
 
   void PathIndex::build() noexcept {
-    builder_.build(root_.c_str());
+    builder_.build(root_.data());
   }
 
   bool PathIndex::complete() const noexcept {

@@ -361,7 +361,7 @@ namespace telar::runtime::cli::pane_agents {
   template <Allocator Memory>
   void connectRuntime(Memory& memory, const RuntimePaths<Memory>& paths, bool start) {
     try {
-      const RuntimeConnection probe{paths.socket.c_str()};
+      const RuntimeConnection probe{paths.socket.data()};
 
       return;
     } catch (const SystemError& error) {
@@ -394,7 +394,7 @@ namespace telar::runtime::cli::pane_agents {
     const auto column = [&](std::string_view text, std::size_t width) {
       out.text(text);
       if (text.size() < width) {
-        out.data.append(width - text.size(), ' ');
+        out.data.resize(out.data.size() + width - text.size(), ' ');
       }
     };
 
@@ -404,7 +404,7 @@ namespace telar::runtime::cli::pane_agents {
       out.number(value);
       const auto used = out.data.size() - start;
       if (used < width) {
-        out.data.append(width - used, ' ');
+        out.data.resize(out.data.size() + width - used, ' ');
       }
     };
 
@@ -469,27 +469,27 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   template <Allocator Memory>
-  tbc::view<Vector<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory&, tbc::lt::a> memory, const char* socket, const Options& options) {
+  tbc::view<ds::Vec<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory&, tbc::lt::a> memory, const char* socket, const Options& options) {
     ControlSession session{memory, socket};
 
     session.receiveTimeout(30);
-    Vector<std::uint64_t, Memory> workspaces{AllocatorRef<std::uint64_t, Memory>{memory}};
-    Vector<PaneRecord, Memory> records{AllocatorRef<PaneRecord, Memory>{memory}};
+    ds::Vec<std::uint64_t, Memory> workspaces{memory};
+    ds::Vec<PaneRecord, Memory> records{memory};
 
     if (options.workspace) {
-      workspaces.push_back(entityId(*options.workspace, "TELAR_WORKSPACE_ID"));
+      workspaces.push(entityId(*options.workspace, "TELAR_WORKSPACE_ID"));
     } else {
       for (const auto& entry : runtimeList(session).entries) {
-        workspaces.push_back(entry.workspace);
+        workspaces.push(entry.workspace);
       }
     }
 
     for (const auto workspace : workspaces) {
-      Vector<std::uint64_t, Memory> tabs{AllocatorRef<std::uint64_t, Memory>{memory}};
+      ds::Vec<std::uint64_t, Memory> tabs{memory};
       const WorkspaceLocation location{.id = workspace};
 
       if (options.tab) {
-        tabs.push_back(entityId(*options.tab, "TELAR_TAB_ID"));
+        tabs.push(entityId(*options.tab, "TELAR_TAB_ID"));
       } else {
         const auto snapshot = session.template exchange<WorkspaceSnapshot>(RequestWorkspaceSnapshot{.workspace = location});
         if (snapshot.workspace.kind != location.kind || snapshot.workspace.id != workspace) {
@@ -497,7 +497,7 @@ namespace telar::runtime::cli::pane_agents {
         }
 
         for (const auto& entry : snapshot.tabs) {
-          tabs.push_back(entry.tab_id);
+          tabs.push(entry.tab_id);
         }
       }
 
@@ -511,7 +511,7 @@ namespace telar::runtime::cli::pane_agents {
         std::uint16_t position = 0;
 
         for (const auto pane : snapshot.panes) {
-          records.push_back(PaneRecord{.location = target, .position = position++, .pane = pane});
+          records.push(PaneRecord{.location = target, .position = position++, .pane = pane});
         }
       }
     }
@@ -732,7 +732,7 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   int executeAgent(Memory& memory, const RuntimePaths<Memory>& paths, const Options& options, Output& out) {
-    ControlSession session{memory, paths.socket.c_str()};
+    ControlSession session{memory, paths.socket.data()};
 
     session.receiveTimeout(30);
     const bool report = options.action == "report-title" || options.action == "report-state" || options.action == "report-command";
@@ -740,12 +740,12 @@ namespace telar::runtime::cli::pane_agents {
     constexpr std::string_view prefix = "worktree:";
     if (options.target.starts_with(prefix) && options.target.size() > prefix.size()) {
       if (report) {
-        ControlSession catalog{memory, paths.socket.c_str()};
+        ControlSession catalog{memory, paths.socket.data()};
 
         catalog.receiveTimeout(30);
         runtimeList(catalog);
       } else {
-        tree = worktreeId(memory, paths.socket.c_str(), options.target.substr(prefix.size()));
+        tree = worktreeId(memory, paths.socket.data(), options.target.substr(prefix.size()));
       }
     }
 
@@ -1054,7 +1054,7 @@ namespace telar::runtime::cli::execution {
       const RuntimePaths paths{memory, server_options, process_environment};
 
       ensureRuntime(memory, paths);
-      ControlSession session{memory, paths.socket.c_str()};
+      ControlSession session{memory, paths.socket.data()};
 
       session.receiveTimeout(30);
       return start(session, options);
@@ -1152,23 +1152,23 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   int executePane(Memory& memory, const RuntimePaths<Memory>& paths, Options options, Output& out) {
-    ControlSession session{memory, paths.socket.c_str()};
+    ControlSession session{memory, paths.socket.data()};
 
     session.receiveTimeout(30);
-    String<Memory> input{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> input{memory};
     // The text to send: the option's, or what stdin gave, which lives here rather than in the options.
     std::string_view text = options.text;
 
     if (options.stdin_text) {
       input.resize(max_input_bytes + 1);
-      const auto count = std::fread(input.data(), 1, input.size(), stdin);
+      const auto count = std::fread(input.dataMut(), 1, input.size(), stdin);
       if (count > max_input_bytes) {
         throw Failure{"send-keys needs text of 1 to 65536 bytes, or --stdin"};
       }
 
       input.resize(count);
-      while (!input.empty() && (input.back() == '\r' || input.back() == '\n')) {
-        input.pop_back();
+      while (!input.empty() && (input.view().back() == '\r' || input.view().back() == '\n')) {
+        input.truncate(input.size() - 1);
       }
 
       if (input.empty()) {
@@ -1176,18 +1176,18 @@ namespace telar::runtime::cli::pane_agents {
       }
 
       // The text is sent as a zero-terminated string, so embedded NUL ends it.
-      text = std::string_view{input}.substr(0, input.find('\0'));
+      text = std::string_view{input}.substr(0, input.view().find('\0'));
     }
 
     if (options.action == "list" || options.action == "get") {
-      inspectPanes(memory, paths.socket.c_str(), options, out);
+      inspectPanes(memory, paths.socket.data(), options, out);
       return 0;
     }
 
     const auto wanted = paneId(options.target);
 
     if (options.action == "watch") {
-      const auto catalog = paneCatalog(memory, paths.socket.c_str(), options);
+      const auto catalog = paneCatalog(memory, paths.socket.data(), options);
 
       for (const auto& entry : catalog) {
         if (entry.pane.pane_id == wanted) {
@@ -1342,7 +1342,7 @@ namespace telar::runtime::cli::project_setup {
 
         if (completed.encoded().starts_with('{')) {
           completed.eachMember([&](JsonValue key, JsonValue value) {
-            String<Memory> name{AllocatorRef<char, Memory>{memory}};
+            ds::String<Memory> name{memory};
 
             key.string(name);
             const auto key_end = static_cast<std::size_t>(key.encoded().data() - candidate.data()) + key.encoded().size();
@@ -1566,7 +1566,7 @@ namespace telar::runtime::cli::project_setup {
     const RuntimePaths paths{memory, server_options, process_environment};
 
     ensureRuntime(memory, paths);
-    ControlSession session{memory, paths.socket.c_str()};
+    ControlSession session{memory, paths.socket.data()};
 
     session.receiveTimeout(30);
     return execute(session, cwd, *recipe, detach);

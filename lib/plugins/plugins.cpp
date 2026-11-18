@@ -65,7 +65,7 @@ namespace telar::runtime::plugins {
     }
 
     template <Allocator Memory>
-    String<Memory> required(String<Memory> path) {
+    ds::String<Memory> required(ds::String<Memory> path) {
       if (path.empty()) {
         throw std::invalid_argument{"Home directory unavailable for plugins"};
       }
@@ -117,7 +117,7 @@ namespace telar::runtime::plugins {
   template <Allocator Memory>
   Capabilities Capabilities::parse(Memory& memory, const JsonValue& value) {
     Capabilities result;
-    String<Memory> text{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> text{memory};
 
     value.eachElement([&](const JsonValue& element) {
       element.string(text);
@@ -154,13 +154,13 @@ namespace telar::runtime::plugins {
   template <Allocator Memory>
   struct Manifest::Wire {
     explicit Wire(Memory& memory)
-        : id(AllocatorRef<char, Memory>{memory}),
-          version(AllocatorRef<char, Memory>{memory}),
-          entry(AllocatorRef<char, Memory>{memory}),
-          url(AllocatorRef<char, Memory>{memory}),
-          revision(AllocatorRef<char, Memory>{memory}),
-          actions(AllocatorRef<String<Memory>, Memory>{memory}),
-          capabilities(AllocatorRef<String<Memory>, Memory>{memory}) {}
+        : id(memory),
+          version(memory),
+          entry(memory),
+          url(memory),
+          revision(memory),
+          actions(memory),
+          capabilities(memory) {}
 
     void read(Memory& memory, const JsonValue& root) {
       JsonFields fields{memory, root, field_names};
@@ -176,7 +176,7 @@ namespace telar::runtime::plugins {
       for (auto [name, list] : {std::pair{"actions", &actions}, std::pair{"capabilities", &capabilities}}) {
         if (const auto& value = fields.optional(name)) {
           value->eachElement([&](const JsonValue& element) {
-            element.string(list->emplace_back(AllocatorRef<char, Memory>{memory}));
+            element.string(list->emplace(memory));
           });
         }
       }
@@ -261,13 +261,13 @@ namespace telar::runtime::plugins {
     }
 
     std::uint64_t api_version = 0;
-    String<Memory> id;
-    String<Memory> version;
-    String<Memory> entry;
-    String<Memory> url;
-    String<Memory> revision;
-    Vector<String<Memory>, Memory> actions;
-    Vector<String<Memory>, Memory> capabilities;
+    ds::String<Memory> id;
+    ds::String<Memory> version;
+    ds::String<Memory> entry;
+    ds::String<Memory> url;
+    ds::String<Memory> revision;
+    ds::Vec<ds::String<Memory>, Memory> actions;
+    ds::Vec<ds::String<Memory>, Memory> capabilities;
   };
 
   // std.json's scanner: input that stops inside a string or an open object or
@@ -340,35 +340,35 @@ namespace telar::runtime::plugins {
 
   // Inspection
 
-  void appendInspection(String<Memory>& output, const Package& package) {
+  void appendInspection(ds::String<Memory>& output, const Package& package) {
     const auto& manifest = package.manifest;
 
-    output += "id: ";
-    output += manifest.id.view();
-    output += "\nversion: ";
-    output += manifest.version.view();
-    output += "\nsource: ";
-    output += manifest.source.view();
-    output += "\nrevision: ";
-    output += manifest.revision.view();
-    output += "\ndigest: ";
+    output.append("id: ");
+    output.append(manifest.id.view());
+    output.append("\nversion: ");
+    output.append(manifest.version.view());
+    output.append("\nsource: ");
+    output.append(manifest.source.view());
+    output.append("\nrevision: ");
+    output.append(manifest.revision.view());
+    output.append("\ndigest: ");
     appendLowerHex(output, package.digest);
-    output += "\nactions:";
+    output.append("\nactions:");
     for (const auto& action : std::span{manifest.actions}.first(manifest.action_count)) {
-      output += ' ';
-      output += action.view();
+      output.push(' ');
+      output.append(action.view());
     }
 
-    output += "\ncapabilities:";
+    output.append("\ncapabilities:");
     for (unsigned index = 0; index < static_cast<unsigned>(Capability::count); ++index) {
       const auto capability = static_cast<Capability>(index);
       if (manifest.capabilities.contains(capability)) {
-        output += ' ';
-        output += Capabilities::name(capability);
+        output.push(' ');
+        output.append(Capabilities::name(capability));
       }
     }
 
-    output += '\n';
+    output.push('\n');
   }
 
   // Package files
@@ -376,12 +376,12 @@ namespace telar::runtime::plugins {
   template <Allocator Memory>
   PackageFiles<Memory>::PackageFiles(Memory& memory, int directory)
       : memory_(memory),
-        entries_(AllocatorRef<Entry, Memory>{memory}) {
-    String<Memory> prefix{AllocatorRef<char, Memory>{memory}};
+        entries_(memory) {
+    ds::String<Memory> prefix{memory};
     DirectoryStream iterator{directory};
 
     scan(iterator, prefix);
-    std::ranges::sort(entries_, [](const auto& first, const auto& second) {
+    std::ranges::sort(entries_.viewMut(), [](const auto& first, const auto& second) {
       return first.path < second.path;
     });
   }
@@ -392,7 +392,7 @@ namespace telar::runtime::plugins {
   }
 
   template <Allocator Memory>
-  void PackageFiles<Memory>::scan(DirectoryStream& iterator, String<Memory>& prefix) {
+  void PackageFiles<Memory>::scan(DirectoryStream& iterator, ds::String<Memory>& prefix) {
     const auto directory = iterator.descriptor();
     if (directory < 0) {
       throw SystemError{"Read plugin package directory descriptor"};
@@ -415,7 +415,7 @@ namespace telar::runtime::plugins {
       const auto parent_length = prefix.size();
 
 #if defined(__APPLE__)
-      prefix.append(entry->d_name, entry->d_namlen);
+      prefix.append(std::string_view{entry->d_name, entry->d_namlen});
 #else
       prefix.append(entry->d_name);
 #endif
@@ -423,14 +423,14 @@ namespace telar::runtime::plugins {
         throw std::invalid_argument{"Plugin package path exceeds its limit"};
       }
 
-      entries_.push_back({String<Memory>{prefix, AllocatorRef<char, Memory>{memory_}}, S_ISDIR(status.st_mode)});
+      entries_.push({ds::String<Memory>{memory_, prefix}, S_ISDIR(status.st_mode)});
       if (S_ISDIR(status.st_mode)) {
         FileDescriptor child{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
         if (!child) {
           throw SystemError{"Open plugin package directory"};
         }
 
-        prefix += '/';
+        prefix.push('/');
         DirectoryStream children{std::move(child)};
 
         scan(children, prefix);
@@ -451,7 +451,7 @@ namespace telar::runtime::plugins {
 
       for (const auto& entry : files.entries()) {
         if (entry.directory) {
-          if (::mkdirat(destination, entry.path.c_str(), S_IRWXU) != 0) {
+          if (::mkdirat(destination, entry.path.data(), S_IRWXU) != 0) {
             throw SystemError{"Create plugin package directory"};
           }
 
@@ -474,8 +474,8 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   Package copyPackage(Memory& memory, const Package& package, int destination, std::string_view path, Package (*inspect)(Memory& memory, std::string_view path)) {
-    String<Memory> source_path{package.root.view(), AllocatorRef<char, Memory>{memory}};
-    FileDescriptor source{telarOpenDirectoryNoFollow(source_path.c_str())};
+    ds::String<Memory> source_path{memory, package.root.view()};
+    FileDescriptor source{telarOpenDirectoryNoFollow(source_path.data())};
     if (!source) {
       throw SystemError{"Open plugin package source"};
     }
@@ -494,7 +494,7 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   Package inspectConfiguredPackage(Memory& memory, std::string_view directory, std::string_view path, PackageHashing hashing) {
-    String<Memory> resolved{path, AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> resolved{memory, path};
 
     resolveRelativePath(resolved, directory);
     return inspectPackage(memory, resolved, hashing);
@@ -539,34 +539,34 @@ namespace telar::runtime::plugins {
       : memory_(memory) {}
 
   void PackageInstallation::install(const Package& package, std::string_view destination) {
-    String<Memory> path{destination, AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> path{memory_, destination};
 
     resolveAbsolutePath(path);
-    if (existing(package, path.c_str())) {
+    if (existing(package, path.data())) {
       return;
     }
 
-    const auto separator = path.rfind('/');
-    String<Memory> parent{std::string_view{path}.substr(0, separator), AllocatorRef<char, Memory>{memory_}};
+    const auto separator = path.view().rfind('/');
+    ds::String<Memory> parent{memory_, std::string_view{path}.substr(0, separator)};
 
     createPrivateDirectory(parent);
     auto directory = openPrivateParent(path);
 
-    parent += "/.telar-plugin-XXXXXX";
+    parent.append("/.telar-plugin-XXXXXX");
     TemporaryDirectory staging{parent};
     if (::mkdirat(staging.descriptor(), staged_package, 0700) != 0) {
       throw SystemError{"Create plugin installation staging directory"};
     }
 
     auto copied = openBeneath(staging.descriptor(), staged_package, O_RDONLY | O_DIRECTORY);
-    String<Memory> staged_path{staging.path(), AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> staged_path{memory_, staging.path()};
 
-    staged_path += '/';
-    staged_path += staged_package;
+    staged_path.push('/');
+    staged_path.append(staged_package);
     PackageCopy{memory_}.copy(package, copied.get(), staged_path);
 
-    if (renameAt(staging.descriptor(), staged_package, directory.get(), path.c_str() + separator + 1, RenameMode::create_only) != 0) {
-      if (sys::lastError() == EEXIST && existing(package, path.c_str())) {
+    if (renameAt(staging.descriptor(), staged_package, directory.get(), path.data() + separator + 1, RenameMode::create_only) != 0) {
+      if (sys::lastError() == EEXIST && existing(package, path.data())) {
         return;
       }
 
@@ -605,7 +605,7 @@ namespace telar::runtime::plugins {
   // Package registry
 
   template <Allocator Memory>
-  void registerPackages(Vector<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path)) {
+  void registerPackages(ds::Vec<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path)) {
     for (const auto& specification : specifications) {
       if (!specification.enabled) {
         continue;
@@ -627,26 +627,26 @@ namespace telar::runtime::plugins {
         }
       }
 
-      packages.push_back(std::move(package));
+      packages.push(std::move(package));
     }
   }
 
   // Paths
 
   template <Allocator Memory>
-  String<Memory> Paths::trustFile(String<Memory> home) {
+  ds::String<Memory> Paths::trustFile(ds::String<Memory> home) {
     auto path = required(std::move(home));
 
-    path += "/trust.json";
+    path.append("/trust.json");
     return path;
   }
 
-  String<Memory> Paths::installationDirectory(String<Memory> data, const Package& package) {
+  ds::String<Memory> Paths::installationDirectory(ds::String<Memory> data, const Package& package) {
     auto path = required(std::move(data));
 
-    path += "/telar/plugins/";
-    path += package.manifest.id.view();
-    path += '/';
+    path.append("/telar/plugins/");
+    path.append(package.manifest.id.view());
+    path.push('/');
     appendLowerHex(path, package.digest);
     return path;
   }
@@ -659,7 +659,7 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   TrustStore TrustStore::load(Memory& memory, std::string_view path) {
-    Vector<unsigned char, Memory> bytes{AllocatorRef<unsigned char, Memory>{memory}};
+    ds::Vec<unsigned char, Memory> bytes{memory};
     if (!readPrivateFile(AT_FDCWD, path, bytes, PackageLimits::trust_bytes - 1)) {
       return {};
     }
@@ -755,28 +755,28 @@ namespace telar::runtime::plugins {
     return false;
   }
 
-  String<Memory> TrustStore::json(Memory& memory) const {
-    String<Memory> output{"{\"version\":1,\"grants\":[", AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> TrustStore::json(Memory& memory) const {
+    ds::String<Memory> output{memory, "{\"version\":1,\"grants\":["};
 
     for (std::size_t index = 0; index < count_; ++index) {
       if (index != 0) {
-        output += ',';
+        output.push(',');
       }
 
       const auto& entry = grants_[index];
 
-      output += "{\"plugin\":";
+      output.append("{\"plugin\":");
       appendJsonText(output, entry.plugin.view());
-      output += ",\"digest\":\"";
+      output.append(",\"digest\":\"");
       appendLowerHex(output, entry.digest);
-      output += "\",\"capabilities\":[";
+      output.append("\",\"capabilities\":[");
       bool first = true;
 
       for (unsigned value = 0; value < static_cast<unsigned>(Capability::count); ++value) {
         const auto capability = static_cast<Capability>(value);
         if (entry.capabilities.contains(capability)) {
           if (!first) {
-            output += ',';
+            output.push(',');
           }
 
           appendJsonText(output, Capabilities::name(capability));
@@ -784,10 +784,10 @@ namespace telar::runtime::plugins {
         }
       }
 
-      output += "]}";
+      output.append("]}");
     }
 
-    output += "]}\n";
+    output.append("]}\n");
     if (output.size() > PackageLimits::trust_bytes) {
       throw std::length_error{"Plugin trust store exceeds its limit"};
     }
@@ -810,11 +810,11 @@ namespace telar::runtime::plugins {
 
   // Trust update
 
-  void saveTrust(Memory& memory, const TrustStore& store, String<Memory> path) {
+  void saveTrust(Memory& memory, const TrustStore& store, ds::String<Memory> path) {
     const auto contents = store.json(memory);
 
     resolveAbsolutePath(path);
-    const auto separator = path.rfind('/');
+    const auto separator = path.view().rfind('/');
 
     createPrivateDirectory(std::string_view{path}.substr(0, separator));
     const auto parent = openPrivateParent(path);
@@ -824,14 +824,14 @@ namespace telar::runtime::plugins {
     }
   }
 
-  void updateTrust(Memory& memory, const Package& package, Capabilities capabilities, String<Memory> path) {
+  void updateTrust(Memory& memory, const Package& package, Capabilities capabilities, ds::String<Memory> path) {
     auto store = TrustStore::load(memory, path);
 
     store.upsert(package.manifest, package.digest, capabilities);
     saveTrust(memory, store, std::move(path));
   }
 
-  void revokeTrust(Memory& memory, std::string_view id, String<Memory> path) {
+  void revokeTrust(Memory& memory, std::string_view id, ds::String<Memory> path) {
     auto store = TrustStore::load(memory, path);
 
     store.revoke(id);
@@ -857,11 +857,11 @@ namespace telar::runtime::plugins {
   template Package inspectPackage<Memory>(Memory& memory, std::string_view path, PackageHashing hashing);
   template Package inspectPackage<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path, PackageHashing hashing);
 
-  template void registerPackages<Memory>(Vector<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
-  template void registerPackages<ConcurrentMemory>(Vector<Package, ConcurrentMemory>& packages, ConcurrentMemory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(ConcurrentMemory& memory, std::string_view directory, std::string_view path));
+  template void registerPackages<Memory>(ds::Vec<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
+  template void registerPackages<ConcurrentMemory>(ds::Vec<Package, ConcurrentMemory>& packages, ConcurrentMemory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(ConcurrentMemory& memory, std::string_view directory, std::string_view path));
 
-  template String<Memory> Paths::trustFile<Memory>(String<Memory> home);
-  template String<ConcurrentMemory> Paths::trustFile<ConcurrentMemory>(String<ConcurrentMemory> home);
+  template ds::String<Memory> Paths::trustFile<Memory>(ds::String<Memory> home);
+  template ds::String<ConcurrentMemory> Paths::trustFile<ConcurrentMemory>(ds::String<ConcurrentMemory> home);
 
   template TrustStore TrustStore::load<Memory>(Memory& memory, std::string_view path);
   template TrustStore TrustStore::load<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path);

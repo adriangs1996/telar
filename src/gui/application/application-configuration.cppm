@@ -202,7 +202,7 @@ export {
 
       struct ElementHandlers {
         std::uint64_t instance = 0;
-        Vector<int, Memory> references;
+        ds::Vec<int, Memory> references;
       };
 
       ElementHandlers& handlersOf(std::uint64_t instance);
@@ -250,7 +250,7 @@ export {
       int root_reference_ = LUA_NOREF;
       ds::Array<int, BindingEffects::maximum_effects> transient_references_{};
       std::size_t transient_count_ = 0;
-      tbc::view<Vector<ElementHandlers, Memory>, tbc::lt::a> element_handlers_{AllocatorRef<ElementHandlers, Memory>{memory_}};
+      tbc::view<ds::Vec<ElementHandlers, Memory>, tbc::lt::a> element_handlers_{memory_};
     };
 
     extern template class ConfigurationGeneration<telar::Memory>;

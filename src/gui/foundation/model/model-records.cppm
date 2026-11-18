@@ -87,11 +87,11 @@ export {
       void observePanes(std::span<const TabPane> panes);
 
       TabLocation location;
-      String<Memory> label;
-      String<Memory> foreground;
+      ds::String<Memory> label;
+      ds::String<Memory> foreground;
       // The foreground pane's working directory, as the runtime last listed it.
-      String<Memory> directory;
-      Vector<TabMember, Memory> members;
+      ds::String<Memory> directory;
+      ds::Vec<TabMember, Memory> members;
       PaneLayout layout;
       std::uint64_t focused_pane = 0;
       std::uint64_t foreground_pane = 0;
@@ -110,9 +110,9 @@ export {
       explicit Workspace(Memory& memory, WorkspaceLocation identity = {});
 
       WorkspaceLocation location;
-      String<Memory> name;
-      String<Memory> path;
-      String<Memory> branch;
+      ds::String<Memory> name;
+      ds::String<Memory> path;
+      ds::String<Memory> branch;
       bool dirty = false;
       std::uint16_t tab_count = 0;
     };
@@ -135,11 +135,11 @@ export {
       ds::Option<std::uint64_t> created_by;
       ds::Option<CoordinatorReference> coordinator;
       WorktreeState state = WorktreeState::active;
-      String<Memory> path;
-      String<Memory> branch;
-      String<Memory> base;
-      String<Memory> title;
-      String<Memory> command_label;
+      ds::String<Memory> path;
+      ds::String<Memory> branch;
+      ds::String<Memory> base;
+      ds::String<Memory> title;
+      ds::String<Memory> command_label;
       std::uint32_t diff_added = 0;
       std::uint32_t diff_removed = 0;
       std::uint32_t diff_files = 0;
@@ -168,14 +168,14 @@ export {
       AgentProvider provider_kind = AgentProvider::unknown;
       AgentAttachmentMarkers attachments = AgentAttachmentMarkers::none;
       AgentTitleState title_state = AgentTitleState::placeholder;
-      String<Memory> title;
-      String<Memory> provider_name;
-      String<Memory> workspace_label;
-      String<Memory> display_name;
-      String<Memory> icon;
-      String<Memory> detail;
-      String<Memory> plan_step;
-      String<Memory> final_message;
+      ds::String<Memory> title;
+      ds::String<Memory> provider_name;
+      ds::String<Memory> workspace_label;
+      ds::String<Memory> display_name;
+      ds::String<Memory> icon;
+      ds::String<Memory> detail;
+      ds::String<Memory> plan_step;
+      ds::String<Memory> final_message;
       std::uint16_t plan_done = 0;
       std::uint16_t plan_total = 0;
       std::uint32_t status_age_s = 0;

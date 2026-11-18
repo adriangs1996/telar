@@ -33,7 +33,7 @@ namespace telar::runtime::traffic {
   Capture::Capture(Memory& memory, FileDescriptor socket)
       : memory_(memory),
         socket_(std::move(socket)),
-        output_(AllocatorRef<Byte, ErasingAllocator<Memory>>{memory_}) {
+        output_(memory_) {
     output_.resize(Limits::frame_bytes + Protocol::prefix_bytes);
     randomBytes(&session_, sizeof(session_));
   }
@@ -150,10 +150,10 @@ namespace telar::runtime::traffic {
     event.offline = offline_;
     event.capture_drops = dropped_;
     event.kernel_drops = kernel_drops_.count();
-    const auto payload = Protocol::encode(std::span{output_}.subspan(Protocol::prefix_bytes), event);
+    const auto payload = Protocol::encode(output_.viewMut().subspan(Protocol::prefix_bytes), event);
     const auto prefix = Protocol::prefix(payload.size());
 
-    std::ranges::copy(prefix, output_.begin());
+    std::ranges::copy(prefix, output_.viewMut().begin());
 
     // Once any part of a frame is written it must finish, or close the channel.
     // Only a wholly unsent frame may be dropped under capture backpressure.

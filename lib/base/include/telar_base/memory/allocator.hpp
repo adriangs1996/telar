@@ -302,12 +302,6 @@ namespace telar {
   };
 
   template <typename Value, Allocator Memory>
-  using Vector = std::vector<Value, AllocatorRef<Value, Memory>>;
-
-  template <Allocator Memory>
-  using String = std::basic_string<char, std::char_traits<char>, AllocatorRef<char, Memory>>;
-
-  template <typename Value, Allocator Memory>
   class AllocationDeleter {
   public:
     explicit AllocationDeleter(Memory& memory) noexcept

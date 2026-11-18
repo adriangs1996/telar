@@ -55,13 +55,13 @@ export namespace telar::gui::inline foundation::inline terminal {
     static constexpr std::size_t maximum_cells = TerminalGrid::maximum_cells;
 
     explicit Screen(Memory& memory)
-        : cells_(AllocatorRef<CellValue, Memory>{memory}),
-          row_revisions_(AllocatorRef<std::uint64_t, Memory>{memory}),
-          row_flags_(AllocatorRef<Byte, Memory>{memory}),
-          links_(AllocatorRef<MetadataLink, Memory>{memory}),
-          link_runs_(AllocatorRef<MetadataRun, Memory>{memory}),
-          uris_(AllocatorRef<Byte, Memory>{memory}),
-          staged_(AllocatorRef<CellValue, Memory>{memory}) {}
+        : cells_(memory),
+          row_revisions_(memory),
+          row_flags_(memory),
+          links_(memory),
+          link_runs_(memory),
+          uris_(memory),
+          staged_(memory) {}
 
     void detach() noexcept {
       frame_id_ = 0;
@@ -94,7 +94,7 @@ export namespace telar::gui::inline foundation::inline terminal {
         auto reader = span.reader();
 
         while (const auto cell = reader.next()) {
-          staged_.emplace_back(*cell);
+          staged_.emplace(*cell);
         }
       }
 
@@ -102,27 +102,32 @@ export namespace telar::gui::inline foundation::inline terminal {
 
       if (snapshot) {
         cells_.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-        row_revisions_.assign(frame.rows, revision_ + 1);
+        row_revisions_.clear();
+        row_revisions_.resize(frame.rows, revision_ + 1);
       }
 
       const auto* staged = staged_.data();
 
       for (const auto& span : frame.spans) {
-        std::copy_n(staged, span.count, cells_.begin() + span.start);
+        std::copy_n(staged, span.count, cells_.dataMut() + span.start);
         staged += span.count;
         const auto last = (span.start + span.count - 1) / frame.cols;
 
-        std::fill(row_revisions_.begin() + span.start / frame.cols, row_revisions_.begin() + last + 1, revision_ + 1);
+        std::fill(row_revisions_.dataMut() + span.start / frame.cols, row_revisions_.dataMut() + last + 1, revision_ + 1);
       }
 
       if (frame.text_metadata) {
         const auto& metadata = *frame.text_metadata;
 
         metadata_status_ = metadata.status;
-        row_flags_.assign(metadata.row_flags.begin(), metadata.row_flags.end());
-        links_.assign(metadata.links.begin(), metadata.links.end());
-        link_runs_.assign(metadata.runs.begin(), metadata.runs.end());
-        uris_.assign(metadata.uris.begin(), metadata.uris.end());
+        row_flags_.clear();
+        row_flags_.extend({metadata.row_flags.begin(), metadata.row_flags.end()});
+        links_.clear();
+        links_.extend({metadata.links.begin(), metadata.links.end()});
+        link_runs_.clear();
+        link_runs_.extend({metadata.runs.begin(), metadata.runs.end()});
+        uris_.clear();
+        uris_.extend({metadata.uris.begin(), metadata.uris.end()});
       }
 
       pane_id_ = frame.pane_id;
@@ -241,17 +246,22 @@ export namespace telar::gui::inline foundation::inline terminal {
       for (std::size_t row = 0; row < rows.size(); ++row) {
         const auto cells = rows[row].first(std::min<std::size_t>(columns_, rows[row].size()));
 
-        std::ranges::copy(cells, cells_.begin() + static_cast<std::ptrdiff_t>(row * columns_));
-        std::fill(cells_.begin() + static_cast<std::ptrdiff_t>((row * columns_) + cells.size()), cells_.begin() + static_cast<std::ptrdiff_t>((row + 1) * columns_), CellValue{});
+        std::ranges::copy(cells, cells_.viewMut().begin() + static_cast<std::ptrdiff_t>(row * columns_));
+        std::fill(cells_.dataMut() + static_cast<std::ptrdiff_t>((row * columns_) + cells.size()), cells_.dataMut() + static_cast<std::ptrdiff_t>((row + 1) * columns_), CellValue{});
       }
 
-      row_revisions_.assign(rows_, ++revision_);
-      row_flags_.assign(flags.begin(), flags.end());
+      row_revisions_.clear();
+      row_revisions_.resize(rows_, ++revision_);
+      row_flags_.clear();
+      row_flags_.extend({flags.begin(), flags.end()});
       row_flags_.resize(rows_, 0);
       metadata_status_ = metadata.status;
-      links_.assign(metadata.links.begin(), metadata.links.end());
-      link_runs_.assign(metadata.runs.begin(), metadata.runs.end());
-      uris_.assign(metadata.uris.begin(), metadata.uris.end());
+      links_.clear();
+      links_.extend({metadata.links.begin(), metadata.links.end()});
+      link_runs_.clear();
+      link_runs_.extend({metadata.runs.begin(), metadata.runs.end()});
+      uris_.clear();
+      uris_.extend({metadata.uris.begin(), metadata.uris.end()});
       cursor_ = {};
       scroll_ = {.total_rows = rows_, .offset = 0};
       cells_offset_ = 0;
@@ -294,14 +304,14 @@ export namespace telar::gui::inline foundation::inline terminal {
       }
     }
 
-    Vector<CellValue, Memory> cells_;
-    Vector<std::uint64_t, Memory> row_revisions_;
-    Vector<Byte, Memory> row_flags_;
-    Vector<MetadataLink, Memory> links_;
-    Vector<MetadataRun, Memory> link_runs_;
-    Vector<Byte, Memory> uris_;
+    ds::Vec<CellValue, Memory> cells_;
+    ds::Vec<std::uint64_t, Memory> row_revisions_;
+    ds::Vec<Byte, Memory> row_flags_;
+    ds::Vec<MetadataLink, Memory> links_;
+    ds::Vec<MetadataRun, Memory> link_runs_;
+    ds::Vec<Byte, Memory> uris_;
     // The cells of the frame being applied, decoded once; kept between frames for its capacity.
-    Vector<CellValue, Memory> staged_;
+    ds::Vec<CellValue, Memory> staged_;
     std::uint64_t pane_id_ = 0;
     std::uint64_t frame_id_ = 0;
     std::uint64_t revision_ = 0;

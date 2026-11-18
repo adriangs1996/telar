@@ -45,9 +45,9 @@ export {
       SuggestionOptions options_;
       ds::Option<PipeProcess> process_;
       ByteQueue<ConcurrentMemory> input_;
-      String<ConcurrentMemory> line_;
-      String<ConcurrentMemory> text_;
-      String<ConcurrentMemory> encoded_;
+      ds::String<ConcurrentMemory> line_;
+      ds::String<ConcurrentMemory> text_;
+      ds::String<ConcurrentMemory> encoded_;
       Clock::time_point deadline_{};
       Clock::time_point last_used_{};
       std::atomic<bool> stopping_{false};
@@ -60,7 +60,7 @@ export {
 export {
   namespace telar::runtime {
 
-    String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
+    ds::String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
 
   }
 }

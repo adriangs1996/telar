@@ -98,12 +98,12 @@ namespace {
       Agent agent{memory};
 
       agent.pane_id = pane_id;
-      agent.provider_name = "codex";
+      agent.provider_name.assign("codex");
       agent.provider_kind = AgentProvider::codex;
-      agent.workspace_label = "project";
+      agent.workspace_label.assign("project");
       agent.status = AgentStatus::blocked;
       agent.blocked_reason = AgentBlockedReason::permission;
-      agent.detail = "live event";
+      agent.detail.assign("live event");
       AgentRecordContext context{.machine = "machine", .branch = "feature", .selected = true};
       auto record = agentRecord(agent, context);
 
@@ -121,12 +121,12 @@ namespace {
       QVERIFY(record.value(QStringLiteral("selected")).toBool());
       QCOMPARE(record.value(QStringLiteral("providerMark")).toInt(), static_cast<int>(AgentProvider::codex));
 
-      agent.display_name = "Custom agent";
+      agent.display_name.assign("Custom agent");
       agent.status = AgentStatus::working;
       record = agentRecord(agent, context);
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("Custom agent"));
       QCOMPARE(record.value(QStringLiteral("detail")).toString(), QStringLiteral("live event"));
-      agent.title = "Session title";
+      agent.title.assign("Session title");
       context.connected = false;
       record = agentRecord(agent, context);
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("Session title"));
@@ -141,7 +141,7 @@ namespace {
       agent.provider_kind = AgentProvider::unknown;
       record = agentRecord(agent, context);
       QCOMPARE(record.value(QStringLiteral("glyph")).toString(), QStringLiteral("?"));
-      agent.icon = "!";
+      agent.icon.assign("!");
       record = agentRecord(agent, context);
       QCOMPARE(record.value(QStringLiteral("glyph")).toString(), QStringLiteral("!"));
     }
@@ -153,7 +153,7 @@ namespace {
       Agent agent{memory};
 
       agent.pane_id = pane_id;
-      agent.title = "Session title";
+      agent.title.assign("Session title");
       QQuickWindow window;
       QQmlEngine engine;
       const auto record = agentRecord(agent, {.machine = {}, .branch = {}, .selected = true});

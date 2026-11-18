@@ -70,17 +70,17 @@ namespace {
     return checksum;
   }
 
-  // A Vector that grows to a few dozen elements, through AllocatorRef.
+  // A Vec that grows to a few dozen elements, from the allocator.
   template <telar::Allocator Memory>
   [[gnu::noinline]] std::uintptr_t vectors(Memory& memory, Sizes sizes) {
     std::uintptr_t checksum = 0;
 
     for (const auto size : sizes) {
-      telar::Vector<std::uint32_t, Memory> values{telar::AllocatorRef<std::uint32_t, Memory>{memory}};
+      telar::ds::Vec<std::uint32_t, Memory> values{memory};
       const std::uint32_t count = size % 48u + 1u;
 
       for (std::uint32_t value = 0; value < count; ++value) {
-        values.push_back(value);
+        values.push(value);
       }
 
       checksum += values.size() + values.back();

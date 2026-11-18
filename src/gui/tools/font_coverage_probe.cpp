@@ -53,17 +53,19 @@ namespace {
   }
 
   // The bitmap is allocated from memory, region `a`.
-  tbc::view<Vector<std::uint8_t, SystemAllocator>, tbc::lt::a> coverage(const fonts::Face& face, tbc::view<SystemAllocator&, tbc::lt::a> memory) {
-    Vector<std::uint8_t, SystemAllocator> result(bitmap_bytes + outside_unicode.size(), 0, AllocatorRef<std::uint8_t, SystemAllocator>{memory});
+  tbc::view<telar::ds::Vec<std::uint8_t, SystemAllocator>, tbc::lt::a> coverage(const fonts::Face& face, tbc::view<SystemAllocator&, tbc::lt::a> memory) {
+    telar::ds::Vec<std::uint8_t, SystemAllocator> result{memory};
+
+    result.resize(bitmap_bytes + outside_unicode.size());
 
     for (std::size_t scalar = 0; scalar < unicode_count; ++scalar) {
       if (face.covers(static_cast<char32_t>(scalar))) {
-        result[scalar / bits_per_byte] |= static_cast<std::uint8_t>(1U << (scalar % bits_per_byte));
+        result.atMut(scalar / bits_per_byte) |= static_cast<std::uint8_t>(1U << (scalar % bits_per_byte));
       }
     }
 
     for (std::size_t index = 0; index < outside_unicode.size(); ++index) {
-      result[bitmap_bytes + index] = static_cast<std::uint8_t>(face.covers(outside_unicode[index]));
+      result.atMut(bitmap_bytes + index) = static_cast<std::uint8_t>(face.covers(outside_unicode[index]));
     }
 
     return result;
@@ -92,7 +94,7 @@ namespace {
   void runProbe(const char* path, std::string_view variant) {
     SystemAllocator memory;
     const auto source = telar::runtime::readFile(memory, path, telar_font_max_bytes);
-    const Vector<std::uint8_t, SystemAllocator> bytes{source.cbegin(), source.cend(), AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
+    const telar::ds::Vec<std::uint8_t, SystemAllocator> bytes{memory, {reinterpret_cast<const std::uint8_t*>(source.data()), source.size()}};
     fonts::Face face{bytes, matchVariant(variant)};
     const auto expected = coverage(face, memory);
     constexpr telar::ds::Array<std::uint16_t, 3> heights{9, 13, 31};

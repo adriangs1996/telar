@@ -7,6 +7,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -17,8 +18,8 @@ namespace {
 
   namespace {
 
-    String<SystemAllocator> escaped(SystemAllocator& memory, std::string_view text, JsonEscapes escapes) {
-      String<SystemAllocator> output{AllocatorRef<char, SystemAllocator>{memory}};
+    ds::String<SystemAllocator> escaped(SystemAllocator& memory, std::string_view text, JsonEscapes escapes) {
+      ds::String<SystemAllocator> output{memory};
 
       appendJsonText(output, text, escapes);
       return output;
@@ -41,7 +42,7 @@ namespace {
   // UTF-8 bytes beside the other escapes.
   void unescapesCodepoints() {
     SystemAllocator memory;
-    String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
+    ds::String<SystemAllocator> text{memory};
 
     JsonValue::parse(R"("\u4e2d\u00e9\r\/")").string(text);
     check(text == "\xe4\xb8\xad\xc3\xa9\r/");

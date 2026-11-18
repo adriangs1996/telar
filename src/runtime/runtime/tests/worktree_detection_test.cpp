@@ -144,7 +144,7 @@ namespace {
     WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 
     service.tick(model);
-    pane.cwd = "/tmp/changed";
+    pane.cwd.assign("/tmp/changed");
     ++pane.cwd_revision;
     probe.release();
     collect(model, service);
@@ -174,7 +174,7 @@ namespace {
       model.worktrees.registerEntry(RegisterWorktree{.source = 7, .origin = WorktreeOrigin::external, .path = path, .branch = "external"});
     }
 
-    pane.cwd = "/tmp/another";
+    pane.cwd.assign("/tmp/another");
     ++pane.cwd_revision;
     service.tick(model);
     collect(model, service);
@@ -207,7 +207,7 @@ namespace {
     GatedWorktreeDetector probe;
     WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 
-    pane.cwd = "/repository-second";
+    pane.cwd.assign("/repository-second");
     ++pane.cwd_revision;
     probe.release();
     service.tick(model);

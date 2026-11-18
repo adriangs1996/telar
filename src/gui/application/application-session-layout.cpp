@@ -163,7 +163,7 @@ namespace telar::gui::application {
   }
 
   template <typename Value>
-  void Session::reserveAppend(Vector<Value, Memory>& values, std::size_t maximum) {
+  void Session::reserveAppend(ds::Vec<Value, Memory>& values, std::size_t maximum) {
     if (values.size() < values.capacity()) {
       return;
     }
@@ -187,7 +187,7 @@ namespace telar::gui::application {
       throw std::length_error{"GUI tab capacity reached"};
     }
 
-    tabs_.push_back(makeOwned<Tab<Memory>>(memory_, memory_, location));
+    tabs_.push(makeOwned<Tab<Memory>>(memory_, memory_, location));
     features::workbench::furnish(workbench_, *tabs_.back());
     ++view_version_.tabs;
 
@@ -203,7 +203,7 @@ namespace telar::gui::application {
       throw std::length_error{"GUI pane capacity reached"};
     }
 
-    panes_.push_back(makeOwned<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics_)));
+    panes_.push(makeOwned<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics_)));
     panes_.back()->location = location;
     ++view_version_.panes;
 
@@ -504,10 +504,10 @@ namespace telar::gui::application {
 
     auto tab = makeOwned<Tab<Memory>>(memory_, memory_, message.location);
 
-    tab->label = message.label;
+    tab->label.assign(message.label);
     tab->position = message.position;
     if (discovered) {
-      tab->foreground = (*cached)->foreground;
+      tab->foreground.assign((*cached)->foreground);
       tab->foreground_pane = (*cached)->foreground_pane;
     }
 
@@ -527,7 +527,7 @@ namespace telar::gui::application {
     confirmAttachment(*pane);
 
     if (discovered) {
-      tabs_[cached_index] = std::move(tab);
+      tabs_.atMut(cached_index) = std::move(tab);
     } else {
       for (auto& existing : tabs_) {
         if (sameWorkspace(existing->location.workspace, message.location.workspace) && existing->position >= message.position) {
@@ -536,10 +536,10 @@ namespace telar::gui::application {
       }
 
       features::workbench::furnish(workbench_, *tab);
-      tabs_.push_back(std::move(tab));
+      tabs_.push(std::move(tab));
     }
 
-    panes_.push_back(std::move(pane));
+    panes_.push(std::move(pane));
     ++view_version_.tabs;
     ++view_version_.panes;
     workbench::selectTab(*this, message.location);
@@ -629,7 +629,7 @@ namespace telar::gui::application {
           ++view_version_.workspace;
         }
 
-        workspace.name = message.name;
+        workspace.name.assign(message.name);
       }
     }
 
@@ -639,7 +639,7 @@ namespace telar::gui::application {
         ++view_version_.tabs;
       }
 
-      tab.label = descriptor.label;
+      tab.label.assign(descriptor.label);
       tab.position = descriptor.position;
       tab.observePanes(descriptor.panes);
       ++chrome_revision_;
@@ -738,8 +738,8 @@ namespace telar::gui::application {
       }
     }
 
-    std::erase_if(tabs_, [&](const auto& tab) {
-      return sameTab(tab->location, location);
+    tabs_.retain([&](const auto& tab) {
+      return !sameTab(tab->location, location);
     });
 
     removePanes([&](const Pane<Memory>& pane) {
@@ -759,8 +759,8 @@ namespace telar::gui::application {
       }
     }
 
-    std::erase_if(panes_, [&](const auto& pane) {
-      return removed(*pane);
+    panes_.retain([&](const auto& pane) {
+      return !removed(*pane);
     });
 
     terminal::graphics::forgetClosed(*this);
@@ -823,7 +823,7 @@ namespace telar::gui::application {
         ++view_version_.tabs;
       }
 
-      tab->label = message.label;
+      tab->label.assign(message.label);
     }
 
     return Change::model;

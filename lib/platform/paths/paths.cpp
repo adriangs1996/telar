@@ -164,18 +164,18 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback) {
+  ds::String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback) {
     const auto found = findXdgDirectory(environment, variable, fallback);
-    String<Memory> path{found.base, AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> path{memory, found.base};
 
-    path += found.suffix;
+    path.append(found.suffix);
     return path;
   }
 
-  template String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
-  template String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
-  template String<SystemAllocator> xdgDirectory<SystemAllocator>(SystemAllocator& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
-  template String<BudgetAllocator<SystemAllocator>> xdgDirectory<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template ds::String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template ds::String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template ds::String<SystemAllocator> xdgDirectory<SystemAllocator>(SystemAllocator& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template ds::String<BudgetAllocator<SystemAllocator>> xdgDirectory<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
   SocketLocation SocketLocation::resolve(std::string_view explicit_path, const EnvironmentSource& environment, std::uint32_t user) {
     for (const auto candidate : {explicit_path, environment.lookup("TELAR_SOCKET"), environment.lookup("TELAR_SOCKET_PATH")}) {
@@ -248,38 +248,38 @@ namespace telar::runtime::cli {
 
   template <Allocator Memory>
   RuntimePaths<Memory>::RuntimePaths(Memory& memory, const ServerOptions& options, const EnvironmentSource& environment)
-      : socket(AllocatorRef<char, Memory>{memory}),
-        history(AllocatorRef<char, Memory>{memory}),
-        session(AllocatorRef<char, Memory>{memory}),
-        data_home(AllocatorRef<char, Memory>{memory}) {
+      : socket(memory),
+        history(memory),
+        session(memory),
+        data_home(memory) {
     resolveSocket(options.socket, environment);
   }
 
   template <Allocator Memory>
   void RuntimePaths<Memory>::resolveStorage(const ServerOptions& options, const EnvironmentSource& environment) {
-    data_home = environment.lookup("XDG_DATA_HOME");
+    data_home.assign(environment.lookup("XDG_DATA_HOME"));
     if (const auto home = environment.lookup("HOME"); data_home.empty() && !home.empty()) {
-      data_home = home;
-      data_home += "/.local/share";
+      data_home.assign(home);
+      data_home.append("/.local/share");
     }
 
-    history = options.history.empty() ? environment.lookup("TELAR_HISTORY") : options.history;
+    history.assign(options.history.empty() ? environment.lookup("TELAR_HISTORY") : options.history);
     if (history.empty()) {
       if (data_home.empty()) {
         throw std::invalid_argument{"Home directory unavailable"};
       }
 
-      history = data_home;
-      history += "/telar/history.db";
+      history.assign(data_home);
+      history.append("/telar/history.db");
       history_managed = true;
     }
 
     if (options.persist_session) {
       if (!options.session.empty()) {
-        session = options.session;
+        session.assign(options.session);
       } else {
-        session.assign(std::string_view{history}.substr(0, history.find_last_of('/') + 1));
-        session += "session.ckpt";
+        session.assign(std::string_view{history}.substr(0, history.view().find_last_of('/') + 1));
+        session.append("session.ckpt");
       }
     }
   }
@@ -287,36 +287,36 @@ namespace telar::runtime::cli {
   template <Allocator Memory>
   void RuntimePaths<Memory>::prepareSocket() const {
     if (socket_managed) {
-      createPrivateDirectory(std::string_view{socket}.substr(0, socket.rfind('/')));
+      createPrivateDirectory(std::string_view{socket}.substr(0, socket.view().rfind('/')));
     }
   }
 
   template <Allocator Memory>
   bool RuntimePaths<Memory>::isDefaultSocket(const EnvironmentSource& environment) const {
-    const RuntimePaths expected{socket.get_allocator().memory(), ServerOptions{}, DefaultSocketEnvironment{environment}};
+    const RuntimePaths expected{socket.memory(), ServerOptions{}, DefaultSocketEnvironment{environment}};
 
     return socket == expected.socket;
   }
 
   template <Allocator Memory>
-  String<Memory> RuntimePaths<Memory>::configHome(Memory& memory, const EnvironmentSource& environment) {
+  ds::String<Memory> RuntimePaths<Memory>::configHome(Memory& memory, const EnvironmentSource& environment) {
     auto path = xdgDirectory(memory, environment, "XDG_CONFIG_HOME", "/.config");
     if (!path.empty()) {
-      path += "/telar";
+      path.append("/telar");
     }
 
     return path;
   }
 
   template <Allocator Memory>
-  String<Memory> RuntimePaths<Memory>::configFile(Memory& memory, const EnvironmentSource& environment) {
+  ds::String<Memory> RuntimePaths<Memory>::configFile(Memory& memory, const EnvironmentSource& environment) {
     if (const auto development = environment.lookup("TELAR_DEVELOPMENT_CONFIG"); !development.empty()) {
-      return String<Memory>{development, AllocatorRef<char, Memory>{memory}};
+      return ds::String<Memory>{memory, development};
     }
 
     auto path = configHome(memory, environment);
     if (!path.empty()) {
-      path += "/config.lua";
+      path.append("/config.lua");
     }
 
     return path;
@@ -325,7 +325,7 @@ namespace telar::runtime::cli {
   template <Allocator Memory>
   void RuntimePaths<Memory>::prepareStorage() const {
     if (history_managed) {
-      createPrivateDirectory(std::string_view{history}.substr(0, history.rfind('/')));
+      createPrivateDirectory(std::string_view{history}.substr(0, history.view().rfind('/')));
     }
   }
 
@@ -333,7 +333,7 @@ namespace telar::runtime::cli {
   void RuntimePaths<Memory>::resolveSocket(std::string_view override, const EnvironmentSource& environment) {
     const auto location = SocketLocation::resolve(override, environment, ::getuid());
 
-    socket = location.path();
+    socket.assign(location.path());
     socket_managed = location.managedDirectory().hasValue();
   }
 

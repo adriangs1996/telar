@@ -51,7 +51,7 @@ export {
       [[nodiscard]] bool contains(BindingAction action) const noexcept;
 
     private:
-      Vector<ResolvedAction, Memory> entries_;
+      ds::Vec<ResolvedAction, Memory> entries_;
     };
 
     template <Capacity Bounds, Allocator Memory>
@@ -92,11 +92,11 @@ export {
 
       [[nodiscard]] std::string_view view(ElementText range) const noexcept;
 
-      Vector<Element, Memory> elements;
-      String<Memory> text;
-      Vector<CanvasStep, Memory> steps;
+      ds::Vec<Element, Memory> elements;
+      ds::String<Memory> text;
+      ds::Vec<CanvasStep, Memory> steps;
       // Element `action` indices name these; `actions` holds what each one means.
-      Vector<BindingAction, Memory> bindings;
+      ds::Vec<BindingAction, Memory> bindings;
       ResolvedActions<Memory> actions;
       // Lua handlers this render registered for `on_click` functions, by element `callback`.
       std::uint32_t callbacks = 0;

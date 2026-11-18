@@ -89,11 +89,11 @@ namespace telar::render::terminal {
 
   class Painter {
   public:
-    Painter(const Document<Memory>& document, std::size_t width, String<Memory>& output)
+    Painter(const Document<Memory>& document, std::size_t width, ds::String<Memory>& output)
         : document_(document),
           width_(width),
           output_(output),
-          destination_(output.get_allocator()) {}
+          destination_(output.memory()) {}
 
     void paint() {
       const Block* previous = nullptr;
@@ -110,7 +110,7 @@ namespace telar::render::terminal {
           output_.append("\x1b[1m");
           output_.append(calloutTitle(block.callout));
           output_.append(reset);
-          output_.push_back('\n');
+          output_.push('\n');
         }
 
         switch (block.kind) {
@@ -159,10 +159,10 @@ namespace telar::render::terminal {
 
       const auto indent = (block.list - 1) * list_indent;
 
-      output_.append(indent, ' ');
+      output_.resize(output_.size() + indent, ' ');
       used += indent;
       if (!marker || block.marker == Marker::none) {
-        output_.append(list_indent, ' ');
+        output_.resize(output_.size() + list_indent, ' ');
         return used + list_indent;
       }
 
@@ -199,11 +199,11 @@ namespace telar::render::terminal {
       }
 
       output_.append("\x1b[2m");
-      output_.append(text.data(), length);
+      output_.append(std::string_view{text.data(), length});
       output_.append(reset);
       const auto pad = shown + 1 > list_indent ? 1 : list_indent - shown;
 
-      output_.append(pad, ' ');
+      output_.resize(output_.size() + pad, ' ');
       return used + shown + pad;
     }
 
@@ -215,12 +215,12 @@ namespace telar::render::terminal {
       bars.callout = (block.flags & Block::opens_callout) != 0 ? previous.callout : block.callout;
       prefix(bars, false);
       trimTrailingSpace();
-      output_.push_back('\n');
+      output_.push('\n');
     }
 
     void trimTrailingSpace() {
-      while (!output_.empty() && output_.back() == ' ') {
-        output_.pop_back();
+      while (!output_.empty() && output_.view().back() == ' ') {
+        output_.truncate(output_.size() - 1);
       }
     }
 
@@ -282,7 +282,7 @@ namespace telar::render::terminal {
       const auto newline = [&] {
         trimTrailingSpace();
         setStyle(current, 0);
-        output_.push_back('\n');
+        output_.push('\n');
         used = prefix(block, false);
         column = 0;
         pending_space = false;
@@ -299,7 +299,7 @@ namespace telar::render::terminal {
             setStyle(current, 0);
           }
 
-          output_.push_back(' ');
+          output_.push(' ');
           ++column;
         }
 
@@ -364,14 +364,14 @@ namespace telar::render::terminal {
         if (ends_target && !target.empty() && target != text && target.find_first_of(" \t\n") == std::string_view::npos) {
           destination_.assign("<");
           destination_.append(target);
-          destination_.push_back('>');
+          destination_.push('>');
           pending_space = true;
           word(destination_, style::html);
         }
       }
 
       setStyle(current, 0);
-      output_.push_back('\n');
+      output_.push('\n');
     }
 
     void verbatim(const Block& block) {
@@ -382,7 +382,7 @@ namespace telar::render::terminal {
         output_.append("\x1b[2m");
         appendClean(info);
         output_.append(reset);
-        output_.push_back('\n');
+        output_.push('\n');
       }
 
       bool marker = info.empty();
@@ -399,7 +399,7 @@ namespace telar::render::terminal {
         output_.append(block.kind == BlockKind::html ? std::string_view{"\x1b[2m  "} : std::string_view{"\x1b[36m  "});
         appendClean(text.substr(start, end - start));
         output_.append(reset);
-        output_.push_back('\n');
+        output_.push('\n');
         start = end + 1;
       }
     }
@@ -426,7 +426,7 @@ namespace telar::render::terminal {
       }
 
       output_.append(reset);
-      output_.push_back('\n');
+      output_.push('\n');
     }
 
     std::size_t cellWidth(const Cell& cell) const noexcept {
@@ -486,7 +486,7 @@ namespace telar::render::terminal {
         }
 
         output_.append(reset);
-        output_.push_back('\n');
+        output_.push('\n');
       };
 
       line("┌", "┬", "┐");
@@ -499,7 +499,7 @@ namespace telar::render::terminal {
           const auto& cell = cells[row * columns_count + column];
 
           cellText(cell, widths[column], row == 0 ? style::strong : 0);
-          output_.push_back(' ');
+          output_.push(' ');
         }
 
         output_.append("\x1b[2m│\x1b[0m\n");
@@ -519,7 +519,7 @@ namespace telar::render::terminal {
       const auto before = cell.align == Align::right ? gap : cell.align == Align::center ? gap / 2
                                                                                          : 0;
 
-      output_.append(before, ' ');
+      output_.resize(output_.size() + before, ' ');
       std::size_t column = 0;
       const bool cut = natural > width;
       const auto budget = cut ? width - 1 : width;
@@ -540,7 +540,7 @@ namespace telar::render::terminal {
           if (!control(value)) {
             output_.append(text.substr(begin, index - begin));
           } else {
-            output_.push_back(' ');
+            output_.push(' ');
           }
 
           column += cells;
@@ -553,16 +553,16 @@ namespace telar::render::terminal {
         ++column;
       }
 
-      output_.append(width > column + before ? width - column - before : 0, ' ');
+      output_.resize(output_.size() + (width > column + before ? width - column - before : 0), ' ');
     }
 
     const Document<Memory>& document_;
     std::size_t width_;
-    String<Memory>& output_;
-    String<Memory> destination_;
+    ds::String<Memory>& output_;
+    ds::String<Memory> destination_;
   };
 
-  void render(const Document<Memory>& document, std::uint16_t width, String<Memory>& output) {
+  void render(const Document<Memory>& document, std::uint16_t width, ds::String<Memory>& output) {
     Painter{document, std::max(width, min_width), output}.paint();
   }
 

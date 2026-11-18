@@ -751,17 +751,17 @@ namespace {
       application::Pane pane{memory, 1, budget};
 
       pane.location = location;
-      pane.cwd = "/work/telar";
-      pane.foreground = "Python";
+      pane.cwd.assign("/work/telar");
+      pane.foreground.assign("Python");
       telar::ds::Array agents{Agent{memory}, Agent{memory}};
 
       agents.atMut(0).pane_id = pane.id;
       agents.atMut(agents.size() - 1).pane_id = pane.id;
       agents.atMut(0).location = {.workspace = location.workspace, .tab_id = 2};
-      agents.atMut(0).title = "Other tab";
+      agents.atMut(0).title.assign("Other tab");
       agents.atMut(0).title_state = telar::AgentTitleState::ready;
       agents.atMut(agents.size() - 1).location = location;
-      agents.atMut(agents.size() - 1).title = "Session title";
+      agents.atMut(agents.size() - 1).title.assign("Session title");
       for (const auto state : {telar::AgentTitleState::placeholder, telar::AgentTitleState::pending, telar::AgentTitleState::ready, telar::AgentTitleState::failed}) {
         agents.atMut(agents.size() - 1).title_state = state;
         const auto record = tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true);
@@ -773,7 +773,7 @@ namespace {
       agents.atMut(0).location = location;
       agents.atMut(0).title_state = telar::AgentTitleState::placeholder;
       QCOMPARE(tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
-      tab.label = "Review";
+      tab.label.assign("Review");
       tab.fullscreen = true;
       QCOMPARE(tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
     }

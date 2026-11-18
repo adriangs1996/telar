@@ -33,10 +33,11 @@ namespace telar::gui::qt {
   public:
     // The source reads the font into memory, region `a`, and keeps nothing of the configuration.
     explicit FontSource(tbc::view<Memory&, tbc::lt::a> memory, const FontConfiguration& font)
-        : bytes_(AllocatorRef<std::uint8_t, Memory>{memory}) {
+        : bytes_(memory) {
       const auto data = loadFontData(font);
 
-      bytes_.assign(data.bytes.cbegin(), data.bytes.cend());
+      bytes_.clear();
+      bytes_.extend({reinterpret_cast<const std::uint8_t*>(data.bytes.constData()), static_cast<std::size_t>(data.bytes.size())});
       match_ = data.match;
     }
 
@@ -49,7 +50,7 @@ namespace telar::gui::qt {
     }
 
   private:
-    tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> bytes_;
+    tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> bytes_;
     fonts::FontMatch match_{};
   };
 

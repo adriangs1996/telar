@@ -90,7 +90,7 @@ export {
     // to `path`.
     template <typename Text>
     void appendWorktreeCheckout(Text& path, std::string_view root, std::string_view branch);
-    extern template void appendWorktreeCheckout<String<Memory>>(String<Memory>& path, std::string_view root, std::string_view branch);
+    extern template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, std::string_view root, std::string_view branch);
     extern template void appendWorktreeCheckout<std::string>(std::string& path, std::string_view root, std::string_view branch);
 
     void branch(std::string_view value);

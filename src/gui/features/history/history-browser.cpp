@@ -14,14 +14,14 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   HistoryRow<Memory>::HistoryRow(Memory& memory)
-      : command(AllocatorRef<char, Memory>{memory}),
-        cwd(AllocatorRef<char, Memory>{memory}),
-        provider(AllocatorRef<char, Memory>{memory}) {}
+      : command(memory),
+        cwd(memory),
+        provider(memory) {}
 
   template <Allocator Memory>
   HistoryPageStorage<Memory>::HistoryPageStorage(tbc::view<Memory&, tbc::lt::a> memory, std::span<const HistoryEntry> entries)
-      : rows_(AllocatorRef<HistoryRow<Memory>, Memory>{memory}),
-        commands_(AllocatorRef<char, Memory>{memory}) {
+      : rows_(memory),
+        commands_(memory) {
     entries = entries.first(std::min(entries.size(), maximum_entries));
     rows_.reserve(entries.size());
     commands_.reserve(commandBytes(entries));
@@ -32,16 +32,16 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   void HistoryPageStorage<Memory>::exchangeWith(HistoryPageStorage& other) {
-    if (rows_.get_allocator() != other.rows_.get_allocator()) {
+    if (&rows_.memory() != &other.rows_.memory()) {
       throw std::invalid_argument{"History pages must share an allocator"};
     }
 
-    rows_.swap(other.rows_);
-    commands_.swap(other.commands_);
+    std::swap(rows_, other.rows_);
+    std::swap(commands_, other.commands_);
   }
 
   template <Allocator Memory>
-  const Vector<HistoryRow<Memory>, Memory>& HistoryPageStorage<Memory>::rows() const noexcept {
+  const ds::Vec<HistoryRow<Memory>, Memory>& HistoryPageStorage<Memory>::rows() const noexcept {
     return rows_;
   }
 
@@ -75,13 +75,13 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   void HistoryPageStorage<Memory>::append(tbc::view<Memory&, tbc::lt::a> memory, const HistoryEntry& entry) {
-    auto& row = rows_.emplace_back(memory);
+    auto& row = rows_.emplace(memory);
 
     row.id = entry.id;
     row.pane_id = entry.pane_id;
-    row.command = runtime::utf8Prefix(entry.command, command_preview_bytes);
-    row.cwd = entry.cwd;
-    row.provider = entry.provider;
+    row.command.assign(runtime::utf8Prefix(entry.command, command_preview_bytes));
+    row.cwd.assign(entry.cwd);
+    row.provider.assign(entry.provider);
     row.started_at_ms = entry.started_at_ms;
     row.duration_ns = entry.duration_ns;
     row.exit_code = entry.exit_code;
@@ -195,10 +195,10 @@ namespace telar::gui::features::history {
   HistoryBrowser<Memory>::HistoryBrowser(Memory& memory)
       : memory_(memory),
         page_(memory),
-        selected_command_(AllocatorRef<char, Memory>{memory}),
-        query_(AllocatorRef<char, Memory>{memory}),
-        scope_path_(AllocatorRef<char, Memory>{memory}),
-        output_(AllocatorRef<char, Memory>{memory}) {}
+        selected_command_(memory),
+        query_(memory),
+        scope_path_(memory),
+        output_(memory) {}
 
   template <Allocator Memory>
   QueryHistory HistoryBrowser<Memory>::begin(QueryHistory query) {
@@ -410,7 +410,7 @@ namespace telar::gui::features::history {
       }
 
       output_.resize(message.content.size());
-      output_.resize(PlainText::strip(message.content, {output_.data(), output_.size()}));
+      output_.resize(PlainText::strip(message.content, output_.viewMut()));
     } catch (...) {
       state_.output_phase = HistoryPhase::failed;
       output_request_ = 0;
@@ -502,7 +502,7 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  const Vector<HistoryRow<Memory>, Memory>& HistoryBrowser<Memory>::rows() const noexcept {
+  const ds::Vec<HistoryRow<Memory>, Memory>& HistoryBrowser<Memory>::rows() const noexcept {
     return page_.rows();
   }
 
@@ -584,11 +584,11 @@ namespace telar::gui::features::history {
     query.snapshot_id = 0;
     query.entry_id = 0;
     static_cast<void>(Codec::encodedSize(query));
-    String<Memory> next_query{query.query, AllocatorRef<char, Memory>{memory_}};
-    String<Memory> next_scope{AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> next_query{memory_, query.query};
+    ds::String<Memory> next_scope{memory_};
 
     if (const auto* path = std::get_if<std::string_view>(&query.scope_value)) {
-      next_scope = *path;
+      next_scope.assign(*path);
     }
 
     query_ = std::move(next_query);
@@ -660,7 +660,7 @@ namespace telar::gui::features::history {
     try {
       static_cast<void>(ValueCodec<HistoryEntry>::encodedSize(entries.front()));
       selected_command_.reserve(maximum_command_bytes);
-      selected_command_ = entries.front().command;
+      selected_command_.assign(entries[0].command);
     } catch (...) {
       state_.command_phase = HistoryPhase::failed;
       error_.assign("Could not store the selected command");

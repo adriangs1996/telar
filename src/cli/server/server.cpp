@@ -127,7 +127,7 @@ namespace telar::runtime::cli {
     const auto deadline = std::chrono::steady_clock::now() + start_window;
     ds::Option<RuntimeConnection> connection;
 
-    while (!connectExisting(connection, paths.socket.c_str())) {
+    while (!connectExisting(connection, paths.socket.data())) {
       int status = 0;
       if (::waitpid(child, &status, WNOHANG) == child) {
         return RuntimeStart::exited;
@@ -146,7 +146,7 @@ namespace telar::runtime::cli {
   template <Allocator Memory>
   void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
     ds::Option<RuntimeConnection> connection;
-    if (!connectExisting(connection, paths.socket.c_str())) {
+    if (!connectExisting(connection, paths.socket.data())) {
       const auto started = startRuntime(memory, options, paths);
       if (started == RuntimeStart::exited) {
         throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};
@@ -157,7 +157,7 @@ namespace telar::runtime::cli {
       }
     }
 
-    std::printf("%s\n", paths.socket.c_str());
+    std::printf("%s\n", paths.socket.data());
     std::fwrite(handshake::schema_id.data(), 1, handshake::schema_id.size(), stdout);
     std::fputc('\n', stdout);
   }
@@ -175,12 +175,12 @@ namespace telar::runtime::cli {
 
   [[noreturn]] void execRuntime(Memory& memory, std::span<char* const> arguments) {
     const ExecutablePath runtime{runtime_program};
-    Vector<char*, Memory> command{AllocatorRef<char*, Memory>{memory}};
+    ds::Vec<char*, Memory> command{memory};
 
     command.reserve(arguments.size() + 2);
-    command.push_back(const_cast<char*>(runtime.c_str()));
-    command.insert(command.end(), arguments.begin(), arguments.end());
-    command.push_back(nullptr);
+    command.push(const_cast<char*>(runtime.c_str()));
+    command.extend({arguments.begin(), arguments.end()});
+    command.push(nullptr);
     ::execv(runtime.c_str(), command.data());
     throw SystemError{"Start telar-runtime, which must be installed beside telar"};
   }
@@ -196,13 +196,13 @@ namespace telar::runtime::cli {
 
     switch (options.action) {
     case ServerAction::stop:
-      stopRuntime(paths.socket.c_str());
+      stopRuntime(paths.socket.data());
       return;
     case ServerAction::endpoint:
       printEndpoint(memory, options, paths);
       return;
     case ServerAction::bridge:
-      RuntimeConnection{paths.socket.c_str(), false}.bridge();
+      RuntimeConnection{paths.socket.data(), false}.bridge();
     case ServerAction::run:
     case ServerAction::help:
       return;

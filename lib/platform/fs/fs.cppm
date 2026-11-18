@@ -89,14 +89,14 @@ export {
     // Sizes the caller's buffer and fills it; built in fs.cpp for the base allocators
     // its callers use.
     template <Allocator Memory>
-    bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit);
+    bool readPrivateFile(int directory, std::string_view name, ds::Vec<unsigned char, Memory>& bytes, std::size_t limit);
 
-    extern template bool readPrivateFile<Memory>(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit);
-    extern template bool readPrivateFile<ConcurrentMemory>(int directory, std::string_view name, Vector<unsigned char, ConcurrentMemory>& bytes, std::size_t limit);
-    extern template bool readPrivateFile<SystemAllocator>(int directory, std::string_view name, Vector<unsigned char, SystemAllocator>& bytes, std::size_t limit);
-    extern template bool readPrivateFile<BudgetAllocator<SystemAllocator>>(int directory, std::string_view name, Vector<unsigned char, BudgetAllocator<SystemAllocator>>& bytes, std::size_t limit);
-    extern template bool readPrivateFile<ErasingAllocator<Memory>>(int directory, std::string_view name, Vector<unsigned char, ErasingAllocator<Memory>>& bytes, std::size_t limit);
-    extern template bool readPrivateFile<ErasingAllocator<ConcurrentMemory>>(int directory, std::string_view name, Vector<unsigned char, ErasingAllocator<ConcurrentMemory>>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<Memory>(int directory, std::string_view name, ds::Vec<unsigned char, Memory>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<ConcurrentMemory>(int directory, std::string_view name, ds::Vec<unsigned char, ConcurrentMemory>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<SystemAllocator>(int directory, std::string_view name, ds::Vec<unsigned char, SystemAllocator>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<BudgetAllocator<SystemAllocator>>(int directory, std::string_view name, ds::Vec<unsigned char, BudgetAllocator<SystemAllocator>>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<ErasingAllocator<Memory>>(int directory, std::string_view name, ds::Vec<unsigned char, ErasingAllocator<Memory>>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<ErasingAllocator<ConcurrentMemory>>(int directory, std::string_view name, ds::Vec<unsigned char, ErasingAllocator<ConcurrentMemory>>& bytes, std::size_t limit);
 
   }
 }
@@ -132,21 +132,21 @@ export {
     // These two read into a string of the caller's allocator; built in fs.cpp for the base allocators
     // its callers use.
     template <Allocator Memory>
-    String<Memory> readFileContents(Memory& memory, int descriptor, std::size_t maximum_bytes);
+    ds::String<Memory> readFileContents(Memory& memory, int descriptor, std::size_t maximum_bytes);
 
     template <Allocator Memory>
-    String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes);
+    ds::String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes);
 
-    extern template String<Memory> readFileContents<Memory>(Memory& memory, int descriptor, std::size_t maximum_bytes);
-    extern template String<ConcurrentMemory> readFileContents<ConcurrentMemory>(ConcurrentMemory& memory, int descriptor, std::size_t maximum_bytes);
-    extern template String<SystemAllocator> readFileContents<SystemAllocator>(SystemAllocator& memory, int descriptor, std::size_t maximum_bytes);
-    extern template String<BudgetAllocator<SystemAllocator>> readFileContents<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, int descriptor, std::size_t maximum_bytes);
-    extern template String<RecyclingAllocator<Memory>> readFileContents<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, int descriptor, std::size_t maximum_bytes);
-    extern template String<Memory> readFile<Memory>(Memory& memory, const char* path, std::size_t maximum_bytes);
-    extern template String<ConcurrentMemory> readFile<ConcurrentMemory>(ConcurrentMemory& memory, const char* path, std::size_t maximum_bytes);
-    extern template String<SystemAllocator> readFile<SystemAllocator>(SystemAllocator& memory, const char* path, std::size_t maximum_bytes);
-    extern template String<BudgetAllocator<SystemAllocator>> readFile<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const char* path, std::size_t maximum_bytes);
-    extern template String<RecyclingAllocator<Memory>> readFile<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, const char* path, std::size_t maximum_bytes);
+    extern template ds::String<Memory> readFileContents<Memory>(Memory& memory, int descriptor, std::size_t maximum_bytes);
+    extern template ds::String<ConcurrentMemory> readFileContents<ConcurrentMemory>(ConcurrentMemory& memory, int descriptor, std::size_t maximum_bytes);
+    extern template ds::String<SystemAllocator> readFileContents<SystemAllocator>(SystemAllocator& memory, int descriptor, std::size_t maximum_bytes);
+    extern template ds::String<BudgetAllocator<SystemAllocator>> readFileContents<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, int descriptor, std::size_t maximum_bytes);
+    extern template ds::String<RecyclingAllocator<Memory>> readFileContents<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, int descriptor, std::size_t maximum_bytes);
+    extern template ds::String<Memory> readFile<Memory>(Memory& memory, const char* path, std::size_t maximum_bytes);
+    extern template ds::String<ConcurrentMemory> readFile<ConcurrentMemory>(ConcurrentMemory& memory, const char* path, std::size_t maximum_bytes);
+    extern template ds::String<SystemAllocator> readFile<SystemAllocator>(SystemAllocator& memory, const char* path, std::size_t maximum_bytes);
+    extern template ds::String<BudgetAllocator<SystemAllocator>> readFile<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const char* path, std::size_t maximum_bytes);
+    extern template ds::String<RecyclingAllocator<Memory>> readFile<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, const char* path, std::size_t maximum_bytes);
 
   }
 }
@@ -179,19 +179,19 @@ export {
     // These two resolve a path in a string of the caller's allocator; built in fs.cpp for the base
     // allocators its callers use.
     template <Allocator Memory>
-    void resolveRelativePath(String<Memory>& path, std::string_view directory);
+    void resolveRelativePath(ds::String<Memory>& path, std::string_view directory);
 
     template <Allocator Memory>
-    void resolveAbsolutePath(String<Memory>& path);
+    void resolveAbsolutePath(ds::String<Memory>& path);
 
-    extern template void resolveRelativePath<Memory>(String<Memory>& path, std::string_view directory);
-    extern template void resolveRelativePath<ConcurrentMemory>(String<ConcurrentMemory>& path, std::string_view directory);
-    extern template void resolveRelativePath<SystemAllocator>(String<SystemAllocator>& path, std::string_view directory);
-    extern template void resolveRelativePath<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& path, std::string_view directory);
-    extern template void resolveAbsolutePath<Memory>(String<Memory>& path);
-    extern template void resolveAbsolutePath<ConcurrentMemory>(String<ConcurrentMemory>& path);
-    extern template void resolveAbsolutePath<SystemAllocator>(String<SystemAllocator>& path);
-    extern template void resolveAbsolutePath<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& path);
+    extern template void resolveRelativePath<Memory>(ds::String<Memory>& path, std::string_view directory);
+    extern template void resolveRelativePath<ConcurrentMemory>(ds::String<ConcurrentMemory>& path, std::string_view directory);
+    extern template void resolveRelativePath<SystemAllocator>(ds::String<SystemAllocator>& path, std::string_view directory);
+    extern template void resolveRelativePath<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& path, std::string_view directory);
+    extern template void resolveAbsolutePath<Memory>(ds::String<Memory>& path);
+    extern template void resolveAbsolutePath<ConcurrentMemory>(ds::String<ConcurrentMemory>& path);
+    extern template void resolveAbsolutePath<SystemAllocator>(ds::String<SystemAllocator>& path);
+    extern template void resolveAbsolutePath<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& path);
 
   }
 }

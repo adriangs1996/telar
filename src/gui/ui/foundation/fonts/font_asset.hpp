@@ -12,13 +12,14 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   class FontAsset {
   public:
     explicit FontAsset(const FontData& data)
-        : bytes_(data.bytes.cbegin(), data.bytes.cend(), AllocatorRef<std::uint8_t, SystemAllocator>{memory_}),
+        : bytes_(memory_, {reinterpret_cast<const std::uint8_t*>(data.bytes.constData()), static_cast<std::size_t>(data.bytes.size())}),
           match_(data.match) {}
 
     ~FontAsset() = default;
@@ -38,7 +39,7 @@ namespace telar::gui::qt {
   private:
     SystemAllocator memory_;
     // Allocated from memory_, which the asset owns.
-    tbc::view<Vector<std::uint8_t, SystemAllocator>, tbc::lt::self> bytes_;
+    tbc::view<ds::Vec<std::uint8_t, SystemAllocator>, tbc::lt::self> bytes_;
     fonts::FontMatch match_;
   };
 

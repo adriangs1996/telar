@@ -62,7 +62,7 @@ export {
       bool boolean() const noexcept;
 
       template <Allocator Memory>
-      void string(String<Memory>& output) const;
+      void string(ds::String<Memory>& output) const;
 
       static tbc::view<JsonValue, tbc::lt::b> parse(tbc::view<std::string_view, tbc::lt::b> input, unsigned maximum_depth = 32);
 
@@ -88,12 +88,12 @@ export {
     };
 
     // Built in json.cpp for the base allocators its callers use.
-    extern template void JsonValue::string<Memory>(String<Memory>& output) const;
-    extern template void JsonValue::string<ConcurrentMemory>(String<ConcurrentMemory>& output) const;
-    extern template void JsonValue::string<SystemAllocator>(String<SystemAllocator>& output) const;
-    extern template void JsonValue::string<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output) const;
-    extern template void JsonValue::string<ErasingMemory>(String<ErasingMemory>& output) const;
-    extern template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
+    extern template void JsonValue::string<Memory>(ds::String<Memory>& output) const;
+    extern template void JsonValue::string<ConcurrentMemory>(ds::String<ConcurrentMemory>& output) const;
+    extern template void JsonValue::string<SystemAllocator>(ds::String<SystemAllocator>& output) const;
+    extern template void JsonValue::string<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& output) const;
+    extern template void JsonValue::string<ErasingMemory>(ds::String<ErasingMemory>& output) const;
+    extern template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(ds::String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
 
     // How a JSON string spells control bytes: `standard` uses every short escape JSON has; `control`
     // spells backspace and form feed as \u escapes and escapes DEL too, for text a terminal shows.
@@ -164,12 +164,12 @@ export {
     // Appends `text` to `output` as one JSON string literal, quotes included.
     template <typename Text>
     TBC_GENERIC void appendJsonText(Text& output, std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
-      output.push_back('"');
+      output.append(std::string_view{"\""});
       escapeJson(text, escapes, [&](std::string_view piece) {
         output.append(piece);
       });
 
-      output.push_back('"');
+      output.append(std::string_view{"\""});
     }
 
   }
@@ -194,7 +194,7 @@ export {
       // The fields view the object's text and the names, and allocate scratch text, all in region `a`.
       inline explicit JsonFields(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const JsonValue&, tbc::lt::a> object, tbc::view<const ds::Array<std::string_view, Count>&, tbc::lt::a> names)
           : names_(names),
-            text_(AllocatorRef<char, Memory>{memory}) {
+            text_(memory) {
         object.eachMember([&](const JsonValue& key, const JsonValue& value) {
           key.string(text_);
           values_.atMut(unsetJsonFieldPosition(names_, values_, text_)) = value;
@@ -217,7 +217,7 @@ export {
     private:
       tbc::view<ds::Array<std::string_view, Count>, tbc::lt::a> names_;
       tbc::view<ds::Array<ds::Option<JsonValue>, Count>, tbc::lt::a> values_;
-      tbc::view<String<Memory>, tbc::lt::a> text_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> text_;
     };
 
     template <Allocator Memory, std::size_t Count>
@@ -257,7 +257,7 @@ export {
       void setLiteral(std::string_view name, std::string_view value);
       void append(JsonNode child);
       void remove(std::string_view name);
-      String<Memory> format() const;
+      ds::String<Memory> format() const;
 
     private:
       static constexpr unsigned maximum_depth = 256;
@@ -265,11 +265,11 @@ export {
 
       tbc::view<Memory&, tbc::lt::a> memory() const noexcept;
       static tbc::view<JsonNode, tbc::lt::a> fromValue(tbc::view<Memory&, tbc::lt::a> memory, JsonValue value);
-      void appendFormatted(String<Memory>& output, unsigned depth) const;
+      void appendFormatted(ds::String<Memory>& output, unsigned depth) const;
 
-      tbc::view<String<Memory>, tbc::lt::a> name_;
-      tbc::view<String<Memory>, tbc::lt::a> text_;
-      tbc::view<Vector<JsonNode, Memory>, tbc::lt::a> children_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> name_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> text_;
+      tbc::view<ds::Vec<JsonNode, Memory>, tbc::lt::a> children_;
       JsonKind kind_;
     };
 

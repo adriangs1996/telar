@@ -11,9 +11,7 @@ namespace telar::gui {
   using ::telar::MemoryAdapter;
   using ::telar::MemoryInterface;
   using ::telar::Owned;
-  using ::telar::String;
   using ::telar::SynchronizedAllocator;
   using ::telar::SystemAllocator;
-  using ::telar::Vector;
 
 }

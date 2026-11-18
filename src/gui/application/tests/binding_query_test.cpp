@@ -132,7 +132,7 @@ namespace {
 
     check(requiredJsonField(value, "level").equals("warning") && requiredJsonField(value, "duration_ms").encoded() == "750", "notification descriptions must preserve severity and duration");
     check(requiredJsonField(value, "target").encoded() == R"({"pane":99})", "notification targets must retain the original tagged id shape");
-    String<telar::ConcurrentMemory> title{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
+    telar::ds::String<telar::ConcurrentMemory> title{memory};
 
     requiredJsonField(value, "title").string(title);
     check(title.size() == telar::max_notification_title_bytes, "notification fitting must preserve complete UTF-8 at the wire's title bound");

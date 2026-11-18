@@ -173,10 +173,10 @@ namespace {
       constexpr auto label = "office · Telar";
       const auto initial = face.shape(label, pixel_height);
       const auto advance = initial.advance();
-      Vector<fonts::ShapedGlyph, SystemAllocator> saved{AllocatorRef<fonts::ShapedGlyph, SystemAllocator>{memory}};
+      telar::ds::Vec<fonts::ShapedGlyph, SystemAllocator> saved{memory};
 
       for (std::size_t index = 0; index < initial.size(); ++index) {
-        saved.push_back(initial.glyph(index));
+        saved.push(initial.glyph(index));
       }
 
       QVERIFY(!saved.empty());
@@ -186,12 +186,12 @@ namespace {
       const auto original_height = original.height;
       const auto original_left = original.left;
       const auto original_top = original.top;
-      Vector<std::uint8_t, SystemAllocator> pixels{AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
+      telar::ds::Vec<std::uint8_t, SystemAllocator> pixels{memory};
 
       for (std::uint32_t row = 0; row < original.height; ++row) {
         const auto coverage = original.row(row);
 
-        pixels.insert(pixels.end(), coverage.begin(), coverage.end());
+        pixels.extend(coverage);
       }
 
       constexpr std::uint16_t pressure_height = 40;
@@ -552,3 +552,4 @@ namespace {
 
 #include "font_resolver_test.moc"
 #include "telar_base/ds/values.hpp"
+#include "telar_base/ds/containers.hpp"

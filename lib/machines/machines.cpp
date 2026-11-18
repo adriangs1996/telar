@@ -386,7 +386,7 @@ namespace telar::runtime::machines {
 
   template <Allocator Memory>
   RadixNumber<Memory>::RadixNumber(Memory& memory, std::string_view text, bool floating_syntax)
-      : digits_(AllocatorRef<char, Memory>{memory}) {
+      : digits_(memory) {
     if (text.starts_with('+') || text.starts_with('-')) {
       negative_ = text.front() == '-';
       text.remove_prefix(1);
@@ -512,7 +512,7 @@ namespace telar::runtime::machines {
         invalid();
       }
 
-      digits_.push_back(runtime::asciiLower(byte));
+      digits_.push(runtime::asciiLower(byte));
       if (!point_seen) {
         ++point_;
       }
@@ -574,22 +574,25 @@ namespace telar::runtime::machines {
     point_ += whole;
     unsigned carry = 0;
 
-    for (auto digit = digits_.rbegin(); digit != digits_.rend(); ++digit) {
-      const auto product = (static_cast<unsigned>(digit_symbols.find(*digit)) << static_cast<unsigned>(remainder)) + carry;
+    for (auto index = digits_.size(); index-- != 0;) {
+      auto& digit = digits_.atMut(index);
+      const auto product = (static_cast<unsigned>(digit_symbols.find(digit)) << static_cast<unsigned>(remainder)) + carry;
 
-      *digit = digit_symbols[product % radix_];
+      digit = digit_symbols[product % radix_];
       carry = product / radix_;
     }
 
     if (carry != 0) {
-      digits_.insert(digits_.begin(), digit_symbols[carry]);
+      const char symbol = digit_symbols[carry];
+
+      digits_.insert(0, {&symbol, 1});
       ++point_;
     }
   }
 
   template <Allocator Memory>
   void RadixNumber<Memory>::normalize() {
-    const auto first = digits_.find_first_not_of('0');
+    const auto first = digits_.view().find_first_not_of('0');
     if (first == std::string_view::npos) {
       digits_.clear();
       point_ = 0;
@@ -597,10 +600,10 @@ namespace telar::runtime::machines {
       return;
     }
 
-    digits_.erase(0, first);
+    digits_.remove(0, first);
     point_ -= static_cast<std::ptrdiff_t>(first);
-    while (digits_.back() == '0') {
-      digits_.pop_back();
+    while (digits_.view().back() == '0') {
+      digits_.truncate(digits_.size() - 1);
     }
   }
 
@@ -877,7 +880,7 @@ namespace telar::runtime::machines {
     try {
       validateUtf8(source);
       const runtime::JsonFields fields{memory, runtime::JsonValue::parse(source), file_fields};
-      String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> scratch{memory};
       const auto version = readVersion(memory, fields.required("version"), scratch);
 
       validateOptionalString(fields.optional("local_label"), scratch);
@@ -918,29 +921,29 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  String<Memory> MachineProfileCodec::format(Memory& memory, const MachineProfiles& profiles) {
-    String<Memory> output{AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> MachineProfileCodec::format(Memory& memory, const MachineProfiles& profiles) {
+    ds::String<Memory> output{memory};
 
-    output += profiles.version() == MachineProfiles::plain_format_version ? "{\"version\":1" : "{\"version\":2";
+    output.append(profiles.version() == MachineProfiles::plain_format_version ? "{\"version\":1" : "{\"version\":2");
     if (const auto label = profiles.localLabel()) {
-      output += ",\"local_label\":";
+      output.append(",\"local_label\":");
       runtime::appendJsonText(output, *label);
     }
 
-    output += ",\"machines\":[";
+    output.append(",\"machines\":[");
     bool first = true;
 
     for (const auto& profile : profiles.rows()) {
-      output += first ? "\n  " : ",\n  ";
+      output.append(first ? "\n  " : ",\n  ");
       first = false;
       appendProfile(output, profile);
     }
 
     if (!first) {
-      output += '\n';
+      output.push('\n');
     }
 
-    output += "]}\n";
+    output.append("]}\n");
 
     return output;
   }
@@ -950,7 +953,7 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  std::uint16_t MachineProfileCodec::readVersion(Memory& memory, const runtime::JsonValue& value, String<Memory>& scratch) {
+  std::uint16_t MachineProfileCodec::readVersion(Memory& memory, const runtime::JsonValue& value, ds::String<Memory>& scratch) {
     auto text = value.encoded();
     if (text.starts_with('"')) {
       value.string(scratch);
@@ -961,14 +964,14 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  void MachineProfileCodec::validateOptionalString(const ds::Option<runtime::JsonValue>& value, String<Memory>& scratch) {
+  void MachineProfileCodec::validateOptionalString(const ds::Option<runtime::JsonValue>& value, ds::String<Memory>& scratch) {
     if (value && !isNull(*value)) {
       value->string(scratch);
     }
   }
 
   template <Allocator Memory>
-  MachineLogin MachineProfileCodec::readLogin(const runtime::JsonValue& value, String<Memory>& scratch) {
+  MachineLogin MachineProfileCodec::readLogin(const runtime::JsonValue& value, ds::String<Memory>& scratch) {
     auto text = value.encoded();
     if (text.starts_with('"')) {
       value.string(scratch);
@@ -980,7 +983,7 @@ namespace telar::runtime::machines {
       return static_cast<MachineLogin>(found - machine_login_names.begin());
     }
 
-    const auto ordinal = JsonUnsignedInteger::parse<std::uint8_t>(scratch.get_allocator().memory(), text, false);
+    const auto ordinal = JsonUnsignedInteger::parse<std::uint8_t>(scratch.memory(), text, false);
     if (ordinal >= machine_login_names.size()) {
       throw MachineFailure{MachineError::invalid_profiles};
     }
@@ -989,7 +992,7 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  void MachineProfileCodec::validateProfile(Memory& memory, const runtime::JsonValue& value, String<Memory>& scratch) {
+  void MachineProfileCodec::validateProfile(Memory& memory, const runtime::JsonValue& value, ds::String<Memory>& scratch) {
     const runtime::JsonFields fields{memory, value, profile_fields};
 
     for (auto const* name : {"id", "label", "destination"}) {
@@ -1014,8 +1017,8 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  String<Memory> MachineProfileCodec::readString(Memory& memory, const runtime::JsonValue& value) {
-    String<Memory> text{AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> MachineProfileCodec::readString(Memory& memory, const runtime::JsonValue& value) {
+    ds::String<Memory> text{memory};
 
     value.string(text);
 
@@ -1043,7 +1046,7 @@ namespace telar::runtime::machines {
 
     if (const auto& logins = fields.optional("logins"); logins && !isNull(*logins)) {
       const runtime::JsonFields values{memory, *logins, machine_agent_names};
-      String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> scratch{memory};
 
       for (const auto agent : machine_agents) {
         const auto name = machine_agent_names.at(static_cast<std::size_t>(agent));
@@ -1057,21 +1060,21 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  void MachineProfileCodec::appendProfile(String<Memory>& output, const MachineProfile& profile) {
-    output += "{\"id\":";
+  void MachineProfileCodec::appendProfile(ds::String<Memory>& output, const MachineProfile& profile) {
+    output.append("{\"id\":");
     runtime::appendJsonText(output, profile.identity().format().view());
-    output += ",\"label\":";
+    output.append(",\"label\":");
     runtime::appendJsonText(output, profile.label());
-    output += ",\"destination\":";
+    output.append(",\"destination\":");
     runtime::appendJsonText(output, profile.destination());
     if (const auto color = profile.color()) {
-      output += ",\"color\":";
+      output.append(",\"color\":");
       runtime::appendJsonText(output, *color);
     }
 
-    output += profile.enabled() ? ",\"enabled\":true" : ",\"enabled\":false";
+    output.append(profile.enabled() ? ",\"enabled\":true" : ",\"enabled\":false");
     if (const auto program = profile.program()) {
-      output += ",\"telar_path\":";
+      output.append(",\"telar_path\":");
       runtime::appendJsonText(output, *program);
     }
 
@@ -1083,22 +1086,22 @@ namespace telar::runtime::machines {
         continue;
       }
 
-      output += first ? ",\"logins\":{" : ",";
+      output.append(first ? ",\"logins\":{" : ",");
       first = false;
       runtime::appendJsonText(output, machine_agent_names.at(static_cast<std::size_t>(agent)));
-      output += ':';
+      output.push(':');
       runtime::appendJsonText(output, machine_login_names.at(static_cast<std::size_t>(*login)));
     }
 
-    output += first ? "}" : "}}";
+    output.append(first ? "}" : "}}");
   }
 
   template MachineProfiles MachineProfileCodec::parse<Memory>(Memory&, std::string_view);
   template MachineProfiles MachineProfileCodec::parse<ConcurrentMemory>(ConcurrentMemory&, std::string_view);
-  template String<Memory> MachineProfileCodec::format<Memory>(Memory&, const MachineProfiles&);
-  template String<ConcurrentMemory> MachineProfileCodec::format<ConcurrentMemory>(ConcurrentMemory&, const MachineProfiles&);
-  template void MachineProfileCodec::appendProfile<Memory>(String<Memory>&, const MachineProfile&);
-  template void MachineProfileCodec::appendProfile<ConcurrentMemory>(String<ConcurrentMemory>&, const MachineProfile&);
+  template ds::String<Memory> MachineProfileCodec::format<Memory>(Memory&, const MachineProfiles&);
+  template ds::String<ConcurrentMemory> MachineProfileCodec::format<ConcurrentMemory>(ConcurrentMemory&, const MachineProfiles&);
+  template void MachineProfileCodec::appendProfile<Memory>(ds::String<Memory>&, const MachineProfile&);
+  template void MachineProfileCodec::appendProfile<ConcurrentMemory>(ds::String<ConcurrentMemory>&, const MachineProfile&);
 
   MachineRemoteCommand::Text MachineRemoteCommand::discovery(ds::Option<std::string_view> program) {
     return format(discovery_prefix, program, discovery_suffix);

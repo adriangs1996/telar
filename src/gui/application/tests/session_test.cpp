@@ -749,7 +749,7 @@ namespace {
     };
 
     telar::MemoryAdapter adapter{memory};
-    String<telar::ConcurrentMemory> foreign_token{AllocatorRef<char, telar::ConcurrentMemory>{adapter}};
+    ds::String<telar::ConcurrentMemory> foreign_token{adapter};
 
     LayoutToken::write(foreign_snapshot, foreign_token);
     command.request_id = 4;

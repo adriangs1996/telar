@@ -16,17 +16,17 @@ namespace telar::gui::application {
         screen(memory),
         rows(memory),
         graphics(memory, budget),
-        title(AllocatorRef<char, Memory>{memory}),
-        cwd(AllocatorRef<char, Memory>{memory}),
-        foreground(AllocatorRef<char, Memory>{memory}),
+        title(memory),
+        cwd(memory),
+        foreground(memory),
         document(memory),
-        document_parts(AllocatorRef<Byte, Memory>{memory}) {}
+        document_parts(memory) {}
 
   template <Allocator Memory>
   Pane<Memory>::InlineDocument::InlineDocument(Memory& memory, std::uint64_t identity)
       : id(identity),
         document(memory),
-        parts(AllocatorRef<Byte, Memory>{memory}) {}
+        parts(memory) {}
 
   template <Allocator Memory>
   tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory>&, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory>*>, tbc::lt::a> pane) noexcept {

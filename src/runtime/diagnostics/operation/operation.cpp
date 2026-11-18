@@ -6,7 +6,7 @@ namespace telar::runtime::diagnostics {
 
   template <Allocator Memory>
   FileStorage<Memory>::FileStorage(Memory& memory, std::string_view path)
-      : path_(path, AllocatorRef<char, Memory>{memory}) {}
+      : path_(memory, path) {}
 
   template <Allocator Memory>
   void FileStorage<Memory>::sample(Clock::time_point now) noexcept {
@@ -17,7 +17,7 @@ namespace telar::runtime::diagnostics {
     next_sample_ = now + sample_interval;
 
     struct stat status;
-    const bool available = !path_.empty() && path_ != ":memory:" && ::lstat(path_.c_str(), &status) == 0 && S_ISREG(status.st_mode) && status.st_size >= 0;
+    const bool available = !path_.empty() && path_ != ":memory:" && ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) && status.st_size >= 0;
 
     bytes_.store(available ? static_cast<std::uint64_t>(status.st_size) : 0, std::memory_order_relaxed);
   }

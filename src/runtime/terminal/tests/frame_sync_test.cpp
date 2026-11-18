@@ -76,8 +76,8 @@ namespace {
     check(!sync.acknowledge(2));
     check(sync.prepare(screen).empty());
 
-    screen.cells[17].text.atMut(0) = 'X';
-    screen.row_revisions[0] = ++screen.revision;
+    screen.cells.atMut(17).text.atMut(0) = 'X';
+    screen.row_revisions.atMut(0) = ++screen.revision;
     check(sync.prepare(screen).empty());
     check(sync.acknowledge(1));
     check(!sync.acknowledge(1));

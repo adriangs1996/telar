@@ -157,7 +157,7 @@ export {
       bool rechecked(std::uint32_t completed) const noexcept;
       ObservationTime reportTime() const noexcept;
 
-      Vector<Byte, Memory> payload;
+      ds::Vec<Byte, Memory> payload;
       ReporterIdentity reporter;
       ObservationTime observed;
       std::uint64_t sequence = 0;

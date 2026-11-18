@@ -101,7 +101,7 @@ export {
 
       void flush();
 
-      String<Memory> data;
+      ds::String<Memory> data;
     };
 
     extern template Output& Output::number<int>(int value);

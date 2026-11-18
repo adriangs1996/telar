@@ -166,8 +166,8 @@ namespace telar::runtime {
   template <Allocator Memory>
   HardenedGit<Memory>::HardenedGit(Memory& memory, std::string_view root)
       : memory_(memory),
-        root_(root, AllocatorRef<char, Memory>{memory}),
-        overrides_(AllocatorRef<String<Memory>, Memory>{memory}) {}
+        root_(memory, root),
+        overrides_(memory) {}
 
   template <Allocator Memory>
   void HardenedGit<Memory>::configure(Command<Memory>& command) {
@@ -213,9 +213,9 @@ namespace telar::runtime {
 
     for (std::size_t index = 0; index < facts->driver_count; ++index) {
       for (const auto suffix : {".clean=", ".smudge=", ".process="}) {
-        overrides_.emplace_back("filter.", AllocatorRef<char, Memory>{memory_});
-        overrides_.back() += facts->drivers[index];
-        overrides_.back() += suffix;
+        overrides_.emplace(memory_, "filter.");
+        overrides_.atMut(overrides_.size() - 1).append(facts->drivers[index]);
+        overrides_.atMut(overrides_.size() - 1).append(suffix);
       }
     }
 
@@ -224,16 +224,16 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   Command<Memory> HardenedGit<Memory>::commandFor(std::span<const std::string_view> arguments) const {
-    Vector<std::string_view, Memory> complete{AllocatorRef<std::string_view, Memory>{memory_}};
+    ds::Vec<std::string_view, Memory> complete{memory_};
 
     complete.reserve(git_observation_options.size() + 2 * overrides_.size() + arguments.size());
-    complete.insert(complete.end(), git_observation_options.begin(), git_observation_options.end());
+    complete.extend({git_observation_options.begin(), git_observation_options.end()});
     for (const auto& override : overrides_) {
-      complete.push_back("-c");
-      complete.push_back(override);
+      complete.push("-c");
+      complete.push(override);
     }
 
-    complete.insert(complete.end(), arguments.begin(), arguments.end());
+    complete.extend({arguments.begin(), arguments.end()});
     return Command<Memory>{memory_, Launch{.cwd = root_, .arguments = complete}, CommandPurpose::administration};
   }
 

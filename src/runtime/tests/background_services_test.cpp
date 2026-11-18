@@ -43,7 +43,7 @@ namespace {
   using namespace telar::runtime;
 
   void testJson(ConcurrentMemory& memory) {
-    String<ConcurrentMemory> text{AllocatorRef<char, ConcurrentMemory>{memory}};
+    ds::String<ConcurrentMemory> text{memory};
     const auto object = JsonValue::parse(R"({"type":"response","data":{"text":"printf \"caf\u00e9\" \ud83d\ude42"},"success":true})");
 
     check(object.field("type")->equals("response") && object.field("success")->boolean());
@@ -51,7 +51,7 @@ namespace {
     check(text == "printf \"café\" 🙂");
     text.clear();
     appendJsonText(text, "\t\n\"\\");
-    String<ConcurrentMemory> decoded{AllocatorRef<char, ConcurrentMemory>{memory}};
+    ds::String<ConcurrentMemory> decoded{memory};
 
     JsonValue::parse(text).string(decoded);
     check(decoded == "\t\n\"\\");

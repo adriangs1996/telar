@@ -23,8 +23,8 @@ namespace telar::git {
     bool contains(const ObjectId& id) const noexcept;
 
   private:
-    Vector<ObjectId, Memory> ids_;
-    String<Memory> bytes_;
+    ds::Vec<ObjectId, Memory> ids_;
+    ds::String<Memory> bytes_;
     Fingerprint identity_;
     ObjectFormat format_ = ObjectFormat::sha1;
     bool loaded_ = false;
@@ -99,12 +99,12 @@ namespace telar::git {
     const CommitGraph* graph_ = nullptr;
     const ShallowCommits* shallow_ = nullptr;
     const Limits* limits_ = nullptr;
-    Vector<Node, Memory> nodes_;
-    Vector<std::uint32_t, Memory> slots_;
-    Vector<ObjectId, Memory> parents_;
-    Vector<std::uint32_t, Memory> graph_parents_;
-    Vector<Queued, Memory> heap_;
-    String<Memory> object_;
+    ds::Vec<Node, Memory> nodes_;
+    ds::Vec<std::uint32_t, Memory> slots_;
+    ds::Vec<ObjectId, Memory> parents_;
+    ds::Vec<std::uint32_t, Memory> graph_parents_;
+    ds::Vec<Queued, Memory> heap_;
+    ds::String<Memory> object_;
     std::uint32_t ahead_ = 0;
     std::uint32_t behind_ = 0;
     std::size_t interesting_ = 0;

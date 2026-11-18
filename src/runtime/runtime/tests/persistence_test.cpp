@@ -263,7 +263,7 @@ namespace {
     check(::mkdtemp(directory.dataMut()) != nullptr);
     const auto path = std::string{directory.data()} + "/session.ckpt";
     checkpoint::FileStore file{memory, path};
-    Vector<Byte, ConcurrentMemory> loaded{AllocatorRef<Byte, ConcurrentMemory>{memory}};
+    ds::Vec<Byte, ConcurrentMemory> loaded{memory};
 
     check(!file.load(loaded));
     ds::Array<Byte, 4096> buffer;

@@ -92,7 +92,7 @@ namespace telar::gui::qt {
 #ifdef Q_OS_MACOS
     static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
     SystemAllocator memory;
-    Vector<std::uint8_t, SystemAllocator> pixels{AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
+    ds::Vec<std::uint8_t, SystemAllocator> pixels{memory};
     ds::Array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles> fonts{};
 #endif
   };
@@ -272,7 +272,7 @@ namespace telar::gui::qt {
 
         const auto& asset = fonts_->asset(role);
 
-        rasterizer = std::make_unique<fonts::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.settings.strength);
+        rasterizer = std::make_unique<fonts::GlyphRasterizer>(rasterization_.pixels.viewMut(), asset.bytes(), asset.match(), rasterization_.settings.strength);
       }
 
       return rasterizer->rasterize(request);

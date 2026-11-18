@@ -22,7 +22,7 @@ namespace telar::runtime::config {
       return;
     }
 
-    String<Memory> path{options.config, AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> path{memory_, options.config};
     if (path.empty()) {
       path = cli::RuntimePaths<Memory>::configFile(memory_, environment);
       if (path.empty()) {
@@ -31,7 +31,7 @@ namespace telar::runtime::config {
     }
 
     ds::Array<char, PATH_MAX> canonical;
-    if (::realpath(path.c_str(), canonical.dataMut()) == nullptr) {
+    if (::realpath(path.data(), canonical.dataMut()) == nullptr) {
       if (sys::lastError() == ENOENT && options.config.empty() && options.profile.empty()) {
         return;
       }
@@ -62,7 +62,7 @@ namespace telar::runtime::config {
   }
 
   template <Allocator Memory>
-  String<Memory> Loader<Memory>::readSource(const char* path) const {
+  ds::String<Memory> Loader<Memory>::readSource(const char* path) const {
     try {
       return readFile(memory_, path, 1024 * 1024);
     } catch (const FileReadError& error) {

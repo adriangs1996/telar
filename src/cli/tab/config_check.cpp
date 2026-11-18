@@ -219,11 +219,11 @@ namespace telar::runtime::cli {
       BudgetAllocator budget{system, memory_budget};
       MemoryAdapter budget_memory{budget};
       Memory& memory = budget_memory;
-      String<Memory> path{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> path{memory};
       const ProcessEnvironment environment;
 
       if (options.path != nullptr) {
-        path = options.path;
+        path.assign(options.path);
       } else {
         path = RuntimePaths<Memory>::configFile(memory, environment);
         if (path.empty()) {
@@ -232,7 +232,7 @@ namespace telar::runtime::cli {
       }
 
       ds::Array<char, PATH_MAX> canonical;
-      if (::realpath(path.c_str(), canonical.dataMut()) == nullptr) {
+      if (::realpath(path.data(), canonical.dataMut()) == nullptr) {
         const auto error = sys::errorName(sys::lastError());
 
         diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);

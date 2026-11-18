@@ -719,13 +719,13 @@ namespace telar::runtime {
   ProxyPortMemory<Memory>::ProxyPortMemory(Memory& memory, int directory, std::string_view endpoint, bool inherit_legacy)
       : memory_(memory),
         directory_(directory),
-        endpoint_(endpoint, AllocatorRef<char, Memory>{memory}) {
+        endpoint_(memory, endpoint) {
     if (endpoint.size() > PATH_MAX || endpoint.contains('\0')) {
       throw SystemError{"Invalid proxy endpoint path", EINVAL};
     }
 
     identify(endpoint);
-    Vector<unsigned char, Memory> bytes{AllocatorRef<unsigned char, Memory>{memory_}};
+    ds::Vec<unsigned char, Memory> bytes{memory_};
     if (const auto record = recall(name_.data(), bytes)) {
       own_ = record->port;
     }
@@ -774,7 +774,7 @@ namespace telar::runtime {
     auto* end = std::to_chars(record.dataMut(), record.dataMut() + record.size(), port).ptr;
 
     *end++ = '\n';
-    end = std::copy(endpoint_.begin(), endpoint_.end(), end);
+    end = std::ranges::copy(endpoint_.view(), end).out;
     *end++ = '\n';
     const auto bytes = std::span{reinterpret_cast<const std::uint8_t*>(record.data()), static_cast<std::size_t>(end - record.data())};
     if (writePrivateFile(directory_, filename(), bytes, PrivateFileMode::replace) != 0) {
@@ -818,7 +818,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto ProxyPortMemory<Memory>::recall(std::string_view name, tbc::view<Vector<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept -> tbc::view<ds::Option<Record>, tbc::lt::a> {
+  auto ProxyPortMemory<Memory>::recall(std::string_view name, tbc::view<ds::Vec<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept -> tbc::view<ds::Option<Record>, tbc::lt::a> {
     try {
       if (!readPrivateFile(directory_, name, bytes, maximum_record_bytes)) {
         return ds::none;

@@ -166,7 +166,7 @@ export {
           appendSpan({.first = start, .count = run.size(), .role = role, .offset = advance_, .columns = span.columns});
           glyphs_.resize(start + run.size());
           for (std::size_t index = 0; index < run.size(); ++index) {
-            glyphs_[start + index] = run.glyph(index);
+            glyphs_.atMut(start + index) = run.glyph(index);
           }
 
           advance_ = addAdvance(advance_, spanAdvance(fonts, span, request, run.advance()));
@@ -210,8 +210,8 @@ export {
 
       static std::int32_t addAdvance(std::int32_t previous, std::int64_t next);
 
-      Vector<ShapedGlyph, Memory> glyphs_;
-      Vector<TextSpan, Memory> spans_;
+      ds::Vec<ShapedGlyph, Memory> glyphs_;
+      ds::Vec<TextSpan, Memory> spans_;
       ds::Option<TextSpan> single_span_;
       std::int32_t advance_ = 0;
     };
@@ -261,9 +261,9 @@ export {
       void begin(std::string_view text, const FontGrid& grid);
       void append(const ShapedRunView& shaped, FontRole role, const FontGrid& grid, std::uint32_t columns);
 
-      Vector<ShapedGlyph, Memory> glyphs_;
-      Vector<TextSpan, Memory> spans_;
-      Vector<Cluster, Memory> clusters_;
+      ds::Vec<ShapedGlyph, Memory> glyphs_;
+      ds::Vec<TextSpan, Memory> spans_;
+      ds::Vec<Cluster, Memory> clusters_;
       std::size_t maximum_text_bytes_;
       std::uint32_t columns_ = 0;
     };
@@ -386,13 +386,13 @@ export {
             const auto x = FontMetrics::roundFixed(pen + glyph.x_offset) + bitmap.left;
             const auto y = -FontMetrics::roundFixed(glyph.y_offset) - bitmap.top;
 
-            glyphs_.push_back({.index = glyph.index, .face = run.role, .ink = {.x = static_cast<float>(x), .y = static_cast<float>(y), .width = static_cast<float>(bitmap.width), .height = static_cast<float>(bitmap.height)}});
+            glyphs_.push({.index = glyph.index, .face = run.role, .ink = {.x = static_cast<float>(x), .y = static_cast<float>(y), .width = static_cast<float>(bitmap.width), .height = static_cast<float>(bitmap.height)}});
           }
 
           pen += glyph.x_advance;
         }
 
-        auto appended = std::span{glyphs_}.subspan(start);
+        auto appended = glyphs_.viewMut().subspan(start);
 
         if (fittedFont(run.role)) {
           const auto metrics = fonts.face(FontRole::primary).metrics(run.request.pixel_height);
@@ -412,7 +412,7 @@ export {
 
       static void fitFallback(std::span<IconGlyph> glyphs, Rect cell, float advance);
 
-      Vector<IconGlyph, Memory> glyphs_;
+      ds::Vec<IconGlyph, Memory> glyphs_;
     };
 
     extern template class IconLayout<Memory>;
@@ -478,7 +478,8 @@ export {
 
         glyphs_.clear();
         spans_.clear();
-        cells_.assign(cells.size(), {});
+        cells_.clear();
+      cells_.resize(cells.size(), {});
         runs_.reserve(cells.size());
         runs_.clear();
         auto& primary = fonts.face(FontRole::primary);
@@ -574,8 +575,8 @@ export {
         cell_.shape(fonts, text, {.pixel_height = request.pixel_height, .preferred = FontRole::primary});
         const auto first_glyph = glyphs_.size();
 
-        glyphs_.insert(glyphs_.end(), cell_.glyphs().begin(), cell_.glyphs().end());
-        cells_[column] = {.first_span = spans_.size(), .span_count = cell_.spans().size()};
+        glyphs_.extend({cell_.glyphs().begin(), cell_.glyphs().end()});
+        cells_.atMut(column) = {.first_span = spans_.size(), .span_count = cell_.spans().size()};
         for (auto span : cell_.spans()) {
           span.first += first_glyph;
           const auto offset = static_cast<std::int64_t>(span.offset) + cellOffset(column, request);
@@ -584,7 +585,7 @@ export {
           }
 
           span.offset = static_cast<std::int32_t>(offset);
-          spans_.push_back(span);
+          spans_.push(span);
         }
       }
 
@@ -611,9 +612,9 @@ export {
 
       TextRuns<Memory> runs_;
       TextLayout<Memory> cell_;
-      Vector<ShapedGlyph, Memory> glyphs_;
-      Vector<TextSpan, Memory> spans_;
-      Vector<CellTextRange, Memory> cells_;
+      ds::Vec<ShapedGlyph, Memory> glyphs_;
+      ds::Vec<TextSpan, Memory> spans_;
+      ds::Vec<CellTextRange, Memory> cells_;
       ds::Array<ds::Option<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
       ds::Array<Cluster, std::size_t{1} << cluster_bits> clusters_{};
       const Face* cached_face_ = nullptr;

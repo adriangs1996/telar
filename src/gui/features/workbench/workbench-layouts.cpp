@@ -12,7 +12,7 @@ import telar.base.ds;
 namespace telar::gui::features::workbench {
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> LayoutToken::write(const ClientLayoutSnapshot& snapshot, tbc::view<String<Memory>&, tbc::lt::a> output) {
+  tbc::view<std::string_view, tbc::lt::a> LayoutToken::write(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<Memory>&, tbc::lt::a> output) {
     ds::Array<Byte, binary_capacity> binary{};
     const auto encoded = Codec::encode(snapshot, binary.viewMut());
 
@@ -241,7 +241,7 @@ namespace telar::gui::features::workbench {
     }
   }
 
-  template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<Memory>(const ClientLayoutSnapshot& snapshot, tbc::view<String<Memory>&, tbc::lt::a> output);
-  template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<ConcurrentMemory>(const ClientLayoutSnapshot& snapshot, tbc::view<String<ConcurrentMemory>&, tbc::lt::a> output);
+  template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<Memory>(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<Memory>&, tbc::lt::a> output);
+  template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<ConcurrentMemory>(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<ConcurrentMemory>&, tbc::lt::a> output);
 
 }

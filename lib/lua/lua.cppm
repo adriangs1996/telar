@@ -105,7 +105,7 @@ export {
 
       static constexpr std::size_t maximum_input_bytes = 1024 * 1024;
       static constexpr unsigned maximum_depth = 64;
-      String<Memory> text_;
+      ds::String<Memory> text_;
     };
 
     extern template class JsonDecoder<Memory>;

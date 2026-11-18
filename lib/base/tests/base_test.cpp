@@ -45,13 +45,13 @@ namespace {
       telar::BudgetAllocator budget{system, 256};
 
       {
-        telar::Vector<int, decltype(budget)> values{telar::AllocatorRef<int, decltype(budget)>{budget}};
+        telar::ds::Vec<int, decltype(budget)> values{budget};
 
-        values.push_back(42);
+        values.push(42);
         auto value = telar::makeOwned<int>(budget, 7);
 
         check(values.front() == 42 && *value == 7);
-        check(budget.liveBytes() == 2 * sizeof(int));
+        check(budget.liveBytes() == (values.capacity() + 1) * sizeof(int), "the budget counts the Vec's storage and the owned value");
         check(budget.allocate(256, alignof(int)) == nullptr);
       }
 
@@ -92,7 +92,7 @@ namespace {
     // A service boundary that knows only the erased interface.
     bool fill(telar::Memory& memory, std::size_t count) {
       try {
-        telar::Vector<int, telar::Memory> values{telar::AllocatorRef<int, telar::Memory>{memory}};
+        telar::ds::Vec<int, telar::Memory> values{memory};
 
         values.resize(count, 7);
         return values.back() == 7;
@@ -200,7 +200,7 @@ namespace {
 
     void testJson() {
       telar::SystemAllocator memory;
-      telar::String<telar::SystemAllocator> text{telar::AllocatorRef<char, telar::SystemAllocator>{memory}};
+      telar::ds::String<telar::SystemAllocator> text{memory};
       const auto value = telar::runtime::JsonValue::parse(R"({"name":"hello\nworld"})");
 
       value.field("name")->string(text);

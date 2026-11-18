@@ -123,8 +123,8 @@ namespace {
       pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
       pane.generation = 2;
       pane.attachment_generation = 3;
-      pane.title = "Ignore OSC title";
-      pane.cwd = "/ignore/cwd";
+      pane.title.assign("Ignore OSC title");
+      pane.cwd.assign("/ignore/cwd");
       ds::Array<Agent<Memory>, 1> agents{Agent{memory}};
       auto& agent = agents.atMut(0);
 
@@ -137,7 +137,7 @@ namespace {
 
       QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("shell"));
       QVERIFY(record.value(QStringLiteral("agent")).toMap().isEmpty());
-      pane.foreground = "nvim";
+      pane.foreground.assign("nvim");
       agent.pane_generation = pane.generation;
       record = paneChromeRecord(pane, span, 2);
       QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("nvim"));
@@ -158,9 +158,9 @@ namespace {
 
       pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
       pane.generation = 2;
-      pane.foreground = "zsh";
-      pane.cwd = "/projects/telar";
-      pane.title = "Test\n\tresults";
+      pane.foreground.assign("zsh");
+      pane.cwd.assign("/projects/telar");
+      pane.title.assign("Test\n\tresults");
       QCOMPARE(paneChromeRecord(pane, std::span<const Agent<Memory>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
       pane.title.clear();
       ds::Array<Agent<Memory>, 1> agents{Agent{memory}};
@@ -170,7 +170,7 @@ namespace {
       agent.pane_generation = pane.generation;
       agent.location = pane.location;
       agent.title_state = AgentTitleState::ready;
-      agent.title = "Fix session restore";
+      agent.title.assign("Fix session restore");
       auto record = paneChromeRecord(pane, std::span<const Agent<Memory>>{agents}, 1);
 
       QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("Fix session restore"));

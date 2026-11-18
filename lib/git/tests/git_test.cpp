@@ -1394,7 +1394,7 @@ namespace {
       ::gettimeofday(&end, nullptr);
       const auto first_us = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
 
-      std::printf("first read: %ld us, repository %d head %d branch %s ahead %u behind %u (%d) staged %d unstaged %d\n", static_cast<long>(first_us), static_cast<int>(first.repository), static_cast<int>(first.head), first.branch.c_str(), first.ahead, first.behind, static_cast<int>(first.divergence), static_cast<int>(first.staged), static_cast<int>(first.unstaged));
+      std::printf("first read: %ld us, repository %d head %d branch %s ahead %u behind %u (%d) staged %d unstaged %d\n", static_cast<long>(first_us), static_cast<int>(first.repository), static_cast<int>(first.head), first.branch.data(), first.ahead, first.behind, static_cast<int>(first.divergence), static_cast<int>(first.staged), static_cast<int>(first.unstaged));
       std::printf("  %s\n", describe(first.changes).c_str());
       std::printf("  work: objects %llu commits %llu trees %llu entries %llu hashed %llu files, %llu bytes\n", static_cast<unsigned long long>(first.work.objects_read), static_cast<unsigned long long>(first.work.commits_read), static_cast<unsigned long long>(first.work.trees_read), static_cast<unsigned long long>(first.work.entries_checked), static_cast<unsigned long long>(first.work.files_hashed), static_cast<unsigned long long>(first.work.bytes_hashed));
       constexpr int rounds = 200;

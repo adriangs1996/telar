@@ -6,6 +6,7 @@ import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -252,9 +253,9 @@ Footnote[^1].
       // A run that starts inside a character.
       Doc split{memory};
 
-      split.text = "\xc3\xa9";
-      split.blocks.push_back(Block{.kind = BlockKind::paragraph, .first = 0, .count = 1, .info = {}});
-      split.runs.push_back(Run{.text = Span{1, 1}, .target = {}, .style = 0});
+      split.text.assign("\xc3\xa9");
+      split.blocks.push(Block{.kind = BlockKind::paragraph, .first = 0, .count = 1, .info = {}});
+      split.runs.push(Run{.text = Span{1, 1}, .target = {}, .style = 0});
       check(decode(encoded(split), decoded) == DecodeError::range, "span splits a character");
 
       // Mutations never crash and never yield an inconsistent document.
@@ -312,7 +313,7 @@ Footnote[^1].
 
     void sequence() {
       const auto document = parse(sample);
-      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> output{memory};
 
       check(appendSequence(document, output), "sequence fits");
       const std::string_view view{output};
@@ -330,7 +331,7 @@ Footnote[^1].
         check(decode(bytes, decoded) == DecodeError::none && decoded.text == document.text, "sequence carries the document");
       }
 
-      String<Memory> end{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> end{memory};
 
       appendEnd(end);
       check(std::string_view{end} == "\x1b]7780;end\x1b\\", "end framing");
@@ -396,7 +397,7 @@ Footnote[^1].
     }
 
     std::vector<std::string> rendered(std::string_view source, std::uint16_t width) {
-      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> output{memory};
 
       terminal::render(parse(source), width, output);
       return lines(output);
@@ -434,7 +435,7 @@ Footnote[^1].
 
     void terminalText() {
       const auto document = parse(std::string{sample} + "\nInjected \x1b]52;c;evil\x07 text\n");
-      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+      ds::String<Memory> output{memory};
 
       terminal::render(document, 60, output);
       const std::string_view view{output};

@@ -25,10 +25,8 @@ export namespace telar {
   using telar::MemoryInterface;
   using telar::Owned;
   using telar::SensitiveAllocator;
-  using telar::String;
   using telar::SynchronizedAllocator;
   using telar::SystemAllocator;
-  using telar::Vector;
 }
 #if TELAR_DIAGNOSTICS
 export namespace telar {

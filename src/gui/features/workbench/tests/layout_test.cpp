@@ -59,7 +59,7 @@ namespace {
     telar::Memory& memory = adapter;
 
     {
-      String<telar::Memory> text{AllocatorRef<char, telar::Memory>{memory}};
+      ds::String<telar::Memory> text{memory};
 
       check(LayoutToken::write(fixture_snapshot, text) == reference_layout_token, "export must match the reference token byte for byte");
       const auto preset = LayoutToken::read(reference_layout_token);
@@ -106,7 +106,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    String<telar::ConcurrentMemory> text{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
+    ds::String<telar::ConcurrentMemory> text{memory};
     const ClientLayoutSnapshot bootstrap;
 
     LayoutToken::write(bootstrap, text);
@@ -159,7 +159,7 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
-    String<telar::ConcurrentMemory> text{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
+    ds::String<telar::ConcurrentMemory> text{memory};
 
     LayoutToken::write(snapshot, text);
     check(text.size() <= LayoutToken::text_capacity, "a complete tab must fit the CLI token capacity");

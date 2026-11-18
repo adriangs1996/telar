@@ -106,11 +106,11 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   DeferredResponses<Memory>::DeferredResponses(Memory& memory)
-      : entries_(AllocatorRef<Entry, Memory>{memory}) {}
+      : entries_(memory) {}
 
   template <Allocator Memory>
   void DeferredResponses<Memory>::append(std::size_t offset, const DeferredResponse& response) {
-    entries_.push_back(Entry{offset, response});
+    entries_.push(Entry{offset, response});
   }
 
   template <Allocator Memory>
@@ -140,15 +140,15 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void DeferredResponses<Memory>::resolved(std::size_t size) noexcept {
-    entries_.erase(entries_.begin());
-    for (auto& entry : entries_) {
+    static_cast<void>(entries_.remove(0));
+    for (auto& entry : entries_.viewMut()) {
       entry.offset += size;
     }
   }
 
   template <Allocator Memory>
   void DeferredResponses<Memory>::eraseBytes(std::size_t offset, std::size_t count) noexcept {
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (entry.offset > offset) {
         entry.offset -= std::min(count, entry.offset - offset);
       }
@@ -319,7 +319,7 @@ namespace telar::runtime {
       : descriptor_(std::move(descriptor)),
         input_(memory, input_limit),
         output_(memory),
-        decode_bytes_(AllocatorRef<Byte, Memory>{memory}) {
+        decode_bytes_(memory) {
     input_.reserve(read_batch_size);
     output_.reserve(read_batch_size);
     decode_bytes_.resize(decode_capacity);
@@ -340,12 +340,12 @@ namespace telar::runtime {
   template <Allocator Memory>
   Connection<Memory>::Frames::Frames(Memory& memory)
       : input(memory, input_limit),
-        decode(AllocatorRef<Byte, Memory>{memory}) {}
+        decode(memory) {}
 
   template <Allocator Memory>
   void Connection<Memory>::exchange(Frames& frames) noexcept {
     input_.swap(frames.input);
-    decode_bytes_.swap(frames.decode);
+    std::swap(decode_bytes_, frames.decode);
   }
 
   template <Allocator Memory>

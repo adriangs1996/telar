@@ -218,10 +218,10 @@ namespace telar::runtime::plugins {
     }
 
     auto target = openBeneath(directory_->descriptor(), name.data(), O_RDONLY | O_DIRECTORY);
-    String<Memory> destination{directory_->path(), AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> destination{memory_, directory_->path()};
 
-    destination += '/';
-    destination += name.data();
+    destination.push('/');
+    destination.append(name.data());
     return PackageCopy{memory_}.copy(package, target.get(), destination);
   }
 

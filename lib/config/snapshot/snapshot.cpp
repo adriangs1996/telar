@@ -90,7 +90,7 @@ namespace telar::runtime::config {
       }
 
       if (name != selected_profile) {
-        auto checked = makeOwned<RuntimeValues<Memory>>(memory_, values_);
+        auto checked = makeOwned<RuntimeValues<Memory>>(memory_, values_.clone());
         const auto saved_commands = client_state.commands.checkpoint();
         const auto saved_keymap = client_state.keymap;
 

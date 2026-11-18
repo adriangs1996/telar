@@ -235,18 +235,20 @@ export {
       static constexpr std::size_t maximum_hostname_bytes = ProxyHostname::maximum_bytes;
 
       explicit ProxyHostPolicy(Memory& memory);
+      // Copying allocates, so it is explicit; the copy shares this policy's allocator.
+      [[nodiscard]] ProxyHostPolicy clone() const;
       static bool validPattern(std::string_view pattern) noexcept;
       bool append(std::string_view pattern);
       void finish();
       void clear() noexcept;
       bool contains(std::string_view hostname) const noexcept;
-      std::span<const String<Memory>> patterns() const noexcept;
+      std::span<const ds::String<Memory>> patterns() const noexcept;
 
     private:
       bool find(std::string_view pattern) const noexcept;
 
       static constexpr std::string_view wildcard_prefix = "*.";
-      Vector<String<Memory>, Memory> patterns_;
+      ds::Vec<ds::String<Memory>, Memory> patterns_;
     };
 
   }
@@ -259,8 +261,10 @@ export {
     template <Allocator Memory>
     struct ProxyOptions {
       explicit ProxyOptions(Memory& memory);
+      // Copying allocates, so it is explicit; the copy shares these options' allocator.
+      [[nodiscard]] ProxyOptions clone() const;
 
-      String<Memory> authority_directory;
+      ds::String<Memory> authority_directory;
       ProxyHostPolicy<Memory> intercept_hosts;
       ProxyCaptureLimits capture;
       bool enabled = false;
@@ -312,9 +316,11 @@ export {
       };
 
       explicit CommandValues(Memory& memory);
+      // Copying allocates, so it is explicit; the copy shares these values' allocator.
+      [[nodiscard]] CommandValues clone() const;
       [[nodiscard]] Views views() const noexcept;
 
-      Vector<String<Memory>, Memory> arguments;
+      ds::Vec<ds::String<Memory>, Memory> arguments;
       std::chrono::milliseconds timeout{15'000};
       std::chrono::milliseconds idle_timeout{300'000};
     };
@@ -322,9 +328,11 @@ export {
     template <Allocator Memory>
     struct RuntimeValues {
       explicit RuntimeValues(Memory& memory);
+      // Copying allocates, so it is explicit; the copy shares these values' allocator.
+      [[nodiscard]] RuntimeValues clone() const;
 
-      String<Memory> history_path;
-      String<Memory> session_path;
+      ds::String<Memory> history_path;
+      ds::String<Memory> session_path;
       HistoryFilters history_filters;
       CommandValues<Memory> engine;
       CommandValues<Memory> descriptions;
@@ -360,7 +368,7 @@ export {
 
     private:
       void graphics(const lua::Value& table);
-      static void path(const lua::Value& field, String<Memory>& destination);
+      static void path(const lua::Value& field, ds::String<Memory>& destination);
       static void patterns(const lua::Value& field, HistoryPatternList& destination);
       void history(const lua::Value& table);
       void session(const lua::Value& table);

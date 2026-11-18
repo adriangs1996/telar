@@ -9,17 +9,17 @@ namespace telar::runtime::cli::hooks {
 
   Object::Object(Memory& memory, JsonValue value, bool reject_duplicates)
       : memory_(memory),
-        members_(AllocatorRef<Member, Memory>{memory}),
+        members_(memory),
         reject_duplicates_(reject_duplicates) {
     if (!value.encoded().starts_with('{')) {
       throw std::invalid_argument{"Expected hook object"};
     }
 
     value.eachMember([&](JsonValue key, JsonValue entry) {
-      String<Memory> name{AllocatorRef<char, Memory>{memory_}};
+      ds::String<Memory> name{memory_};
 
       key.string(name);
-      members_.push_back(Member{.name = std::move(name), .value = entry, .text = ds::none, .position = members_.size()});
+      members_.push(Member{.name = std::move(name), .value = entry, .text = ds::none, .position = members_.size()});
     });
 
     indexMembers();
@@ -89,11 +89,12 @@ namespace telar::runtime::cli::hooks {
   }
 
   auto Object::findMut(std::string_view name) noexcept -> Member* {
-    const auto found = std::lower_bound(members_.begin(), members_.end(), name, [](const Member& member, std::string_view key) {
+    const auto members = members_.viewMut();
+    const auto found = std::lower_bound(members.begin(), members.end(), name, [](const Member& member, std::string_view key) {
       return member.name < key;
     });
 
-    return found != members_.end() && found->name == name ? &*found : nullptr;
+    return found != members.end() && found->name == name ? &*found : nullptr;
   }
 
   auto Object::find(std::string_view name) const noexcept -> const Member* {
@@ -101,7 +102,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   void Object::indexMembers() {
-    std::ranges::sort(members_, [](const Member& left, const Member& right) {
+    std::ranges::sort(members_.viewMut(), [](const Member& left, const Member& right) {
       return left.name == right.name ? left.position < right.position : left.name < right.name;
     });
 
@@ -109,24 +110,24 @@ namespace telar::runtime::cli::hooks {
 
     for (std::size_t index = 0; index < members_.size(); ++index) {
       if (unique != 0 && members_[unique - 1].name == members_[index].name) {
-        members_[unique - 1] = std::move(members_[index]);
-        members_[unique - 1].duplicate = true;
+        members_.atMut(unique - 1) = std::move(members_.atMut(index));
+        members_.atMut(unique - 1).duplicate = true;
       } else {
         if (unique != index) {
-          members_[unique] = std::move(members_[index]);
+          members_.atMut(unique) = std::move(members_.atMut(index));
         }
 
         ++unique;
       }
     }
 
-    members_.erase(members_.begin() + unique, members_.end());
+    members_.truncate(unique);
   }
 
   auto Object::decode(tbc::view<Member&, tbc::lt::a> member) -> tbc::view<std::string_view, tbc::lt::a> {
     checkUnique(member);
     if (!member.text) {
-      String<Memory> decoded{AllocatorRef<char, Memory>{memory_}};
+      ds::String<Memory> decoded{memory_};
 
       member.value.string(decoded);
       member.text = std::move(decoded);
@@ -191,7 +192,7 @@ namespace telar::runtime::cli::hooks {
 
         if (const auto roots = fields.value("workspace_roots")) {
           roots->eachElement([&](JsonValue root) {
-            String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
+            ds::String<Memory> decoded{memory};
 
             root.string(decoded);
             if (!workspace_) {
@@ -291,7 +292,7 @@ namespace telar::runtime::cli::hooks {
       return;
     }
 
-    String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> decoded{memory};
     ds::Option<std::size_t> start;
 
     for (std::size_t index = 0; index < input.size(); ++index) {

@@ -147,7 +147,7 @@ export {
       static constexpr std::size_t line_overhead = 4;
       Memory& upstream_;
       Secure memory_;
-      Vector<Field, Secure> fields_;
+      ds::Vec<Field, Secure> fields_;
       std::size_t bytes_ = 0;
     };
 
@@ -242,7 +242,8 @@ export {
         }
 
         message.body_materialized |= !std::ranges::equal(message.body, view.body);
-        message.body.assign(view.body.begin(), view.body.end());
+        message.body.clear();
+        message.body.extend({view.body.begin(), view.body.end()});
       }
 
     private:
@@ -270,13 +271,13 @@ export {
     template <Allocator Memory>
     class HttpMessage {
       using Secure = ErasingAllocator<Memory>;
-      using Text = String<Secure>;
+      using Text = ds::String<Secure>;
 
       Memory& upstream_;
       Secure memory_;
 
     public:
-      using Bytes = Vector<std::uint8_t, Secure>;
+      using Bytes = ds::Vec<std::uint8_t, Secure>;
 
       explicit HttpMessage(Memory& memory, bool response = false);
 

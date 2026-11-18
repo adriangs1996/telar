@@ -51,30 +51,30 @@ namespace telar::gui::application {
         transport_(transport),
         effects_(effects),
         now_(now),
-        panes_(AllocatorRef<Owned<Pane<Memory>, Memory>, Memory>{memory}),
-        tabs_(AllocatorRef<Owned<Tab<Memory>, Memory>, Memory>{memory}),
+        panes_(memory),
+        tabs_(memory),
         workspaces_(memory),
         agents_(memory),
         pane_list_(memory),
         history_(memory),
         peek_(memory),
-        decode_(AllocatorRef<Byte, Memory>{memory}),
-        clipboard_(AllocatorRef<char, Memory>{memory}),
-        error_(AllocatorRef<char, Memory>{memory}),
-        command_response_(AllocatorRef<char, Memory>{memory}),
-        launch_cwd_(AllocatorRef<char, Memory>{memory}),
-        argument_storage_(AllocatorRef<String<Memory>, Memory>{memory}) {
+        decode_(memory),
+        clipboard_(memory),
+        error_(memory),
+        command_response_(memory),
+        launch_cwd_(memory),
+        argument_storage_(memory) {
     decode_.resize(decode_capacity);
   }
 
   void Session::setLaunch(const Launch& launch) {
     BodySchema<Launch>::validate(launch);
-    launch_cwd_ = launch.cwd;
+    launch_cwd_.assign(launch.cwd);
     argument_storage_.clear();
     launch_argument_count_ = 0;
     argument_storage_.reserve(launch.arguments.size());
     for (const auto argument : launch.arguments) {
-      argument_storage_.emplace_back(argument, AllocatorRef<char, Memory>{memory_});
+      argument_storage_.emplace(memory_, argument);
     }
 
     for (const auto& argument : argument_storage_) {
@@ -87,7 +87,7 @@ namespace telar::gui::application {
 
     launch.cwd = directory;
     BodySchema<Launch>::validate(launch);
-    launch_cwd_ = directory;
+    launch_cwd_.assign(directory);
   }
 
   void Session::setLaunchArguments(std::span<const std::string_view> arguments) {
@@ -227,7 +227,7 @@ namespace telar::gui::application {
       throw EncodingError{"Empty server message"};
     }
 
-    DecodeStorage storage{decode_};
+    DecodeStorage storage{decode_.viewMut()};
     const auto dispatch = [&]<typename Message> {
       return dispatchMessage<Message>(payload, storage, handler);
     };
@@ -358,15 +358,15 @@ namespace telar::gui::application {
     return tab == nullptr ? nullptr : findPane(tab->focused_pane);
   }
 
-  const Vector<Owned<Tab<Memory>, Memory>, Memory>& Session::tabs() const noexcept {
+  const ds::Vec<Owned<Tab<Memory>, Memory>, Memory>& Session::tabs() const noexcept {
     return tabs_;
   }
 
-  const Vector<Owned<Pane<Memory>, Memory>, Memory>& Session::panes() const noexcept {
+  const ds::Vec<Owned<Pane<Memory>, Memory>, Memory>& Session::panes() const noexcept {
     return panes_;
   }
 
-  const Vector<Workspace<Memory>, Memory>& Session::workspaces() const noexcept {
+  const ds::Vec<Workspace<Memory>, Memory>& Session::workspaces() const noexcept {
     return workspaces_.entries();
   }
 
@@ -374,7 +374,7 @@ namespace telar::gui::application {
     return workspaces_;
   }
 
-  const Vector<Agent<Memory>, Memory>& Session::agents() const noexcept {
+  const ds::Vec<Agent<Memory>, Memory>& Session::agents() const noexcept {
     return agents_.entries();
   }
 
@@ -592,7 +592,7 @@ namespace telar::gui::application {
       }
     }
 
-    error_ = message.message;
+    error_.assign(message.message);
 
     return Change::model;
   }

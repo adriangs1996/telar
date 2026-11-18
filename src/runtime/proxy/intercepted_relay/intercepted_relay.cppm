@@ -428,7 +428,7 @@ export {
     // The parser retains a blocked fragment while a buffered prefix drains during fail-open fallback.
     class Http1InterceptedRelay {
       using Secure = ErasingAllocator<ConcurrentMemory>;
-      using Bytes = Vector<Byte, Secure>;
+      using Bytes = ds::Vec<Byte, Secure>;
       enum class Mode {
         undecided,
         buffering,
@@ -465,7 +465,7 @@ export {
               return;
             }
 
-            relay.message_.body.insert(relay.message_.body.end(), bytes.begin(), bytes.end());
+            relay.message_.body.extend({bytes.begin(), bytes.end()});
           } catch (...) {
             relay.unavailable("http_allocation_failed");
           }
@@ -567,7 +567,7 @@ export {
               return {relay.mode_ == Mode::failed ? StreamResult::State::failed : StreamResult::State::blocked, 0, StreamReadiness::completion};
             }
 
-            relay.wire_.insert(relay.wire_.end(), bytes.begin(), bytes.end());
+            relay.wire_.extend({bytes.begin(), bytes.end()});
             return {StreamResult::State::data, bytes.size()};
           } catch (...) {
             relay.unavailable("http_allocation_failed");

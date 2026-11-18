@@ -67,9 +67,9 @@ export {
 
     private:
       struct Member {
-        String<Memory> name;
+        ds::String<Memory> name;
         JsonValue value;
-        ds::Option<String<Memory>> text;
+        ds::Option<ds::String<Memory>> text;
         std::size_t position;
         bool duplicate = false;
       };
@@ -81,7 +81,7 @@ export {
       void checkUnique(const Member& member) const;
 
       Memory& memory_;
-      Vector<Member, Memory> members_;
+      ds::Vec<Member, Memory> members_;
       bool reject_duplicates_;
     };
 
@@ -131,7 +131,7 @@ export {
       void strictBoolean(std::string_view name);
       static JsonValue toolObject(const Object& fields);
 
-      ds::Option<String<Memory>> workspace_;
+      ds::Option<ds::String<Memory>> workspace_;
     };
 
   }

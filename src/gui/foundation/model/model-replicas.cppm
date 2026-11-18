@@ -22,9 +22,9 @@ export {
 
       explicit AgentReplica(Memory& memory);
 
-      [[nodiscard]] const Vector<Agent<Memory>, Memory>& entries() const noexcept;
-      [[nodiscard]] typename Vector<Agent<Memory>, Memory>::const_iterator begin() const noexcept;
-      [[nodiscard]] typename Vector<Agent<Memory>, Memory>::const_iterator end() const noexcept;
+      [[nodiscard]] const ds::Vec<Agent<Memory>, Memory>& entries() const noexcept;
+      [[nodiscard]] const Agent<Memory>* begin() const noexcept;
+      [[nodiscard]] const Agent<Memory>* end() const noexcept;
       [[nodiscard]] std::uint64_t revision() const noexcept;
       [[nodiscard]] std::span<const AgentStatusChange> statusChanges() const noexcept;
       void resetSource() noexcept;
@@ -36,8 +36,8 @@ export {
       static void assign(Agent<Memory>& agent, const AgentSnapshotEntry& entry);
 
       Memory& memory_;
-      Vector<Agent<Memory>, Memory> entries_;
-      Vector<Agent<Memory>, Memory> staging_;
+      ds::Vec<Agent<Memory>, Memory> entries_;
+      ds::Vec<Agent<Memory>, Memory> staging_;
       ds::Array<AgentStatusChange, capacity> status_changes_;
       std::size_t status_change_count_ = 0;
       std::uint64_t revision_ = 0;
@@ -87,7 +87,7 @@ export {
       bool apply(const PaneList& list, std::uint64_t now_ns);
 
     private:
-      Vector<ListedPane, Memory> entries_;
+      ds::Vec<ListedPane, Memory> entries_;
       std::uint64_t revision_ = 0;
     };
 
@@ -111,12 +111,12 @@ export {
 
       explicit WorkspaceReplica(Memory& memory);
 
-      [[nodiscard]] const Vector<Workspace<Memory>, Memory>& entries() const noexcept;
+      [[nodiscard]] const ds::Vec<Workspace<Memory>, Memory>& entries() const noexcept;
       [[nodiscard]] std::span<const Workspace<Memory>> projects() const noexcept;
-      [[nodiscard]] const Vector<Worktree<Memory>, Memory>& worktrees() const noexcept;
+      [[nodiscard]] const ds::Vec<Worktree<Memory>, Memory>& worktrees() const noexcept;
       [[nodiscard]] std::span<Workspace<Memory>> entriesMut() noexcept;
-      [[nodiscard]] typename Vector<Workspace<Memory>, Memory>::const_iterator begin() const noexcept;
-      [[nodiscard]] typename Vector<Workspace<Memory>, Memory>::const_iterator end() const noexcept;
+      [[nodiscard]] const Workspace<Memory>* begin() const noexcept;
+      [[nodiscard]] const Workspace<Memory>* end() const noexcept;
       [[nodiscard]] std::uint64_t revision() const noexcept;
       [[nodiscard]] std::size_t dropped() const noexcept;
       [[nodiscard]] const Worktree<Memory>* worktree(std::uint64_t identity) const noexcept;
@@ -131,15 +131,15 @@ export {
       static bool holdsWorktree(const WorkspaceList& snapshot, std::uint64_t identity) noexcept;
       static std::size_t retainedCount(std::span<const WorkspaceListEntry* const> ordered);
       template <typename Row>
-      static void prepare(Vector<Row, Memory>& rows, std::size_t count, Memory& memory);
+      static void prepare(ds::Vec<Row, Memory>& rows, std::size_t count, Memory& memory);
       static void assign(Workspace<Memory>& row, const WorkspaceListEntry& entry);
       static void assign(Worktree<Memory>& row, const WorktreeListEntry& entry);
 
       Memory& memory_;
-      Vector<Workspace<Memory>, Memory> entries_;
-      Vector<Workspace<Memory>, Memory> staging_entries_;
-      Vector<Worktree<Memory>, Memory> worktrees_;
-      Vector<Worktree<Memory>, Memory> staging_worktrees_;
+      ds::Vec<Workspace<Memory>, Memory> entries_;
+      ds::Vec<Workspace<Memory>, Memory> staging_entries_;
+      ds::Vec<Worktree<Memory>, Memory> worktrees_;
+      ds::Vec<Worktree<Memory>, Memory> staging_worktrees_;
       std::uint64_t revision_ = 0;
       std::size_t project_count_ = 0;
       std::size_t dropped_ = 0;

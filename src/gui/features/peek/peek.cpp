@@ -13,7 +13,7 @@ namespace telar::gui::features::peek {
 
   template <Allocator Memory>
   PeekScreen<Memory>::PeekScreen(Memory& memory)
-      : text_(AllocatorRef<char, Memory>{memory}) {}
+      : text_(memory) {}
 
   template <Allocator Memory>
   void PeekScreen<Memory>::show(PeekTarget target) noexcept {
@@ -100,7 +100,7 @@ namespace telar::gui::features::peek {
       ++start;
     }
 
-    text_ = reply.text.substr(start);
+    text_.assign(reply.text.substr(start));
 
     return start;
   }

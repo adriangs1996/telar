@@ -18,8 +18,8 @@ namespace telar::runtime::control {
         clipboard_(memory),
         graphics_queries_(memory, resources),
         reports_(memory),
-        document_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
-        zones_(AllocatorRef<Zone, ConcurrentMemory>{memory}),
+        document_(memory),
+        zones_(memory),
         responses_(responses),
         enabled_(enabled) {}
 
@@ -293,18 +293,18 @@ namespace telar::runtime::control {
       return ds::none;
     }
 
-    ds::Option<Zone> zone{std::move(zones_.front())};
+    ds::Option<Zone> zone{std::move(zones_.frontMut())};
 
-    zones_.erase(zones_.begin());
+    static_cast<void>(zones_.remove(0));
     return zone;
   }
 
-  bool Engine::takeDocument(Vector<std::uint8_t, ConcurrentMemory>& into) noexcept {
+  bool Engine::takeDocument(ds::Vec<std::uint8_t, ConcurrentMemory>& into) noexcept {
     if (!document_pending_) {
       return false;
     }
 
-    into.swap(document_);
+    std::swap(into, document_);
     document_.clear();
     document_pending_ = false;
     return true;
@@ -320,8 +320,10 @@ namespace telar::runtime::control {
     }
 
     try {
-      Vector<std::uint8_t, ConcurrentMemory> bytes(encoded.size() / 4 * 3 + 3, document_.get_allocator());
-      const auto size = base64::decode<base64::Padding::optional>(encoded, bytes);
+      ds::Vec<std::uint8_t, ConcurrentMemory> bytes{document_.memory()};
+
+      bytes.resize(encoded.size() / 4 * 3 + 3);
+      const auto size = base64::decode<base64::Padding::optional>(encoded, bytes.viewMut());
       if (!size || *size > ::telar::render::max_document_bytes) {
         return;
       }
@@ -354,10 +356,10 @@ namespace telar::runtime::control {
 
     try {
       if (zones_.size() == ::telar::render::max_pane_documents) {
-        zones_.erase(zones_.begin());
+        static_cast<void>(zones_.remove(0));
       }
 
-      zones_.push_back(std::move(zone));
+      zones_.push(std::move(zone));
     } catch (const std::bad_alloc&) {
     }
   }

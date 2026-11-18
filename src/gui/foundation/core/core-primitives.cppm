@@ -11,8 +11,6 @@ export namespace telar::gui::inline foundation::inline core {
   using telar::gui::BudgetAllocator;
   using telar::gui::makeOwned;
   using telar::gui::Owned;
-  using telar::gui::String;
   using telar::gui::SynchronizedAllocator;
   using telar::gui::SystemAllocator;
-  using telar::gui::Vector;
 }

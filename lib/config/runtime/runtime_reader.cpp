@@ -241,7 +241,7 @@ namespace telar::runtime::config {
   }
 
   template <Allocator Memory>
-  void RuntimeReader<Memory>::path(const lua::Value& field, String<Memory>& destination) {
+  void RuntimeReader<Memory>::path(const lua::Value& field, ds::String<Memory>& destination) {
     if (!field.present()) {
       return;
     }
@@ -251,7 +251,7 @@ namespace telar::runtime::config {
       field.fail("is not a valid path");
     }
 
-    destination = text;
+    destination.assign(text);
   }
 
   template <Allocator Memory>
@@ -322,7 +322,7 @@ namespace telar::runtime::config {
     }
 
     destination.arguments.clear();
-    auto& memory = destination.arguments.get_allocator().memory();
+    auto& memory = destination.arguments.memory();
     std::size_t bytes = 0;
 
     for (std::size_t index = 1; index <= count; ++index) {
@@ -333,7 +333,7 @@ namespace telar::runtime::config {
       }
 
       bytes += text.size();
-      destination.arguments.emplace_back(text, AllocatorRef<char, Memory>{memory});
+      destination.arguments.emplace(memory, text);
     }
 
     destination.timeout = std::chrono::milliseconds{table.field("timeout_ms").boundedInteger(15'000, 1000, 60'000)};

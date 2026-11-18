@@ -19,9 +19,9 @@ namespace telar::runtime {
       : memory_(memory),
         options_(options),
         input_(memory, 128 * 1024),
-        line_(AllocatorRef<char, ConcurrentMemory>{memory}),
-        text_(AllocatorRef<char, ConcurrentMemory>{memory}),
-        encoded_(AllocatorRef<char, ConcurrentMemory>{memory}) {
+        line_(memory),
+        text_(memory),
+        encoded_(memory) {
     line_.reserve(maximum_record);
     text_.reserve(maximum_record);
     encoded_.reserve(maximum_record);
@@ -62,9 +62,9 @@ namespace telar::runtime {
       }
 
       deadline_ = Clock::now() + options_.timeout;
-      encoded_ = "{\"type\":\"prompt\",\"message\":";
+      encoded_.assign("{\"type\":\"prompt\",\"message\":");
       appendJsonText(encoded_, prompt);
-      encoded_ += "}\n";
+      encoded_.append("}\n");
       write(encoded_);
       bool settled = false;
 
@@ -228,7 +228,7 @@ namespace telar::runtime {
       if (newline != bytes.end()) {
         const auto length = static_cast<std::size_t>(newline - bytes.begin());
         if (!discarded && length <= maximum_record) {
-          line_.assign(reinterpret_cast<const char*>(bytes.data()), length);
+          line_.assign(std::string_view{reinterpret_cast<const char*>(bytes.data()), length});
           input_.consume(length + 1);
           return;
         }
@@ -245,17 +245,17 @@ namespace telar::runtime {
     }
   }
 
-  String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request) {
-    String<ConcurrentMemory> prompt{AllocatorRef<char, ConcurrentMemory>{memory}};
+  ds::String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request) {
+    ds::String<ConcurrentMemory> prompt{memory};
 
     prompt.reserve(9 * 1024);
-    prompt = "You are a shell assistant inside a terminal multiplexer. Reply with exactly one shell command line that fulfils the request, and nothing else: no markdown, no code fences, no quotes around the command, no explanation. If one command cannot fulfil the request, reply with one line starting with '#' that says why.\nWorking directory: ";
-    prompt += cwd;
-    prompt += "\nLast screen rows:\n";
-    prompt += screen;
-    prompt += "\nRequest: ";
-    prompt += request;
-    prompt += '\n';
+    prompt.assign("You are a shell assistant inside a terminal multiplexer. Reply with exactly one shell command line that fulfils the request, and nothing else: no markdown, no code fences, no quotes around the command, no explanation. If one command cannot fulfil the request, reply with one line starting with '#' that says why.\nWorking directory: ");
+    prompt.append(cwd);
+    prompt.append("\nLast screen rows:\n");
+    prompt.append(screen);
+    prompt.append("\nRequest: ");
+    prompt.append(request);
+    prompt.push('\n');
     return prompt;
   }
 

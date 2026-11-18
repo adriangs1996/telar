@@ -69,9 +69,9 @@ export {
 
       std::uint64_t id = 0;
       std::uint64_t pane_id = 0;
-      String<Memory> command;
-      String<Memory> cwd;
-      String<Memory> provider;
+      ds::String<Memory> command;
+      ds::String<Memory> cwd;
+      ds::String<Memory> provider;
       std::size_t full_offset = 0;
       std::size_t full_length = 0;
       std::int64_t started_at_ms = 0;

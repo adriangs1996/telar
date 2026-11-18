@@ -179,8 +179,8 @@ export {
       Command<Memory> commandFor(std::span<const std::string_view> arguments) const;
 
       Memory& memory_;
-      String<Memory> root_;
-      Vector<String<Memory>, Memory> overrides_;
+      ds::String<Memory> root_;
+      ds::Vec<ds::String<Memory>, Memory> overrides_;
     };
 
     extern template class HardenedGit<Memory>;

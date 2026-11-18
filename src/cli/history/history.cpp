@@ -432,7 +432,7 @@ namespace telar::runtime::cli::diagnostics {
       if (options.action == DiagnosticsOptions::Action::logs) {
         readLogs(paths.socket, options);
       } else {
-        ControlSession session{memory, paths.socket.c_str()};
+        ControlSession session{memory, paths.socket.data()};
 
         session.receiveTimeout(30);
         printLimits(session.template exchange<LimitList>(QueryLimits{}), options.json);
@@ -458,7 +458,7 @@ namespace telar::runtime::cli {
 
   void ensureRuntime(Memory& memory, const RuntimePaths<Memory>& paths, const ServerOptions& options) {
     ds::Option<RuntimeConnection> connection;
-    if (connectExisting(connection, paths.socket.c_str())) {
+    if (connectExisting(connection, paths.socket.data())) {
       return;
     }
 
@@ -997,7 +997,7 @@ namespace telar::runtime::cli::history {
       const RuntimePaths paths{memory, server_options, process_environment};
 
       ensureRuntime(memory, paths);
-      ControlSession session{memory, paths.socket.c_str(), max_payload_size, max_batch_payload + 2048};
+      ControlSession session{memory, paths.socket.data(), max_payload_size, max_batch_payload + 2048};
 
       session.receiveTimeout(30);
       const auto cwd = options.scope == HistoryScope::cwd ? std::filesystem::canonical(".").string() : std::string{};
@@ -1008,7 +1008,7 @@ namespace telar::runtime::cli::history {
         return importHistory(session, *input);
       case HistoryOptions::Action::remove:
       case HistoryOptions::Action::prune:
-        prune(memory, paths.socket.c_str(), session, options, scope);
+        prune(memory, paths.socket.data(), session, options, scope);
         break;
       case HistoryOptions::Action::show:
         show(session, options);

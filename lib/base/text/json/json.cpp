@@ -317,20 +317,20 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  void JsonValue::string(String<Memory>& output) const {
+  void JsonValue::string(ds::String<Memory>& output) const {
     const auto encoded = stringContents();
 
     output.clear();
     output.resize(encoded.size());
-    output.resize(unescape(encoded, output.data()));
+    output.resize(unescape(encoded, output.dataMut()));
   }
 
-  template void JsonValue::string<Memory>(String<Memory>& output) const;
-  template void JsonValue::string<ConcurrentMemory>(String<ConcurrentMemory>& output) const;
-  template void JsonValue::string<SystemAllocator>(String<SystemAllocator>& output) const;
-  template void JsonValue::string<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output) const;
-  template void JsonValue::string<ErasingMemory>(String<ErasingMemory>& output) const;
-  template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
+  template void JsonValue::string<Memory>(ds::String<Memory>& output) const;
+  template void JsonValue::string<ConcurrentMemory>(ds::String<ConcurrentMemory>& output) const;
+  template void JsonValue::string<SystemAllocator>(ds::String<SystemAllocator>& output) const;
+  template void JsonValue::string<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& output) const;
+  template void JsonValue::string<ErasingMemory>(ds::String<ErasingMemory>& output) const;
+  template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(ds::String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
 
   std::size_t JsonValue::unescape(std::string_view encoded, char* output) {
     std::size_t written = 0;
@@ -426,9 +426,9 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   JsonNode<Memory>::JsonNode(tbc::view<Memory&, tbc::lt::a> memory, JsonKind kind)
-      : name_(AllocatorRef<char, Memory>{memory}),
-        text_(AllocatorRef<char, Memory>{memory}),
-        children_(AllocatorRef<JsonNode, Memory>{memory}),
+      : name_(memory),
+        text_(memory),
+        children_(memory),
         kind_(kind) {}
 
   template <Allocator Memory>
@@ -452,7 +452,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   std::span<JsonNode<Memory>> JsonNode<Memory>::childrenMut() noexcept {
-    return children_;
+    return children_.viewMut();
   }
 
   template <Allocator Memory>
@@ -466,11 +466,12 @@ namespace telar::runtime {
       return nullptr;
     }
 
-    const auto found = std::ranges::find_if(children_, [name](const auto& child) {
+    const auto children = children_.viewMut();
+    const auto found = std::ranges::find_if(children, [name](const auto& child) {
       return child.name_ == name;
     });
 
-    return found == children_.end() ? nullptr : &*found;
+    return found == children.end() ? nullptr : &*found;
   }
 
   template <Allocator Memory>
@@ -480,7 +481,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void JsonNode<Memory>::erase(std::size_t index) {
-    children_.erase(children_.begin() + index);
+    static_cast<void>(children_.remove(index));
   }
 
   template <Allocator Memory>
@@ -499,23 +500,23 @@ namespace telar::runtime {
 
     JsonNode child{memory(), kind};
 
-    child.name_ = name;
-    children_.push_back(std::move(child));
-    return children_.back();
+    child.name_.assign(name);
+    children_.push(std::move(child));
+    return children_.atMut(children_.size() - 1);
   }
 
   template <Allocator Memory>
   void JsonNode<Memory>::setString(std::string_view name, std::string_view value) {
     auto& child = ensure(name, JsonKind::string);
 
-    child.text_ = value;
+    child.text_.assign(value);
   }
 
   template <Allocator Memory>
   void JsonNode<Memory>::setLiteral(std::string_view name, std::string_view value) {
     auto& child = ensure(name, JsonKind::literal);
 
-    child.text_ = value;
+    child.text_.assign(value);
   }
 
   template <Allocator Memory>
@@ -524,28 +525,28 @@ namespace telar::runtime {
       throw std::invalid_argument{"Expected JSON array"};
     }
 
-    children_.push_back(std::move(child));
+    children_.push(std::move(child));
   }
 
   template <Allocator Memory>
   void JsonNode<Memory>::remove(std::string_view name) {
-    std::erase_if(children_, [name](const auto& child) {
-      return child.name_ == name;
-    });
+    static_cast<void>(children_.retain([name](const auto& child) {
+      return child.name_ != name;
+    }));
   }
 
   template <Allocator Memory>
-  String<Memory> JsonNode<Memory>::format() const {
-    String<Memory> output{AllocatorRef<char, Memory>{memory()}};
+  ds::String<Memory> JsonNode<Memory>::format() const {
+    ds::String<Memory> output{memory()};
 
     appendFormatted(output, 0);
-    output += '\n';
+    output.push('\n');
     return output;
   }
 
   template <Allocator Memory>
   tbc::view<Memory&, tbc::lt::a> JsonNode<Memory>::memory() const noexcept {
-    return text_.get_allocator().memory();
+    return text_.memory();
   }
 
   template <Allocator Memory>
@@ -561,65 +562,65 @@ namespace telar::runtime {
         auto child = fromValue(memory, item);
 
         key.string(child.name_);
-        node.children_.push_back(std::move(child));
+        node.children_.push(std::move(child));
       });
 
-      Vector<std::string_view, Memory> names{AllocatorRef<std::string_view, Memory>{memory}};
+      ds::Vec<std::string_view, Memory> names{memory};
 
       names.reserve(node.children_.size());
       for (const auto& child : node.children_) {
-        names.push_back(child.name_);
+        names.push(child.name_);
       }
 
-      std::ranges::sort(names);
+      std::ranges::sort(names.viewMut());
       if (std::adjacent_find(names.begin(), names.end()) != names.end()) {
         throw std::invalid_argument{"Duplicate JSON field"};
       }
     } else if (kind == JsonKind::array) {
       value.eachElement([&](JsonValue item) {
-        node.children_.push_back(fromValue(memory, item));
+        node.children_.push(fromValue(memory, item));
       });
     } else if (kind == JsonKind::string) {
       value.string(node.text_);
     } else {
-      node.text_ = encoded;
+      node.text_.assign(encoded);
     }
 
     return node;
   }
 
   template <Allocator Memory>
-  void JsonNode<Memory>::appendFormatted(String<Memory>& output, unsigned depth) const {
+  void JsonNode<Memory>::appendFormatted(ds::String<Memory>& output, unsigned depth) const {
     if (kind_ == JsonKind::string) {
       appendJsonText(output, text_);
       return;
     }
 
     if (kind_ == JsonKind::literal) {
-      output += text_;
+      output.append(text_);
       return;
     }
 
-    output += kind_ == JsonKind::object ? '{' : '[';
+    output.push(kind_ == JsonKind::object ? '{' : '[');
     for (std::size_t index = 0; index < children_.size(); ++index) {
-      output += index == 0 ? "\n" : ",\n";
-      output.append((depth + 1) * indentation, ' ');
+      output.append(index == 0 ? "\n" : ",\n");
+      output.resize(output.size() + (depth + 1) * indentation, ' ');
       const auto& child = children_[index];
 
       if (kind_ == JsonKind::object) {
         appendJsonText(output, child.name_);
-        output += ": ";
+        output.append(": ");
       }
 
       child.appendFormatted(output, depth + 1);
     }
 
     if (!children_.empty()) {
-      output += '\n';
-      output.append(depth * indentation, ' ');
+      output.push('\n');
+      output.resize(output.size() + depth * indentation, ' ');
     }
 
-    output += kind_ == JsonKind::object ? '}' : ']';
+    output.push(kind_ == JsonKind::object ? '}' : ']');
   }
 
   template class JsonNode<Memory>;

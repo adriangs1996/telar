@@ -128,7 +128,7 @@ export {
         SensitiveText<128> client, server, reason;
         SensitiveText<253> host;
         Verdict verdict = Verdict::pending;
-        Vector<Byte, Secure> bytes;
+        ds::Vec<Byte, Secure> bytes;
         ds::Array<Route, Limits::subscribers> chain;
         std::size_t routes;
         std::size_t step = 0;
@@ -317,7 +317,7 @@ export {
               selection(request.selection),
               filter(request.filter),
               host(memory),
-              entries(AllocatorRef<ds::Option<Entry>, ConcurrentMemory>{memory}) {
+              entries(memory) {
           if (!request.host.empty() && !host.append(request.host)) {
             throw EncodingError{"Invalid recording host scope"};
           }
@@ -331,12 +331,12 @@ export {
         }
 
         inline Entry& at(std::size_t index) {
-          return entries[(head + index) % entries.size()].getMut();
+          return entries.atMut((head + index) % entries.size()).getMut();
         }
 
         inline void evict() noexcept {
           bytes -= at(0).frame->bytes.bytes().size();
-          entries[head].reset();
+          entries.atMut(head).reset();
           head = (head + 1) % entries.size();
           --count;
           ++evicted;
@@ -355,7 +355,7 @@ export {
         Selection selection;
         Filter filter;
         ProxyHostPolicy<ConcurrentMemory> host;
-        Vector<ds::Option<Entry>, ConcurrentMemory> entries;
+        ds::Vec<ds::Option<Entry>, ConcurrentMemory> entries;
         std::size_t bytes = 0;
         std::size_t head = 0;
         std::size_t count = 0;
@@ -419,7 +419,7 @@ export {
               Protocol::encode(shared->bytes.bytesMut(), event);
             }
 
-            session.entries[(session.head + session.count) % session.entries.size()].emplace(Entry{session.next++, now, shared});
+            session.entries.atMut((session.head + session.count) % session.entries.size()).emplace(Entry{session.next++, now, shared});
             ++session.count;
             session.bytes += size;
           } catch (...) {
@@ -697,7 +697,7 @@ export {
     // The traffic control service: its own thread serves clients while proxy threads report flows to it.
     class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort {
       using SensitiveMemory = ErasingAllocator<ConcurrentMemory>;
-      using Bytes = Vector<Byte, SensitiveMemory>;
+      using Bytes = ds::Vec<Byte, SensitiveMemory>;
       static constexpr std::size_t maximum_peers = Limits::subscribers * 2 + 1;
 
       using Frame = EventFrame;

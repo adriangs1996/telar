@@ -275,7 +275,7 @@ export namespace telar::runtime {
     void clear() noexcept;
 
   private:
-    Vector<std::uint8_t, Memory> bytes_;
+    ds::Vec<std::uint8_t, Memory> bytes_;
     CommandOutputWindow window_;
   };
 
@@ -340,7 +340,7 @@ export namespace telar::runtime {
   };
 
   // Reads `selection` into `destination`. Whether it was cut short, or nothing when it is empty.
-  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination);
+  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, ds::Vec<Byte, ConcurrentMemory>& destination);
 
   // The commands a pane's integrated shell ran, each anchored to the row its prompt starts on
   // in the pane's own terminal, so a client can mark them in the scrollback and jump to them.
@@ -443,7 +443,7 @@ export namespace telar::runtime {
     std::span<const Byte> captured() const noexcept override;
 
     Terminal& terminal_;
-    Vector<Byte, ConcurrentMemory> text_;
+    ds::Vec<Byte, ConcurrentMemory> text_;
   };
 
   // Captures the commands typed at a pane's prompt, with their directory, duration, status and
@@ -559,10 +559,10 @@ export namespace telar::runtime {
     std::span<std::uint8_t> outputStorage() noexcept override;
 
     Terminal& terminal_;
-    Vector<std::uint8_t, ConcurrentMemory> output_;
-    Vector<Byte, ConcurrentMemory> command_;
+    ds::Vec<std::uint8_t, ConcurrentMemory> output_;
+    ds::Vec<Byte, ConcurrentMemory> command_;
     // Survives a previous command's completion, which the input typing this one triggers.
-    Vector<Byte, ConcurrentMemory> submitted_;
+    ds::Vec<Byte, ConcurrentMemory> submitted_;
   };
 
 }

@@ -63,7 +63,7 @@ export {
       void delivered() noexcept;
 
     private:
-      Vector<Byte, ConcurrentMemory> bytes_;
+      ds::Vec<Byte, ConcurrentMemory> bytes_;
       std::uint64_t pane_ = 0;
       bool pending_ = false;
     };
@@ -175,7 +175,7 @@ export {
       ds::Option<PendingClientCommand> pending_command;
       ds::Option<PendingPaneFocus> pending_focus;
       Connection<ConcurrentMemory> connection;
-      Vector<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory> attachments;
+      ds::Vec<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory> attachments;
       PendingClipboard clipboard;
       std::size_t next_attachment = 0;
       ds::Option<std::uint64_t> completing_exit;
@@ -340,7 +340,7 @@ export {
       ByteQueue<ConcurrentMemory> input;
       // Reads rows of `terminal`'s scrollback for clients that ask for them.
       ScrollbackRows scrollback_rows;
-      String<ConcurrentMemory> cwd;
+      ds::String<ConcurrentMemory> cwd;
       ds::Option<PtyProcess> process;
       std::uint32_t observers = 0;
       std::uint64_t cwd_revision = 0;
@@ -445,8 +445,8 @@ export {
       explicit Tab(ConcurrentMemory& memory, std::uint64_t identity, std::string_view name);
 
       std::uint64_t id;
-      String<ConcurrentMemory> label;
-      Vector<std::uint64_t, ConcurrentMemory> panes;
+      ds::String<ConcurrentMemory> label;
+      ds::Vec<std::uint64_t, ConcurrentMemory> panes;
     };
 
     class Workspace {
@@ -460,9 +460,9 @@ export {
       std::string_view displayName() const noexcept;
 
       std::uint64_t id;
-      String<ConcurrentMemory> path;
-      String<ConcurrentMemory> name;
-      Vector<Tab, ConcurrentMemory> tabs;
+      ds::String<ConcurrentMemory> path;
+      ds::String<ConcurrentMemory> name;
+      ds::Vec<Tab, ConcurrentMemory> tabs;
       ds::Option<std::uint64_t> geometry_client;
       FixedText<200> git_branch;
       std::chrono::steady_clock::time_point git_checked_at{};
@@ -489,7 +489,7 @@ export {
       ds::Option<CoordinatorReference> coordinator;
       WorktreeOrigin origin;
       WorktreeState state = WorktreeState::active;
-      String<ConcurrentMemory> path;
+      ds::String<ConcurrentMemory> path;
       FixedText<200> branch;
       FixedText<200> base;
       FixedText<96> title;
@@ -711,7 +711,7 @@ export {
 
       Record* find(std::uint64_t identity) noexcept;
 
-      Vector<Record, ConcurrentMemory> records_;
+      ds::Vec<Record, ConcurrentMemory> records_;
       std::uint64_t clock_ = 0;
     };
 

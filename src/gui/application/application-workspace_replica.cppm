@@ -68,9 +68,9 @@ export {
       // from a frame that still shows an older view.
       std::uint64_t viewport_requests = 0;
       features::terminal::graphics::GraphicsStore<Memory> graphics;
-      String<Memory> title;
-      String<Memory> cwd;
-      String<Memory> foreground;
+      ds::String<Memory> title;
+      ds::String<Memory> cwd;
+      ds::String<Memory> foreground;
       TerminalSize size = default_terminal_size;
       bool attached = false;
       bool attaching = false;
@@ -88,7 +88,7 @@ export {
       bool document_shown = false;
       std::uint64_t document_version = 0;
       std::uint64_t document_revision = 0;
-      Vector<Byte, Memory> document_parts;
+      ds::Vec<Byte, Memory> document_parts;
 
       // A document that stands for `rows` rows of the scrollback from stable row `first_row`, as
       // `generation` numbers them, drawn in their place once whole and valid. The view measures it
@@ -102,7 +102,7 @@ export {
         std::uint32_t rows = 0;
         std::uint32_t view_rows = 0;
         render::Document<Memory> document;
-        Vector<Byte, Memory> parts;
+        ds::Vec<Byte, Memory> parts;
         bool whole = false;
         bool shown = false;
       };

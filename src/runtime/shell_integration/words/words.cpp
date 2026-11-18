@@ -359,8 +359,8 @@ namespace telar::runtime {
         return;
       }
 
-      String<SystemAllocator> name{AllocatorRef<char, SystemAllocator>{memory}};
-      String<SystemAllocator> command{AllocatorRef<char, SystemAllocator>{memory}};
+      ds::String<SystemAllocator> name{memory};
+      ds::String<SystemAllocator> command{memory};
 
       scripts->eachMember([&](const JsonValue& key, const JsonValue& value) {
         key.string(name);

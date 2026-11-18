@@ -330,7 +330,7 @@ export {
 
     class TcpFlows {
       using Secure = ErasingAllocator<ConcurrentMemory>;
-      using Bytes = Vector<Byte, Secure>;
+      using Bytes = ds::Vec<Byte, Secure>;
       using Clock = std::chrono::steady_clock;
 
       struct Key {
@@ -354,7 +354,7 @@ export {
       struct Side {
         explicit Side(Secure& memory);
 
-        Vector<Segment, Secure> pending;
+        ds::Vec<Segment, Secure> pending;
         std::uint32_t next = 0;
         std::uint32_t initial = 0;
         ds::Option<std::uint32_t> fin;
@@ -550,7 +550,7 @@ export {
             return false;
           }
 
-          side.pending.push_back({sequence, Bytes{bytes.begin(), bytes.end(), AllocatorRef<Byte, Secure>{memory}}});
+          side.pending.push({sequence, Bytes{memory, bytes}});
           flow.buffered += bytes.size();
           total_buffered += bytes.size();
           if (!side.gap) {
@@ -575,7 +575,7 @@ export {
 
           total_buffered -= pending.bytes.size();
           flow.buffered -= pending.bytes.size();
-          side.pending.erase(side.pending.begin() + index);
+          static_cast<void>(side.pending.remove(index));
           index = 0;
         }
 

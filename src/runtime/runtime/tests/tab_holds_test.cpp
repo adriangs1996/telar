@@ -163,14 +163,14 @@ namespace {
     auto workspace = makeOwned<Workspace>(memory, memory, workspace_id, "/tmp", "Held tabs");
 
     for (std::size_t index = 0; index < HeldTabs::capacity; ++index) {
-      workspace->tabs.emplace_back(memory, index + 1, "Empty");
+      workspace->tabs.emplace(memory, index + 1, "Empty");
     }
 
     model.workspaces.insert(workspace_id, std::move(workspace));
     const auto other_id = model.workspaces.nextId();
     auto other = makeOwned<Workspace>(memory, memory, other_id, "/", "Other workspace");
 
-    other->tabs.emplace_back(memory, HeldTabs::capacity + 1, "Empty");
+    other->tabs.emplace(memory, HeldTabs::capacity + 1, "Empty");
     model.workspaces.insert(other_id, std::move(other));
     owner.session().workspace = workspace_id;
     holder.session().workspace = workspace_id;

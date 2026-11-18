@@ -94,13 +94,13 @@ export namespace telar::runtime::control {
         : local_budget_(resources.limits.global_bytes),
           memory_(memory, resources.budget != nullptr ? *resources.budget : local_budget_, resources.limits.pane_bytes, resources.budget != nullptr ? resources.usage : nullptr),
           allocator_(memory_),
-          decoded_(AllocatorRef<std::uint8_t, QueryMemory>{memory_}),
-          inflated_(AllocatorRef<std::uint8_t, QueryMemory>{memory_}),
+          decoded_(memory_),
+          inflated_(memory_),
           image_limit_(std::min(resources.limits.screenBytes(), resources.limits.global_bytes)) {}
 
     void discard() noexcept {
-      Vector<std::uint8_t, QueryMemory>{decoded_.get_allocator()}.swap(decoded_);
-      Vector<std::uint8_t, QueryMemory>{inflated_.get_allocator()}.swap(inflated_);
+      decoded_ = ds::Vec<std::uint8_t, QueryMemory>{decoded_.memory()};
+      inflated_ = ds::Vec<std::uint8_t, QueryMemory>{inflated_.memory()};
     }
 
     bool handle(std::string_view body, Reply<Memory>& reply, bool enabled) {
@@ -125,7 +125,7 @@ export namespace telar::runtime::control {
 
       try {
         decoded_.resize(payload.size() / 4 * 3 + (payload.size() % 4 == 0 ? 0 : 3));
-        const auto decoded_size = decodeGraphicsPayload(payload, decoded_);
+        const auto decoded_size = decodeGraphicsPayload(payload, decoded_.viewMut());
         if (!decoded_size) {
           return true;
         }
@@ -245,7 +245,7 @@ export namespace telar::runtime::control {
         }
 
         decoded_.resize(static_cast<std::size_t>(count));
-        const bool read = request.medium == 's' ? GraphicsChildSharedMemory::read(file->descriptor.get(), decoded_, request.offset) : file->read(decoded_, request.offset);
+        const bool read = request.medium == 's' ? GraphicsChildSharedMemory::read(file->descriptor.get(), decoded_.viewMut(), request.offset) : file->read(decoded_.viewMut(), request.offset);
         if (!read) {
           return "EINVAL: invalid data";
         }
@@ -284,7 +284,7 @@ export namespace telar::runtime::control {
           const auto start = inflated_.size();
 
           inflated_.resize(std::min(image_limit_, start + inflate_chunk_bytes));
-          stream.next_out = inflated_.data() + start;
+          stream.next_out = inflated_.dataMut() + start;
           stream.avail_out = static_cast<uInt>(inflated_.size() - start);
           status = ::inflate(&stream, Z_NO_FLUSH);
           inflated_.resize(inflated_.size() - stream.avail_out);
@@ -362,8 +362,8 @@ export namespace telar::runtime::control {
     MediaBudget local_budget_;
     QueryMemory memory_;
     GhosttyAllocatorBridge<QueryMemory> allocator_;
-    Vector<std::uint8_t, QueryMemory> decoded_;
-    Vector<std::uint8_t, QueryMemory> inflated_;
+    ds::Vec<std::uint8_t, QueryMemory> decoded_;
+    ds::Vec<std::uint8_t, QueryMemory> inflated_;
     std::size_t image_limit_;
   };
 

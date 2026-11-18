@@ -314,7 +314,7 @@ export {
       void applyExponent(std::ptrdiff_t value);
       void normalize();
 
-      String<Memory> digits_;
+      ds::String<Memory> digits_;
       std::ptrdiff_t point_ = 0;
       unsigned radix_ = decimal_radix;
       bool negative_ = false;
@@ -470,7 +470,7 @@ export {
       [[nodiscard]] static MachineProfiles parse(Memory& memory, std::string_view source);
 
       template <Allocator Memory>
-      [[nodiscard]] static String<Memory> format(Memory& memory, const MachineProfiles& profiles);
+      [[nodiscard]] static ds::String<Memory> format(Memory& memory, const MachineProfiles& profiles);
 
     private:
       static constexpr auto file_fields = ds::Array<std::string_view, 3>{"version", "local_label", "machines"};
@@ -479,34 +479,34 @@ export {
       static bool isNull(const runtime::JsonValue& value) noexcept;
 
       template <Allocator Memory>
-      static std::uint16_t readVersion(Memory& memory, const runtime::JsonValue& value, String<Memory>& scratch);
+      static std::uint16_t readVersion(Memory& memory, const runtime::JsonValue& value, ds::String<Memory>& scratch);
 
       template <Allocator Memory>
-      static void validateOptionalString(const ds::Option<runtime::JsonValue>& value, String<Memory>& scratch);
+      static void validateOptionalString(const ds::Option<runtime::JsonValue>& value, ds::String<Memory>& scratch);
 
       template <Allocator Memory>
-      static MachineLogin readLogin(const runtime::JsonValue& value, String<Memory>& scratch);
+      static MachineLogin readLogin(const runtime::JsonValue& value, ds::String<Memory>& scratch);
 
       template <Allocator Memory>
-      static void validateProfile(Memory& memory, const runtime::JsonValue& value, String<Memory>& scratch);
+      static void validateProfile(Memory& memory, const runtime::JsonValue& value, ds::String<Memory>& scratch);
 
       template <Allocator Memory>
-      static String<Memory> readString(Memory& memory, const runtime::JsonValue& value);
+      static ds::String<Memory> readString(Memory& memory, const runtime::JsonValue& value);
 
       template <Allocator Memory>
       static MachineProfile readProfile(Memory& memory, const runtime::JsonValue& value);
 
     public:
       template <Allocator Memory>
-      static void appendProfile(String<Memory>& output, const MachineProfile& profile);
+      static void appendProfile(ds::String<Memory>& output, const MachineProfile& profile);
     };
 
     extern template MachineProfiles MachineProfileCodec::parse<Memory>(Memory&, std::string_view);
     extern template MachineProfiles MachineProfileCodec::parse<ConcurrentMemory>(ConcurrentMemory&, std::string_view);
-    extern template String<Memory> MachineProfileCodec::format<Memory>(Memory&, const MachineProfiles&);
-    extern template String<ConcurrentMemory> MachineProfileCodec::format<ConcurrentMemory>(ConcurrentMemory&, const MachineProfiles&);
-    extern template void MachineProfileCodec::appendProfile<Memory>(String<Memory>&, const MachineProfile&);
-    extern template void MachineProfileCodec::appendProfile<ConcurrentMemory>(String<ConcurrentMemory>&, const MachineProfile&);
+    extern template ds::String<Memory> MachineProfileCodec::format<Memory>(Memory&, const MachineProfiles&);
+    extern template ds::String<ConcurrentMemory> MachineProfileCodec::format<ConcurrentMemory>(ConcurrentMemory&, const MachineProfiles&);
+    extern template void MachineProfileCodec::appendProfile<Memory>(ds::String<Memory>&, const MachineProfile&);
+    extern template void MachineProfileCodec::appendProfile<ConcurrentMemory>(ds::String<ConcurrentMemory>&, const MachineProfile&);
 
   }
 }

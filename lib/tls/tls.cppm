@@ -222,11 +222,11 @@ export {
   namespace telar::runtime {
 
     // The directory without the caller's environment type: lookup reads a variable from environment.
-    String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
+    ds::String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
 
     // Generic over the caller's environment, so it stays here and hands the lookup to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
-    TBC_GENERIC String<Memory> proxyAuthorityDirectory(Memory& memory, const Environment& environment) {
+    TBC_GENERIC ds::String<Memory> proxyAuthorityDirectory(Memory& memory, const Environment& environment) {
       return proxyAuthorityDirectoryFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
         return static_cast<const Environment*>(target)->lookup(name);
       });
@@ -327,15 +327,15 @@ export {
     public:
       explicit Paths(ConcurrentMemory& memory, std::string_view directory);
 
-      const String<ConcurrentMemory>& directory() const noexcept;
-      String<ConcurrentMemory> file(std::string_view name) const;
+      const ds::String<ConcurrentMemory>& directory() const noexcept;
+      ds::String<ConcurrentMemory> file(std::string_view name) const;
       FileDescriptor open() const;
       FileDescriptor prepare() const;
       static void validateDirectory(int descriptor);
 
       // Generic over the caller's environment, so it stays here and hands the lookup to keychainFrom.
       template <EnvironmentLookup Environment>
-      TBC_GENERIC static String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
+      TBC_GENERIC static ds::String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
         return keychainFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
           return static_cast<const Environment*>(target)->lookup(name);
         });
@@ -352,10 +352,10 @@ export {
     private:
       using Lookup = std::string_view (*)(const void*, const char*);
 
-      static String<ConcurrentMemory> keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup);
+      static ds::String<ConcurrentMemory> keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup);
       Destination nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const void* environment, Lookup lookup) const;
 
-      String<ConcurrentMemory> directory_;
+      ds::String<ConcurrentMemory> directory_;
     };
 
   }

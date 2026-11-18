@@ -317,7 +317,7 @@ namespace telar::runtime {
   HttpFields<Memory>::HttpFields(Memory& memory)
       : upstream_(memory),
         memory_(memory),
-        fields_(AllocatorRef<Field, Secure>{memory_}) {}
+        fields_(memory_) {}
 
   template <Allocator Memory>
   void HttpFields<Memory>::append(std::string_view name, std::string_view value) {
@@ -326,20 +326,23 @@ namespace telar::runtime {
       throw std::length_error{"HTTP fields exceed their limit"};
     }
 
-    fields_.emplace_back(upstream_, name, value);
+    fields_.emplace(upstream_, name, value);
     bytes_ += name.size() + value.size() + line_overhead;
   }
 
   template <Allocator Memory>
   void HttpFields<Memory>::set(std::string_view name, std::string_view value) {
     validate(name, value);
-    const auto previous = std::ranges::find_if(fields_, [&](const Field& field) {
+    const auto found = std::ranges::find_if(fields_, [&](const Field& field) {
       return asciiEqualIgnoreCase(field.name(), name);
     });
-    if (previous == fields_.end()) {
+    if (found == fields_.end()) {
       append(name, value);
       return;
     }
+
+    const auto position = static_cast<std::size_t>(found - fields_.begin());
+    auto* const previous = &fields_.atMut(position);
 
     const auto old_bytes = previous->name().size() + previous->value().size();
     if (name.size() + value.size() > maximum_bytes - (bytes_ - old_bytes)) {
@@ -350,12 +353,14 @@ namespace telar::runtime {
 
     bytes_ = bytes_ - old_bytes + name.size() + value.size();
     *previous = std::move(replacement);
-    for (auto cursor = std::next(previous); cursor != fields_.end();) {
-      if (asciiEqualIgnoreCase(cursor->name(), previous->name())) {
-        bytes_ -= cursor->name().size() + cursor->value().size() + line_overhead;
-        cursor = fields_.erase(cursor);
+    for (auto index = position + 1; index < fields_.size();) {
+      const auto& field = fields_[index];
+
+      if (asciiEqualIgnoreCase(field.name(), fields_[position].name())) {
+        bytes_ -= field.name().size() + field.value().size() + line_overhead;
+        static_cast<void>(fields_.remove(index));
       } else {
-        ++cursor;
+        ++index;
       }
     }
   }
@@ -370,10 +375,10 @@ namespace telar::runtime {
 
     for (auto index = fields_.size(); index != 0; --index) {
       if (matching[index - 1]) {
-        const auto cursor = fields_.begin() + index - 1;
+        const auto& field = fields_[index - 1];
 
-        bytes_ -= cursor->name().size() + cursor->value().size() + line_overhead;
-        fields_.erase(cursor);
+        bytes_ -= field.name().size() + field.value().size() + line_overhead;
+        static_cast<void>(fields_.remove(index - 1));
       }
     }
   }
@@ -518,14 +523,14 @@ namespace telar::runtime {
       : upstream_(memory),
         memory_(memory),
         response(response),
-        method(AllocatorRef<char, Secure>{memory_}),
-        target(AllocatorRef<char, Secure>{memory_}),
-        reason(AllocatorRef<char, Secure>{memory_}),
-        scheme(AllocatorRef<char, Secure>{memory_}),
-        authority(AllocatorRef<char, Secure>{memory_}),
+        method(memory_),
+        target(memory_),
+        reason(memory_),
+        scheme(memory_),
+        authority(memory_),
         headers(memory),
         trailers(memory),
-        body(AllocatorRef<std::uint8_t, Secure>{memory_}) {}
+        body(memory_) {}
 
   template <Allocator Memory>
   auto HttpMessage<Memory>::readHttp1Head(std::string_view input, bool head_response) -> Http1Head {
@@ -600,10 +605,12 @@ namespace telar::runtime {
     const std::less_equal<const std::uint8_t*> before;
     if (!decoded.storage && !body.empty() && before(body.data(), bytes.data()) && before(bytes.data() + bytes.size(), body.data() + body.size())) {
       // An identity entity already in the body only has to be cut to the bytes it spans.
-      body.erase(body.begin(), body.begin() + (bytes.data() - body.data()));
-      body.resize(bytes.size());
+      // The bytes lie inside the body: they move to its front, which the copy reads before it writes.
+      std::memmove(body.dataMut(), bytes.data(), bytes.size());
+      body.truncate(bytes.size());
     } else {
-      body.assign(bytes.begin(), bytes.end());
+      body.clear();
+      body.extend(bytes);
     }
 
     body_materialized = true;
@@ -657,12 +664,12 @@ namespace telar::runtime {
         }
       } else {
         validateRequest();
-        if ((scheme != "http" && scheme != "https") || (!target.starts_with('/') && !(method == "OPTIONS" && target == "*"))) {
+        if ((scheme != "http" && scheme != "https") || (!target.view().starts_with('/') && !(method == "OPTIONS" && target == "*"))) {
           throw std::invalid_argument{"Invalid HTTP/2 target"};
         }
       }
 
-      if (std::ranges::any_of(authority, [](unsigned char byte) {
+      if (std::ranges::any_of(authority.view(), [](unsigned char byte) {
             return byte <= 32 || byte >= 127 || std::string_view{"/,#?@\\"}.contains(byte);
           })) {
         throw std::invalid_argument{"Invalid HTTP/2 authority"};
@@ -679,7 +686,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpMessage<Memory>::serializeHttp1() -> Bytes {
-    Bytes output{AllocatorRef<std::uint8_t, Secure>{memory_}};
+    Bytes output{memory_};
 
     serializeHttp1(output);
     return output;
@@ -813,7 +820,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpMessage<Memory>::validateRequest() const {
-    if (!HttpFields<Memory>::token(method) || method.size() > maximum_method_bytes || target.empty() || target.size() > maximum_target_bytes || std::ranges::any_of(target, [](unsigned char byte) {
+    if (!HttpFields<Memory>::token(method) || method.size() > maximum_method_bytes || target.empty() || target.size() > maximum_target_bytes || std::ranges::any_of(target.view(), [](unsigned char byte) {
           return byte <= 32 || byte >= 127;
         })) {
       throw std::invalid_argument{"Invalid HTTP request line"};
@@ -910,7 +917,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpMessage<Memory>::contentEncoding() -> Text {
-    Text encoding{AllocatorRef<char, Secure>{memory_}};
+    Text encoding{memory_};
 
     for (const auto& field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "content-encoding")) {
@@ -919,10 +926,10 @@ namespace telar::runtime {
         }
 
         if (!encoding.empty()) {
-          encoding += ", ";
+          encoding.append(", ");
         }
 
-        encoding += field.value();
+        encoding.append(field.value());
       }
     }
 
@@ -940,7 +947,7 @@ namespace telar::runtime {
       throw std::length_error{"HTTP wire message exceeds its limit"};
     }
 
-    output.insert(output.end(), bytes.begin(), bytes.end());
+    output.extend({bytes.begin(), bytes.end()});
   }
 
   template <Allocator Memory>

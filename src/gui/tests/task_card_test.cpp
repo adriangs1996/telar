@@ -116,15 +116,15 @@ namespace {
       agent.status = AgentStatus::working;
       agent.plan_done = 2;
       agent.plan_total = 4;
-      agent.plan_step = "Compile the changes";
-      task.branch = "worktree-fix";
-      task.title = "Fix the task";
+      agent.plan_step.assign("Compile the changes");
+      task.branch.assign("worktree-fix");
+      task.title.assign("Fix the task");
       task.diff_added = diff_added;
       task.diff_removed = 3;
       task.diff_files = 2;
       task.commits_ahead = 1;
       task.command_state = CommandState::exited;
-      task.command_label = "test";
+      task.command_label.assign("test");
       QQuickWindow window;
       QQmlEngine engine;
       auto record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true, .depth = 1});
@@ -158,7 +158,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(selected.size(), 1, wait_ms);
       QCOMPARE(selected.front().front().toString(), QStringLiteral("2"));
       agent.status = AgentStatus::done;
-      agent.final_message = "\n \t\n Final answer\t\nmore";
+      agent.final_message.assign("\n \t\n Final answer\t\nmore");
       record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true});
       QVERIFY(card->setProperty("record", record));
       QTRY_COMPARE_WITH_TIMEOUT(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Final answer"), wait_ms);
@@ -173,7 +173,7 @@ namespace {
       task.diff_files = 0;
       task.commits_ahead = 0;
       task.command_state = CommandState::none;
-      agent.workspace_label = "project";
+      agent.workspace_label.assign("project");
       QVERIFY(card->setProperty("record", taskRecord(agent, task, {.machine = {}, .branch = {}})));
       // With nothing to tell, the worktree's card names its project.
       QTRY_VERIFY_WITH_TIMEOUT(visualItems(*card, QStringLiteral("agentProjectLabel")).front()->isVisible(), wait_ms);
@@ -190,9 +190,9 @@ namespace {
       Worktree task{memory};
 
       agent.status = AgentStatus::working;
-      agent.detail = "Reading the cards";
-      task.branch = "worktree/fix";
-      task.title = "Shape";
+      agent.detail.assign("Reading the cards");
+      task.branch.assign("worktree/fix");
+      task.title.assign("Shape");
       QQuickWindow window;
       QQmlEngine engine;
       const auto settings = properties(taskRecord(agent, task, {.machine = {}, .branch = {}}));
@@ -209,7 +209,7 @@ namespace {
       QCOMPARE(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Reading the cards"));
       agent.status = AgentStatus::blocked;
       agent.blocked_reason = AgentBlockedReason::question;
-      agent.detail = "Keep the old snapshots?";
+      agent.detail.assign("Keep the old snapshots?");
       QVERIFY(card->setProperty("record", taskRecord(agent, task, {.machine = {}, .branch = {}, .selected = true})));
       QTRY_VERIFY_WITH_TIMEOUT(attention->isVisible(), wait_ms);
       QCOMPARE(card->implicitHeight(), height);
@@ -230,15 +230,15 @@ namespace {
       Worktree task{memory};
 
       agent.status = AgentStatus::working;
-      agent.detail = "Running the build";
-      task.branch = "worktree-arch/build";
-      task.title = "Build architecture";
+      agent.detail.assign("Running the build");
+      task.branch.assign("worktree-arch/build");
+      task.title.assign("Build architecture");
       task.diff_added = diff_added;
       task.diff_removed = 3;
       task.diff_files = 2;
       task.commits_ahead = 1;
       task.command_state = CommandState::exited;
-      task.command_label = "test";
+      task.command_label.assign("test");
       QQuickWindow window;
       QQmlEngine engine;
       auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(taskRecord(agent, task, {.machine = "host", .branch = {}})));
@@ -276,9 +276,9 @@ namespace {
 
       task.id = command_worktree_id;
       task.workspace = 2;
-      task.branch = "worktree-fix";
-      task.title = "Check the task";
-      task.command_label = "test";
+      task.branch.assign("worktree-fix");
+      task.title.assign("Check the task");
+      task.command_label.assign("test");
       task.command_state = CommandState::exited;
       task.command_exit = 1;
       const auto record = commandRecord(task, {.machine = "host", .branch = {}});

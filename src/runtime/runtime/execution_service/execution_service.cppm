@@ -294,7 +294,7 @@ export {
 
         auto& result = *attachment;
 
-        client.attachments.push_back(std::move(attachment));
+        client.attachments.push(std::move(attachment));
         client.workspace = workspace->id;
         pane.observers |= client.observerBit();
         return result;
@@ -318,8 +318,8 @@ export {
         }
 
         const auto bit = client->observerBit();
-        const auto removed = std::erase_if(client->attachments, [identity](const auto& attachment) {
-          return attachment->pane_id == identity;
+        const auto removed = client->attachments.retain([identity](const auto& attachment) {
+          return attachment->pane_id != identity;
         });
 
         if (auto* pane = model.panes.find(identity)) {
@@ -372,8 +372,8 @@ export {
         bool released = false;
 
         for (auto* client : clients.items()) {
-          if (client != nullptr && std::erase_if(client->attachments, [identity](const auto& attachment) {
-                return attachment->pane_id == identity;
+          if (client != nullptr && client->attachments.retain([identity](const auto& attachment) {
+                return attachment->pane_id != identity;
               }) != 0) {
             pane->observers &= ~client->observerBit();
             released = true;

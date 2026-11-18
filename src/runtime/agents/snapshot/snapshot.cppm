@@ -198,8 +198,8 @@ export {
       // The predicate is the caller's type, so this member keeps its body here.
       template <typename Predicate>
       TBC_GENERIC inline void removeIf(Predicate&& predicate) {
-        if (std::erase_if(records_, [&](const auto& agent) {
-              return predicate(*agent);
+        if (records_.retain([&](const auto& agent) {
+              return !predicate(*agent);
             }) != 0) {
           changed();
         }
@@ -213,7 +213,7 @@ export {
 
     private:
       Memory& memory_;
-      Vector<Owned<Agent, Memory>, Memory> records_;
+      ds::Vec<Owned<Agent, Memory>, Memory> records_;
       std::uint64_t revision_ = 1;
     };
 
@@ -253,9 +253,9 @@ export {
       static constexpr std::size_t metadata_capacity = 16 * 1024;
       static constexpr std::size_t transcript_capacity = 64 * 1024;
       static constexpr std::size_t line_capacity = 4096;
-      String<Memory> path_;
-      Vector<char, Memory> bytes_;
-      String<Memory> decoded_;
+      ds::String<Memory> path_;
+      ds::Vec<char, Memory> bytes_;
+      ds::String<Memory> decoded_;
     };
 
     extern template class SessionFileReader<Memory>;

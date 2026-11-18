@@ -505,7 +505,7 @@ namespace {
     ProxyOptions options{memory};
 
     options.enabled = true;
-    options.authority_directory = directory.path();
+    options.authority_directory.assign(directory.path());
     options.capture.enabled = false;
     ProxyRuntime<NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, std::string{directory.path()} + "/runtime.sock", false};
     const auto original = proxy.authorityStatus(true);
@@ -548,7 +548,7 @@ namespace {
 
     const proxy_trust::Paths paths{memory, directory.path()};
     const auto handle = paths.open();
-    Vector<Byte, TlsTestMemory> published{AllocatorRef<Byte, TlsTestMemory>{memory}};
+    ds::Vec<Byte, TlsTestMemory> published{memory};
 
     check(readPrivateFile(handle.get(), "ca-active-cert.pem", published, PemDocument::maximum_bytes));
     check(std::ranges::equal(published, std::span{rotated.certificate}.first(rotated.certificate_bytes)));

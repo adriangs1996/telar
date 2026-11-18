@@ -241,7 +241,7 @@ namespace telar::runtime::control {
   ClipboardWrite::ClipboardWrite(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit)
       : metadata(metadata),
         memory_(memory),
-        spool_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+        spool_(memory),
         limit_(limit) {}
 
   ClipboardStatus ClipboardWrite::data(std::string_view mime, std::string_view encoded) {
@@ -295,7 +295,7 @@ namespace telar::runtime::control {
       }
 
       reserve(*count);
-      spool_.insert(spool_.end(), decoded.begin(), decoded.begin() + *count);
+      spool_.extend({decoded.begin(), decoded.begin() + *count});
       group_size_ = 0;
     }
 
@@ -303,14 +303,14 @@ namespace telar::runtime::control {
   }
 
   ClipboardStatus ClipboardWrite::alias(std::string_view mime, std::string_view encoded) {
-    Vector<std::uint8_t, ConcurrentMemory> decoded{AllocatorRef<std::uint8_t, ConcurrentMemory>{memory_}};
+    ds::Vec<std::uint8_t, ConcurrentMemory> decoded{memory_};
 
     if (encoded.size() / 4 * 3 > limit_) {
       return ClipboardStatus::too_large;
     }
 
     decoded.resize(encoded.size() / 4 * 3);
-    const auto length = base64::decode<base64::Padding::required>(encoded, decoded);
+    const auto length = base64::decode<base64::Padding::required>(encoded, decoded.viewMut());
     if (!length) {
       return ClipboardStatus::invalid;
     }
@@ -555,7 +555,7 @@ namespace telar::runtime::control {
 
   Clipboard::Clipboard(ConcurrentMemory& memory)
       : memory_(memory),
-        decoded_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+        decoded_(memory),
         transaction_(nullptr, AllocationDeleter<ClipboardWrite, ConcurrentMemory>{memory}),
         pending_(nullptr, AllocationDeleter<Pending, ConcurrentMemory>{memory}),
         asynchronous_replies_{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}} {}
@@ -609,7 +609,8 @@ namespace telar::runtime::control {
       request.prompt = access == Access::ask;
       request.mimes.atMut(request.mime_count++).assign("text/plain");
       if (!read) {
-        request.text.assign(decoded_.begin(), decoded_.end());
+        request.text.clear();
+        request.text.extend({decoded_.begin(), decoded_.end()});
       }
     } catch (const std::bad_alloc&) {
       pending_.reset();
@@ -838,7 +839,7 @@ namespace telar::runtime::control {
     pending_.reset();
     transaction_.reset();
     grants_.clear();
-    Vector<std::uint8_t, ConcurrentMemory>{decoded_.get_allocator()}.swap(decoded_);
+    decoded_ = ds::Vec<std::uint8_t, ConcurrentMemory>{decoded_.memory()};
     for (auto& reply : asynchronous_replies_.viewMut()) {
       reply.discard();
     }
@@ -910,7 +911,7 @@ namespace telar::runtime::control {
   }
 
   Clipboard::Pending::Pending(ConcurrentMemory& memory)
-      : text(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+      : text(memory),
         transaction(nullptr, AllocationDeleter<ClipboardWrite, ConcurrentMemory>{memory}) {
     randomBytes(&nonce, sizeof(nonce));
     if (nonce == 0) {
@@ -951,7 +952,7 @@ namespace telar::runtime::control {
     }
 
     decoded_.resize(std::min(maximum_bytes, encoded.size() / 4 * 3 + encoded.size() % 4 * 3 / 4));
-    const auto size = base64::decode<Rule>(encoded, decoded_);
+    const auto size = base64::decode<Rule>(encoded, decoded_.viewMut());
     if (!size) {
       return false;
     }

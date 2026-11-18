@@ -501,7 +501,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   AgentRegistry<Memory>::AgentRegistry(Memory& memory)
       : memory_(memory),
-        records_(AllocatorRef<Owned<Agent, Memory>, Memory>{memory}) {
+        records_(memory) {
     records_.reserve(capacity);
   }
 
@@ -526,7 +526,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::resource_limit, "Agent capacity reached"};
     }
 
-    records_.push_back(makeOwned<Agent>(memory_, pane, generation));
+    records_.push(makeOwned<Agent>(memory_, pane, generation));
     return *records_.back();
   }
 
@@ -547,9 +547,9 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   SessionFileReader<Memory>::SessionFileReader(Memory& memory)
-      : path_(AllocatorRef<char, Memory>{memory}),
-        bytes_(AllocatorRef<char, Memory>{memory}),
-        decoded_(AllocatorRef<char, Memory>{memory}) {}
+      : path_(memory),
+        bytes_(memory),
+        decoded_(memory) {}
 
   template <Allocator Memory>
   auto SessionFileReader<Memory>::observe(const Request& request) noexcept -> Result {
@@ -557,7 +557,7 @@ namespace telar::runtime {
     Result result{.request = request, .offset = request.watch.offset, .title = ds::none};
 
     try {
-      path_ = request.watch.path.view();
+      path_.assign(request.watch.path.view());
       switch (request.watch.kind) {
       case AgentSessionFileKind::claude_transcript:
         claude(request.watch, result);
@@ -580,7 +580,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void SessionFileReader<Memory>::codex(const SessionFileWatch& watch, Result& result) {
-    Database database{path_.c_str(), DatabaseAccess::read_only};
+    Database database{path_.data(), DatabaseAccess::read_only};
     Statement statement{database, "SELECT name FROM threads WHERE id = ?1"};
 
     statement.bind(1, watch.session.view());
@@ -611,7 +611,7 @@ namespace telar::runtime {
       return;
     }
 
-    FileDescriptor file{::open(path_.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
+    FileDescriptor file{::open(path_.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
     const auto size = regularFileSize(file);
     if (!size || *size >= metadata_capacity) {
       return;
@@ -627,7 +627,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void SessionFileReader<Memory>::claude(const SessionFileWatch& watch, Result& result) {
-    FileDescriptor file{::open(path_.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
+    FileDescriptor file{::open(path_.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
     if (!file) {
       if (!watch.offset) {
         result.offset = 0;
@@ -727,7 +727,7 @@ namespace telar::runtime {
         throw EncodingError{"Agent session file offset is outside its bounds"};
       }
 
-      const auto count = ::pread(descriptor, bytes_.data() + filled, limit - filled, static_cast<off_t>(offset + filled));
+      const auto count = ::pread(descriptor, bytes_.dataMut() + filled, limit - filled, static_cast<off_t>(offset + filled));
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }

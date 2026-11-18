@@ -73,9 +73,9 @@ export {
 
       void captureRow(LinkTable& table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start);
 
-      tbc::view<Vector<MetadataLink, ConcurrentMemory>, tbc::lt::a> links_;
-      tbc::view<Vector<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
-      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> uris_;
+      tbc::view<ds::Vec<MetadataLink, ConcurrentMemory>, tbc::lt::a> links_;
+      tbc::view<ds::Vec<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> uris_;
       MetadataStatus status_ = MetadataStatus::complete;
     };
 
@@ -108,9 +108,9 @@ export {
 
       void resize(std::uint16_t columns, std::uint16_t lines);
 
-      Vector<ScreenCell, ConcurrentMemory> cells;
-      Vector<std::uint64_t, ConcurrentMemory> row_revisions;
-      Vector<Byte, ConcurrentMemory> row_flags;
+      ds::Vec<ScreenCell, ConcurrentMemory> cells;
+      ds::Vec<std::uint64_t, ConcurrentMemory> row_revisions;
+      ds::Vec<Byte, ConcurrentMemory> row_flags;
       TextMetadataCapture metadata;
       std::uint64_t metadata_revision = 1;
       std::uint16_t cols = 0;
@@ -162,7 +162,7 @@ export {
       // A document that stands for rows of the scrollback, kept while the scrollback keeps them.
       struct InlineDocument {
         std::uint64_t id = 0;
-        Vector<Byte, ConcurrentMemory> bytes;
+        ds::Vec<Byte, ConcurrentMemory> bytes;
         TrackedRow first;
         TrackedRow end;
         bool end_inclusive = false;
@@ -171,12 +171,12 @@ export {
         std::uint32_t rows = 0;
         // What each of its rows held when the terminal first drew it, 0 before: a document stands
         // for that text, and goes once a row of it changes. A reflow learns them again.
-        Vector<std::uint64_t, ConcurrentMemory> contents;
+        ds::Vec<std::uint64_t, ConcurrentMemory> contents;
       };
 
       // Keeps the document of a zone a program closed. Past the pane's limits the oldest documents
       // go, and their rows show their text again.
-      void keepInline(Vector<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive);
+      void keepInline(ds::Vec<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive);
 
       // Follows the documents' rows through output and reflow, and lets go of those whose rows the
       // scrollback dropped. Only the primary screen holds them.
@@ -193,13 +193,13 @@ export {
 
       void setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept;
 
-      Vector<Byte, ConcurrentMemory> clipboard;
+      ds::Vec<Byte, ConcurrentMemory> clipboard;
       // The encoded document the pane's program shows over the pane, empty when none.
-      Vector<Byte, ConcurrentMemory> document;
+      ds::Vec<Byte, ConcurrentMemory> document;
       std::uint64_t document_revision = 0;
       // The documents that stand for rows of the scrollback, oldest first; the revision changes
       // whenever one comes, goes or moves.
-      Vector<InlineDocument, ConcurrentMemory> inline_documents;
+      ds::Vec<InlineDocument, ConcurrentMemory> inline_documents;
       std::uint64_t inline_revision = 0;
       std::uint64_t next_document_id = 1;
       std::size_t inline_bytes = 0;
@@ -282,13 +282,13 @@ export {
       diagnostics::FrameCounters counters_;
 #endif
       std::uint64_t pane_id_;
-      tbc::view<Vector<ScreenCell, ConcurrentMemory>, tbc::lt::a> baseline_;
-      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> cell_bytes_;
-      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> payload_;
+      tbc::view<ds::Vec<ScreenCell, ConcurrentMemory>, tbc::lt::a> baseline_;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> cell_bytes_;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> payload_;
       // Views of cell_bytes_.
-      tbc::view<Vector<FrameSpan, ConcurrentMemory>, tbc::lt::self> spans_;
-      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> metadata_bytes_;
-      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> previous_metadata_;
+      tbc::view<ds::Vec<FrameSpan, ConcurrentMemory>, tbc::lt::self> spans_;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> metadata_bytes_;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> previous_metadata_;
       std::uint64_t metadata_revision_ = 0;
       FrameBody previous_header_{};
       std::uint64_t next_frame_id_ = 1;
@@ -544,8 +544,8 @@ export {
       tbc::view<PaneRows, tbc::lt::a> read(tbc::view<Terminal&, tbc::lt::a> terminal, const ReadPaneRows& request);
 
     private:
-      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> cells_;
-      tbc::view<Vector<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> cells_;
+      tbc::view<ds::Vec<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
     };
 
   }

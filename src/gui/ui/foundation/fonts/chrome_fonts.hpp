@@ -12,6 +12,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -25,8 +26,8 @@ namespace telar::gui::qt {
 
   private:
     SystemAllocator memory_;
-    Vector<std::uint8_t, SystemAllocator> regular_bytes_;
-    Vector<std::uint8_t, SystemAllocator> emphasized_bytes_;
+    ds::Vec<std::uint8_t, SystemAllocator> regular_bytes_;
+    ds::Vec<std::uint8_t, SystemAllocator> emphasized_bytes_;
     // The faces read the bytes stored beside them.
     tbc::view<fonts::Face, tbc::lt::self> regular_;
     tbc::view<fonts::Face, tbc::lt::self> emphasized_;

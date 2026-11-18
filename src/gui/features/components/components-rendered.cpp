@@ -49,12 +49,12 @@ namespace telar::gui::features::components {
 
   template <Allocator Memory>
   ResolvedActions<Memory>::ResolvedActions(Memory& memory)
-      : entries_(AllocatorRef<ResolvedAction, Memory>{memory}) {}
+      : entries_(memory) {}
 
   template <Allocator Memory>
   void ResolvedActions<Memory>::add(ResolvedAction entry) {
     if (find(entry.action) == nullptr) {
-      entries_.push_back(std::move(entry));
+      entries_.push(std::move(entry));
     }
   }
 
@@ -80,10 +80,10 @@ namespace telar::gui::features::components {
 
   template <Allocator Memory>
   RenderedElements<Memory>::RenderedElements(Memory& memory)
-      : elements(AllocatorRef<Element, Memory>{memory}),
-        text(AllocatorRef<char, Memory>{memory}),
-        steps(AllocatorRef<CanvasStep, Memory>{memory}),
-        bindings(AllocatorRef<BindingAction, Memory>{memory}),
+      : elements(memory),
+        text(memory),
+        steps(memory),
+        bindings(memory),
         actions(memory) {}
 
   template <Allocator Memory>

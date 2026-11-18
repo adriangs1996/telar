@@ -30,8 +30,8 @@ export {
       ByteQueue<Memory> input;
       RetainedStream<Memory> output;
       RetainedStream<Memory> error;
-      String<Memory> requested_cwd;
-      Vector<String<Memory>, Memory> arguments;
+      ds::String<Memory> requested_cwd;
+      ds::Vec<ds::String<Memory>, Memory> arguments;
       std::uint64_t requested_workspace;
       bool requested_stdin;
       bool eof;

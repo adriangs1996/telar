@@ -118,7 +118,7 @@ export {
         DeferredResponse response;
       };
 
-      Vector<Entry, Memory> entries_;
+      ds::Vec<Entry, Memory> entries_;
     };
 
     extern template class DeferredResponses<SystemAllocator>;
@@ -495,7 +495,7 @@ export {
         explicit Frames(Memory& memory);
 
         ByteQueue<Memory> input;
-        Vector<Byte, Memory> decode;
+        ds::Vec<Byte, Memory> decode;
       };
 
       // Lends the connection's frames, or takes them back: the same exchange both ways.
@@ -527,7 +527,7 @@ export {
             return false;
           }
 
-          DecodeStorage storage{frames.decode};
+          DecodeStorage storage{frames.decode.viewMut()};
 
           visitor(bytes.first(length), storage);
           frames.input.consume(frame_prefix_size + length);
@@ -634,7 +634,7 @@ export {
       FileDescriptor descriptor_;
       ByteQueue<Memory> input_;
       OutgoingFrames<Memory> output_;
-      Vector<Byte, Memory> decode_bytes_;
+      ds::Vec<Byte, Memory> decode_bytes_;
     };
 
     extern template class Connection<SystemAllocator>;
@@ -654,7 +654,7 @@ export {
     class TBC_GENERIC EncodedReply {
     public:
       inline explicit EncodedReply(Memory& memory)
-          : bytes_(AllocatorRef<Byte, Memory>{memory}) {
+          : bytes_(memory) {
         bytes_.reserve(failure_capacity);
       }
 
@@ -667,7 +667,7 @@ export {
         }
 
         bytes_.resize(length);
-        Codec::encode(message, bytes_);
+        Codec::encode(message, bytes_.viewMut());
       }
 
       inline std::span<const Byte> payload() const noexcept {
@@ -676,7 +676,7 @@ export {
 
     private:
       static constexpr std::size_t failure_capacity = 256;
-      Vector<Byte, Memory> bytes_;
+      ds::Vec<Byte, Memory> bytes_;
     };
 
   }

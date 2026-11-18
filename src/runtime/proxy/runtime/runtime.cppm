@@ -1342,18 +1342,18 @@ export {
       class Fields {
       public:
         inline explicit Fields(Secure& memory)
-            : names_(AllocatorRef<String<Secure>, Secure>{memory}),
-              fields_(AllocatorRef<nghttp2_nv, Secure>{memory}) {
+            : names_(memory),
+              fields_(memory) {
           names_.reserve(HttpFields<Local>::maximum_fields + 4);
           fields_.reserve(HttpFields<Local>::maximum_fields + 4);
         }
 
         inline void add(std::string_view name, std::string_view value) {
-          names_.emplace_back(name, AllocatorRef<char, Secure>{names_.get_allocator().memory()});
-          auto& lower = names_.back();
+          names_.emplace(names_.memory(), name);
+          auto& lower = names_.backMut();
 
-          std::ranges::transform(lower, lower.begin(), asciiLower);
-          fields_.push_back({reinterpret_cast<std::uint8_t*>(lower.data()), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), lower.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
+          std::ranges::transform(lower.view(), lower.dataMut(), asciiLower);
+          fields_.push({reinterpret_cast<std::uint8_t*>(lower.dataMut()), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), lower.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
         }
 
         inline auto bytes() const noexcept -> std::span<const nghttp2_nv> {
@@ -1361,8 +1361,8 @@ export {
         }
 
       private:
-        Vector<String<Secure>, Secure> names_;
-        Vector<nghttp2_nv, Secure> fields_;
+        ds::Vec<ds::String<Secure>, Secure> names_;
+        ds::Vec<nghttp2_nv, Secure> fields_;
       };
 
     public:
@@ -2822,7 +2822,7 @@ export {
 
       void identify(std::string_view endpoint) noexcept;
 
-      tbc::view<ds::Option<Record>, tbc::lt::a> recall(std::string_view name, tbc::view<Vector<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept;
+      tbc::view<ds::Option<Record>, tbc::lt::a> recall(std::string_view name, tbc::view<ds::Vec<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept;
 
       // Generic over the caller's visitor.
       template <typename Visitor>
@@ -2840,7 +2840,7 @@ export {
 
           descriptor.release();
 
-          Vector<unsigned char, Memory> bytes{AllocatorRef<unsigned char, Memory>{memory_}};
+          ds::Vec<unsigned char, Memory> bytes{memory_};
 
           for (std::size_t scanned = 0; scanned < maximum_scanned_entries; ++scanned) {
             const auto* entry = ::readdir(directory.get());
@@ -2876,7 +2876,7 @@ export {
       static constexpr std::size_t maximum_record_bytes = 8 + PATH_MAX + 1;
       Memory& memory_;
       int directory_;
-      String<Memory> endpoint_;
+      ds::String<Memory> endpoint_;
       ds::Array<char, filename_bytes + 1> name_;
       ProxyPortRange::Set reserved_;
       ds::Option<std::uint16_t> own_;
@@ -3362,14 +3362,14 @@ export {
       inline explicit ProxyRuntime(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, std::string_view endpoint, bool inherit_legacy, Tap& tap)
           : memory_(memory),
             authority_directory_(directoryPath(memory, options)),
-            certificate_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
-            bundle_path_(AllocatorRef<char, ConcurrentMemory>{memory}) {
+            certificate_path_(memory),
+            bundle_path_(memory) {
         TELAR_TRACE("proxy.startRuntime");
         const auto& path = authority_directory_;
         const proxy_trust::Paths trust_paths{memory, path};
         struct stat record_state{};
         const auto record_path = trust_paths.file(proxy_trust::Record::filename);
-        const bool has_trust_record = ::lstat(record_path.c_str(), &record_state) == 0;
+        const bool has_trust_record = ::lstat(record_path.data(), &record_state) == 0;
         if (!options.enabled && !has_trust_record) {
           return;
         }
@@ -3390,7 +3390,7 @@ export {
 
         raiseDescriptorLimit();
         createPrivateDirectory(path);
-        FileDescriptor directory{::open(path.c_str(), O_DIRECTORY | O_RDONLY | O_NOFOLLOW | O_CLOEXEC)};
+        FileDescriptor directory{::open(path.data(), O_DIRECTORY | O_RDONLY | O_NOFOLLOW | O_CLOEXEC)};
         if (!directory) {
           throw SystemError{"Open proxy authority directory"};
         }
@@ -3412,17 +3412,17 @@ export {
 
         ports.remember(listener.port());
 
-        certificate_path_ = path;
-        certificate_path_ += '/';
-        certificate_path_ += active_certificate;
-        bundle_path_ = path;
-        bundle_path_ += "/ca-bundle.pem";
+        certificate_path_.assign(path);
+        certificate_path_.push('/');
+        certificate_path_.append(active_certificate);
+        bundle_path_.assign(path);
+        bundle_path_.append("/ca-bundle.pem");
         status_.active = true;
         status_.system_trusted = system_trusted;
         status_.port = listener.port();
         status_.preferred_port = ports.preferred();
         status_.scope = std::ranges::any_of(options.intercept_hosts.patterns(), [](const auto& host) {
-          return host.starts_with('*');
+          return host.view().starts_with('*');
         })
                             ? ProxyScope::wildcard
                             : ProxyScope::exact;
@@ -3434,9 +3434,9 @@ export {
         client_ = std::move(identity);
         service_.emplace(memory, options, *secret_, *interception_, std::move(listener), flowControl(tap));
         if (options.transparent_redirect) {
-          String<ConcurrentMemory> redirect_path{endpoint, AllocatorRef<char, ConcurrentMemory>{memory}};
+          ds::String<ConcurrentMemory> redirect_path{memory, endpoint};
 
-          redirect_path += redirect::socket_suffix;
+          redirect_path.append(redirect::socket_suffix);
           redirect_.emplace(redirect_path, service_.getMut());
         }
 
@@ -3585,9 +3585,9 @@ export {
         return nullptr;
       }
 
-      inline static String<ConcurrentMemory> directoryPath(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options) {
+      inline static ds::String<ConcurrentMemory> directoryPath(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options) {
         if (!options.authority_directory.empty()) {
-          return options.authority_directory;
+          return options.authority_directory.clone();
         }
 
         return proxyAuthorityDirectory(memory, process_environment);
@@ -3606,9 +3606,9 @@ export {
       }
 
       ConcurrentMemory& memory_;
-      String<ConcurrentMemory> authority_directory_;
-      String<ConcurrentMemory> certificate_path_;
-      String<ConcurrentMemory> bundle_path_;
+      ds::String<ConcurrentMemory> authority_directory_;
+      ds::String<ConcurrentMemory> certificate_path_;
+      ds::String<ConcurrentMemory> bundle_path_;
       ProxyStatus status_{};
       ds::Option<TlsLibrary> library_;
       ds::Option<TlsTrustStore> trust_;

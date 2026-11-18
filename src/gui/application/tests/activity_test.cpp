@@ -177,7 +177,7 @@ namespace {
     check(!plan.entries[0].parent, "an explicit stale reference must not fall back to a coincident pane id");
     Agent agent{memory};
 
-    agent.final_message = "\n \t\n  Final answer\t\nother";
+    agent.final_message.assign("\n \t\n  Final answer\t\nother");
     check(agent.finalLine() == "Final answer", "task summaries must use the original first nonempty line");
   }
 

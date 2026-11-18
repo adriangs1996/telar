@@ -49,7 +49,7 @@ namespace telar::gui::qt {
   RuntimeConnection::RuntimeConnection(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         stream_(memory),
-        output_(AllocatorRef<Byte, ApplicationAllocator>{memory}) {
+        output_(memory) {
     socket_.setReadBufferSize(max_payload_size + frame_prefix_size);
     retry_.setSingleShot(true);
     deadline_.setSingleShot(true);
@@ -263,7 +263,7 @@ namespace telar::gui::qt {
   std::span<Byte> RuntimeConnection::buffer(std::size_t size) {
     output_.resize(size);
 
-    return output_;
+    return output_.viewMut();
   }
 
   void RuntimeConnection::send(std::span<const Byte> message) {

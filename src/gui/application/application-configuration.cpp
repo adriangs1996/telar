@@ -292,13 +292,13 @@ namespace telar::gui::application {
       element.steps_offset = setting.steps_offset;
       element.steps_count = setting.steps_count;
       element.since = setting.since;
-      output_.elements.push_back(element);
+      output_.elements.push(element);
 
       return static_cast<std::uint32_t>(output_.elements.size() - 1);
     }
 
     void step(const runtime::config::CanvasStepSetting<Color>& setting) {
-      output_.steps.push_back({.op = setting.op, .count = setting.count, .values = setting.values, .color = color(setting.color), .text = store(setting.text)});
+      output_.steps.push({.op = setting.op, .count = setting.count, .values = setting.values, .color = color(setting.color), .text = store(setting.text)});
     }
 
     [[nodiscard]] ds::Option<features::components::ResolvedAction> resolve(const runtime::lua::Value& action) const {
@@ -306,7 +306,7 @@ namespace telar::gui::application {
     }
 
     void bind(features::components::ResolvedAction resolved) {
-      output_.bindings.push_back(resolved.action);
+      output_.bindings.push(resolved.action);
       output_.actions.add(std::move(resolved));
     }
 
@@ -531,7 +531,7 @@ namespace telar::gui::application {
     }
 
     auto result = makeOwned<features::components::RenderedElements<Memory>>(memory_, memory_);
-    Vector<int, Memory> handlers{AllocatorRef<int, Memory>{memory_}};
+    ds::Vec<int, Memory> handlers{memory_};
     const auto release = [&] {
       for (const auto handler : handlers) {
         luaL_unref(machine_.state(), LUA_REGISTRYINDEX, handler);
@@ -552,7 +552,7 @@ namespace telar::gui::application {
 
       const auto callback = [&](const runtime::lua::Value& value) {
         value.pushCopy();
-        handlers.push_back(luaL_ref(machine_.state(), LUA_REGISTRYINDEX));
+        handlers.push(luaL_ref(machine_.state(), LUA_REGISTRYINDEX));
 
         return static_cast<std::uint32_t>(handlers.size() - 1);
       };
@@ -626,7 +626,7 @@ namespace telar::gui::application {
       luaL_unref(machine_.state(), LUA_REGISTRYINDEX, reference);
     }
 
-    element_handlers_.erase(found);
+    static_cast<void>(element_handlers_.remove(static_cast<std::size_t>(found - element_handlers_.begin())));
   }
 
   template <Allocator Memory>
@@ -805,14 +805,15 @@ namespace telar::gui::application {
 
   template <Allocator Memory>
   typename ConfigurationGeneration<Memory>::ElementHandlers& ConfigurationGeneration<Memory>::handlersOf(std::uint64_t instance) {
-    const auto found = std::ranges::find(element_handlers_, instance, &ElementHandlers::instance);
-    if (found != element_handlers_.end()) {
+    const auto handlers = element_handlers_.viewMut();
+    const auto found = std::ranges::find(handlers, instance, &ElementHandlers::instance);
+    if (found != handlers.end()) {
       return *found;
     }
 
-    element_handlers_.push_back({.instance = instance, .references = Vector<int, Memory>{AllocatorRef<int, Memory>{memory_}}});
+    element_handlers_.push({.instance = instance, .references = ds::Vec<int, Memory>{memory_}});
 
-    return element_handlers_.back();
+    return element_handlers_.atMut(element_handlers_.size() - 1);
   }
 
   template <Allocator Memory>

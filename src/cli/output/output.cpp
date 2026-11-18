@@ -68,7 +68,7 @@ namespace telar::runtime::cli {
   }
 
   Output::Output(Memory& memory)
-      : data(AllocatorRef<char, Memory>{memory}) {}
+      : data(memory) {}
 
   Output& Output::text(std::string_view value) {
     data.append(value);
@@ -95,7 +95,7 @@ namespace telar::runtime::cli {
     ds::Array<char, 32> buffer;
     const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
-    data.append(buffer.data(), end);
+    data.append(std::string_view{buffer.data(), end});
     return *this;
   }
 

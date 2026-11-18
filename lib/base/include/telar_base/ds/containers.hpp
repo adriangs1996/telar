@@ -184,6 +184,15 @@ namespace telar::ds {
     explicit Vec(tbc::view<Memory&, tbc::lt::a> memory) noexcept
         : memory_(&memory) {}
 
+    // Copies the values, so the Vec borrows nothing of them. The storage holds exactly them, as Rust's
+    // `to_vec` does: a copy is not expected to grow.
+    Vec(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Value> values)
+      requires std::is_copy_constructible_v<Value>
+        : memory_(&memory) {
+      reserve(values.size());
+      extend(values);
+    }
+
     Vec(const Vec&) = delete;
     Vec& operator=(const Vec&) = delete;
 
@@ -224,13 +233,23 @@ namespace telar::ds {
     }
 
     // The copy lives in the allocator's region, as its storage does, and borrows nothing else of this
-    // Vec.
+    // Vec. Values that copy only explicitly, as a String, are cloned one by one.
     [[nodiscard]] tbc::view<Vec, tbc::lt::a> clone() const
-      requires std::is_copy_constructible_v<Value>
+      requires std::is_copy_constructible_v<Value> || requires(const Value& value) {
+        { value.clone() } -> std::same_as<Value>;
+      }
     {
       Vec copy{*memory_};
 
-      copy.extend(view());
+      copy.reserve(size_);
+      if constexpr (std::is_copy_constructible_v<Value>) {
+        copy.extend(view());
+      } else {
+        for (std::size_t index = 0; index < size_; ++index) {
+          copy.push(items_[index].clone());
+        }
+      }
+
       return copy;
     }
 
@@ -452,6 +471,44 @@ namespace telar::ds {
     }
 
     // Appends copies of the values.
+    // Returns the storage past its values to the allocator, as Rust's `shrink_to_fit`.
+    void shrinkToFit() {
+      if (capacity_ == size_) {
+        return;
+      }
+
+      if (size_ == 0) {
+        release();
+        return;
+      }
+
+      reallocate(size_);
+    }
+
+    // Keeps the values `keep` accepts, in their order, and drops the others, as Rust's `retain`.
+    // Returns how many it dropped.
+    template <typename Predicate>
+    std::size_t retain(Predicate keep) {
+      std::size_t kept = 0;
+
+      for (std::size_t index = 0; index < size_; ++index) {
+        if (!keep(std::as_const(items_[index]))) {
+          continue;
+        }
+
+        if (kept != index) {
+          items_[kept] = std::move(items_[index]);
+        }
+
+        ++kept;
+      }
+
+      const auto dropped = size_ - kept;
+
+      truncate(kept);
+      return dropped;
+    }
+
     void extend(std::span<const Value> values)
       requires std::is_copy_constructible_v<Value>
     {
@@ -642,6 +699,11 @@ namespace telar::ds {
       return onHeap() ? representation_.heap.size : inline_capacity - tag();
     }
 
+    // The allocator its storage comes from, which a String built beside it shares.
+    [[nodiscard]] tbc::view<Memory&, tbc::lt::a> memory() const noexcept {
+      return *memory_;
+    }
+
     // The bytes it holds without reallocating, besides the NUL.
     [[nodiscard]] std::size_t capacity() const noexcept {
       return onHeap() ? representation_.heap.capacity & ~heap_flag : inline_capacity;
@@ -664,6 +726,11 @@ namespace telar::ds {
       return {representation_.bytes, inline_capacity - tag()};
     }
 
+    // The bytes to edit in place, as a span over `size()` of them; the NUL after them stays.
+    [[nodiscard]] std::span<char> viewMut() noexcept {
+      return {dataMut(), size()};
+    }
+
     // As std::string converts, so that a String passes where text is read.
     [[nodiscard]] operator std::string_view() const noexcept {
       return view();
@@ -674,6 +741,27 @@ namespace telar::ds {
       if (count > capacity()) {
         reallocate(roundedCapacity(count), {});
       }
+    }
+
+    // Returns the storage past its bytes to the allocator, back inline when they fit there.
+    void shrinkToFit() {
+      if (!onHeap() || capacity() == roundedCapacity(size())) {
+        return;
+      }
+
+      const auto size = this->size();
+      if (size <= inline_capacity) {
+        Representation shorter;
+        auto* bytes = shorter.bytes;
+
+        copyShort(bytes, representation_.heap.data, size);
+        release();
+        representation_ = shorter;
+        setInlineSize(size);
+        return;
+      }
+
+      reallocate(roundedCapacity(size), {});
     }
 
     // Copies the text to the end. Text read from this String stays valid while it is copied, as the
@@ -758,6 +846,13 @@ namespace telar::ds {
 
       reserve(count);
       std::memset(dataMut() + size, fill, count - size);
+      setSize(count);
+    }
+
+    // `count` bytes, any new ones left for the caller to write before it reads them, as
+    // std::string::resize_and_overwrite does: a buffer a read fills whole is not cleared first.
+    void resizeForOverwrite(std::size_t count) {
+      reserve(count);
       setSize(count);
     }
 

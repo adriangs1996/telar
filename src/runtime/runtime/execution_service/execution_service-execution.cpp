@@ -1,6 +1,7 @@
 module telar.runtime.runtime.execution_service;
 
 import telar.platform.error;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -12,14 +13,14 @@ namespace telar::runtime {
         input(memory, input_capacity),
         output(memory, retained_capacity),
         error(memory, retained_capacity),
-        requested_cwd(request.cwd, AllocatorRef<char, Memory>{memory}),
-        arguments(AllocatorRef<String<Memory>, Memory>{memory}),
+        requested_cwd(memory, request.cwd),
+        arguments(memory),
         requested_workspace(request.workspace_id),
         requested_stdin(request.stdin_open),
         eof(!request.stdin_open) {
     input.reserve(input_capacity);
     for (const auto argument : request.arguments) {
-      arguments.emplace_back(argument, AllocatorRef<char, Memory>{memory});
+      arguments.emplace(memory, argument);
     }
 
     try {

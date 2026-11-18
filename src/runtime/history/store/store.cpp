@@ -285,7 +285,7 @@ namespace telar::runtime {
 
   HistoryRows::HistoryRows(ConcurrentMemory& memory)
       : text_(memory, max_payload_size),
-        entries_(AllocatorRef<HistoryEntry, ConcurrentMemory>{memory}) {
+        entries_(memory) {
     text_.reserve(max_payload_size);
     entries_.reserve(maximum_entries);
     clear();
@@ -311,7 +311,7 @@ namespace telar::runtime {
     entry.cwd = copy(stored.cwd);
     entry.workspace_path = copy(stored.workspace_path);
     entry.provider = copy(stored.provider);
-    entries_.push_back(entry);
+    entries_.push(entry);
     encoded_bytes_ += bytes;
     return true;
   }
@@ -523,10 +523,10 @@ END;
 
     auto sql = string("SELECT ");
 
-    sql += entry_columns;
-    sql += " FROM command WHERE id <= ?1";
+    sql.append(entry_columns);
+    sql.append(" FROM command WHERE id <= ?1");
     if (request.entry_id != 0) {
-      sql += " AND id = ?2";
+      sql.append(" AND id = ?2");
     }
 
     appendMatch(sql, request.query);
@@ -535,7 +535,7 @@ END;
     // stream newest first and stop once the page and one more command are found.
     const bool distinct = request.distinct && request.entry_id == 0;
 
-    sql += distinct ? " ORDER BY started_at_ms DESC, id DESC" : " ORDER BY started_at_ms DESC, id DESC LIMIT ?7 OFFSET ?8";
+    sql.append(distinct ? " ORDER BY started_at_ms DESC, id DESC" : " ORDER BY started_at_ms DESC, id DESC LIMIT ?7 OFFSET ?8");
     Statement statement{database_, sql};
 
     statement.bind(1, integer(request.snapshot_id));
@@ -588,11 +588,11 @@ END;
 
     appendMatch(sql, request.match);
     if (request.failed_only) {
-      sql += " AND exit_code IS NOT NULL AND exit_code <> 0";
+      sql.append(" AND exit_code IS NOT NULL AND exit_code <> 0");
     }
 
     if (request.before_ms != 0) {
-      sql += " AND started_at_ms < ?4";
+      sql.append(" AND started_at_ms < ?4");
     }
 
     appendScope(sql, request.scope);
@@ -631,12 +631,12 @@ END;
 
     appendScope(filters, request.scope);
     if (request.since_ms != 0) {
-      filters += " AND started_at_ms >= ?1";
+      filters.append(" AND started_at_ms >= ?1");
     }
 
     auto sql = string("SELECT COUNT(*), COUNT(DISTINCT command) FROM command");
 
-    sql += filters;
+    sql.append(filters);
     Statement totals{database_, sql};
 
     bindScope(totals, request.scope, request.scope_value);
@@ -648,8 +648,8 @@ END;
     HistoryStatsResult result{.request_id = request.request_id, .total = static_cast<std::uint64_t>(totals.integer(0)), .unique = static_cast<std::uint64_t>(totals.integer(1))};
 
     sql.assign("SELECT command, COUNT(*) AS n FROM command");
-    sql += filters;
-    sql += " GROUP BY command ORDER BY n DESC LIMIT 400";
+    sql.append(filters);
+    sql.append(" GROUP BY command ORDER BY n DESC LIMIT 400");
     Statement top{database_, sql};
 
     bindScope(top, request.scope, request.scope_value);
@@ -686,19 +686,19 @@ END;
     auto sql = string("SELECT id, command FROM command WHERE id <= ?1");
 
     appendFilters(sql, request);
-    sql += " ORDER BY started_at_ms DESC, id DESC LIMIT ";
-    sql += fuzzy_candidate_limit;
+    sql.append(" ORDER BY started_at_ms DESC, id DESC LIMIT ");
+    sql.append(fuzzy_candidate_limit);
 
     Statement statement{database_, sql};
 
     statement.bind(1, integer(request.snapshot_id));
     bindFilters(statement, request);
-    Vector<RankedEntry, ConcurrentMemory> ranked{AllocatorRef<RankedEntry, ConcurrentMemory>{memory_}};
+    ds::Vec<RankedEntry, ConcurrentMemory> ranked{memory_};
 
     ranked.reserve(maximum_fuzzy_candidates);
     HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, ConcurrentMemory>{memory_}};
 
-    Vector<FuzzyCandidate, ConcurrentMemory> candidates{AllocatorRef<FuzzyCandidate, ConcurrentMemory>{memory_}};
+    ds::Vec<FuzzyCandidate, ConcurrentMemory> candidates{memory_};
 
     candidates.reserve(maximum_fuzzy_candidates);
     while (statement.next()) {
@@ -710,7 +710,7 @@ END;
       }
 
       candidate.score = historyScore(command, request.query);
-      candidates.push_back(candidate);
+      candidates.push(candidate);
     }
 
     std::uint32_t order = 0;
@@ -721,7 +721,7 @@ END;
       }
 
       if (candidate.score) {
-        ranked.push_back(RankedEntry{candidate.id, *candidate.score, order++});
+        ranked.push(RankedEntry{candidate.id, *candidate.score, order++});
       }
     }
 
@@ -731,10 +731,10 @@ END;
 
     const auto end = std::min(std::uint64_t{request.offset} + request.limit, static_cast<std::uint64_t>(ranked.size()));
 
-    std::partial_sort(ranked.begin(), ranked.begin() + end, ranked.end(), precedes);
+    std::partial_sort(ranked.dataMut(), ranked.dataMut() + end, ranked.dataMut() + ranked.size(), precedes);
     sql.assign("SELECT ");
-    sql += entry_columns;
-    sql += " FROM command WHERE id = ?1";
+    sql.append(entry_columns);
+    sql.append(" FROM command WHERE id = ?1");
     Statement detail{database_, sql};
     const auto start = std::min<std::size_t>(request.offset, ranked.size());
 
@@ -751,8 +751,8 @@ END;
     reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = start + rows_.entries().size() < ranked.size(), .entries = rows_.entries()});
   }
 
-  String<ConcurrentMemory> HistoryStore::string(std::string_view value) const {
-    return String<ConcurrentMemory>{value, AllocatorRef<char, ConcurrentMemory>{memory_}};
+  ds::String<ConcurrentMemory> HistoryStore::string(std::string_view value) const {
+    return ds::String<ConcurrentMemory>{memory_, value};
   }
 
   std::int64_t HistoryStore::integer(std::uint64_t value) {
@@ -779,9 +779,9 @@ END;
     return indexed_ && characters >= 3;
   }
 
-  void HistoryStore::appendMatch(String<ConcurrentMemory>& sql, std::string_view query) const {
+  void HistoryStore::appendMatch(ds::String<ConcurrentMemory>& sql, std::string_view query) const {
     if (!query.empty()) {
-      sql += useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(lower(command), lower(?3)) > 0";
+      sql.append(useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(lower(command), lower(?3)) > 0");
     }
   }
 
@@ -798,28 +798,28 @@ END;
     auto quoted = string("\"");
 
     for (const char byte : query) {
-      quoted += byte;
+      quoted.push(byte);
       if (byte == '"') {
-        quoted += '"';
+        quoted.push('"');
       }
     }
 
-    quoted += '"';
+    quoted.push('"');
     statement.bind(3, std::string_view{quoted});
   }
 
-  void HistoryStore::appendScope(String<ConcurrentMemory>& sql, HistoryScope scope) {
+  void HistoryStore::appendScope(ds::String<ConcurrentMemory>& sql, HistoryScope scope) {
     switch (scope) {
     case HistoryScope::global:
       break;
     case HistoryScope::cwd:
-      sql += " AND cwd = ?6";
+      sql.append(" AND cwd = ?6");
       break;
     case HistoryScope::workspace:
-      sql += " AND workspace_path = ?6";
+      sql.append(" AND workspace_path = ?6");
       break;
     case HistoryScope::pane:
-      sql += " AND pane_id = ?6";
+      sql.append(" AND pane_id = ?6");
       break;
     }
   }
@@ -832,13 +832,13 @@ END;
     }
   }
 
-  void HistoryStore::appendFilters(String<ConcurrentMemory>& sql, const QueryHistory& request) {
+  void HistoryStore::appendFilters(ds::String<ConcurrentMemory>& sql, const QueryHistory& request) {
     if (request.failed_only) {
-      sql += " AND exit_code IS NOT NULL AND exit_code <> 0";
+      sql.append(" AND exit_code IS NOT NULL AND exit_code <> 0");
     }
 
     if (request.author != HistoryAuthorFilter::all) {
-      sql += " AND author = ?5";
+      sql.append(" AND author = ?5");
     }
 
     appendScope(sql, request.scope);

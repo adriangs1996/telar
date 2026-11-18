@@ -30,7 +30,7 @@ namespace telar::gui::features::history {
 
     void exchangeWith(HistoryPageStorage& other);
 
-    [[nodiscard]] const Vector<HistoryRow<Memory>, Memory>& rows() const noexcept;
+    [[nodiscard]] const ds::Vec<HistoryRow<Memory>, Memory>& rows() const noexcept;
 
     [[nodiscard]] std::string_view command(std::size_t index) const;
 
@@ -39,8 +39,8 @@ namespace telar::gui::features::history {
 
     void append(tbc::view<Memory&, tbc::lt::a> memory, const HistoryEntry& entry);
 
-    tbc::view<Vector<HistoryRow<Memory>, Memory>, tbc::lt::a> rows_;
-    tbc::view<String<Memory>, tbc::lt::a> commands_;
+    tbc::view<ds::Vec<HistoryRow<Memory>, Memory>, tbc::lt::a> rows_;
+    tbc::view<ds::String<Memory>, tbc::lt::a> commands_;
   };
 
   extern template class HistoryPageStorage<telar::Memory>;
@@ -112,7 +112,7 @@ namespace telar::gui::features::history {
 
     void suspend() noexcept;
 
-    [[nodiscard]] const Vector<HistoryRow<Memory>, Memory>& rows() const noexcept;
+    [[nodiscard]] const ds::Vec<HistoryRow<Memory>, Memory>& rows() const noexcept;
 
     [[nodiscard]] const HistoryViewState& state() const noexcept;
 
@@ -181,10 +181,10 @@ namespace telar::gui::features::history {
 
     Memory& memory_;
     HistoryPageStorage<Memory> page_;
-    String<Memory> selected_command_;
-    String<Memory> query_;
-    String<Memory> scope_path_;
-    String<Memory> output_;
+    ds::String<Memory> selected_command_;
+    ds::String<Memory> query_;
+    ds::String<Memory> scope_path_;
+    ds::String<Memory> output_;
     runtime::FixedText<maximum_error_bytes> error_;
     Criteria criteria_;
     HistoryViewState state_;

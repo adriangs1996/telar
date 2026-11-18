@@ -65,7 +65,7 @@ export {
         }
       }
 
-      Vector<Byte, Memory> payload_;
+      ds::Vec<Byte, Memory> payload_;
       ds::Array<Byte, frame_prefix_size> prefix_{};
       std::size_t prefix_used_ = 0;
       std::size_t expected_ = 0;

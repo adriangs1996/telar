@@ -44,18 +44,18 @@ namespace telar::gui::inline foundation::inline model {
   template <Allocator Memory>
   Tab<Memory>::Tab(Memory& memory, TabLocation identity)
       : location(identity),
-        label(AllocatorRef<char, Memory>{memory}),
-        foreground(AllocatorRef<char, Memory>{memory}),
-        directory(AllocatorRef<char, Memory>{memory}),
-        members(AllocatorRef<TabMember, Memory>{memory}) {}
+        label(memory),
+        foreground(memory),
+        directory(memory),
+        members(memory) {}
 
   template <Allocator Memory>
   void Tab<Memory>::observeForeground(PaneForeground report) {
     if (foreground_pane == report.pane_id) {
-      foreground = report.name;
+      foreground.assign(report.name);
     }
 
-    for (auto& member : members) {
+    for (auto& member : members.viewMut()) {
       if (member.pane_id == report.pane_id) {
         member.foreground.assign(report.name);
       }
@@ -73,7 +73,7 @@ namespace telar::gui::inline foundation::inline model {
     const auto* selected = &panes.front();
 
     for (const auto& pane : panes) {
-      auto& member = members.emplace_back();
+      auto& member = members.emplace();
 
       member.pane_id = pane.pane_id;
       member.foreground.assign(pane.foreground);
@@ -82,25 +82,25 @@ namespace telar::gui::inline foundation::inline model {
       }
     }
 
-    foreground = selected->foreground;
+    foreground.assign(selected->foreground);
     foreground_pane = selected->pane_id;
-    directory = selected->cwd;
+    directory.assign(selected->cwd);
   }
 
   template <Allocator Memory>
   Workspace<Memory>::Workspace(Memory& memory, WorkspaceLocation identity)
       : location(identity),
-        name(AllocatorRef<char, Memory>{memory}),
-        path(AllocatorRef<char, Memory>{memory}),
-        branch(AllocatorRef<char, Memory>{memory}) {}
+        name(memory),
+        path(memory),
+        branch(memory) {}
 
   template <Allocator Memory>
   Worktree<Memory>::Worktree(Memory& memory)
-      : path(AllocatorRef<char, Memory>{memory}),
-        branch(AllocatorRef<char, Memory>{memory}),
-        base(AllocatorRef<char, Memory>{memory}),
-        title(AllocatorRef<char, Memory>{memory}),
-        command_label(AllocatorRef<char, Memory>{memory}) {}
+      : path(memory),
+        branch(memory),
+        base(memory),
+        title(memory),
+        command_label(memory) {}
 
   template <Allocator Memory>
   std::string_view Worktree<Memory>::displayName() const noexcept {
@@ -124,14 +124,14 @@ namespace telar::gui::inline foundation::inline model {
 
   template <Allocator Memory>
   Agent<Memory>::Agent(Memory& memory)
-      : title(AllocatorRef<char, Memory>{memory}),
-        provider_name(AllocatorRef<char, Memory>{memory}),
-        workspace_label(AllocatorRef<char, Memory>{memory}),
-        display_name(AllocatorRef<char, Memory>{memory}),
-        icon(AllocatorRef<char, Memory>{memory}),
-        detail(AllocatorRef<char, Memory>{memory}),
-        plan_step(AllocatorRef<char, Memory>{memory}),
-        final_message(AllocatorRef<char, Memory>{memory}) {}
+      : title(memory),
+        provider_name(memory),
+        workspace_label(memory),
+        display_name(memory),
+        icon(memory),
+        detail(memory),
+        plan_step(memory),
+        final_message(memory) {}
 
   template <Allocator Memory>
   std::string_view Agent<Memory>::finalLine() const noexcept {

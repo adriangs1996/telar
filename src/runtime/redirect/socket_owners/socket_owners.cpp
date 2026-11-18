@@ -78,7 +78,7 @@ namespace telar::runtime::redirect {
   PfCommand::PfCommand(Memory& memory) noexcept
       : memory_(memory) {}
 
-  String<Memory> PfCommand::run(std::span<const std::string_view> arguments, std::string_view input) {
+  ds::String<Memory> PfCommand::run(std::span<const std::string_view> arguments, std::string_view input) {
     constexpr std::size_t maximum_arguments = 12;
     if (arguments.size() >= maximum_arguments) {
       throw std::invalid_argument{"Too many PF command arguments"};
@@ -92,14 +92,14 @@ namespace telar::runtime::redirect {
     Command command{memory_, Launch{.cwd = "/", .arguments = std::span{argv}.first(arguments.size() + 1), .environment_mode = EnvironmentMode::replace, .environment = environment}, CommandPurpose::administration};
     // pfctl reports some results, the token `-E` hands out among them, on its standard error,
     // so both streams make one output in the order they arrive.
-    String<Memory> output{AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> output{memory_};
     const auto append = [&](std::span<const Byte> bytes) {
       constexpr std::size_t output_limit = 256 * 1024;
       if (output.size() + bytes.size() > output_limit) {
         throw std::runtime_error{"PF command output exceeds its limit"};
       }
 
-      output.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      output.append(std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()});
       return true;
     };
 
@@ -672,7 +672,7 @@ namespace telar::runtime::redirect {
 
   Helper::Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes, Direction direction)
       : memory_(memory),
-        endpoint_(endpoint, AllocatorRef<char, Memory>{memory}),
+        endpoint_(memory, endpoint),
         direction_(direction) {
     if (processes.size() > selected_processes_.size()) {
       throw std::invalid_argument{"Too many selected processes"};
@@ -686,7 +686,7 @@ namespace telar::runtime::redirect {
 
     std::ranges::copy(processes, selected_processes_.viewMut().begin());
     process_count_ = processes.size();
-    endpoint_ += socket_suffix;
+    endpoint_.append(socket_suffix);
     for (const auto& target : targets) {
       listeners_.atMut(count_).emplace(target, incoming[count_]);
       mappings_.atMut(count_) = listeners_[count_]->mapping();
@@ -694,7 +694,7 @@ namespace telar::runtime::redirect {
     }
   }
 
-  String<Memory> Helper::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) {
+  ds::String<Memory> Helper::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) {
     ds::Array<FlowKey, maximum_flows> keys;
     ds::Array<FlowKey, maximum_flows> incoming;
     ds::Array<Bypass, maximum_flows> bypasses;
@@ -772,7 +772,7 @@ namespace telar::runtime::redirect {
       std::fprintf(stderr, "telar redirect: TCP discovery on pflog%u\n", packet_log_->index());
     }
 
-    std::fprintf(stderr, "telar redirect: active for uid %u, %zu TCP destinations, anchor %s, discovery %.*s\n", uid, count_, identity.anchor.c_str(), static_cast<int>(discovery_->name().size()), discovery_->name().data());
+    std::fprintf(stderr, "telar redirect: active for uid %u, %zu TCP destinations, anchor %s, discovery %.*s\n", uid, count_, identity.anchor.data(), static_cast<int>(discovery_->name().size()), discovery_->name().data());
     const auto active = static_cast<Byte>(MonitorUpdate::active);
 
     traffic::sendAll(monitor.get(), {&active, 1});

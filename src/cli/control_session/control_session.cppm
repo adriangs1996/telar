@@ -96,13 +96,13 @@ export {
           request.request_id = next_request_++;
         }
 
-        connection_.send(request, outgoing_);
+        connection_.send(request, outgoing_.viewMut());
       }
 
       template <typename Reply, typename Request>
       TBC_GENERIC inline Reply exchange(Request request) {
         request.request_id = next_request_++;
-        connection_.send(request, outgoing_);
+        connection_.send(request, outgoing_.viewMut());
         return receive<Reply>(request.request_id);
       }
 
@@ -110,8 +110,8 @@ export {
       template <typename Reply>
       TBC_GENERIC inline Reply receive(ds::Option<std::uint64_t> request_id = ds::none) {
         for (;;) {
-          const auto frame = connection_.receive(incoming_);
-          DecodeStorage storage{decoded_};
+          const auto frame = connection_.receive(incoming_.viewMut());
+          DecodeStorage storage{decoded_.viewMut()};
 
           if (frame.front() == static_cast<Byte>(MessageSchema<Reply>::tag)) {
             auto reply = Codec::decode<Reply>(frame, storage);
@@ -140,9 +140,9 @@ export {
       static constexpr std::size_t maximum_request_bytes = 65536 + 4096 + 1024;
 
       RuntimeConnection connection_;
-      Vector<Byte, Memory> outgoing_;
-      Vector<Byte, Memory> incoming_;
-      Vector<Byte, Memory> decoded_;
+      ds::Vec<Byte, Memory> outgoing_;
+      ds::Vec<Byte, Memory> incoming_;
+      ds::Vec<Byte, Memory> decoded_;
       std::uint64_t next_request_ = 1;
     };
 

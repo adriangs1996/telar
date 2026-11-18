@@ -35,16 +35,20 @@ namespace telar::runtime::cli::repository {
     ds::Array<Byte, 32> outgoing;
 
     connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing.viewMut());
-    Vector<Byte, Memory> incoming(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
-    Vector<Byte, Memory> decoded(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
+    ds::Vec<Byte, Memory> incoming{memory};
+
+    incoming.resize(max_payload_size, Byte{});
+    ds::Vec<Byte, Memory> decoded{memory};
+
+    decoded.resize(max_payload_size, Byte{});
 
     for (;;) {
-      const auto frame = connection.receive(incoming);
+      const auto frame = connection.receive(incoming.viewMut());
       if (static_cast<ServerTag>(frame.front()) != ServerTag::workspace_list) {
         continue;
       }
 
-      DecodeStorage storage{decoded};
+      DecodeStorage storage{decoded.viewMut()};
       const auto list = Codec::decode<WorkspaceList>(frame, storage);
       Catalog result;
 
@@ -152,7 +156,7 @@ namespace telar::runtime::cli::repository {
     const RuntimePaths paths{memory, server, environment};
 
     ensureRuntime(memory, paths);
-    const auto available = catalog(memory, paths.socket.c_str());
+    const auto available = catalog(memory, paths.socket.data());
 
     if (selected) {
       std::string path{*selected};
@@ -214,7 +218,7 @@ namespace telar::runtime::cli::repository {
     RuntimePaths storage_paths{memory, ServerOptions{}, environment};
 
     storage_paths.resolveStorage(ServerOptions{}, environment);
-    historyPaths(storage_paths.history.c_str(), consider);
+    historyPaths(storage_paths.history.data(), consider);
 
     consider(managedPath(identity));
     return consider.result;
@@ -280,7 +284,7 @@ namespace telar::runtime::cli::repository {
     }
 
     auto directory = file_transfer::openDirectory(stage);
-    Vector<unsigned char, Memory> marker{AllocatorRef<unsigned char, Memory>{memory}};
+    ds::Vec<unsigned char, Memory> marker{memory};
     if (!readPrivateFile(directory.get(), "owner", marker, 2048) || std::string_view{reinterpret_cast<const char*>(marker.data()), marker.size()} != identity) {
       throw std::runtime_error{"UnownedRepositoryStage"};
     }

@@ -47,7 +47,7 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    ds::Option<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes);
+    ds::Option<ds::String<Memory>> read(Memory& memory, const ds::String<Memory>& path, std::size_t maximum_bytes);
 
   }
 }
@@ -92,9 +92,9 @@ export {
       Memory& memory_;
       static constexpr std::string_view worktree_timeout = "360";
       Provider provider_;
-      String<Memory> marker_;
-      String<Memory> command_;
-      String<Memory> worktree_command_;
+      ds::String<Memory> marker_;
+      ds::String<Memory> command_;
+      ds::String<Memory> worktree_command_;
     };
 
   }

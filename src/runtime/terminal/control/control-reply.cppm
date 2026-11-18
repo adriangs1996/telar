@@ -14,10 +14,10 @@ export namespace telar::runtime::control {
   template <Allocator Memory>
   class TBC_GENERIC Reply {
     struct Storage {
-      explicit Storage(Vector<std::uint8_t, Memory>&& bytes)
+      explicit Storage(ds::Vec<std::uint8_t, Memory>&& bytes)
           : bytes(std::move(bytes)) {}
 
-      Vector<std::uint8_t, Memory> bytes;
+      ds::Vec<std::uint8_t, Memory> bytes;
     };
 
   public:
@@ -25,7 +25,7 @@ export namespace telar::runtime::control {
 
     explicit Reply(Memory& memory)
         : memory_(memory),
-          overflow_(AllocatorRef<std::uint8_t, Memory>{memory}) {}
+          overflow_(memory) {}
 
     Reply(const Reply&) = delete;
     Reply& operator=(const Reply&) = delete;
@@ -50,14 +50,14 @@ export namespace telar::runtime::control {
       } else {
         if (overflow_.empty()) {
           overflow_.reserve(std::max(inline_.size() * 2, size_ + text.size()));
-          overflow_.insert(overflow_.end(), inline_.begin(), inline_.begin() + size_);
+          overflow_.extend({inline_.begin(), inline_.begin() + size_});
         }
 
         if (size_ + text.size() > overflow_.capacity()) {
           overflow_.reserve(std::min(maximum_bytes, std::max(size_ + text.size(), overflow_.capacity() * 2)));
         }
 
-        overflow_.insert(overflow_.end(), text.begin(), text.end());
+        overflow_.extend({reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
       }
 
       size_ += text.size();
@@ -123,7 +123,7 @@ export namespace telar::runtime::control {
 
     void discard() noexcept {
       clear();
-      Vector<std::uint8_t, Memory>{overflow_.get_allocator()}.swap(overflow_);
+      overflow_ = ds::Vec<std::uint8_t, Memory>{overflow_.memory()};
     }
 
   private:
@@ -133,7 +133,7 @@ export namespace telar::runtime::control {
 
     Memory& memory_;
     ds::Array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_;
-    Vector<std::uint8_t, Memory> overflow_;
+    ds::Vec<std::uint8_t, Memory> overflow_;
     std::shared_ptr<Storage> owned_;
     std::size_t size_ = 0;
   };

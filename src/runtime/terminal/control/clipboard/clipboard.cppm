@@ -146,7 +146,7 @@ export namespace telar::runtime::control {
 
     static constexpr std::size_t initial_capacity = 4096;
     tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-    tbc::view<Vector<std::uint8_t, ConcurrentMemory>, tbc::lt::a> spool_;
+    tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> spool_;
     std::size_t limit_;
     ds::Array<Entry, maximum_mimes> entries_;
     ds::Array<Alias, maximum_aliases> aliases_;
@@ -270,7 +270,7 @@ export namespace telar::runtime::control {
       tbc::view<ds::Array<std::string_view, 4>, tbc::lt::self> mime_views;
       tbc::view<ds::Array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
       std::size_t mime_count = 0;
-      Vector<std::uint8_t, ConcurrentMemory> text;
+      ds::Vec<std::uint8_t, ConcurrentMemory> text;
       Owned<ClipboardWrite, ConcurrentMemory> transaction;
       bool write = false;
       bool listing = false;
@@ -327,7 +327,7 @@ export namespace telar::runtime::control {
     ReplyBuilder buildReply();
 
     ConcurrentMemory& memory_;
-    Vector<std::uint8_t, ConcurrentMemory> decoded_;
+    ds::Vec<std::uint8_t, ConcurrentMemory> decoded_;
     Owned<ClipboardWrite, ConcurrentMemory> transaction_;
     Owned<Pending, ConcurrentMemory> pending_;
     ds::Array<Reply<ConcurrentMemory>, 2> asynchronous_replies_;

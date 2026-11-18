@@ -84,7 +84,7 @@ namespace telar::runtime::cli::render_command {
   // Reads all of descriptor, up to one byte past the limit so an oversized
   // source is detected without reading the rest of it.
   template <Allocator Memory>
-  bool readSource(int descriptor, String<Memory>& source) {
+  bool readSource(int descriptor, ds::String<Memory>& source) {
     constexpr std::size_t chunk = 64 * 1024;
     const auto limit = render::markdown::max_source_bytes + 1;
 
@@ -92,7 +92,7 @@ namespace telar::runtime::cli::render_command {
       const auto at = source.size();
 
       source.resize(std::min(at + chunk, limit));
-      const auto got = ::read(descriptor, source.data() + at, source.size() - at);
+      const auto got = ::read(descriptor, source.dataMut() + at, source.size() - at);
       if (got < 0) {
         source.resize(at);
         if (sys::lastError() == EINTR) {
@@ -213,13 +213,13 @@ namespace telar::runtime::cli::render_command {
       return 1;
     }
 
-    String<Memory> output{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> output{memory};
 
     // Clients that cannot show documents still show what is running.
     output.append("\x1b[2mtelar render \xc2\xb7 ");
     for (const char byte : name) {
       if (static_cast<unsigned char>(byte) >= 0x20 && byte != 0x7f) {
-        output.push_back(byte);
+        output.push(byte);
       }
     }
 
@@ -255,7 +255,7 @@ namespace telar::runtime::cli::render_command {
       return 1;
     }
 
-    String<Memory> source{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> source{memory};
 
     {
       const auto descriptor = from_stdin ? STDIN_FILENO : ::open(std::string{options.path}.c_str(), O_RDONLY | O_CLOEXEC);
@@ -301,7 +301,7 @@ namespace telar::runtime::cli::render_command {
 
     // Natively, the styled text sits between the OSCs that begin and end the document's zone:
     // a client that draws documents shows the document in place of the text, any other the text.
-    String<Memory> output{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> output{memory};
     if (native && !render::appendSequence(document, output)) {
       reportDocumentLimit();
       return 1;

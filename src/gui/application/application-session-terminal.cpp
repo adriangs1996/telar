@@ -228,7 +228,7 @@ namespace telar::gui::application {
 
   Change Session::apply(const PaneTitle& message) {
     if (auto* pane = findPane(message.pane_id)) {
-      pane->title = message.title;
+      pane->title.assign(message.title);
       ++chrome_revision_;
     }
 
@@ -237,7 +237,7 @@ namespace telar::gui::application {
 
   Change Session::apply(const PaneCwd& message) {
     if (auto* pane = findPane(message.pane_id)) {
-      pane->cwd = message.cwd;
+      pane->cwd.assign(message.cwd);
       ++chrome_revision_;
     }
 
@@ -246,7 +246,7 @@ namespace telar::gui::application {
 
   Change Session::apply(const PaneForeground& message) {
     if (auto* pane = findPane(message.pane_id)) {
-      pane->foreground = message.name;
+      pane->foreground.assign(message.name);
     }
 
     for (const auto& tab : tabs_) {
@@ -259,7 +259,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneClipboard& message) {
-    clipboard_ = textView(message.bytes);
+    clipboard_.assign(textView(message.bytes));
 
     return Change::clipboard;
   }
@@ -335,7 +335,7 @@ namespace telar::gui::application {
     }
 
     if (message.size == 0) {
-      pane->document_parts.shrink_to_fit();
+      pane->document_parts.shrinkToFit();
       if (!pane->document_shown) {
         return Change::none;
       }
@@ -343,14 +343,14 @@ namespace telar::gui::application {
       pane->document.clear();
       pane->document_shown = false;
     } else {
-      pane->document_parts.insert(pane->document_parts.end(), message.bytes.begin(), message.bytes.end());
+      pane->document_parts.extend({message.bytes.begin(), message.bytes.end()});
       if (pane->document_parts.size() < message.size) {
         return Change::none;
       }
 
       pane->document_shown = render::decode(pane->document_parts, pane->document) == render::DecodeError::none;
       pane->document_parts.clear();
-      pane->document_parts.shrink_to_fit();
+      pane->document_parts.shrinkToFit();
     }
 
     ++pane->document_version;
@@ -384,12 +384,12 @@ namespace telar::gui::application {
           return Change::none;
         }
 
-        document.parts.insert(document.parts.end(), message.bytes.begin(), message.bytes.end());
+        document.parts.extend({message.bytes.begin(), message.bytes.end()});
         if (document.parts.size() == message.size) {
           document.shown = render::decode(document.parts, document.document) == render::DecodeError::none;
           document.whole = true;
           document.parts.clear();
-          document.parts.shrink_to_fit();
+          document.parts.shrinkToFit();
         }
       }
 

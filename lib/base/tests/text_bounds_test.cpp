@@ -10,6 +10,7 @@ import telar.testing;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace {
 
@@ -81,7 +82,7 @@ namespace {
     check(!stringRefused("\"\\u0041\""));
 
     SystemAllocator memory;
-    String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
+    ds::String<SystemAllocator> text{memory};
     const auto unpaired = JsonValue::parse(R"("\ud800\u0041")");
 
     check(jsonRefused([&] {

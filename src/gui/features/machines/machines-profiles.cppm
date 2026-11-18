@@ -126,7 +126,7 @@ export {
 
     template <typename Source, typename Memory>
     concept MachineProfileSource = Allocator<Memory> && requires(Source& source, Memory& memory) {
-      { source.read(memory) } -> std::same_as<ds::Option<Vector<Byte, Memory>>>;
+      { source.read(memory) } -> std::same_as<ds::Option<ds::Vec<Byte, Memory>>>;
     };
 
     template <typename Storage, typename Memory>

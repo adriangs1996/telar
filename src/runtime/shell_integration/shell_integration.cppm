@@ -196,7 +196,7 @@ export namespace telar::runtime {
 
     // Writes the scripts beneath `data_home` and returns their directory. It is named after
     // their content, so runtimes of different versions never overwrite each other's.
-    static String<Memory> install(Memory& memory, std::string_view data_home);
+    static ds::String<Memory> install(Memory& memory, std::string_view data_home);
 
     // Points an integrable shell at the scripts and returns the token its marks are signed
     // with. Leaves every other command untouched, and a shell too if the scripts are gone and
@@ -210,9 +210,9 @@ export namespace telar::runtime {
     // Writes the scripts again if something removed them since the runtime started.
     bool present() const noexcept;
 
-    String<Memory> directory_;
-    String<Memory> sentinel_;
-    String<Memory> ssh_;
+    ds::String<Memory> directory_;
+    ds::String<Memory> sentinel_;
+    ds::String<Memory> ssh_;
     Memory& memory_;
   };
 

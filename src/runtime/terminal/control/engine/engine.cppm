@@ -77,7 +77,7 @@ export namespace telar::runtime::control {
     // ended it, on the primary screen; `end` is the row after them, or their last row when the
     // cursor stopped within it.
     struct Zone {
-      Vector<std::uint8_t, ConcurrentMemory> bytes;
+      ds::Vec<std::uint8_t, ConcurrentMemory> bytes;
       TrackedRow first;
       TrackedRow end;
       bool end_inclusive = false;
@@ -87,7 +87,7 @@ export namespace telar::runtime::control {
     ds::Option<Zone> takeZone() noexcept;
 
     // Moves the document a program wrote since the last call into into.
-    bool takeDocument(Vector<std::uint8_t, ConcurrentMemory>& into) noexcept;
+    bool takeDocument(ds::Vec<std::uint8_t, ConcurrentMemory>& into) noexcept;
 
     bool pasteEvents() const noexcept;
 
@@ -185,9 +185,9 @@ export namespace telar::runtime::control {
     tbc::view<GraphicsQueries<ConcurrentMemory>, tbc::lt::a> graphics_queries_;
     tbc::view<Reports<ConcurrentMemory>, tbc::lt::a> reports_;
     ColorQueries<ConcurrentMemory> colors_;
-    tbc::view<Vector<std::uint8_t, ConcurrentMemory>, tbc::lt::a> document_;
+    tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> document_;
     ds::Option<Zone> open_zone_;
-    tbc::view<Vector<Zone, ConcurrentMemory>, tbc::lt::a> zones_;
+    tbc::view<ds::Vec<Zone, ConcurrentMemory>, tbc::lt::a> zones_;
     ClientFacts facts_;
     tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;
     bool enabled_;

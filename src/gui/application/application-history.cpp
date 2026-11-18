@@ -115,7 +115,7 @@ namespace telar::gui::application::history {
 
   void paste(Session& session, std::uint64_t entry_id, bool alternate) {
     // The entry is copied out of the history, which pasting must not be able to reach.
-    const String<Memory> entry{view(session).command(entry_id), AllocatorRef<char, Memory>{Access::memory(session)}};
+    const ds::String<Memory> entry{Access::memory(session), view(session).command(entry_id)};
     const std::string_view command = entry;
     const auto* pane = session.focusedPane();
     if (pane == nullptr || !pane->attached || pane->exited) {
@@ -141,7 +141,7 @@ namespace telar::gui::application::history {
   }
 
   void copy(Session& session, std::uint64_t entry_id) {
-    Access::clipboard(session) = view(session).command(entry_id);
+    Access::clipboard(session).assign(view(session).command(entry_id));
   }
 
   void visit(Session& session, std::uint64_t entry_id) {

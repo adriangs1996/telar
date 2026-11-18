@@ -186,6 +186,30 @@ namespace {
     check(alive.count() == 0 && memory.liveBytes() == 0);
   }
 
+  // A Vec of values that copy only explicitly clones each one into storage of its own allocator.
+  void testVecCloneOfClones() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+
+    {
+      ds::Vec<ds::String<BudgetAllocator<SystemAllocator>>, BudgetAllocator<SystemAllocator>> names{memory};
+
+      names.emplace(memory, "short");
+      names.emplace(memory, "a name long enough to live on the heap, past the inline bytes");
+
+      const auto before = memory.liveBytes();
+      auto copy = names.clone();
+
+      check(copy.size() == 2 && copy.capacity() == 2 && copy[0] == "short" && copy[1] == names[1]);
+      check(copy[1].data() != names[1].data() && memory.liveBytes() > before);
+      names.atMut(1).clear();
+      check(copy[1] == "a name long enough to live on the heap, past the inline bytes");
+      check(names.clone().size() == 2 && ds::Vec<ds::String<BudgetAllocator<SystemAllocator>>, BudgetAllocator<SystemAllocator>>{memory}.clone().empty());
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
   void testVecMoves() {
     SystemAllocator system;
     BudgetAllocator first{system, 1 << 20};
@@ -926,6 +950,184 @@ namespace {
     check(alive.count() == 0);
   }
 
+  // A tree's node holds a Vec of nodes: the Vec is declared while the node's type is incomplete.
+  struct TreeNode {
+    explicit TreeNode(BudgetAllocator<SystemAllocator>& memory, int value)
+        : value(value),
+          children(memory) {}
+
+    int value;
+    ds::Vec<TreeNode, BudgetAllocator<SystemAllocator>> children;
+  };
+
+  void testVecIncomplete() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+
+    {
+      TreeNode root{memory, 0};
+
+      for (int value = 1; value <= 3; ++value) {
+        auto& child = root.children.emplace(memory, value);
+
+        child.children.emplace(memory, value * 10);
+      }
+
+      check(root.children.size() == 3 && root.children[2].value == 3 && root.children[2].children[0].value == 30);
+      check(memory.liveBytes() != 0);
+    }
+
+    check(memory.liveBytes() == 0, "a tree of Vecs returns all its storage");
+  }
+
+  // A Vec built from values copies each, in order, with storage from its own allocator.
+  void testVecFromValues() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+    Lives alive;
+
+    {
+      const ds::Array<Counted, 3> source{{Counted{1, alive}, Counted{2, alive}, Counted{3, alive}}};
+      const ds::Vec<Counted, BudgetAllocator<SystemAllocator>> copy{memory, source.view()};
+
+      check(copy.size() == 3 && copy[0].value == 1 && copy[2].value == 3 && alive.count() == 6);
+      check(copy.capacity() == 3 && memory.liveBytes() == 3 * sizeof(Counted), "a copy holds exactly its values");
+
+      const auto again = copy.clone();
+
+      check(again.capacity() == 3 && memory.liveBytes() == 6 * sizeof(Counted), "a clone holds exactly its values");
+
+      const ds::Vec<Counted, BudgetAllocator<SystemAllocator>> none{memory, std::span<const Counted>{}};
+
+      check(none.empty() && none.capacity() == 0);
+    }
+
+    check(alive.count() == 0 && memory.liveBytes() == 0);
+  }
+
+  // retain keeps the accepted values in order, destroys each dropped one once, and works for values
+  // that only move.
+  void testVecRetain() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+    Lives alive;
+
+    {
+      ds::Vec<Counted, BudgetAllocator<SystemAllocator>> values{memory};
+
+      for (int value = 0; value < 10; ++value) {
+        values.emplace(value, alive);
+      }
+
+      check(values.retain([](const Counted& value) { return value.value % 3 == 0; }) == 6);
+      check(values.size() == 4 && values[0].value == 0 && values[1].value == 3 && values[2].value == 6 && values[3].value == 9);
+      check(alive.count() == 4, "each dropped value is destroyed once");
+      check(values.retain([](const Counted&) { return true; }) == 0 && values.size() == 4);
+      check(values.retain([](const Counted&) { return false; }) == 4 && values.empty() && alive.count() == 0);
+    }
+
+    ds::Vec<std::unique_ptr<int>, BudgetAllocator<SystemAllocator>> owners{memory};
+
+    for (int value = 0; value < 6; ++value) {
+      owners.push(std::make_unique<int>(value));
+    }
+
+    check(owners.retain([](const std::unique_ptr<int>& owner) { return *owner % 2 == 1; }) == 3);
+    check(owners.size() == 3 && *owners[0] == 1 && *owners[1] == 3 && *owners[2] == 5);
+  }
+
+  // shrinkToFit hands the storage past the values back: all of it when empty.
+  void testShrinkToFit() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+
+    {
+      ds::Vec<std::uint64_t, BudgetAllocator<SystemAllocator>> values{memory};
+
+      values.reserve(100);
+      values.push(7);
+      values.push(8);
+
+      const auto reserved = memory.liveBytes();
+
+      values.shrinkToFit();
+      check(values.capacity() == 2 && memory.liveBytes() < reserved && values[0] == 7 && values[1] == 8);
+      values.clear();
+      values.shrinkToFit();
+      check(values.capacity() == 0 && memory.liveBytes() == 0, "an empty Vec keeps no storage");
+      values.push(9);
+      check(values.size() == 1 && values[0] == 9);
+    }
+
+    {
+      ds::String<BudgetAllocator<SystemAllocator>> text{memory};
+      const std::string_view long_text = "a text that does not fit the inline bytes";
+
+      text.append(long_text);
+      text.reserve(400);
+      text.shrinkToFit();
+      check(text == long_text && text.capacity() < 400 && text.data()[text.size()] == '\0');
+      text.truncate(5);
+      text.shrinkToFit();
+      check(text == "a tex" && memory.liveBytes() == 0, "a String short enough goes back inline and returns its storage");
+      check(&text.memory() == &memory, "a String keeps the allocator it was given");
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
+  // The edits that read text from the String itself, inline and on the heap, keep the text intact and
+  // the String terminated.
+  void testStringSelfEdits() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+
+    for (const std::string_view start : {std::string_view{"inline"}, std::string_view{"a longer text, kept on the heap by its size"}}) {
+      ds::String<BudgetAllocator<SystemAllocator>> text{memory, start};
+      std::string model{start};
+
+      text.insert(2, text.view());
+      model.insert(2, std::string{model});
+      check(text == std::string_view{model} && text.data()[text.size()] == '\0', "inserting a String into itself copies it whole first");
+
+      text.replace(1, 3, text.view().substr(4, 6));
+      model.replace(1, 3, model.substr(4, 6));
+      check(text == std::string_view{model});
+
+      text.assign(text.view().substr(3));
+      model.assign(model.substr(3));
+      check(text == std::string_view{model});
+
+      text.remove(2, 1000);
+      model.erase(2);
+      check(text == std::string_view{model} && text.size() == 2, "a removal past the end stops at it");
+
+      text.resize(6, '-');
+      model.resize(6, '-');
+      text.atMut(0) = 'X';
+      model[0] = 'X';
+      check(text == std::string_view{model} && text[5] == '-');
+      check(text.pop() == ds::Option{'-'} && text.size() == 5);
+    }
+
+    {
+      ds::String<BudgetAllocator<SystemAllocator>> buffer{memory, "kept"};
+
+      buffer.resizeForOverwrite(100);
+      std::memset(buffer.dataMut() + 4, 'w', 96);
+      check(buffer.size() == 100 && buffer.view().substr(0, 5) == "keptw" && buffer.data()[100] == '\0', "the bytes before keep their value and the String stays terminated");
+      buffer.resizeForOverwrite(2);
+      check(buffer == "ke");
+      std::ranges::replace(buffer.viewMut(), 'e', 'E');
+      check(buffer == "kE" && buffer.viewMut().size() == 2 && buffer.data()[2] == '\0', "viewMut edits the bytes and leaves the NUL");
+    }
+
+    ds::String<BudgetAllocator<SystemAllocator>> empty{memory};
+
+    check(!empty.pop().hasValue() && empty.empty());
+    check(memory.liveBytes() == 0);
+  }
+
   const telar::testing::Case case_array{"ds.array", testArray};
   const telar::testing::Case case_option{"ds.option", testOption};
   const telar::testing::Case case_vec_growth{"ds.vec_growth", testVecGrowth};
@@ -944,6 +1146,12 @@ namespace {
   const telar::testing::Case case_function_lifetimes{"ds.function_lifetimes", testFunctionLifetimes};
   const telar::testing::Case case_array_access{"ds.array_access", testArrayAccess};
   const telar::testing::Case case_option_assignment{"ds.option_assignment", testOptionAssignment};
+  const telar::testing::Case case_vec_incomplete{"ds.vec_incomplete", testVecIncomplete};
+  const telar::testing::Case case_vec_retain{"ds.vec_retain", testVecRetain};
+  const telar::testing::Case case_vec_clone_of_clones{"ds.vec_clone_of_clones", testVecCloneOfClones};
+  const telar::testing::Case case_vec_from_values{"ds.vec_from_values", testVecFromValues};
+  const telar::testing::Case case_shrink_to_fit{"ds.shrink_to_fit", testShrinkToFit};
+  const telar::testing::Case case_string_self_edits{"ds.string_self_edits", testStringSelfEdits};
   const telar::testing::Case case_vec_edges{"ds.vec_edges", testVecEdges};
   const telar::testing::Case case_string_edges{"ds.string_edges", testStringEdges};
   const telar::testing::Case case_map_edges{"ds.map_edges", testMapEdges};

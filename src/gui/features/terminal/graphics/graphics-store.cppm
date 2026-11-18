@@ -202,8 +202,8 @@ export {
 
       Memory& memory_;
       GraphicsBudget& budget_;
-      Vector<Owned<Image, Memory>, Memory> images_;
-      Vector<GraphicsPlacement, Memory> placements_;
+      ds::Vec<Owned<Image, Memory>, Memory> images_;
+      ds::Vec<GraphicsPlacement, Memory> placements_;
       std::size_t bytes_ = 0;
       std::uint64_t released_bytes_ = 0;
       std::uint64_t latest_revision_ = 0;

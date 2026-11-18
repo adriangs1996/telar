@@ -109,7 +109,7 @@ export {
 
       explicit FileStore(Memory& memory, std::string_view path);
 
-      bool load(Vector<Byte, Memory>& bytes);
+      bool load(ds::Vec<Byte, Memory>& bytes);
 
       FileDescriptor lock() const;
 
@@ -123,7 +123,7 @@ export {
 
     private:
       FileDescriptor parent_;
-      String<Memory> name_;
+      ds::String<Memory> name_;
     };
 
     template <Allocator Memory>
@@ -342,7 +342,7 @@ export {
         validateIdentity(record.first_tab);
         auto workspace = makeOwned<Workspace>(memory_, memory_, record.id, record.path, record.name);
 
-        workspace->tabs.emplace_back(memory_, record.first_tab, record.first_label);
+        workspace->tabs.emplace(memory_, record.first_tab, record.first_label);
         model_.workspaces.insert(record.id, std::move(workspace));
         advanceIdentityCounter(model_.next_tab_id, record.first_tab + 1);
       }
@@ -354,7 +354,7 @@ export {
           return;
         }
 
-        workspace->tabs.emplace_back(memory_, record.id, record.label);
+        workspace->tabs.emplace(memory_, record.id, record.label);
         advanceIdentityCounter(model_.next_tab_id, record.id + 1);
       }
 
@@ -399,7 +399,7 @@ export {
         // No client asked for it: its shell keeps its prompt, which telar's editor covers.
         const auto identity = panes_.launch(model_, nullptr, false, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
 
-        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push_back(identity);
+        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(identity);
         auto& pane = *model_.panes.find(identity);
 
         pane.launch.restore(record.arguments, record.argument_count);
@@ -456,8 +456,8 @@ export {
             continue;
           }
 
-          std::erase_if(workspace->tabs, [](const auto& tab) {
-            return tab.panes.empty();
+          workspace->tabs.retain([](const auto& tab) {
+            return !tab.panes.empty();
           });
 
           if (workspace->tabs.empty()) {
@@ -675,7 +675,7 @@ export {
     public:
       inline explicit SessionStore(ConcurrentMemory& memory)
           : memory_(memory),
-            buffer_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
+            buffer_(memory) {}
 
       inline ~SessionStore() {
         if (worker_) {
@@ -735,7 +735,7 @@ export {
 
         try {
           TELAR_TRACE("checkpoint.encode");
-          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_, dropped_records);
+          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records);
 
           pending_ = worker_.getMut().submit(bytes);
           dirty_ = !pending_;
@@ -766,7 +766,7 @@ export {
           });
 
           if (snapshot_.changed(model, layouts, agents) || dirty_) {
-            const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_, dropped_records);
+            const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records);
             if (worker_.getMut().submit(bytes)) {
               worker_.getMut().wait([&](int error) {
                 completed(error);
@@ -800,7 +800,7 @@ export {
 
       ConcurrentMemory& memory_;
       Snapshot<Agents> snapshot_;
-      Vector<Byte, ConcurrentMemory> buffer_;
+      ds::Vec<Byte, ConcurrentMemory> buffer_;
       // The worker stores the encoded buffer above until its result is collected, so the store stays put.
       tbc::view<ds::Option<ObservationWorker<FileStore<ConcurrentMemory>>>, tbc::lt::self> worker_;
       Clock::time_point due_{};

@@ -137,7 +137,7 @@ export {
 
       static IntegrationProvider describe(AgentProvider provider);
 
-      String<Memory> root(Memory& memory, const EnvironmentSource& environment, bool legacy = false) const;
+      ds::String<Memory> root(Memory& memory, const EnvironmentSource& environment, bool legacy = false) const;
 
     private:
       static constexpr auto claude_events = ds::Array<std::string_view, 8>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"};

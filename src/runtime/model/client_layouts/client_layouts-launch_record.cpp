@@ -1,13 +1,14 @@
 module telar.runtime.model.client_layouts;
+import telar.base.ds;
 
 namespace telar::runtime {
 
   template <Allocator Memory>
   LaunchRecord<Memory>::LaunchRecord(Memory& memory)
-      : bytes_(AllocatorRef<char, Memory>{memory}) {}
+      : bytes_(memory) {}
 
   template <Allocator Memory>
-  void LaunchRecord<Memory>::capture(std::span<const String<Memory>> arguments, bool restorable) {
+  void LaunchRecord<Memory>::capture(std::span<const ds::String<Memory>> arguments, bool restorable) {
     bytes_.clear();
     count_ = 0;
     if (!restorable) {
@@ -27,7 +28,7 @@ namespace telar::runtime {
     bytes_.reserve(size);
     for (const auto& argument : arguments) {
       bytes_.append(argument);
-      bytes_.push_back('\0');
+      bytes_.push('\0');
     }
 
     count_ = static_cast<std::uint16_t>(arguments.size());
@@ -52,8 +53,8 @@ namespace telar::runtime {
   template class LaunchRecord<SystemAllocator>;
   template class LaunchRecord<ConcurrentMemory>;
   template LaunchRecord<Memory>::LaunchRecord(Memory& memory);
-  template void LaunchRecord<Memory>::capture(std::span<const String<Memory>> arguments, bool restorable);
+  template void LaunchRecord<Memory>::capture(std::span<const ds::String<Memory>> arguments, bool restorable);
   template LaunchRecord<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::LaunchRecord(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory);
-  template void LaunchRecord<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::capture(std::span<const String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>> arguments, bool restorable);
+  template void LaunchRecord<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::capture(std::span<const ds::String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>> arguments, bool restorable);
 
 }

@@ -41,15 +41,17 @@ import telar.runtime.redirect.pf_rules;
 
 namespace telar::runtime::cli {
 
-  String<Memory> pluginCallbackSource(Memory& memory, std::string_view source, std::string_view action) {
+  ds::String<Memory> pluginCallbackSource(Memory& memory, std::string_view source, std::string_view action) {
     constexpr std::string_view prefix = "local telar = require(\"telar\")\nlocal plugin = (function()\n";
     constexpr std::string_view middle = "\nend)()\nif type(plugin) ~= \"table\" or type(plugin.actions) ~= \"table\" then error(\"plugin must return a table with an actions table\") end\nlocal callback = plugin.actions[\"";
     constexpr std::string_view suffix = "\"]\nif type(callback) ~= \"function\" then error(\"plugin action is not a function\") end\nreturn {telar.bind_global({\"escape\"}, callback)}";
 
-    String<Memory> wrapped{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> wrapped{memory};
 
     wrapped.reserve(prefix.size() + source.size() + middle.size() + action.size() + suffix.size());
-    wrapped.append(prefix).append(source).append(middle).append(action).append(suffix);
+    for (const auto part : {prefix, source, middle, action, suffix}) {
+      wrapped.append(part);
+    }
 
     return wrapped;
   }
@@ -173,11 +175,11 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"Expected traffic redirect --socket PATH --target IP:PORT [--direction outbound|inbound|both] [--process PID[@SECONDS.MICROSECONDS]] [--dry-run]"};
     }
 
-    String<Memory> endpoint{socket, AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> endpoint{memory, socket};
 
-    endpoint += redirect::socket_suffix;
+    endpoint.append(redirect::socket_suffix);
 
-    if (endpoint.front() != '/' || endpoint.size() >= sizeof(sockaddr_un::sun_path)) {
+    if (endpoint.view().front() != '/' || endpoint.size() >= sizeof(sockaddr_un::sun_path)) {
       throw std::invalid_argument{"Invalid absolute redirect endpoint"};
     }
 
@@ -195,7 +197,7 @@ namespace telar::runtime::cli {
       redirect::PfSession session{command, state, identity, loopback};
 
       session.recover();
-      std::println("telar redirect: recovered {}", identity.anchor.c_str());
+      std::println("telar redirect: recovered {}", identity.anchor.data());
       return;
     }
 
@@ -208,7 +210,7 @@ namespace telar::runtime::cli {
     if (dry_run) {
       struct stat metadata{};
 
-      if (::lstat(endpoint.c_str(), &metadata) != 0 || !S_ISSOCK(metadata.st_mode) || (metadata.st_mode & 0077) != 0 || (::geteuid() != 0 && metadata.st_uid != ::geteuid())) {
+      if (::lstat(endpoint.data(), &metadata) != 0 || !S_ISSOCK(metadata.st_mode) || (metadata.st_mode & 0077) != 0 || (::geteuid() != 0 && metadata.st_uid != ::geteuid())) {
         throw SystemError{"Enable runtime.proxy.transparent_redirect on an owned runtime first", EACCES};
       }
 
@@ -247,7 +249,7 @@ namespace telar::runtime::cli {
     installPngDecoder();
 
     // Shells keep starting without the integration when its scripts cannot be written.
-    String<ConcurrentMemory> shell_integration{AllocatorRef<char, ConcurrentMemory>{memory}};
+    ds::String<ConcurrentMemory> shell_integration{memory};
 
     if (configuration.shell_integration && !paths.data_home.empty()) {
       try {
@@ -261,9 +263,9 @@ namespace telar::runtime::cli {
     ds::Option<traffic::Service> traffic_service;
 
     if (configuration.proxy.network_capture) {
-      String<ConcurrentMemory> endpoint{paths.socket, AllocatorRef<char, ConcurrentMemory>{memory}};
+      ds::String<ConcurrentMemory> endpoint{memory, paths.socket};
 
-      endpoint += traffic::socket_suffix;
+      endpoint.append(traffic::socket_suffix);
       traffic_service.emplace(memory, endpoint, configuration.proxy.stream_interception);
     }
 
@@ -291,16 +293,16 @@ namespace telar::runtime::cli {
     ds::Option<traffic::control::Service<ConcurrentMemory, decltype(network_backend)>> network_control;
 
     if (shared_traffic != nullptr) {
-      String<ConcurrentMemory> endpoint{paths.socket, AllocatorRef<char, ConcurrentMemory>{memory}};
+      ds::String<ConcurrentMemory> endpoint{memory, paths.socket};
 
-      endpoint += traffic::control::socket_suffix;
+      endpoint.append(traffic::control::socket_suffix);
       network_control.emplace(memory, endpoint, network_backend);
       shared_traffic->packageControl(&network_control.getMut());
     }
 
     // Queued halves borrow the proxy's capture quota, so workers must release them before the proxy is destroyed.
     plugins::ShutdownGuard stop_plugins{plugin_service};
-    BackgroundService background_service{memory, paths.history.c_str(), configuration.history_filters};
+    BackgroundService background_service{memory, paths.history.data(), configuration.history_filters};
     PathService path_service{memory};
     EditorService editor_service{memory};
     const auto engine_arguments = configuration.engine.views();
@@ -417,9 +419,9 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"Expected traffic capture --socket PATH or traffic import --socket PATH --file PCAP"};
     }
 
-    String<Memory> path{socket, AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> path{memory, socket};
 
-    path += traffic::socket_suffix;
+    path.append(traffic::socket_suffix);
     traffic::Capture capture{memory, traffic::connect(path)};
 
     if (file != nullptr) {

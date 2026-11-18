@@ -82,7 +82,7 @@ namespace telar::runtime::traffic {
         direction(event.direction),
         visibility(event.visibility),
         source(event.source),
-        bytes(event.bytes.begin(), event.bytes.end(), AllocatorRef<Byte, Secure>{memory}),
+        bytes(memory, event.bytes),
         routes(matches.size()) {
     client.append(event.client);
     server.append(event.server);
@@ -281,7 +281,8 @@ namespace telar::runtime::traffic {
         }
 
         if (verdict == Verdict::replace) {
-          slot.getMut().bytes.assign(bytes.begin(), bytes.end());
+          slot.getMut().bytes.clear();
+      slot.getMut().bytes.extend(bytes);
           slot.getMut().replaced = true;
         }
 
@@ -486,7 +487,7 @@ namespace telar::runtime::traffic {
   Service::Peer::Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid)
       : socket(std::move(socket)),
         uid(uid),
-        input(AllocatorRef<Byte, SensitiveMemory>{memory}) {}
+        input(memory) {}
 
   Service::Service(ConcurrentMemory& memory, std::string_view path, bool allow_interception)
       : upstream_(memory),
@@ -878,7 +879,7 @@ namespace telar::runtime::traffic {
       const auto previous = peer.input.size();
 
       peer.input.resize(peer.expected);
-      const auto count = ::recv(peer.socket.get(), peer.input.data() + previous, peer.expected - previous, 0);
+      const auto count = ::recv(peer.socket.get(), peer.input.dataMut() + previous, peer.expected - previous, 0);
       if (count <= 0) {
         peer.input.resize(previous);
         if (count == 0 || !socketWouldBlock(sys::lastError())) {

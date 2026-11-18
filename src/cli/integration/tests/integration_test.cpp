@@ -83,7 +83,7 @@ namespace {
         check(upgraded.install(settings) && !upgraded.install(settings));
         const auto formatted = settings.format();
 
-        check(formatted.contains("/new path/telar") && !formatted.contains("/fixture/telar"));
+        check(formatted.view().contains("/new path/telar") && !formatted.view().contains("/fixture/telar"));
         check(upgraded.uninstall(settings) && !upgraded.uninstall(settings));
         check(settings.find("hooks")->children().empty());
         for (const auto event : specification.events) {

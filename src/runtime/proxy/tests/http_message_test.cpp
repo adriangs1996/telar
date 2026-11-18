@@ -174,10 +174,11 @@ namespace {
     const auto framing = request.readHttp1Head("POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 999\r\n\r\n");
 
     check(framing.framing.length == 999);
-    request.target = "/edited";
+    request.target.assign("/edited");
     const ds::Array<std::uint8_t, 7> body{'a', 0, 'b', 'o', 'd', 'y', 255};
 
-    request.body.assign(body.begin(), body.end());
+    request.body.clear();
+    request.body.extend({body.begin(), body.end()});
     auto wire = request.serializeHttp1();
 
     check(text(wire).starts_with("POST /edited HTTP/1.1\r\n") && text(wire).contains("Content-Length: 7\r\n"));
@@ -221,7 +222,8 @@ namespace {
       static_cast<void>(HttpContentCodec{memory}.decodeView(body, "identity", body.size() - 1));
     });
 
-    request.body.assign(body.begin(), body.end());
+    request.body.clear();
+    request.body.extend({body.begin(), body.end()});
     request.headers.set("Content-Encoding", "gzip");
     request.headers.set("X-Order", "merged");
     check(*request.headers.get("x-order") == "merged");
@@ -232,9 +234,10 @@ namespace {
       HttpMessage response{memory, true};
 
       response.status = status;
-      response.reason = "Fixture";
+      response.reason.assign("Fixture");
       response.headers.append("Content-Length", "123");
-      response.body.assign(body.begin(), body.end());
+      response.body.clear();
+      response.body.extend({body.begin(), body.end()});
       const auto output = response.serializeHttp1();
 
       check(text(output).ends_with("\r\n\r\n"));
@@ -293,12 +296,12 @@ namespace {
     });
 
     request.trailers.clear();
-    request.method = "BAD METHOD";
+    request.method.assign("BAD METHOD");
     fails([&] {
       request.serializeHttp1();
     });
 
-    request.method = "POST";
+    request.method.assign("POST");
     request.version = HttpVersion::http2;
     fails([&] {
       request.serializeHttp1();

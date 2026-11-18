@@ -279,7 +279,7 @@ namespace {
     const auto workspace_id = model.workspaces.nextId();
     auto workspace = makeOwned<Workspace>(memory, memory, workspace_id, "/tmp", "Test");
 
-    workspace->tabs.emplace_back(memory, 1, "Shell");
+    workspace->tabs.emplace(memory, 1, "Shell");
     const TabLocation location{WorkspaceLocation{.id = workspace_id}, 1};
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
@@ -288,10 +288,10 @@ namespace {
     constexpr std::uint64_t pane_generation = 34;
 
     pane->generation = pane_generation;
-    workspace->tabs[0].panes.push_back(pane_id);
+    workspace->tabs.atMut(0).panes.push(pane_id);
     model.workspaces.insert(workspace_id, std::move(workspace));
     model.panes.insert(pane_id, std::move(pane));
-    target.session().attachments.push_back(makeOwned<Attachment>(memory, memory, target.session().graphics_credit, pane_id, model.panes.find(pane_id)->media));
+    target.session().attachments.push(makeOwned<Attachment>(memory, memory, target.session().graphics_credit, pane_id, model.panes.find(pane_id)->media));
     target.session().last_input_pane = pane_id;
     target.session().last_input_sequence = 7;
 

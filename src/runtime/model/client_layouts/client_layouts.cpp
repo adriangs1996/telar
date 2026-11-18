@@ -11,16 +11,16 @@ import telar.base.ds;
 namespace telar::runtime {
 
   PendingClipboard::PendingClipboard(ConcurrentMemory& memory)
-      : bytes_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
+      : bytes_(memory) {}
 
   void PendingClipboard::replace(std::uint64_t pane, std::span<const Byte> bytes) {
     if (bytes.size() > capacity) {
       throw EncodingError{"Selection exceeds the clipboard limit"};
     }
 
-    Vector<Byte, ConcurrentMemory> replacement{bytes.begin(), bytes.end(), bytes_.get_allocator()};
+    ds::Vec<Byte, ConcurrentMemory> replacement{bytes_.memory(), bytes};
 
-    bytes_.swap(replacement);
+    std::swap(bytes_, replacement);
     pane_ = pane;
     pending_ = true;
   }
@@ -77,7 +77,7 @@ namespace telar::runtime {
       : id(identity),
         generation(identity),
         connection(memory, std::move(descriptor)),
-        attachments(AllocatorRef<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory>{memory}),
+        attachments(memory),
         clipboard(memory),
         deferred_report(memory) {
     attachments.reserve(attachment_capacity);
@@ -125,7 +125,7 @@ namespace telar::runtime {
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
         scrollback_rows(memory),
-        cwd(command.cwd(), AllocatorRef<char, ConcurrentMemory>{memory}) {
+        cwd(memory, command.cwd()) {
     randomBytes(history_session.dataMut(), history_session.size());
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());
@@ -409,21 +409,21 @@ namespace telar::runtime {
 
   Tab::Tab(ConcurrentMemory& memory, std::uint64_t identity, std::string_view name)
       : id(identity),
-        label(name, AllocatorRef<char, ConcurrentMemory>{memory}),
-        panes(AllocatorRef<std::uint64_t, ConcurrentMemory>{memory}) {
+        label(memory, name),
+        panes(memory) {
     panes.reserve(64);
   }
 
   Workspace::Workspace(ConcurrentMemory& memory, std::uint64_t identity, std::string_view directory, std::string_view label)
       : id(identity),
-        path(directory, AllocatorRef<char, ConcurrentMemory>{memory}),
-        name(label, AllocatorRef<char, ConcurrentMemory>{memory}),
-        tabs(AllocatorRef<Tab, ConcurrentMemory>{memory}) {
+        path(memory, directory),
+        name(memory, label),
+        tabs(memory) {
     tabs.reserve(64);
   }
 
   Tab* Workspace::tabMut(std::uint64_t tab_id) noexcept {
-    for (auto& entry : tabs) {
+    for (auto& entry : tabs.viewMut()) {
       if (entry.id == tab_id) {
         return &entry;
       }
@@ -458,7 +458,7 @@ namespace telar::runtime {
         created_by(request.created_by),
         coordinator(request.coordinator),
         origin(request.origin),
-        path(request.path, AllocatorRef<char, ConcurrentMemory>{memory}) {
+        path(memory, request.path) {
     branch.assign(request.branch);
     base.assign(request.base);
     title.assign(request.title);
@@ -527,7 +527,7 @@ namespace telar::runtime {
       }
 
       const auto length = entry->path.size();
-      if (path.size() != length && path[length] != '/' && entry->path.back() != '/') {
+      if (path.size() != length && path[length] != '/' && entry->path.view().back() != '/') {
         continue;
       }
 
@@ -613,7 +613,7 @@ namespace telar::runtime {
         worktrees(memory) {}
 
   ClientLayouts::ClientLayouts(ConcurrentMemory& memory)
-      : records_(AllocatorRef<Record, ConcurrentMemory>{memory}) {
+      : records_(memory) {
     records_.reserve(maximum_identities);
   }
 
@@ -671,10 +671,10 @@ namespace telar::runtime {
 
     if (existing == nullptr) {
       if (records_.size() < maximum_identities) {
-        records_.emplace_back();
-        existing = &records_.back();
+        records_.emplace();
+        existing = &records_.backMut();
       } else {
-        existing = &*std::ranges::min_element(records_, {}, &Record::last_used);
+        existing = &*std::ranges::min_element(records_.viewMut(), {}, &Record::last_used);
       }
     }
 
@@ -787,7 +787,7 @@ namespace telar::runtime {
   }
 
   ClientLayouts::Record* ClientLayouts::find(std::uint64_t identity) noexcept {
-    for (auto& record : records_) {
+    for (auto& record : records_.viewMut()) {
       if (record.identity == identity) {
         return &record;
       }

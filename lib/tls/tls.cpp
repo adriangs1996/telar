@@ -292,8 +292,8 @@ namespace telar::runtime {
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto files = AuthorityFiles::forKind(kind);
     ErasingAllocator sensitive_memory{memory};
-    Vector<unsigned char, decltype(sensitive_memory)> key_bytes{AllocatorRef<unsigned char, decltype(sensitive_memory)>{sensitive_memory}};
-    Vector<unsigned char, ConcurrentMemory> certificate_bytes{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
+    ds::Vec<unsigned char, decltype(sensitive_memory)> key_bytes{sensitive_memory};
+    ds::Vec<unsigned char, ConcurrentMemory> certificate_bytes{memory};
     const bool has_key = readPrivateFile(directory, files.key, key_bytes, PemDocument::maximum_bytes);
     const bool has_certificate = readPrivateFile(directory, files.certificate, certificate_bytes, PemDocument::maximum_bytes);
 
@@ -379,11 +379,11 @@ namespace telar::runtime {
 
     requireTls(roots.size() <= maximum_root_bytes, "TLS root bundle exceeds its bound");
     const PemDocument own{certificate()};
-    Vector<std::uint8_t, ConcurrentMemory> bundle{AllocatorRef<std::uint8_t, ConcurrentMemory>{memory_}};
+    ds::Vec<std::uint8_t, ConcurrentMemory> bundle{memory_};
 
     bundle.reserve(roots.size() + own.bytes().size());
-    bundle.insert(bundle.end(), roots.begin(), roots.end());
-    bundle.insert(bundle.end(), own.bytes().begin(), own.bytes().end());
+    bundle.extend({roots.begin(), roots.end()});
+    bundle.extend({own.bytes().begin(), own.bytes().end()});
     if (const int error = writePrivateFile(directory, "ca-bundle.pem", bundle, PrivateFileMode::replace)) {
       throw SystemError{"Publish TLS trust bundle", error};
     }
@@ -393,18 +393,18 @@ namespace telar::runtime {
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
-    String<ConcurrentMemory> path{lookup(environment, "XDG_DATA_HOME"), AllocatorRef<char, ConcurrentMemory>{memory}};
-    if (path.empty() || path.front() != '/') {
-      path = lookup(environment, "HOME");
+  ds::String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
+    ds::String<ConcurrentMemory> path{memory, lookup(environment, "XDG_DATA_HOME")};
+    if (path.empty() || path.view().front() != '/') {
+      path.assign(lookup(environment, "HOME"));
       if (path.empty()) {
         throw std::invalid_argument{"Home directory unavailable for proxy"};
       }
 
-      path += "/.local/share";
+      path.append("/.local/share");
     }
 
-    path += "/telar/proxy";
+    path.append("/telar/proxy");
     return path;
   }
 
@@ -427,9 +427,9 @@ namespace telar::runtime::proxy_trust {
         output_(output) {}
 
   void SystemCommand::run(std::span<const std::string_view> arguments) {
-    Vector<String<ConcurrentMemory>, ConcurrentMemory> owned{AllocatorRef<String<ConcurrentMemory>, ConcurrentMemory>{memory_}};
-    Vector<char*, ConcurrentMemory> pointers{AllocatorRef<char*, ConcurrentMemory>{memory_}};
-    String<ConcurrentMemory> line{"telar proxy trust: exec", AllocatorRef<char, ConcurrentMemory>{memory_}};
+    ds::Vec<ds::String<ConcurrentMemory>, ConcurrentMemory> owned{memory_};
+    ds::Vec<char*, ConcurrentMemory> pointers{memory_};
+    ds::String<ConcurrentMemory> line{memory_, "telar proxy trust: exec"};
 
     owned.reserve(arguments.size());
     pointers.reserve(arguments.size() + 1);
@@ -438,21 +438,21 @@ namespace telar::runtime::proxy_trust {
         throw std::invalid_argument{"Invalid proxy trust command argument"};
       }
 
-      owned.emplace_back(argument, AllocatorRef<char, ConcurrentMemory>{memory_});
-      line += ' ';
+      owned.emplace(memory_, argument);
+      line.push(' ');
       appendJsonText(line, argument);
     }
 
-    line += '\n';
+    line.push('\n');
     if (std::fwrite(line.data(), 1, line.size(), output_) != line.size() || std::fflush(output_) != 0) {
       throw SystemError{"Print proxy trust command", EIO};
     }
 
-    for (auto& argument : owned) {
-      pointers.push_back(argument.data());
+    for (auto& argument : owned.viewMut()) {
+      pointers.push(argument.dataMut());
     }
 
-    pointers.push_back(nullptr);
+    pointers.push(nullptr);
 
     // The command talks to the person at the terminal, as sudo does, so it keeps the
     // standard streams and this process group, and nothing else this process holds.
@@ -540,7 +540,7 @@ namespace telar::runtime::proxy_trust {
   }
 
   ds::Option<Record> Record::read(ConcurrentMemory& memory, int directory) {
-    Vector<unsigned char, ConcurrentMemory> source{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
+    ds::Vec<unsigned char, ConcurrentMemory> source{memory};
     if (!readPrivateFile(directory, filename, source, maximum_bytes - 1)) {
       return ds::none;
     }
@@ -549,14 +549,14 @@ namespace telar::runtime::proxy_trust {
   }
 
   void Record::write(ConcurrentMemory& memory, int directory) const {
-    String<ConcurrentMemory> source{"{\n  \"version\": 1,\n  \"backend\": ", AllocatorRef<char, ConcurrentMemory>{memory}};
+    ds::String<ConcurrentMemory> source{memory, "{\n  \"version\": 1,\n  \"backend\": "};
 
     appendJsonText(source, backendName(backend));
-    source += ",\n  \"fingerprint\": ";
+    source.append(",\n  \"fingerprint\": ");
     appendJsonText(source, {fingerprint.data(), fingerprint.size()});
-    source += ",\n  \"store_path\": ";
+    source.append(",\n  \"store_path\": ");
     appendJsonText(source, store.view());
-    source += "\n}\n";
+    source.append("\n}\n");
     if (source.size() > maximum_bytes) {
       throw std::length_error{"Proxy trust record exceeds its bound"};
     }
@@ -575,21 +575,21 @@ namespace telar::runtime::proxy_trust {
   }
 
   Paths::Paths(ConcurrentMemory& memory, std::string_view directory)
-      : directory_(directory, AllocatorRef<char, ConcurrentMemory>{memory}) {
+      : directory_(memory, directory) {
     if (directory.empty() || directory.front() != '/' || directory.contains('\0') || directory.size() + AuthorityFiles::forKind(AuthorityKind::system_trust).certificate.size() + 1 >= PATH_MAX) {
       throw std::invalid_argument{"Proxy authority directory must be an absolute bounded path"};
     }
   }
 
-  const String<ConcurrentMemory>& Paths::directory() const noexcept {
+  const ds::String<ConcurrentMemory>& Paths::directory() const noexcept {
     return directory_;
   }
 
-  String<ConcurrentMemory> Paths::file(std::string_view name) const {
-    auto path = directory_;
+  ds::String<ConcurrentMemory> Paths::file(std::string_view name) const {
+    auto path = directory_.clone();
 
-    path += '/';
-    path += name;
+    path.push('/');
+    path.append(name);
     if (path.size() >= PATH_MAX) {
       throw std::length_error{"Proxy authority file path exceeds its bound"};
     }
@@ -599,7 +599,7 @@ namespace telar::runtime::proxy_trust {
 
   FileDescriptor Paths::open() const {
     // A path that names no directory holds no trust record.
-    FileDescriptor descriptor{::open(directory_.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+    FileDescriptor descriptor{::open(directory_.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (!descriptor && sys::lastError() != ENOENT && sys::lastError() != ENOTDIR) {
       throw SystemError{"Open proxy authority directory"};
     }
@@ -625,16 +625,16 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  String<ConcurrentMemory> Paths::keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup) {
+  ds::String<ConcurrentMemory> Paths::keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup) {
     const auto home = lookup(environment, "HOME");
-    String<ConcurrentMemory> result{home, AllocatorRef<char, ConcurrentMemory>{memory}};
+    ds::String<ConcurrentMemory> result{memory, home};
 
     if (home.empty()) {
       return result;
     }
 
-    result += "/Library/Keychains/login.keychain-db";
-    if (result.front() != '/' || result.size() > PATH_MAX || result.contains('\0')) {
+    result.append("/Library/Keychains/login.keychain-db");
+    if (result.view().front() != '/' || result.size() > PATH_MAX || result.view().contains('\0')) {
       throw std::invalid_argument{"Invalid proxy trust keychain path"};
     }
 

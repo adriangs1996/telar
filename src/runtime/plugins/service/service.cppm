@@ -102,7 +102,7 @@ export {
       ResultQueue<ConcurrentMemory> results_;
       ds::Option<CancellationSignal> cancellation_;
       // Workers report to the queue, budget and cancellation above, so the service is pinned.
-      tbc::view<Vector<Owned<Worker<>, ConcurrentMemory>, ConcurrentMemory>, tbc::lt::self> workers_;
+      tbc::view<ds::Vec<Owned<Worker<>, ConcurrentMemory>, ConcurrentMemory>, tbc::lt::self> workers_;
       FixedText<PATH_MAX> trust_path_;
       std::jthread trust_monitor_;
       std::atomic<std::uint64_t> next_event_{1};

@@ -268,7 +268,9 @@ export {
 
     public:
       inline explicit RequestQueue(Memory& memory)
-          : slots_(Capacity, AllocatorRef<ds::Option<Value>, Memory>{memory}) {}
+          : slots_(memory) {
+        slots_.resize(Capacity);
+      }
 
       inline bool empty() const noexcept {
         return count_ == 0;
@@ -284,7 +286,7 @@ export {
 
       inline Value& atMut(std::size_t offset) noexcept {
         TELAR_ASSERT(offset < count_);
-        return slots_[(head_ + offset) % Capacity].getMut();
+        return slots_.atMut((head_ + offset) % Capacity).getMut();
       }
 
       inline const Value& operator[](std::size_t offset) const noexcept {
@@ -295,7 +297,7 @@ export {
       template <typename... Arguments>
       inline Value& emplace(Arguments&&... arguments) {
         TELAR_ASSERT(!full());
-        auto& value = slots_[(head_ + count_) % Capacity].emplace(std::forward<Arguments>(arguments)...);
+        auto& value = slots_.atMut((head_ + count_) % Capacity).emplace(std::forward<Arguments>(arguments)...);
 
         ++count_;
         return value;
@@ -304,28 +306,28 @@ export {
       inline void removeLast() noexcept {
         TELAR_ASSERT(!empty());
         --count_;
-        slots_[(head_ + count_) % Capacity].reset();
+        slots_.atMut((head_ + count_) % Capacity).reset();
       }
 
       inline Value take() noexcept {
         TELAR_ASSERT(!empty());
-        auto value = std::move(*slots_[head_]);
+        auto value = std::move(slots_.atMut(head_).getMut());
 
-        slots_[head_].reset();
+        slots_.atMut(head_).reset();
         head_ = (head_ + 1) % Capacity;
         --count_;
         return value;
       }
 
       inline void swap(RequestQueue& other) noexcept {
-        TELAR_ASSERT(slots_.get_allocator() == other.slots_.get_allocator());
-        slots_.swap(other.slots_);
+        TELAR_ASSERT(&slots_.memory() == &other.slots_.memory());
+        std::swap(slots_, other.slots_);
         std::swap(head_, other.head_);
         std::swap(count_, other.count_);
       }
 
     private:
-      Vector<ds::Option<Value>, Memory> slots_;
+      ds::Vec<ds::Option<Value>, Memory> slots_;
       std::size_t head_ = 0;
       std::size_t count_ = 0;
     };
@@ -456,7 +458,7 @@ export {
           job.workspace_path.assign(context.workspace_path);
           job.prompt.assign(context.prompt);
           job.request.resize(Codec::encodedSize(message));
-          Codec::encode(message, job.request);
+          Codec::encode(message, job.request.viewMut());
         } catch (...) {
           requests_.removeLast();
           TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
@@ -568,10 +570,10 @@ export {
         inline explicit Job(Memory& memory, std::uint64_t client_id, std::uint64_t request_identity)
             : client(client_id),
               request_id(request_identity),
-              request(AllocatorRef<Byte, Memory>{memory}),
+              request(memory),
               reply(memory),
-              workspace_path(AllocatorRef<char, Memory>{memory}),
-              prompt(AllocatorRef<char, Memory>{memory}) {}
+              workspace_path(memory),
+              prompt(memory) {}
 
         bool cancelled = false;
         bool superseded = false;
@@ -593,11 +595,11 @@ export {
 
         std::uint64_t client;
         std::uint64_t request_id;
-        Vector<Byte, Memory> request;
+        ds::Vec<Byte, Memory> request;
         EncodedReply<Memory> reply;
         RequestContext context;
-        String<Memory> workspace_path;
-        String<Memory> prompt;
+        ds::String<Memory> workspace_path;
+        ds::String<Memory> prompt;
         ds::Option<typename InternalRequestType<Service>::Type> internal;
       };
 

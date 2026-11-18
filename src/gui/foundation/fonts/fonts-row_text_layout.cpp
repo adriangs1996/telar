@@ -11,8 +11,8 @@ namespace telar::gui::inline foundation::inline fonts {
 
   template <Allocator Memory>
   TextLayout<Memory>::TextLayout(Memory& memory)
-      : glyphs_(AllocatorRef<ShapedGlyph, Memory>{memory}),
-        spans_(AllocatorRef<TextSpan, Memory>{memory}) {}
+      : glyphs_(memory),
+        spans_(memory) {}
 
   template <Allocator Memory>
   std::span<const ShapedGlyph> TextLayout<Memory>::glyphs() const noexcept {
@@ -45,11 +45,11 @@ namespace telar::gui::inline foundation::inline fonts {
     }
 
     if (single_span_) {
-      spans_.push_back(*single_span_);
+      spans_.push(*single_span_);
       single_span_.reset();
     }
 
-    spans_.push_back(span);
+    spans_.push(span);
   }
 
   template <Allocator Memory>
@@ -103,7 +103,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
   template <Allocator Memory>
   IconLayout<Memory>::IconLayout(Memory& memory)
-      : glyphs_(AllocatorRef<IconGlyph, Memory>{memory}) {}
+      : glyphs_(memory) {}
 
   template <Allocator Memory>
   std::span<const IconGlyph> IconLayout<Memory>::glyphs() const noexcept {
@@ -166,9 +166,9 @@ namespace telar::gui::inline foundation::inline fonts {
   RowTextLayout<Memory>::RowTextLayout(Memory& memory)
       : runs_(memory),
         cell_(memory),
-        glyphs_(AllocatorRef<ShapedGlyph, Memory>{memory}),
-        spans_(AllocatorRef<TextSpan, Memory>{memory}),
-        cells_(AllocatorRef<CellTextRange, Memory>{memory}) {}
+        glyphs_(memory),
+        spans_(memory),
+        cells_(memory) {}
 
   template <Allocator Memory>
   void RowTextLayout<Memory>::resetFont() noexcept {
@@ -206,9 +206,9 @@ namespace telar::gui::inline foundation::inline fonts {
   void RowTextLayout<Memory>::appendPrimary(std::span<const ShapedGlyph> glyphs, std::size_t column, RowTextRequest request) {
     const auto first = glyphs_.size();
 
-    glyphs_.insert(glyphs_.end(), glyphs.begin(), glyphs.end());
-    cells_[column] = {.first_span = spans_.size(), .span_count = 1};
-    spans_.push_back({.first = first, .count = glyphs.size(), .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 1});
+    glyphs_.extend({glyphs.begin(), glyphs.end()});
+    cells_.atMut(column) = {.first_span = spans_.size(), .span_count = 1};
+    spans_.push({.first = first, .count = glyphs.size(), .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 1});
   }
 
   template <Allocator Memory>
@@ -280,16 +280,16 @@ namespace telar::gui::inline foundation::inline fonts {
 
   template <Allocator Memory>
   void RowTextLayout<Memory>::appendCluster(ShapedGlyph glyph, std::size_t column, RowTextRequest request) {
-    cells_[column] = {.first_span = spans_.size(), .span_count = 1};
-    spans_.push_back({.first = glyphs_.size(), .count = 1, .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 0});
-    glyphs_.push_back(glyph);
+    cells_.atMut(column) = {.first_span = spans_.size(), .span_count = 1};
+    spans_.push({.first = glyphs_.size(), .count = 1, .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 0});
+    glyphs_.push(glyph);
   }
 
   template <Allocator Memory>
   CellTextLayout<Memory>::CellTextLayout(Memory& memory, std::size_t maximum_text_bytes)
-      : glyphs_(AllocatorRef<ShapedGlyph, Memory>{memory}),
-        spans_(AllocatorRef<TextSpan, Memory>{memory}),
-        clusters_(AllocatorRef<Cluster, Memory>{memory}),
+      : glyphs_(memory),
+        spans_(memory),
+        clusters_(memory),
         maximum_text_bytes_(maximum_text_bytes) {}
 
   template <Allocator Memory>
@@ -311,12 +311,12 @@ namespace telar::gui::inline foundation::inline fonts {
     }
 
     for (std::size_t index = 0; index < shaped.size(); ++index) {
-      glyphs_.push_back(shaped.glyph(index));
+      glyphs_.push(shaped.glyph(index));
     }
 
-    spans_.push_back({.first = glyphs_.size() - shaped.size(), .count = shaped.size(), .role = role, .offset = static_cast<std::int32_t>(columns_ * grid.width), .columns = columns});
+    spans_.push({.first = glyphs_.size() - shaped.size(), .count = shaped.size(), .role = role, .offset = static_cast<std::int32_t>(columns_ * grid.width), .columns = columns});
     columns_ += columns;
-    clusters_.push_back({.columns = columns_, .glyph_end = glyphs_.size(), .span_end = spans_.size()});
+    clusters_.push({.columns = columns_, .glyph_end = glyphs_.size(), .span_end = spans_.size()});
   }
 
   template <Allocator Memory>

@@ -7,10 +7,10 @@ import telar.base.ds;
 namespace telar::runtime::control {
 
   Checksum::Checksum(ConcurrentMemory& memory)
-      : graphemes_(AllocatorRef<std::uint32_t, ConcurrentMemory>{memory}) {}
+      : graphemes_(memory) {}
 
   void Checksum::discard() noexcept {
-    Vector<std::uint32_t, ConcurrentMemory>{graphemes_.get_allocator()}.swap(graphemes_);
+    graphemes_ = ds::Vec<std::uint32_t, ConcurrentMemory>{graphemes_.memory()};
   }
 
   // Defined here, beside accumulate, so that this unit instantiates every specialization it names.
@@ -236,7 +236,7 @@ namespace telar::runtime::control {
       }
 
       graphemes_.resize(count);
-      status = ghostty_grid_ref_graphemes(&reference, graphemes_.data(), graphemes_.size(), &count);
+      status = ghostty_grid_ref_graphemes(&reference, graphemes_.dataMut(), graphemes_.size(), &count);
       points = std::span<const std::uint32_t>{graphemes_}.first(count);
     }
 

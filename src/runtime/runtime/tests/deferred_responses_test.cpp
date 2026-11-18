@@ -102,8 +102,8 @@ namespace {
 
     workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{3, location});
     workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{4, location.workspace});
-    workspace.name = "Current workspace";
-    workspace.tabs.front().label = "Current tab";
+    workspace.name.assign("Current workspace");
+    workspace.tabs.atMut(0).label.assign("Current tab");
     pane.close_requested = true;
     check(reader.receive<TabSnapshot>().panes.empty());
     const auto snapshot = reader.receive<WorkspaceSnapshot>();

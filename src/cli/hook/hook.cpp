@@ -220,8 +220,8 @@ namespace telar::runtime::cli::hooks {
       return;
     }
 
-    String<Memory> current{AllocatorRef<char, Memory>{input.memory}};
-    String<Memory> pending{AllocatorRef<char, Memory>{input.memory}};
+    ds::String<Memory> current{input.memory};
+    ds::String<Memory> pending{input.memory};
 
     items->eachElement([&](JsonValue value) {
       if (!value.encoded().starts_with('{')) {
@@ -238,9 +238,9 @@ namespace telar::runtime::cli::hooks {
       if (status == AgentPlanStatus::completed) {
         report.plan_done += report.plan_done < std::numeric_limits<std::uint16_t>::max();
       } else if (status == AgentPlanStatus::in_progress && current.empty()) {
-        current = item.stringField(todo ? "activeForm" : "step").valueOr(item.stringField(todo ? "content" : "step").valueOr(""));
+        current.assign(item.stringField(todo ? "activeForm" : "step").valueOr(item.stringField(todo ? "content" : "step").valueOr("")));
       } else if (status == AgentPlanStatus::pending && pending.empty()) {
-        pending = item.stringField(todo ? "content" : "step").valueOr("");
+        pending.assign(item.stringField(todo ? "content" : "step").valueOr(""));
       }
     });
 
@@ -420,10 +420,10 @@ namespace telar::runtime::cli::hooks {
           environment_(environment),
           socket_(socket),
           output_(memory, maximum_output_bytes),
-          root_(AllocatorRef<char, Memory>{memory}),
-          branch_(AllocatorRef<char, Memory>{memory}),
-          base_(AllocatorRef<char, Memory>{memory}),
-          path_(AllocatorRef<char, Memory>{memory}) {}
+          root_(memory),
+          branch_(memory),
+          base_(memory),
+          path_(memory) {}
 
     void answer(Object& input) {
       TELAR_TRACE("hooks.worktree");
@@ -488,17 +488,17 @@ namespace telar::runtime::cli::hooks {
         throw std::runtime_error{"NotARepository"};
       }
 
-      root_ = common.substr(0, common.size() - 5);
+      root_.assign(common.substr(0, common.size() - 5));
     }
 
     void chooseBranch(std::string_view name) {
-      branch_ = name;
+      branch_.assign(name);
       if (validWorktreeBranch(branch_)) {
         return;
       }
 
       branch_.resize(std::min<std::size_t>(branch_.size(), 200));
-      for (auto& character : branch_) {
+      for (auto& character : branch_.viewMut()) {
         const auto byte = static_cast<unsigned char>(character);
         const bool safe = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '/';
         if (!safe) {
@@ -506,7 +506,7 @@ namespace telar::runtime::cli::hooks {
         }
       }
 
-      branch_ = trimText(branch_, "-./");
+      branch_.assign(trimText(branch_, "-./"));
       if (!validWorktreeBranch(branch_)) {
         throw std::runtime_error{"InvalidWorktreeBranch"};
       }
@@ -525,16 +525,16 @@ namespace telar::runtime::cli::hooks {
 
       mainRoot(cwd);
       chooseBranch(input.text("name"));
-      base_ = git({"git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"}, "NotARepository");
+      base_.assign(git({"git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"}, "NotARepository"));
       if (!validWorktreeBranch(base_)) {
         throw std::runtime_error{"InvalidWorktreeBranch"};
       }
 
       path_.clear();
       sessions::appendWorktreeCheckout(path_, root_, branch_);
-      String<Memory> reference{"refs/heads/", AllocatorRef<char, Memory>{memory_}};
+      ds::String<Memory> reference{memory_, "refs/heads/"};
 
-      reference += branch_;
+      reference.append(branch_);
       bool exists = true;
 
       try {
@@ -555,7 +555,7 @@ namespace telar::runtime::cli::hooks {
         std::fprintf(stderr, "telar hook: worktree created but not tracked: %s\n", error.what());
       }
 
-      std::printf("%s\n", path_.c_str());
+      std::printf("%s\n", path_.data());
     }
 
     RuntimePaths<Memory> paths() {
@@ -587,14 +587,14 @@ namespace telar::runtime::cli::hooks {
       }
 
       const auto resolved = paths();
-      Session session{memory_, resolved.socket.c_str(), *target};
+      Session session{memory_, resolved.socket.data(), *target};
 
       session.template exchange<WorktreeRegistered>(RegisterWorktree{.source = *workspace, .created_by = target->pane_id, .path = path_, .branch = branch_, .base = base_});
     }
 
     void remove(Object& input) {
-      path_ = input.text("worktree_path");
-      if (!path_.starts_with('/') || path_.contains('\0')) {
+      path_.assign(input.text("worktree_path"));
+      if (!path_.view().starts_with('/') || path_.view().contains('\0')) {
         throw std::runtime_error{"InvalidWorktreePath"};
       }
 
@@ -602,7 +602,7 @@ namespace telar::runtime::cli::hooks {
       try {
         git({"git", "-C", root_, "worktree", "remove", "--", path_}, "git worktree remove failed");
       } catch (const std::exception&) {
-        std::fprintf(stderr, "telar hook: kept %s; it has changes to review\n", path_.c_str());
+        std::fprintf(stderr, "telar hook: kept %s; it has changes to review\n", path_.data());
         return;
       }
 
@@ -617,11 +617,11 @@ namespace telar::runtime::cli::hooks {
 
     void forgetWorktree() {
       const auto resolved = paths();
-      RuntimeConnection connection{resolved.socket.c_str()};
+      RuntimeConnection connection{resolved.socket.data()};
 
       connection.receiveTimeout(30);
-      Vector<Byte, Memory> incoming{AllocatorRef<Byte, Memory>{memory_}};
-      Vector<Byte, Memory> decoded{AllocatorRef<Byte, Memory>{memory_}};
+      ds::Vec<Byte, Memory> incoming{memory_};
+      ds::Vec<Byte, Memory> decoded{memory_};
 
       incoming.resize(max_payload_size);
       decoded.resize(max_payload_size);
@@ -634,15 +634,15 @@ namespace telar::runtime::cli::hooks {
 
       connection.send(RequestRuntimeState{.client_identity = identity, .interactive = false}, outgoing.viewMut());
       for (;;) {
-        const auto frame = connection.receive(incoming);
+        const auto frame = connection.receive(incoming.viewMut());
         if (frame.front() == static_cast<Byte>(ServerTag::workspace_list)) {
-          DecodeStorage storage{decoded};
+          DecodeStorage storage{decoded.viewMut()};
           const auto catalog = Codec::decode<WorkspaceList>(frame, storage);
 
           for (const auto& worktree : catalog.worktrees) {
             if (worktree.path == path_) {
               connection.send(ForgetWorktree{.request_id = 1, .worktree = worktree.worktree}, outgoing.viewMut());
-              waitForgotten(connection, incoming);
+              waitForgotten(connection, incoming.viewMut());
               return;
             }
           }
@@ -670,10 +670,10 @@ namespace telar::runtime::cli::hooks {
     const Environment& environment_;
     std::string_view socket_;
     CommandOutput<Memory> output_;
-    String<Memory> root_;
-    String<Memory> branch_;
-    String<Memory> base_;
-    String<Memory> path_;
+    ds::String<Memory> root_;
+    ds::String<Memory> branch_;
+    ds::String<Memory> base_;
+    ds::String<Memory> path_;
   };
 
   template <EnvironmentLookup Environment>
@@ -712,9 +712,9 @@ namespace telar::runtime::cli {
     ds::Option<trace::Session<Memory>> tracing;
 
     try {
-      const String<Memory> path{environment.lookup("TELAR_HOOK_TRACE"), AllocatorRef<char, Memory>{memory}};
+      const ds::String<Memory> path{memory, environment.lookup("TELAR_HOOK_TRACE")};
       if (!path.empty()) {
-        tracing.emplace(memory, path.c_str());
+        tracing.emplace(memory, path.data());
       }
     } catch (const std::exception&) {
     }
@@ -745,7 +745,7 @@ namespace telar::runtime::cli {
 
           server.socket = options.socket;
           const RuntimePaths paths{memory, server, environment};
-          hooks::Session session{memory, paths.socket.c_str(), *target};
+          hooks::Session session{memory, paths.socket.data(), *target};
 
           if (reports.progress) {
             session.report(*reports.progress);
@@ -787,7 +787,7 @@ namespace telar::runtime::cli::hooks {
   template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
 
   Input::Input(Memory& memory)
-      : text_(AllocatorRef<char, Memory>{memory}) {}
+      : text_(memory) {}
 
   void Input::read(int descriptor) {
     TELAR_TRACE("hooks.readInput");
@@ -808,7 +808,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       received_ += static_cast<std::size_t>(count);
-      text_.append(buffer.data(), std::min(static_cast<std::size_t>(count), maximum_bytes - text_.size()));
+      text_.append(std::string_view{buffer.data(), std::min(static_cast<std::size_t>(count), maximum_bytes - text_.size())});
     }
 
     if (limited()) {
@@ -829,16 +829,16 @@ namespace telar::runtime::cli::hooks {
   }
 
   void Input::keepWholeMembers() {
-    const auto opening = text_.find_first_not_of(" \r\n\t");
+    const auto opening = text_.view().find_first_not_of(" \r\n\t");
     if (opening == std::string_view::npos || text_[opening] != '{') {
-      text_ = "{}";
+      text_.assign("{}");
       return;
     }
 
     std::size_t depth = 0;
     std::size_t complete = 0;
     std::size_t member_start = opening + 1;
-    String<Memory> candidate{text_.get_allocator()};
+    ds::String<Memory> candidate{text_.memory()};
     bool quoted = false;
     bool escaped = false;
 
@@ -884,24 +884,24 @@ namespace telar::runtime::cli::hooks {
     }
 
     if (complete == 0) {
-      text_ = "{}";
+      text_.assign("{}");
     } else {
       text_.resize(complete);
-      text_.push_back('}');
+      text_.push('}');
     }
   }
 
-  bool Input::completeMember(std::size_t start, std::size_t end, String<Memory>& candidate) {
+  bool Input::completeMember(std::size_t start, std::size_t end, ds::String<Memory>& candidate) {
     if (std::string_view{text_.data() + start, end - start}.find_first_not_of(" \r\n\t") == std::string_view::npos) {
       return false;
     }
 
-    candidate = "{";
-    candidate.append(text_.data() + start, end - start);
-    candidate += "}";
+    candidate.assign("{");
+    candidate.append(std::string_view{text_.data() + start, end - start});
+    candidate.append("}");
     try {
       JsonValue::parse(candidate);
-      validateUnicodeEscapes(candidate.get_allocator().memory(), candidate);
+      validateUnicodeEscapes(candidate.memory(), candidate);
       return true;
     } catch (const JsonError&) {
       return false;

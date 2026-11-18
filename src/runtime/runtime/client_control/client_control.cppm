@@ -211,7 +211,8 @@ export {
           return ReportDecision::rejected;
         }
 
-        report.payload.assign(payload.begin(), payload.end());
+        report.payload.clear();
+        report.payload.extend({payload.begin(), payload.end()});
         report.reporter = reporter;
         report.required_recheck = pane->process_rechecks + (pane->process_recheck_running ? 2 : 1);
         report.observed = ObservationTime::now();
@@ -273,17 +274,17 @@ export {
 
       // Releases a due report to be answered and exchanges its payload with the caller's empty one, which
       // must share the client's allocator, as Rust's `mem::swap`.
-      inline void open(ClientSession& client, Vector<Byte, ConcurrentMemory>& payload) noexcept {
+      inline void open(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept {
         cancel(client);
         client.deferred_report.answering = true;
         client.connection.read_paused = false;
-        payload.swap(client.deferred_report.payload);
+        std::swap(payload, client.deferred_report.payload);
       }
 
       // Ends the answer and gives the payload's storage back to the client.
-      inline static void close(ClientSession& client, Vector<Byte, ConcurrentMemory>& payload) noexcept {
+      inline static void close(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept {
         payload.clear();
-        payload.swap(client.deferred_report.payload);
+        std::swap(payload, client.deferred_report.payload);
         client.deferred_report.answering = false;
       }
 
@@ -1006,7 +1007,7 @@ export {
           }
 
           pane->worktree_checked_cwd = pane->cwd_revision;
-          if (pane->exit_status || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace || !pane->cwd.starts_with('/') || model.worktrees.containing(pane->cwd) != nullptr) {
+          if (pane->exit_status || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace || !pane->cwd.view().starts_with('/') || model.worktrees.containing(pane->cwd) != nullptr) {
             continue;
           }
 

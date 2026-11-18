@@ -181,14 +181,15 @@ namespace {
       Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 8, .host = "fixture.test"})}};
       HttpMessage message{memory};
 
-      message.method = "POST";
-      message.target = "/gzip";
+      message.method.assign("POST");
+      message.target.assign("/gzip");
       message.headers.append("Host", "fixture.test");
       message.headers.append("Content-Encoding", "gzip");
       message.trailers.append("X-Checksum", "fixture");
       const ds::Array<Byte, 3> before{'a', 0, 'b'};
 
-      message.body.assign(before.begin(), before.end());
+      message.body.clear();
+      message.body.extend(before.view());
       const auto wire = message.serializeHttp1();
       TestByteStream child, origin;
 

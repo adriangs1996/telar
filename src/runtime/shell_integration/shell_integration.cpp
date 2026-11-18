@@ -71,33 +71,33 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ShellIntegration<Memory>::ShellIntegration(Memory& memory, std::string_view directory, bool ssh)
-      : directory_(directory, AllocatorRef<char, Memory>{memory}),
-        sentinel_(AllocatorRef<char, Memory>{memory}),
-        ssh_(AllocatorRef<char, Memory>{memory}),
+      : directory_(memory, directory),
+        sentinel_(memory),
+        ssh_(memory),
         memory_(memory) {
     if (!directory_.empty()) {
       sentinel_.assign(directory_);
-      sentinel_ += '/';
-      sentinel_ += files.back().directory;
-      sentinel_ += '/';
-      sentinel_ += files.back().name;
+      sentinel_.push('/');
+      sentinel_.append(files.back().directory);
+      sentinel_.push('/');
+      sentinel_.append(files.back().name);
     }
 
     if (!directory_.empty() && ssh) {
       ssh_.assign(directory_);
-      ssh_ += '/';
-      ssh_ += shell_files::ssh.directory;
-      ssh_ += '/';
-      ssh_ += shell_files::ssh.name;
+      ssh_.push('/');
+      ssh_.append(shell_files::ssh.directory);
+      ssh_.push('/');
+      ssh_.append(shell_files::ssh.name);
     }
   }
 
   template <Allocator Memory>
-  String<Memory> ShellIntegration<Memory>::install(Memory& memory, std::string_view data_home) {
-    String<Memory> directory{data_home, AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> ShellIntegration<Memory>::install(Memory& memory, std::string_view data_home) {
+    ds::String<Memory> directory{memory, data_home};
 
-    directory += "/telar/shell-integration/";
-    directory.append(shell_files::digest_digits.data(), shell_files::digest_digits.size());
+    directory.append("/telar/shell-integration/");
+    directory.append(std::string_view{shell_files::digest_digits.data(), shell_files::digest_digits.size()});
     writeScripts(directory);
     return directory;
   }
@@ -124,7 +124,7 @@ namespace telar::runtime {
       command.setEnvironment("TELAR_PROMPT_MODE", "telar");
     }
 
-    String<Memory> path{directory_, AllocatorRef<char, Memory>{memory_}};
+    ds::String<Memory> path{memory_, directory_};
 
     switch (*shell) {
     case IntegratedShell::none:
@@ -132,12 +132,12 @@ namespace telar::runtime {
     case IntegratedShell::zsh:
       // Copy before setting: setting a variable can move the one a view points into.
       if (const auto previous = command.environment("ZDOTDIR")) {
-        const String<Memory> saved{*previous, AllocatorRef<char, Memory>{memory_}};
+        const ds::String<Memory> saved{memory_, *previous};
 
         command.setEnvironment("TELAR_ZSH_ZDOTDIR", saved);
       }
 
-      path += "/zsh";
+      path.append("/zsh");
       command.setEnvironment("ZDOTDIR", path);
       break;
     case IntegratedShell::bash: {
@@ -148,7 +148,7 @@ namespace telar::runtime {
         command.setEnvironment("TELAR_BASH_LOGIN", "1");
       }
 
-      path += "/bash/telar.bash";
+      path.append("/bash/telar.bash");
       const ds::Array<std::string_view, 3> arguments{"--rcfile", path, "-i"};
 
       command.replaceSpawnArguments(arguments);
@@ -156,14 +156,14 @@ namespace telar::runtime {
     }
     case IntegratedShell::fish: {
       // XDG's default when the variable is unset, so fish keeps finding the system's files.
-      String<Memory> saved{"/usr/local/share:/usr/share", AllocatorRef<char, Memory>{memory_}};
+      ds::String<Memory> saved{memory_, "/usr/local/share:/usr/share"};
       const auto previous = command.environment("XDG_DATA_DIRS");
       if (previous) {
         saved.assign(*previous);
       }
 
-      path += "/fish:";
-      path += saved;
+      path.append("/fish:");
+      path.append(saved);
       if (previous) {
         command.setEnvironment("TELAR_FISH_XDG_DATA_DIRS", saved);
       }
@@ -178,7 +178,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   bool ShellIntegration<Memory>::present() const noexcept {
-    if (::access(sentinel_.c_str(), R_OK) == 0) {
+    if (::access(sentinel_.data(), R_OK) == 0) {
       return true;
     }
 

@@ -82,8 +82,8 @@ namespace telar::git {
     // The index's own modification time: entries modified at or after it are racy.
     std::int64_t timestamp() const noexcept;
 
-    Vector<IndexEntry, Memory> entries;
-    Vector<CacheTreeNode, Memory> tree;
+    ds::Vec<IndexEntry, Memory> entries;
+    ds::Vec<CacheTreeNode, Memory> tree;
     Fingerprint fingerprint;
     IndexState state = IndexState::ready;
 
@@ -91,8 +91,8 @@ namespace telar::git {
     IndexState parse(const Limits& limits);
     bool parseTree(std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits);
 
-    String<Memory> bytes_;
-    String<Memory> paths_;
+    ds::String<Memory> bytes_;
+    ds::String<Memory> paths_;
     ObjectFormat format_ = ObjectFormat::sha1;
     bool loaded_ = false;
   };
@@ -113,7 +113,7 @@ namespace telar::git {
   private:
     // One tree buffer per depth, allocated before the walk: a reader at one
     // depth keeps viewing its buffer while deeper trees are read.
-    String<Memory>& buffer(std::size_t depth) noexcept;
+    ds::String<Memory>& buffer(std::size_t depth) noexcept;
 
     bool readTree(const ObjectId& id, std::size_t depth);
     std::string_view relative(std::uint32_t entry, std::size_t prefix) const noexcept;
@@ -132,7 +132,7 @@ namespace telar::git {
     // Past the entries below directory `component` of the current prefix.
     std::uint32_t groupEnd(std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) const noexcept;
 
-    Vector<String<Memory>, Memory> trees_;
+    ds::Vec<ds::String<Memory>, Memory> trees_;
     Memory& memory_;
     ObjectDatabase* objects_ = nullptr;
     const Index* index_ = nullptr;
@@ -206,8 +206,8 @@ namespace telar::git {
     const Limits* limits_ = nullptr;
     std::uint64_t hashed_bytes_ = 0;
     Fingerprint verified_index_;
-    Vector<Verified, Memory> verified_;
-    String<Memory> buffer_;
+    ds::Vec<Verified, Memory> verified_;
+    ds::String<Memory> buffer_;
     Directories directories_;
   };
 

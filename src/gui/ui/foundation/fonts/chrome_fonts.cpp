@@ -6,6 +6,7 @@ static_assert(true);
 #include "chrome_fonts.hpp"
 #include "font_source.hpp"
 #include "foundation/core/memory.hpp"
+#include "telar_base/ds/containers.hpp"
 #include <QByteArray>
 #include <QtCore/qstringliteral.h>
 #include <cstdint>
@@ -23,10 +24,10 @@ namespace telar::gui::qt {
       return emphasized ? semibold : regular;
     }
 
-    Vector<std::uint8_t, SystemAllocator> fontBytes(SystemAllocator& memory, bool emphasized) {
+    ds::Vec<std::uint8_t, SystemAllocator> fontBytes(SystemAllocator& memory, bool emphasized) {
       const auto bytes = bundledFont(emphasized);
 
-      return {bytes.cbegin(), bytes.cend(), AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
+      return ds::Vec<std::uint8_t, SystemAllocator>{memory, {reinterpret_cast<const std::uint8_t*>(bytes.constData()), static_cast<std::size_t>(bytes.size())}};
     }
 
   }

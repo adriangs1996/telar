@@ -127,7 +127,7 @@ namespace telar::gui::qt {
         store_(store),
         elements_(elements),
         memory_(memory),
-        targets_(AllocatorRef<RowTarget, ApplicationAllocator>{memory}) {}
+        targets_(memory) {}
 
   QAbstractItemModel* ActivityController::rows() noexcept {
     return &rows_;
@@ -208,7 +208,7 @@ namespace telar::gui::qt {
 
     ++rebuilds_;
     elements_.begin(ElementSlots::agent_slots);
-    Vector<Order::Source, ApplicationAllocator> sources{AllocatorRef<Order::Source, ApplicationAllocator>{memory_}};
+    ds::Vec<Order::Source, ApplicationAllocator> sources{memory_};
 
     sources.reserve(application::machines::Machines::capacity);
     for (std::size_t index = 0; index < versions.size(); ++index) {
@@ -219,7 +219,7 @@ namespace telar::gui::qt {
       const auto slot = static_cast<application::machines::Machines::Slot>(index);
       const auto& session = store_.client(slot).session;
 
-      sources.push_back({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList()});
+      sources.push({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList()});
     }
 
     Order::Plan order;
@@ -228,7 +228,7 @@ namespace telar::gui::qt {
     QList<QVariantMap> records;
 
     records.reserve(static_cast<qsizetype>(order.count));
-    Vector<RowTarget, ApplicationAllocator> targets{AllocatorRef<RowTarget, ApplicationAllocator>{memory_}};
+    ds::Vec<RowTarget, ApplicationAllocator> targets{memory_};
 
     targets.reserve(order.count);
     for (const auto& entry : order.view()) {
@@ -250,11 +250,11 @@ namespace telar::gui::qt {
       }
 
       records.append(std::move(record));
-      targets.push_back({.identity = key, .target = target});
+      targets.push({.identity = key, .target = target});
     }
 
     const auto agent_count = static_cast<int>(records.size());
-    Vector<ListedProcess, ApplicationAllocator> processes{AllocatorRef<ListedProcess, ApplicationAllocator>{memory_}};
+    ds::Vec<ListedProcess, ApplicationAllocator> processes{memory_};
 
     // Processes are the active machine's; the other machines are summarized by their sidebar row.
     for (std::size_t index = 0; index < sources.size(); ++index) {
@@ -269,12 +269,12 @@ namespace telar::gui::qt {
           return agent.pane_id == pane.pane_id && agent.pane_generation == pane.pane_generation;
         });
         if (!held) {
-          processes.push_back({.source = index, .pane = &pane});
+          processes.push({.source = index, .pane = &pane});
         }
       }
     }
 
-    std::ranges::sort(processes, precedes);
+    std::ranges::sort(processes.viewMut(), precedes);
     if (!processes.empty()) {
       records.append(processHeaderRecord(static_cast<qsizetype>(processes.size())));
     }
@@ -294,7 +294,7 @@ namespace telar::gui::qt {
 
       record.insert(QStringLiteral("key"), key);
       records.append(std::move(record));
-      targets.push_back({.identity = key, .target = target});
+      targets.push({.identity = key, .target = target});
     }
 
     targets_ = std::move(targets);

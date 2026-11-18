@@ -147,7 +147,7 @@ export {
       static constexpr std::size_t batch_capacity = 128;
       static_assert(NSIG - 1 <= batch_capacity);
       FileDescriptor queue_;
-      Vector<Interest, Memory> interests_;
+      ds::Vec<Interest, Memory> interests_;
       FileDescriptor signal_reader_;
       FileDescriptor signal_writer_;
       ds::Array<struct sigaction, NSIG> previous_signals_{};

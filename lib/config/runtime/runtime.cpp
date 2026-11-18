@@ -424,7 +424,15 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ProxyHostPolicy<Memory>::ProxyHostPolicy(Memory& memory)
-      : patterns_(AllocatorRef<String<Memory>, Memory>{memory}) {}
+      : patterns_(memory) {}
+
+  template <Allocator Memory>
+  ProxyHostPolicy<Memory> ProxyHostPolicy<Memory>::clone() const {
+    ProxyHostPolicy copy{patterns_.memory()};
+
+    copy.patterns_ = patterns_.clone();
+    return copy;
+  }
 
   template <Allocator Memory>
   bool ProxyHostPolicy<Memory>::validPattern(std::string_view pattern) noexcept {
@@ -444,17 +452,19 @@ namespace telar::runtime {
       pattern = numeric.data();
     }
 
-    patterns_.emplace_back(pattern, AllocatorRef<char, Memory>{patterns_.get_allocator().memory()});
-    std::ranges::transform(patterns_.back(), patterns_.back().begin(), asciiLower);
+    patterns_.emplace(patterns_.memory(), pattern);
+    auto& added = patterns_.backMut();
+
+    std::ranges::transform(added.view(), added.dataMut(), asciiLower);
     return true;
   }
 
   template <Allocator Memory>
   void ProxyHostPolicy<Memory>::finish() {
-    std::ranges::sort(patterns_);
-    const auto duplicates = std::ranges::unique(patterns_);
+    std::ranges::sort(patterns_.viewMut());
+    const auto duplicates = std::ranges::unique(patterns_.viewMut());
 
-    patterns_.erase(duplicates.begin(), duplicates.end());
+    patterns_.truncate(patterns_.size() - duplicates.size());
   }
 
   template <Allocator Memory>
@@ -504,7 +514,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::span<const String<Memory>> ProxyHostPolicy<Memory>::patterns() const noexcept {
+  std::span<const ds::String<Memory>> ProxyHostPolicy<Memory>::patterns() const noexcept {
     return patterns_;
   }
 
@@ -525,8 +535,26 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ProxyOptions<Memory>::ProxyOptions(Memory& memory)
-      : authority_directory(AllocatorRef<char, Memory>{memory}),
+      : authority_directory(memory),
         intercept_hosts(memory) {}
+
+  template <Allocator Memory>
+  ProxyOptions<Memory> ProxyOptions<Memory>::clone() const {
+    ProxyOptions copy{authority_directory.memory()};
+
+    copy.authority_directory = authority_directory.clone();
+    copy.intercept_hosts = intercept_hosts.clone();
+    copy.capture = capture;
+    copy.enabled = enabled;
+    copy.anonymous_tunnels = anonymous_tunnels;
+    copy.pane_https_proxy = pane_https_proxy;
+    copy.network_capture = network_capture;
+    copy.network_control = network_control;
+    copy.transparent_redirect = transparent_redirect;
+    copy.transparent_tls = transparent_tls;
+    copy.stream_interception = stream_interception;
+    return copy;
+  }
 
   template struct ProxyOptions<Memory>;
   template struct ProxyOptions<ConcurrentMemory>;
@@ -635,7 +663,7 @@ namespace telar::runtime::config {
         directory.fail("is invalid");
       }
 
-      values.authority_directory = text;
+      values.authority_directory.assign(text);
     }
 
     const auto hosts = table.field("intercept_hosts");
@@ -708,7 +736,17 @@ namespace telar::runtime::config {
 
   template <Allocator Memory>
   CommandValues<Memory>::CommandValues(Memory& memory)
-      : arguments(AllocatorRef<String<Memory>, Memory>{memory}) {}
+      : arguments(memory) {}
+
+  template <Allocator Memory>
+  CommandValues<Memory> CommandValues<Memory>::clone() const {
+    CommandValues copy{arguments.memory()};
+
+    copy.arguments = arguments.clone();
+    copy.timeout = timeout;
+    copy.idle_timeout = idle_timeout;
+    return copy;
+  }
 
   template <Allocator Memory>
   typename CommandValues<Memory>::Views CommandValues<Memory>::views() const noexcept {
@@ -723,11 +761,35 @@ namespace telar::runtime::config {
 
   template <Allocator Memory>
   RuntimeValues<Memory>::RuntimeValues(Memory& memory)
-      : history_path(AllocatorRef<char, Memory>{memory}),
-        session_path(AllocatorRef<char, Memory>{memory}),
+      : history_path(memory),
+        session_path(memory),
         engine(memory),
         descriptions(memory),
         proxy(memory) {}
+
+  template <Allocator Memory>
+  RuntimeValues<Memory> RuntimeValues<Memory>::clone() const {
+    RuntimeValues copy{history_path.memory()};
+
+    copy.history_path = history_path.clone();
+    copy.session_path = session_path.clone();
+    copy.history_filters = history_filters;
+    copy.engine = engine.clone();
+    copy.descriptions = descriptions.clone();
+    copy.proxy = proxy.clone();
+    copy.plugins = plugins;
+    copy.configuration_directory = configuration_directory;
+    copy.manifests = manifests;
+    copy.limits = limits;
+    copy.graphics = graphics;
+    copy.control_policy = control_policy;
+    copy.capture_output = capture_output;
+    copy.persist_session = persist_session;
+    copy.resume_agents = resume_agents;
+    copy.shell_integration = shell_integration;
+    copy.ssh_integration = ssh_integration;
+    return copy;
+  }
 
   template struct CommandValues<Memory>;
   template struct CommandValues<ConcurrentMemory>;

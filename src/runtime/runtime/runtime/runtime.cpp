@@ -868,7 +868,7 @@ namespace telar::runtime {
 
     const auto tab_id = nextTabIdentity(model);
 
-    workspace.tabs.emplace_back(memory_, tab_id, request.label);
+    workspace.tabs.emplace(memory_, tab_id, request.label);
 
     try {
       const auto pane = createAt(model, panes, clients, client_id, TabLocation{request.workspace, tab_id}, launch, request.size);
@@ -887,7 +887,7 @@ namespace telar::runtime {
       });
     } catch (...) {
       if (auto* current = model.workspaces.find(request.workspace.id); current != nullptr && current->tabs.back().panes.empty()) {
-        current->tabs.pop_back();
+        current->tabs.truncate(current->tabs.size() - 1);
       }
 
       throw;
@@ -907,7 +907,7 @@ namespace telar::runtime {
 
     const auto tab_id = nextTabIdentity(model);
 
-    workspace.tabs.emplace_back(memory_, tab_id, request.label);
+    workspace.tabs.emplace(memory_, tab_id, request.label);
     try {
       auto launch = request.launch;
       LaunchDirectory directory;
@@ -918,13 +918,13 @@ namespace telar::runtime {
 
       const auto pane = panes.launch(model, owner_colors, bare_prompt, launch, TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, request.size).id;
 
-      require(model.workspaces, WorkspaceLocation{.id = request.workspace}).tabs.back().panes.push_back(pane);
+      require(model.workspaces, WorkspaceLocation{.id = request.workspace}).tabs.backMut().panes.push(pane);
       ++model.next_tab_id;
       ++model.workspace_revision;
       return pane;
     } catch (...) {
       if (auto* current = model.workspaces.find(request.workspace)) {
-        current->tabs.pop_back();
+        current->tabs.truncate(current->tabs.size() - 1);
       }
 
       throw;
@@ -1003,9 +1003,9 @@ namespace telar::runtime {
     }
 
     if (from < to) {
-      std::rotate(workspace.tabs.begin() + from, workspace.tabs.begin() + from + 1, workspace.tabs.begin() + to + 1);
+      std::rotate(workspace.tabs.dataMut() + from, workspace.tabs.dataMut() + from + 1, workspace.tabs.dataMut() + to + 1);
     } else if (to < from) {
-      std::rotate(workspace.tabs.begin() + to, workspace.tabs.begin() + from, workspace.tabs.begin() + from + 1);
+      std::rotate(workspace.tabs.dataMut() + to, workspace.tabs.dataMut() + from, workspace.tabs.dataMut() + from + 1);
     }
 
     ++model.workspace_revision;
@@ -1043,7 +1043,9 @@ namespace telar::runtime {
         continue;
       }
 
-      std::erase(tab->panes, identity);
+      tab->panes.retain([&](const auto& value) {
+        return value != identity;
+      });
       releaseEmptyTab(model, panes, clients, location);
       leaveEmptyViews(model, panes, clients, location.workspace.id);
     }
@@ -1241,8 +1243,8 @@ namespace telar::runtime {
       }
     }
 
-    std::erase_if(workspace->tabs, [&](const auto& candidate) {
-      return candidate.id == location.tab_id;
+    workspace->tabs.retain([&](const auto& candidate) {
+      return candidate.id != location.tab_id;
     });
 
     const bool workspace_closed = workspace->tabs.empty();
@@ -1306,7 +1308,7 @@ namespace telar::runtime {
     auto workspace = makeOwned<Workspace>(memory_, memory_, workspace_id, launch.cwd, name);
     const auto tab_id = model.next_tab_id;
 
-    workspace->tabs.emplace_back(memory_, tab_id, std::string_view{});
+    workspace->tabs.emplace(memory_, tab_id, std::string_view{});
     model.workspaces.insertProvisional(workspace_id, std::move(workspace));
     ds::Option<std::uint64_t> pane;
 
@@ -1315,7 +1317,7 @@ namespace telar::runtime {
       const auto* requester = clients.find(client_id);
 
       pane = panes.launch(model, nullptr, requester != nullptr && requester->bare_prompt, launch, location, size).id;
-      model.workspaces.find(workspace_id)->tabs.front().panes.push_back(*pane);
+      model.workspaces.find(workspace_id)->tabs.atMut(0).panes.push(*pane);
       if (replace_view) {
         panes.detachAll(model, clients, client_id);
       }
@@ -1369,7 +1371,7 @@ namespace telar::runtime {
 
     try {
       panes.attach(model, requireClient(clients, client_id), pane, size);
-      requireTab(model.workspaces, location).panes.push_back(pane);
+      requireTab(model.workspaces, location).panes.push(pane);
     } catch (...) {
       panes.remove(model, clients, pane);
       throw;
@@ -2950,7 +2952,7 @@ namespace telar::runtime {
         continue;
       }
 
-      Vector<Byte, ConcurrentMemory> payload{AllocatorRef<Byte, ConcurrentMemory>{memory_}};
+      ds::Vec<Byte, ConcurrentMemory> payload{memory_};
 
       deferred_reports_.open(*client, payload);
       Frames frames{memory_};
@@ -2960,7 +2962,7 @@ namespace telar::runtime {
 
       try {
         if (!client->connection.closing) {
-          DecodeStorage storage{frames.decode};
+          DecodeStorage storage{frames.decode.viewMut()};
 
           dispatch(identity, std::span<const Byte>{payload}, storage);
           answered = true;

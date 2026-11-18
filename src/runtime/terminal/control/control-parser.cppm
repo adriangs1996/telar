@@ -26,7 +26,7 @@ export namespace telar::runtime::control {
     static constexpr std::size_t string_limit = apc_limit;
 
     explicit Parser(Memory& memory)
-        : overflow_(AllocatorRef<std::uint8_t, Memory>{memory}) {}
+        : overflow_(memory) {}
 
     // Consumers borrow a sequence only during complete(). A false result leaves
     // its owned bytes unchanged, including across calls with an empty input.
@@ -213,7 +213,7 @@ export namespace telar::runtime::control {
     }
 
     void discard() noexcept {
-      Vector<std::uint8_t, Memory>{overflow_.get_allocator()}.swap(overflow_);
+      overflow_ = ds::Vec<std::uint8_t, Memory>{overflow_.memory()};
       clear();
       phase_ = Phase::ground;
       after_ready_ = Phase::ground;
@@ -505,7 +505,8 @@ export namespace telar::runtime::control {
         append(escape);
         phase_ = Phase::escape;
       } else {
-        overflow_.assign(sequence.begin(), sequence.end());
+        overflow_.clear();
+        overflow_.extend({sequence.begin(), sequence.end()});
         size_ = sequence.size();
         phase_ = Phase::ready;
       }
@@ -624,7 +625,7 @@ export namespace telar::runtime::control {
 
         if (overflow_.empty()) {
           overflow_.reserve(inline_.size() * 2);
-          overflow_.insert(overflow_.end(), inline_.begin(), inline_.end());
+          overflow_.extend({inline_.begin(), inline_.end()});
         }
 
         if (overflow_.size() == overflow_.capacity()) {
@@ -633,7 +634,7 @@ export namespace telar::runtime::control {
 
         const auto count = std::min(input.size(), overflow_.capacity() - overflow_.size());
 
-        overflow_.insert(overflow_.end(), input.begin(), input.begin() + count);
+        overflow_.extend({input.begin(), input.begin() + count});
         size_ += count;
         input = input.subspan(count);
       }
@@ -651,14 +652,14 @@ export namespace telar::runtime::control {
 
       if (overflow_.empty()) {
         overflow_.reserve(inline_.size() * 2);
-        overflow_.insert(overflow_.end(), inline_.begin(), inline_.end());
+        overflow_.extend({inline_.begin(), inline_.end()});
       }
 
       if (overflow_.size() == overflow_.capacity()) {
         overflow_.reserve(std::min(string_limit, overflow_.capacity() * 2));
       }
 
-      overflow_.push_back(byte);
+      overflow_.push(byte);
       ++size_;
       return true;
     }
@@ -669,7 +670,7 @@ export namespace telar::runtime::control {
     }
 
     ds::Array<std::uint8_t, inline_bytes> inline_;
-    Vector<std::uint8_t, Memory> overflow_;
+    ds::Vec<std::uint8_t, Memory> overflow_;
     std::size_t size_ = 0;
     Phase phase_ = Phase::ground;
     Phase after_ready_ = Phase::ground;

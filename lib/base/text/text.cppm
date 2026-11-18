@@ -326,12 +326,12 @@ export {
 
     // Built in text.cpp for the base allocators of telar.base.memory.allocators.
     template <Allocator Memory>
-    void appendLowerHex(String<Memory>& output, std::span<const std::uint8_t> bytes);
+    void appendLowerHex(ds::String<Memory>& output, std::span<const std::uint8_t> bytes);
 
-    extern template void appendLowerHex<Memory>(String<Memory>& output, std::span<const std::uint8_t> bytes);
-    extern template void appendLowerHex<ConcurrentMemory>(String<ConcurrentMemory>& output, std::span<const std::uint8_t> bytes);
-    extern template void appendLowerHex<SystemAllocator>(String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
-    extern template void appendLowerHex<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<Memory>(ds::String<Memory>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<ConcurrentMemory>(ds::String<ConcurrentMemory>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<SystemAllocator>(ds::String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
 
     std::string lowerHex(std::span<const std::uint8_t> bytes);
 
@@ -363,7 +363,7 @@ export {
       void truncateHexFallback();
       bool readMantissa(std::string_view text, unsigned base, bool floating);
 
-      String<Memory> digits_;
+      ds::String<Memory> digits_;
       std::int64_t integer_digits_ = 0;
     };
 

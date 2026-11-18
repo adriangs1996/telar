@@ -216,24 +216,24 @@ namespace telar::runtime::config {
     }
   }
 
-  String<Memory> IntegrationProvider::root(Memory& memory, const EnvironmentSource& environment, bool legacy) const {
-    String<Memory> result{AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> IntegrationProvider::root(Memory& memory, const EnvironmentSource& environment, bool legacy) const {
+    ds::String<Memory> result{memory};
 
     if (this->environment != nullptr && !legacy) {
-      result = environment.lookup(this->environment);
+      result.assign(environment.lookup(this->environment));
       if (!result.empty()) {
-        result += environment_suffix;
+        result.append(environment_suffix);
         return result;
       }
     }
 
-    result = environment.lookup("HOME");
+    result.assign(environment.lookup("HOME"));
     if (result.empty()) {
       throw std::invalid_argument{"Home directory unavailable for integration"};
     }
 
-    result += '/';
-    result += home_directory;
+    result.push('/');
+    result.append(home_directory);
     return result;
   }
 

@@ -238,8 +238,8 @@ namespace {
     check(refused);
   }
 
-  String<SystemAllocator> relative(SystemAllocator& memory, std::string_view path, std::string_view directory) {
-    String<SystemAllocator> resolved{path, AllocatorRef<char, SystemAllocator>{memory}};
+  ds::String<SystemAllocator> relative(SystemAllocator& memory, std::string_view path, std::string_view directory) {
+    ds::String<SystemAllocator> resolved{memory, path};
 
     resolveRelativePath(resolved, directory);
     return resolved;
@@ -258,7 +258,7 @@ namespace {
     ds::Array<char, PATH_MAX> current{};
 
     check(::getcwd(current.dataMut(), current.size()) != nullptr);
-    String<SystemAllocator> path{"rel", AllocatorRef<char, SystemAllocator>{memory}};
+    ds::String<SystemAllocator> path{memory, "rel"};
 
     resolveAbsolutePath(path);
     check(std::string_view{path} == std::string{current.data()} + "/rel");

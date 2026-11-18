@@ -313,10 +313,10 @@ namespace telar::render {
 
   template <Allocator Memory>
   Document<Memory>::Document(Memory& memory)
-      : blocks(AllocatorRef<Block, Memory>{memory}),
-        cells(AllocatorRef<Cell, Memory>{memory}),
-        runs(AllocatorRef<Run, Memory>{memory}),
-        text(AllocatorRef<char, Memory>{memory}) {}
+      : blocks(memory),
+        cells(memory),
+        runs(memory),
+        text(memory) {}
 
   template <Allocator Memory>
   std::string_view Document<Memory>::view(Span span) const noexcept {
@@ -371,15 +371,15 @@ namespace telar::render {
     }
 
     document.blocks.resize(counts.blocks);
-    error = detail::decodeBlocks(input, document.blocks);
+    error = detail::decodeBlocks(input, document.blocks.viewMut());
     if (error == DecodeError::none) {
       document.cells.resize(counts.cells);
-      error = detail::decodeCells(input, counts, document.cells);
+      error = detail::decodeCells(input, counts, document.cells.viewMut());
     }
 
     if (error == DecodeError::none) {
       document.runs.resize(counts.runs);
-      error = detail::decodeRuns(input, counts, document.runs);
+      error = detail::decodeRuns(input, counts, document.runs.viewMut());
     }
 
     if (error == DecodeError::none) {
@@ -399,15 +399,16 @@ namespace telar::render {
   template void encode<Memory>(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
   template DecodeError decode<Memory>(std::span<const std::uint8_t> input, Document<Memory>& document);
 
-  bool appendSequence(const Document<Memory>& document, String<Memory>& output) {
+  bool appendSequence(const Document<Memory>& document, ds::String<Memory>& output) {
     const auto size = encodedSize(document);
     if (!size) {
       return false;
     }
 
-    Vector<std::uint8_t, Memory> bytes(*size, AllocatorRef<std::uint8_t, Memory>{output.get_allocator().memory()});
+    ds::Vec<std::uint8_t, Memory> bytes{output.memory()};
 
-    encode(document, bytes);
+    bytes.resize(*size);
+    encode(document, bytes.viewMut());
     const auto encoded = (*size + 2) / 3 * 4;
 
     output.append("\x1b]");
@@ -415,12 +416,12 @@ namespace telar::render {
     const auto body = output.size();
 
     output.resize(body + encoded);
-    static_cast<void>(runtime::base64::encode(bytes, std::span<char>{output.data() + body, encoded}));
+    static_cast<void>(runtime::base64::encode(bytes, std::span<char>{output.dataMut() + body, encoded}));
     output.append("\x1b\\");
     return true;
   }
 
-  void appendEnd(String<Memory>& output) {
+  void appendEnd(ds::String<Memory>& output) {
     output.append("\x1b]");
     output.append(sequence_end);
     output.append("\x1b\\");

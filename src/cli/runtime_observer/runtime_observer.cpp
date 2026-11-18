@@ -329,7 +329,7 @@ namespace telar::runtime::cli::runtime_clipboard {
       server_options.socket = options.socket.valueOr("");
       const RuntimePaths paths{memory, server_options, process_environment};
       constexpr std::size_t frame_bytes = runtime_clipboard_chunk_bytes + 1024;
-      ControlSession session{memory, paths.socket.c_str(), frame_bytes, 128};
+      ControlSession session{memory, paths.socket.data(), frame_bytes, 128};
 
       session.receiveTimeout(10);
       ReadRuntimeClipboard request;
@@ -424,7 +424,7 @@ namespace telar::runtime::cli {
 
     server_options.socket = options.socket.valueOr("");
     const RuntimePaths paths{memory, server_options, process_environment};
-    RuntimeConnection connection{paths.socket.c_str()};
+    RuntimeConnection connection{paths.socket.data()};
 
     if (options.action != RuntimeOptions::Action::watch) {
       connection.receiveTimeout(30);
@@ -433,13 +433,17 @@ namespace telar::runtime::cli {
     ds::Array<Byte, 32> outgoing;
 
     connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing.viewMut());
-    Vector<Byte, Memory> incoming(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
-    Vector<Byte, Memory> decoded(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
+    ds::Vec<Byte, Memory> incoming{memory};
+
+    incoming.resize(max_payload_size, Byte{});
+    ds::Vec<Byte, Memory> decoded{memory};
+
+    decoded.resize(max_payload_size, Byte{});
     std::uint64_t count = 0;
 
     for (;;) {
-      const auto frame = connection.receive(incoming);
-      DecodeStorage storage{decoded};
+      const auto frame = connection.receive(incoming.viewMut());
+      DecodeStorage storage{decoded.viewMut()};
       const auto tag = static_cast<ServerTag>(frame.front());
       if (tag == ServerTag::request_failed) {
         const auto failure = Codec::decode<RequestFailed>(frame, storage);

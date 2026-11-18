@@ -189,7 +189,7 @@ namespace telar::runtime {
 
   ds::Option<ProxySecret> ProxySecretFile::load(Memory& memory, int directory) {
     ErasingAllocator sensitive{memory};
-    Vector<unsigned char, decltype(sensitive)> bytes{AllocatorRef<unsigned char, decltype(sensitive)>{sensitive}};
+    ds::Vec<unsigned char, decltype(sensitive)> bytes{sensitive};
     if (!readPrivateFile(directory, filename, bytes, maximum_file_bytes)) {
       return ds::none;
     }

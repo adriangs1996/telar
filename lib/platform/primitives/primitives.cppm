@@ -9,6 +9,7 @@ import telar.tbc;
 // The descriptors, mappings and shared memory below are POSIX objects: their
 // importers reach the system calls that operate on them from telar.sys.
 import telar.sys.posix;
+import telar.base.ds;
 
 #if TELAR_DEBUG
 import telar.base.memory.allocators;
@@ -141,13 +142,13 @@ export extern "C++" {
     class Session {
     public:
       explicit Session(Memory& memory, const char* path)
-          : buffers_(AllocatorRef<Record, Memory>{memory}) {
+          : buffers_(memory) {
         if (path == nullptr) {
           return;
         }
 
         buffers_.resize(2 * buffer_capacity);
-        open(path, std::span{buffers_}.first(buffer_capacity), std::span{buffers_}.subspan(buffer_capacity));
+        open(path, buffers_.viewMut().first(buffer_capacity), buffers_.viewMut().subspan(buffer_capacity));
         active_ = true;
       }
 
@@ -161,7 +162,7 @@ export extern "C++" {
       Session& operator=(const Session&) = delete;
 
     private:
-      Vector<Record, Memory> buffers_;
+      ds::Vec<Record, Memory> buffers_;
       bool active_ = false;
     };
 

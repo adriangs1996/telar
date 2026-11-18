@@ -84,12 +84,12 @@ export {
 
     private:
       HistoryEventView event_;
-      String<ConcurrentMemory> workspace_;
-      String<ConcurrentMemory> shell_;
-      String<ConcurrentMemory> command_;
-      String<ConcurrentMemory> directory_;
-      Vector<Byte, ConcurrentMemory> output_;
-      String<ConcurrentMemory> cause_;
+      ds::String<ConcurrentMemory> workspace_;
+      ds::String<ConcurrentMemory> shell_;
+      ds::String<ConcurrentMemory> command_;
+      ds::String<ConcurrentMemory> directory_;
+      ds::Vec<Byte, ConcurrentMemory> output_;
+      ds::String<ConcurrentMemory> cause_;
     };
 
     template <typename Sink>

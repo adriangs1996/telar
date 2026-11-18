@@ -155,7 +155,7 @@ namespace telar::git {
   ReadStatus readSmall(int directory, const char* name, std::span<char> buffer, std::string_view& contents, Fingerprint* fingerprint = nullptr) noexcept;
 
   // Reads a whole file of at most `limit` bytes into `bytes`, which keeps its capacity.
-  ReadStatus readWhole(int directory, const char* name, String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint = nullptr);
+  ReadStatus readWhole(int directory, const char* name, ds::String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint = nullptr);
 
   FileDescriptor openDirectory(int directory, const char* name) noexcept;
 

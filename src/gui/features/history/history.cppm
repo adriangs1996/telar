@@ -45,7 +45,7 @@ export namespace telar::gui::features::history {
     inline explicit HistoryView(const HistoryBrowser<Memory>& browser) noexcept
         : browser_(&browser) {}
 
-    [[nodiscard]] inline const Vector<HistoryRow<Memory>, Memory>& rows() const noexcept {
+    [[nodiscard]] inline const ds::Vec<HistoryRow<Memory>, Memory>& rows() const noexcept {
       return browser_->rows();
     }
 

@@ -152,7 +152,7 @@ namespace {
         FailureCode::invalid_request,
         unavailable);
 
-    owner.session().attachments.push_back(makeOwned<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
+    owner.session().attachments.push(makeOwned<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
     panes.remove(model, clients, pane.id);
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
@@ -173,8 +173,8 @@ namespace {
     const auto identity = model.workspaces.nextId();
     auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
 
-    workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
-    workspace->tabs.emplace_back(memory, model.next_tab_id++, "Running");
+    workspace->tabs.emplace(memory, model.next_tab_id++, "Default");
+    workspace->tabs.emplace(memory, model.next_tab_id++, "Running");
     auto& stored = *workspace;
 
     model.workspaces.insert(identity, std::move(workspace));
@@ -183,7 +183,7 @@ namespace {
     Command command{memory, launch};
     auto& existing = panes.launch(model, nullptr, false, command, TabLocation{empty.workspace, stored.tabs.back().id}, size);
 
-    stored.tabs.back().panes.push_back(existing.id);
+    stored.tabs.atMut(stored.tabs.size() - 1).panes.push(existing.id);
 
     expectFailure([&] {
       workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
@@ -227,7 +227,7 @@ namespace {
     const auto identity = model.workspaces.nextId();
     auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
 
-    workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
+    workspace->tabs.emplace(memory, model.next_tab_id++, "Default");
     auto& stored = *workspace;
 
     model.workspaces.insert(identity, std::move(workspace));

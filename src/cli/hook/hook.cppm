@@ -36,9 +36,9 @@ export {
     private:
       void keepWholeMembers();
 
-      bool completeMember(std::size_t start, std::size_t end, String<Memory>& candidate);
+      bool completeMember(std::size_t start, std::size_t end, ds::String<Memory>& candidate);
 
-      String<Memory> text_;
+      ds::String<Memory> text_;
       std::uint64_t received_ = 0;
     };
 

@@ -159,10 +159,10 @@ export namespace telar::render {
     [[nodiscard]] std::span<const Cell> cellsOf(const Block& block) const noexcept;
     void clear() noexcept;
 
-    Vector<Block, Memory> blocks;
-    Vector<Cell, Memory> cells;
-    Vector<Run, Memory> runs;
-    String<Memory> text;
+    ds::Vec<Block, Memory> blocks;
+    ds::Vec<Cell, Memory> cells;
+    ds::Vec<Run, Memory> runs;
+    ds::String<Memory> text;
   };
 
   extern template struct Document<Memory>;
@@ -230,10 +230,10 @@ export namespace telar::render {
 
   // Appends the OSC that begins document, or returns false when the document
   // exceeds max_document_bytes. On the primary screen, appendEnd closes it.
-  [[nodiscard]] bool appendSequence(const Document<Memory>& document, String<Memory>& output);
+  [[nodiscard]] bool appendSequence(const Document<Memory>& document, ds::String<Memory>& output);
 
   // Appends the OSC that ends the zone a document stands for.
-  void appendEnd(String<Memory>& output);
+  void appendEnd(ds::String<Memory>& output);
 
   // Replaces document with the one input encodes. Input comes from any program
   // in a pane, so every count, range, enumeration and reserved byte is checked;

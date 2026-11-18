@@ -10,7 +10,7 @@ namespace telar::runtime::plugins {
 
   Service::Service(ConcurrentMemory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix, traffic::PackagePort* traffic)
       : memory_(memory),
-        workers_(AllocatorRef<Owned<Worker<>, ConcurrentMemory>, ConcurrentMemory>{memory}) {
+        workers_(memory) {
     if (specifications.empty()) {
       return;
     }
@@ -24,7 +24,7 @@ namespace telar::runtime::plugins {
     workers_.reserve(specifications.size());
     try {
       for (const auto& specification : specifications) {
-        workers_.push_back(makeOwned<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = cancellation_.getMut(), .trace_prefix = trace_prefix, .traffic = traffic}));
+        workers_.push(makeOwned<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = cancellation_.getMut(), .trace_prefix = trace_prefix, .traffic = traffic}));
       }
     } catch (...) {
       stop();

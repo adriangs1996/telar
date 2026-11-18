@@ -826,8 +826,8 @@ export {
       ResultQueue<ConcurrentMemory>& results_;
       TapBudget& budget_;
       WorkerLaunch launch_;
-      String<ConcurrentMemory> entry_;
-      String<ConcurrentMemory> trace_path_;
+      ds::String<ConcurrentMemory> entry_;
+      ds::String<ConcurrentMemory> trace_path_;
       [[maybe_unused]] std::uint64_t session_number_ = 0;
       tbc::view<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>, tbc::lt::a> requests_;
       CancellationSignal cancellation_;

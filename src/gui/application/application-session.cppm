@@ -205,15 +205,15 @@ export {
 
       [[nodiscard]] Pane<Memory>* focusedPane() const noexcept;
 
-      [[nodiscard]] const Vector<Owned<Tab<Memory>, Memory>, Memory>& tabs() const noexcept;
+      [[nodiscard]] const ds::Vec<Owned<Tab<Memory>, Memory>, Memory>& tabs() const noexcept;
 
-      [[nodiscard]] const Vector<Owned<Pane<Memory>, Memory>, Memory>& panes() const noexcept;
+      [[nodiscard]] const ds::Vec<Owned<Pane<Memory>, Memory>, Memory>& panes() const noexcept;
 
-      [[nodiscard]] const Vector<Workspace<Memory>, Memory>& workspaces() const noexcept;
+      [[nodiscard]] const ds::Vec<Workspace<Memory>, Memory>& workspaces() const noexcept;
 
       [[nodiscard]] const WorkspaceReplica<Memory>& workspaceList() const noexcept;
 
-      [[nodiscard]] const Vector<Agent<Memory>, Memory>& agents() const noexcept;
+      [[nodiscard]] const ds::Vec<Agent<Memory>, Memory>& agents() const noexcept;
 
       [[nodiscard]] std::uint64_t agentRevision() const noexcept;
 
@@ -329,7 +329,7 @@ export {
       void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id = 0);
 
       template <typename Value>
-      static void reserveAppend(Vector<Value, Memory>& values, std::size_t maximum);
+      static void reserveAppend(ds::Vec<Value, Memory>& values, std::size_t maximum);
 
       std::uint64_t nextRequest() noexcept;
 
@@ -576,8 +576,8 @@ export {
       // A session built without effects points `effects_` here.
       DiscardHostEffects discard_effects_;
       features::terminal::graphics::State graphics_;
-      tbc::view<Vector<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
-      tbc::view<Vector<Owned<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
+      tbc::view<ds::Vec<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
+      tbc::view<ds::Vec<Owned<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
@@ -588,12 +588,12 @@ export {
       tbc::view<features::peek::State, tbc::lt::a> peek_;
       features::paths::State paths_;
       features::palette::State palette_;
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> decode_;
-      tbc::view<String<Memory>, tbc::lt::a> clipboard_;
-      tbc::view<String<Memory>, tbc::lt::a> error_;
-      tbc::view<String<Memory>, tbc::lt::a> command_response_;
-      tbc::view<String<Memory>, tbc::lt::a> launch_cwd_;
-      tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> argument_storage_;
+      tbc::view<ds::Vec<Byte, Memory>, tbc::lt::a> decode_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> clipboard_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> error_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> command_response_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> launch_cwd_;
+      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> argument_storage_;
       // The launch arguments view the strings stored beside them; the protocol allows at most 64.
       tbc::view<ds::Array<std::string_view, maximum_launch_arguments>, tbc::lt::self> launch_arguments_{};
       std::size_t launch_argument_count_ = 0;

@@ -43,7 +43,7 @@ export {
       static constexpr int inner_gap = -10;
       static constexpr int trailing_gap = -5;
       static constexpr auto minimum_score = std::numeric_limits<std::int32_t>::min();
-      Vector<std::int32_t, Memory> matrix_;
+      ds::Vec<std::int32_t, Memory> matrix_;
     };
 
     extern template class FuzzyMatch<SystemAllocator>;
@@ -258,7 +258,7 @@ export {
 
       bool better(const Candidate& left, const Candidate& right, bool browse) const noexcept;
 
-      String<ConcurrentMemory> root_;
+      ds::String<ConcurrentMemory> root_;
       PathIndexStorage<ConcurrentMemory> storage_;
       // Builds into storage_.
       tbc::view<PathIndexBuilder, tbc::lt::self> builder_;

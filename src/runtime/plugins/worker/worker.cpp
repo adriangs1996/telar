@@ -787,8 +787,8 @@ namespace telar::runtime::plugins {
         results_(results),
         budget_(budget),
         launch_(launch),
-        entry_(specification.entry.view(), AllocatorRef<char, ConcurrentMemory>{memory}),
-        trace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        entry_(memory, specification.entry.view()),
+        trace_path_(memory),
         thread_([this] {
           run();
         }) {}
@@ -974,7 +974,7 @@ namespace telar::runtime::plugins {
     }
 
     prepareTrace();
-    session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = traffic});
+    session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.data(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.data(), .traffic = traffic});
   }
 
   template <WorkerClock Clock>
@@ -1018,8 +1018,8 @@ namespace telar::runtime::plugins {
     ds::Array<char, 64> suffix;
     const auto length = std::snprintf(suffix.dataMut(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
 
-    trace_path_ = launch_.trace_prefix;
-    trace_path_.append(suffix.data(), static_cast<std::size_t>(length));
+    trace_path_.assign(launch_.trace_prefix);
+    trace_path_.append(std::string_view{suffix.data(), static_cast<std::size_t>(length)});
 #endif
   }
 

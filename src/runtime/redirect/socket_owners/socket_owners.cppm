@@ -70,7 +70,7 @@ export {
     public:
       explicit PfCommand(Memory& memory) noexcept;
 
-      String<Memory> run(std::span<const std::string_view> arguments, std::string_view input = {});
+      ds::String<Memory> run(std::span<const std::string_view> arguments, std::string_view input = {});
 
     private:
       Memory& memory_;
@@ -452,7 +452,7 @@ export {
     public:
       explicit Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes = {}, Direction direction = Direction::outbound);
 
-      String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false);
+      ds::String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false);
 
       void run(const PfIdentity<Memory>& identity);
 
@@ -537,7 +537,7 @@ export {
       static constexpr std::size_t maximum_flows = 256;
       static constexpr std::size_t pending_offset = 3 + Target::maximum_targets;
       Memory& memory_;
-      String<Memory> endpoint_;
+      ds::String<Memory> endpoint_;
       ds::Array<ds::Option<Listener>, Target::maximum_targets> listeners_;
       ds::Array<Mapping, Target::maximum_targets> mappings_;
       ds::Array<ds::Option<Pending>, maximum_pending> pending_;

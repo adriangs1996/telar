@@ -46,11 +46,11 @@ namespace telar::runtime::cli {
   template <Allocator Memory>
   pid_t launchDaemon(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths, const ExecutablePath& executable) {
     ds::Array<char, PATH_MAX> config_path;
-    Vector<char*, Memory> arguments{AllocatorRef<char*, Memory>{memory}};
+    ds::Vec<char*, Memory> arguments{memory};
 
     arguments.reserve(2 * options.engine_argument_count + 28);
     const auto append = [&](std::string_view value) {
-      arguments.push_back(const_cast<char*>(value.data()));
+      arguments.push(const_cast<char*>(value.data()));
     };
 
     append(executable.view());
@@ -98,11 +98,11 @@ namespace telar::runtime::cli {
       }
     }
 
-    arguments.push_back(nullptr);
-    String<Memory> log_path{paths.socket, AllocatorRef<char, Memory>{memory}};
+    arguments.push(nullptr);
+    ds::String<Memory> log_path{memory, paths.socket};
 
-    log_path += ".runtime.start.log";
-    return spawnDaemon(executable.c_str(), arguments.data(), log_path.c_str());
+    log_path.append(".runtime.start.log");
+    return spawnDaemon(executable.c_str(), arguments.data(), log_path.data());
   }
 
   template pid_t launchDaemon<Memory>(Memory&, const ServerOptions&, const RuntimePaths<Memory>&, const ExecutablePath&);

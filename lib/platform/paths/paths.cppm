@@ -130,12 +130,12 @@ export {
     // Joins the pieces into a string of the caller's allocator; built in paths.cpp for the
     // allocators of telar.base.memory.allocators.
     template <Allocator Memory>
-    String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    ds::String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
-    extern template String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
-    extern template String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
-    extern template String<SystemAllocator> xdgDirectory<SystemAllocator>(SystemAllocator& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
-    extern template String<BudgetAllocator<SystemAllocator>> xdgDirectory<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template ds::String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template ds::String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template ds::String<SystemAllocator> xdgDirectory<SystemAllocator>(SystemAllocator& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template ds::String<BudgetAllocator<SystemAllocator>> xdgDirectory<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
     // Where a runtime's socket is, as every telar process finds it: the explicit path, else
     // TELAR_SOCKET, else TELAR_SOCKET_PATH, else the managed `runtime.sock` in XDG_RUNTIME_DIR/telar
@@ -171,19 +171,19 @@ export {
       bool isDefaultSocket(const EnvironmentSource& environment) const;
 
       // telar's configuration directory: XDG_CONFIG_HOME/telar, else ~/.config/telar; empty without either.
-      [[nodiscard]] static String<Memory> configHome(Memory& memory, const EnvironmentSource& environment);
+      [[nodiscard]] static ds::String<Memory> configHome(Memory& memory, const EnvironmentSource& environment);
 
       // The configuration a process started without --config reads: TELAR_DEVELOPMENT_CONFIG, else
       // config.lua in the configuration directory; empty without either.
-      [[nodiscard]] static String<Memory> configFile(Memory& memory, const EnvironmentSource& environment);
+      [[nodiscard]] static ds::String<Memory> configFile(Memory& memory, const EnvironmentSource& environment);
 
       void prepareStorage() const;
 
-      String<Memory> socket;
-      String<Memory> history;
-      String<Memory> session;
+      ds::String<Memory> socket;
+      ds::String<Memory> history;
+      ds::String<Memory> session;
       // XDG_DATA_HOME, or ~/.local/share; empty without either.
-      String<Memory> data_home;
+      ds::String<Memory> data_home;
       bool socket_managed = false;
       bool history_managed = false;
 

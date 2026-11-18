@@ -95,10 +95,10 @@ namespace telar::git {
   }
 
   Index::Index(Memory& memory) noexcept
-      : entries(AllocatorRef<IndexEntry, Memory>{memory}),
-        tree(AllocatorRef<CacheTreeNode, Memory>{memory}),
-        bytes_(AllocatorRef<char, Memory>{memory}),
-        paths_(AllocatorRef<char, Memory>{memory}) {}
+      : entries(memory),
+        tree(memory),
+        bytes_(memory),
+        paths_(memory) {}
 
   IndexState Index::load(int gitdir, ObjectFormat format, const Limits& limits) {
     const auto identity = fingerprintAt(gitdir, "index");
@@ -236,8 +236,8 @@ namespace telar::git {
           return IndexState::invalid;
         }
 
-        const auto terminator = bytes_.find('\0', cursor);
-        if (terminator == String<Memory>::npos || terminator >= end) {
+        const auto terminator = bytes_.view().find('\0', cursor);
+        if (terminator == std::string_view::npos || terminator >= end) {
           return IndexState::invalid;
         }
 
@@ -254,14 +254,14 @@ namespace telar::git {
 
         // Reserved first, so the kept prefix is copied from a stable buffer.
         paths_.reserve(offset + kept + suffix.size());
-        paths_.append(paths_.data() + previous_offset, kept);
+        paths_.append(std::string_view{paths_.data() + previous_offset, kept});
         paths_.append(suffix);
         path = std::string_view{paths_}.substr(offset);
         entry.path_offset = static_cast<std::uint32_t>(offset);
         position = terminator + 1;
       } else {
-        const auto terminator = bytes_.find('\0', name_start);
-        if (terminator == String<Memory>::npos || terminator >= end) {
+        const auto terminator = bytes_.view().find('\0', name_start);
+        if (terminator == std::string_view::npos || terminator >= end) {
           return IndexState::invalid;
         }
 
@@ -296,7 +296,7 @@ namespace telar::git {
 
       previous_offset = entry.path_offset;
       previous_length = path.size();
-      entries.push_back(entry);
+      entries.push(entry);
     }
 
     while (position < end) {
@@ -375,19 +375,19 @@ namespace telar::git {
 
     const auto index = tree.size();
 
-    tree.push_back(node);
+    tree.push(node);
     for (std::uint32_t child = 0; child < subtrees; ++child) {
       if (!parseTree(data, position, depth + 1, limits)) {
         return false;
       }
     }
 
-    tree[index].end = static_cast<std::uint32_t>(tree.size());
+    tree.atMut(index).end = static_cast<std::uint32_t>(tree.size());
     return true;
   }
 
   StagedComparison::StagedComparison(Memory& memory) noexcept
-      : trees_(AllocatorRef<String<Memory>, Memory>{memory}),
+      : trees_(memory),
         memory_(memory) {}
 
   bool StagedComparison::compare(ObjectDatabase& objects, const Index& index, ds::Option<ObjectId> tree, const Limits& limits, ChangeCounts& counts) {
@@ -397,7 +397,7 @@ namespace telar::git {
     counts_ = &counts;
     trees_read_ = 0;
     while (trees_.size() < limits.path_depth + 2) {
-      trees_.emplace_back(AllocatorRef<char, Memory>{memory_});
+      trees_.emplace(memory_);
     }
 
     const auto end = static_cast<std::uint32_t>(index.entries.size());
@@ -410,18 +410,18 @@ namespace telar::git {
     const auto complete = compareTree(*tree, 0, 0, end, index.tree.empty() ? no_cache_tree : 0, 0);
     constexpr std::size_t retained = 256 << 10;
 
-    for (auto& buffer : trees_) {
+    for (auto& buffer : trees_.viewMut()) {
       if (buffer.capacity() > retained) {
         buffer.clear();
-        buffer.shrink_to_fit();
+        buffer.shrinkToFit();
       }
     }
 
     return complete;
   }
 
-  String<Memory>& StagedComparison::buffer(std::size_t depth) noexcept {
-    return trees_[depth];
+  ds::String<Memory>& StagedComparison::buffer(std::size_t depth) noexcept {
+    return trees_.atMut(depth);
   }
 
   bool StagedComparison::readTree(const ObjectId& id, std::size_t depth) {
@@ -576,8 +576,8 @@ namespace telar::git {
   }
 
   UnstagedComparison::UnstagedComparison(Memory& memory) noexcept
-      : verified_(AllocatorRef<Verified, Memory>{memory}),
-        buffer_(AllocatorRef<char, Memory>{memory}) {}
+      : verified_(memory),
+        buffer_(memory) {}
 
   bool UnstagedComparison::compare(int worktree, const Index& index, Options options, const Limits& limits, ChangeCounts& counts) {
     const auto complete = scan(worktree, index, options, limits, counts);
@@ -596,7 +596,8 @@ namespace telar::git {
     }
 
     if (verified_.size() != index.entries.size()) {
-      verified_.assign(index.entries.size(), Verified{});
+      verified_.clear();
+    verified_.resize(index.entries.size(), Verified{});
     }
 
     directories_.reset(worktree);
@@ -655,7 +656,7 @@ namespace telar::git {
         return false;
       }
 
-      switch (examine(entry, index.timestamp(), parent, file.c_str(), status, verified_[current])) {
+      switch (examine(entry, index.timestamp(), parent, file.c_str(), status, verified_.atMut(current))) {
       case Verdict::clean:
         break;
       case Verdict::modified:
@@ -857,7 +858,7 @@ namespace telar::git {
     std::uint64_t remaining = size;
 
     while (remaining != 0) {
-      const auto count = ::read(file.get(), buffer_.data(), static_cast<std::size_t>(std::min<std::uint64_t>(remaining, chunk)));
+      const auto count = ::read(file.get(), buffer_.dataMut(), static_cast<std::size_t>(std::min<std::uint64_t>(remaining, chunk)));
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }

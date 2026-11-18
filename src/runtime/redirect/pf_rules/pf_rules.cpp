@@ -351,19 +351,19 @@ namespace telar::runtime::redirect {
 
   template <Allocator Memory>
   PfIdentity<Memory>::PfIdentity(Memory& memory, std::string_view endpoint)
-      : anchor(AllocatorRef<char, Memory>{memory}),
-        label(AllocatorRef<char, Memory>{memory}) {
+      : anchor(memory),
+        label(memory) {
     const auto hash = plugins::stableId(endpoint);
     ds::Array<char, 32> hex{};
 
     std::snprintf(hex.dataMut(), hex.size(), "tlr_%016llx", static_cast<unsigned long long>(hash));
-    label = hex.data();
-    anchor = "com.apple/telar-redirect-";
-    anchor += label;
+    label.assign(hex.data());
+    anchor.assign("com.apple/telar-redirect-");
+    anchor.append(label);
   }
 
   template <Allocator Memory>
-  String<Memory> pfRules(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope) {
+  ds::String<Memory> pfRules(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope) {
     const auto uid = scope.uid;
     const auto label = scope.label;
     const auto interface = scope.discovery_interface;
@@ -371,7 +371,7 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Invalid transparent redirect scope"};
     }
 
-    String<Memory> rules{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> rules{memory};
 
     if ((scope.log_interface && *scope.log_interface >= 16) || (allowsIncoming(scope.direction) && !std::ranges::any_of(mappings, [](const auto& mapping) {
           return mapping.incoming;
@@ -432,7 +432,7 @@ namespace telar::runtime::redirect {
         const auto listener = selected->listenerAddress();
         const auto count = std::snprintf(line.dataMut(), line.size(), "rdr on lo0 %s proto tcp from %.*s port %u to %.*s port %u -> %.*s port %u\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port);
 
-        rules.append(line.data(), static_cast<std::size_t>(count));
+        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
       }
     }
 
@@ -444,7 +444,7 @@ namespace telar::runtime::redirect {
       const auto gateway = bypass.route.gateway.view();
       const auto count = std::snprintf(line.dataMut(), line.size(), "pass out quick route-to (%.*s %.*s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags S/SA no state\n", static_cast<int>(name.size()), name.data(), static_cast<int>(gateway.size()), gateway.data(), flow.destination.endpoint.storage.ss_family == AF_INET6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
 
-      rules.append(line.data(), static_cast<std::size_t>(count));
+      rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
     }
 
     for (const auto group : {scope.flows, scope.incoming_flows}) {
@@ -458,7 +458,7 @@ namespace telar::runtime::redirect {
         const auto listener = selected->listenerAddress();
         const auto count = std::snprintf(line.dataMut(), line.size(), "pass in quick on lo0 %s proto tcp from %.*s port %u to %.*s port %u flags S/SA keep state label \"%.*s\"\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port, static_cast<int>(label.size()), label.data());
 
-        rules.append(line.data(), static_cast<std::size_t>(count));
+        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
       }
     }
 
@@ -468,7 +468,7 @@ namespace telar::runtime::redirect {
       const auto destination = flow.destination.host.view();
       const auto count = std::snprintf(line.dataMut(), line.size(), "pass out quick route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
 
-      rules.append(line.data(), static_cast<std::size_t>(count));
+      rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
     }
 
     for (const auto& flow : scope.incoming_flows) {
@@ -477,7 +477,7 @@ namespace telar::runtime::redirect {
       const auto destination = flow.destination.host.view();
       const auto count = std::snprintf(line.dataMut(), line.size(), "pass in quick on ! lo0 route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
 
-      rules.append(line.data(), static_cast<std::size_t>(count));
+      rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
     }
 
     for (const auto& mapping : mappings) {
@@ -496,13 +496,13 @@ namespace telar::runtime::redirect {
       if (allowsOutgoing(scope.direction)) {
         const auto count = std::snprintf(line.dataMut(), line.size(), "pass out%s quick on ! %.*s route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", logging.dataMut(), static_cast<int>(interface.size()), interface.data(), static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
 
-        rules.append(line.data(), static_cast<std::size_t>(count));
+        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
       }
 
       if (allowsIncoming(scope.direction) && mapping.incoming && scope.log_interface) {
         const auto count = std::snprintf(line.dataMut(), line.size(), "pass in log (user, to pflog%u) quick on ! lo0 route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", *scope.log_interface, static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
 
-        rules.append(line.data(), static_cast<std::size_t>(count));
+        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
       }
     }
 
@@ -511,8 +511,8 @@ namespace telar::runtime::redirect {
 
   template class PfIdentity<Memory>;
   template class PfIdentity<ConcurrentMemory>;
-  template String<Memory> pfRules<Memory>(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
-  template String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
+  template ds::String<Memory> pfRules<Memory>(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
+  template ds::String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
 #endif
 
 }

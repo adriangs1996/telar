@@ -192,7 +192,7 @@ namespace telar::runtime {
         identity_(context.identity),
         direction_(response ? traffic::Direction::inbound : traffic::Direction::outbound),
         message_(memory, response),
-        wire_(AllocatorRef<Byte, Secure>{secure_}) {
+        wire_(secure_) {
     parser_.reset(response);
   }
 
@@ -421,10 +421,10 @@ namespace telar::runtime {
 
       try {
         // Built aside and swapped in, so a message that fails to serialize leaves the wire as it was.
-        Bytes wire{AllocatorRef<Byte, Secure>{secure_}};
+        Bytes wire{secure_};
 
         message_.serializeHttp1(wire);
-        wire_.swap(wire);
+        std::swap(wire_, wire);
       } catch (...) {
         message_.response_to_head = source_head;
         throw;

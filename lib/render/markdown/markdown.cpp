@@ -23,19 +23,19 @@ namespace telar::render::markdown {
     }
 
     if (value < 0x80) {
-      text.push_back(static_cast<char>(value));
+      text.push(static_cast<char>(value));
     } else if (value < 0x800) {
-      text.push_back(static_cast<char>(0xc0 | (value >> 6)));
-      text.push_back(static_cast<char>(0x80 | (value & 0x3f)));
+      text.push(static_cast<char>(0xc0 | (value >> 6)));
+      text.push(static_cast<char>(0x80 | (value & 0x3f)));
     } else if (value < 0x10000) {
-      text.push_back(static_cast<char>(0xe0 | (value >> 12)));
-      text.push_back(static_cast<char>(0x80 | ((value >> 6) & 0x3f)));
-      text.push_back(static_cast<char>(0x80 | (value & 0x3f)));
+      text.push(static_cast<char>(0xe0 | (value >> 12)));
+      text.push(static_cast<char>(0x80 | ((value >> 6) & 0x3f)));
+      text.push(static_cast<char>(0x80 | (value & 0x3f)));
     } else {
-      text.push_back(static_cast<char>(0xf0 | (value >> 18)));
-      text.push_back(static_cast<char>(0x80 | ((value >> 12) & 0x3f)));
-      text.push_back(static_cast<char>(0x80 | ((value >> 6) & 0x3f)));
-      text.push_back(static_cast<char>(0x80 | (value & 0x3f)));
+      text.push(static_cast<char>(0xf0 | (value >> 18)));
+      text.push(static_cast<char>(0x80 | ((value >> 12) & 0x3f)));
+      text.push(static_cast<char>(0x80 | ((value >> 6) & 0x3f)));
+      text.push(static_cast<char>(0x80 | (value & 0x3f)));
     }
   }
 
@@ -66,8 +66,8 @@ namespace telar::render::markdown {
 
   // A copy of source with every invalid UTF-8 sequence replaced by U+FFFD, so
   // that every span of the document starts and ends on a character.
-  String<Memory> repairUtf8(std::string_view source, Memory& memory) {
-    String<Memory> repaired{AllocatorRef<char, Memory>{memory}};
+  ds::String<Memory> repairUtf8(std::string_view source, Memory& memory) {
+    ds::String<Memory> repaired{memory};
 
     repaired.reserve(source.size());
     std::size_t index = 0;
@@ -95,9 +95,9 @@ namespace telar::render::markdown {
   public:
     explicit Builder(Document<Memory>& document, Memory& memory)
         : document_(document),
-          lists_(AllocatorRef<List, Memory>{memory}),
-          callouts_(AllocatorRef<Callout, Memory>{memory}),
-          spans_(AllocatorRef<Frame, Memory>{memory}) {}
+          lists_(memory),
+          callouts_(memory),
+          spans_(memory) {}
 
     [[nodiscard]] bool overflowed() const noexcept {
       return overflow_;
@@ -183,23 +183,23 @@ namespace telar::render::markdown {
         break;
       case MD_BLOCK_ADMONITION:
         ++quote_;
-        callouts_.push_back(callout_);
+        callouts_.push(callout_);
         callout_ = calloutOf(static_cast<const MD_BLOCK_ADMONITION_DETAIL*>(detail)->type);
         opens_callout_ = true;
         break;
       case MD_BLOCK_UL:
-        lists_.push_back(List{.ordered = false, .tight = static_cast<const MD_BLOCK_UL_DETAIL*>(detail)->is_tight != 0});
+        lists_.push(List{.ordered = false, .tight = static_cast<const MD_BLOCK_UL_DETAIL*>(detail)->is_tight != 0});
         break;
       case MD_BLOCK_OL: {
         const auto* ordered = static_cast<const MD_BLOCK_OL_DETAIL*>(detail);
 
-        lists_.push_back(List{.ordered = true, .tight = ordered->is_tight != 0, .next = ordered->start});
+        lists_.push(List{.ordered = true, .tight = ordered->is_tight != 0, .next = ordered->start});
         break;
       }
       case MD_BLOCK_LI: {
         ++items_;
         const auto* item = static_cast<const MD_BLOCK_LI_DETAIL*>(detail);
-        auto& list = lists_.back();
+        auto& list = lists_.backMut();
 
         marker_ = item->is_task ? (item->task_mark == ' ' ? Marker::task_open : Marker::task_done) : list.ordered ? Marker::ordered
                                                                                                                   : Marker::bullet;
@@ -228,7 +228,7 @@ namespace telar::render::markdown {
         const auto info = attribute(static_cast<const MD_BLOCK_CODE_DETAIL*>(detail)->lang);
 
         open(BlockKind::code);
-        document_.blocks.back().info = info;
+        document_.blocks.atMut(document_.blocks.size() - 1).info = info;
         break;
       }
       case MD_BLOCK_HTML:
@@ -238,13 +238,13 @@ namespace telar::render::markdown {
         const auto columns = static_cast<const MD_BLOCK_TABLE_DETAIL*>(detail)->col_count;
 
         open(BlockKind::table);
-        document_.blocks.back().columns = static_cast<std::uint16_t>(std::min<unsigned>(columns, std::numeric_limits<std::uint16_t>::max()));
+        document_.blocks.atMut(document_.blocks.size() - 1).columns = static_cast<std::uint16_t>(std::min<unsigned>(columns, std::numeric_limits<std::uint16_t>::max()));
         break;
       }
       case MD_BLOCK_TH:
       case MD_BLOCK_TD:
         floor_ = static_cast<std::uint32_t>(document_.runs.size());
-        document_.cells.push_back(Cell{.first = floor_, .count = 0, .align = alignOf(static_cast<const MD_BLOCK_TD_DETAIL*>(detail)->align)});
+        document_.cells.push(Cell{.first = floor_, .count = 0, .align = alignOf(static_cast<const MD_BLOCK_TD_DETAIL*>(detail)->align)});
         break;
       default:
         break;
@@ -263,12 +263,12 @@ namespace telar::render::markdown {
         closeImplicit();
         --quote_;
         callout_ = callouts_.back();
-        callouts_.pop_back();
+        callouts_.truncate(callouts_.size() - 1);
         opens_callout_ = false;
         break;
       case MD_BLOCK_UL:
       case MD_BLOCK_OL:
-        lists_.pop_back();
+        lists_.truncate(lists_.size() - 1);
         break;
       case MD_BLOCK_LI:
       case MD_BLOCK_FOOTNOTE_DEF:
@@ -291,7 +291,7 @@ namespace telar::render::markdown {
         break;
       case MD_BLOCK_TH:
       case MD_BLOCK_TD: {
-        auto& cell = document_.cells.back();
+        auto& cell = document_.cells.backMut();
 
         cell.count = static_cast<std::uint32_t>(document_.runs.size()) - cell.first;
         break;
@@ -342,7 +342,7 @@ namespace telar::render::markdown {
         break;
       }
 
-      spans_.push_back(frame);
+      spans_.push(frame);
       return overflow_ ? abort : 0;
     }
 
@@ -352,7 +352,7 @@ namespace telar::render::markdown {
         appendRun("image", 0);
       }
 
-      spans_.pop_back();
+      spans_.truncate(spans_.size() - 1);
       style_ = frame.style;
       target_ = frame.target;
       return overflow_ ? abort : 0;
@@ -366,7 +366,7 @@ namespace telar::render::markdown {
 
       switch (type) {
       case MD_TEXT_NULLCHAR: {
-        String<Memory> character{document_.text.get_allocator()};
+        ds::String<Memory> character{document_.text.memory()};
 
         appendUtf8(character, replacement);
         appendRun(character, 0);
@@ -379,7 +379,7 @@ namespace telar::render::markdown {
         appendRun(" ", 0);
         break;
       case MD_TEXT_ENTITY: {
-        String<Memory> decoded{document_.text.get_allocator()};
+        ds::String<Memory> decoded{document_.text.memory()};
 
         appendEntity(decoded, value);
         appendRun(decoded, 0);
@@ -435,7 +435,7 @@ namespace telar::render::markdown {
         break;
       }
 
-      document_.blocks.push_back(block);
+      document_.blocks.push(block);
     }
 
     void close() {
@@ -443,7 +443,7 @@ namespace telar::render::markdown {
         return;
       }
 
-      auto& block = document_.blocks.back();
+      auto& block = document_.blocks.backMut();
 
       switch (leaf_) {
       case Leaf::runs:
@@ -513,11 +513,11 @@ namespace telar::render::markdown {
       const auto style = static_cast<std::uint16_t>(style_ | extra);
       auto& runs = document_.runs;
       if (runs.size() > floor_ && runs.back().style == style && runs.back().target == target_ && runs.back().text.offset + runs.back().text.size == offset) {
-        runs.back().text.size += static_cast<std::uint32_t>(value.size());
+        runs.atMut(runs.size() - 1).text.size += static_cast<std::uint32_t>(value.size());
         return;
       }
 
-      runs.push_back(Run{.text = Span{offset, static_cast<std::uint32_t>(value.size())}, .target = target_, .style = style});
+      runs.push(Run{.text = Span{offset, static_cast<std::uint32_t>(value.size())}, .target = target_, .style = style});
     }
 
     void appendVerbatim(std::string_view value) {
@@ -588,9 +588,9 @@ namespace telar::render::markdown {
     }
 
     Document<Memory>& document_;
-    Vector<List, Memory> lists_;
-    Vector<Callout, Memory> callouts_;
-    Vector<Frame, Memory> spans_;
+    ds::Vec<List, Memory> lists_;
+    ds::Vec<Callout, Memory> callouts_;
+    ds::Vec<Frame, Memory> spans_;
     std::uint32_t quote_ = 0;
     std::uint32_t items_ = 0;
     Marker marker_ = Marker::none;
@@ -612,8 +612,8 @@ namespace telar::render::markdown {
       return Error::too_large;
     }
 
-    Memory& memory = document.text.get_allocator().memory();
-    String<Memory> repaired{AllocatorRef<char, Memory>{memory}};
+    Memory& memory = document.text.memory();
+    ds::String<Memory> repaired{memory};
 
     if (inspectUtf8(source) != Utf8Validation::valid) {
       repaired = repairUtf8(source, memory);

@@ -9,6 +9,7 @@ import telar.base.text.json;
 import telar.testing;
 import telar.wire.vocabulary;
 import telar.cli.window;
+import telar.base.ds;
 
 namespace {
 
@@ -65,7 +66,7 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     Memory& memory = adapter;
-    String<Memory> output{AllocatorRef<char, Memory>{memory}};
+    ds::String<Memory> output{memory};
 
     appendJson(output, JsonValue::parse(R"({"a":-1e-20,"b":-1.5e300})"), false);
     check(std::string_view{output} == R"({"a":-0.00000000000000000001,"b":-15)" + std::string(299, '0') + "}");

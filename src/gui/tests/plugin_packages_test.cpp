@@ -157,7 +157,7 @@ namespace {
     const auto directory = temporary.path().toUtf8();
     const std::string_view path{encoded.constData(), static_cast<std::size_t>(encoded.size())};
     const auto inspected = Inspector::inspect(memory, path);
-    String<telar::Memory> digest{AllocatorRef<char, telar::Memory>{memory}};
+    telar::ds::String<telar::Memory> digest{memory};
 
     telar::runtime::appendLowerHex(digest, inspected.digest);
     require(digest == "38c0b5755058a4a00997332cc04a7678549e25854bcd8acf9e7080f81a9622b7", "package digest must match the independent SHA-256 framing control");

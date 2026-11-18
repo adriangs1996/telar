@@ -12,10 +12,10 @@ namespace telar::gui::inline foundation::inline terminal {
 
   template <Allocator Memory>
   RowCache<Memory>::RowCache(Memory& memory)
-      : cells_(AllocatorRef<CellValue, Memory>{memory}),
-        slots_(AllocatorRef<Slot, Memory>{memory}),
-        links_(AllocatorRef<Link, Memory>{memory}),
-        uris_(AllocatorRef<Byte, Memory>{memory}) {}
+      : cells_(memory),
+        slots_(memory),
+        links_(memory),
+        uris_(memory) {}
 
   template <Allocator Memory>
   void RowCache<Memory>::number(std::uint64_t generation) {
@@ -51,7 +51,7 @@ namespace telar::gui::inline foundation::inline terminal {
 
     for (std::uint16_t row = 0; row < reply.rows; ++row) {
       const auto stable = reply.from + row;
-      auto& slot = slots_[stable % slot_count];
+      auto& slot = slots_.atMut(stable % slot_count);
       if (slot.held) {
         dropLinks(slot.stable);
       }
@@ -65,7 +65,7 @@ namespace telar::gui::inline foundation::inline terminal {
       for (std::uint16_t column = 0; column < columns_; ++column) {
         const auto cell = reader.next();
 
-        cells_[first + column] = cell ? CellValue{*cell} : CellValue{};
+        cells_.atMut(first + column) = cell ? CellValue{*cell} : CellValue{};
       }
     }
 
@@ -139,18 +139,18 @@ namespace telar::gui::inline foundation::inline terminal {
   template <Allocator Memory>
   void RowCache<Memory>::release() {
     forget();
-    Vector<Slot, Memory> slots{slots_.get_allocator()};
+    ds::Vec<Slot, Memory> slots{slots_.memory()};
 
-    slots_.swap(slots);
-    Vector<CellValue, Memory> cells{cells_.get_allocator()};
+    std::swap(slots_, slots);
+    ds::Vec<CellValue, Memory> cells{cells_.memory()};
 
-    cells_.swap(cells);
-    Vector<Link, Memory> links{links_.get_allocator()};
+    std::swap(cells_, cells);
+    ds::Vec<Link, Memory> links{links_.memory()};
 
-    links_.swap(links);
-    Vector<Byte, Memory> uris{uris_.get_allocator()};
+    std::swap(links_, links);
+    ds::Vec<Byte, Memory> uris{uris_.memory()};
 
-    uris_.swap(uris);
+    std::swap(uris_, uris);
   }
 
   template <Allocator Memory>
@@ -167,7 +167,7 @@ namespace telar::gui::inline foundation::inline terminal {
 
   template <Allocator Memory>
   void RowCache<Memory>::forget() noexcept {
-    for (auto& slot : slots_) {
+    for (auto& slot : slots_.viewMut()) {
       slot.held = false;
     }
 
@@ -178,8 +178,8 @@ namespace telar::gui::inline foundation::inline terminal {
 
   template <Allocator Memory>
   void RowCache<Memory>::dropLinks(std::uint64_t stable) noexcept {
-    std::erase_if(links_, [stable](const Link& link) {
-      return link.stable == stable;
+    links_.retain([stable](const Link& link) {
+      return link.stable != stable;
     });
   }
 
@@ -201,23 +201,23 @@ namespace telar::gui::inline foundation::inline terminal {
       const auto& target = metadata.links[run.link_index];
       const auto offset = uris_.size();
 
-      uris_.insert(uris_.end(), metadata.uris.begin() + target.offset, metadata.uris.begin() + target.offset + target.len);
-      links_.push_back({.stable = reply.from + (run.start / reply.cols), .column = static_cast<std::uint16_t>(run.start % reply.cols), .length = run.len, .uri_offset = static_cast<std::uint32_t>(offset), .uri_length = target.len});
+      uris_.extend({metadata.uris.begin() + target.offset, metadata.uris.begin() + target.offset + target.len});
+      links_.push({.stable = reply.from + (run.start / reply.cols), .column = static_cast<std::uint16_t>(run.start % reply.cols), .length = run.len, .uri_offset = static_cast<std::uint32_t>(offset), .uri_length = target.len});
     }
   }
 
   template <Allocator Memory>
   void RowCache<Memory>::compactUris() {
-    Vector<Byte, Memory> kept{uris_.get_allocator()};
+    ds::Vec<Byte, Memory> kept{uris_.memory()};
 
-    for (auto& link : links_) {
+    for (auto& link : links_.viewMut()) {
       const auto offset = kept.size();
 
-      kept.insert(kept.end(), uris_.begin() + link.uri_offset, uris_.begin() + link.uri_offset + link.uri_length);
+      kept.extend({uris_.begin() + link.uri_offset, uris_.begin() + link.uri_offset + link.uri_length});
       link.uri_offset = static_cast<std::uint32_t>(offset);
     }
 
-    uris_.swap(kept);
+    std::swap(uris_, kept);
   }
 
   template class RowCache<Memory>;

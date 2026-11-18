@@ -10,12 +10,14 @@ namespace telar::runtime {
 
   HistoryEvent::HistoryEvent(ConcurrentMemory& memory, const HistoryEventView& event)
       : event_(event),
-        workspace_(event.session.workspace_path, AllocatorRef<char, ConcurrentMemory>{memory}),
-        shell_(event.session.shell, AllocatorRef<char, ConcurrentMemory>{memory}),
-        command_(event.command.command, AllocatorRef<char, ConcurrentMemory>{memory}),
-        directory_(event.command.directory, AllocatorRef<char, ConcurrentMemory>{memory}),
-        output_(event.command.output.begin(), event.command.output.end(), AllocatorRef<Byte, ConcurrentMemory>{memory}),
-        cause_(event.failure.cause, AllocatorRef<char, ConcurrentMemory>{memory}) {}
+        workspace_(memory, event.session.workspace_path),
+        shell_(memory, event.session.shell),
+        command_(memory, event.command.command),
+        directory_(memory, event.command.directory),
+        output_(memory),
+        cause_(memory, event.failure.cause) {
+    output_.extend(event.command.output);
+  }
 
   HistoryEventView HistoryEvent::view() const noexcept {
     auto result = event_;

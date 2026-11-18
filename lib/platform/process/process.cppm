@@ -113,7 +113,7 @@ export {
       void setEnvironment(std::string_view name, std::string_view value);
       SpawnSpec specification(TerminalSize size);
       std::string_view cwd() const noexcept;
-      std::span<const String<Memory>> arguments() const noexcept;
+      std::span<const ds::String<Memory>> arguments() const noexcept;
       bool restorable() const noexcept;
 
     private:
@@ -122,16 +122,16 @@ export {
       void resolveExecutable();
 
       using SensitiveMemory = ErasingAllocator<Memory>;
-      tbc::view<String<Memory>, tbc::lt::a> executable_;
-      tbc::view<String<Memory>, tbc::lt::a> cwd_;
-      tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> arguments_;
-      tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> spawn_arguments_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> executable_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> cwd_;
+      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> arguments_;
+      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> spawn_arguments_;
       tbc::view<SensitiveMemory, tbc::lt::a> environment_memory_;
       // The environment allocates from the sibling allocator, and the spawn arrays point into the
       // command's own strings, so a command keeps its address.
-      tbc::view<Vector<String<SensitiveMemory>, SensitiveMemory>, tbc::lt::self> environment_;
-      tbc::view<Vector<char*, Memory>, tbc::lt::self> argument_pointers_;
-      tbc::view<Vector<char*, Memory>, tbc::lt::self> environment_pointers_;
+      tbc::view<ds::Vec<ds::String<SensitiveMemory>, SensitiveMemory>, tbc::lt::self> environment_;
+      tbc::view<ds::Vec<char*, Memory>, tbc::lt::self> argument_pointers_;
+      tbc::view<ds::Vec<char*, Memory>, tbc::lt::self> environment_pointers_;
       tbc::view<Memory&, tbc::lt::a> memory_;
       bool restorable_;
     };

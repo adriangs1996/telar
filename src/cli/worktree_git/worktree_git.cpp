@@ -186,11 +186,13 @@ namespace telar::runtime::cli::sessions {
   void appendWorktreeCheckout(Text& path, std::string_view root, std::string_view branch) {
     path.append(root);
     path.append("-worktrees/");
-    const auto suffix = path.size();
 
-    path.append(branch);
-    std::replace(path.begin() + static_cast<std::ptrdiff_t>(suffix), path.end(), '/', '-');
-    std::replace(path.begin() + static_cast<std::ptrdiff_t>(suffix), path.end(), '\\', '-');
+    // A branch's separators would make directories: each becomes a dash.
+    for (const char character : branch) {
+      const char safe = character == '/' || character == '\\' ? '-' : character;
+
+      path.append(std::string_view{&safe, 1});
+    }
   }
 
   void branch(std::string_view value) {
@@ -439,7 +441,7 @@ namespace telar::runtime::cli::repository {
 namespace telar::runtime::cli::sessions {
 
   template void appendWorktreeCheckout<std::string>(std::string& path, std::string_view root, std::string_view branch);
-  template void appendWorktreeCheckout<String<Memory>>(String<Memory>& path, std::string_view root, std::string_view branch);
+  template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, std::string_view root, std::string_view branch);
 
 }
 
@@ -723,12 +725,12 @@ namespace telar::runtime::cli::sessions {
   Channel::Channel(Memory& memory, ds::Option<std::string_view> socket, bool start)
       : paths_(memory, socketOptions(socket), process_environment) {
     ds::Option<RuntimeConnection> probe;
-    if (start && !connectExisting(probe, paths_.socket.c_str()) && startRuntime(memory, socketOptions(socket), paths_) != RuntimeStart::listening) {
+    if (start && !connectExisting(probe, paths_.socket.data()) && startRuntime(memory, socketOptions(socket), paths_) != RuntimeStart::listening) {
       throw Failure{"the local runtime is not reachable"};
     }
 
     try {
-      session_.emplace(memory, paths_.socket.c_str());
+      session_.emplace(memory, paths_.socket.data());
     } catch (const SystemError& error) {
       throw Failure{connectionFailure(error.code())};
     }
@@ -746,7 +748,7 @@ namespace telar::runtime::cli::sessions {
   }
 
   const char* Channel::socket() const {
-    return paths_.socket.c_str();
+    return paths_.socket.data();
   }
 
   ControlSession& Channel::control() noexcept {
