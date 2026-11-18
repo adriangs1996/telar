@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include <cstdint>
+#include <unistd.h>
 
 import std;
 import telar.testing;
@@ -16,6 +17,7 @@ namespace {
   using telar::testing::check;
 
   using namespace telar::runtime::cli;
+  namespace ds = telar::ds;
 
   namespace {
 
@@ -147,6 +149,48 @@ namespace {
   }
 
   const telar::testing::Case case_parses_integers{"arguments.parses_integers", parsesIntegers};
+  // Formatted output reaches the descriptor whole, past the writer's buffer, and the CLI's
+  // formattable values print as their text would.
+  void formattedOutput() {
+    ds::Array<int, 2> pipe{};
+
+    check(::pipe(pipe.dataMut()) == 0);
+    const ds::Array<char, 6000> filler = [] {
+      ds::Array<char, 6000> bytes;
+
+      for (std::size_t index = 0; index < bytes.size(); ++index) {
+        bytes.atMut(index) = static_cast<char>('a' + index % 26);
+      }
+
+      return bytes;
+    }();
+    const std::string_view long_text{filler.data(), filler.size()};
+
+    writeFormatted(pipe[1], "<{}|{}|{}|{}|{}>", long_text, orNull(ds::Option<int>{-3}), orNull(ds::Option<std::uint64_t>{}), quoteJson("q\"\n"), EscapedField{"a\tb\x01"});
+    ::close(pipe[1]);
+
+    ds::Array<char, 8192> read{};
+    std::size_t size = 0;
+
+    for (;;) {
+      const auto count = ::read(pipe[0], read.dataMut() + size, read.size() - size);
+      if (count <= 0) {
+        break;
+      }
+
+      size += static_cast<std::size_t>(count);
+    }
+
+    ::close(pipe[0]);
+    const std::string_view text{read.data(), size};
+
+    constexpr std::string_view tail = "|-3|null|\"q\\\"\\n\"|a\\tb\\x01>";
+
+    check(text.size() == 1 + long_text.size() + tail.size() && text.starts_with('<') && text.substr(1, long_text.size()) == long_text, "the text passes the buffer whole");
+    check(text.substr(1 + long_text.size()) == tail, "values print as their text");
+  }
+
+  const telar::testing::Case case_formatted_output{"arguments.formatted_output", formattedOutput};
   const telar::testing::Case case_maps_errors{"arguments.maps_errors", mapsErrors};
   const telar::testing::Case case_walks_words{"arguments.walks_words", walksWords};
   const telar::testing::Case case_choice_maps_words{"arguments.choice_maps_words", choiceMapsWords};

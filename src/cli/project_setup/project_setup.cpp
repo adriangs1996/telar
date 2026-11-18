@@ -14,6 +14,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.base.memory.containers;
 
 namespace telar::runtime::cli::pane_agents {
 
@@ -573,13 +574,16 @@ namespace telar::runtime::cli::pane_agents {
     const ProcessEnvironment environment;
     const auto id = maybeUnsigned(environment.lookup("TELAR_PANE_ID"));
     // A later lookup may overwrite the storage an earlier one returned.
-    const std::string own{environment.lookup("TELAR_SOCKET_PATH")};
-    if (!id || *id == target || own.empty()) {
+    const auto socket_path = environment.lookup("TELAR_SOCKET_PATH");
+    FixedText<PATH_MAX> own;
+    if (!id || *id == target || socket_path.empty() || socket_path.size() > PATH_MAX) {
       return ds::none;
     }
 
+    own.assign(socket_path);
+
     const auto socket = options.socket ? std::string_view{options.socket} : environment.lookup("TELAR_SOCKET");
-    if (!socket.empty() && socket != own) {
+    if (!socket.empty() && socket != own.view()) {
       return ds::none;
     }
 
@@ -894,13 +898,13 @@ namespace telar::runtime::cli::execution {
     }
   }
 
-  std::string statusJson(const ExecutionReply& reply) {
-    return std::format("{{\"execution_id\":{},\"workspace_id\":{},\"state\":{},\"exit_code\":{},\"stdout_offset\":{},\"stderr_offset\":{},\"stdout_bytes\":{},\"stderr_bytes\":{},\"stdin_bytes\":{},\"stdin_open\":{},\"failure\":{}}}\n", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), finished(reply) ? std::to_string(reply.exit_code) : "null", reply.stdout_offset, reply.stderr_offset, reply.stdout_total, reply.stderr_total, reply.input_offset, jsonBoolean(reply.stdin_open), quoteJson(textBytes(reply.failure)));
+  void writeStatusJson(const ExecutionReply& reply) {
+    writeFormatted(STDOUT_FILENO, "{{\"execution_id\":{},\"workspace_id\":{},\"state\":{},\"exit_code\":{},\"stdout_offset\":{},\"stderr_offset\":{},\"stdout_bytes\":{},\"stderr_bytes\":{},\"stdin_bytes\":{},\"stdin_open\":{},\"failure\":{}}}\n", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), orNull(finished(reply) ? ds::Option{reply.exit_code} : ds::none), reply.stdout_offset, reply.stderr_offset, reply.stdout_total, reply.stderr_total, reply.input_offset, jsonBoolean(reply.stdin_open), quoteJson(textBytes(reply.failure)));
   }
 
   void writeStreams(ExecutionRequest& request, const ExecutionReply& reply) {
     if (request.stdout_offset != reply.stdout_offset || request.stderr_offset != reply.stderr_offset) {
-      writeText(std::format("telar exec: retained output lost; resume with --stdout-offset {} --stderr-offset {}\n", reply.stdout_offset, reply.stderr_offset), STDERR_FILENO);
+      writeFormatted(STDERR_FILENO, "telar exec: retained output lost; resume with --stdout-offset {} --stderr-offset {}\n", reply.stdout_offset, reply.stderr_offset);
       throw std::runtime_error{"ExecutionOutputLost"};
     }
 
@@ -912,7 +916,9 @@ namespace telar::runtime::cli::execution {
 
   void list(ControlSession& session) {
     ExecutionRequest request{.action = ExecutionAction::list};
-    std::string output = "[";
+    DescriptorWriter output{STDOUT_FILENO};
+
+    output.print("[");
 
     for (;;) {
       const auto reply = exchange(session, request);
@@ -921,15 +927,15 @@ namespace telar::runtime::cli::execution {
       }
 
       if (request.execution_id != 0) {
-        output += ',';
+        output.print(",");
       }
 
-      output += std::format("{{\"execution_id\":{},\"workspace_id\":{},\"state\":{},\"exit_code\":{}}}", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), finished(reply) ? std::to_string(reply.exit_code) : "null");
+      output.print("{{\"execution_id\":{},\"workspace_id\":{},\"state\":{},\"exit_code\":{}}}", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), orNull(finished(reply) ? ds::Option{reply.exit_code} : ds::none));
       request.execution_id = reply.execution_id;
     }
 
-    output += "]\n";
-    writeText(output);
+    output.print("]\n");
+    output.flush();
   }
 
   // Forgets a finished execution; a refusal leaves it retained, as before.
@@ -959,7 +965,7 @@ namespace telar::runtime::cli::execution {
       } else {
         if (finished(reply) && request.stdout_offset == reply.stdout_total && request.stderr_offset == reply.stderr_total) {
           if (reply.state == ExecutionState::failed) {
-            writeText("telar exec: " + std::string{textBytes(reply.failure)} + "\n", STDERR_FILENO);
+            writeFormatted(STDERR_FILENO, "telar exec: {}\n", textBytes(reply.failure));
           }
 
           const auto status = std::clamp(reply.exit_code, 0, 255);
@@ -975,7 +981,7 @@ namespace telar::runtime::cli::execution {
         }
 
         if (options.timeout_seconds != 0 && std::chrono::steady_clock::now() - started >= std::chrono::seconds{options.timeout_seconds}) {
-          writeText(std::format("telar exec: wait timed out; execution {} continues\n", request.execution_id), STDERR_FILENO);
+          writeFormatted(STDERR_FILENO, "telar exec: wait timed out; execution {} continues\n", request.execution_id);
           return timeout_status;
         }
 
@@ -1032,14 +1038,14 @@ namespace telar::runtime::cli::execution {
       const auto reply = exchange(session, request);
 
       if (options.action == ExecutionOptions::Action::status || options.action == ExecutionOptions::Action::cancel || options.action == ExecutionOptions::Action::forget || options.detach) {
-        writeText(statusJson(reply));
+        writeStatusJson(reply);
         return 0;
       }
 
       return observe(session, request, reply, options);
     } catch (...) {
       if (options.action == ExecutionOptions::Action::start) {
-        writeText(std::format("telar exec: query execution {} before retrying an uncertain launch\n", request.execution_id), STDERR_FILENO);
+        writeFormatted(STDERR_FILENO, "telar exec: query execution {} before retrying an uncertain launch\n", request.execution_id);
       }
 
       throw;
@@ -1059,9 +1065,9 @@ namespace telar::runtime::cli::execution {
       session.receiveTimeout(30);
       return start(session, options);
     } catch (const ControlFailure& error) {
-      writeText("telar exec: " + std::string{error.message().empty() ? error.what() : error.message()} + "\n", STDERR_FILENO);
+      writeFormatted(STDERR_FILENO, "telar exec: {}\n", error.message().empty() ? std::string_view{error.what()} : error.message());
     } catch (const std::exception& error) {
-      writeText("telar exec: " + std::string{commandErrorName(error)} + "\n", STDERR_FILENO);
+      writeFormatted(STDERR_FILENO, "telar exec: {}\n", commandErrorName(error));
     }
 
     return failure_status;
@@ -1298,7 +1304,9 @@ namespace telar::runtime::cli::project_setup {
   // keeps a distinct EOF diagnostic when its valid prefix can be completed.
   template <Allocator Memory>
   const char* recipeJsonFailure(Memory& memory, std::string_view text) {
-    std::string closing;
+    // The brackets still open, innermost last; a recipe within its byte limit nests no deeper.
+    ds::Array<char, max_recipe_bytes> closing;
+    std::size_t open = 0;
     bool in_string = false;
     bool escaped = false;
 
@@ -1314,28 +1322,30 @@ namespace telar::runtime::cli::project_setup {
       } else if (byte == '"') {
         in_string = true;
       } else if (byte == '{' || byte == '[') {
-        closing += byte == '{' ? '}' : ']';
+        closing.atMut(open++) = byte == '{' ? '}' : ']';
       } else if (byte == '}' || byte == ']') {
-        if (closing.empty() || closing.back() != byte) {
+        if (open == 0 || closing[open - 1] != byte) {
           return "SyntaxError";
         }
 
-        closing.pop_back();
+        --open;
       }
     }
 
-    std::reverse(closing.begin(), closing.end());
+    const auto unclosed = closing.viewMut().first(open);
+
+    std::ranges::reverse(unclosed);
     constexpr ds::Array completions{"", "\"", "0", "null", ":null", "\":null", "\"\":null", "n\"", "0\"", "00\"", "000\"", "0000\"", "rue", "ue", "e", "alse", "lse", "se", "ull", "ll", "l"};
 
     for (const std::string_view suffix : completions) {
-      if (suffix.empty() && closing.empty()) {
+      if (suffix.empty() && open == 0) {
         continue;
       }
 
-      std::string candidate{text};
+      ds::String<Memory> candidate{memory, text};
 
-      candidate += suffix;
-      candidate += closing;
+      candidate.append(suffix);
+      candidate.append({unclosed.data(), unclosed.size()});
       try {
         const auto completed = JsonValue::parse(candidate);
         const char* diagnostic = "UnexpectedEndOfInput";
@@ -1379,7 +1389,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  std::vector<std::string> recipeArguments(Memory& memory, std::string_view text) {
+  ds::Vec<ds::String<Memory>, Memory> recipeArguments(Memory& memory, std::string_view text) {
     auto recipe = [&] {
       try {
         return JsonNode<Memory>::parse(memory, text);
@@ -1424,7 +1434,7 @@ namespace telar::runtime::cli::project_setup {
       throw std::runtime_error{"InvalidProjectRecipe"};
     }
 
-    std::vector<std::string> result;
+    ds::Vec<ds::String<Memory>, Memory> result{memory};
 
     result.reserve(argv->children().size());
     for (const auto& argument : argv->children()) {
@@ -1432,15 +1442,15 @@ namespace telar::runtime::cli::project_setup {
         throw std::runtime_error{"UnexpectedToken"};
       }
 
-      result.emplace_back(argument.text());
+      result.emplace(memory, argument.text());
     }
 
     return result;
   }
 
   template <Allocator Memory>
-  ds::Option<std::vector<std::string>> loadRecipe(Memory& memory, std::string_view cwd, bool authorized) {
-    const auto path = std::string{cwd} + "/.telar/setup.json";
+  ds::Option<ds::Vec<ds::String<Memory>, Memory>> loadRecipe(Memory& memory, std::string_view cwd, bool authorized) {
+    const auto path = ds::format(memory, "{}/.telar/setup.json", cwd);
     FileDescriptor parent;
     FileDescriptor file;
 
@@ -1464,7 +1474,7 @@ namespace telar::runtime::cli::project_setup {
       throw std::runtime_error{"InvalidProjectRecipe"};
     }
 
-    std::string text;
+    ds::String<Memory> text{memory};
 
     text.reserve(static_cast<std::size_t>(inode.st_size));
     ds::Array<char, max_recipe_bytes> bytes;
@@ -1487,7 +1497,7 @@ namespace telar::runtime::cli::project_setup {
         throw std::runtime_error{"StreamTooLong"};
       }
 
-      text.append(bytes.data(), static_cast<std::size_t>(count));
+      text.append({bytes.data(), static_cast<std::size_t>(count)});
     }
 
     return recipeArguments(memory, text);
@@ -1525,7 +1535,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   // Starts a recipe as an execution in `cwd` and, unless `detach`, waits for it to succeed.
-  std::uint64_t execute(ControlSession& session, std::string_view cwd, std::span<const std::string> recipe, bool detach) {
+  std::uint64_t execute(ControlSession& session, std::string_view cwd, std::span<const ds::String<Memory>> recipe, bool detach) {
     ds::Array<std::string_view, ExecutionOptions::max_arguments> argv;
 
     for (std::size_t index = 0; index < recipe.size(); ++index) {
@@ -1535,7 +1545,7 @@ namespace telar::runtime::cli::project_setup {
     const auto id = randomIdentity();
     ExecutionRequest request{.action = ExecutionAction::start, .execution_id = id, .cwd = cwd, .arguments = std::span{argv}.first(recipe.size())};
 
-    writeText(std::format("telar project: setup execution {}; each explicit invocation repeats the recipe\n", id), STDERR_FILENO);
+    writeFormatted(STDERR_FILENO, "telar project: setup execution {}; each explicit invocation repeats the recipe\n", id);
     const auto reply = execution::exchange(session, request);
 
     if (!detach) {
@@ -1551,7 +1561,7 @@ namespace telar::runtime::cli::project_setup {
       return ds::none;
     }
 
-    return execute(session, cwd, *recipe, detach);
+    return execute(session, cwd, recipe->view(), detach);
   }
 
   ds::Option<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
@@ -1569,19 +1579,19 @@ namespace telar::runtime::cli::project_setup {
     ControlSession session{memory, paths.socket.data()};
 
     session.receiveTimeout(30);
-    return execute(session, cwd, *recipe, detach);
+    return execute(session, cwd, recipe->view(), detach);
   }
 
   int run(Memory& memory, const Options& options) {
     try {
       const auto id = prepare(memory, options.cwd, true, options.detach, {});
 
-      writeText(std::format("{{\"execution_id\":{},\"environment\":{},\"ready\":{}}}\n", id ? std::to_string(*id) : "null", quoteJson(!id ? "not_declared" : options.detach ? "running"
+      writeFormatted(STDOUT_FILENO, "{{\"execution_id\":{},\"environment\":{},\"ready\":{}}}\n", orNull(id), quoteJson(!id ? "not_declared" : options.detach ? "running"
                                                                                                                                                                             : "ready"),
-          jsonBoolean(id && !options.detach)));
+          jsonBoolean(id && !options.detach));
       return 0;
     } catch (const std::exception& error) {
-      writeText("telar project: " + std::string{error.what()} + "; inspect the execution output, supply missing tools/access on this destination, then explicitly retry project setup\n", STDERR_FILENO);
+      writeFormatted(STDERR_FILENO, "telar project: {}; inspect the execution output, supply missing tools/access on this destination, then explicitly retry project setup\n", error.what());
       return 1;
     }
   }

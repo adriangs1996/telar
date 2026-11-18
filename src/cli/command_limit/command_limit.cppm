@@ -113,13 +113,14 @@ export {
     };
 
     // A number, or JSON's `null` without one, where it is formatted.
+    template <typename Number>
     struct NumberOrNull {
-      ds::Option<std::uint64_t> value;
+      ds::Option<Number> value;
     };
 
     template <typename Number>
-    constexpr NumberOrNull orNull(const ds::Option<Number>& value) noexcept {
-      return {value ? ds::Option<std::uint64_t>{static_cast<std::uint64_t>(*value)} : ds::none};
+    constexpr NumberOrNull<Number> orNull(const ds::Option<Number>& value) noexcept {
+      return {value};
     }
 
     // The text as a JSON string literal where it is formatted.
@@ -130,6 +131,75 @@ export {
     void writeBytes(int descriptor, std::span<const Byte> bytes);
 
     void writeText(std::string_view text, int descriptor = STDOUT_FILENO);
+
+    // Formats text to a descriptor through a buffer on the stack, written out as it fills and at
+    // `flush`: nothing is allocated and the text has no limit on its length.
+    class DescriptorWriter {
+    public:
+      explicit DescriptorWriter(int descriptor) noexcept
+          : descriptor_(descriptor) {}
+
+      DescriptorWriter(const DescriptorWriter&) = delete;
+      DescriptorWriter& operator=(const DescriptorWriter&) = delete;
+
+      template <typename... Arguments>
+      void print(std::format_string<Arguments...> format, Arguments&&... arguments) {
+        std::format_to(Appender{this}, format, std::forward<Arguments>(arguments)...);
+      }
+
+      void flush() {
+        if (used_ != 0) {
+          const auto used = std::exchange(used_, 0);
+
+          writeText({buffer_.data(), used}, descriptor_);
+        }
+      }
+
+    private:
+      struct Appender {
+        using difference_type = std::ptrdiff_t;
+
+        DescriptorWriter* writer;
+
+        Appender& operator=(char character) {
+          writer->push(character);
+          return *this;
+        }
+
+        Appender& operator*() noexcept {
+          return *this;
+        }
+
+        Appender& operator++() noexcept {
+          return *this;
+        }
+
+        Appender operator++(int) noexcept {
+          return *this;
+        }
+      };
+
+      void push(char character) {
+        if (used_ == buffer_.size()) {
+          flush();
+        }
+
+        buffer_.atMut(used_++) = character;
+      }
+
+      ds::Array<char, 4096> buffer_;
+      std::size_t used_ = 0;
+      int descriptor_;
+    };
+
+    // Writes the formatted text to `descriptor`, as one write when it fits the writer's buffer.
+    template <typename... Arguments>
+    void writeFormatted(int descriptor, std::format_string<Arguments...> format, Arguments&&... arguments) {
+      DescriptorWriter writer{descriptor};
+
+      writer.print(format, std::forward<Arguments>(arguments)...);
+      writer.flush();
+    }
 
     std::string_view textBytes(std::span<const Byte> bytes);
 
@@ -195,14 +265,14 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
   }
 };
 
-template <>
-struct std::formatter<telar::runtime::cli::NumberOrNull, char> {
+template <typename Number>
+struct std::formatter<telar::runtime::cli::NumberOrNull<Number>, char> {
   constexpr auto parse(std::format_parse_context& context) {
     return context.begin();
   }
 
   template <typename Context>
-  auto format(const telar::runtime::cli::NumberOrNull& number, Context& context) const {
+  auto format(const telar::runtime::cli::NumberOrNull<Number>& number, Context& context) const {
     return number.value ? std::format_to(context.out(), "{}", *number.value) : std::format_to(context.out(), "null");
   }
 };
