@@ -1027,10 +1027,11 @@ applies these rules to C++:
 - A call is known by its declaration. Elision or labels give its result, labels
   give what it keeps, and it needs every borrow it receives to be live. Every
   definition is checked against its declaration.
-- C++ chooses a non-const accessor by the object's constness rather than by its
-  use, so a call's ability to invalidate an input is summarized across calls, an
-  input at a time, never field by field, also into functions that another
-  checked unit defines. Rust needs no such summary.
+- A call may invalidate every input its declaration lets it mutate, whole, as a
+  `&mut` borrow does. C++ chooses a non-const accessor by the object's constness
+  rather than by its use, so project types never overload a method on constness:
+  a read is a `const` method and mutable access has its own name, as `get` and
+  `get_mut`.
 - Exclusivity is upheld where `noalias` matters to the callee: a call's mutable
   argument may not overlap another argument, and an object may not borrow itself
   except through a pinned `lt::self` field.

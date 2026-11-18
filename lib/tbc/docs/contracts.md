@@ -133,47 +133,24 @@ uses only the callee's signature:
   keeps an `F` only in a field of type `F`.
 - The call uses everything it is given, including what its receiver holds, as a
   Rust call needs every borrow its inputs carry to be live.
-- The call may invalidate an input it can mutate. Its summary says only which
-  inputs, never which of their fields: a method's receiver counts whole, as
-  `&mut self` lends the whole object. Through a reference, it reaches the object
-  that reference designates. This summary is the one thing the checker infers
-  across calls, because C++ picks a non-const accessor such as `operator[]` by
-  the object's constness rather than by its use; every `&mut` would otherwise
-  conflict, which Rust code never meets. The summary of a function that another
-  unit of the same run defines is read from that unit (see below). A project
-  function no checked unit defines, or a virtual one that is not `final`, may
-  invalidate every input it can mutate. What the receiver reaches through its own reference fields it borrows
-  exclusively, as a Rust `&mut` field is: a call that mutates through one
-  invalidates every other borrow of that object, never the receiver's own.
-  Nothing a reference to const designates, nor a constant with static storage,
-  is invalidated through it, as a Rust `&T` lends nothing to mutate.
-
-### Functions another unit defines
-
-When `tbc-lint` checks several translation units, a first pass summarizes, once
-per unit, what each function that unit's own source file defines can invalidate:
-which parameters, through a reference or what a pointer designates, and whether
-the receiver or the environment. Each summary is the one that unit solves for the
-function, recursion included, and it is keyed by the function's linkage name, on
-which every unit that declares it agrees. A unit that sees only the declaration,
-such as a caller of a module's implementation unit or of a template instantiated
-explicitly elsewhere, invalidates what the summary says instead of every mutable
-input. A function several units define invalidates what any of them does.
-
-The summary keeps no more than a call through a visible body reads, so a call
-into another unit is checked as if its body were visible, with one difference:
-the first pass summarizes each unit without the summaries of other units, so a
-function that calls into a third unit keeps that call's declared invalidations.
-A summary that names something only its unit knows, such as a global or a field
-inside a parameter, is not exported, and the callers fall back to the
-declaration. Constructors and destructors, virtual calls that may reach an
-override, and indirect calls stay known by their declarations. A single checked
-unit has no other unit to read, so its calls into functions defined elsewhere
-keep their declared invalidations.
+- The call may invalidate every input it can mutate, whole, as `&mut` lends a
+  whole object: the receiver of a non-const method, and what a non-const
+  reference or pointer parameter designates. Through such an input it also
+  reaches what the input's own non-const references and pointers designate, as
+  `&mut T` reaches what a `&'a mut U` field of `T` designates; other borrows of
+  those objects end, while the input keeps its own, as a Rust `&mut` reborrows
+  what its fields lend. Nothing a reference to const designates, nor a constant
+  with static storage, is invalidated through it, as a Rust `&T` lends nothing
+  to mutate. The callee's body never narrows this: a function another unit
+  defines, a recursive one, a virtual one and a `final` override are all known
+  the same way, and every override is bound by the declaration it overrides.
+- A call may also replace the environment, as `setenv` does, so a `getenv`
+  result does not survive it; Rust lends no borrow of the environment at all.
 
 A closure is checked with the function that defines it, as Rust does, so its
 call keeps which fields it reads and mutates. So are the members the compiler
-writes, such as a defaulted assignment.
+writes, such as a defaulted assignment. These are the only calls known by their
+bodies.
 
 ```cpp
 void clearResponse(stream &target);
@@ -228,9 +205,53 @@ class tally {
 
 Make such a helper `static`, or a free function, and pass it the fields it needs.
 
-Project headers are checked too. Template definitions are analyzed in their
-instantiated forms; an uninstantiated dependent template has not been verified.
-Diagnostics are emitted after summary convergence, not from provisional states.
+Each definition is checked once per run: a unit checks what its own file
+defines, and the first unit to reach a definition from a project header, or an
+instantiation of a template, checks it for all. What a unit imports from a
+module is checked with the unit that defines it. Template definitions are
+analyzed in their instantiated forms; an uninstantiated dependent template has
+not been verified. Diagnostics are emitted after the closures a function calls
+are solved, not from provisional states.
+
+## The C++ that tbc checks
+
+Rust tells shared from exclusive access by how a value is used: `v[i]` lends
+`&v` when it is read and `&mut v` when it is written, and `get` and `get_mut` are
+two methods. C++ picks between a `const` and a non-`const` overload by the
+constness of the object instead, so a read through a non-`const` object would
+lend it exclusively. Project types therefore never overload a method on
+constness: a read is a `const` method, and mutable access has a name of its own,
+as `find` and `findMut`. A class that declares both a `const` and a non-`const`
+member with the same name and parameters is a `tbc-const-overload`, reported
+at the non-`const` one. An overload that only an rvalue receiver selects is not
+one, nor is an override, whose signature the method it overrides chose.
+
+The standard library keeps its overloads; the checker models its types by their
+kind instead, as described above. Any other third-party type, such as Qt's, is
+known by its declarations like a project type: a non-`const` method lends the
+object exclusively, which a copy-on-write type's detach needs. Read such types
+through `const` access (`std::as_const`, `constData`, `at`) where a borrow of
+them must survive.
+
+Shared access is deep, as Rust's `&T` is: a `const` method, or a reference or
+pointer to `const`, lends shared everything its object reaches, so its body may
+not mutate what a reference or pointer field designates, nor what a smart
+pointer field owns (`tbc-contract-violation`), which C++'s shallow `const`
+allows. A shared type, a synchronization primitive such as `std::mutex` or
+`std::atomic`, and an opaque C object may change through it, as Rust's interior
+mutability and raw pointers allow. A standard method that differs from a
+`const` one only in its constness, such as `std::vector::front`, gives access
+rather than mutating; what is done with what it returns counts.
+
+telar code uses the containers of `telar::ds` (`Vec`, `Array`, `Option`,
+`String`, `Map`, `Function`), which follow these rules, rather than the standard
+ones they replace or C arrays: `tbc-lint --checks=standard-containers` reports
+each such type (`tbc-standard-container`) outside the folders
+`docs/build/standard-containers-allowlist.txt` still lists.
+
+Every check the declaration-only rule makes is local: each function is checked
+once, where it is defined, against its own declaration and the declarations of
+what it calls, as `rustc` checks each body.
 
 ## Keep public promises explicit
 
@@ -359,15 +380,14 @@ for recursive structures.
 
 A borrow also records the fields on the way to its place, so an operation on one
 field of an object leaves borrows of its other fields valid. That holds through a
-reference a function returns to a field and through a callee that mutates a field
-of its argument:
+reference a function returns to a field, and through a call that receives only
+that field:
 
 ```cpp
-void clearResponse(stream &target) { target.response.headers.clear(); }
-
 void observeMethod(stream &active) {
   const std::string_view method = active.request.method;
-  clearResponse(active); // the request is another field
+  active.response.headers.clear(); // the request is another field
+  clearResponse(active.response);  // so is the response a call receives
   observe(method);
 }
 ```
@@ -436,6 +456,9 @@ struct holder {
   text_a read() const;
 };
 ```
+
+A member of an anonymous struct or union is a field of the record that holds it,
+as C++ names it, so `telar::ds::Option` labels the `Value` its union holds.
 
 A result in that region can come from the receiver's field or from any
 parameter in the region. A non-const method can retain any argument passed to a
@@ -603,6 +626,19 @@ template <typename Value, Allocator Memory, typename... Arguments>
 TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments);
 ```
 
+A constructor template marked `TBC_CONSTRUCTS` builds its class's first template
+argument in place from its trailing pack, as `ds::Option`'s `in_place` one does
+for a value that cannot move: the object keeps what that type's constructors keep
+of the pack.
+
+Two cases follow overload resolution rather than every constructor that takes as
+many arguments. A value of the type itself selects its copy or move constructor,
+so a `std::string_view` built from another keeps what that one views, not the
+variable it was copied from. A library type has no declaration that states more,
+so it keeps what the argument-shape model gives a construction of it: a view
+views what it is made from, and any other type, such as `std::variant`, keeps a
+copy of what each argument holds.
+
 ```cpp
 class asset {
 public:
@@ -720,9 +756,9 @@ has deliberate limits:
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
   protocols still require further analysis or audited models.
-- Mutable global borrowed state, exception-unwinding analysis, virtual/indirect
-  dispatch, and conflicting redeclaration contracts are not comprehensively
-  checked. Unsupported result dependencies may produce `tbc-missing-contract`.
+- Mutable global borrowed state, exception-unwinding analysis, indirect calls,
+  and conflicting redeclaration contracts are not comprehensively checked.
+  Unsupported result dependencies may produce `tbc-missing-contract`.
 - Bounds, nullability, initialization, and concurrency are separate checks and
   remain pending. A pointer annotation is not a non-null promise.
 

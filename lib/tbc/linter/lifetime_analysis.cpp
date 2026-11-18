@@ -774,6 +774,26 @@ namespace tbc_lint {
       return result;
     }
 
+    // The fields of a record as C++ names them: the members of an anonymous struct or union are the
+    // record's own, as a field of the record holding them.
+    void appendNamedFields(const clang::RecordDecl& record, llvm::SmallVectorImpl<const clang::FieldDecl*>& fields) {
+      for (const auto* field : record.fields()) {
+        const auto* inner = field->isAnonymousStructOrUnion() ? field->getType()->getAsRecordDecl() : nullptr;
+        if (inner != nullptr && inner->getDefinition() != nullptr) {
+          appendNamedFields(*inner->getDefinition(), fields);
+        } else {
+          fields.push_back(field);
+        }
+      }
+    }
+
+    llvm::SmallVector<const clang::FieldDecl*, 8> namedFields(const clang::RecordDecl& record) {
+      llvm::SmallVector<const clang::FieldDecl*, 8> fields;
+
+      appendNamedFields(record, fields);
+      return fields;
+    }
+
     // The fields of a record, its bases' first.
     void recordFields(const clang::CXXRecordDecl& record, llvm::SmallVectorImpl<const clang::FieldDecl*>& fields) {
       for (const auto& base : record.bases()) {
@@ -783,9 +803,7 @@ namespace tbc_lint {
         }
       }
 
-      for (const auto* field : record.fields()) {
-        fields.push_back(field);
-      }
+      appendNamedFields(record, fields);
     }
 
     // A borrow held at an unknown position that covers the fields being replaced may lie in any other
@@ -999,74 +1017,6 @@ namespace tbc_lint {
       bool queued = false;
     };
 
-    // A place a summary invalidates, named so that another unit can find it: a parameter by its
-    // position, or a field of the receiver by its position among the fields of the receiver's class.
-    struct exported_invalidation {
-      bool receiver = false;
-      unsigned index = 0;
-      storage_kind level = storage_kind::object;
-      bool designated = false;
-      storage_range range;
-
-      [[nodiscard]] bool samePlace(const exported_invalidation& other) const {
-        return receiver == other.receiver && index == other.index && level == other.level && designated == other.designated;
-      }
-    };
-
-    // What a function another unit defines can invalidate, which is all its callers read of a call known
-    // by its declaration.
-    struct exported_summary {
-      // A unit that defines the function computed what no other unit can read, so callers know it by
-      // its declaration alone.
-      bool opaque = false;
-      bool invalidates_environment = false;
-      llvm::SmallVector<exported_invalidation, 2> invalidates;
-
-      void merge(const exported_summary& other) {
-        opaque = opaque || other.opaque;
-        invalidates_environment = invalidates_environment || other.invalidates_environment;
-        for (const auto& place : other.invalidates) {
-          const auto found = std::ranges::find_if(invalidates, [&](const exported_invalidation& entry) {
-            return entry.samePlace(place);
-          });
-          if (found == invalidates.end()) {
-            invalidates.push_back(place);
-          } else {
-            found->range = found->range.widen(place.range);
-          }
-        }
-      }
-    };
-
-    using summary_table = llvm::StringMap<exported_summary>;
-
-    // Whether another unit can call a function it knows only by its declaration. A function with internal
-    // linkage has a definition in each unit that calls it, constructors and destructors are not calls
-    // whose invalidations a summary describes, and nothing calls `main`.
-    bool callableElsewhere(const clang::FunctionDecl& function) {
-      return !llvm::isa<clang::CXXConstructorDecl, clang::CXXDestructorDecl>(function) && function.isExternallyVisible() && !function.isDependentContext() && !function.isMain();
-    }
-
-    // The name the linker knows a function by, which every unit that declares it agrees on.
-    std::optional<std::string> linkageName(clang::MangleContext& mangler, const clang::FunctionDecl& function) {
-      if (!callableElsewhere(function)) {
-        return std::nullopt;
-      }
-
-      std::string name;
-      llvm::raw_string_ostream stream(name);
-
-      if (mangler.shouldMangleDeclName(&function)) {
-        mangler.mangleName(clang::GlobalDecl(&function), stream);
-      } else if (const auto* identifier = function.getIdentifier()) {
-        stream << identifier->getName();
-      } else {
-        return std::nullopt;
-      }
-
-      return name;
-    }
-
     // A call whose callers see its body, as Rust checks a closure with the function that defines it and
     // derives memberwise special members: a lambda's call operator, or a member the compiler writes. Any
     // other call is known only by its declaration.
@@ -1076,64 +1026,14 @@ namespace tbc_lint {
       return method != nullptr && (method->getParent()->isLambda() || method->isDefaulted());
     }
 
-    // What a function's summary invalidates, in terms another unit can read. It is opaque when part of
-    // it names a variable only this unit knows, such as a global, or a field inside a parameter.
-    exported_summary exportSummary(const clang::FunctionDecl& definition, const function_summary& summary) {
-      llvm::SmallVector<const clang::FieldDecl*, 8> fields;
-      const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&definition);
-
-      if (method != nullptr && method->isInstance() && method->getParent()->getDefinition() != nullptr) {
-        recordFields(*method->getParent()->getDefinition(), fields);
-      }
-
-      exported_summary result{.opaque = false, .invalidates_environment = summary.invalidates_environment, .invalidates = {}};
-
-      for (const auto& [target, range] : summary.invalidates) {
-        if (!target.path.empty() || !target.select.empty()) {
-          return exported_summary{.opaque = true, .invalidates_environment = false, .invalidates = {}};
-        }
-
-        exported_invalidation place{.level = target.level, .designated = target.designated, .range = range};
-        const auto* parameter = llvm::dyn_cast<clang::ParmVarDecl>(target.variable);
-
-        if (parameter != nullptr && parameter->getDeclContext() == &definition) {
-          place.index = parameter->getFunctionScopeIndex();
-        } else if (const auto found = llvm::find(fields, target.variable); found != fields.end()) {
-          place.receiver = true;
-          place.index = static_cast<unsigned>(found - fields.begin());
-        } else {
-          return exported_summary{.opaque = true, .invalidates_environment = false, .invalidates = {}};
-        }
-
-        result.invalidates.push_back(place);
-      }
-
-      return result;
-    }
-
     // Functions are solved in the order the translation unit declares them, so results never depend on addresses.
     struct inference_cache {
       llvm::DenseMap<const clang::FunctionDecl*, std::unique_ptr<function_entry>> functions;
       llvm::SmallVector<const clang::FunctionDecl*, 32> order;
-      // What the functions other units define invalidate, and the entries read from it for callees this
-      // unit only declares; a null entry is a callee no unit summarized.
-      const summary_table* imports = nullptr;
-      llvm::DenseMap<const clang::FunctionDecl*, std::unique_ptr<function_entry>> imported;
-      std::unique_ptr<clang::MangleContext> mangler;
 
       void clear() {
         functions.clear();
         order.clear();
-        imported.clear();
-        mangler.reset();
-      }
-
-      clang::MangleContext& mangling(clang::ASTContext& context) {
-        if (mangler == nullptr) {
-          mangler.reset(context.createMangleContext());
-        }
-
-        return *mangler;
       }
     };
 
@@ -1168,6 +1068,29 @@ namespace tbc_lint {
       }
 
       return expression;
+    }
+
+    // The object a member access reads a field of, past the anonymous structs and unions on the way:
+    // their members are fields of the record holding them, so `this->(anonymous).value_` reads the
+    // receiver's `value_`. Whether the access goes through a pointer is the outermost step's.
+    struct named_base {
+      const clang::Expr* object;
+      bool arrow;
+    };
+
+    named_base namedBase(const clang::MemberExpr& member) {
+      named_base result{.object = clean(member.getBase()), .arrow = member.isArrow()};
+
+      while (const auto* anonymous = llvm::dyn_cast_or_null<clang::MemberExpr>(result.object)) {
+        const auto* field = llvm::dyn_cast<clang::FieldDecl>(anonymous->getMemberDecl());
+        if (field == nullptr || !field->isAnonymousStructOrUnion()) {
+          break;
+        }
+
+        result = {.object = clean(anonymous->getBase()), .arrow = anonymous->isArrow()};
+      }
+
+      return result;
     }
 
     // An inheriting constructor runs the base constructor it names on the same arguments.
@@ -1393,7 +1316,7 @@ namespace tbc_lint {
           return;
         }
 
-        for (const auto* field : constructor->getParent()->fields()) {
+        for (const auto* field : namedFields(*constructor->getParent())) {
           if (selfBorrowing(*field)) {
             report(issue::relocated_self, initializerLocation(*constructor, *field));
           }
@@ -1428,7 +1351,7 @@ namespace tbc_lint {
         // An implicit assignment is deleted for a reference or a const member; other causes need Sema.
         const bool implicit_assignment = (record.needsImplicitCopyAssignment() && !declared_move) || record.needsImplicitMoveAssignment();
 
-        return implicit_assignment && llvm::none_of(record.fields(), [](const auto* field) {
+        return implicit_assignment && llvm::none_of(namedFields(record), [](const auto* field) {
           return field->getType()->isReferenceType() || field->getType().isConstQualified();
         });
       }
@@ -1549,15 +1472,54 @@ namespace tbc_lint {
         return viewType(parameter.getType().getNonReferenceType()) && !parameter.getType()->isReferenceType() && !viewType(type) && !type->isPointerType();
       }
 
+      // A constructor marked TBC_CONSTRUCTS builds its class's first template argument in place from its
+      // trailing pack, as std::optional's in_place one does, so it keeps what that type's constructors
+      // keep of the pack.
+      std::optional<loans> inPlaceConstruction(const clang::CXXConstructorDecl& constructor, llvm::ArrayRef<const clang::Expr*> arguments, const state& current) {
+        const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(constructor.getParent());
+        if (!constructs(constructor) || specialization == nullptr || specialization->getTemplateArgs().size() == 0 || specialization->getTemplateArgs()[0].getKind() != clang::TemplateArgument::Type) {
+          return std::nullopt;
+        }
+
+        // The parameters before the pack, which an instantiation has expanded.
+        const auto* pattern = constructor.getPrimaryTemplate() != nullptr ? constructor.getPrimaryTemplate()->getTemplatedDecl() : &constructor;
+        const unsigned leading = pattern->getNumParams() == 0 ? 0 : pattern->getNumParams() - 1;
+
+        return arguments.size() > leading ? constructorRetention(recordOf(specialization->getTemplateArgs()[0].getAsType()), arguments.drop_front(leading), current) : loans{};
+      }
+
       // What constructing a record from some arguments keeps: what each constructor that can take them
       // keeps by its declaration, or, for an aggregate, what each argument holds.
       loans constructorRetention(const clang::CXXRecordDecl* record, llvm::ArrayRef<const clang::Expr*> arguments, const state& current) {
         loans result;
         const auto* definition = record != nullptr ? record->getDefinition() : nullptr;
         bool matched = false;
-        const bool labeled = definition != nullptr && llvm::any_of(definition->fields(), [](const clang::FieldDecl* field) {
+        const bool labeled = definition != nullptr && llvm::any_of(namedFields(*definition), [](const clang::FieldDecl* field) {
           return lifetimeField(*field);
         });
+
+        // A value of the record's own type selects its copy or move constructor, as overload resolution
+        // does, so the new object holds what that value holds; no constructor template that takes a
+        // forwarding reference, such as std::string_view's from a range, competes with it.
+        if (definition != nullptr && arguments.size() == 1) {
+          const auto* argument = recordOf(arguments.front()->getType());
+          if (argument != nullptr && argument->getCanonicalDecl() == definition->getCanonicalDecl()) {
+            return copiedValue(arguments.front(), current);
+          }
+        }
+
+        // A library type keeps what a construction of it keeps by the argument-shape model, as no
+        // declaration of it states more: a view views what it is made from, and any other type keeps a
+        // copy of what each argument holds, as std::variant does of the alternative it is given.
+        if (definition != nullptr && libraryRecord(context_.getCanonicalTagType(definition))) {
+          const bool view = viewType(context_.getCanonicalTagType(definition));
+
+          for (const auto* argument : arguments) {
+            result.merge(view ? storage(argument, current) : copiedValue(argument, current));
+          }
+
+          return unplaced(result);
+        }
 
         llvm::SmallVector<const clang::CXXConstructorDecl*, 4> constructors;
 
@@ -1581,6 +1543,11 @@ namespace tbc_lint {
           matched = true;
           if (constructor->isCopyOrMoveConstructor()) {
             result.merge(copiedValue(arguments.front(), current));
+            continue;
+          }
+
+          if (auto built = inPlaceConstruction(*constructor, arguments, current)) {
+            result.merge(*built);
             continue;
           }
 
@@ -1608,7 +1575,7 @@ namespace tbc_lint {
         }
 
         if (!matched) {
-          const bool references = definition == nullptr || llvm::any_of(definition->fields(), [](const clang::FieldDecl* field) {
+          const bool references = definition == nullptr || llvm::any_of(namedFields(*definition), [](const clang::FieldDecl* field) {
             return field->getType()->isReferenceType() || field->getType()->isPointerType();
           });
 
@@ -1883,7 +1850,7 @@ namespace tbc_lint {
 
         // A constructor's fields hold nothing on entry: its initializers give them their first values.
         if (const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && !llvm::isa<clang::CXXConstructorDecl>(method)) {
-          for (const auto* field : method->getParent()->fields()) {
+          for (const auto* field : namedFields(*method->getParent())) {
             if (containsViews(field->getType())) {
               const auto annotation = viewAnnotation(field->getType(), context_);
 
@@ -2303,7 +2270,7 @@ namespace tbc_lint {
 
         const auto* region = field != nullptr ? viewAnnotation(field->getType(), context_).region : parameterAnnotation(*output, context_).region;
         const auto* constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function_);
-        const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(constructor->getParent()->fields(), [](const clang::FieldDecl* member) {
+        const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(namedFields(*constructor->getParent()), [](const clang::FieldDecl* member) {
           return lifetimeField(*member);
         });
 
@@ -2708,12 +2675,12 @@ namespace tbc_lint {
       }
 
       loans fieldPlace(const clang::MemberExpr& member, const clang::FieldDecl& field, const state& current) {
-        const auto* base = clean(member.getBase());
+        const auto [base, arrow] = namedBase(member);
         if (llvm::isa<clang::CXXThisExpr>(base)) {
           return localStorage(&field);
         }
 
-        auto result = member.isArrow() ? value(base, current) : reference(base, current);
+        auto result = arrow ? value(base, current) : reference(base, current);
 
         for (auto& source : result.values) {
           project(source, field);
@@ -2724,12 +2691,12 @@ namespace tbc_lint {
 
       // What a field holds is what its object holds at that field.
       loans fieldContents(const clang::MemberExpr& member, const clang::FieldDecl& field, const state& current) {
-        const auto* base = clean(member.getBase());
+        const auto [base, arrow] = namedBase(member);
         if (llvm::isa<clang::CXXThisExpr>(base)) {
           return readPlace(&field, current);
         }
 
-        return selected(member.isArrow() ? pointeeContents(member, base, true, current) : value(base, current), field);
+        return selected(arrow ? pointeeContents(member, base, true, current) : value(base, current), field);
       }
 
       // Each initializer of an aggregate's fields holds its contents at that field.
@@ -2906,7 +2873,7 @@ namespace tbc_lint {
           return false;
         }
 
-        for (const auto* field : method->getParent()->fields()) {
+        for (const auto* field : namedFields(*method->getParent())) {
           if (viewAnnotation(field->getType(), context_).region == region && containsViews(field->getType())) {
             return true;
           }
@@ -2949,82 +2916,21 @@ namespace tbc_lint {
 
         const auto found = cache_.functions.find(callee->getCanonicalDecl());
         if (found == cache_.functions.end()) {
-          return importedDeclaration(*callee);
+          return nullptr;
         }
 
         found->second->dependents.insert(function_.getCanonicalDecl());
         return found->second.get();
       }
 
-      // A callee whose body another unit defines is known by the summary that unit computed, stated in
-      // terms of this unit's declaration of it. It never changes while this unit is solved.
-      function_entry* importedDeclaration(const clang::FunctionDecl& callee) {
-        if (cache_.imports == nullptr || callee.getDefinition() != nullptr || transparent(&callee)) {
-          return nullptr;
-        }
-
-        const auto* declaration = callee.getCanonicalDecl();
-        if (const auto found = cache_.imported.find(declaration); found != cache_.imported.end()) {
-          return found->second.get();
-        }
-
-        auto entry = importSummary(*declaration);
-        auto* known = entry.get();
-
-        cache_.imported.try_emplace(declaration, std::move(entry));
-        return known;
-      }
-
-      std::unique_ptr<function_entry> importSummary(const clang::FunctionDecl& declaration) {
-        const auto name = linkageName(cache_.mangling(context_), declaration);
-        const auto found = name ? cache_.imports->find(*name) : cache_.imports->end();
-        if (found == cache_.imports->end() || found->second.opaque) {
-          return nullptr;
-        }
-
-        llvm::SmallVector<const clang::FieldDecl*, 8> fields;
-        const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&declaration);
-
-        if (method != nullptr && method->isInstance() && method->getParent()->getDefinition() != nullptr) {
-          recordFields(*method->getParent()->getDefinition(), fields);
-        }
-
-        auto entry = std::make_unique<function_entry>();
-
-        entry->definition = &declaration;
-        entry->summary.invalidates_environment = found->second.invalidates_environment;
-        for (const auto& place : found->second.invalidates) {
-          const clang::ValueDecl* variable = nullptr;
-
-          if (place.receiver && place.index < fields.size()) {
-            variable = fields[place.index];
-          } else if (!place.receiver && place.index < declaration.getNumParams()) {
-            variable = declaration.getParamDecl(place.index);
-          }
-
-          // A declaration that disagrees with the definition the summary was computed from is known by
-          // its declaration alone.
-          if (variable == nullptr) {
-            return nullptr;
-          }
-
-          entry->summary.invalidates.push_back({.target = {.variable = variable, .level = place.level, .designated = place.designated}, .range = place.range});
-        }
-
-        return entry;
-      }
-
-      function_entry* knownFunction(const clang::CallExpr& call) {
-        return knownDeclaration(call.getDirectCallee());
-      }
-
       [[nodiscard]] static bool transparent(const clang::FunctionDecl* callee) {
         return transparentCallee(callee);
       }
 
-      // The summary of a call whose body its callers see.
+      // The summary of a call whose body its callers see. Every other call is known by its declaration
+      // alone, as a Rust call is by its signature.
       function_entry* transparentFunction(const clang::CallExpr& call) {
-        return transparent(call.getDirectCallee()) ? knownFunction(call) : nullptr;
+        return transparent(call.getDirectCallee()) ? knownDeclaration(call.getDirectCallee()) : nullptr;
       }
 
       // A summary's borrow lies at its symbolic place inside the actual borrow that replaces its input,
@@ -3191,6 +3097,12 @@ namespace tbc_lint {
         loans result;
         const auto fields = constructedFields(construction, current);
         if (!fields) {
+          if (const auto* constructor = constructorOf(construction)) {
+            if (auto built = inPlaceConstruction(*constructor, llvm::ArrayRef(construction.getArgs(), construction.getNumArgs()), current)) {
+              return unplaced(*built);
+            }
+          }
+
           if (!declaredRetention(construction, current, result) && !elidedRetention(construction, current, result)) {
             result.add({.kind = origin_kind::unknown, .expression = &construction});
           }
@@ -3214,7 +3126,7 @@ namespace tbc_lint {
       // field of the class carries a region, so that the signature promises nothing.
       bool declaredRetention(const clang::CXXConstructExpr& construction, const state& current, loans& retained) {
         const auto* constructor = constructorOf(construction);
-        if (constructor == nullptr || llvm::none_of(constructor->getParent()->fields(), [](const auto* field) {
+        if (constructor == nullptr || llvm::none_of(namedFields(*constructor->getParent()), [](const auto* field) {
               return lifetimeField(*field);
             })) {
           return false;
@@ -3421,7 +3333,7 @@ namespace tbc_lint {
             gather(value(source.expression, current));
           } else if (source.kind == origin_kind::receiver) {
             if (const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_)) {
-              for (const auto* field : method->getParent()->fields()) {
+              for (const auto* field : namedFields(*method->getParent())) {
                 gather(current.get(field));
               }
             }
@@ -3960,7 +3872,7 @@ namespace tbc_lint {
         loans result;
 
         if (const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_)) {
-          for (const auto* field : method->getParent()->fields()) {
+          for (const auto* field : namedFields(*method->getParent())) {
             result.merge(current.get(field));
           }
         }
@@ -4301,6 +4213,15 @@ namespace tbc_lint {
             if (const auto* pointer = dereferencedPointer(access); pointer != nullptr && pointer->getType()->isPointerType()) {
               checkUse(value(pointer, current), *access);
             }
+
+            // Reading through a reference variable, as `first + 1` does, reads its referent.
+            if (const auto* read = llvm::dyn_cast<clang::ImplicitCastExpr>(access); read != nullptr && read->getCastKind() == clang::CK_LValueToRValue) {
+              const auto* name = llvm::dyn_cast<clang::DeclRefExpr>(read->getSubExpr()->IgnoreParens());
+              const auto* variable = name == nullptr ? nullptr : llvm::dyn_cast<clang::VarDecl>(name->getDecl());
+              if (variable != nullptr && variable->getType()->isReferenceType()) {
+                checkUse(value(name, current), *access);
+              }
+            }
           }
 
           for (const auto* child : next->children()) {
@@ -4444,11 +4365,10 @@ namespace tbc_lint {
         }
 
         if (!output.present && !containsViews(function_.getReturnType())) {
-          // What an aggregate writes to its static fields is checked even when it borrows nothing.
-          if (llvm::isa<clang::InitListExpr>(clean(statement.getRetValue()))) {
-            static_cast<void>(value(statement.getRetValue(), current));
-          }
-
+          // A result that borrows nothing still reads what it is computed from, as `return first;`
+          // reads through a reference, so that must be alive. What an aggregate writes to its static
+          // fields is checked as it is computed.
+          checkUse(value(statement.getRetValue(), current), statement);
           return;
         }
 
@@ -4707,9 +4627,11 @@ namespace tbc_lint {
           checkUse(instantiate(summarized->summary.uses, call, current), call);
         }
 
+        // A project call known by its declaration may replace the environment, as `setenv` does: Rust
+        // hands out no borrow of it at all.
         const auto name = callee->getNameAsString();
-        const auto* known = knownFunction(call);
-        if ((known != nullptr && known->summary.invalidates_environment) || ((name == "getenv" || name == "setenv" || name == "unsetenv" || name == "putenv") && context_.getSourceManager().isInSystemHeader(callee->getLocation()))) {
+        const auto* known = transparentFunction(call);
+        if ((known != nullptr && known->summary.invalidates_environment) || declaredCall(*callee) || ((name == "getenv" || name == "setenv" || name == "unsetenv" || name == "putenv") && context_.getSourceManager().isInSystemHeader(callee->getLocation()))) {
           invalidateEnvironment(call, current);
         }
 
@@ -4893,14 +4815,12 @@ namespace tbc_lint {
 
       void applyInferredInvalidations(const clang::CallExpr& call, state& current) {
         const auto* callee = call.getDirectCallee();
-        const auto* known = knownFunction(call);
+        const auto* known = transparentFunction(call);
         if (known == nullptr || overridable(*callee)) {
           applyDeclaredInvalidations(call, current);
           return;
         }
 
-        const bool whole_receiver = !transparent(callee);
-        std::optional<storage_range> receiver_range;
         const receiver_reads reads(*this);
         // The call's places are found in the state it was entered with, then invalidated together.
         llvm::SmallVector<invalidation, 8> places;
@@ -4981,12 +4901,6 @@ namespace tbc_lint {
               continue;
             }
 
-            // A call through its declaration borrows its whole receiver, as `&mut self` does.
-            if (whole_receiver) {
-              receiver_range = receiver_range ? receiver_range->widen(range) : range;
-              continue;
-            }
-
             if (capturedReceiver(*call.getDirectCallee(), field)) {
               for (const auto& actual : capturedThis(*call.getDirectCallee(), *object, current).values) {
                 if (const auto place = placeWithin(actual, receiverPlace(target))) {
@@ -5005,10 +4919,6 @@ namespace tbc_lint {
           }
         }
 
-        if (receiver_range) {
-          receiverPlaces(call, *receiver_range, current, places);
-        }
-
         invalidateAll(places, &call, current);
         if (!borrowed_places.empty()) {
           invalidateAll(borrowed_places, &call, current, false, receiverVariable(call));
@@ -5018,7 +4928,11 @@ namespace tbc_lint {
       // The variable a call's receiver is, when it is an object of its own: a local or a field of `this`
       // held by value. A reference names another object's borrows, so it is never one.
       [[nodiscard]] const clang::ValueDecl* receiverVariable(const clang::CallExpr& call) const {
-        const auto* object = receiver(call);
+        return ownVariable(receiver(call));
+      }
+
+      // The variable an argument or a receiver is, when it is an object of its own.
+      [[nodiscard]] const clang::ValueDecl* ownVariable(const clang::Expr* object) const {
         if (object == nullptr) {
           return nullptr;
         }
@@ -5221,27 +5135,9 @@ namespace tbc_lint {
         return record != nullptr && sharedRecord(*record);
       }
 
-      [[nodiscard]] static bool sharedRecord(const clang::CXXRecordDecl& declaration) {
-        const auto* record = &declaration;
-        if (const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record)) {
-          if (const auto* pattern = specialization->getSpecializedTemplate()->getTemplatedDecl(); pattern != nullptr && annotated(*pattern, "tbc::shared")) {
-            return true;
-          }
-        }
-
-        return annotated(*record, "tbc::shared");
-      }
-
-      [[nodiscard]] static bool annotated(const clang::Decl& declaration, llvm::StringRef name) {
-        return llvm::any_of(declaration.specific_attrs<clang::AnnotateAttr>(), [&](const clang::AnnotateAttr* attribute) {
-          return attribute->getAnnotation() == name;
-        });
-      }
-
-      // Whether a parameter lets the callee mutate what the argument designates: a reference or a
-      // pointer to a non-const object of a type that is not shared.
-      [[nodiscard]] static bool exclusiveParameter(const clang::ParmVarDecl& parameter) {
-        const auto type = parameter.getType();
+      // Whether a reference or a pointer lets its holder mutate what it designates: a non-const object of
+      // a type that is not shared.
+      [[nodiscard]] static bool mutableReferent(clang::QualType type) {
         clang::QualType pointee;
 
         if (type->isReferenceType()) {
@@ -5255,19 +5151,116 @@ namespace tbc_lint {
         return !pointee.isConstQualified() && !pointee->isFunctionType() && !sharedType(pointee);
       }
 
+      // Whether a parameter lets the callee mutate what the argument designates.
+      [[nodiscard]] static bool exclusiveParameter(const clang::ParmVarDecl& parameter) {
+        return mutableReferent(parameter.getType());
+      }
+
+      // The fields through which a mutable borrow of an object reaches other objects it may mutate, as a
+      // Rust `&mut T` reaches what a `&'a mut U` field of `T` designates.
+      static void mutableReferenceFields(clang::QualType type, llvm::SmallVectorImpl<const clang::FieldDecl*>& output) {
+        const auto* record = recordOf(type.getNonReferenceType());
+        if (record == nullptr || !record->hasDefinition()) {
+          return;
+        }
+
+        llvm::SmallVector<const clang::FieldDecl*, 8> fields;
+
+        recordFields(*record->getDefinition(), fields);
+        for (const auto* field : fields) {
+          if (mutableReferent(field->getType())) {
+            output.push_back(field);
+          }
+        }
+      }
+
+      // What an exclusive input reaches through its mutable references, past the part `select` names,
+      // as a Rust `&mut` reaches through each `&mut` field in turn, up to the dereference bound.
+      void reachedThrough(const loans& actual, const field_path& select, clang::QualType holder, const object_place& input, unsigned depth, const state& current, llvm::SmallVectorImpl<invalidation>& output) {
+        llvm::SmallVector<const clang::FieldDecl*, 4> fields;
+
+        mutableReferenceFields(holder, fields);
+        for (const auto* field : fields) {
+          auto step = select;
+
+          step.push_back({.field = field, .level = storage_kind::object});
+          auto target = input;
+
+          target.select = step;
+          for (const auto& designation : ofType(selectedAlong(actual, step, current), designatedTypeOf(*input.variable, step)).values) {
+            if (const auto place = placeWithin(designation, target)) {
+              output.push_back({.target = *place, .range = owned_storage});
+            }
+          }
+
+          if (depth > 1) {
+            const auto type = field->getType();
+
+            step.push_back({.level = storage_kind::object, .dereference = true});
+            reachedThrough(actual, step, type->isPointerType() ? type->getPointeeType() : type.getNonReferenceType(), input, depth - 1, current, output);
+          }
+        }
+      }
+
+      // A project function known by its declaration alone: any but a closure or a member the compiler
+      // writes, whose bodies their callers see.
+      [[nodiscard]] bool declaredCall(const clang::FunctionDecl& callee) const {
+        const auto& sources = context_.getSourceManager();
+
+        return !transparent(&callee) && !rawFunction(callee) && !sources.isInSystemHeader(sources.getExpansionLoc(callee.getLocation())) && !libraryFunction(callee);
+      }
+
       // A project call whose body its callers do not see may free or move what its exclusive inputs own,
-      // as a Rust callee may through each `&mut` it receives.
+      // as a Rust callee may through each `&mut` it receives. A method of a library type other than the
+      // standard library's, whose types are modeled, lends its receiver the same way, which a
+      // copy-on-write type's detach needs; what the library's functions do to their other inputs stays
+      // outside the analysis.
       void applyDeclaredInvalidations(const clang::CallExpr& call, state& current) {
         const auto* callee = call.getDirectCallee();
         const auto& sources = context_.getSourceManager();
-        if (callee == nullptr || sources.isInSystemHeader(sources.getExpansionLoc(callee->getLocation())) || libraryFunction(*callee)) {
+        if (callee == nullptr || standardDeclaration(*callee) || rawFunction(*callee)) {
+          return;
+        }
+
+        const bool library = sources.isInSystemHeader(sources.getExpansionLoc(callee->getLocation())) || libraryFunction(*callee);
+        // A copy-on-write container detaches on its first non-const access, so the `end` a range loop
+        // or a lookup asks for after `begin` or `find` moves nothing.
+        if (library && callee->getIdentifier() != nullptr && (callee->getName() == "end" || callee->getName() == "cend")) {
           return;
         }
 
         llvm::SmallVector<invalidation, 8> places;
+        // What the receiver reaches through its own mutable references it borrows exclusively, as a Rust
+        // `&mut` field is: the call may invalidate other borrows of those objects, not the receiver's.
+        llvm::SmallVector<invalidation, 8> reached;
+        llvm::SmallVector<const clang::FieldDecl*, 4> fields;
         const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(callee);
         if (const auto* object = receiver(call); object != nullptr && method != nullptr && method->isInstance() && !method->isConst() && !sharedType(objectType(*object))) {
           receiverPlaces(call, owned_storage, current, places);
+          if (!library) {
+            mutableReferenceFields(objectType(*object), fields);
+          }
+
+          for (const auto* field : fields) {
+            const object_place target{.variable = field, .designated = true};
+            const auto contents = receiverField(*callee, *object, *field, current);
+            const auto type = field->getType();
+
+            for (const auto& designation : ofType(contents, designatedTypeOf(*field, {})).values) {
+              if (const auto place = placeWithin(designation, target)) {
+                reached.push_back({.target = *place, .range = owned_storage});
+              }
+            }
+
+            const field_path deeper{{.level = storage_kind::object, .dereference = true}};
+
+            reachedThrough(contents, deeper, type->isPointerType() ? type->getPointeeType() : type.getNonReferenceType(), target, std::to_underlying(path_bound::dereferences) - 1, current, reached);
+          }
+        }
+
+        if (library) {
+          invalidateAll(places, &call, current);
+          return;
         }
 
         const auto offset = argumentOffset(call);
@@ -5279,23 +5272,44 @@ namespace tbc_lint {
           }
 
           const auto* argument = call.getArg(index + offset);
+          const auto actual = value(argument, current);
+          const bool by_reference = parameter->getType()->isReferenceType();
 
-          if (parameter->getType()->isReferenceType()) {
-            for (const auto& actual : invalidationTargets(*argument, current)) {
-              places.push_back({.target = actual, .range = owned_storage});
+          if (by_reference) {
+            for (const auto& target : invalidationTargets(*argument, current)) {
+              places.push_back({.target = target, .range = owned_storage});
             }
-
-            continue;
+          } else {
+            for (const auto& source : actual.values) {
+              if (source.variable != nullptr) {
+                places.push_back({.target = {.variable = source.variable, .level = source.storage, .path = source.path, .designated = standsForInput(source), .select = source.select}, .range = owned_storage});
+              }
+            }
           }
 
-          for (const auto& source : value(argument, current).values) {
-            if (source.variable != nullptr) {
-              places.push_back({.target = {.variable = source.variable, .level = source.storage, .path = source.path, .designated = standsForInput(source), .select = source.select}, .range = owned_storage});
-            }
+          // What the argument designates through its mutable references, as a callee that mutates through
+          // them invalidates it: a pointer is dereferenced first. Like the receiver, the argument keeps
+          // its own borrows of those objects, as a Rust `&mut` reborrows what its fields lend.
+          llvm::SmallVector<invalidation, 4> designated;
+          field_path select;
+
+          if (!by_reference) {
+            select.push_back({.level = storage_kind::object, .dereference = true});
+          }
+
+          const auto type = parameter->getType();
+
+          reachedThrough(actual, select, by_reference ? type.getNonReferenceType() : type->getPointeeType(), {.variable = parameter, .level = storage_kind::inherited, .designated = true}, std::to_underlying(path_bound::dereferences), current, designated);
+
+          if (!designated.empty()) {
+            invalidateAll(designated, &call, current, false, by_reference ? ownVariable(argument) : nullptr);
           }
         }
 
         invalidateAll(places, &call, current);
+        if (!reached.empty()) {
+          invalidateAll(reached, &call, current, false, receiverVariable(call));
+        }
       }
 
       // What a callee's input holds at a call: the argument for a parameter, or what the receiver holds at
@@ -5518,8 +5532,9 @@ namespace tbc_lint {
         for (const auto& element : block) {
           if (const auto initialized = element.getAs<clang::CFGInitializer>()) {
             const auto* initializer = initialized->getInitializer();
-            if (initializer->isMemberInitializer()) {
-              const auto* field = initializer->getMember();
+            // A member of an anonymous union or struct is initialized as the record's own field.
+            if (initializer->isMemberInitializer() || initializer->isIndirectMemberInitializer()) {
+              const auto* field = initializer->isMemberInitializer() ? initializer->getMember() : initializer->getIndirectMember()->getAnonField();
               if (staticField(*field)) {
                 checkStatic(value(initializer->getInit(), current), initializer->getSourceLocation());
               } else if (containsViews(field->getType())) {
@@ -5605,56 +5620,13 @@ namespace tbc_lint {
     };
   }
 
-  struct unit_summaries::implementation {
-    summary_table functions;
-    std::size_t definitions = 0;
-  };
-
-  unit_summaries::unit_summaries()
-      : implementation_(std::make_unique<implementation>()) {}
-
-  unit_summaries::~unit_summaries() = default;
-  unit_summaries::unit_summaries(unit_summaries&&) noexcept = default;
-  unit_summaries& unit_summaries::operator=(unit_summaries&&) noexcept = default;
-
-  std::size_t unit_summaries::definitions() const {
-    return implementation_->definitions;
-  }
-
-  struct summary_index::implementation {
-    summary_table functions;
-  };
-
-  summary_index::summary_index()
-      : implementation_(std::make_unique<implementation>()) {}
-
-  summary_index::~summary_index() = default;
-
-  void summary_index::add(const unit_summaries& unit) {
-    for (const auto& entry : unit.implementation_->functions) {
-      implementation_->functions[entry.getKey()].merge(entry.getValue());
-    }
-  }
-
   struct lifetime_analysis::implementation {
     inference_cache cache;
-    // Where a summarizing analysis writes; null when it checks.
-    unit_summaries::implementation* output = nullptr;
   };
 
-  lifetime_analysis::lifetime_analysis(bool errors, const summary_index* index)
+  lifetime_analysis::lifetime_analysis(bool errors)
       : implementation_(std::make_unique<implementation>()),
-        errors_(errors) {
-    if (index != nullptr) {
-      implementation_->cache.imports = &index->implementation_->functions;
-    }
-  }
-
-  lifetime_analysis::lifetime_analysis(unit_summaries& output)
-      : implementation_(std::make_unique<implementation>()),
-        errors_(false) {
-    implementation_->output = output.implementation_.get();
-  }
+        errors_(errors) {}
 
   lifetime_analysis::~lifetime_analysis() = default;
 
@@ -5663,23 +5635,8 @@ namespace tbc_lint {
     implementation_->cache.clear();
   }
 
-  // A summarizing analysis starts from the functions its unit's own file defines that other units can
-  // call, which they may know only by their declarations; it reaches the rest through their calls.
   void lifetime_analysis::analyze(const clang::FunctionDecl& function, clang::ASTContext& context) {
-    const auto* definition = function.getDefinition();
-    if (definition == nullptr) {
-      return;
-    }
-
-    auto* output = implementation_->output;
-    if (output == nullptr) {
-      add(*definition, context);
-      return;
-    }
-
-    ++output->definitions;
-    const auto& sources = context.getSourceManager();
-    if (callableElsewhere(*definition) && !transparentCallee(definition) && sources.isInMainFile(sources.getExpansionLoc(definition->getLocation()))) {
+    if (const auto* definition = function.getDefinition()) {
       add(*definition, context);
     }
   }
@@ -5697,7 +5654,7 @@ namespace tbc_lint {
     options.AddLifetime = true;
     auto graph = clang::CFG::buildCFG(&definition, definition.getBody(), &context, options);
     if (!graph) {
-      if (implementation_->output == nullptr && containsViews(definition.getReturnType())) {
+      if (containsViews(definition.getReturnType())) {
         auto& diagnostics = context.getDiagnostics();
         const auto id = diagnostics.getCustomDiagID(errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning, "cannot analyze borrowed result [tbc-missing-contract]");
 
@@ -5718,14 +5675,11 @@ namespace tbc_lint {
   }
 
   void lifetime_analysis::finishTranslationUnit(clang::ASTContext& context) {
-    if (context.getDiagnostics().hasUncompilableErrorOccurred()) {
-      return;
-    }
-
     auto& cache = implementation_->cache;
-    // Calls reach definitions the matcher never visits: bodies imported from a module and the
-    // instantiations of its templates. Unanalyzed, each would be an opaque call without a summary.
-    // The order grows while it is walked, so discovery is transitive.
+    // Calls reach closures and compiler-written members the matcher never visits, such as a defaulted
+    // member of a class a module exports. Their callers see their bodies, so each is analyzed; any
+    // other callee is known by its declaration. The order grows while it is walked, so discovery is
+    // transitive.
     const auto& sources = context.getSourceManager();
     llvm::DenseMap<const clang::FunctionDecl*, llvm::SmallVector<const clang::FunctionDecl*, 4>> calls;
 
@@ -5749,7 +5703,7 @@ namespace tbc_lint {
           }
 
           const auto* definition = callee != nullptr ? callee->getDefinition() : nullptr;
-          if (definition != nullptr && !cache.functions.contains(definition->getCanonicalDecl()) && !sources.isInSystemHeader(sources.getExpansionLoc(definition->getLocation()))) {
+          if (definition != nullptr && transparentCallee(definition) && !cache.functions.contains(definition->getCanonicalDecl()) && !sources.isInSystemHeader(sources.getExpansionLoc(definition->getLocation()))) {
             add(*definition, context);
           }
 
@@ -5789,11 +5743,16 @@ namespace tbc_lint {
       }
     }
 
+    // Only the summaries of closures and compiler-written members are read by their callers, so only
+    // they are solved before the functions that call them are checked.
     llvm::SmallVector<const clang::FunctionDecl*, 32> work;
 
     for (const auto* key : llvm::reverse(postorder)) {
-      work.push_back(key);
-      cache.functions.find(key)->second->queued = true;
+      auto& entry = *cache.functions.find(key)->second;
+      if (transparentCallee(entry.definition)) {
+        work.push_back(key);
+        entry.queued = true;
+      }
     }
 
     // Summaries grow monotonically; dependency requeueing also solves recursive calls.
@@ -5807,17 +5766,12 @@ namespace tbc_lint {
       if (entry.summary.merge(inferred)) {
         for (const auto* dependent : entry.dependents) {
           auto& next = *cache.functions.find(dependent)->second;
-          if (!next.queued) {
+          if (!next.queued && transparentCallee(next.definition)) {
             next.queued = true;
             work.push_back(dependent);
           }
         }
       }
-    }
-
-    if (auto* output = implementation_->output) {
-      exportSummaries(context, *output);
-      return;
     }
 
     llvm::SmallVector<function_entry*, 32> ordered;
@@ -5834,26 +5788,6 @@ namespace tbc_lint {
       function_analysis analysis(*entry->definition, context, errors_, reported_, cache);
 
       analysis.run(*entry->graph, true);
-    }
-  }
-
-  // Each function the unit's file defines that other units can call, by the name they all know it by.
-  void lifetime_analysis::exportSummaries(clang::ASTContext& context, unit_summaries::implementation& output) {
-    auto& cache = implementation_->cache;
-    const auto& sources = context.getSourceManager();
-
-    for (const auto* key : cache.order) {
-      const auto& entry = *cache.functions.find(key)->second;
-      if (transparentCallee(entry.definition) || !sources.isInMainFile(sources.getExpansionLoc(entry.definition->getLocation()))) {
-        continue;
-      }
-
-      const auto name = linkageName(cache.mangling(context), *entry.definition);
-      if (!name) {
-        continue;
-      }
-
-      output.functions[*name].merge(exportSummary(*entry.definition, entry.summary));
     }
   }
 }

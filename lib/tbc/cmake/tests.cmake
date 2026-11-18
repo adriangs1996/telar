@@ -44,6 +44,11 @@ if(TBC_BUILD_LINTER)
       "$<TARGET_FILE:tbc-lint>" "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_OSX_SYSROOT}" "${tbc_clang}")
   set_tests_properties(tbc-lint-interface-bodies PROPERTIES TIMEOUT 120)
 
+  add_test(NAME tbc-lint-standard-containers
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/standard_containers_test.py"
+      "$<TARGET_FILE:tbc-lint>" "${CMAKE_OSX_SYSROOT}")
+  set_tests_properties(tbc-lint-standard-containers PROPERTIES TIMEOUT 120)
+
   add_test(NAME tbc-spec-runner COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/spec_runner_test.py")
   set_tests_properties(tbc-spec-runner PROPERTIES TIMEOUT 30 LABELS "spec")
 

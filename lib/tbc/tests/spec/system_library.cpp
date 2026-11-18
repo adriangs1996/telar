@@ -286,3 +286,63 @@ void libraryProjectStructValue(third_party::project_list& list, std::string_view
 }
 
 // END CASE
+
+// CASE: library.const_read_keeps_storage
+// PAIR: library.mutation
+// SOURCE: src/gui/ui/app/chrome/components/machine_chrome/machine_chrome_layout.cpp :: MachineChromeLayout::listRecords
+// STATUS: implemented
+// CONTRACT: A library type is known by its declarations, as a project type is: a const method lends it shared and a non-const one exclusively.
+// SCENARIO: Reading an element through a const method keeps the storage another element view designates; accept.
+void libraryConstReadKeepsStorage(library::list<int>& items) {
+  const int* first = items.data();
+
+  static_cast<void>(items.at(1));
+  static_cast<void>(*first);
+}
+
+// END CASE
+
+// CASE: library.append_ends_storage
+// PAIR: library.mutation
+// SOURCE: src/gui/ui/app/chrome/components/machine_chrome/machine_chrome_layout.cpp :: MachineChromeLayout::listRecords
+// STATUS: implemented
+// CONTRACT: A library type is known by its declarations, as a project type is: a const method lends it shared and a non-const one exclusively.
+// SCENARIO: Appending through a non-const method can move the storage the element view designates; reject at the call.
+void libraryAppendEndsStorage(library::list<int>& items) {
+  const int* first = items.data();
+
+  items.append(2); // expected-error [tbc-invalidated-borrow]
+  static_cast<void>(*first);
+}
+
+// END CASE
+
+// CASE: library.const_data_keeps_buffer
+// PAIR: library.detach
+// SOURCE: src/gui/main.cpp :: runtimeEndpoint
+// STATUS: implemented
+// CONTRACT: A non-const method of a copy-on-write library type can detach the object onto another buffer, so it ends the borrows of the old one.
+// SCENARIO: The bytes are read through the const accessor only; accept.
+void libraryConstDataKeepsBuffer(library::shared_text& text) {
+  const char* bytes = text.constData();
+
+  static_cast<void>(text.constData());
+  third_party::observe(bytes);
+}
+
+// END CASE
+
+// CASE: library.detach_ends_buffer
+// PAIR: library.detach
+// SOURCE: src/gui/main.cpp :: runtimeEndpoint
+// STATUS: implemented
+// CONTRACT: A non-const method of a copy-on-write library type can detach the object onto another buffer, so it ends the borrows of the old one.
+// SCENARIO: The non-const accessor may detach the shared buffer the earlier bytes designate; reject at the call.
+void libraryDetachEndsBuffer(library::shared_text& text) {
+  const char* bytes = text.constData();
+
+  static_cast<void>(text.data()); // expected-error [tbc-invalidated-borrow]
+  third_party::observe(bytes);
+}
+
+// END CASE

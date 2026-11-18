@@ -96,6 +96,10 @@ lifetime: lifetime-checker (configure "dev")
 interface-bodies: lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=interface_bodies "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
+# Check that telar code uses telar::ds rather than the standard containers it replaces, outside the allowlist.
+standard-containers: lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=standard_containers "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+
 # Check the blank lines of docs/code-style.md; FIX=ON inserts them.
 blank-lines fix="OFF": lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=blank_lines "-DBUILD_DIRECTORY={{ build_dir }}/dev" "-DFIX={{ fix }}" -P cmake/scripts/check.cmake

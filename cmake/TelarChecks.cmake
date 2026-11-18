@@ -9,12 +9,14 @@ include_guard(GLOBAL)
 #   lifetime          tbc-lint's lifetime analysis
 #   blank_lines       tbc-lint's blank lines of docs/code-style.md
 #   interface_bodies  tbc-lint's rule that module interfaces keep no function bodies
+#   standard_containers  tbc-lint's rule that telar code uses telar::ds, not the standard
+#                     containers it replaces
 #
 # and format and format-check run cmake/scripts/format.cmake over every C++ file Git
 # tracks.
 
 # The quality checks a target can register for.
-set(TELAR_CHECKS lint lifetime blank_lines interface_bodies)
+set(TELAR_CHECKS lint lifetime blank_lines interface_bodies standard_containers)
 
 set(TELAR_CHECK_JOBS "" CACHE STRING "Parallel processes of a quality check; empty uses each check's default")
 set(TBC_LINTER "" CACHE FILEPATH "Path to tbc-lint; otherwise use the project .tbc.json or PATH")

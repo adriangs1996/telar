@@ -4,12 +4,23 @@
 
 namespace cross_unit {
   template <typename memory>
-  std::span<node<memory>> node<memory>::children() noexcept {
+  std::span<const node<memory>> node<memory>::children() const noexcept {
     return children_;
   }
 
   template <typename memory>
-  node<memory>* node<memory>::find(std::string_view name) noexcept {
+  const node<memory>* node<memory>::find(std::string_view name) const noexcept {
+    for (const auto& child : children_) {
+      if (child.name_ == name) {
+        return &child;
+      }
+    }
+
+    return nullptr;
+  }
+
+  template <typename memory>
+  node<memory>* node<memory>::findMut(std::string_view name) noexcept {
     for (auto& child : children_) {
       if (child.name_ == name) {
         return &child;
@@ -25,10 +36,10 @@ namespace cross_unit {
   }
 
   template <typename memory>
-  std::size_t node<memory>::count() noexcept {
+  std::size_t node<memory>::count() const noexcept {
     std::size_t total = 1;
 
-    for (auto& child : children_) {
+    for (const auto& child : children_) {
       total += child.count();
     }
 
@@ -51,11 +62,19 @@ namespace cross_unit {
 
   visitor::~visitor() = default;
 
-  void visitor::visit(node<int>& target) {
+  void visitor::visit(const node<int>& target) {
     static_cast<void>(target.count());
   }
 
-  void counter::visit(node<int>& target) {
+  void visitor::prune(node<int>& target) {
+    target.truncate(1);
+  }
+
+  void counter::visit(const node<int>& target) {
+    seen_ += target.count();
+  }
+
+  void counter::prune(node<int>& target) {
     seen_ += target.count();
   }
 }

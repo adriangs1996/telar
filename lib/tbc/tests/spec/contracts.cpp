@@ -505,6 +505,65 @@ namespace contracts {
 
 // END CASE
 
+// CASE: contract.anonymous_union_field
+// PAIR: contract.anonymous_union
+// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Option
+// STATUS: implemented
+// CONTRACT: A member of an anonymous union is a field of the record that holds it, labeled as any other.
+// SCENARIO: The constructor, the assignment and the read keep the view in the labeled member's region; accept.
+namespace contracts {
+  class maybe_text {
+  public:
+    maybe_text() noexcept
+        : empty_() {}
+
+    explicit maybe_text(tbc::view<std::string_view, tbc::lt::a> text) noexcept
+        : text_(text),
+          full_(true) {}
+
+    void hold(tbc::view<std::string_view, tbc::lt::a> text) noexcept {
+      text_ = text;
+      full_ = true;
+    }
+
+    tbc::view<std::string_view, tbc::lt::a> text() const noexcept {
+      return full_ ? text_ : std::string_view{};
+    }
+
+  private:
+    union {
+      char empty_;
+      tbc::view<std::string_view, tbc::lt::a> text_;
+    };
+    bool full_ = false;
+  };
+}
+
+std::size_t anonymousUnionField(std::string_view text) {
+  contracts::maybe_text held;
+
+  held.hold(text);
+  return held.text().size();
+}
+
+// END CASE
+
+// CASE: contract.anonymous_union_escape
+// PAIR: contract.anonymous_union
+// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Option
+// STATUS: implemented
+// CONTRACT: A member of an anonymous union is a field of the record that holds it, labeled as any other.
+// SCENARIO: The holder keeps a view of a local string through the union's member and outlives it; reject.
+contracts::maybe_text anonymousUnionEscape() {
+  std::string owner = "abc";
+  contracts::maybe_text held;
+
+  held.hold(owner);
+  return held; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
 // CASE: contract.deduced_result
 // PAIR: contract.deduced_result
 // SOURCE: src/gui/ui/foundation/config/configuration_source.cpp :: ConfigurationSource::reload

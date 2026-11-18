@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace declarations {
@@ -208,6 +209,110 @@ std::size_t declarationConstructedView(declarations::arena& memory) {
     made = declarations::make<declarations::entry>(memory, text, 7);
   } // expected-error [tbc-invalidated-borrow]
   return made->text.size();
+}
+
+// END CASE
+
+// CASE: declaration.constructed_in_place_copy
+// PAIR: declaration.constructs_in_place
+// SOURCE: lib/base/ds/ds.cppm :: Option
+// STATUS: implemented
+// CONTRACT: A constructor marked TBC_CONSTRUCTS builds its class's first template argument in place from its trailing pack, and keeps what that type's constructor keeps of it.
+// SCENARIO: An optional entry is built in place from a live string and a temporary number it copies; accept.
+namespace declarations {
+  template <typename Value>
+  class in_place_slot {
+  public:
+    template <typename... Arguments>
+    TBC_CONSTRUCTS explicit in_place_slot(std::in_place_t, Arguments&&... arguments)
+        : value_(std::forward<Arguments>(arguments)...) {}
+
+    [[nodiscard]] const Value& get() const noexcept {
+      return value_;
+    }
+
+  private:
+    Value value_;
+  };
+}
+
+std::size_t declarationConstructedInPlaceCopy(const std::string& text) {
+  const declarations::in_place_slot<declarations::entry> slot{std::in_place, text, 7};
+
+  return slot.get().text.size();
+}
+
+// END CASE
+
+// CASE: declaration.constructed_in_place_view
+// PAIR: declaration.constructs_in_place
+// SOURCE: lib/base/ds/ds.cppm :: Option
+// STATUS: implemented
+// CONTRACT: A constructor marked TBC_CONSTRUCTS builds its class's first template argument in place from its trailing pack, and keeps what that type's constructor keeps of it.
+// SCENARIO: The entry built in place keeps a view of a temporary string that dies with its declaration; reject at the declaration.
+std::size_t declarationConstructedInPlaceView() {
+  const declarations::in_place_slot<declarations::entry> slot{std::in_place, std::string{"temporary"}, 7}; // expected-error [tbc-dangling-borrow]
+
+  return slot.get().text.size();
+}
+
+// END CASE
+
+// CASE: declaration.constructed_in_place_same_view
+// PAIR: declaration.constructs_in_place
+// SOURCE: lib/base/text/text.cpp :: Split::next
+// STATUS: implemented
+// CONTRACT: A constructor marked TBC_CONSTRUCTS builds its class's first template argument in place from its trailing pack, and keeps what that type's constructor keeps of it.
+// SCENARIO: A view built from a local view copies it, as its copy constructor does and none of its constructor templates, so the holder keeps what the local views, the caller's text, not the local; accept.
+namespace declarations {
+  template <typename Value>
+  class converted_slot {
+  public:
+    template <typename Other>
+    TBC_CONSTRUCTS converted_slot(Other&& value)
+        : value_(std::forward<Other>(value)) {}
+
+  private:
+    Value value_;
+  };
+}
+
+declarations::converted_slot<std::string_view> declarationConstructedInPlaceSameView(std::string_view text) {
+  const auto prefix = text.substr(0, 1);
+
+  return prefix;
+}
+
+// END CASE
+
+// CASE: declaration.constructed_in_place_library_copy
+// PAIR: declaration.constructs_library_in_place
+// SOURCE: src/gui/features/prompt/prompt.cpp :: ask
+// STATUS: implemented
+// CONTRACT: A constructor marked TBC_CONSTRUCTS keeps what its first template argument's construction keeps; a library type keeps a copy of what each argument holds, unless it is a view.
+// SCENARIO: A variant takes a temporary query that views the caller's text, so the slot keeps a view of that text, not of the temporary; accept.
+namespace declarations {
+  struct query {
+    std::string_view prefix;
+  };
+}
+
+declarations::converted_slot<std::variant<declarations::query>> declarationConstructedInPlaceLibraryCopy(std::string_view text) {
+  return declarations::query{.prefix = text};
+}
+
+// END CASE
+
+// CASE: declaration.constructed_in_place_library_escape
+// PAIR: declaration.constructs_library_in_place
+// SOURCE: src/gui/features/prompt/prompt.cpp :: ask
+// STATUS: implemented
+// CONTRACT: A constructor marked TBC_CONSTRUCTS keeps what its first template argument's construction keeps; a library type keeps a copy of what each argument holds, unless it is a view.
+// SCENARIO: The variant keeps a copy of a query that views a local string, which dies before the slot is used; reject.
+declarations::converted_slot<std::variant<declarations::query>> declarationConstructedInPlaceLibraryEscape() {
+  const std::string local = "local";
+
+  return declarations::query{.prefix = local}; // expected-error [tbc-dangling-borrow]
 }
 
 // END CASE
@@ -691,7 +796,7 @@ void declarationSharedKept(declarations::arena& memory) {
 // SOURCE: src/runtime/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
-// SCENARIO: The same loader over a pool without the mark lets the call invalidate the pool the machine keeps; reject at the call.
+// SCENARIO: The same loader over a pool without the mark passes the pool the machine keeps as a mutable argument, and the call may invalidate it while the machine is used later; reject the overlapping argument and the call.
 namespace declarations {
   class pooled_loader {
   public:
@@ -700,7 +805,10 @@ namespace declarations {
 
     void load() {
       const machine<pool> running{memory_};
-      install(running.slot(), memory_); // expected-error [tbc-invalidated-borrow]
+      install(
+          running.slot(),
+          memory_ // expected-error [tbc-invalidated-borrow]
+      );          // expected-error [tbc-invalidated-borrow]
       static_cast<void>(running.slot());
     }
 
@@ -889,7 +997,7 @@ std::size_t declarationMutableReferent(declarations::settings& values) {
 // SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
 // STATUS: implemented
 // CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
-// SCENARIO: A connection resolves each stream of its own table through a raw pointer; accept.
+// SCENARIO: A connection resolves each stream of its own table through a raw pointer, by index, since a method of the connection lends it whole; accept.
 namespace declarations {
   struct raw_half {
     int ticket = 0;
@@ -902,8 +1010,8 @@ namespace declarations {
   class raw_connection {
   public:
     void advance() {
-      for (auto& slot : streams_) {
-        if (auto* current = tbc::raw(slot.get())) {
+      for (std::size_t index = 0; index < streams_.size(); ++index) {
+        if (auto* current = tbc::raw(streams_[index].get())) {
           resolve(current->request);
         }
       }
@@ -934,9 +1042,9 @@ namespace declarations {
   class checked_connection {
   public:
     void advance() {
-      for (auto& slot : streams_) {
-        if (slot) {
-          resolve(slot->request); // expected-error [tbc-invalidated-borrow]
+      for (std::size_t index = 0; index < streams_.size(); ++index) {
+        if (auto* current = streams_[index].get()) {
+          resolve(current->request); // expected-error [tbc-invalidated-borrow]
         }
       }
     }
@@ -1893,3 +2001,65 @@ std::size_t declarationSharedBorrowHeldElement(tbc::view<declarations::model_mem
 }
 
 // END CASE
+
+// CASE: declaration.nested_reference_reached
+// PAIR: declaration.nested_reference
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// STATUS: implemented
+// CONTRACT: A call that receives an object by mutable reference may mutate what it reaches through each mutable reference in turn, as a Rust `&mut` reaches through nested `&mut` fields.
+// SCENARIO: The call receives a wrapper of a wrapper of the vector a borrow points into, so it may grow that vector; reject at the call.
+namespace declarations {
+  struct nested_inner {
+    std::vector<int>& items;
+  };
+
+  struct nested_outer {
+    nested_inner& inner;
+  };
+
+  void growNested(nested_outer& outer);
+  void consume(int value);
+}
+
+void declarationNestedReferenceReached() {
+  std::vector<int> items{1, 2};
+  declarations::nested_inner inner{items};
+  declarations::nested_outer outer{inner};
+  const int& first = items.front();
+
+  declarations::growNested(outer); // expected-error [tbc-invalidated-borrow]
+  declarations::consume(first);
+}
+
+// END CASE
+
+// CASE: declaration.nested_reference_shared
+// PAIR: declaration.nested_reference
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// STATUS: implemented
+// CONTRACT: A call that receives an object by mutable reference may mutate what it reaches through each mutable reference in turn, as a Rust `&mut` reaches through nested `&mut` fields.
+// SCENARIO: The inner wrapper refers to the vector through a reference to const, so the call cannot reach it mutably; accept.
+namespace declarations {
+  struct shared_inner {
+    const std::vector<int>& items;
+  };
+
+  struct shared_outer {
+    shared_inner& inner;
+  };
+
+  void readNested(shared_outer& outer);
+}
+
+void declarationNestedReferenceShared() {
+  std::vector<int> items{1, 2};
+  declarations::shared_inner inner{items};
+  declarations::shared_outer outer{inner};
+  const int& first = items.front();
+
+  declarations::readNested(outer);
+  declarations::consume(first);
+}
+
+// END CASE
+

@@ -2,10 +2,12 @@
 #define TBC_LINTER_VIEW_TYPE_HPP
 
 #include <clang/AST/ASTContext.h>
+#include <clang/AST/Attr.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/ExprCXX.h>
 #include <clang/AST/Type.h>
 #include <clang/Basic/SourceManager.h>
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallPtrSet.h>
 
 namespace tbc_lint {
@@ -122,6 +124,25 @@ namespace tbc_lint {
 
   inline const clang::CXXRecordDecl* recordOf(clang::QualType type) {
     return type.getNonReferenceType()->getAsCXXRecordDecl();
+  }
+
+  inline bool annotated(const clang::Decl& declaration, llvm::StringRef name) {
+    return llvm::any_of(declaration.specific_attrs<clang::AnnotateAttr>(), [&](const clang::AnnotateAttr* attribute) {
+      return attribute->getAnnotation() == name;
+    });
+  }
+
+  // A type marked TBC_SHARED keeps every borrow it hands out valid whatever is done through it, as a Rust
+  // type with interior mutability does through `&self`; a class template's mark covers its
+  // specializations.
+  inline bool sharedRecord(const clang::CXXRecordDecl& record) {
+    if (const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(&record)) {
+      if (const auto* pattern = specialization->getSpecializedTemplate()->getTemplatedDecl(); pattern != nullptr && annotated(*pattern, "tbc::shared")) {
+        return true;
+      }
+    }
+
+    return annotated(record, "tbc::shared");
   }
 
   inline bool standardRecord(clang::QualType type) {

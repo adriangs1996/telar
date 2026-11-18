@@ -6,14 +6,15 @@
 #include <span>
 
 // Each call below reaches a function whose body only `units/cross_unit/node.cpp` defines. The
-// runner checks both units together, so the first pass summarizes what that body invalidates.
+// runner checks both units together; each call is known by its declaration all the same, as a Rust
+// call is by the callee's signature.
 
 // CASE: cross_unit.find_keeps_children
 // PAIR: cross_unit.accessor
 // SOURCE: lib/base/text/json/json.cppm :: JsonNode::find
 // STATUS: implemented
-// CONTRACT: A call into a function another unit defines invalidates what that function's body can invalidate, as when its body is visible; a non-const receiver alone ends no borrow of it.
-// SCENARIO: A lookup through the non-const receiver mutates nothing, so the children viewed before it stay valid; accept.
+// CONTRACT: A call is known by its declaration, wherever its body is: a const method lends its receiver shared, as `&self` does, and a non-const one exclusively, as `&mut self` does.
+// SCENARIO: A lookup is a const method, so it ends no borrow of the receiver, even a non-const one; accept.
 std::size_t crossUnitFind(cross_unit::node<int>& root) {
   const auto children = root.children();
 
@@ -23,11 +24,26 @@ std::size_t crossUnitFind(cross_unit::node<int>& root) {
 
 // END CASE
 
+// CASE: cross_unit.find_mut_ends_children
+// PAIR: cross_unit.accessor
+// SOURCE: lib/base/text/json/json.cppm :: JsonNode::find
+// STATUS: implemented
+// CONTRACT: A call is known by its declaration, wherever its body is: a const method lends its receiver shared, as `&self` does, and a non-const one exclusively, as `&mut self` does.
+// SCENARIO: The lookup for mutable access lends the whole node, whatever its body does, as Rust's `get_mut` does; reject at the call.
+std::size_t crossUnitFindMut(cross_unit::node<int>& root) {
+  const auto children = root.children();
+
+  static_cast<void>(root.findMut("name")); // expected-error [tbc-invalidated-borrow]
+  return children.size();
+}
+
+// END CASE
+
 // CASE: cross_unit.append_ends_children
 // PAIR: cross_unit.accessor
 // SOURCE: lib/base/text/json/json.cppm :: JsonNode::append
 // STATUS: implemented
-// CONTRACT: A call into a function another unit defines invalidates what that function's body can invalidate, as when its body is visible; a non-const receiver alone ends no borrow of it.
+// CONTRACT: A call is known by its declaration, wherever its body is: a const method lends its receiver shared, as `&self` does, and a non-const one exclusively, as `&mut self` does.
 // SCENARIO: Appending a child can move the storage the children view designates; reject at the call.
 std::size_t crossUnitAppend(cross_unit::node<int>& root) {
   const auto children = root.children();
@@ -42,8 +58,8 @@ std::size_t crossUnitAppend(cross_unit::node<int>& root) {
 // PAIR: cross_unit.recursion
 // SOURCE: lib/base/text/json/json.cpp :: JsonNode::appendFormatted
 // STATUS: implemented
-// CONTRACT: A recursive function's summary is solved in the unit that defines it, from no effect up, so recursion alone invalidates nothing.
-// SCENARIO: Counting walks the tree through recursive calls and mutates nothing; accept.
+// CONTRACT: A recursive function is known by its declaration like any other: recursion neither adds nor removes an effect.
+// SCENARIO: Counting is a const method, so it ends no borrow of the receiver; accept.
 std::size_t crossUnitCount(cross_unit::node<int>& root) {
   const auto children = root.children();
   const auto total = root.count();
@@ -57,8 +73,8 @@ std::size_t crossUnitCount(cross_unit::node<int>& root) {
 // PAIR: cross_unit.recursion
 // SOURCE: lib/base/text/json/json.cpp :: JsonNode::appendFormatted
 // STATUS: implemented
-// CONTRACT: A recursive function's summary is solved in the unit that defines it, from no effect up, so recursion alone invalidates nothing.
-// SCENARIO: Truncating clears the children at the deepest level it recurses to, which can be this node's; reject at the call.
+// CONTRACT: A recursive function is known by its declaration like any other: recursion neither adds nor removes an effect.
+// SCENARIO: Truncating is a non-const method, so it can invalidate the children view; reject at the call.
 std::size_t crossUnitTruncate(cross_unit::node<int>& root) {
   const auto children = root.children();
 
@@ -68,13 +84,13 @@ std::size_t crossUnitTruncate(cross_unit::node<int>& root) {
 
 // END CASE
 
-// CASE: cross_unit.final_visit_keeps_children
+// CASE: cross_unit.virtual_const_visit_keeps_children
 // PAIR: cross_unit.virtual
 // SOURCE: src/cli/tab/tab.cppm :: HistoryPathVisitor
 // STATUS: implemented
-// CONTRACT: A virtual call may reach an override no unit summarized, so it stays known by its declaration; a call to a final override is known by its body.
-// SCENARIO: The final counter only counts the node it visits; accept.
-std::size_t crossUnitFinalVisit(cross_unit::counter& visit, cross_unit::node<int>& root) {
+// CONTRACT: Virtual or final, a call is known by its declaration, which binds every override.
+// SCENARIO: The visitor receives the node by reference to const, so no override can invalidate it; accept.
+std::size_t crossUnitVirtualConstVisit(cross_unit::visitor& visit, cross_unit::node<int>& root) {
   const auto children = root.children();
 
   visit.visit(root);
@@ -83,16 +99,16 @@ std::size_t crossUnitFinalVisit(cross_unit::counter& visit, cross_unit::node<int
 
 // END CASE
 
-// CASE: cross_unit.virtual_visit_ends_children
+// CASE: cross_unit.final_mutable_visit_ends_children
 // PAIR: cross_unit.virtual
 // SOURCE: src/cli/tab/tab.cppm :: HistoryPathVisitor
 // STATUS: implemented
-// CONTRACT: A virtual call may reach an override no unit summarized, so it stays known by its declaration; a call to a final override is known by its body.
-// SCENARIO: The base visitor's body mutates nothing, but an override may, so the call can invalidate the node it receives; reject at the call.
-std::size_t crossUnitVirtualVisit(cross_unit::visitor& visit, cross_unit::node<int>& root) {
+// CONTRACT: Virtual or final, a call is known by its declaration, which binds every override.
+// SCENARIO: The final counter's prune only counts, but it receives the node by mutable reference, so the call can invalidate it; reject at the call.
+std::size_t crossUnitFinalMutableVisit(cross_unit::counter& visit, cross_unit::node<int>& root) {
   const auto children = root.children();
 
-  visit.visit(root); // expected-error [tbc-invalidated-borrow]
+  visit.prune(root); // expected-error [tbc-invalidated-borrow]
   return children.size();
 }
 
@@ -164,13 +180,13 @@ namespace cross_unit {
   };
 }
 
-// CASE: cross_unit.summarized_streams_keep_wrappers
+// CASE: cross_unit.defined_streams_keep_wrappers
 // PAIR: cross_unit.stream_wrappers
 // SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
-// CONTRACT: A wrapper keeps a reference to the stream it wraps; a call that reads and writes through the wrappers invalidates only what the streams' bodies invalidate, read from the unit that defines them.
-// SCENARIO: The sockets' reads and writes change no storage the wrappers designate, and each wrapper views its own socket; accept.
-bool crossUnitSummarizedStreams(cross_unit::relays& relays, cross_unit::socket_stream& child, cross_unit::socket_stream& origin, cross_unit::flow* owner) {
+// CONTRACT: A wrapper keeps a mutable reference to the stream it wraps; a call that receives the wrapper by mutable reference may invalidate the stream's storage but not the wrapper's own reference to it, as a Rust `&mut` reborrows what its fields lend.
+// SCENARIO: Each wrapper views its own socket, whose reads and writes another unit defines; accept.
+bool crossUnitDefinedStreams(cross_unit::relays& relays, cross_unit::socket_stream& child, cross_unit::socket_stream& origin, cross_unit::flow* owner) {
   cross_unit::flow_stream<cross_unit::socket_stream> to_child{child, owner};
   cross_unit::flow_stream<cross_unit::socket_stream> to_origin{origin, owner};
 
@@ -179,15 +195,30 @@ bool crossUnitSummarizedStreams(cross_unit::relays& relays, cross_unit::socket_s
 
 // END CASE
 
-// CASE: cross_unit.opaque_streams_end_wrappers
+// CASE: cross_unit.opaque_streams_keep_wrappers
 // PAIR: cross_unit.stream_wrappers
 // SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
-// CONTRACT: A wrapper keeps a reference to the stream it wraps; a call that reads and writes through the wrappers invalidates only what the streams' bodies invalidate, read from the unit that defines them.
-// SCENARIO: No checked unit defines the streams' reads and writes, so each may invalidate the stream it is called on, which the wrapper passed with it designates; reject both wrappers at the call. A run that leaves out the streams' unit reports the proxy's relay so.
+// CONTRACT: A wrapper keeps a mutable reference to the stream it wraps; a call that receives the wrapper by mutable reference may invalidate the stream's storage but not the wrapper's own reference to it, as a Rust `&mut` reborrows what its fields lend.
+// SCENARIO: No checked unit defines the streams' reads and writes, which changes nothing: the calls are known by their declarations either way; accept.
 bool crossUnitOpaqueStreams(cross_unit::relays& relays, cross_unit::opaque_stream& child, cross_unit::opaque_stream& origin, cross_unit::flow* owner) {
   cross_unit::flow_stream<cross_unit::opaque_stream> to_child{child, owner};
   cross_unit::flow_stream<cross_unit::opaque_stream> to_origin{origin, owner};
+
+  return relays.transfer(to_child, to_origin, owner);
+}
+
+// END CASE
+
+// CASE: cross_unit.shared_stream_overlaps
+// PAIR: cross_unit.stream_wrappers
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// STATUS: implemented
+// CONTRACT: A wrapper keeps a mutable reference to the stream it wraps; a call that receives the wrapper by mutable reference may invalidate the stream's storage but not the wrapper's own reference to it, as a Rust `&mut` reborrows what its fields lend.
+// SCENARIO: Both wrappers view the same socket, so mutating it through either one invalidates the other's borrow of it; reject each wrapper at the call.
+bool crossUnitSharedStream(cross_unit::relays& relays, cross_unit::socket_stream& socket, cross_unit::flow* owner) {
+  cross_unit::flow_stream<cross_unit::socket_stream> to_child{socket, owner};
+  cross_unit::flow_stream<cross_unit::socket_stream> to_origin{socket, owner};
 
   return relays.transfer(
       to_child,  // expected-error [tbc-invalidated-borrow]

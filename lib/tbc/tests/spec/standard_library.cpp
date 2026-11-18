@@ -348,7 +348,7 @@ std::pair<std::string_view, std::string> convertedOwnerCopied(std::string_view t
 
 // CASE: std.range_copy
 // PAIR: std.range_construction
-// SOURCE: src/gui/tests/font_fixture/font_fixture.cppm :: FontFixture::read
+// SOURCE: src/gui/foundation/fonts/tests/font_fixture/font_fixture.cppm :: FontFixture::read
 // STATUS: implemented
 // CONTRACT: A container built from an iterator range copies the designated elements, not the range's storage.
 // SCENARIO: The copied views outlive the local vector they were read from; accept.
@@ -361,7 +361,7 @@ std::vector<std::string_view> rangeCopy(std::string_view text) {
 
 // CASE: std.range_copy_dangling
 // PAIR: std.range_construction
-// SOURCE: src/gui/tests/font_fixture/font_fixture.cppm :: FontFixture::read
+// SOURCE: src/gui/foundation/fonts/tests/font_fixture/font_fixture.cppm :: FontFixture::read
 // STATUS: implemented
 // CONTRACT: Copied elements keep the dependencies of the elements they copy.
 // SCENARIO: The copied views point into strings owned by a local vector.
@@ -687,3 +687,41 @@ const int* stdRangeAdaptorOwning(int value) {
 }
 
 // END CASE
+
+// CASE: std.reference_read_after_growth
+// PAIR: std.reference_read
+// SOURCE: lib/config/runtime/runtime.cppm :: AgentManifests::tryAdd
+// STATUS: implemented
+// CONTRACT: Reading through a reference is a use of its referent, whatever the expression reads it in: a returned value or a computation needs it alive as much as a call does.
+// SCENARIO: An element reference is read in the returned value, and in a computation, after growth may have moved the element; reject at each growth.
+int referenceReadReturned() {
+  std::vector<int> values{1, 2};
+  const int& first = values.front();
+  values.push_back(3); // expected-error [tbc-invalidated-borrow]
+  return first;
+}
+
+int referenceReadComputed() {
+  std::vector<int> values{1, 2};
+  const int& first = values.front();
+  values.push_back(3); // expected-error [tbc-invalidated-borrow]
+  return first + 1;
+}
+
+// END CASE
+
+// CASE: std.reference_read_before_growth
+// PAIR: std.reference_read
+// SOURCE: lib/config/runtime/runtime.cppm :: AgentManifests::tryAdd
+// STATUS: implemented
+// CONTRACT: Reading through a reference is a use of its referent, whatever the expression reads it in: a returned value or a computation needs it alive as much as a call does.
+// SCENARIO: The element is read into a value before growth, which the value does not depend on; accept.
+int referenceReadBeforeGrowth() {
+  std::vector<int> values{1, 2};
+  const int first = values.front() + 1;
+  values.push_back(3);
+  return first;
+}
+
+// END CASE
+

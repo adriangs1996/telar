@@ -602,6 +602,28 @@ void inferredEnvironmentImmediateRead() {
 
 // END CASE
 
+// CASE: inference.environment_project_call
+// PAIR: inference.environment
+// SOURCE: lib/ebnf/tests/parser_assertions.hpp :: colorsEnabled
+// STATUS: implemented
+// CONTRACT: A call to a project function known by its declaration may replace the environment, as `setenv` does, so a `getenv` borrow does not survive it.
+// SCENARIO: The environment value is used after a call into the project; reject at the call.
+namespace inferred {
+  void configureTerminal();
+}
+
+void inferredEnvironmentProjectCall() {
+  const auto* text = std::getenv("TERM");
+  if (text == nullptr) {
+    return;
+  }
+
+  inferred::configureTerminal(); // expected-error [tbc-invalidated-borrow]
+  inferred::observe(text);
+}
+
+// END CASE
+
 // CASE: inference.output_argument_temporary
 // PAIR: inference.output_argument
 // SOURCE: lib/ebnf/lexer/lexer.cppm :: tokenizeSourceIntoBuffer

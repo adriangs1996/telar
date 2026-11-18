@@ -73,6 +73,22 @@ namespace library {
     type* items_;
   };
 
+  // A copy-on-write string, as QString or QByteArray: copies share one buffer until a non-const access
+  // detaches the object onto a buffer of its own.
+  class shared_text {
+  public:
+    using value_type = char;
+
+    explicit shared_text(const char* text);
+    shared_text(const shared_text& other);
+    ~shared_text();
+    [[nodiscard]] const char* constData() const;
+    [[nodiscard]] char* data();
+
+  private:
+    char* buffer_;
+  };
+
   // Releases resources without being a container: its pointer results have no known relation to it.
   class component {
   public:

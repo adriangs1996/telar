@@ -10,16 +10,17 @@
 // Declarations whose bodies `node.cpp` defines, as a module interface declares what its
 // implementation unit defines. The fixture that calls them sees no body.
 namespace cross_unit {
-  // A tree node instantiated in another unit, as `JsonNode<Memory>` is.
+  // A tree node instantiated in another unit, as `JsonNode<Memory>` is. A read is a const method and
+  // mutable access has its own name, as Rust's `get` and `get_mut`, never a constness overload.
   template <typename memory>
   class node {
   public:
-    std::span<node> children() noexcept;
-    // Reads the children through a non-const receiver, which mutates nothing.
-    node* find(std::string_view name) noexcept;
+    std::span<const node> children() const noexcept;
+    const node* find(std::string_view name) const noexcept;
+    node* findMut(std::string_view name) noexcept;
     void append(node child);
     // Counts the nodes below this one, through itself.
-    std::size_t count() noexcept;
+    std::size_t count() const noexcept;
     // Drops the children `depth` levels below this one, through itself.
     void truncate(std::size_t depth);
 
@@ -34,12 +35,14 @@ namespace cross_unit {
   class visitor {
   public:
     virtual ~visitor();
-    virtual void visit(node<int>& target);
+    virtual void visit(const node<int>& target);
+    virtual void prune(node<int>& target);
   };
 
   class counter final : public visitor {
   public:
-    void visit(node<int>& target) override;
+    void visit(const node<int>& target) override;
+    void prune(node<int>& target) override;
 
   private:
     std::size_t seen_ = 0;

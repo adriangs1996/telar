@@ -148,9 +148,9 @@ namespace places {
 // SOURCE: src/gui/application/application-session.cppm :: Session::panes_
 // STATUS: implemented
 // CONTRACT: Mutating an object owned through a container element does not invalidate the container's elements.
-// SCENARIO: Each owned pane is detached while the range loop keeps iterating the vector; accept.
+// SCENARIO: Each owned pane is detached, through a mutable reference to its owner as Rust's `iter_mut` gives, while the range loop keeps iterating the vector; accept.
 void placeOwnedObjectMutation(std::vector<std::unique_ptr<places::pane>>& panes) {
-  for (const auto& pane : panes) {
+  for (auto& pane : panes) {
     pane->detach();
   }
 }
