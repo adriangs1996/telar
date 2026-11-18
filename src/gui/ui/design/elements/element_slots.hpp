@@ -14,7 +14,6 @@ static_assert(true);
 #include <QVariantMap>
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -38,7 +37,7 @@ namespace telar::gui::qt {
 
   public:
     using Rendered = application::components::RenderedElements<ApplicationAllocator>;
-    using Context = std::function<application::components::Context()>;
+    using Context = ds::Function<application::components::Context()>;
 
     struct Instance {
       application::components::Slot slot = application::components::Slot::count;

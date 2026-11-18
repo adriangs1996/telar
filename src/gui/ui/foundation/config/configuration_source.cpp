@@ -186,7 +186,7 @@ namespace telar::gui::qt {
 
       return result;
     },
-        [this, number, done = std::move(done)](LuaOutcome<TrackedResult<Value>> tracked) {
+        [this, number, done = std::move(done)](LuaOutcome<TrackedResult<Value>> tracked) mutable {
           LuaOutcome<Value> outcome;
 
           outcome.stale = configurationGeneration() != number;

@@ -347,7 +347,7 @@ namespace telar::gui::qt {
   }
 
   // Releases keys typed while the Lua thread ran the binding, after applying its result.
-  void WindowCommands::luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply) {
+  void WindowCommands::luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, ds::Function<void()> apply) {
     try {
       if (!stale) {
         if (!error.isEmpty()) {

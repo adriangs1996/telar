@@ -23,7 +23,6 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <exception>
-#include <functional>
 #include <optional>
 
 #pragma once
@@ -168,7 +167,7 @@ namespace telar::gui::qt {
   private:
     [[nodiscard]] BindingContext context() const;
     void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
-    void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, const std::function<void()>& apply);
+    void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, ds::Function<void()> apply);
     void applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects);
     void executeNamedAction(const NamedActionDescription& named);
     void executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved);

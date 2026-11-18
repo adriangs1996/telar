@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tbc/view.hpp"
+#include "telar_base/ds/containers.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QList>
@@ -12,7 +13,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <optional>
 
 namespace telar::gui::qt {
@@ -53,7 +53,8 @@ namespace telar::gui::qt {
 
   class SurfaceCommand {
   public:
-    using Completion = std::function<void(SurfaceCommandResult)>;
+    // Held inline, never on the heap; what it captures fits in sixteen pointers.
+    using Completion = ds::Function<void(SurfaceCommandResult), 16 * sizeof(void*)>;
     SurfaceCommand();
     ~SurfaceCommand();
     SurfaceCommand(const SurfaceCommand&) = delete;

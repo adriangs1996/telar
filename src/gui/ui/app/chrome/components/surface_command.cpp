@@ -289,7 +289,7 @@ namespace telar::gui::qt {
     deadline_.stop();
     grace_.stop();
     group_ = 0;
-    const auto complete = std::move(complete_);
+    auto complete = std::move(complete_);
     if (complete) {
       complete(std::move(result_));
     }

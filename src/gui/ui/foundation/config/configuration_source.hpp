@@ -33,7 +33,6 @@ static_assert(true);
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
-#include <functional>
 #include <initializer_list>
 #include <lauxlib.h>
 #include <limits.h>
@@ -83,8 +82,9 @@ namespace telar::gui::qt {
     using Effects = Owned<application::components::ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
     using Actions = application::components::ResolvedActions<ApplicationAllocator>;
     using ElementsRender = Owned<application::components::RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
+    // A callback held inline, never on the heap; what it captures fits in eight pointers.
     template <typename Value>
-    using Done = std::function<void(LuaOutcome<Value>)>;
+    using Done = ds::Function<void(LuaOutcome<Value>), 8 * sizeof(void*)>;
 
     // The source keeps the application's allocator, and what is prepared with it, region `a`.
     explicit ConfigurationSource(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, QObject* parent = nullptr);
