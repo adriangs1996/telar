@@ -8,6 +8,7 @@
 
 import std;
 import telar.testing;
+import telar.client;
 import telar.platform.process;
 import telar.runtime.runtime.tests.protocol_peer;
 import telar.runtime.runtime.tests.runtime_host;
@@ -69,6 +70,95 @@ namespace {
     ProtocolPeer peer{host.socket()};
 
     check(peer.exchange<ClientList>(QueryClients{.request_id = 1}).request_id == 1);
+  }
+
+  // A connection to the runtime that has not said hello.
+  int connectRaw(const char* socket) {
+    const int descriptor = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    sockaddr_un address{};
+
+    address.sun_family = AF_UNIX;
+    std::strncpy(address.sun_path, socket, sizeof(address.sun_path) - 1);
+    check(::connect(descriptor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+    return descriptor;
+  }
+
+  // Whether the runtime still holds the connection open: it neither closed it nor wrote to it.
+  bool heldOpen(int descriptor) {
+    pollfd ready{.fd = descriptor, .events = POLLIN, .revents = 0};
+
+    return ::poll(&ready, 1, 0) == 0;
+  }
+
+  // Says hello on a fresh connection and returns the runtime's answer.
+  HandshakeResponse hello(const char* socket) {
+    const int descriptor = connectRaw(socket);
+    const auto payload = HandshakeCodec::encode(ClientHello{});
+    std::array<Byte, 4 + payload.size()> frame{};
+    std::span<Byte> output = frame;
+
+    u32::encode(payload.size(), output);
+    std::ranges::copy(payload, output.begin());
+    check(::send(descriptor, frame.data(), frame.size(), 0) == static_cast<ssize_t>(frame.size()));
+    std::array<Byte, 4 + HandshakeCodec::max_message_size> reply{};
+    std::size_t received = 0;
+
+    while (received < 4 || received < 4 + (reply[0] | reply[1] << 8 | reply[2] << 16 | reply[3] << 24)) {
+      const auto count = ::recv(descriptor, reply.data() + received, reply.size() - received, 0);
+
+      check(count > 0, "the runtime closed the handshake without answering");
+      received += static_cast<std::size_t>(count);
+    }
+
+    ::close(descriptor);
+    return HandshakeCodec::decodeResponse(std::span{reply}.subspan(4, received - 4));
+  }
+
+  void testPendingCapacityRefusesSeventeenth() {
+    RuntimeHost host;
+    std::vector<int> pending;
+
+    // Every handshake slot is taken by a connection that has not said hello yet.
+    for (std::size_t index = 0; index < 16; ++index) {
+      pending.push_back(connectRaw(host.socket()));
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{200});
+    const int extra = connectRaw(host.socket());
+
+    // The connection past them is refused at once, and none of the waiting ones loses its place.
+    check(closedByRuntime(extra, std::chrono::seconds{1}), "a handshake past the pending capacity was kept");
+    check(std::ranges::all_of(pending, heldOpen), "a waiting handshake was dropped for a later one");
+    ::close(extra);
+    for (const int descriptor : pending) {
+      ::close(descriptor);
+    }
+  }
+
+  void testClientLimitRejectsWithReason() {
+    RuntimeHost host;
+    std::vector<std::unique_ptr<ProtocolPeer>> clients;
+
+    // One client short of the limit, and a handshake on its way that holds the last place.
+    for (std::size_t index = 0; index + 1 < 32; ++index) {
+      clients.push_back(std::make_unique<ProtocolPeer>(host.socket()));
+    }
+
+    const int reserving = connectRaw(host.socket());
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{200});
+    const auto refused = hello(host.socket());
+
+    check(std::holds_alternative<ServerReject>(refused) && std::get<ServerReject>(refused).reason == HandshakeRejectReason::client_limit_reached, "a client past the limit was not refused for it");
+
+    // Once that handshake goes, the place is free again.
+    ::close(reserving);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+
+    while (!std::holds_alternative<ServerAccept>(hello(host.socket()))) {
+      check(std::chrono::steady_clock::now() < deadline, "the client limit counted a handshake that was gone");
+      std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
   }
 
   void testPaneIdentityEnvironment() {
@@ -359,6 +449,8 @@ namespace {
 
   const telar::testing::Case case_unknown_tag_drops_only_sender{"runtime_wire.unknown_tag_drops_only_sender", testUnknownTagDropsOnlySender};
   const telar::testing::Case case_idle_handshakes_expire{"runtime_wire.idle_handshakes_expire", testIdleHandshakesExpire};
+  const telar::testing::Case case_pending_capacity_refuses_seventeenth{"runtime_wire.pending_capacity_refuses_seventeenth", testPendingCapacityRefusesSeventeenth};
+  const telar::testing::Case case_client_limit_rejects_with_reason{"runtime_wire.client_limit_rejects_with_reason", testClientLimitRejectsWithReason};
   const telar::testing::Case case_pane_identity_environment{"runtime_wire.pane_identity_environment", testPaneIdentityEnvironment};
   const telar::testing::Case case_send_text_refusals{"runtime_wire.send_text_refusals", testSendTextRefusals};
   const telar::testing::Case case_blocked_agent_refuses_prompt{"runtime_wire.blocked_agent_refuses_prompt", testBlockedAgentRefusesPrompt};
