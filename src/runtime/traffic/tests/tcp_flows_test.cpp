@@ -46,10 +46,20 @@ namespace {
 
     void deliver(std::span<const Byte> captured, std::size_t original) {
       flows.packet(traffic::Event{.session = 3, .interface_index = 1, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(original), .interface = "fixture", .bytes = captured}, [&](const traffic::Event& event) {
-        const auto flow = FlowCodec::decode(event.bytes);
-
-        published.push_back({event.kind, flow.id, std::string{flow.reason}, std::string{reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size()}, std::string{flow.client}, std::string{flow.server}});
+        record(event);
       });
+    }
+
+    void expire(bool stop) {
+      flows.expire([&](const traffic::Event& event) {
+        record(event);
+      }, stop);
+    }
+
+    void record(const traffic::Event& event) {
+      const auto flow = FlowCodec::decode(event.bytes);
+
+      published.push_back({event.kind, flow.id, std::string{flow.reason}, std::string{reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size()}, std::string{flow.client}, std::string{flow.server}});
     }
 
     std::string data() const {
@@ -180,6 +190,36 @@ namespace {
     }
   }
 
+  // Expiring keeps the flows still in use; stopping the capture closes every flow once, and a
+  // packet after it opens a new one.
+  void testExpiry() {
+    SystemAllocator system;
+    SynchronizedAllocator synchronized{system};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    Capture capture{memory};
+
+    for (std::uint16_t index = 0; index < 3; ++index) {
+      auto packet = traffic_test::tcp(false, false, 0, syn);
+      const auto port = static_cast<std::uint16_t>(20000 + index);
+
+      packet[20] = static_cast<Byte>(port >> 8);
+      packet[21] = static_cast<Byte>(port);
+      capture.deliver(packet, packet.size());
+    }
+
+    capture.expire(false);
+    check(capture.closed().empty(), "fresh flows outlive an expiry");
+    capture.expire(true);
+    check(capture.closed() == std::vector<std::string>{"capture_stopped", "capture_stopped", "capture_stopped"});
+    capture.expire(true);
+    check(capture.closed().size() == 3, "a stopped flow is gone");
+
+    capture.send(false, 0, syn);
+    check(std::ranges::count(capture.published, Kind::flow_open, &Published::kind) == 4);
+  }
+
+  const telar::testing::Case case_expiry{"tcp_flows.expiry", testExpiry};
   const telar::testing::Case case_adversarial_segments{"tcp_flows.adversarial_segments", testAdversarialSegments};
   const telar::testing::Case case_capacity_and_orientation{"tcp_flows.capacity_and_orientation", testCapacityAndOrientation};
 

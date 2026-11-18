@@ -164,7 +164,7 @@ namespace telar::git {
     std::size_t count = 0;
 
     try {
-      std::string name{"refs/heads"};
+      ds::String<Memory> name{memory_, "refs/heads"};
       FileDescriptor heads{::openat(common_.get(), "refs/heads", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
       if (heads) {
         looseBranches(heads.get(), name, 0, limit, count, target, visit);
@@ -205,7 +205,7 @@ namespace telar::git {
     return probe() != inputs_ || (worktree_ && fingerprintAt(gitdir_.get(), "index") != index_.fingerprint);
   }
 
-  void StatusReader::looseBranches(int directory, std::string& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const {
+  void StatusReader::looseBranches(int directory, ds::String<Memory>& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const {
     constexpr unsigned maximum_depth = 16;
     runtime::DirectoryStream entries{directory};
 
@@ -226,7 +226,7 @@ namespace telar::git {
 
       const auto size = name.size();
 
-      name.push_back('/');
+      name.push('/');
       name.append(child);
       if (S_ISDIR(state.st_mode) && depth < maximum_depth) {
         FileDescriptor nested{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
@@ -234,7 +234,7 @@ namespace telar::git {
           looseBranches(nested.get(), name, depth + 1, limit, count, target, visit);
         }
       } else if (S_ISREG(state.st_mode) && validReferenceName(name, limits_.path_length)) {
-        visit(target, std::string_view{name}.substr(std::string_view{"refs/heads/"}.size()));
+        visit(target, name.view().substr(std::string_view{"refs/heads/"}.size()));
         ++count;
       }
 

@@ -461,15 +461,43 @@ namespace {
           mine = std::move(moved);
           break;
         }
-        default:
-          if (random() % 32 == 0) {
+        default: {
+          const auto choice = random() % 32;
+
+          if (choice == 0) {
             mine.clear();
             model.clear();
+          } else if (choice < 4) {
+            // Drops the keys of one residue and edits the values it keeps, so later probes run past
+            // the slots it frees.
+            const auto modulus = static_cast<std::uint64_t>(2 + random() % 7);
+            const auto residue = static_cast<std::uint64_t>(random()) % modulus;
+            const auto keep = [&](std::uint64_t candidate) {
+              return candidate % modulus != residue;
+            };
+            const auto dropped = mine.retain([&](const std::uint64_t& entry, std::string& value) {
+              if (!keep(entry)) {
+                return false;
+              }
+
+              value.append("~");
+              return true;
+            });
+
+            check(dropped == std::erase_if(model, [&](const auto& entry) {
+              return !keep(entry.first);
+            }));
+            for (auto& [entry, value] : model) {
+              value.append("~");
+            }
+
+            check(same(mine, model));
           } else {
             mine.reserve(static_cast<std::size_t>(random() % 1024));
           }
 
           break;
+        }
         }
 
         check(same(mine, model), "the Map holds what the model holds");

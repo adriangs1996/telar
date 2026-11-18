@@ -14,6 +14,7 @@ import telar.base.ds;
 // reach their names through these declarations instead of including them.
 export namespace telar::runtime {
   using telar::runtime::FixedText;
+  using telar::runtime::ErrorText;
 }
 
 // Interface: telar_base/memory/byte_queue.cppm

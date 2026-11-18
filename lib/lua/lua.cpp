@@ -170,17 +170,8 @@ namespace telar::runtime::lua {
 
   }
 
-  Error::Error(std::string_view message) noexcept {
-    const auto size = std::min(message.size(), message_.size() - 1);
-    if (size != 0) {
-      std::memcpy(message_.dataMut(), message.data(), size);
-    }
-
-    message_.atMut(size) = '\0';
-  }
-
   const char* Error::what() const noexcept {
-    return message_.data();
+    return message_.c_str();
   }
 
   template <Allocator Memory>
@@ -777,10 +768,10 @@ namespace telar::runtime::lua {
       }
 
       {
-        const Value key{state_, -2, label_};
+        const Value key{state_, -2, label_.view()};
         const auto name = key.string();
         if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
-          throw Error{"unknown field " + label_ + "." + std::string{name}};
+          throw Error{"unknown field ", label_.view(), ".", name};
         }
       }
 
@@ -816,8 +807,8 @@ namespace telar::runtime::lua {
     lua_pushnil(state_);
     while (lua_next(state_, index_) != 0) {
       {
-        const Value key{state_, -2, label_};
-        const Value value{state_, -1, label_};
+        const Value key{state_, -2, label_.view()};
+        const Value value{state_, -1, label_.view()};
 
         consume(target, key.string(), value);
       }
@@ -827,10 +818,7 @@ namespace telar::runtime::lua {
   }
 
   void Value::fail(const char* message) const {
-    ds::Array<char, 512> description;
-
-    std::snprintf(description.dataMut(), description.size(), "%s %s", label_.c_str(), message);
-    throw Error{description.data()};
+    throw Error{label_.view(), " ", message};
   }
 
   Value::Value(const Value& parent, std::string_view key)
@@ -846,7 +834,7 @@ namespace telar::runtime::lua {
       : state_(parent.state_),
         index_(lua_gettop(state_) + 1),
         restored_top_(lua_gettop(state_)),
-        label_(parent.label_ + "." + name) {
+        label_(parent.label_.view(), ".", name) {
     lua_getfield(state_, parent.index_, name);
   }
 

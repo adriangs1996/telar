@@ -1323,22 +1323,24 @@ namespace telar::ds {
 
       Option<Value> removed{std::move(entries_[index].value)};
 
-      std::destroy_at(entries_ + index);
-      --size_;
+      erase(index);
+      return removed;
+    }
 
-      // A slot no probe ever passed full can be empty again; any other stays removed, so that probes
-      // for the keys past it go on.
-      const auto before = Group::matchEmpty(Group::load(control_ + ((index - Group::width) & mask_)));
-      const auto after = Group::matchEmpty(Group::load(control_ + index));
+    // Keeps the entries `keep` accepts and drops the others, as Rust's `retain`. `keep` sees each key
+    // shared and its value mutable, and must not reach this Map. Returns how many it dropped.
+    template <typename Predicate>
+    std::size_t retain(Predicate keep) {
+      std::size_t dropped = 0;
 
-      if (mask_ < Group::width || (before != 0 && after != 0 && Group::lastFromEnd(before) + Group::first(after) < Group::width)) {
-        setControl(control_, mask_, index, Group::empty);
-        ++growth_left_;
-      } else {
-        setControl(control_, mask_, index, Group::removed);
+      for (std::size_t index = 0; index < mask_; ++index) {
+        if (control_[index] >= 0 && !keep(std::as_const(entries_[index].key), entries_[index].value)) {
+          erase(index);
+          ++dropped;
+        }
       }
 
-      return removed;
+      return dropped;
     }
 
     // Destroys the entries and keeps the storage.
@@ -1388,6 +1390,24 @@ namespace telar::ds {
 
     [[nodiscard]] static std::uint64_t hashOf(Lookup key) noexcept {
       return Hasher{}(key);
+    }
+
+    // Destroys the entry in a full slot.
+    void erase(std::size_t index) noexcept {
+      std::destroy_at(entries_ + index);
+      --size_;
+
+      // A slot no probe ever passed full can be empty again; any other stays removed, so that probes
+      // for the keys past it go on.
+      const auto before = Group::matchEmpty(Group::load(control_ + ((index - Group::width) & mask_)));
+      const auto after = Group::matchEmpty(Group::load(control_ + index));
+
+      if (mask_ < Group::width || (before != 0 && after != 0 && Group::lastFromEnd(before) + Group::first(after) < Group::width)) {
+        setControl(control_, mask_, index, Group::empty);
+        ++growth_left_;
+      } else {
+        setControl(control_, mask_, index, Group::removed);
+      }
     }
 
     // The byte a full slot keeps of its key's hash; the rest of the hash picks where probes start.

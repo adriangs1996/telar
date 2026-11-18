@@ -258,6 +258,26 @@ namespace {
       check(parseExact<int>("-7") == -7 && parseExact<unsigned>("ff", 16) == 255u);
     }
 
+    // An error message joins its parts, keeps what fits and stays terminated, whatever it is given.
+    void testErrorText() {
+      const telar::runtime::ErrorText<16> joined{"unknown ", "field ", std::string_view{"x"}};
+
+      check(joined.view() == "unknown field x" && std::strlen(joined.c_str()) == joined.view().size());
+
+      // Two texts are two parts, never the bounds of one view.
+      const telar::runtime::ErrorText<8> cut{"abcdef", "ghijkl"};
+
+      check(cut.view() == "abcdefgh" && cut.c_str()[8] == '\0', "a long message is cut at the capacity");
+
+      const telar::runtime::ErrorText<4> empty{std::string_view{}};
+
+      check(empty.view().empty() && *empty.c_str() == '\0');
+
+      const telar::runtime::ErrorText<4> exact{"four"};
+
+      check(exact.view() == "four" && exact.c_str()[4] == '\0');
+    }
+
     void testBracketedPaste() {
       check(paste("ls\n", false) == "ls\n");
       check(paste("ls\n", true) == "\x1b[200~ls\n\x1b[201~");
@@ -271,6 +291,7 @@ namespace {
     const telar::testing::Case memory{"base.memory", testMemory};
     const telar::testing::Case memory_interface{"base.memory_interface", testMemoryInterface};
     const telar::testing::Case bracketed_paste{"base.bracketed_paste", testBracketedPaste};
+    const telar::testing::Case error_text{"base.error_text", testErrorText};
     const telar::testing::Case numbers{"base.numbers", testNumbers};
     const telar::testing::Case retained_stream{"base.retained_stream", testRetainedStream};
     const telar::testing::Case limits{"base.limits", testLimits};

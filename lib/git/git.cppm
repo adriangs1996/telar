@@ -245,7 +245,7 @@ export namespace telar::git {
     FileDescriptor worktree_;
     FileDescriptor gitdir_;
 
-    void looseBranches(int directory, std::string& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const;
+    void looseBranches(int directory, ds::String<Memory>& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const;
 
     FileDescriptor common_;
     Fingerprint gitdir_identity_;

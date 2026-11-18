@@ -22,12 +22,15 @@ export {
 
     class Error : public std::exception {
     public:
-      explicit Error(std::string_view message) noexcept;
+      template <typename... Parts>
+        requires std::is_constructible_v<ErrorText<1023>, const Parts&...>
+      explicit Error(const Parts&... parts) noexcept
+          : message_(parts...) {}
 
       const char* what() const noexcept override;
 
     private:
-      ds::Array<char, 1024> message_;
+      ErrorText<1023> message_;
     };
 
     struct Limits {
@@ -245,7 +248,8 @@ export {
       tbc::view<lua_State*, tbc::lt::a> state_;
       int index_;
       int restored_top_;
-      std::string label_;
+      // The value's path, for errors only: a deep path is cut rather than allocated.
+      ErrorText<255> label_;
     };
 
   }

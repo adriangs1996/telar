@@ -396,10 +396,15 @@ namespace telar::runtime::traffic {
     return bytes;
   }
 
-  std::string TcpEndpoint::text() const {
+  FixedText<TcpEndpoint::text_bytes> TcpEndpoint::text() const {
     const auto host = IpPayload::addressText(address, ipv6);
+    const std::string_view name{host.data()};
+    ds::Array<char, text_bytes> buffer;
+    const auto written = ipv6 ? std::format_to_n(buffer.dataMut(), buffer.size(), "[{}]:{}", name, port) : std::format_to_n(buffer.dataMut(), buffer.size(), "{}:{}", name, port);
+    FixedText<text_bytes> text;
 
-    return (ipv6 ? "[" + std::string{host.data()} + "]:" : std::string{host.data()} + ":") + std::to_string(port);
+    text.assign({buffer.data(), static_cast<std::size_t>(written.out - buffer.data())});
+    return text;
   }
 
   std::uint16_t TcpPacketDecoder::word(std::span<const Byte> bytes, std::size_t offset) noexcept {
@@ -445,7 +450,7 @@ namespace telar::runtime::traffic {
     return packet;
   }
 
-  std::size_t TcpFlows::Hash::operator()(const Key& key) const noexcept {
+  std::uint64_t TcpFlows::Hash::operator()(const Key& key) const noexcept {
     std::size_t hash = key.session;
     auto add = [&](unsigned value) {
       hash = (hash ^ value) * 1099511628211ull;
@@ -465,7 +470,8 @@ namespace telar::runtime::traffic {
       add(endpoint->ipv6);
     }
 
-    return hash;
+    // The table reads the low bits of the hash and the high ones apart, so every bit is mixed.
+    return ds::Hash{}(static_cast<std::uint64_t>(hash));
   }
 
   TcpFlows::Side::Side(Secure& memory)
@@ -480,7 +486,7 @@ namespace telar::runtime::traffic {
 
   TcpFlows::TcpFlows(ConcurrentMemory& memory)
       : memory_(memory),
-        flows_(0, Hash{}, std::equal_to<Key>{}, AllocatorRef<Entry, Secure>{memory_}) {}
+        flows_(memory_) {}
 
   std::int32_t TcpFlows::distance(std::uint32_t a, std::uint32_t b) noexcept {
     return std::bit_cast<std::int32_t>(a - b);
