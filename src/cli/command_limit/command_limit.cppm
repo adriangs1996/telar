@@ -106,6 +106,12 @@ export {
     // The text a command builds, in the allocator the command runs with.
     using Text = ds::String<Memory>;
 
+    // Text whose control bytes print as escapes (\n, \r, \t, \xNN) where it is formatted, so a
+    // field of a terminal line cannot move the cursor or break the line.
+    struct EscapedField {
+      std::string_view text;
+    };
+
     // A number, or JSON's `null` without one, where it is formatted.
     struct NumberOrNull {
       ds::Option<std::uint64_t> value;
@@ -154,6 +160,40 @@ export {
 
   }
 }
+
+template <>
+struct std::formatter<telar::runtime::cli::EscapedField, char> {
+  constexpr auto parse(std::format_parse_context& context) {
+    return context.begin();
+  }
+
+  template <typename Context>
+  auto format(const telar::runtime::cli::EscapedField& field, Context& context) const {
+    auto output = context.out();
+
+    for (const unsigned char byte : field.text) {
+      switch (byte) {
+      case '\n':
+        output = std::format_to(output, "\\n");
+        break;
+      case '\r':
+        output = std::format_to(output, "\\r");
+        break;
+      case '\t':
+        output = std::format_to(output, "\\t");
+        break;
+      default:
+        if (byte < 0x20 || byte == 0x7f) {
+          output = std::format_to(output, "\\x{:02x}", byte);
+        } else {
+          *output++ = static_cast<char>(byte);
+        }
+      }
+    }
+
+    return output;
+  }
+};
 
 template <>
 struct std::formatter<telar::runtime::cli::NumberOrNull, char> {

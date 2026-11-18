@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.base.diagnostics;
 import telar.cli.server;
 import telar.platform.fs;
+import telar.platform.error;
 import telar.wire.runtime;
 import telar.base.ds;
 
@@ -37,14 +38,19 @@ namespace telar::runtime::cli::file_transfer {
         throw std::runtime_error{"InvalidFilePath"};
       }
 
-      const std::string name{component};
-      auto next = ::openat(current.get(), name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+      ds::Array<char, NAME_MAX + 1> name{};
+      if (component.size() >= name.size()) {
+        throw std::runtime_error{sys::errorName(ENAMETOOLONG)};
+      }
+
+      std::ranges::copy(component, name.dataMut());
+      auto next = ::openat(current.get(), name.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
       if (next < 0 && sys::lastError() == ENOENT && create) {
-        if (::mkdirat(current.get(), name.c_str(), 0700) != 0 && sys::lastError() != EEXIST) {
+        if (::mkdirat(current.get(), name.data(), 0700) != 0 && sys::lastError() != EEXIST) {
           throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
-        next = ::openat(current.get(), name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        next = ::openat(current.get(), name.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
       }
 
       if (next < 0) {
@@ -147,7 +153,7 @@ namespace telar::runtime::cli::file_transfer {
     }
 
     if (options.action == Options::Action::get) {
-      auto file = openRegular(parent.get(), name.c_str());
+      auto file = openRegular(parent.get(), name.data());
       struct stat inode{};
       if (::fstat(file.get(), &inode) != 0) {
         throw std::runtime_error{sys::errorName(sys::lastError())};
@@ -158,8 +164,10 @@ namespace telar::runtime::cli::file_transfer {
       return;
     }
 
-    const auto temporary = std::format(".telar-file-{:016x}{:016x}", randomIdentity(), randomIdentity());
-    FileDescriptor file{::openat(parent.get(), temporary.c_str(), O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
+    ds::Array<char, 64> temporary{};
+
+    std::format_to_n(temporary.dataMut(), temporary.size() - 1, ".telar-file-{:016x}{:016x}", randomIdentity(), randomIdentity());
+    FileDescriptor file{::openat(parent.get(), temporary.data(), O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
     if (!file) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
     }
@@ -174,10 +182,13 @@ namespace telar::runtime::cli::file_transfer {
         throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
-      publish(parent.get(), temporary.c_str(), name.c_str());
-      writeText(std::format("{{\"bytes\":{},\"published\":true}}\n", size));
+      publish(parent.get(), temporary.data(), name.data());
+      ds::Array<char, 64> reply;
+      const auto written = std::format_to_n(reply.dataMut(), reply.size(), "{{\"bytes\":{},\"published\":true}}\n", size);
+
+      writeText({reply.data(), written.out});
     } catch (...) {
-      ::unlinkat(parent.get(), temporary.c_str(), 0);
+      ::unlinkat(parent.get(), temporary.data(), 0);
       throw;
     }
   }
@@ -187,7 +198,7 @@ namespace telar::runtime::cli::file_transfer {
       transfer(options);
       return 0;
     } catch (const std::exception& error) {
-      writeText("telar file: " + std::string{error.what()} + "\n", STDERR_FILENO);
+      std::fprintf(stderr, "telar file: %s\n", error.what());
       return 1;
     }
   }
@@ -201,12 +212,12 @@ namespace telar::runtime::cli::diagnostics {
   constexpr std::size_t max_tail_bytes = 1024 * 1024;
 
   struct Log {
-    std::string name;
+    Text name;
     DiagnosticsOptions::Component component;
     std::uint32_t pid;
   };
 
-  ds::Option<Log> parseLog(std::string_view name, std::string_view base) {
+  ds::Option<Log> parseLog(Memory& memory, std::string_view name, std::string_view base) {
     if (!name.starts_with(base) || !name.ends_with(".log")) {
       return ds::none;
     }
@@ -226,7 +237,7 @@ namespace telar::runtime::cli::diagnostics {
 
     const auto pid = maybeUnsigned<std::uint32_t>(suffix);
     if (pid && *pid != 0) {
-      return Log{.name = std::string{name}, .component = component, .pid = *pid};
+      return Log{.name = Text{memory, name}, .component = component, .pid = *pid};
     }
 
     return ds::none;
@@ -249,8 +260,8 @@ namespace telar::runtime::cli::diagnostics {
     return bytes;
   }
 
-  std::vector<Log> findLogs(DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
-    std::vector<Log> logs;
+  ds::Vec<Log, Memory> findLogs(Memory& memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
+    ds::Vec<Log, Memory> logs{memory};
     std::size_t visited = 0;
     std::size_t skipped = 0;
 
@@ -268,7 +279,7 @@ namespace telar::runtime::cli::diagnostics {
         continue;
       }
 
-      auto log = parseLog(entry->d_name, base);
+      auto log = parseLog(memory, entry->d_name, base);
       if (!log || (options.component != DiagnosticsOptions::Component::all && options.component != log->component) || (options.pid && log->pid != *options.pid)) {
         continue;
       }
@@ -278,15 +289,15 @@ namespace telar::runtime::cli::diagnostics {
         continue;
       }
 
-      logs.push_back(std::move(log.getMut()));
+      logs.push(std::move(log.getMut()));
     }
 
     if (options.component != DiagnosticsOptions::Component::client && !options.pid) {
       for (const auto suffix : {".runtime.start.log", ".runtime.log"}) {
-        std::string name = std::string{base} + suffix;
+        auto name = ds::format(memory, "{}{}", base, suffix);
         struct stat state{};
-        if (::fstatat(::dirfd(directory), name.c_str(), &state, 0) == 0) {
-          logs.push_back({.name = std::move(name), .component = DiagnosticsOptions::Component::runtime, .pid = 0});
+        if (::fstatat(::dirfd(directory), name.data(), &state, 0) == 0) {
+          logs.push({.name = std::move(name), .component = DiagnosticsOptions::Component::runtime, .pid = 0});
         }
       }
     }
@@ -299,32 +310,33 @@ namespace telar::runtime::cli::diagnostics {
       throw std::runtime_error{"DiagnosticLogsNotFound"};
     }
 
-    std::sort(logs.begin(), logs.end(), [](const auto& left, const auto& right) {
+    std::ranges::sort(logs.viewMut(), [](const auto& left, const auto& right) {
       return left.name < right.name;
     });
 
     return logs;
   }
 
-  void readLogs(std::string_view endpoint, const DiagnosticsOptions& options) {
+  void readLogs(Memory& memory, std::string_view endpoint, const DiagnosticsOptions& options) {
     const auto slash = endpoint.rfind('/');
     if (slash == endpoint.npos) {
       throw std::runtime_error{"InvalidSocketPath"};
     }
 
-    const auto parent = std::string{endpoint.substr(0, slash)};
+    const Text parent{memory, endpoint.substr(0, slash)};
     const auto base = endpoint.substr(slash + 1);
-    std::unique_ptr<DIR, decltype(&::closedir)> directory{::opendir(parent.c_str()), &::closedir};
+    std::unique_ptr<DIR, decltype(&::closedir)> directory{::opendir(parent.data()), &::closedir};
     if (!directory) {
       throw std::runtime_error{sys::lastError() == ENOENT ? "DiagnosticLogsNotFound" : sys::errorName(sys::lastError())};
     }
 
-    const auto logs = findLogs(directory.get(), base, options);
-    std::string bytes(max_tail_bytes, '\0');
-    std::string output = options.json ? "[" : "";
+    const auto logs = findLogs(memory, directory.get(), base, options);
+    Text bytes{memory};
+    Text output{memory, options.json ? "[" : ""};
 
+    bytes.resizeForOverwrite(max_tail_bytes);
     for (const auto& log : logs) {
-      FileDescriptor file{::openat(::dirfd(directory.get()), log.name.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
+      FileDescriptor file{::openat(::dirfd(directory.get()), log.name.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
       if (!file) {
         throw std::runtime_error{"CannotOpenDiagnosticLog"};
       }
@@ -338,7 +350,7 @@ namespace telar::runtime::cli::diagnostics {
       std::size_t count = 0;
 
       while (count < bytes.size()) {
-        const auto read = ::pread(file.get(), bytes.data() + count, bytes.size() - count, offset + count);
+        const auto read = ::pread(file.get(), bytes.dataMut() + count, bytes.size() - count, offset + count);
         if (read < 0 && sys::lastError() == EINTR) {
           continue;
         }
@@ -354,44 +366,43 @@ namespace telar::runtime::cli::diagnostics {
         count += static_cast<std::size_t>(read);
       }
 
-      auto text = std::string_view{bytes}.substr(0, count);
+      auto text = bytes.view().substr(0, count);
       if (offset != 0 && text.find('\n') != text.npos) {
         text.remove_prefix(text.find('\n') + 1);
       }
 
       const auto selected = tail(text, options.lines);
       const bool truncated = offset != 0 || selected.size() < text.size();
-      const auto path = parent + "/" + log.name;
+      const auto path = ds::format(memory, "{}/{}", parent, log.name);
 
       if (options.json) {
         if (&log != logs.data()) {
-          output += ',';
+          output.push(',');
         }
 
-        output += std::format("{{\"path\":{},\"component\":{},\"pid\":{},\"truncated\":{},\"text\":{}}}", quoteJson(path), quoteJson(log.component == DiagnosticsOptions::Component::runtime ? "runtime" : "client"), log.pid, jsonBoolean(truncated), quoteJson(selected));
+        ds::formatTo(output, "{{\"path\":{},\"component\":{},\"pid\":{},\"truncated\":{},\"text\":{}}}", quoteJson(path), quoteJson(log.component == DiagnosticsOptions::Component::runtime ? "runtime" : "client"), log.pid, jsonBoolean(truncated), quoteJson(selected));
       } else {
-        output += path + (truncated ? " (tail)\n" : "\n");
-        output += selected;
+        ds::formatTo(output, "{}{}{}", path, truncated ? " (tail)\n" : "\n", selected);
         if (selected.empty() || selected.back() != '\n') {
-          output += '\n';
+          output.push('\n');
         }
       }
     }
 
     if (options.json) {
-      output += "]\n";
+      output.append("]\n");
     }
 
     writeText(output);
   }
 
-  void printLimits(const LimitList& list, bool json) {
-    std::string output;
+  void printLimits(Memory& memory, const LimitList& list, bool json) {
+    Text output{memory};
 
     if (json) {
-      output = std::format("{{\"runtime_evicted\":{},\"client_evicted\":{},\"refused_reports\":{},\"limits\":[", list.runtime_evicted, list.client_evicted, list.refused_reports);
+      ds::formatTo(output, "{{\"runtime_evicted\":{},\"client_evicted\":{},\"refused_reports\":{},\"limits\":[", list.runtime_evicted, list.client_evicted, list.refused_reports);
     } else if (list.entries.empty()) {
-      output = "no limit reached\n";
+      output.append("no limit reached\n");
     }
 
     for (const auto& entry : list.entries) {
@@ -399,24 +410,24 @@ namespace telar::runtime::cli::diagnostics {
 
       if (json) {
         if (&entry != list.entries.data()) {
-          output += ',';
+          output.push(',');
         }
 
-        output += std::format("{{\"name\":{},\"noun\":{},\"value\":{},\"requested\":{},\"route\":{},\"origin\":{},\"hits\":{},\"last_ms\":{}}}", quoteJson(entry.reach.name), quoteJson(entry.reach.noun), entry.reach.value, entry.reach.requested ? std::to_string(*entry.reach.requested) : "null", quoteJson(entry.reach.route), quoteJson(origin), entry.hits, entry.last_ms);
+        ds::formatTo(output, "{{\"name\":{},\"noun\":{},\"value\":{},\"requested\":{},\"route\":{},\"origin\":{},\"hits\":{},\"last_ms\":{}}}", quoteJson(entry.reach.name), quoteJson(entry.reach.noun), entry.reach.value, orNull(entry.reach.requested), quoteJson(entry.reach.route), quoteJson(origin), entry.hits, entry.last_ms);
       } else {
         constexpr std::int64_t seconds_per_day = 24 * 60 * 60;
         constexpr std::int64_t seconds_per_hour = 60 * 60;
         constexpr std::int64_t seconds_per_minute = 60;
         const auto seconds = std::max<std::int64_t>(0, entry.last_ms / 1000) % seconds_per_day;
 
-        output += std::format("{}  ({}{}{}, last {:02}:{:02}:{:02} UTC)\n", limitDescription(entry.reach, entry.hits), origin, entry.reach.route.empty() ? "" : ", ", entry.reach.route, seconds / seconds_per_hour, seconds / seconds_per_minute % seconds_per_minute, seconds % seconds_per_minute);
+        ds::formatTo(output, "{}  ({}{}{}, last {:02}:{:02}:{:02} UTC)\n", limitDescription(entry.reach, entry.hits), origin, entry.reach.route.empty() ? "" : ", ", entry.reach.route, seconds / seconds_per_hour, seconds / seconds_per_minute % seconds_per_minute, seconds % seconds_per_minute);
       }
     }
 
     if (json) {
-      output += "]}\n";
+      output.append("]}\n");
     } else if (list.runtime_evicted != 0 || list.client_evicted != 0 || list.refused_reports != 0) {
-      output += std::format("{} runtime and {} client limits replaced by newer ones; {} client reports refused\n", list.runtime_evicted, list.client_evicted, list.refused_reports);
+      ds::formatTo(output, "{} runtime and {} client limits replaced by newer ones; {} client reports refused\n", list.runtime_evicted, list.client_evicted, list.refused_reports);
     }
 
     writeText(output);
@@ -430,19 +441,19 @@ namespace telar::runtime::cli::diagnostics {
       const RuntimePaths paths{memory, server_options, process_environment};
 
       if (options.action == DiagnosticsOptions::Action::logs) {
-        readLogs(paths.socket, options);
+        readLogs(memory, paths.socket, options);
       } else {
         ControlSession session{memory, paths.socket.data()};
 
         session.receiveTimeout(30);
-        printLimits(session.template exchange<LimitList>(QueryLimits{}), options.json);
+        printLimits(memory, session.template exchange<LimitList>(QueryLimits{}), options.json);
       }
 
       return 0;
     } catch (const std::exception& error) {
       const std::string_view reason = commandErrorName(error);
 
-      writeText("telar diagnostics: " + std::string{reason} + "\n", STDERR_FILENO);
+      std::fprintf(stderr, "telar diagnostics: %.*s\n", static_cast<int>(reason.size()), reason.data());
       if (reason == "DiagnosticLogsNotFound") {
         writeText("  the background runtime writes .runtime.log beside its socket once it starts;\n  per-process telemetry needs a build with -Ddiagnostics.\n", STDERR_FILENO);
         return 2;
@@ -478,13 +489,14 @@ namespace telar::runtime::cli::history {
 
   struct ImportedLine {
     std::int64_t started_at_ms;
-    std::string command;
+    Text command;
   };
 
   class ImportParser {
   public:
-    explicit ImportParser(HistoryOptions::ImportKind kind)
-        : kind_(kind) {}
+    ImportParser(Memory& memory, HistoryOptions::ImportKind kind)
+        : kind_(kind),
+          command_(memory) {}
 
     ds::Option<ImportedLine> feed(std::string_view line) {
       while (line.ends_with('\r')) {
@@ -515,7 +527,7 @@ namespace telar::runtime::cli::history {
         return ds::none;
       }
 
-      return ImportedLine{.started_at_ms = time_, .command = command_};
+      return ImportedLine{.started_at_ms = time_, .command = command_.clone()};
     }
 
     std::size_t skipped = 0;
@@ -542,7 +554,7 @@ namespace telar::runtime::cli::history {
       bytes_ += bytes.size();
       last_ = bytes.back();
       if (bytes_ <= max_command_bytes) {
-        command_ += bytes;
+        command_.append(bytes);
       }
     }
 
@@ -559,7 +571,7 @@ namespace telar::runtime::cli::history {
       if (active_ && bytes_ != 0 && last_ == '\\') {
         --bytes_;
         if (bytes_ < command_.size()) {
-          command_.resize(bytes_);
+          command_.truncate(bytes_);
         }
 
         last_ = 0;
@@ -599,16 +611,20 @@ namespace telar::runtime::cli::history {
       auto finished = flush();
 
       begin(time_, line);
-      return finished ? finished : flush();
+      if (finished) {
+        return finished;
+      }
+
+      return flush();
     }
 
     ds::Option<ImportedLine> bash(std::string_view line) {
       if (line.size() > 1 && line.front() == '#') {
         try {
-          const auto seconds = parseInt<std::int64_t>(line.substr(1));
+          static_cast<void>(parseInt<std::int64_t>(line.substr(1)));
           auto finished = flush();
 
-          time_ = timestamp(std::to_string(seconds));
+          time_ = timestamp(line.substr(1));
           return finished;
         } catch (const std::invalid_argument&) {
         }
@@ -638,13 +654,13 @@ namespace telar::runtime::cli::history {
 
     HistoryOptions::ImportKind kind_;
     std::int64_t time_ = 0;
-    std::string command_;
+    Text command_;
     std::size_t bytes_ = 0;
     char last_ = 0;
     bool active_ = false;
   };
 
-  std::pair<HistoryOptions::ImportKind, std::string> resolveImport(const HistoryOptions& options) {
+  std::pair<HistoryOptions::ImportKind, Text> resolveImport(Memory& memory, const HistoryOptions& options) {
     using Kind = HistoryOptions::ImportKind;
 
     if (options.import_file) {
@@ -653,7 +669,7 @@ namespace telar::runtime::cli::history {
                                                                                    : file.contains("bash")            ? Kind::bash
                                                                                                                       : Kind::zsh;
 
-      return {kind, std::string{file}};
+      return {kind, Text{memory, file}};
     }
 
     const auto* home = std::getenv("HOME");
@@ -672,8 +688,8 @@ namespace telar::runtime::cli::history {
         continue;
       }
 
-      std::string path = std::string{home} + suffix;
-      if (::access(path.c_str(), F_OK) == 0) {
+      auto path = ds::format(memory, "{}{}", home, suffix);
+      if (::access(path.data(), F_OK) == 0) {
         return {kind, std::move(path)};
       }
     }
@@ -681,8 +697,8 @@ namespace telar::runtime::cli::history {
     throw std::runtime_error{"HistfileNotFound"};
   }
 
-  std::pair<std::string, bool> newestLines(const std::string& path) {
-    FileDescriptor file{::open(path.c_str(), O_RDONLY | O_CLOEXEC)};
+  std::pair<Text, bool> newestLines(Memory& memory, const Text& path) {
+    FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC)};
     struct stat inode{};
     if (!file || ::fstat(file.get(), &inode) != 0) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
@@ -690,11 +706,12 @@ namespace telar::runtime::cli::history {
 
     const auto size = static_cast<std::uint64_t>(inode.st_size);
     const auto offset = size > max_histfile_bytes ? size - max_histfile_bytes : 0;
-    std::string text(size - offset, '\0');
+    Text text{memory};
     std::size_t used = 0;
 
+    text.resizeForOverwrite(size - offset);
     while (used < text.size()) {
-      const auto count = ::pread(file.get(), text.data() + used, text.size() - used, static_cast<off_t>(offset + used));
+      const auto count = ::pread(file.get(), text.dataMut() + used, text.size() - used, static_cast<off_t>(offset + used));
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -710,12 +727,12 @@ namespace telar::runtime::cli::history {
       used += static_cast<std::size_t>(count);
     }
 
-    text.resize(used);
+    text.truncate(used);
     if (offset != 0) {
       reportCommandLimit({.name = "history.max_histfile_bytes", .noun = "bytes", .value = max_histfile_bytes, .requested = size});
-      const auto newline = text.find('\n');
+      const auto newline = text.view().find('\n');
 
-      text.erase(0, newline == text.npos ? text.size() : newline + 1);
+      text.remove(0, newline == std::string_view::npos ? text.size() : newline + 1);
     }
 
     return {std::move(text), offset != 0};
@@ -723,22 +740,22 @@ namespace telar::runtime::cli::history {
 
   struct ImportSource {
     HistoryOptions::ImportKind kind;
-    std::string path;
-    std::string text;
+    Text path;
+    Text text;
     bool truncated;
   };
 
-  ImportSource loadImport(const HistoryOptions& options) {
-    const auto [kind, path] = resolveImport(options);
-    auto [text, truncated] = newestLines(path);
+  ImportSource loadImport(Memory& memory, const HistoryOptions& options) {
+    auto [kind, path] = resolveImport(memory, options);
+    auto [text, truncated] = newestLines(memory, path);
 
-    return {.kind = kind, .path = path, .text = std::move(text), .truncated = truncated};
+    return {.kind = kind, .path = std::move(path), .text = std::move(text), .truncated = truncated};
   }
 
-  int importHistory(ControlSession& session, const ImportSource& input) {
+  int importHistory(Memory& memory, ControlSession& session, const ImportSource& input) {
     constexpr ds::Array kind_names{"auto", "zsh", "bash", "fish"};
-    const auto source = std::string{kind_names.at(static_cast<std::size_t>(input.kind))} + ":" + input.path;
-    std::vector<ImportedLine> batch;
+    const auto source = ds::format(memory, "{}:{}", kind_names.at(static_cast<std::size_t>(input.kind)), input.path);
+    ds::Vec<ImportedLine, Memory> batch{memory};
 
     batch.reserve(max_import_entries);
     std::size_t used = 0;
@@ -751,10 +768,10 @@ namespace telar::runtime::cli::history {
       ds::Array<ImportHistoryEntry, max_import_entries> entries;
 
       for (std::size_t index = 0; index < batch.size(); ++index) {
-        entries.atMut(index) = {.started_at_ms = batch[index].started_at_ms, .command = batch[index].command};
+        entries.atMut(index) = {.started_at_ms = batch[index].started_at_ms, .command = batch[index].command.view()};
       }
 
-      session.template exchange<RequestCompleted>(ImportHistory{.source = source, .base_sequence = total, .entries = std::span{entries}.first(batch.size())});
+      session.template exchange<RequestCompleted>(ImportHistory{.source = source.view(), .base_sequence = total, .entries = std::span{entries}.first(batch.size())});
       total += batch.size();
       batch.clear();
       used = 0;
@@ -770,10 +787,10 @@ namespace telar::runtime::cli::history {
       }
 
       used += entry->command.size();
-      batch.push_back(std::move(entry.getMut()));
+      batch.push(std::move(entry.getMut()));
     };
 
-    ImportParser parser{input.kind};
+    ImportParser parser{memory, input.kind};
     std::string_view remaining = input.text;
 
     for (;;) {
@@ -789,7 +806,7 @@ namespace telar::runtime::cli::history {
 
     push(parser.flush());
     flush();
-    writeText(std::format("imported {} commands from {}\n", total, input.path));
+    writeText(ds::format(memory, "imported {} commands from {}\n", total, input.path));
     if (parser.skipped != 0) {
       const LimitReach reach{.name = "history.import_command_bytes", .noun = "bytes", .value = max_command_bytes, .requested = parser.largest_skipped};
 
@@ -803,59 +820,35 @@ namespace telar::runtime::cli::history {
     return input.truncated || parser.skipped != 0 ? 1 : 0;
   }
 
-  std::string field(std::string_view value) {
-    std::string result;
-
-    for (const unsigned char byte : value) {
-      switch (byte) {
-      case '\n':
-        result += "\\n";
-        break;
-      case '\r':
-        result += "\\r";
-        break;
-      case '\t':
-        result += "\\t";
-        break;
-      default:
-        if (byte < 0x20 || byte == 0x7f) {
-          result += std::format("\\x{:02x}", byte);
-        } else {
-          result += static_cast<char>(byte);
-        }
-      }
-    }
-
-    return result;
-  }
-
-  void print(const HistoryResults& results) {
-    std::string output;
+  void print(Memory& memory, const HistoryResults& results) {
+    Text output{memory};
 
     for (const auto& entry : results.entries) {
       const auto seconds = static_cast<std::time_t>(std::max<std::int64_t>(0, entry.started_at_ms / 1000));
       std::tm utc{};
 
       ::gmtime_r(&seconds, &utc);
-      const auto status = entry.status == HistoryStatus::running ? "RUN" : entry.status == HistoryStatus::interrupted ? "INT"
-                                                                       : entry.exit_code                              ? std::to_string(*entry.exit_code)
-                                                                                                                      : "?";
-
-      output += std::format("#{}  {:04}-{:02}-{:02} {:02}:{:02}:{:02}Z  {}  {}ms  {}  ", entry.id, utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec, status, std::max<std::int64_t>(0, entry.duration_ns / 1000000), field(entry.cwd));
-      if (entry.author == HistoryAuthor::agent && !entry.provider.empty()) {
-        output += "\x1b[2m[" + field(entry.provider) + "]\x1b[22m ";
+      ds::Array<char, 16> code;
+      std::string_view status = entry.status == HistoryStatus::running ? "RUN" : entry.status == HistoryStatus::interrupted ? "INT" : "?";
+      if (entry.status != HistoryStatus::running && entry.status != HistoryStatus::interrupted && entry.exit_code) {
+        status = {code.data(), std::format_to_n(code.dataMut(), code.size(), "{}", *entry.exit_code).out};
       }
 
-      output += field(entry.command) + '\n';
+      ds::formatTo(output, "#{}  {:04}-{:02}-{:02} {:02}:{:02}:{:02}Z  {}  {}ms  {}  ", entry.id, utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec, status, std::max<std::int64_t>(0, entry.duration_ns / 1000000), EscapedField{entry.cwd});
+      if (entry.author == HistoryAuthor::agent && !entry.provider.empty()) {
+        ds::formatTo(output, "\x1b[2m[{}]\x1b[22m ", EscapedField{entry.provider});
+      }
+
+      ds::formatTo(output, "{}\n", EscapedField{entry.command});
     }
 
     writeText(output);
   }
 
-  tbc::view<HistoryScopeValue, tbc::lt::a> scopeValue(tbc::view<const HistoryOptions&, tbc::lt::a> options, tbc::view<const std::string&, tbc::lt::a> cwd) {
+  tbc::view<HistoryScopeValue, tbc::lt::a> scopeValue(tbc::view<const HistoryOptions&, tbc::lt::a> options, tbc::view<std::string_view, tbc::lt::a> cwd) {
     switch (options.scope) {
     case HistoryScope::cwd:
-      return std::string_view{cwd};
+      return cwd;
     case HistoryScope::workspace:
       return options.scope_value;
     case HistoryScope::pane:
@@ -880,7 +873,7 @@ namespace telar::runtime::cli::history {
 
   bool confirmPrune() {
     constexpr std::size_t confirmation_bytes = 16;
-    std::string line;
+    ds::Array<char, confirmation_bytes> typed;
 
     for (std::size_t index = 0; index < confirmation_bytes; ++index) {
       char byte = 0;
@@ -890,13 +883,14 @@ namespace telar::runtime::cli::history {
       }
 
       if (byte == '\n') {
+        const std::string_view line{typed.data(), index};
         const auto start = line.find_first_not_of(" \r");
         const auto end = line.find_last_not_of(" \r");
 
         return start != line.npos && line.substr(start, end - start + 1) == "yes";
       }
 
-      line += byte;
+      typed.atMut(index) = byte;
     }
 
     return false;
@@ -906,7 +900,7 @@ namespace telar::runtime::cli::history {
     if (options.action == HistoryOptions::Action::remove) {
       const auto result = session.template exchange<HistoryPruned>(DeleteHistory{.id = options.id});
 
-      writeText(std::format("removed {} entries\n", result.removed));
+      writeText(ds::format(memory, "removed {} entries\n", result.removed));
       return;
     }
 
@@ -918,9 +912,9 @@ namespace telar::runtime::cli::history {
       const auto results = query(session, preview, scope);
 
       if (options.before_ms != 0) {
-        writeText(std::format("{} newest entries match the text/scope filters; --before applies on top and is not previewable\n", results.entries.size()));
+        writeText(ds::format(memory, "{} newest entries match the text/scope filters; --before applies on top and is not previewable\n", results.entries.size()));
       } else {
-        writeText(std::format("would remove {} entries (counting at most the newest {})\n", results.entries.size(), HistoryOptions::max_results));
+        writeText(ds::format(memory, "would remove {} entries (counting at most the newest {})\n", results.entries.size(), HistoryOptions::max_results));
       }
 
       if (options.dry_run) {
@@ -945,23 +939,23 @@ namespace telar::runtime::cli::history {
         .match = options.query,
     });
 
-    writeText(std::format("removed {} entries\n", result.removed));
+    writeText(ds::format(memory, "removed {} entries\n", result.removed));
   }
 
-  void show(ControlSession& session, const HistoryOptions& options) {
+  void show(Memory& memory, ControlSession& session, const HistoryOptions& options) {
     const auto output = session.template exchange<HistoryOutput>(ReadHistoryOutput{.id = options.id});
     if (output.observed_bytes == 0) {
-      writeText(std::format("telar history: no output captured for entry {} (runtime.history.output = \"bounded\" enables capture)\n", output.id), STDERR_FILENO);
+      writeText(ds::format(memory, "telar history: no output captured for entry {} (runtime.history.output = \"bounded\" enables capture)\n", output.id), STDERR_FILENO);
       return;
     }
 
     writeBytes(STDOUT_FILENO, output.content);
     if (output.truncated) {
-      writeText(std::format("telar history: output truncated ({} bytes observed)\n", output.observed_bytes), STDERR_FILENO);
+      writeText(ds::format(memory, "telar history: output truncated ({} bytes observed)\n", output.observed_bytes), STDERR_FILENO);
     }
   }
 
-  void stats(ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+  void stats(Memory& memory, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
     constexpr std::int64_t milliseconds_per_day = 86400000;
     const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     const auto result = session.template exchange<HistoryStatsResult>(HistoryStatsQuery{
@@ -970,14 +964,14 @@ namespace telar::runtime::cli::history {
         .since_ms = options.period_days == 0 ? 0 : now - static_cast<std::int64_t>(options.period_days) * milliseconds_per_day,
     });
 
-    auto output = std::format("commands: {}\nunique:   {}\n", result.total, result.unique);
+    auto output = ds::format(memory, "commands: {}\nunique:   {}\n", result.total, result.unique);
 
     if (!result.top.empty()) {
-      output += "top:\n";
+      output.append("top:\n");
     }
 
     for (const auto& entry : result.top) {
-      output += std::format("  {:>7}  {}\n", entry.count, field(entry.command));
+      ds::formatTo(output, "  {:>7}  {}\n", entry.count, EscapedField{entry.command});
     }
 
     writeText(output);
@@ -988,7 +982,7 @@ namespace telar::runtime::cli::history {
       ds::Option<ImportSource> input;
 
       if (options.action == HistoryOptions::Action::import) {
-        input = loadImport(options);
+        input = loadImport(memory, options);
       }
 
       ServerOptions server_options{};
@@ -1000,25 +994,29 @@ namespace telar::runtime::cli::history {
       ControlSession session{memory, paths.socket.data(), max_payload_size, max_batch_payload + 2048};
 
       session.receiveTimeout(30);
-      const auto cwd = options.scope == HistoryScope::cwd ? std::filesystem::canonical(".").string() : std::string{};
-      const auto scope = scopeValue(options, cwd);
+      ds::Array<char, PATH_MAX> directory{};
+      if (options.scope == HistoryScope::cwd && ::realpath(".", directory.dataMut()) == nullptr) {
+        throw SystemError{"Resolve the working directory"};
+      }
+
+      const auto scope = scopeValue(options, std::string_view{directory.data()});
 
       switch (options.action) {
       case HistoryOptions::Action::import:
-        return importHistory(session, *input);
+        return importHistory(memory, session, *input);
       case HistoryOptions::Action::remove:
       case HistoryOptions::Action::prune:
         prune(memory, paths.socket.data(), session, options, scope);
         break;
       case HistoryOptions::Action::show:
-        show(session, options);
+        show(memory, session, options);
         break;
       case HistoryOptions::Action::stats:
-        stats(session, options, scope);
+        stats(memory, session, options, scope);
         break;
       case HistoryOptions::Action::list:
       case HistoryOptions::Action::search:
-        print(query(session, options, scope));
+        print(memory, query(session, options, scope));
         break;
       }
 
@@ -1026,13 +1024,15 @@ namespace telar::runtime::cli::history {
     } catch (const ControlFailure& error) {
       const auto context = options.action == HistoryOptions::Action::import ? "telar history import: " : "telar history: ";
 
-      writeText(context + std::string{error.message().empty() ? error.what() : error.message()} + "\n", STDERR_FILENO);
+      const std::string_view message = error.message().empty() ? std::string_view{error.what()} : error.message();
+
+      std::fprintf(stderr, "%s%.*s\n", context, static_cast<int>(message.size()), message.data());
       writeText(options.action == HistoryOptions::Action::import ? "error: HistoryImportFailed\n" : options.action == HistoryOptions::Action::remove || options.action == HistoryOptions::Action::prune ? "error: HistoryPruneFailed\n"
                                                                                                                                                                                                         : "error: HistoryQueryFailed\n",
           STDERR_FILENO);
       return 1;
     } catch (const std::exception& error) {
-      writeText("error: " + std::string{error.what()} + "\n", STDERR_FILENO);
+      std::fprintf(stderr, "error: %s\n", error.what());
       return 1;
     }
   }

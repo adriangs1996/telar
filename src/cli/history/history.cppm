@@ -59,7 +59,8 @@ export {
         get,
       };
       Action action;
-      std::string path;
+      // Views the command line, so it ends with a NUL, as does every suffix of it.
+      std::string_view path;
       std::uint64_t bytes = 0;
 
       static Options parse(Arguments words);
