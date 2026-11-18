@@ -57,6 +57,7 @@ namespace {
     http11,
     http2,
     no_alpn,
+    origin_without_alpn,
     other_alpn,
     tls12,
     tls13,
@@ -165,7 +166,7 @@ namespace {
 
     check(server_selection.assign(scenario == SessionCase::http2 ? std::span<const unsigned char>{http2} : scenario == SessionCase::other_alpn ? std::span<const unsigned char>{other}
                                                                                                                                                : std::span<const unsigned char>{http11}));
-    if (scenario != SessionCase::no_alpn) {
+    if (scenario != SessionCase::no_alpn && scenario != SessionCase::origin_without_alpn) {
       SSL_CTX_set_alpn_select_cb(server_context.get(), &AlpnSelection::select, nullptr);
     }
 
@@ -244,8 +245,8 @@ namespace {
       check(SSL_version(client.get()) == version && SSL_version(server.get()) == version);
     }
 
-    check(session.protocol() == (scenario == SessionCase::http2 ? HttpProtocol::http2 : (scenario == SessionCase::no_alpn || scenario == SessionCase::other_alpn) ? HttpProtocol::other
-                                                                                                                                                                  : HttpProtocol::http11));
+    check(session.protocol() == (scenario == SessionCase::http2 ? HttpProtocol::http2 : (scenario == SessionCase::no_alpn || scenario == SessionCase::origin_without_alpn || scenario == SessionCase::other_alpn) ? HttpProtocol::other
+                                                                                                                                                                                                                  : HttpProtocol::http11));
     const unsigned char* client_protocol = nullptr;
     const unsigned char* server_protocol = nullptr;
     unsigned client_length = 0;
@@ -254,6 +255,10 @@ namespace {
     SSL_get0_alpn_selected(client.get(), &client_protocol, &client_length);
     SSL_get0_alpn_selected(server.get(), &server_protocol, &server_length);
     check(std::ranges::equal(std::span{client_protocol, client_length}, std::span{server_protocol, server_length}));
+    if (scenario == SessionCase::origin_without_alpn) {
+      check(session.unnegotiated() && client_length == 0);
+    }
+
     check(SSL_get_verify_result(client.get()) == X509_V_OK);
     transferThrough(session, client.get(), server.get(), TlsSide::child);
     transferThrough(session, server.get(), client.get(), TlsSide::origin);
@@ -358,6 +363,13 @@ namespace {
     checkAuthorityRotation(memory, library);
   }
 
+  // A child that offers protocols to an origin that negotiates none still connects, without a
+  // protocol of its own.
+  void testOriginWithoutAlpn(TlsTestMemory& memory, const TlsLibrary& library) {
+    checkSession(memory, library, SessionCase::origin_without_alpn);
+  }
+
   const telar::testing::Case case_tls_session{"tls_session.tls_session", withTlsLibrary<testTlsSession>};
+  const telar::testing::Case case_origin_without_alpn{"tls_session.origin_without_alpn", withTlsLibrary<testOriginWithoutAlpn>};
 
 }
