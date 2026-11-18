@@ -150,6 +150,24 @@ namespace {
       }
     }
 
+    // A hook deletes a chunk by replacing it with nothing: none of it is written, the write reports
+    // it consumed, and the next chunk goes to the hook again.
+    {
+      Control control{memory};
+      FlowState gate;
+
+      gate.open(&control, 3, -1, -1, "fixture.test");
+      PartialStream stream;
+      const std::array<Byte, 3> original{'o', 0, 'd'};
+
+      check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked);
+      control.broker.decide(control.ticket, Verdict::replace, {});
+      const auto deleted = gate.write(traffic::Direction::outbound, stream, original);
+
+      check(deleted.state == StreamResult::State::data && deleted.bytes == original.size() && stream.output.empty());
+      check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked && control.requests == 2);
+    }
+
     {
       Control control{memory};
 

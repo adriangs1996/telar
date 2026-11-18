@@ -505,6 +505,46 @@ namespace {
     checkAdmissionAndStop(memory, library);
   }
 
+  // Silent sockets that fill every unauthenticated slot cannot lock legitimate clients out: once the
+  // oldest has waited past the eviction age, a newcomer takes its place and is served.
+  void testUnauthenticatedEviction(TlsTestMemory& memory, const TlsLibrary& library) {
+    TlsTrustStore trust{memory, library};
+    TlsContexts contexts{memory, library, trust};
+    TlsInterception interception{contexts, nullptr};
+    ProxyOptions options{memory};
+    const auto secret = ProxySecret::generate();
+    auto origin_listener = ProxyListener::bind(std::nullopt, {});
+    ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+    std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
+
+    silent.front() = connectLocal(service.port());
+    await([&] {
+      return service.active() == 1;
+    });
+
+    for (auto& socket : std::span{silent}.subspan(1)) {
+      socket = connectLocal(service.port());
+    }
+
+    await([&] {
+      return service.active() == silent.size();
+    });
+
+    std::this_thread::sleep_for(ProxyConnectionPolicy::evictable_head_age + std::chrono::milliseconds{100});
+    auto newcomer = connectLocal(service.port());
+
+    writeText(newcomer.get(), request(secret, origin_listener.port(), "origin.test"));
+    check(readHead(newcomer.get()) == "HTTP/1.1 200 Connection Established\r\n\r\n");
+    await([&] {
+      char byte;
+
+      return ::recv(silent.front().get(), &byte, 1, 0) == 0;
+    });
+
+    check(service.counters().read(ProxyCounter::unauthenticated_eviction) == 1);
+  }
+
   const telar::testing::Case case_proxy_service{"proxy_service.proxy_service", withTlsLibrary<testProxyService>};
+  const telar::testing::Case case_unauthenticated_eviction{"proxy_service.unauthenticated_eviction", withTlsLibrary<testUnauthenticatedEviction>};
 
 }
