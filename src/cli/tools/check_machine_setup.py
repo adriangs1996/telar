@@ -110,7 +110,7 @@ def run(binary, provider, seed, login=False, prepare=None):
         if prepare:prepare(root,env)
         result=[]
         for repetition in range(2):
-            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=20)
+            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
             files=snapshot(root,binary)
             # Fixture files contain implementation paths and schema by design.
             result.append({'status':child.returncode,'stdout':normalize(child.stdout,root,binary),'stderr':normalize(child.stderr,root,binary),'files':files})

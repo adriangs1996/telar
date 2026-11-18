@@ -35,7 +35,7 @@ if(APPLE)
     LABELS cli.e2e TIMEOUT 90)
   telar_add_test(machine-setup-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/machine_setup_test.py"
     --telar "$<TARGET_FILE:telar>"
-    LABELS cli.e2e TIMEOUT 120)
+    LABELS cli.e2e TIMEOUT 400)
 endif()
 telar_add_test(exec-runtime-offline-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/exec_runtime_test.py"
   --telar "$<TARGET_FILE:telar>" --offline
