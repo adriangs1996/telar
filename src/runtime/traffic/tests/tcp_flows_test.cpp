@@ -29,6 +29,8 @@ namespace {
     std::uint64_t id;
     std::string reason;
     std::string bytes;
+    std::string client;
+    std::string server;
   };
 
   // A capture of one TCP connection, fed segment by segment, and what the flows publish from it.
@@ -38,12 +40,15 @@ namespace {
 
     void send(bool incoming, std::uint32_t sequence, Byte flags, std::string_view body = {}, std::size_t cut = 0) {
       const auto packet = traffic_test::tcp(false, incoming, sequence, flags, body);
-      const auto captured = std::span{packet}.first(packet.size() - cut);
 
-      flows.packet(traffic::Event{.session = 3, .interface_index = 1, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(packet.size()), .interface = "fixture", .bytes = captured}, [&](const traffic::Event& event) {
+      deliver(std::span{packet}.first(packet.size() - cut), packet.size());
+    }
+
+    void deliver(std::span<const Byte> captured, std::size_t original) {
+      flows.packet(traffic::Event{.session = 3, .interface_index = 1, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(original), .interface = "fixture", .bytes = captured}, [&](const traffic::Event& event) {
         const auto flow = FlowCodec::decode(event.bytes);
 
-        published.push_back({event.kind, flow.id, std::string{flow.reason}, std::string{reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size()}});
+        published.push_back({event.kind, flow.id, std::string{flow.reason}, std::string{reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size()}, std::string{flow.client}, std::string{flow.server}});
       });
     }
 
@@ -134,6 +139,48 @@ namespace {
     }
   }
 
+  // A capture opening flows without end keeps a bounded table: each flow it drops to make room is
+  // closed in public, with the reason. A flow first seen at its SYN-ACK names the sender of that
+  // SYN-ACK as the server.
+  void testCapacityAndOrientation() {
+    SystemAllocator system;
+    SynchronizedAllocator synchronized{system};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+
+    {
+      Capture capture{memory};
+      constexpr std::size_t flows = 1000;
+
+      for (std::size_t index = 0; index < flows; ++index) {
+        auto packet = traffic_test::tcp(false, false, 0, syn);
+        const auto port = static_cast<std::uint16_t>(10000 + index);
+
+        packet[20] = static_cast<Byte>(port >> 8);
+        packet[21] = static_cast<Byte>(port);
+        capture.deliver(packet, packet.size());
+      }
+
+      const auto opened = std::ranges::count(capture.published, Kind::flow_open, &Published::kind);
+      const auto closed = capture.closed();
+
+      check(opened == flows && !closed.empty() && static_cast<std::size_t>(opened) - closed.size() < flows);
+      check(std::ranges::all_of(closed, [](const std::string& reason) {
+        return reason == "flow_limit";
+      }));
+    }
+
+    {
+      Capture capture{memory};
+
+      capture.send(true, 9, syn | ack);
+      const auto open = std::ranges::find(capture.published, Kind::flow_open, &Published::kind);
+
+      check(open != capture.published.end() && open->server.ends_with(":80") && open->client.ends_with(":50000"));
+    }
+  }
+
   const telar::testing::Case case_adversarial_segments{"tcp_flows.adversarial_segments", testAdversarialSegments};
+  const telar::testing::Case case_capacity_and_orientation{"tcp_flows.capacity_and_orientation", testCapacityAndOrientation};
 
 }

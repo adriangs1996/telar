@@ -243,6 +243,38 @@ namespace {
     }
   }
 
+  // Internal events share the queue's bound with client requests: with the queue full one is
+  // refused, so its caller can count the loss, and it never runs.
+  void checkInternalAdmissionLimit(SystemAllocator& memory) {
+    ControlledHistoryService service;
+    RequestWorker worker{memory, service};
+
+    worker.submit(1, QueryClients{.request_id = 1});
+    check(service.waitStarted(1));
+    for (std::uint64_t identity = 2; identity <= 65; ++identity) {
+      worker.submit(1, QueryClients{.request_id = identity});
+    }
+
+    bool refused = false;
+
+    try {
+      worker.submitInternal(std::uint64_t{1000});
+    } catch (const RequestError& error) {
+      refused = error.code() == FailureCode::resource_limit;
+    }
+
+    check(refused);
+    service.stop();
+    std::vector<std::uint64_t> identities;
+
+    drainHistoryResponses(worker, identities, 65);
+    check(!worker.pending());
+
+    const auto finished = service.finished();
+
+    check(finished.size() == 65 && std::ranges::find(finished, 1000) == finished.end());
+  }
+
   void testHistoryCapacity() {
     SystemAllocator memory;
 
@@ -252,5 +284,13 @@ namespace {
   }
 
   const telar::testing::Case case_history_capacity{"history_capacity.history_capacity", testHistoryCapacity};
+  const telar::testing::Case case_internal_admission_limit{
+      "history_capacity.internal_admission_limit",
+      [] {
+        SystemAllocator memory;
+
+        checkInternalAdmissionLimit(memory);
+      },
+  };
 
 }

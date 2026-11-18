@@ -44,7 +44,28 @@ namespace {
     check(request && request->framing.kind == Http1Framing::Kind::none && !request->framing.hasBody());
   }
 
+  // Keep-alive is the HTTP/1.1 default, and a Connection field without `close` keeps it; a field whose
+  // name only matches a framing field in length frames nothing.
+  void testConnectionTokensAndLookalikes() {
+    const auto kept = Http1Head::analyze("GET / HTTP/1.1\r\nHost: a\r\nConnection: keep-alive\r\n\r\n", false);
+
+    check(kept && !kept->closes);
+
+    const auto closing = Http1Head::analyze("GET / HTTP/1.1\r\nHost: a\r\nConnection: keep-alive, close\r\n\r\n", false);
+
+    check(closing && closing->closes);
+
+    const auto length = Http1Head::analyze("POST / HTTP/1.1\r\nHost: a\r\nContent-Lengtx: 5\r\n\r\n", false);
+
+    check(length && length->framing.kind == Http1Framing::Kind::none);
+
+    const auto chunked = Http1Head::analyze("POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encodinx: chunked\r\nContent-Length: 3\r\n\r\n", false);
+
+    check(chunked && chunked->framing.kind == Http1Framing::Kind::content_length && chunked->framing.length == 3);
+  }
+
   const telar::testing::Case case_field_name_whitespace{"http1_head.field_name_whitespace", testFieldNameWhitespace};
   const telar::testing::Case case_response_until_close{"http1_head.response_until_close", testResponseUntilClose};
+  const telar::testing::Case case_connection_tokens{"http1_head.connection_tokens", testConnectionTokensAndLookalikes};
 
 }

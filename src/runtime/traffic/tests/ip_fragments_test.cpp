@@ -392,6 +392,59 @@ namespace {
     }
   }
 
+  // Fragments that each fit the offset field can still describe a datagram past the 65535 bytes an
+  // IPv4 total length can state: it is reported, and never delivered with a length cut to 16 bits.
+  void reassembledSizeLimit(TlsTestMemory& memory) {
+    IpFragments fragments{memory};
+    const auto original = traffic_test::tcp(false, false, 1, 16, "0123456789abcdef");
+    const auto first = fragment(original, 0, 8, true);
+    std::vector<Byte> last{original.begin(), original.begin() + 20};
+
+    word(last, 2, 20 + 15);
+    word(last, 4, 77);
+    word(last, 6, 65520 / 8);
+    last.resize(20 + 15, 'x');
+    std::vector<std::string> errors;
+    std::size_t delivered = 0;
+    const auto consume = [&](std::span<const Byte>) {
+      ++delivered;
+    };
+
+    const auto report = [&](const Event&, std::string_view reason) {
+      errors.emplace_back(reason);
+    };
+
+    fragments.packet(packet(first), consume, report);
+    fragments.packet(packet(last), consume, report);
+    check(delivered == 0 && errors == std::vector<std::string>{"ip_fragment_size_limit"});
+    fragments.expire(report, true);
+  }
+
+  // Capture analysis turns a fragment failure into an error event of the capture it came from, so a
+  // subscriber learns why a datagram never arrived.
+  void analysisPublishesErrors(TlsTestMemory& memory) {
+    CaptureAnalysis analysis{memory};
+    const auto original = traffic_test::tcp(false, false, 1, 16, "0123456789abcdef");
+    std::vector<traffic::Event> errors;
+    std::vector<std::string> reasons;
+    const auto emit = [&](const traffic::Event& event) {
+      if (event.kind == Kind::error) {
+        errors.push_back(event);
+        reasons.emplace_back(reinterpret_cast<const char*>(event.bytes.data()), event.bytes.size());
+      }
+    };
+
+    analysis.packet(packet(fragment(original, 0, 24, true)), Selection::all, emit);
+    analysis.packet(packet(fragment(original, 16, 16, true)), Selection::all, emit);
+    check(reasons == std::vector<std::string>{"ip_fragment_overlap"});
+    check(errors.front().session == 42 && errors.front().interface_index == 7 && errors.front().interface == "fragment-fixture");
+
+    reasons.clear();
+    analysis.packet(packet(fragment(original, 0, 24, true, 78)), Selection::all, emit);
+    analysis.expire(emit, true);
+    check(reasons == std::vector<std::string>{"ip_fragment_capture_stopped"});
+  }
+
   // Each case owns the budget its calls share and leaves nothing allocated there.
   template <auto body>
   void budgeted() {
@@ -412,5 +465,7 @@ namespace {
   const telar::testing::Case case_malformed_and_piece_limits{"ip_fragments.malformed_and_piece_limits", budgeted<malformedAndPieceLimits>};
   const telar::testing::Case case_invalid_fragment_headers{"ip_fragments.invalid_fragment_headers", budgeted<invalidFragmentHeaders>};
   const telar::testing::Case case_conflicting_lengths{"ip_fragments.conflicting_lengths", budgeted<conflictingLengths>};
+  const telar::testing::Case case_reassembled_size_limit{"ip_fragments.reassembled_size_limit", budgeted<reassembledSizeLimit>};
+  const telar::testing::Case case_analysis_publishes_errors{"ip_fragments.analysis_publishes_errors", budgeted<analysisPublishesErrors>};
 
 }

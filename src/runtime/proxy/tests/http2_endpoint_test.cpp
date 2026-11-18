@@ -224,6 +224,13 @@ namespace {
         }
       }
 
+      // An informational response, which precedes the final one on the same stream.
+      void inform(std::int32_t id, const Fields& fields) {
+        const auto native = nativeFields(fields);
+
+        check(nghttp2_submit_headers(session_, NGHTTP2_FLAG_NONE, id, nullptr, native.data(), native.size(), nullptr) >= 0);
+      }
+
       void ping() {
         constexpr std::array<std::uint8_t, 8> bytes{1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -754,12 +761,139 @@ namespace {
       check(received.complete && received.body == "reply" && fixture.owner.errors.empty());
       check(received.field("grpc-status") == "0" && received.field("grpc-message") == "done");
     }
+
+    // The `:status` of every response block a stream received, in order.
+    auto statuses(const Peer::Stream& stream) -> std::vector<std::string> {
+      std::vector<std::string> result;
+
+      for (const auto& [name, value] : stream.headers) {
+        if (name == ":status") {
+          result.push_back(value);
+        }
+      }
+
+      return result;
+    }
+
+    // A child that opens with something other than the HTTP/2 preface fails the connection, before
+    // any request reaches the origin.
+    void badClientMagic() {
+      Fixture fixture;
+
+      fixture.child.input = "PRI * HTTP/2.0\r\n\r\nXX\r\n\r\n";
+      fixture.until([&] {
+        return fixture.connection.finished();
+      });
+
+      check(fixture.owner.errors == std::vector<std::string>{"http2_connection_failed"});
+      check(fixture.server.streams.empty() && fixture.owner.requests.empty());
+    }
+
+    // Early hints reach the client ahead of the final response, which still follows; an origin that
+    // keeps sending informational responses has the stream reset.
+    void informationalResponses() {
+      {
+        Fixture fixture;
+
+        fixture.server.echoing = false;
+        const auto stream = fixture.client.request("/hints", {}, "GET");
+
+        fixture.until([&] {
+          fixture.automatic(0, false);
+          return originStream(fixture, "/hints").has_value();
+        });
+
+        const auto origin = *originStream(fixture, "/hints");
+
+        fixture.server.inform(origin, Fields{{":status", "103"}, {"link", "</style.css>; rel=preload"}});
+        fixture.server.respond(origin, Fields{{":status", "200"}}, "final");
+        fixture.until([&] {
+          fixture.automatic(0, false);
+          return settled(fixture.client.streams[stream]);
+        });
+
+        const auto& received = fixture.client.streams[stream];
+
+        check(received.complete && statuses(received) == std::vector<std::string>{"103", "200"});
+        check(received.field("link") == "</style.css>; rel=preload" && received.body == "final" && fixture.owner.errors.empty());
+      }
+
+      {
+        Fixture fixture;
+
+        fixture.server.echoing = false;
+        const auto stream = fixture.client.request("/chatty", {}, "GET");
+
+        fixture.until([&] {
+          fixture.automatic(0, false);
+          return originStream(fixture, "/chatty").has_value();
+        });
+
+        const auto origin = *originStream(fixture, "/chatty");
+
+        for (unsigned count = 0; count < 9; ++count) {
+          fixture.server.inform(origin, Fields{{":status", "103"}});
+        }
+
+        fixture.until([&] {
+          return settled(fixture.client.streams[stream]);
+        });
+
+        check(fixture.client.streams[stream].reset != 0 && fixture.owner.errors == std::vector<std::string>{"http2_informational_limit"});
+      }
+    }
+
+    // An intercepted request that expects 100-continue gets it before the hook decides, and the
+    // origin receives the request without the expectation.
+    void expectContinue() {
+      Fixture fixture;
+      const auto stream = fixture.client.request(Fields{{":method", "POST"}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", "/expect"}, {"expect", "100-continue"}}, "body");
+
+      fixture.until([&] {
+        return !fixture.owner.requests.empty() && fixture.client.streams[stream].field(":status") == "100";
+      });
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return fixture.client.streams[stream].complete;
+      });
+
+      const auto origin = originStream(fixture, "/expect");
+
+      check(origin && fixture.server.streams[*origin].field("expect").empty());
+      check(statuses(fixture.client.streams[stream]) == std::vector<std::string>{"100", "200"});
+    }
+
+    // The origin closing with a request still unanswered resets that stream, so the client does not
+    // wait on it forever.
+    void originEofInflight() {
+      Fixture fixture;
+
+      fixture.server.echoing = false;
+      const auto stream = fixture.client.request("/pending", "body");
+
+      fixture.until([&] {
+        fixture.automatic(0, false);
+        return originStream(fixture, "/pending").has_value();
+      });
+
+      fixture.origin.ended = true;
+      fixture.until([&] {
+        return settled(fixture.client.streams[stream]);
+      });
+
+      check(fixture.client.streams[stream].reset != 0 && !fixture.client.streams[stream].complete);
+    }
   }
 
   const telar::testing::Case case_unavailable_policy{"http2_endpoint.unavailable_policy", unavailablePolicy};
   const telar::testing::Case case_invalid_messages{"http2_endpoint.invalid_messages", invalidMessages};
   const telar::testing::Case case_invalid_decision{"http2_endpoint.invalid_decision", invalidDecision};
   const telar::testing::Case case_response_trailers{"http2_endpoint.response_trailers", responseTrailers};
+  const telar::testing::Case case_bad_client_magic{"http2_endpoint.bad_client_magic", badClientMagic};
+  const telar::testing::Case case_informational_responses{"http2_endpoint.informational_responses", informationalResponses};
+  const telar::testing::Case case_expect_continue{"http2_endpoint.expect_continue", expectContinue};
+  const telar::testing::Case case_origin_eof_inflight{"http2_endpoint.origin_eof_inflight", originEofInflight};
   const telar::testing::Case case_multiplexed{
       "http2_endpoint.multiplexed",
       [] {

@@ -20,6 +20,7 @@ import telar.testing.erasure_checking_allocator;
 import telar.runtime.exchange_capture.producer;
 import telar.config.runtime;
 import telar.runtime.vocabulary.exchange;
+import telar.runtime.http.message;
 
 namespace {
 
@@ -358,6 +359,108 @@ namespace {
     }
   }
 
+  struct Decoded {
+    std::vector<std::uint8_t> bytes;
+    bool decoded;
+    bool failed;
+  };
+
+  // What the capture keeps of `input` coded as `coding`, decoded under `limit`.
+  Decoded decodeCapture(std::span<const std::uint8_t> input, std::string_view coding, std::size_t limit) {
+    ErasureCheckingAllocator system;
+    BudgetAllocator memory{system, 4 * 1024 * 1024};
+    MemoryAdapter adapter{memory};
+    Decoded result;
+
+    {
+      CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
+      const auto body = decoder.decode(input, coding, limit);
+
+      result = {{body.bytes().begin(), body.bytes().end()}, body.decoded, body.failed};
+    }
+
+    check(memory.liveBytes() == 0);
+    return result;
+  }
+
+  // A body whose coding does not check out is kept as it arrived and marked failed, never shown as a
+  // complete decoded body.
+  void testCorruptStreamsFallBackRaw() {
+    const auto plaintext = bodyText(512);
+    const std::array chunks{Chunk{256, 6, Z_DEFAULT_STRATEGY}, Chunk{0, 6, Z_DEFAULT_STRATEGY}};
+    const auto gzip = deflateChunks(plaintext, 31, chunks);
+    const auto zlib = deflateChunks(plaintext, 15, chunks);
+
+    check(decodeCapture(gzip, "gzip", 1024).bytes == plaintext && decodeCapture(zlib, "deflate", 1024).bytes == plaintext);
+
+    // The full flush ends the first chunk with an empty stored block, so the next byte starts a block
+    // header: block type 3 is reserved.
+    constexpr std::array<std::uint8_t, 4> flush{0, 0, 0xff, 0xff};
+    const auto boundary = std::ranges::search(zlib, flush);
+
+    check(!boundary.empty() && boundary.end() != zlib.end());
+    auto corrupt = zlib;
+
+    corrupt[static_cast<std::size_t>(boundary.end() - zlib.begin())] |= 0x06;
+    auto method = zlib;
+
+    method[0] = (method[0] & 0xf0) | 9;
+    auto window = zlib;
+
+    window[0] = (8 << 4) | 8;
+    auto magic = gzip;
+
+    magic[0] = 0x1e;
+    const std::array<std::pair<std::string_view, std::vector<std::uint8_t>>, 5> inputs{{
+        {"gzip", {gzip.begin(), gzip.end() - 8}},
+        {"deflate", corrupt},
+        {"deflate", method},
+        {"deflate", window},
+        {"gzip", magic},
+    }};
+
+    for (const auto& [coding, input] : inputs) {
+      const auto body = decodeCapture(input, coding, 1024);
+
+      check(body.failed && !body.decoded && body.bytes == input);
+    }
+  }
+
+  // A body coded twice decodes through both codings, the last listed first. A coding the decoder
+  // does not know leaves the body raw without calling it a failure; a malformed list, or an inner
+  // coding the limit cuts short, does fail.
+  void testStackedAndUnknownCodings() {
+    const auto plaintext = bodyText(512);
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    HttpContentCodec codec{memory};
+    const auto gzip = codec.encode(plaintext, "gzip", 4096);
+    const std::vector<std::uint8_t> inner{gzip.bytes().begin(), gzip.bytes().end()};
+    const auto coded = codec.encode(inner, "br", 4096);
+    const std::vector<std::uint8_t> wire{coded.bytes().begin(), coded.bytes().end()};
+
+    const auto stacked = decodeCapture(wire, "gzip, br", 1024);
+
+    check(stacked.decoded && !stacked.failed && stacked.bytes == plaintext);
+
+    const auto cut = decodeCapture(wire, "gzip, br", inner.size() - 1);
+
+    check(cut.failed && !cut.decoded && std::ranges::equal(cut.bytes, std::span{wire}.first(std::min(wire.size(), inner.size() - 1))));
+
+    const auto unknown = decodeCapture(wire, "x-custom", 1024);
+
+    check(!unknown.failed && !unknown.decoded && unknown.bytes == wire);
+
+    const auto malformed = decodeCapture(wire, "gzip,,br", 1024);
+
+    check(malformed.failed && !malformed.decoded && malformed.bytes == wire);
+
+    const auto identity = decodeCapture(wire, "identity", 1024);
+
+    check(identity.decoded && !identity.failed && identity.bytes == wire);
+  }
+
   void testCapturePublication() {
     SystemAllocator system;
     BudgetAllocator budget{system, 8 * 1024 * 1024};
@@ -472,5 +575,7 @@ namespace {
   const telar::testing::Case case_flate_bomb_is_bounded{"capture_decode.flate_bomb_is_bounded", testFlateBombIsBounded};
   const telar::testing::Case case_gzip_envelope_fields{"capture_decode.gzip_envelope_fields", testGzipEnvelopeFields};
   const telar::testing::Case case_zstd_declared_size_below_blocks{"capture_decode.zstd_declared_size_below_blocks", testZstdDeclaredSizeBelowBlocks};
+  const telar::testing::Case case_corrupt_streams_fall_back_raw{"capture_decode.corrupt_streams_fall_back_raw", testCorruptStreamsFallBackRaw};
+  const telar::testing::Case case_stacked_and_unknown_codings{"capture_decode.stacked_and_unknown_codings", testStackedAndUnknownCodings};
 
 }
