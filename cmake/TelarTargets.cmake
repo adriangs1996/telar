@@ -293,7 +293,7 @@ function(telar_add_probes target)
 endfunction()
 
 # telar_add_tests(<target> LABEL <label> [DIRECTORY <folder>] [RECURSE] [QT] [MAIN <target>]
-#                 [RUN_SERIAL] [LINK <target>...] [SOURCES <file>...] [MACOS_SOURCES <file>...]
+#                 [RUN_SERIAL] [NO_TEST] [LINK <target>...] [SOURCES <file>...] [MACOS_SOURCES <file>...]
 #                 [LINUX_SOURCES <file>...] [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...]
 #                 [CHECKS <check>...])
 # The test program of the current folder: <folder>/*_test.cpp, <folder>/macos/*_test.{cpp,mm}
@@ -308,9 +308,10 @@ endfunction()
 # main that runs the cases. QT builds it as a Qt program that finds the process's QML
 # modules. Every case is a CTest test of its own, <label>.<suite>.<case>, carrying LABELS
 # <label>, TIMEOUT and ENVIRONMENT, and with RUN_SERIAL runs alone, as a case that drives the
-# window server must. CHECKS defaults to lint and blank_lines.
+# window server must. NO_TEST builds the program without registering its cases, for a tree
+# that lacks what they need. CHECKS defaults to lint and blank_lines.
 function(telar_add_tests target)
-  cmake_parse_arguments(PARSE_ARGV 1 tests "QT;RECURSE;RUN_SERIAL" "LABEL;TIMEOUT;DIRECTORY;MAIN"
+  cmake_parse_arguments(PARSE_ARGV 1 tests "QT;RECURSE;RUN_SERIAL;NO_TEST" "LABEL;TIMEOUT;DIRECTORY;MAIN"
     "LINK;SOURCES;MACOS_SOURCES;LINUX_SOURCES;ENVIRONMENT;CHECKS")
   if(tests_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_tests(${target}): unexpected arguments ${tests_UNPARSED_ARGUMENTS}")
@@ -404,6 +405,9 @@ function(telar_add_tests target)
   target_link_libraries(${target} PRIVATE ${links} ${tests_MAIN})
   set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${directory}")
   telar_register_checks(${target} CHECKS ${tests_CHECKS})
+  if(tests_NO_TEST)
+    return()
+  endif()
 
   set(properties LABELS "${tests_LABEL}")
   if(tests_TIMEOUT)

@@ -239,17 +239,25 @@ if(TELAR_GUI_NATIVE)
     endif()
   endif()
   telar_add_test(gui-quick-test QT NO_TEST SOURCES quick_test.cpp agent_report_fixture.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation gui-test-fixtures)
-  telar_add_test(gui-suggestion-controls-test QT NO_TEST SOURCES suggestion_controls_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation)
-  target_compile_definitions(gui-suggestion-controls-test PRIVATE
-    TELAR_GUI_TEST_PYTHON="${Python3_EXECUTABLE}"
-    TELAR_GUI_SUGGESTION_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/suggestion_engine_fixture.py")
   set(TELAR_GUI_TEST_RUNTIME "" CACHE FILEPATH "Runtime executable for native GUI integration tests")
+  # The cases of ui/app that drive a real runtime: the program always builds, and its
+  # cases register when TELAR_GUI_TEST_RUNTIME names the runtime.
+  set(gui_runtime_tests NO_TEST)
+  if(TELAR_GUI_TEST_RUNTIME)
+    set(gui_runtime_tests ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}")
+  endif()
+  telar_add_tests(gui-ui-app-runtime-tests LABEL gui.ui.app DIRECTORY ../ui/app/tests/runtime QT MAIN gui-testing-main
+    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation
+    ${gui_runtime_tests} TIMEOUT 90)
+  set_target_properties(gui-ui-app-runtime-tests PROPERTIES AUTOMOC ON)
+  target_include_directories(gui-ui-app-runtime-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  target_compile_definitions(gui-ui-app-runtime-tests PRIVATE
+    TELAR_GUI_TEST_PYTHON="${Python3_EXECUTABLE}"
+    TELAR_GUI_SUGGESTION_FIXTURE="${TELAR_PROCESS_SOURCE_DIR}/ui/app/tests/runtime/suggestion_engine_fixture.py")
   if(TELAR_GUI_TEST_RUNTIME)
     get_filename_component(gui_test_runtime_directory "${TELAR_GUI_TEST_RUNTIME}" DIRECTORY)
     telar_add_test(gui-quick COMMAND gui-quick-test
       LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 90)
-    telar_add_test(gui-suggestion-controls COMMAND gui-suggestion-controls-test
-      LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 90)
   endif()
 endif()
 
