@@ -37,7 +37,7 @@ namespace telar::gui::qt {
   void PanesController::resizeDivider(int index, qreal x, qreal y, bool commit) {
     try {
       auto& session = store_.sessionMut();
-      auto* tab = session.activeTab();
+      auto* tab = session.activeTabMut();
       if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
         return;
       }
@@ -137,8 +137,9 @@ namespace telar::gui::qt {
 
     ++rebuilds_;
 
-    auto& session = store_.session();
-    auto* tab = session.activeTab();
+    // Arranging the layout fills its placements.
+    auto& session = store_.sessionMut();
+    auto* tab = session.activeTabMut();
     QList<QVariantMap> panes;
     QList<QVariantMap> dividers;
 

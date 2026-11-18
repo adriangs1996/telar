@@ -663,7 +663,7 @@ namespace {
     deliver(client, PaneOpened{.request_id = split.request_id, .pane_id = 2, .location = split.location, .created = true, .pane_generation = 1});
     constexpr std::uint16_t original_ratio = 3500;
 
-    client.activeTab()->layout.setSplitRatio({.node_index = 0, .ratio = original_ratio});
+    client.activeTabMut()->layout.setSplitRatio({.node_index = 0, .ratio = original_ratio});
 
     ClientCommand command;
 
@@ -677,7 +677,7 @@ namespace {
 
     check(preset.focused_pane == 2 && !preset.fullscreen, "export must capture the tab's focus and fullscreen state");
 
-    client.activeTab()->layout.setSplitRatio({.node_index = 0, .ratio = PaneLayout::ratio_half});
+    client.activeTabMut()->layout.setSplitRatio({.node_index = 0, .ratio = PaneLayout::ratio_half});
     application::workbench::focusPane(client, 1);
     application::workbench::toggleFullscreen(client);
     client.setSidebarVisible(false);

@@ -142,7 +142,7 @@ namespace telar::gui::qt {
     void loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path = {});
     void setWindow(QQuickWindow& window);
     bool eventFilter(QObject* watched, QEvent* event) override;
-    [[nodiscard]] application::Pane<Memory>* pane(std::uint64_t identity) const noexcept;
+    [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
     void soundPlaybackFinished(ds::Option<CommandFailure> failure);

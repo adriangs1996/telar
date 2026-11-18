@@ -465,7 +465,7 @@ namespace telar::runtime {
       return true;
     }
 
-    for (const auto& attachment : client.attachments) {
+    for (auto& attachment : client.attachments.viewMut()) {
       const auto* pane = model_.panes.find(attachment->pane_id);
       if (pane == nullptr || attachment->clipboard_revision == pane->terminal.effects.clipboard_revision) {
         continue;

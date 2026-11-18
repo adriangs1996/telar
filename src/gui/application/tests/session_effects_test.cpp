@@ -140,10 +140,10 @@ namespace {
     InputClient client{memory, transport, InputEffects{transport, observations}};
 
     openFirstPane(client, transport);
-    const auto* pane = client.focusedPane();
+    auto* pane = client.focusedPaneMut();
 
     check(pane != nullptr, "input observation requires the opened pane");
-    client.findPane(pane->id)->graphics.detach();
+    client.findPaneMut(pane->id)->graphics.detach();
     check(pane->graphics.revision() != 0, "input observation must exercise a nonzero graphics revision");
     client.input(pane->id, "a");
     client.input(pane->id, "b", application::PaneInputSource::mouse);
@@ -169,7 +169,7 @@ namespace {
     InputClient client{memory, transport, InputEffects{transport, observations}};
 
     openFirstPane(client, transport);
-    auto* pane = client.findPane(1);
+    auto* pane = client.findPaneMut(1);
 
     check(pane != nullptr, "input rejection requires the opened pane");
     client.input(pane->id, {});

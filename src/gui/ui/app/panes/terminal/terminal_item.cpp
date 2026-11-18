@@ -96,7 +96,7 @@ namespace telar::gui::qt {
     // At rest, with nothing drawn from them, the rows kept beyond the screen are given back.
     scroll_release_.setSingleShot(true);
     connect(&scroll_release_, &QTimer::timeout, this, [this] {
-      if (auto* current = pane(); current != nullptr && !motion_.moving() && shift_ == 0 && current->folds.empty()) {
+      if (auto* current = controller_ == nullptr ? nullptr : controller_->session().findPaneMut(pane_id_); current != nullptr && !motion_.moving() && shift_ == 0 && current->folds.empty()) {
         current->rows.release();
       }
     });
@@ -256,7 +256,7 @@ namespace telar::gui::qt {
     emit paneIdChanged();
   }
 
-  application::Pane<Memory>* TerminalItem::pane() const noexcept {
+  const application::Pane<Memory>* TerminalItem::pane() const noexcept {
     return controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
   }
 

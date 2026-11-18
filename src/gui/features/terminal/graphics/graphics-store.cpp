@@ -372,7 +372,7 @@ namespace telar::gui::features::terminal::graphics {
 
   template <Allocator Memory>
   void GraphicsStore<Memory>::retireOtherGenerations(ImageKey current) noexcept {
-    for (auto& image : images_) {
+    for (auto& image : images_.viewMut()) {
       const auto key = image->description().key;
       if (key.image_id == current.image_id && key.generation != current.generation) {
         image->retire();

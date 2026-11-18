@@ -21,7 +21,7 @@ import telar.base.ds;
 namespace telar::gui::application {
 
   void Session::input(std::uint64_t pane_id, std::string_view bytes, PaneInputSource source) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || !pane->attached || pane->exited || bytes.empty()) {
       return;
     }
@@ -53,7 +53,7 @@ namespace telar::gui::application {
   }
 
   void Session::runCommand(std::uint64_t pane_id, std::string_view text) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || !pane->attached || pane->exited || text.empty()) {
       return;
     }
@@ -89,7 +89,7 @@ namespace telar::gui::application {
   }
 
   void Session::requestRows(std::uint64_t pane_id, std::uint64_t first, std::uint64_t last) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || !pane->attached || !readsRows() || pane->scrollback_generation == 0 || last < first) {
       return;
     }
@@ -120,13 +120,13 @@ namespace telar::gui::application {
   }
 
   std::uint64_t Session::takeDroppedRows(std::uint64_t pane_id) noexcept {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
 
     return pane == nullptr ? 0 : std::exchange(pane->scrollback_dropped, 0);
   }
 
   void Session::resize(std::uint64_t pane_id, TerminalSize size) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || pane->size == size) {
       return;
     }
@@ -140,7 +140,7 @@ namespace telar::gui::application {
   }
 
   void Session::presented(std::uint64_t pane_id, std::uint64_t frame_id) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (ready_ && pane != nullptr && pane->attached && frame_id > pane->acknowledged_frame && frame_id <= pane->screen.frameId()) {
       send(FrameAck{.pane_id = pane_id, .frame_id = frame_id});
       pane->acknowledged_frame = frame_id;
@@ -148,7 +148,7 @@ namespace telar::gui::application {
   }
 
   void Session::scroll(PaneScrollDelta delta) {
-    auto* pane = findPane(delta.pane_id);
+    auto* pane = findPaneMut(delta.pane_id);
     if (pane == nullptr || !pane->attached || features::terminal::copy_mode::view(copy_mode_).active()) {
       return;
     }
@@ -170,7 +170,7 @@ namespace telar::gui::application {
   }
 
   bool Session::measureInline(std::uint64_t pane_id, std::uint64_t id, std::uint32_t rows) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr) {
       return false;
     }
@@ -189,7 +189,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneFrame& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr || !pane->attached) {
       return Change::none;
     }
@@ -228,7 +228,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneTitle& message) {
-    if (auto* pane = findPane(message.pane_id)) {
+    if (auto* pane = findPaneMut(message.pane_id)) {
       pane->title.assign(message.title);
       ++chrome_revision_;
     }
@@ -237,7 +237,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneCwd& message) {
-    if (auto* pane = findPane(message.pane_id)) {
+    if (auto* pane = findPaneMut(message.pane_id)) {
       pane->cwd.assign(message.cwd);
       ++chrome_revision_;
     }
@@ -246,11 +246,11 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneForeground& message) {
-    if (auto* pane = findPane(message.pane_id)) {
+    if (auto* pane = findPaneMut(message.pane_id)) {
       pane->foreground.assign(message.name);
     }
 
-    for (const auto& tab : tabs_) {
+    for (auto& tab : tabs_.viewMut()) {
       tab->observeForeground(message);
     }
 
@@ -266,7 +266,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneProgress& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr || (pane->progress_state == message.state && pane->progress_percent == message.percent)) {
       return Change::none;
     }
@@ -279,7 +279,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneGit& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr || pane->git == message) {
       return Change::none;
     }
@@ -293,7 +293,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneShell& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr || pane->shell == message) {
       return Change::none;
     }
@@ -317,7 +317,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneDocument& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr) {
       return Change::none;
     }
@@ -406,7 +406,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneScrollback& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr) {
       return Change::none;
     }
@@ -454,7 +454,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneRows& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr) {
       return Change::none;
     }

@@ -41,7 +41,8 @@ namespace telar::gui::qt {
     PathPickerController& operator=(PathPickerController&&) = delete;
 
     [[nodiscard]] QVariantMap state() const;
-    [[nodiscard]] QVariantMap geometry() const;
+    // Not const: arranging the layout fills its placements.
+    [[nodiscard]] QVariantMap geometry();
     // The paths from `first` on, at most `count`, cut to `columns` cells, for the prompt line's rows.
     Q_INVOKABLE QVariantList rows(int columns, int first, int count) const;
     Q_INVOKABLE void search(const QString& text);
@@ -68,7 +69,7 @@ namespace telar::gui::qt {
 
   private:
     [[nodiscard]] bool isOpen() const noexcept;
-    [[nodiscard]] application::paths::PathPickerPlacement placement() const;
+    [[nodiscard]] application::paths::PathPickerPlacement placement();
 
     // Runs a user's mutation of the session and commits it to the store.
     template <std::invocable Mutation>

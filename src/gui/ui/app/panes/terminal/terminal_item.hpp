@@ -378,7 +378,7 @@ namespace telar::gui::qt {
     void appendDrawnRow(std::size_t index) const;
     [[nodiscard]] int indexAt(QPointF position) const noexcept;
     [[nodiscard]] application::terminal::copy_mode::CopyPointerInput pointerInput(QPointF position, application::terminal::copy_mode::CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
-    [[nodiscard]] application::Pane<Memory>* pane() const noexcept;
+    [[nodiscard]] const application::Pane<Memory>* pane() const noexcept;
     // The first command of the remote session the pane is in, counting the ssh that opened it;
     // past the last command when the pane's shell is its own. Its separators name the host.
     [[nodiscard]] static std::size_t liveSession(const application::Pane<Memory>& pane) noexcept;

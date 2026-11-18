@@ -59,7 +59,7 @@ namespace telar::gui::qt {
       return store_.sessionMut();
     }
 
-    [[nodiscard]] application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept {
+    [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept {
       return store_.session().findPane(pane_id);
     }
 

@@ -245,7 +245,7 @@ namespace telar::gui::application::terminal::copy_mode {
       return nullptr;
     }
 
-    auto* found = session.findPane(copy->pane_id);
+    auto* found = session.findPaneMut(copy->pane_id);
     if (found == nullptr || !found->attached) {
       feature::close(state);
 

@@ -72,7 +72,7 @@ export namespace telar::gui::features::workbench {
   [[nodiscard]] bool place(State& state, WorkbenchGeometry geometry) noexcept;
 
   // The attachment shelf reserves `reservation` at the bottom of every tab in `tabs`.
-  [[nodiscard]] Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, Tabs tabs) noexcept;
+  [[nodiscard]] Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, std::span<Owned<Tab<Memory>, Memory>> tabs) noexcept;
 
   // The panes on screen took the sizes the reservation leaves them.
   void resized(State& state) noexcept;
@@ -104,7 +104,10 @@ export namespace telar::gui::features::workbench {
 
   // The tab at `location`, if the session holds it. The session's own lookup, which ui makes
   // every frame for the active tab.
-  [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline const Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
+
+  // The same tab, to change it.
+  [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* findMut(std::span<Owned<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept;
 
   // The tab at `index` in the order the workspace of `active` shows its tabs.
   [[nodiscard]] ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept;
@@ -199,7 +202,15 @@ namespace telar::gui::features::workbench {
     return Access::geometry(state);
   }
 
-  inline Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept {
+  inline const Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept {
+    const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
+      return sameTab(tab->location, location);
+    });
+
+    return found == tabs.end() ? nullptr : found->get();
+  }
+
+  inline Tab<Memory>* findMut(std::span<Owned<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept {
     const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
       return sameTab(tab->location, location);
     });

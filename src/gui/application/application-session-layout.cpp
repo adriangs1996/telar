@@ -101,7 +101,7 @@ namespace telar::gui::application {
       throw EncodingError{"UnexpectedPaneSplit"};
     }
 
-    auto* tab = findTab(request.location);
+    auto* tab = findTabMut(request.location);
     if (tab == nullptr) {
       if (findPane(message.pane_id) == nullptr) {
         send(DetachPane{message.pane_id});
@@ -173,12 +173,16 @@ namespace telar::gui::application {
     values.reserve(std::max(values.size() + 1, grown));
   }
 
-  Tab<Memory>* Session::findTab(TabLocation location) const noexcept {
-    return features::workbench::find(tabs_, location);
+  const Tab<Memory>* Session::findTab(TabLocation location) const noexcept {
+    return features::workbench::find(tabs_.view(), location);
+  }
+
+  Tab<Memory>* Session::findTabMut(TabLocation location) noexcept {
+    return features::workbench::findMut(tabs_.viewMut(), location);
   }
 
   Tab<Memory>& Session::ensureTab(TabLocation location) {
-    if (auto* tab = findTab(location)) {
+    if (auto* tab = findTabMut(location)) {
       return *tab;
     }
 
@@ -187,14 +191,14 @@ namespace telar::gui::application {
     }
 
     tabs_.push(makeOwned<Tab<Memory>>(memory_, memory_, location));
-    features::workbench::furnish(workbench_, *tabs_.back());
+    features::workbench::furnish(workbench_, *tabs_.backMut());
     ++view_version_.tabs;
 
     return *tabs_.back();
   }
 
   Pane<Memory>& Session::ensurePane(std::uint64_t pane_id, TabLocation location) {
-    if (auto* pane = findPane(pane_id)) {
+    if (auto* pane = findPaneMut(pane_id)) {
       return *pane;
     }
 
@@ -203,7 +207,7 @@ namespace telar::gui::application {
     }
 
     panes_.push(makeOwned<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics_)));
-    panes_.back()->location = location;
+    panes_.backMut()->location = location;
     ++view_version_.panes;
 
     return *panes_.back();
@@ -259,7 +263,7 @@ namespace telar::gui::application {
 
     try {
       workbench::retainLayout(*this);
-      for (auto& pane : panes_) {
+      for (auto& pane : panes_.viewMut()) {
         if (pane->attached || pane->attaching) {
           prepareDetach(pane->id);
           send(DetachPane{pane->id});
@@ -381,7 +385,7 @@ namespace telar::gui::application {
     activity::acknowledge(*this);
     const auto* active = activeTab();
 
-    for (auto& pane : panes_) {
+    for (auto& pane : panes_.viewMut()) {
       const auto visible = active != nullptr && active->layout.contains(pane->id) && (!active->fullscreen || pane->id == active->focused_pane);
       if (visible && !pane->attached && !pane->attaching && !pane->exited) {
         pane->attaching = true;
@@ -528,7 +532,7 @@ namespace telar::gui::application {
     if (discovered) {
       tabs_.atMut(cached_index) = std::move(tab);
     } else {
-      for (auto& existing : tabs_) {
+      for (auto& existing : tabs_.viewMut()) {
         if (sameWorkspace(existing->location.workspace, message.location.workspace) && existing->position >= message.position) {
           ++existing->position;
         }
@@ -697,7 +701,7 @@ namespace telar::gui::application {
 
     discardTab(message.location);
     if (closing_known) {
-      for (auto& tab : tabs_) {
+      for (auto& tab : tabs_.viewMut()) {
         if (sameWorkspace(tab->location.workspace, message.location.workspace) && tab->position > position) {
           --tab->position;
         }
@@ -766,12 +770,12 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneExited& message) {
-    if (auto* pane = findPane(message.pane_id)) {
+    if (auto* pane = findPaneMut(message.pane_id)) {
       pane->exited = true;
       ++view_version_.panes;
     }
 
-    for (auto& tab : tabs_) {
+    for (auto& tab : tabs_.viewMut()) {
       tab->layout.remove(message.pane_id);
       if (tab->focused_pane == message.pane_id) {
         tab->focused_pane = tab->layout.firstPane();
@@ -817,7 +821,7 @@ namespace telar::gui::application {
       throw EncodingError{"UnexpectedTabRenamed"};
     }
 
-    if (auto* tab = findTab(message.location)) {
+    if (auto* tab = findTabMut(message.location)) {
       if (tab->label != message.label) {
         ++view_version_.tabs;
       }
@@ -834,7 +838,7 @@ namespace telar::gui::application {
       throw EncodingError{"UnexpectedTabMoved"};
     }
 
-    if (auto* tab = findTab(message.location)) {
+    if (auto* tab = findTabMut(message.location)) {
       const auto count = std::ranges::count_if(tabs_, [&](const auto& entry) {
         return sameWorkspace(entry->location.workspace, message.location.workspace);
       });
@@ -844,7 +848,7 @@ namespace telar::gui::application {
 
       const auto previous = tab->position;
 
-      for (auto& entry : tabs_) {
+      for (auto& entry : tabs_.viewMut()) {
         if (!sameWorkspace(entry->location.workspace, message.location.workspace) || entry.get() == tab) {
           continue;
         }

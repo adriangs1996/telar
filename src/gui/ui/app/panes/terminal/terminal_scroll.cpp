@@ -173,7 +173,7 @@ namespace telar::gui::qt {
       motion_.stop();
       expected_offset_.reset();
       view_rows_.clear();
-      controller_->session().findPane(pane_id_)->shown_top.reset();
+      controller_->session().findPaneMut(pane_id_)->shown_top.reset();
       top_row_ = current->screen.scroll().offset;
       if (std::exchange(shift_, 0) != 0) {
         emit scrollChanged();
@@ -489,7 +489,7 @@ namespace telar::gui::qt {
     top_row_ = top;
     placeFoldMotion();
     // The session moves the view from where it is drawn, not from the runtime's view.
-    controller_->session().findPane(pane_id_)->shown_top = top;
+    controller_->session().findPaneMut(pane_id_)->shown_top = top;
     if (shift != shift_) {
       shift_ = shift;
       emit scrollChanged();

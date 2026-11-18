@@ -28,7 +28,7 @@ namespace telar::gui::application {
   }
 
   void Session::fold(std::uint64_t pane_id, std::size_t index, bool fold) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || index >= pane->blocks.size() || (fold && !readsRows())) {
       return;
     }
@@ -50,7 +50,7 @@ namespace telar::gui::application {
   }
 
   void Session::foldAll(std::uint64_t pane_id, bool fold) {
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || (fold && !readsRows())) {
       return;
     }
@@ -119,7 +119,7 @@ namespace telar::gui::application {
   }
 
   bool Session::enterBlocks() {
-    const auto* pane = focusedPane();
+    auto* pane = focusedPaneMut();
     if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar || pane->blocks.empty() || prompt::surface(*this, pane->id) != features::prompt::Surface::editor || selectedBlock(pane->id)) {
       return false;
     }
@@ -170,7 +170,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneBlocks& message) {
-    auto* pane = findPane(message.pane_id);
+    auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr) {
       return Change::none;
     }
@@ -218,7 +218,7 @@ namespace telar::gui::application {
 
   ds::Option<features::prompt::Outcome> Session::blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
     using features::prompt::Outcome;
-    auto* pane = findPane(pane_id);
+    auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar) {
       return ds::none;
     }

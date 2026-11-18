@@ -45,14 +45,14 @@ namespace telar::gui::features::workbench {
     return true;
   }
 
-  Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, Tabs tabs) noexcept {
+  Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, std::span<Owned<Tab<Memory>, Memory>> tabs) noexcept {
     auto& current = Access::reservation(state);
     const auto changed = current != reservation;
 
     if (changed) {
       current = reservation;
       Access::resizePending(state) = true;
-      for (const auto& tab : tabs) {
+      for (auto& tab : tabs) {
         tab->layout.setBottomReservation(reservation);
       }
     }

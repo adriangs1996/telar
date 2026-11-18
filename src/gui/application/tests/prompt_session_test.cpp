@@ -755,10 +755,10 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     // A view that draws its own rows says where its top is; the keys move from there.
     constexpr std::uint64_t shown = 20;
 
-    client.findPane(1)->shown_top = shown;
+    client.findPaneMut(1)->shown_top = shown;
     press('j');
     check(top() == shown + 1, "j moves from the top the view shows, not the runtime's view");
-    client.findPane(1)->shown_top.reset();
+    client.findPaneMut(1)->shown_top.reset();
 
     press('G');
     check(!client.selectedBlock(1) && top() == 99, "G goes back to the live end");

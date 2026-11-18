@@ -9109,7 +9109,7 @@ return {api_version=2, client={keybindings={
       return nullptr;
     }
 
-    [[nodiscard]] application::Pane<telar::Memory>* firstPane() const {
+    [[nodiscard]] const application::Pane<telar::Memory>* firstPane() const {
       if (client_->panes()->rows()->rowCount() == 0) {
         return nullptr;
       }

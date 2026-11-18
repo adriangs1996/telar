@@ -167,7 +167,7 @@ namespace telar::gui::application {
 
     if (ready_) {
       workbench::retainLayout(*this);
-      for (auto& pane : panes_) {
+      for (auto& pane : panes_.viewMut()) {
         if (pane->attached || pane->attaching) {
           prepareDetach(pane->id);
           send(DetachPane{pane->id});
@@ -202,7 +202,7 @@ namespace telar::gui::application {
     pending_count_ = 0;
     features::terminal::links::suspend(links_);
     features::prompt::failAll(prompt_);
-    for (auto& pane : panes_) {
+    for (auto& pane : panes_.viewMut()) {
       pane->attached = false;
       pane->attaching = false;
       pane->snapshot_requested = false;
@@ -213,7 +213,7 @@ namespace telar::gui::application {
       pane->scrollback_generation = 0;
     }
 
-    for (auto& tab : tabs_) {
+    for (auto& tab : tabs_.viewMut()) {
       tab->loading = false;
     }
   }
@@ -342,7 +342,7 @@ namespace telar::gui::application {
     }
   }
 
-  Pane<Memory>* Session::findPane(std::uint64_t pane_id) const noexcept {
+  const Pane<Memory>* Session::findPane(std::uint64_t pane_id) const noexcept {
     const auto found = std::find_if(panes_.begin(), panes_.end(), [&](const auto& pane) {
       return pane->id == pane_id;
     });
@@ -350,14 +350,33 @@ namespace telar::gui::application {
     return found == panes_.end() ? nullptr : found->get();
   }
 
-  Tab<Memory>* Session::activeTab() const noexcept {
+  Pane<Memory>* Session::findPaneMut(std::uint64_t pane_id) noexcept {
+    const auto panes = panes_.viewMut();
+    const auto found = std::find_if(panes.begin(), panes.end(), [&](const auto& pane) {
+      return pane->id == pane_id;
+    });
+
+    return found == panes.end() ? nullptr : found->get();
+  }
+
+  const Tab<Memory>* Session::activeTab() const noexcept {
     return active_tab_ ? findTab(*active_tab_) : nullptr;
   }
 
-  Pane<Memory>* Session::focusedPane() const noexcept {
+  Tab<Memory>* Session::activeTabMut() noexcept {
+    return active_tab_ ? findTabMut(*active_tab_) : nullptr;
+  }
+
+  const Pane<Memory>* Session::focusedPane() const noexcept {
     const auto* tab = activeTab();
 
     return tab == nullptr ? nullptr : findPane(tab->focused_pane);
+  }
+
+  Pane<Memory>* Session::focusedPaneMut() noexcept {
+    const auto* tab = activeTab();
+
+    return tab == nullptr ? nullptr : findPaneMut(tab->focused_pane);
   }
 
   const ds::Vec<Owned<Tab<Memory>, Memory>, Memory>& Session::tabs() const noexcept {
@@ -582,11 +601,11 @@ namespace telar::gui::application {
       }
 
       if (request->kind == RequestKind::attach) {
-        if (auto* pane = findPane(request->pane_id)) {
+        if (auto* pane = findPaneMut(request->pane_id)) {
           pane->attaching = false;
         }
       } else if (request->kind == RequestKind::tab_snapshot) {
-        if (auto* tab = findTab(request->location)) {
+        if (auto* tab = findTabMut(request->location)) {
           tab->loading = false;
         }
       } else if (request->kind == RequestKind::split) {
@@ -607,7 +626,7 @@ namespace telar::gui::application {
 
     if (request && request->kind == RequestKind::close_pane) {
       ++view_version_.panes;
-      for (auto& tab : tabs_) {
+      for (auto& tab : tabs_.viewMut()) {
         tab->layout.remove(request->pane_id);
         if (tab->focused_pane == request->pane_id) {
           tab->focused_pane = tab->layout.firstPane();

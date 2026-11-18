@@ -70,7 +70,7 @@ namespace telar::gui::application::terminal::graphics {
 
     template <typename Message, typename Source = std::nullptr_t>
     Change apply(Session& session, const Message& message, Source source = nullptr) {
-      auto* pane = session.findPane(message.header.pane_id);
+      auto* pane = session.findPaneMut(message.header.pane_id);
       if (pane == nullptr || !pane->attached) {
         return Change::none;
       }

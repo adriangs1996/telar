@@ -172,6 +172,11 @@ namespace telar::gui::application {
       return session.workbench_;
     }
 
+    // The tabs, to change them.
+    [[nodiscard]] static std::span<Owned<Tab<Memory>, Memory>> tabsMut(Session& session) noexcept {
+      return session.tabs_.viewMut();
+    }
+
     [[nodiscard]] static constexpr const features::workbench::State& workbench(const Session& session) noexcept {
       return session.workbench_;
     }

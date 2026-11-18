@@ -346,7 +346,7 @@ export {
       }
 
       inline void stop() noexcept {
-        for (auto& slot : slots_) {
+        for (auto& slot : slots_.viewMut()) {
           if (slot) {
             slot->index.stop();
           }
@@ -418,7 +418,7 @@ export {
       }
 
       inline void cancel(std::uint64_t client) noexcept {
-        for (auto& slot : slots_) {
+        for (auto& slot : slots_.viewMut()) {
           if (!slot || slot->client != client) {
             continue;
           }

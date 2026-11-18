@@ -504,7 +504,7 @@ namespace telar::gui::qt {
     display_.publish();
   }
 
-  application::Pane<Memory>* ApplicationController::pane(std::uint64_t identity) const noexcept {
+  const application::Pane<Memory>* ApplicationController::pane(std::uint64_t identity) const noexcept {
     return session().findPane(identity);
   }
 

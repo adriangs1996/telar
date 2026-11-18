@@ -125,12 +125,12 @@ namespace telar::gui::qt {
     return rows;
   }
 
-  application::paths::PathPickerPlacement PathPickerController::placement() const {
+  application::paths::PathPickerPlacement PathPickerController::placement() {
     // Arranging the layout caches its placements, so the session is read through its mutable side.
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     const auto& workbench = application::workbench::geometry(session);
     const auto host = workbench.cellArea();
-    auto* tab = session.activeTab();
+    auto* tab = session.activeTabMut();
     ds::Option<CellPosition> cursor;
 
     if (tab != nullptr) {
@@ -154,7 +154,7 @@ namespace telar::gui::qt {
     return application::paths::PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(application::paths::page(session).matches().size()));
   }
 
-  QVariantMap PathPickerController::geometry() const {
+  QVariantMap PathPickerController::geometry() {
     const auto& display = display_;
     const auto density = display.density;
     const auto& workbench = application::workbench::geometry(store_.session());

@@ -2611,7 +2611,7 @@ namespace telar::runtime {
     auto& client = requireClient(clients_, identity);
 
     client.shared_graphics = message.shared;
-    for (auto& attachment : client.attachments) {
+    for (auto& attachment : client.attachments.viewMut()) {
       attachment->graphics.configure(message.shared);
     }
   }

@@ -199,11 +199,18 @@ export {
 
       void scroll(PaneScrollDelta delta);
 
-      [[nodiscard]] Pane<Memory>* findPane(std::uint64_t pane_id) const noexcept;
+      [[nodiscard]] const Pane<Memory>* findPane(std::uint64_t pane_id) const noexcept;
 
-      [[nodiscard]] Tab<Memory>* activeTab() const noexcept;
+      // The same pane, to change it.
+      [[nodiscard]] Pane<Memory>* findPaneMut(std::uint64_t pane_id) noexcept;
 
-      [[nodiscard]] Pane<Memory>* focusedPane() const noexcept;
+      [[nodiscard]] const Tab<Memory>* activeTab() const noexcept;
+
+      [[nodiscard]] Tab<Memory>* activeTabMut() noexcept;
+
+      [[nodiscard]] const Pane<Memory>* focusedPane() const noexcept;
+
+      [[nodiscard]] Pane<Memory>* focusedPaneMut() noexcept;
 
       [[nodiscard]] const ds::Vec<Owned<Tab<Memory>, Memory>, Memory>& tabs() const noexcept;
 
@@ -337,7 +344,9 @@ export {
 
       ds::Option<Pending> complete(std::uint64_t request_id) noexcept;
 
-      [[nodiscard]] Tab<Memory>* findTab(TabLocation location) const noexcept;
+      [[nodiscard]] const Tab<Memory>* findTab(TabLocation location) const noexcept;
+
+      [[nodiscard]] Tab<Memory>* findTabMut(TabLocation location) noexcept;
 
       Tab<Memory>& ensureTab(TabLocation location);
 

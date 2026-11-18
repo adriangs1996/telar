@@ -173,7 +173,7 @@ namespace {
 
       fixture.open();
       const auto request_id = fixture.transport.last<OpenEditor>().request_id;
-      auto* pane = fixture.client.findPane(1);
+      auto* pane = fixture.client.findPaneMut(1);
 
       switch (mutation) {
       case Mutation::generation:
@@ -248,7 +248,7 @@ namespace {
   void directLaunches() {
     Fixture fixture;
 
-    fixture.client.findPane(1)->generation = 0;
+    fixture.client.findPaneMut(1)->generation = 0;
     fixture.open("~/src/a.cpp:12", true);
     check(fixture.transport.count(ClientTag::open_editor) == 0, "a source without a runtime generation must launch directly");
     const auto split = fixture.transport.last<CreatePane>();

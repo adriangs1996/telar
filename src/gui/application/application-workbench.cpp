@@ -33,7 +33,7 @@ namespace telar::gui::application::workbench {
     }
 
     bool requestSplit(Session& session, std::uint64_t pane_id, ClientLayoutAxis axis, Launch launch) {
-      auto* tab = session.activeTab();
+      auto* tab = session.activeTabMut();
       const auto* pane = session.findPane(pane_id);
       if (paneOperationPending(session) || tab == nullptr || pane == nullptr || !pane->attached || pane->exited || !sameTab(pane->location, tab->location)) {
         return false;
@@ -129,14 +129,14 @@ namespace telar::gui::application::workbench {
 
   void reserveBottom(Session& session, ds::Option<PaneBottomReservation> reservation) {
     auto& state = Access::workbench(session);
-    const auto reserved = feature::reserve(state, reservation, session.tabs());
+    const auto reserved = feature::reserve(state, reservation, Access::tabsMut(session));
 
     if (reserved.changed) {
       ++Access::viewVersion(session).viewport;
     }
 
     if (reserved.resize) {
-      if (auto* tab = session.activeTab()) {
+      if (auto* tab = session.activeTabMut()) {
         resizeVisible(session, *tab);
       }
 
@@ -246,7 +246,7 @@ namespace telar::gui::application::workbench {
   // ---- panes --------------------------------------------------------------------------------
 
   void focusPane(Session& session, std::uint64_t pane_id) {
-    auto* pane = session.findPane(pane_id);
+    auto* pane = session.findPaneMut(pane_id);
     if (pane == nullptr) {
       const auto& agents = session.agents();
       const auto agent = std::find_if(agents.begin(), agents.end(), [&](const auto& entry) {
@@ -305,7 +305,7 @@ namespace telar::gui::application::workbench {
   }
 
   bool resizeToward(Session& session, PaneDirection direction) {
-    auto* tab = session.activeTab();
+    auto* tab = session.activeTabMut();
     if (tab == nullptr || !feature::resize(Access::workbench(session), *tab, direction)) {
       return false;
     }
@@ -336,7 +336,7 @@ namespace telar::gui::application::workbench {
   }
 
   void toggleFullscreen(Session& session) {
-    if (auto* tab = session.activeTab()) {
+    if (auto* tab = session.activeTabMut()) {
       ++Access::viewVersion(session).panes;
       tab->fullscreen = !tab->fullscreen;
       Access::synchronizeAttachments(session);
@@ -525,7 +525,7 @@ namespace telar::gui::application::workbench {
   }
 
   void recoverSplit(Session& session, TabLocation location, std::uint64_t pane_id) {
-    auto* tab = session.activeTab();
+    auto* tab = session.activeTabMut();
     const auto* pane = session.findPane(pane_id);
     if (tab == nullptr || pane == nullptr || !pane->attached || !sameTab(tab->location, location) || !sameTab(pane->location, location)) {
       return;
@@ -539,7 +539,7 @@ namespace telar::gui::application::workbench {
   }
 
   std::uint64_t neighbor(Session& session, PaneDirection direction) {
-    auto* tab = session.activeTab();
+    auto* tab = session.activeTabMut();
     if (tab == nullptr) {
       return 0;
     }
@@ -548,7 +548,7 @@ namespace telar::gui::application::workbench {
   }
 
   std::string_view exportLayout(Session& session) {
-    const auto* tab = session.activeTab();
+    auto* tab = session.activeTabMut();
     if (tab == nullptr || tab->focused_pane == 0) {
       throw EncodingError{"No active tab layout"};
     }
@@ -575,7 +575,7 @@ namespace telar::gui::application::workbench {
   }
 
   void importLayout(Session& session, std::string_view token) {
-    auto* tab = session.activeTab();
+    auto* tab = session.activeTabMut();
     if (session.requestsPending() || (tab != nullptr && tab->loading)) {
       throw EncodingError{"Client has requests in flight"};
     }
