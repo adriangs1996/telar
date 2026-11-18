@@ -36,8 +36,6 @@ if(TELAR_GUI_NATIVE)
 
   set(CMAKE_AUTOMOC ON)
   set(CMAKE_AUTOUIC ON)
-  telar_add_test(gui-surface-command-test SOURCES surface_command_test.cpp LIBRARIES gui-surface-command
-    TEST gui-surface-command LABELS gui.ui TIMEOUT 30)
   if(APPLE)
     telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-platform gui-application
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
@@ -104,8 +102,9 @@ if(TELAR_GUI_NATIVE)
     BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes"
     FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes/cases.json"
           "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes/rounded-rectangles.png")
+  # surface_command drives gui-surface-command, whose telar-gui-command lands beside the program.
   telar_add_tests(gui-ui-app-tests LABEL gui.ui.app DIRECTORY ../ui/app RECURSE QT MAIN gui-testing-main
-    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation TIMEOUT 30)
+    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation gui-test-fixtures gui-surface-command TIMEOUT 30)
   set_target_properties(gui-ui-app-tests PROPERTIES AUTOMOC ON)
   target_include_directories(gui-ui-app-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   # native_pointer_events observes Qt's private window system interface, and on macOS
@@ -132,9 +131,6 @@ if(TELAR_GUI_NATIVE)
     TEST gui-remote-connection LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-remote-connection-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   add_dependencies(gui-remote-connection-test gui-ssh-runtime-fixture)
-  telar_add_test(gui-local-runtime-endpoint-test QT SOURCES local_runtime_endpoint_test.cpp LIBRARIES gui-foundation-system gui-posix Qt6::Network Qt6::Test gui-platform
-    TEST gui-local-runtime-endpoint LABELS gui.ui TIMEOUT 30)
-  target_include_directories(gui-local-runtime-endpoint-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-remote-bridge-test QT SOURCES remote_bridge_test.cpp LIBRARIES gui-foundation-system gui-posix Qt6::Concurrent Qt6::Network Qt6::Test gui-platform gui-features-machines gui-application
     TEST gui-remote-bridge LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-remote-bridge-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
@@ -211,8 +207,6 @@ if(TELAR_GUI_NATIVE)
     TEST gui-agent-card LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-task-card-test QT SOURCES task_card_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-task-card LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-window-test QT SOURCES window_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
-    TEST gui-window LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-configuration-source-test QT SOURCES configuration_source_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-configuration-source LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-configuration-reload-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/configuration_reload_probe.cpp LIBRARIES gui-quick gui-quickplugin
@@ -224,8 +218,6 @@ if(TELAR_GUI_NATIVE)
   target_include_directories(gui-plugin-worker-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-pick-controller-test SOURCES pick_controller_test.cpp LIBRARIES gui-features-machines gui-features-components gui-surface-command gui-application
     TEST gui-pick-controller LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-host-effects-test QT SOURCES host_effects_test.cpp LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-text gui-features-history gui-platform gui-application deps::ghostty_vt Qt6::Core Qt6::Gui Qt6::Test gui-test-fixtures
-    TEST gui-host-effects LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-scene-test QT SOURCES scene_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-scene LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 60)
   telar_add_test(gui-history-controls-test QT SOURCES history_controls_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation

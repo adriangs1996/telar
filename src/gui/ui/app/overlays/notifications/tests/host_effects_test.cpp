@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "foundation/core/memory.hpp"
+#include "qt_case.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
@@ -291,13 +292,20 @@ namespace {
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QCoreApplication application{argc, argv};
-  HostEffectsTest test;
+  const QtCase<HostEffectsTest, "successfulAudioStopsAtTheFirstAvailableBackend"> case_successful_audio_stops_at_the_first_available_backend{"host_effects.successful_audio_stops_at_the_first_available_backend"};
+  const QtCase<HostEffectsTest, "failedBackendsRetainTheSemanticSoundAndStopAfterSuccess"> case_failed_backends_retain_the_semantic_sound_and_stop_after_success{"host_effects.failed_backends_retain_the_semantic_sound_and_stop_after_success"};
+  const QtCase<HostEffectsTest, "exhaustingAllBackendsCompletesOnceAndPermitsTheNextSound"> case_exhausting_all_backends_completes_once_and_permits_the_next_sound{"host_effects.exhausting_all_backends_completes_once_and_permits_the_next_sound"};
+  const QtCase<HostEffectsTest, "launchTimeoutAndOutputFailuresAlsoFallBack"> case_launch_timeout_and_output_failures_also_fall_back{"host_effects.launch_timeout_and_output_failures_also_fall_back"};
+  const QtCase<HostEffectsTest, "aSecondStartCannotReplaceTheActiveAttempt"> case_a_second_start_cannot_replace_the_active_attempt{"host_effects.a_second_start_cannot_replace_the_active_attempt"};
+  const QtCase<HostEffectsTest, "teardownCancelsDeferredAudioWithoutCallingTheHost"> case_teardown_cancels_deferred_audio_without_calling_the_host{"host_effects.teardown_cancels_deferred_audio_without_calling_the_host"};
+  const QtCase<HostEffectsTest, "completionMayDestroyThePlayer"> case_completion_may_destroy_the_player{"host_effects.completion_may_destroy_the_player"};
+  const QtCase<HostEffectsTest, "noticesOwnDeferredPayloadAndReuseCompletedCapacity"> case_notices_own_deferred_payload_and_reuse_completed_capacity{"host_effects.notices_own_deferred_payload_and_reuse_completed_capacity"};
+  const QtCase<HostEffectsTest, "desktopSaturationDropsNewWorkWithoutReplacingRetainedNotices"> case_desktop_saturation_drops_new_work_without_replacing_retained_notices{"host_effects.desktop_saturation_drops_new_work_without_replacing_retained_notices"};
+  const QtCase<HostEffectsTest, "desktopFailuresAreNotRetriedAndReleaseTheirSlot"> case_desktop_failures_are_not_retried_and_release_their_slot{"host_effects.desktop_failures_are_not_retried_and_release_their_slot"};
+  const QtCase<HostEffectsTest, "desktopAdmissionUsesTheInjectedAllocatorAndReusesItsStorage"> case_desktop_admission_uses_the_injected_allocator_and_reuses_its_storage{"host_effects.desktop_admission_uses_the_injected_allocator_and_reuses_its_storage"};
 
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "host_effects_test.moc"
