@@ -50,6 +50,11 @@ namespace {
       ProtocolPeer peer{socket};
 
       waitProvider(peer, pane, AgentProvider::codex);
+      if (workload == "exit") {
+        std::ofstream{result} << "seen";
+        return 0;
+      }
+
       if (workload == "titled" && std::filesystem::exists(argument)) {
         std::ofstream{result} << "idle";
         for (;;) {
@@ -337,11 +342,38 @@ namespace {
     }
   }
 
+  void testShellForegroundRemovesAgent() {
+    RuntimeHost host;
+    ProtocolPeer control{host.socket()};
+    const auto codex = agentExecutable(host, "codex");
+    const auto result = host.directory() + "/agent-exit";
+    const auto command = "'" + codex + "' --wire-agent '" + host.socket() + "' '" + result + "' exit -\r";
+    const std::array<std::string_view, 2> shell{"/bin/sh", "-i"};
+    const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = shell}});
+
+    // The user's shell runs the agent, which exits back to the shell's prompt.
+    control.send(PaneInput{opened.pane_id, {reinterpret_cast<const Byte*>(command.data()), command.size()}});
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+
+    while (readFile(result) != "seen") {
+      check(std::chrono::steady_clock::now() < deadline, "the agent never ran");
+      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+
+    for (std::uint64_t request = 10; agentOf(control.exchange<AgentSnapshot>(QueryAgents{request}), opened.pane_id) != nullptr; ++request) {
+      check(std::chrono::steady_clock::now() < deadline, "the agent outlived its process");
+      // Output makes the runtime look at the pane's process again.
+      control.send(PaneInput{opened.pane_id, {reinterpret_cast<const Byte*>("\r"), 1}});
+      std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+  }
+
   const telar::testing::Case case_sound_on_done_and_blocked{"agent_wire.sound_on_done_and_blocked", testSoundOnDoneAndBlocked};
   const telar::testing::Case case_progress_registers_external_worktree{"agent_wire.progress_registers_external_worktree", testProgressRegistersExternalWorktree};
   const telar::testing::Case case_register_by_verified_creator{"agent_wire.register_by_verified_creator", testRegisterByVerifiedCreator};
   const telar::testing::Case case_interrupt_refusals_and_debounce{"agent_wire.interrupt_refusals_and_debounce", testInterruptRefusalsAndDebounce};
   const telar::testing::Case case_send_text_prompt_budget{"agent_wire.send_text_prompt_budget", testSendTextPromptBudget};
+  const telar::testing::Case case_shell_foreground_removes_agent{"agent_wire.shell_foreground_removes_agent", testShellForegroundRemovesAgent};
   const telar::testing::Case case_report_session_and_restored_agent{"agent_wire.report_session_and_restored_agent", testReportSessionAndRestoredAgent};
 
 }

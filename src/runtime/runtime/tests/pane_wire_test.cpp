@@ -1,3 +1,5 @@
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -26,6 +28,34 @@ namespace {
   std::span<const Byte> bytes(std::string_view text) {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
   }
+
+  // A program that listens on a TCP port of the loopback: argv is `--listen PORT_FILE`. It writes
+  // the port it got, then says so on its terminal.
+  int listen(int argc, char** argv) {
+    if (argc != 3) {
+      return 2;
+    }
+
+    const int descriptor = ::socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in address{};
+    socklen_t length = sizeof(address);
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (descriptor < 0 || ::bind(descriptor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 || ::listen(descriptor, 1) != 0 || ::getsockname(descriptor, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
+      return 1;
+    }
+
+    std::ofstream{argv[2]} << ntohs(address.sin_port);
+    constexpr std::string_view listening = "listening\r\n";
+
+    static_cast<void>(::write(STDOUT_FILENO, listening.data(), listening.size()));
+    for (;;) {
+      ::pause();
+    }
+  }
+
+  const telar::testing::Mode listen_mode{"--listen", listen};
 
   // Every request a client sent before this one was handled.
   void settle(ProtocolPeer& peer, std::uint64_t request) {
@@ -299,13 +329,16 @@ namespace {
     const auto pinned_rows = pinned.scroll.total_rows;
 
     window.send(PaneInput{opened.pane_id, bytes("more\r")});
-    check(frameAfterGrowth(window, opened.pane_id, pinned_rows).scroll.offset == 10, "a scrolled-up view followed new output");
+    const auto grown_pinned = frameAfterGrowth(window, opened.pane_id, pinned_rows);
 
-    // Past the bottom, it follows the output again.
-    window.send(SetPaneViewport{opened.pane_id, 1'000'000});
+    check(grown_pinned.scroll.offset == 10, "a scrolled-up view followed new output");
+
+    // Scrolled back to the bottom row, it follows the output again.
     const auto bottom = [](const PaneFrame& frame) {
       return frame.scroll.total_rows - frame.rows;
     };
+
+    window.send(SetPaneViewport{opened.pane_id, bottom(grown_pinned)});
 
     auto following = nextFrame(window, opened.pane_id);
 
@@ -321,6 +354,42 @@ namespace {
     check(grown.scroll.offset == bottom(grown), "a view at the bottom stopped following the output");
   }
 
+  void testForegroundNameAndPorts() {
+    RuntimeHost host;
+    ProtocolPeer window{host.socket()};
+    const auto program = agentExecutable(host, "portlistener");
+    const auto port_file = host.directory() + "/port";
+    const auto command = "'" + program + "' --listen '" + port_file + "'\r";
+    const std::array<std::string_view, 2> arguments{"/bin/sh", "-i"};
+
+    window.send(RequestRuntimeState{.client_identity = 72, .interactive = true});
+    const auto opened = window.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+
+    // The user's shell runs a program that listens on a port.
+    window.send(PaneInput{opened.pane_id, bytes(command)});
+    std::optional<std::uint16_t> port;
+    bool named = false;
+    bool listed = false;
+
+    // Both arrive as the runtime observes the program, so every message is looked at.
+    window.deadline(std::chrono::seconds{15});
+    while (!named || !listed) {
+      const auto message = window.receiveAny<PaneForeground, PaneList>();
+
+      if (!port && !readFile(port_file).empty()) {
+        port = static_cast<std::uint16_t>(std::stoul(readFile(port_file)));
+      }
+
+      if (const auto* foreground = std::get_if<PaneForeground>(&message)) {
+        named |= foreground->pane_id == opened.pane_id && foreground->name == "portlistener";
+      } else {
+        for (const auto& entry : std::get<PaneList>(message).entries) {
+          listed |= port && entry.pane_id == opened.pane_id && std::ranges::contains(entry.ports, *port);
+        }
+      }
+    }
+  }
+
   const telar::testing::Case case_copy_selection_clipboard_limit{"pane_wire.copy_selection_clipboard_limit", testCopySelectionClipboardLimit};
   const telar::testing::Case case_attach_second_workspace_refused{"pane_wire.attach_second_workspace_refused", testAttachSecondWorkspaceRefused};
   const telar::testing::Case case_command_types_bracketed_and_requires_attachment{"pane_wire.command_types_bracketed_and_requires_attachment", testCommandTypesBracketedAndRequiresAttachment};
@@ -329,5 +398,6 @@ namespace {
   const telar::testing::Case case_read_rows_requires_attachment{"pane_wire.read_rows_requires_attachment", testReadRowsRequiresAttachment};
   const telar::testing::Case case_graphics_limit_reported{"pane_wire.graphics_limit_reported", testGraphicsLimitReported};
   const telar::testing::Case case_set_pane_viewport_follow_or_pin{"pane_wire.set_pane_viewport_follow_or_pin", testSetPaneViewportFollowOrPin};
+  const telar::testing::Case case_foreground_name_and_ports{"pane_wire.foreground_name_and_ports", testForegroundNameAndPorts};
 
 }
