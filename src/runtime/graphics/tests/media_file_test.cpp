@@ -243,9 +243,23 @@ namespace {
     check(reply.starts_with("\x1b_Gi=31;") && reply.ends_with("\x1b\\") && !reply.contains(";OK"));
   }
 
+  // A program may hand telar a temporary file to read and delete: one named as the protocol
+  // names them, in a temp directory, becomes the image and is gone afterwards.
+  void temporaryFileDeletedWhenAuthorized() {
+    Directory directory;
+    const auto contents = pattern(16);
+    const auto path = directory.write("tty-graphics-protocol-pixels", contents);
+    Media media;
+    const auto images = media.feed(fileUpload("a=T,t=t,f=32,s=2,v=2,i=1,q=2", path));
+
+    check(images.size() == 1 && std::ranges::equal(images.front().pixels, contents));
+    check(!std::filesystem::exists(path));
+  }
+
   const telar::testing::Case case_range_outside_file_refused{"media_file.range_outside_file_refused", rangeOutsideFileRefused};
   const telar::testing::Case case_multi_chunk_file_exact_pixels{"media_file.multi_chunk_file_exact_pixels", multiChunkFileExactPixels};
   const telar::testing::Case case_control_at_capacity{"media_file.control_at_capacity", controlAtCapacity};
   const telar::testing::Case case_never_answers_queries{"media_terminal.never_answers_queries", neverAnswersQueries};
+  const telar::testing::Case case_temporary_file_deleted_when_authorized{"media_file.temporary_file_deleted_when_authorized", temporaryFileDeletedWhenAuthorized};
 
 }
