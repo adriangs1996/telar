@@ -10,6 +10,7 @@ import telar.base.text.json;
 import telar.vocabulary;
 import telar.cli.output;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 // Interface: arguments.cppm
 export {
@@ -102,7 +103,23 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    std::string quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard);
+    // The text a command builds, in the allocator the command runs with.
+    using Text = ds::String<Memory>;
+
+    // A number, or JSON's `null` without one, where it is formatted.
+    struct NumberOrNull {
+      ds::Option<std::uint64_t> value;
+    };
+
+    template <typename Number>
+    constexpr NumberOrNull orNull(const ds::Option<Number>& value) noexcept {
+      return {value ? ds::Option<std::uint64_t>{static_cast<std::uint64_t>(*value)} : ds::none};
+    }
+
+    // The text as a JSON string literal where it is formatted.
+    constexpr JsonQuoted quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard) noexcept {
+      return {text, escapes};
+    }
 
     void writeBytes(int descriptor, std::span<const Byte> bytes);
 
@@ -123,9 +140,63 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    std::string limitDescription(const LimitReach& reach, std::uint64_t hits = 1);
+    // How a limit was reached, as `name: requested noun; limit value`, where it is formatted.
+    struct LimitDescription {
+      const LimitReach& reach;
+      std::uint64_t hits = 1;
+    };
+
+    constexpr LimitDescription limitDescription(const LimitReach& reach, std::uint64_t hits = 1) noexcept {
+      return {reach, hits};
+    }
 
     void reportCommandLimit(const LimitReach& reach);
+
+  }
+}
+
+template <>
+struct std::formatter<telar::runtime::cli::NumberOrNull, char> {
+  constexpr auto parse(std::format_parse_context& context) {
+    return context.begin();
+  }
+
+  template <typename Context>
+  auto format(const telar::runtime::cli::NumberOrNull& number, Context& context) const {
+    return number.value ? std::format_to(context.out(), "{}", *number.value) : std::format_to(context.out(), "null");
+  }
+};
+
+template <>
+struct std::formatter<telar::runtime::cli::LimitDescription, char> {
+  constexpr auto parse(std::format_parse_context& context) {
+    return context.begin();
+  }
+
+  template <typename Context>
+  auto format(const telar::runtime::cli::LimitDescription& description, Context& context) const {
+    const auto& reach = description.reach;
+    auto output = std::format_to(context.out(), "{}: ", reach.name);
+    const std::string_view space = reach.noun.empty() ? "" : " ";
+
+    if (reach.requested) {
+      output = std::format_to(output, "{}{}{}; limit {}", *reach.requested, space, reach.noun, reach.value);
+    } else if (reach.value == 0) {
+      output = std::format_to(output, "limit reached");
+    } else {
+      output = std::format_to(output, "limit {}{}{} reached", reach.value, space, reach.noun);
+    }
+
+    if (description.hits > 1) {
+      output = std::format_to(output, " ({} times)", description.hits);
+    }
+
+    return output;
+  }
+};
+
+export {
+  namespace telar::runtime::cli {
 
   }
 }

@@ -3,6 +3,7 @@ export module telar.cli.output;
 import std;
 
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.base.text.json;
 import telar.vocabulary;
 import telar.base.ds;
@@ -14,15 +15,18 @@ export {
     // A command that failed after its arguments parsed: `what()` is the text after
     // the family's prefix on stderr, `status` the exit status (2 for a missing
     // target, 3 for a timeout), and `code` the runtime's refusal, if any.
-    class Failure : public std::runtime_error {
+    class Failure : public std::exception {
     public:
-      explicit Failure(std::string_view message, int status = 1, ds::Option<FailureCode> code = ds::none);
+      explicit Failure(std::string_view message, int status = 1, ds::Option<FailureCode> code = ds::none) noexcept;
+
+      [[nodiscard]] const char* what() const noexcept override;
 
       [[nodiscard]] int status() const noexcept;
 
       [[nodiscard]] ds::Option<FailureCode> code() const noexcept;
 
     private:
+      ErrorText<1023> message_;
       int status_;
       ds::Option<FailureCode> code_;
     };

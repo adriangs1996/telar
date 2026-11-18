@@ -232,7 +232,11 @@ export {
         });
       }
 
-      [[noreturn]] void fail(const char* message) const;
+      // Throws an error naming this value's path, then the parts of the message.
+      template <typename... Parts>
+      [[noreturn]] void fail(const Parts&... parts) const {
+        throw Error{label_.view(), " ", parts...};
+      }
 
     private:
       Value(const Value& parent, std::string_view key);

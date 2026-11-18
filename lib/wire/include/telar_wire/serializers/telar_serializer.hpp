@@ -1,6 +1,9 @@
 #pragma once
 
 #include "../codecs/telar_wire.hpp"
+#ifdef TELAR_DEBUG
+#include "telar_base/memory/allocator.hpp"
+#endif
 
 #include <limits>
 
@@ -273,8 +276,8 @@ namespace telar {
     static constexpr auto tag = Tag;
 
 #ifdef TELAR_DEBUG
-    template <typename Message>
-    static void pretty_print(const Message& message, std::FILE* output = stderr);
+    template <typename Message, Allocator Memory>
+    static void pretty_print(Memory& memory, const Message& message, std::FILE* output = stderr);
 #endif
   };
 

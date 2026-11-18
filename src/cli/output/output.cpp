@@ -54,10 +54,14 @@ namespace telar::runtime::cli {
     return ds::none;
   }
 
-  Failure::Failure(std::string_view message, int status, ds::Option<FailureCode> code)
-      : std::runtime_error{std::string{message}},
+  Failure::Failure(std::string_view message, int status, ds::Option<FailureCode> code) noexcept
+      : message_(message),
         status_(status),
         code_(code) {}
+
+  const char* Failure::what() const noexcept {
+    return message_.c_str();
+  }
 
   int Failure::status() const noexcept {
     return status_;

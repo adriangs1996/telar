@@ -32,8 +32,8 @@ namespace telar::runtime::cli {
     constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
 
     // A family or entry point this build does not implement yet.
-    int unavailable(std::string_view what) {
-      std::fprintf(stderr, "telar: %.*s is not implemented by this telar yet\n", static_cast<int>(what.size()), what.data());
+    int unavailable(std::string_view family) {
+      std::fprintf(stderr, "telar: telar %.*s is not implemented by this telar yet\n", static_cast<int>(family.size()), family.data());
       return 1;
     }
 
@@ -68,7 +68,7 @@ namespace telar::runtime::cli {
       case Family::diagnostics:
         return diagnostics::run(memory, DiagnosticsOptions::parse(options));
       case Family::api:
-        return api::run(options);
+        return api::run(memory, options);
       case Family::history:
         return history::run(memory, HistoryOptions::parse(options));
       case Family::project:
@@ -136,7 +136,7 @@ namespace telar::runtime::cli {
       case Family::worktree:
         return sessions::worktree(memory, sessions::WorktreeOptions::parse(options));
       default:
-        return unavailable(std::string{"telar "} + std::string{familyName(family)});
+        return unavailable(familyName(family));
       }
     }
 

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -1041,6 +1042,52 @@ namespace telar::ds {
     Representation representation_;
   };
 
+  // An output iterator that appends to a String, so that std::format_to writes into one in a single
+  // pass, growing it as std::back_inserter grows a std::string.
+  template <Allocator Memory>
+  class StringAppender {
+  public:
+    using difference_type = std::ptrdiff_t;
+
+    explicit StringAppender(String<Memory>& text) noexcept
+        : text_(&text) {}
+
+    StringAppender& operator=(char character) {
+      text_->push(character);
+      return *this;
+    }
+
+    StringAppender& operator*() noexcept {
+      return *this;
+    }
+
+    StringAppender& operator++() noexcept {
+      return *this;
+    }
+
+    StringAppender operator++(int) noexcept {
+      return *this;
+    }
+
+  private:
+    String<Memory>* text_;
+  };
+
+  // Appends the formatted arguments to `text`, as std::format_to through a back inserter.
+  template <Allocator Memory, typename... Arguments>
+  void formatTo(String<Memory>& text, std::format_string<Arguments...> format, Arguments&&... arguments) {
+    std::format_to(StringAppender<Memory>{text}, format, std::forward<Arguments>(arguments)...);
+  }
+
+  // The formatted arguments in a String from `memory`, as std::format returns a std::string.
+  template <Allocator Memory, typename... Arguments>
+  [[nodiscard]] tbc::view<String<Memory>, tbc::lt::a> format(tbc::view<Memory&, tbc::lt::a> memory, std::format_string<Arguments...> format, Arguments&&... arguments) {
+    String<Memory> text{memory};
+
+    formatTo(text, format, std::forward<Arguments>(arguments)...);
+    return text;
+  }
+
   // A hash for Map keys: integers, enumerations, pointers and text, mixed so that the low bits a
   // table indexes by depend on every bit of the key, and seeded per process. Text hashes as wyhash
   // does: overlapping words for short text, three lanes of 16 bytes for long.
@@ -1048,7 +1095,7 @@ namespace telar::ds {
     template <typename Key>
       requires(std::is_integral_v<Key> || std::is_enum_v<Key> || std::is_pointer_v<Key>)
     [[nodiscard]] std::uint64_t operator()(Key key) const noexcept {
-      std::uint64_t bits;
+      std::uint64_t bits{};
 
       if constexpr (std::is_pointer_v<Key>) {
         bits = reinterpret_cast<std::uintptr_t>(key);
@@ -1692,3 +1739,12 @@ namespace telar::ds {
   };
 
 }
+
+// A String formats as its text does.
+template <telar::Allocator Memory>
+struct std::formatter<telar::ds::String<Memory>, char> : std::formatter<std::string_view, char> {
+  template <typename Context>
+  auto format(const telar::ds::String<Memory>& text, Context& context) const {
+    return std::formatter<std::string_view, char>::format(text.view(), context);
+  }
+};

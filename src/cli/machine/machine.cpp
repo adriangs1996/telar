@@ -1978,7 +1978,7 @@ fetch() {
       digest.update({reinterpret_cast<const char*>(buffer.data()), static_cast<std::size_t>(count)});
     }
 
-    return lowerHex(digest.finish());
+    return std::format("{}", lowerHex(digest.finish()));
   }
 
   template <Allocator Memory>

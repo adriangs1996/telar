@@ -172,8 +172,34 @@ export {
       output.append(std::string_view{"\""});
     }
 
+    // `text` as one JSON string literal, quotes included, when it is formatted: the escapes go
+    // straight into the output, with no text built apart.
+    struct JsonQuoted {
+      std::string_view text;
+      JsonEscapes escapes = JsonEscapes::standard;
+    };
+
   }
 }
+
+template <>
+struct std::formatter<telar::runtime::JsonQuoted, char> {
+  constexpr auto parse(std::format_parse_context& context) {
+    return context.begin();
+  }
+
+  template <typename Context>
+  auto format(const telar::runtime::JsonQuoted& quoted, Context& context) const {
+    auto output = context.out();
+
+    *output++ = '"';
+    telar::runtime::escapeJson(quoted.text, quoted.escapes, [&](std::string_view piece) {
+      output = std::ranges::copy(piece, output).out;
+    });
+    *output++ = '"';
+    return output;
+  }
+};
 
 // Interface: telar_base/text/json_fields.cppm
 namespace telar::runtime {

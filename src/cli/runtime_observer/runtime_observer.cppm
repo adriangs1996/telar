@@ -13,7 +13,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime::cli::api {
 
-    int run(Arguments words);
+    int run(Memory& memory, Arguments words);
 
   }
 }

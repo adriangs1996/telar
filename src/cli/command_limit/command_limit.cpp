@@ -110,14 +110,6 @@ namespace telar::runtime::cli {
     return static_cast<Enum>(found - names.begin());
   }
 
-  std::string quoteJson(std::string_view text, JsonEscapes escapes) {
-    std::string result;
-
-    result.reserve(text.size() + 2);
-    appendJsonText(result, text, escapes);
-    return result;
-  }
-
   void writeBytes(int descriptor, std::span<const Byte> bytes) {
     while (!bytes.empty()) {
       const auto count = ::write(descriptor, bytes.data(), bytes.size());
@@ -167,27 +159,11 @@ namespace telar::runtime::cli {
     return error.what();
   }
 
-  std::string limitDescription(const LimitReach& reach, std::uint64_t hits) {
-    std::string output = std::string{reach.name} + ": ";
-    const auto noun = reach.noun.empty() ? "" : " " + std::string{reach.noun};
-
-    if (reach.requested) {
-      output += std::format("{}{}; limit {}", *reach.requested, noun, reach.value);
-    } else if (reach.value == 0) {
-      output += "limit reached";
-    } else {
-      output += std::format("limit {}{} reached", reach.value, noun);
-    }
-
-    if (hits > 1) {
-      output += std::format(" ({} times)", hits);
-    }
-
-    return output;
-  }
-
   void reportCommandLimit(const LimitReach& reach) {
-    writeText("telar: Limit reached: " + limitDescription(reach) + "\n", STDERR_FILENO);
+    ds::Array<char, 512> line;
+    const auto written = std::format_to_n(line.dataMut(), line.size(), "telar: Limit reached: {}\n", limitDescription(reach));
+
+    writeText({line.data(), std::min(static_cast<std::size_t>(written.size), line.size())}, STDERR_FILENO);
   }
 
   template int parseInt<int>(std::string_view text);

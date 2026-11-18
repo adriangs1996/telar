@@ -16,62 +16,57 @@ import telar.base.ds;
 
 namespace telar::runtime::cli {
 
-  std::string nativeSchemaVersion() {
-    return {handshake::schema_id.begin(), handshake::schema_id.end()};
+  std::string_view nativeSchemaVersion() {
+    return {reinterpret_cast<const char*>(handshake::schema_id.data()), handshake::schema_id.size()};
   }
 
-  std::string proxyStatusJson(const ProxyStatus& status) {
-    return std::format("{{\"active\":{},\"scope\":{},\"system_trusted\":{},\"port\":{},\"preferred_port\":{}}}", jsonBoolean(status.active), quoteJson(status.scope == ProxyScope::exact ? "exact" : "wildcard"), jsonBoolean(status.system_trusted), status.port ? std::to_string(*status.port) : "null", status.preferred_port ? std::to_string(*status.preferred_port) : "null");
+  void appendProxyStatusJson(Text& output, const ProxyStatus& status) {
+    ds::formatTo(output, "{{\"active\":{},\"scope\":{},\"system_trusted\":{},\"port\":{},\"preferred_port\":{}}}", jsonBoolean(status.active), quoteJson(status.scope == ProxyScope::exact ? "exact" : "wildcard"), jsonBoolean(status.system_trusted), orNull(status.port), orNull(status.preferred_port));
   }
 
-  std::string metricsJson(const SystemMetrics& metrics, bool event) {
-    auto result = std::format("{{\"revision\":{},\"cpu_percent\":{},\"memory_used_decigib\":{},", metrics.revision, metrics.cpu_percent, metrics.memory_used_decigib);
-
+  void appendMetricsJson(Text& output, const SystemMetrics& metrics, bool event) {
+    ds::formatTo(output, "{{\"revision\":{},\"cpu_percent\":{},\"memory_used_decigib\":{},", metrics.revision, metrics.cpu_percent, metrics.memory_used_decigib);
     if (event) {
-      result += std::format("\"has_battery\":{},\"battery_percent\":{},\"cpu_count\":{},\"memory_total_decigib\":{}}}", jsonBoolean(metrics.has_battery), metrics.battery_percent, metrics.cpu_count, metrics.memory_total_decigib);
+      ds::formatTo(output, "\"has_battery\":{},\"battery_percent\":{},\"cpu_count\":{},\"memory_total_decigib\":{}}}", jsonBoolean(metrics.has_battery), metrics.battery_percent, metrics.cpu_count, metrics.memory_total_decigib);
     } else {
-      result += std::format("\"memory_total_decigib\":{},\"cpu_count\":{},\"battery_percent\":{}}}", metrics.memory_total_decigib, metrics.cpu_count, metrics.has_battery ? std::to_string(metrics.battery_percent) : "null");
+      ds::formatTo(output, "\"memory_total_decigib\":{},\"cpu_count\":{},\"battery_percent\":{}}}", metrics.memory_total_decigib, metrics.cpu_count, orNull(metrics.has_battery ? ds::Option{metrics.battery_percent} : ds::none));
     }
-
-    return result;
   }
 
-  std::string workspaceEventJson(const WorkspaceList& list) {
-    std::string result = std::format("{{\"type\":\"workspace_list\",\"revision\":{},\"data\":[", list.revision);
-
+  void appendWorkspaceEventJson(Text& output, const WorkspaceList& list) {
+    ds::formatTo(output, "{{\"type\":\"workspace_list\",\"revision\":{},\"data\":[", list.revision);
     for (const auto& entry : list.entries) {
       if (&entry != list.entries.data()) {
-        result += ',';
+        output.push(',');
       }
 
-      result += std::format("{{\"workspace_id\":{},\"name\":{},\"path\":{},\"tab_count\":{},\"branch\":{},\"dirty\":{}}}", entry.workspace, quoteJson(entry.name), quoteJson(entry.path), entry.tab_count, quoteJson(entry.branch), jsonBoolean(entry.dirty));
+      ds::formatTo(output, "{{\"workspace_id\":{},\"name\":{},\"path\":{},\"tab_count\":{},\"branch\":{},\"dirty\":{}}}", entry.workspace, quoteJson(entry.name), quoteJson(entry.path), entry.tab_count, quoteJson(entry.branch), jsonBoolean(entry.dirty));
     }
 
-    return result + "]}";
+    output.append("]}");
   }
 
-  std::string agentEventEntryJson(const AgentSnapshotEntry& agent) {
+  void appendAgentEventEntryJson(Text& output, const AgentSnapshotEntry& agent) {
     constexpr ds::Array status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
     constexpr ds::Array reason_names{"none", "permission", "question", "plan", "other"};
-    const auto session = lowerHex(agent.session_id);
-
     constexpr auto escapes = JsonEscapes::control;
+    ds::Array<char, 2 * agent.session_id.size()> session;
+    const auto session_text = encodeLowerHex(agent.session_id.view(), session.viewMut());
 
-    return std::format("{{\"pane_id\":{},\"pane_generation\":{},\"workspace_id\":{},\"tab_id\":{},\"pane_index\":{},\"provider\":{},\"provider_index\":{},\"status\":{},\"workspace\":{},\"tab\":{},\"title\":{},\"cwd\":{},\"blocked_reason\":{},\"status_age_s\":{},\"worktree_id\":{},\"last_event\":{},\"plan\":{{\"done\":{},\"total\":{},\"step\":{}}},\"final_message\":{},\"session_id\":{}}}", agent.pane_id, agent.pane_generation, agent.location.workspace.id, agent.location.tab_id, agent.pane_index, quoteJson(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes), static_cast<Byte>(agent.provider), quoteJson(status_names.at(static_cast<std::size_t>(agent.status)), escapes), quoteJson(agent.workspace_label, escapes), quoteJson(agent.tab_label, escapes), quoteJson(agent.session_title, escapes), quoteJson(agent.cwd_label, escapes), quoteJson(reason_names.at(static_cast<std::size_t>(agent.blocked_reason)), escapes), agent.status_age_s, agent.work_tree, quoteJson(agent.last_event, escapes), agent.plan_done, agent.plan_total, quoteJson(agent.plan_step, escapes), quoteJson(agent.final_message, escapes), quoteJson(session, escapes));
+    ds::formatTo(output, "{{\"pane_id\":{},\"pane_generation\":{},\"workspace_id\":{},\"tab_id\":{},\"pane_index\":{},\"provider\":{},\"provider_index\":{},\"status\":{},\"workspace\":{},\"tab\":{},\"title\":{},\"cwd\":{},\"blocked_reason\":{},\"status_age_s\":{},\"worktree_id\":{},\"last_event\":{},\"plan\":{{\"done\":{},\"total\":{},\"step\":{}}},\"final_message\":{},\"session_id\":{}}}", agent.pane_id, agent.pane_generation, agent.location.workspace.id, agent.location.tab_id, agent.pane_index, quoteJson(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes), static_cast<Byte>(agent.provider), quoteJson(status_names.at(static_cast<std::size_t>(agent.status)), escapes), quoteJson(agent.workspace_label, escapes), quoteJson(agent.tab_label, escapes), quoteJson(agent.session_title, escapes), quoteJson(agent.cwd_label, escapes), quoteJson(reason_names.at(static_cast<std::size_t>(agent.blocked_reason)), escapes), agent.status_age_s, agent.work_tree, quoteJson(agent.last_event, escapes), agent.plan_done, agent.plan_total, quoteJson(agent.plan_step, escapes), quoteJson(agent.final_message, escapes), quoteJson(session_text, escapes));
   }
 
-  std::string agentEventJson(const AgentSnapshot& snapshot) {
-    std::string result = std::format("{{\"type\":\"agent_snapshot\",\"revision\":{},\"data\":[", snapshot.revision);
-
+  void appendAgentEventJson(Text& output, const AgentSnapshot& snapshot) {
+    ds::formatTo(output, "{{\"type\":\"agent_snapshot\",\"revision\":{},\"data\":[", snapshot.revision);
     for (const auto& entry : snapshot.entries) {
       if (&entry != snapshot.entries.data()) {
-        result += ',';
+        output.push(',');
       }
 
-      result += agentEventEntryJson(entry);
+      appendAgentEventEntryJson(output, entry);
     }
 
-    return result + "]}";
+    output.append("]}");
   }
 
 }
@@ -246,21 +241,21 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "max_clipboard_chunk_bytes", .value = runtime_clipboard_chunk_bytes},
   };
 
-  void appendTable(std::string& output, std::span<const NamedValue> values, bool json) {
+  void appendTable(Text& output, std::span<const NamedValue> values, bool json) {
     for (const auto& entry : values) {
       if (json) {
         if (&entry != values.data()) {
-          output += ',';
+          output.push(',');
         }
 
-        output += quoteJson(entry.name, JsonEscapes::control) + ':' + std::to_string(entry.value);
+        ds::formatTo(output, "{}:{}", quoteJson(entry.name, JsonEscapes::control), entry.value);
       } else {
-        output += std::format("  0x{:02x}  {}\n", entry.value, entry.name);
+        ds::formatTo(output, "  0x{:02x}  {}\n", entry.value, entry.name);
       }
     }
   }
 
-  int run(Arguments words) {
+  int run(Memory& memory, Arguments words) {
     if (words.empty() || std::string_view{words.front()} != "schema") {
       throw std::invalid_argument{"UnknownApiAction"};
     }
@@ -275,37 +270,32 @@ namespace telar::runtime::cli::api {
       json = true;
     }
 
-    std::string fingerprint;
-
-    for (const auto byte : handshake::schema_id) {
-      fingerprint += std::format("{:02x}", byte);
-    }
-
-    std::string output;
+    const auto fingerprint = lowerHex(handshake::schema_id.view());
+    Text output{memory};
 
     if (json) {
-      output = "{\"schema_version\":" + quoteJson(nativeSchemaVersion()) + ",\"fingerprint\":" + quoteJson(fingerprint) + ",\"client_requests\":{";
+      ds::formatTo(output, "{{\"schema_version\":{},\"fingerprint\":\"{}\",\"client_requests\":{{", quoteJson(nativeSchemaVersion()), fingerprint);
       appendTable(output, client_requests, true);
-      output += "},\"server_messages\":{";
+      output.append("},\"server_messages\":{");
       appendTable(output, server_messages, true);
-      output += "},\"agent_statuses\":{";
+      output.append("},\"agent_statuses\":{");
       appendTable(output, agent_statuses, true);
-      output += "},\"bounds\":{";
+      output.append("},\"bounds\":{");
       appendTable(output, bounds, true);
-      output += "}}\n";
+      output.append("}}\n");
     } else {
-      output = std::format("schema {} fingerprint {}\n\nclient requests\n", nativeSchemaVersion(), fingerprint);
+      ds::formatTo(output, "schema {} fingerprint {}\n\nclient requests\n", nativeSchemaVersion(), fingerprint);
       appendTable(output, client_requests, false);
-      output += "\nserver messages\n";
+      output.append("\nserver messages\n");
       appendTable(output, server_messages, false);
-      output += "\nagent statuses\n";
+      output.append("\nagent statuses\n");
       for (const auto& entry : agent_statuses) {
-        output += std::format("  {}  {}\n", entry.value, entry.name);
+        ds::formatTo(output, "  {}  {}\n", entry.value, entry.name);
       }
 
-      output += "\nbounds\n";
+      output.append("\nbounds\n");
       for (const auto& entry : bounds) {
-        output += std::format("  {} = {}\n", entry.name, entry.value);
+        ds::formatTo(output, "  {} = {}\n", entry.name, entry.value);
       }
     }
 
@@ -334,7 +324,7 @@ namespace telar::runtime::cli::runtime_clipboard {
       session.receiveTimeout(10);
       ReadRuntimeClipboard request;
       std::uint64_t total = 0;
-      std::string mime;
+      Text mime{memory};
 
       for (;;) {
         const auto chunk = session.template exchange<RuntimeClipboardChunk>(request);
@@ -345,7 +335,7 @@ namespace telar::runtime::cli::runtime_clipboard {
         if (request.transfer_id == 0) {
           request.transfer_id = chunk.transfer_id;
           total = chunk.total_bytes;
-          mime = chunk.mime;
+          mime.assign(chunk.mime);
         } else if (chunk.transfer_id != request.transfer_id || chunk.total_bytes != total || chunk.mime != mime) {
           throw std::runtime_error{"Clipboard transfer metadata changed"};
         }
@@ -366,55 +356,81 @@ namespace telar::runtime::cli::runtime_clipboard {
 
 namespace telar::runtime::cli {
 
-  void printRuntimeStatus(const ProxyStatus& status, bool json) {
+  void printRuntimeStatus(Memory& memory, const ProxyStatus& status, bool json) {
+    Text output{memory};
+
     if (json) {
-      writeText("{\"running\":true,\"schema_version\":" + quoteJson(nativeSchemaVersion()) + ",\"proxy\":" + proxyStatusJson(status) + "}\n");
+      ds::formatTo(output, "{{\"running\":true,\"schema_version\":{},\"proxy\":", quoteJson(nativeSchemaVersion()));
+      appendProxyStatusJson(output, status);
+      output.append("}\n");
+      writeText(output);
       return;
     }
 
-    auto output = std::format("Runtime: running\nSchema: {}\nProxy: {}\n", nativeSchemaVersion(), status.active ? "active" : "disabled");
-
+    ds::formatTo(output, "Runtime: running\nSchema: {}\nProxy: {}\n", nativeSchemaVersion(), status.active ? "active" : "disabled");
     if (status.port) {
       if (!status.preferred_port) {
-        output += std::format("Proxy port: {} (none remembered for this runtime)\n", *status.port);
+        ds::formatTo(output, "Proxy port: {} (none remembered for this runtime)\n", *status.port);
       } else if (status.port == status.preferred_port) {
-        output += std::format("Proxy port: {}\n", *status.port);
+        ds::formatTo(output, "Proxy port: {}\n", *status.port);
       } else {
-        output += std::format("Proxy port: {} (warning: remembered port {} was held by another process; processes that inherited it do not reach this runtime)\n", *status.port, *status.preferred_port);
+        ds::formatTo(output, "Proxy port: {} (warning: remembered port {} was held by another process; processes that inherited it do not reach this runtime)\n", *status.port, *status.preferred_port);
       }
     }
 
-    output += std::format("Proxy scope: {}\nSystem trust: {}\n", status.scope == ProxyScope::exact ? "exact" : "wildcard", status.system_trusted ? "installed" : "absent");
+    ds::formatTo(output, "Proxy scope: {}\nSystem trust: {}\n", status.scope == ProxyScope::exact ? "exact" : "wildcard", status.system_trusted ? "installed" : "absent");
     writeText(output);
   }
 
-  void printRuntimeMetrics(const SystemMetrics& metrics, bool json) {
+  void printRuntimeMetrics(Memory& memory, const SystemMetrics& metrics, bool json) {
+    Text output{memory};
+
     if (json) {
-      writeText(metricsJson(metrics, false) + "\n");
+      appendMetricsJson(output, metrics, false);
+      output.push('\n');
+      writeText(output);
       return;
     }
 
-    writeText(std::format("CPU: {}% of {}\nMemory: {}.{} of {}.{} GiB\nBattery: {}\n", metrics.cpu_percent, metrics.cpu_count, metrics.memory_used_decigib / 10, metrics.memory_used_decigib % 10, metrics.memory_total_decigib / 10, metrics.memory_total_decigib % 10, metrics.has_battery ? std::to_string(metrics.battery_percent) + "%" : "unavailable"));
+    ds::formatTo(output, "CPU: {}% of {}\nMemory: {}.{} of {}.{} GiB\nBattery: ", metrics.cpu_percent, metrics.cpu_count, metrics.memory_used_decigib / 10, metrics.memory_used_decigib % 10, metrics.memory_total_decigib / 10, metrics.memory_total_decigib % 10);
+    if (metrics.has_battery) {
+      ds::formatTo(output, "{}%\n", metrics.battery_percent);
+    } else {
+      output.append("unavailable\n");
+    }
+
+    writeText(output);
   }
 
-  std::string runtimeEventJson(std::span<const Byte> frame, DecodeStorage& storage) {
+  // Appends the frame as one JSON event line, and says whether the frame is one the watch reports.
+  bool appendRuntimeEventJson(Text& output, std::span<const Byte> frame, DecodeStorage& storage) {
     switch (static_cast<ServerTag>(frame.front())) {
     case ServerTag::proxy_status:
-      return "{\"type\":\"proxy_status\",\"data\":" + proxyStatusJson(Codec::decode<ProxyStatus>(frame, storage)) + "}";
+      output.append("{\"type\":\"proxy_status\",\"data\":");
+      appendProxyStatusJson(output, Codec::decode<ProxyStatus>(frame, storage));
+      output.push('}');
+      return true;
     case ServerTag::system_metrics:
-      return "{\"type\":\"system_metrics\",\"data\":" + metricsJson(Codec::decode<SystemMetrics>(frame, storage), true) + "}";
+      output.append("{\"type\":\"system_metrics\",\"data\":");
+      appendMetricsJson(output, Codec::decode<SystemMetrics>(frame, storage), true);
+      output.push('}');
+      return true;
     case ServerTag::workspace_list:
-      return workspaceEventJson(Codec::decode<WorkspaceList>(frame, storage));
+      appendWorkspaceEventJson(output, Codec::decode<WorkspaceList>(frame, storage));
+      return true;
     case ServerTag::agent_snapshot:
-      return agentEventJson(Codec::decode<AgentSnapshot>(frame, storage));
+      appendAgentEventJson(output, Codec::decode<AgentSnapshot>(frame, storage));
+      return true;
     case ServerTag::runtime_stopping:
       Codec::decode<RuntimeStopping>(frame, storage);
-      return "{\"type\":\"runtime_stopping\"}";
+      output.append("{\"type\":\"runtime_stopping\"}");
+      return true;
     case ServerTag::resync_required:
       Codec::decode<ResyncRequired>(frame, storage);
-      return "{\"type\":\"resync_required\"}";
+      output.append("{\"type\":\"resync_required\"}");
+      return true;
     default:
-      return {};
+      return false;
     }
   }
 
@@ -454,9 +470,10 @@ namespace telar::runtime::cli {
       if (options.action == RuntimeOptions::Action::watch) {
         const bool selected = !options.proxy_only || tag == ServerTag::proxy_status || tag == ServerTag::runtime_stopping || tag == ServerTag::resync_required;
         if (selected) {
-          const auto event = runtimeEventJson(frame, storage);
-          if (!event.empty()) {
-            writeText(event + "\n");
+          Text event{memory};
+          if (appendRuntimeEventJson(event, frame, storage)) {
+            event.push('\n');
+            writeText(event);
             ++count;
           }
         }
@@ -469,10 +486,10 @@ namespace telar::runtime::cli {
           return;
         }
       } else if (tag == ServerTag::proxy_status && options.action == RuntimeOptions::Action::status) {
-        printRuntimeStatus(Codec::decode<ProxyStatus>(frame, storage), options.json);
+        printRuntimeStatus(memory, Codec::decode<ProxyStatus>(frame, storage), options.json);
         return;
       } else if (tag == ServerTag::system_metrics && options.action == RuntimeOptions::Action::metrics) {
-        printRuntimeMetrics(Codec::decode<SystemMetrics>(frame, storage), options.json);
+        printRuntimeMetrics(memory, Codec::decode<SystemMetrics>(frame, storage), options.json);
         return;
       } else if (tag == ServerTag::runtime_stopping) {
         throw std::runtime_error{"RuntimeStopping"};
@@ -487,12 +504,12 @@ namespace telar::runtime::cli {
     } catch (const SystemError& error) {
       const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
 
-      writeText(std::string{"telar runtime: "} + (timeout ? "RuntimeTimeout" : sys::errorName(error.code())) + "\n", STDERR_FILENO);
+      writeText(ds::format(memory, "telar runtime: {}\n", timeout ? std::string_view{"RuntimeTimeout"} : std::string_view{sys::errorName(error.code())}), STDERR_FILENO);
       return timeout ? 3 : 1;
     } catch (const std::exception& error) {
       const auto reason = commandErrorName(error);
 
-      writeText("telar runtime: " + std::string{reason} + "\n", STDERR_FILENO);
+      writeText(ds::format(memory, "telar runtime: {}\n", reason), STDERR_FILENO);
       return reason == "RuntimeTimeout" ? 3 : 1;
     }
   }

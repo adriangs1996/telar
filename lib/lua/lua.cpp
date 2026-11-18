@@ -817,10 +817,6 @@ namespace telar::runtime::lua {
     }
   }
 
-  void Value::fail(const char* message) const {
-    throw Error{label_.view(), " ", message};
-  }
-
   Value::Value(const Value& parent, std::string_view key)
       : state_(parent.state_),
         index_(lua_gettop(state_) + 1),

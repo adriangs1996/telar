@@ -333,10 +333,37 @@ export {
     extern template void appendLowerHex<SystemAllocator>(ds::String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
     extern template void appendLowerHex<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
 
-    std::string lowerHex(std::span<const std::uint8_t> bytes);
+    // The bytes as lowercase hexadecimal where they are formatted, with no text built apart.
+    struct LowerHex {
+      std::span<const std::uint8_t> bytes;
+    };
+
+    constexpr LowerHex lowerHex(std::span<const std::uint8_t> bytes) noexcept {
+      return {bytes};
+    }
 
   }
 }
+
+template <>
+struct std::formatter<telar::runtime::LowerHex, char> {
+  constexpr auto parse(std::format_parse_context& context) {
+    return context.begin();
+  }
+
+  template <typename Context>
+  auto format(const telar::runtime::LowerHex& hex, Context& context) const {
+    constexpr std::string_view digits = "0123456789abcdef";
+    auto output = context.out();
+
+    for (const auto byte : hex.bytes) {
+      *output++ = digits[byte >> 4];
+      *output++ = digits[byte & 15];
+    }
+
+    return output;
+  }
+};
 
 // Interface: telar_base/text/identifier.cppm
 export {

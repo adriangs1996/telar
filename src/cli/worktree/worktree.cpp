@@ -830,7 +830,7 @@ namespace telar::runtime::cli::sessions {
   };
 
   std::string hexSession(const ds::Array<Byte, 16>& session) {
-    return lowerHex(session);
+    return std::format("{}", lowerHex(session));
   }
 
   std::string_view agentStatus(AgentStatus status) {

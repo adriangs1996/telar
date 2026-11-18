@@ -1078,6 +1078,32 @@ namespace {
 
   // The edits that read text from the String itself, inline and on the heap, keep the text intact and
   // the String terminated.
+  // Formatting writes into a String from its allocator, appends past what it holds, grows it past
+  // the inline bytes, and takes a String as an argument.
+  void testStringFormat() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+
+    {
+      const auto text = ds::format(memory, "{}-{:03}-{}", "id", 7, true);
+
+      check(text == "id-007-true" && &text.memory() == &memory);
+
+      auto output = ds::format(memory, "{}", text);
+
+      ds::formatTo(output, " {:>4}|{:x}", "ab", 255);
+      check(output == "id-007-true   ab|ff", "formatTo appends");
+
+      const std::string_view long_text = "a text long enough to leave the String's inline bytes for the heap";
+
+      ds::formatTo(output, "{}{}", long_text, long_text);
+      check(output.size() == 19 + 2 * long_text.size() && output.view().ends_with(long_text) && memory.liveBytes() != 0);
+      check(ds::format(memory, "{}", std::string_view{}).empty());
+    }
+
+    check(memory.liveBytes() == 0);
+  }
+
   void testStringSelfEdits() {
     SystemAllocator system;
     BudgetAllocator memory{system, 1 << 20};
@@ -1148,6 +1174,7 @@ namespace {
   const telar::testing::Case case_option_assignment{"ds.option_assignment", testOptionAssignment};
   const telar::testing::Case case_vec_incomplete{"ds.vec_incomplete", testVecIncomplete};
   const telar::testing::Case case_vec_retain{"ds.vec_retain", testVecRetain};
+  const telar::testing::Case case_string_format{"ds.string_format", testStringFormat};
   const telar::testing::Case case_vec_clone_of_clones{"ds.vec_clone_of_clones", testVecCloneOfClones};
   const telar::testing::Case case_vec_from_values{"ds.vec_from_values", testVecFromValues};
   const telar::testing::Case case_shrink_to_fit{"ds.shrink_to_fit", testShrinkToFit};

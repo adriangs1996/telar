@@ -19,6 +19,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 
@@ -605,6 +606,33 @@ namespace {
     check(!refused<OpenEditor>(editor));
     check(refused<OpenEditor>(patched(editor, text("/editor-sentinel"), text("xeditor-sentinel"))));
   }
+
+#ifdef TELAR_DEBUG
+  // The debug printer names each field and shows its value, escaping text, with its scratch text in
+  // the allocator it is given and none of it left behind.
+  void testPrettyPrintNamesFields() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 20};
+    std::FILE* output = std::tmpfile();
+
+    check(output != nullptr);
+    Codec::pretty_print(memory, CompleteWords{.request_id = 7, .pane_id = 3, .provider = CompletionProvider::branch, .prefix = "gi\"t"}, output);
+    check(memory.liveBytes() == 0, "the printer returns its text to the allocator");
+
+    ds::Array<char, 4096> printed{};
+
+    std::rewind(output);
+    const auto size = std::fread(printed.dataMut(), 1, printed.size() - 1, output);
+
+    std::fclose(output);
+    const std::string_view text{printed.data(), size};
+
+    check(text.starts_with("Frame:\n") && text.contains("request_id") && text.contains("pane_id") && text.contains("prefix"), "every field is named");
+    check(text.contains("7") && text.contains("\"gi\\x22t\""), "values are shown, quotes escaped");
+  }
+
+  const telar::testing::Case case_pretty_print{"wire.pretty_print_names_fields", testPrettyPrintNamesFields};
+#endif
 
   const telar::testing::Case case_truncated{"wire.truncated_payload_is_rejected_at_every_cut", testTruncatedPayloadIsRejectedAtEveryCut};
   const telar::testing::Case case_storage{"wire.decode_storage_exhaustion_is_refused", testDecodeStorageExhaustionIsRefused};

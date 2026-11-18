@@ -2116,9 +2116,7 @@ namespace telar::runtime::config {
   std::size_t ClientReader::slot(std::string_view name, const lua::Value& entry) {
     const auto* const found = std::ranges::find(component_slots, name);
     if (found == component_slots.end()) {
-      const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
-
-      entry.fail(message.c_str());
+      entry.fail("names an unknown component slot \"", name, "\"");
     }
 
     if (!entry.is(LUA_TFUNCTION)) {

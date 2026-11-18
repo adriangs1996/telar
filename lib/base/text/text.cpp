@@ -74,13 +74,6 @@ namespace telar::runtime {
   template void appendLowerHex<SystemAllocator>(ds::String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
   template void appendLowerHex<BudgetAllocator<SystemAllocator>>(ds::String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
 
-  std::string lowerHex(std::span<const std::uint8_t> bytes) {
-    std::string text(2 * bytes.size(), '\0');
-
-    static_cast<void>(encodeLowerHex(bytes, text));
-    return text;
-  }
-
   bool validIdentifier(std::string_view name) noexcept {
     if (name.empty() || name.front() == '.' || name.back() == '.' || name.contains("..")) {
       return false;
