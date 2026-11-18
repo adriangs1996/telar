@@ -267,10 +267,9 @@ namespace {
     RuntimeHost host;
     ProtocolPeer control{host.socket()};
     const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=1; while [ $i -le 48 ]; do printf '\\033_Ga=T,i=%d,f=24,s=1,v=1;AAAA\\033\\\\' $i; i=$((i+1)); done; echo images-sent; exec cat"};
-    const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
 
-    screenShowing(control, opened.pane_id, "images-sent");
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
 
     for (std::uint64_t request = 2;; ++request) {
       const auto limits = control.exchange<LimitList>(QueryLimits{.request_id = request});

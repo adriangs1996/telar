@@ -9,7 +9,6 @@
 import std;
 import telar.testing;
 import telar.client;
-import telar.platform.process;
 import telar.runtime.runtime.tests.protocol_peer;
 import telar.runtime.runtime.tests.runtime_host;
 import telar.runtime.runtime.tests.wire_session;

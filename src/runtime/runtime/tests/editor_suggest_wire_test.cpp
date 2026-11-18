@@ -5,7 +5,6 @@ import telar.runtime.runtime.tests.runtime_host;
 import telar.runtime.runtime.tests.wire_session;
 import telar.wire.editor;
 import telar.wire.pane_io;
-import telar.wire.runtime;
 import telar.wire.vocabulary;
 
 namespace {
