@@ -4,46 +4,21 @@
 # standard-containers check reports any other use, and an entry whose checked files use none, so
 # that it is removed once its folder is migrated.
 
-# telar::ds::Array keeps its values in a C array, as std::array does; this entry stays.
+# telar::ds keeps raw storage in C arrays: Array its values, as std::array does, and String and
+# Function their inline bytes. These entries stay.
+lib/base/include/telar_base/ds/containers.hpp
 lib/base/include/telar_base/ds/values.hpp
 
 # Folders still being migrated.
 lib/base/include/telar_base/diagnostics/
 lib/base/include/telar_base/memory/
-lib/base/text/
-lib/base/text/json/
-lib/config/client/
 lib/config/include/telar_config/terminal/control/
 lib/ebnf/
-lib/git/
-lib/git/checkout/
-lib/lua/
 lib/platform/process/
 lib/shell/syntax/
 lib/wire/include/telar_wire/codecs/
 lib/wire/include/telar_wire/protocol/
 lib/wire/include/telar_wire/serializers/
-src/cli/
-src/cli/command_limit/
-src/cli/control_session/
-src/cli/history/
-src/cli/hook/
-src/cli/hooks/command/
-src/cli/hooks/session/
-src/cli/integration/settings/
-src/cli/launch_commands/
-src/cli/machine/
-src/cli/machine_ssh/
-src/cli/output/
-src/cli/plugin/
-src/cli/project_setup/
-src/cli/render/
-src/cli/runtime_observer/
-src/cli/server/
-src/cli/tab/
-src/cli/window/
-src/cli/worktree/
-src/cli/worktree_git/
 src/gui/
 src/gui/application/
 src/gui/features/activity/
@@ -113,18 +88,9 @@ src/gui/ui/foundation/plugins/
 src/gui/ui/foundation/process/
 src/gui/ui/foundation/scene/
 src/gui/ui/foundation/timing/
-src/runtime/command_capture/tracker/
 src/runtime/generated/
 src/runtime/platform/event_loop/
 src/runtime/platform/event_loop/macos/
 src/runtime/platform/host_metrics/linux/
-src/runtime/platform/request_worker/
 src/runtime/platform/signals/
 src/runtime/redirect/record/
-src/runtime/redirect/socket_owners/
-src/runtime/runtime/runtime/
-src/runtime/shell_integration/
-src/runtime/shell_integration/git_context/
-src/runtime/shell_integration/token/
-src/runtime/shell_integration/words/
-src/runtime/traffic/capture_analysis/
