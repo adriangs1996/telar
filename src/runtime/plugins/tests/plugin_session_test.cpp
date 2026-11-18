@@ -269,8 +269,93 @@ namespace {
     check(budget.liveBytes() == 0 && quota.used() == 0);
   }
 
+  // The worker the runtime starts for a plugin, `tap-worker ENTRY`, answers an exchange
+  // with what the plugin's Lua returns; with `--traffic` it first answers the setup with
+  // the registrations the plugin declared.
+  void testRealWorkerRoundtrip() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 4 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    const ExecutablePath executable;
+    const std::string executable_path{executable.view()};
+    TemporaryDirectory directory{"/tmp/tlr-real-worker.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+    CancellationSignal cancellation;
+
+    {
+      std::ofstream file{entry};
+
+      file << R"lua(
+local telar = require('telar')
+return {on_exchange = function(exchange)
+  return {telar.effect.notification{title = 'seen ' .. exchange.host}}
+end}
+)lua";
+      check(file.good());
+    }
+
+    CaptureQuota quota{4096};
+    std::array<Byte, 4096> output;
+    CapturedExchange exchange{memory};
+    const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
+
+    exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1});
+    exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
+    const auto frame = tap::Protocol::encodeExchange(output, {73, 1}, exchange);
+    tap::ServiceSpec specification;
+
+    specification.plugin_id = 19;
+    specification.generation = 1;
+    specification.declared.insert(tap::Capability::proxy_tap);
+    specification.declared.insert(tap::Capability::notifications);
+    specification.granted = specification.declared;
+
+    {
+      tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = entry.c_str(), .cancellation = cancellation}};
+
+      for (unsigned index = 0; index < 2; ++index) {
+        const auto result = session.exchange(specification, 73, frame);
+
+        check(result && result->batch().count == 1 && result->batch().notifications[0].title == "seen example.test");
+      }
+    }
+
+    {
+      std::ofstream file{entry};
+
+      file << R"lua(
+local traffic = require('telar.traffic')
+traffic.subscribe({events={packet=true}, filter='udp port 53'}, function() end)
+return {}
+)lua";
+      check(file.good());
+    }
+
+    tap::ServiceSpec observer;
+
+    observer.plugin_id = 20;
+    observer.generation = 1;
+    observer.name.assign("observer");
+    observer.declared.insert(tap::Capability::traffic_observe);
+    observer.granted = observer.declared;
+    {
+      tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = entry.c_str(), .cancellation = cancellation, .traffic = true}};
+      std::array<Byte, 4096> setup;
+      const auto reply = session.request(tap::TrafficProtocol::setup(setup, observer), tap::TrafficLimits::reply_bytes);
+      const auto registrations = tap::TrafficProtocol::reply(reply.bytes());
+
+      check(registrations.registration_count == 1 && registrations.registrations[0].filter.view() == "udp port 53");
+    }
+
+    exchange.request.reset();
+    check(budget.liveBytes() == 0 && quota.used() == 0);
+  }
+
   const telar::testing::Case case_plugin_sessions{"plugin_session.plugin_sessions", testPluginSessions};
   const telar::testing::Case case_restart_window{"plugin_session.restart_window", testRestartWindow};
+  const telar::testing::Case case_real_worker_roundtrip{"plugin_session.real_worker_roundtrip", testRealWorkerRoundtrip};
 
   // The plugin runtime starts its workers from this executable, with the words
   // TapWorkerOptions::arguments writes: an entry path runs the real worker, traffic
