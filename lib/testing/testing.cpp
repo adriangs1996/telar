@@ -2,6 +2,7 @@ module telar.testing;
 
 import std;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::testing {
 
@@ -22,15 +23,15 @@ namespace telar::testing {
       Report& operator<<(std::string_view text) noexcept {
         const auto count = std::min(text.size(), bytes_.size() - size_);
 
-        std::copy_n(text.data(), count, bytes_.data() + size_);
+        std::copy_n(text.data(), count, bytes_.dataMut() + size_);
         size_ += count;
 
         return *this;
       }
 
       Report& operator<<(std::uint_least32_t value) noexcept {
-        std::array<char, 16> digits{};
-        const auto [end, error] = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+        ds::Array<char, 16> digits{};
+        const auto [end, error] = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
 
         static_cast<void>(error);
 
@@ -52,7 +53,7 @@ namespace telar::testing {
       }
 
     private:
-      std::array<char, report_capacity> bytes_{};
+      ds::Array<char, report_capacity> bytes_{};
       std::size_t size_ = 0;
     };
 
