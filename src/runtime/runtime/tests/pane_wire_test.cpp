@@ -15,6 +15,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -106,7 +107,7 @@ namespace {
 
     // More than a megabyte is refused, and the clipboard is left as it was.
     owner.send(CopySelection{.pane_id = large.pane_id, .start_y = 0, .end_y = 1'000'000, .linewise = true});
-    std::optional<FailureCode> refused;
+    ds::Option<FailureCode> refused;
 
     try {
       owner.receive<PaneClipboard>();
@@ -161,7 +162,7 @@ namespace {
   void testInputAndResizeRequireAttachment() {
     RuntimeHost host;
     ProtocolPeer outsider{host.socket()};
-    std::optional<Recorder> recorder;
+    ds::Option<Recorder> recorder;
 
     // The window that opened the pane leaves, so nobody holds the workspace's geometry.
     {
@@ -222,7 +223,7 @@ namespace {
     // A second search before the first ends replaces it, and the second finds its match.
     sendTogether(owner, SearchPane{.request_id = 3, .pane_id = opened.pane_id, .needle = "first"}, SearchPane{.request_id = 4, .pane_id = opened.pane_id, .needle = "needle"});
     owner.deadline(std::chrono::seconds{10});
-    std::optional<FailureCode> superseded;
+    ds::Option<FailureCode> superseded;
 
     try {
       owner.receive<PaneMatches>();
@@ -251,7 +252,7 @@ namespace {
     check(rows.pane_id == opened.pane_id && rows.rows == 4 && !rows.cells.empty());
 
     window.send(RequestRuntimeState{.client_identity = 52, .interactive = true});
-    std::optional<FailureCode> refused;
+    ds::Option<FailureCode> refused;
 
     try {
       window.exchange<PaneRows>(ReadPaneRows{.request_id = 3, .pane_id = opened.pane_id, .from = 0, .count = 4});
@@ -366,7 +367,7 @@ namespace {
 
     // The user's shell runs a program that listens on a port.
     window.send(PaneInput{opened.pane_id, bytes(command)});
-    std::optional<std::uint16_t> port;
+    ds::Option<std::uint16_t> port;
     bool named = false;
     bool listed = false;
 

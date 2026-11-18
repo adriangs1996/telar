@@ -19,6 +19,7 @@ import telar.runtime.terminal.control;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.runtime.platform.session_host;
+import telar.base.ds;
 
 // Interface: agents/evidence_state.cppm
 export {
@@ -31,14 +32,14 @@ export {
       void claim(AgentProvider incoming) noexcept;
       bool applyReport(const ReportAgent& incoming, ObservationTime now);
       bool applyScreen(AgentSignal signal, ObservationTime now, AgentStatus projected, bool interrupted) noexcept;
-      std::optional<AgentEvidence> choose(std::int64_t now) const noexcept;
+      ds::Option<AgentEvidence> choose(std::int64_t now) const noexcept;
       void expire(std::int64_t now) noexcept;
       void clearReport() noexcept;
 
-      std::optional<AgentEvidence> process;
-      std::optional<AgentEvidence> screen;
-      std::optional<AgentEvidence> report;
-      std::optional<AgentEvidence> work;
+      ds::Option<AgentEvidence> process;
+      ds::Option<AgentEvidence> screen;
+      ds::Option<AgentEvidence> report;
+      ds::Option<AgentEvidence> work;
       AgentProvider reporter = AgentProvider::unknown;
       AgentAuthority authority = AgentAuthority::candidate;
       AgentReportState report_state = AgentReportState::ready;
@@ -93,8 +94,8 @@ export {
       FixedText<64> session;
       FixedText<1024> path;
       AgentSessionFileKind kind = AgentSessionFileKind::claude_transcript;
-      std::optional<std::uint64_t> offset;
-      std::optional<FixedText<96>> last_title;
+      ds::Option<std::uint64_t> offset;
+      ds::Option<FixedText<96>> last_title;
       std::chrono::steady_clock::time_point checked_at{};
       std::uint64_t revision = 0;
 
@@ -110,8 +111,8 @@ export {
 
     struct SessionFileResult {
       SessionFileRequest request;
-      std::optional<std::uint64_t> offset;
-      std::optional<FixedText<96>> title;
+      ds::Option<std::uint64_t> offset;
+      ds::Option<FixedText<96>> title;
     };
 
   }
@@ -128,7 +129,7 @@ export {
       bool report(const ReportAgent& incoming, ObservationTime now = ObservationTime::now());
       bool observeProcess(ProcessIdentity identity, AgentProvider incoming, ObservationTime now = ObservationTime::now());
       bool observeScreen(AgentSignal signal, ObservationTime now = ObservationTime::now());
-      bool setProcessContext(SessionHost host, bool installed, std::optional<ProcessIdentity> identity) noexcept;
+      bool setProcessContext(SessionHost host, bool installed, ds::Option<ProcessIdentity> identity) noexcept;
       std::string_view eventFor(const AgentEvidence& selected, std::int64_t now) const noexcept;
       bool project(std::int64_t now);
       void forgetReports();
@@ -167,16 +168,16 @@ export {
       std::int64_t expires_at = 0;
       bool acknowledged = true;
       bool in_pane = false;
-      std::optional<ProcessIdentity> process_identity;
-      std::optional<ProcessIdentity> projected_process;
-      std::optional<ProcessIdentity> agent_identity;
+      ds::Option<ProcessIdentity> process_identity;
+      ds::Option<ProcessIdentity> projected_process;
+      ds::Option<ProcessIdentity> agent_identity;
       SessionHost session_host = SessionHost::unknown;
       bool hooks_installed = false;
-      std::optional<std::int64_t> unreported_work_at;
+      ds::Option<std::int64_t> unreported_work_at;
       std::uint64_t interrupt_revision = 0;
       bool interrupt_draft_cleared = false;
-      std::optional<std::chrono::steady_clock::time_point> interrupt_at;
-      std::optional<std::chrono::steady_clock::time_point> interrupt_idle_at;
+      ds::Option<std::chrono::steady_clock::time_point> interrupt_at;
+      ds::Option<std::chrono::steady_clock::time_point> interrupt_idle_at;
     };
 
   }
@@ -244,8 +245,8 @@ export {
       static bool cursorPath(std::string_view path, std::string_view session) noexcept;
       void cursor(const SessionFileWatch& watch, Result& result);
       void claude(const SessionFileWatch& watch, Result& result);
-      std::optional<FixedText<96>> readTitle(std::string_view input, std::optional<std::string_view> session);
-      static std::optional<std::uint64_t> regularFileSize(const FileDescriptor& file) noexcept;
+      ds::Option<FixedText<96>> readTitle(std::string_view input, ds::Option<std::string_view> session);
+      static ds::Option<std::uint64_t> regularFileSize(const FileDescriptor& file) noexcept;
       std::string_view read(int descriptor, std::uint64_t offset, std::size_t limit);
 
       static constexpr std::size_t title_capacity = 96;

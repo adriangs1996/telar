@@ -35,6 +35,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -192,9 +193,9 @@ namespace telar::gui::qt {
     }
   }
 
-  tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> WindowImages::preparePlacements(std::span<const ImagePlacementSource> sources) {
+  tbc::view<ds::Option<LimitReach>, tbc::lt::static_storage> WindowImages::preparePlacements(std::span<const ImagePlacementSource> sources) {
     if (!placementSourcesChanged(sources)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     selectPlacements(sources);
@@ -206,7 +207,7 @@ namespace telar::gui::qt {
 
     const auto previously_reached = std::exchange(placement_limit_reached_, placements_.dropped() != 0);
     if (!placement_limit_reached_ || previously_reached) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return LimitReach{.name = application::terminal::graphics::ImagePlacementSelection::limit_name, .noun = application::terminal::graphics::ImagePlacementSelection::limit_noun, .value = application::terminal::graphics::ImagePlacementSelection::capacity, .requested = placements_.selected().size() + placements_.dropped()};
@@ -560,11 +561,11 @@ namespace telar::gui::qt {
     });
   }
 
-  std::optional<WindowImage> WindowImages::newest(application::terminal::graphics::ImageTextureIdentity identity) const noexcept {
+  ds::Option<WindowImage> WindowImages::newest(application::terminal::graphics::ImageTextureIdentity identity) const noexcept {
     const auto handle = residency_.newestReady(identity);
     const auto* state = residency_.state(handle);
     if (state == nullptr || resources_.images[handle - 1].empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return WindowImage{.handle = handle, .generation = state->identity.generation, .bounds = {.width = static_cast<float>(state->size.width), .height = static_cast<float>(state->size.height)}};
@@ -611,7 +612,7 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<WindowImage> WindowImages::resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key) {
+  ds::Option<WindowImage> WindowImages::resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key) {
     if (const auto* image = store.readyImage(key)) {
       requestImage(scene, store, *image);
     }

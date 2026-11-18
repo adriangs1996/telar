@@ -7,6 +7,7 @@ import telar.wire.clipboard;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import :screen;
+import telar.base.ds;
 
 // Interface: terminal/copy_grid.cppm
 export {
@@ -39,7 +40,7 @@ export {
       [[nodiscard]] std::uint32_t lastRow() const noexcept;
       [[nodiscard]] const CellValue* cell(CopyPoint point) const noexcept;
       [[nodiscard]] static bool whitespace(char byte) noexcept;
-      [[nodiscard]] std::optional<CopyWordClass> wordClass(CopyPoint point) const noexcept;
+      [[nodiscard]] ds::Option<CopyWordClass> wordClass(CopyPoint point) const noexcept;
       [[nodiscard]] CopyPoint step(CopyPoint point, CopyDirection direction) const noexcept;
       [[nodiscard]] bool blankRow(std::uint32_t absolute_row) const noexcept;
       [[nodiscard]] std::array<CopyPoint, 2> pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept;

@@ -19,6 +19,7 @@ import telar.native.zlib;
 import telar.native.zstd;
 import telar.platform.primitives;
 import telar.config.runtime;
+import telar.base.ds;
 
 // Interface: exchange_capture/brotli_decoder.cppm
 export {
@@ -34,7 +35,7 @@ export {
       BrotliDecoder(const BrotliDecoder&) = delete;
       BrotliDecoder& operator=(const BrotliDecoder&) = delete;
 
-      std::optional<std::size_t> decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept;
+      ds::Option<std::size_t> decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept;
 
     private:
       DecoderMemory<Memory> memory_;
@@ -45,7 +46,7 @@ export {
     BrotliDecoder(Memory& memory) -> BrotliDecoder<Memory>;
 
     template <Allocator Memory>
-    [[gnu::noinline]] std::optional<std::size_t> decodeBrotli(Memory& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept;
+    [[gnu::noinline]] ds::Option<std::size_t> decodeBrotli(Memory& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept;
 
   }
 }
@@ -69,7 +70,7 @@ export {
 
       static std::size_t outputCapacity(std::size_t requested) noexcept;
 
-      std::optional<std::size_t> decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, FlateContainer container, std::size_t requested) noexcept;
+      ds::Option<std::size_t> decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, FlateContainer container, std::size_t requested) noexcept;
 
     private:
       enum class BlockKind {
@@ -117,13 +118,13 @@ export {
         bool has_sequences;
       };
 
-      static std::optional<Literals> literals(std::span<const std::uint8_t> bytes) noexcept;
+      static ds::Option<Literals> literals(std::span<const std::uint8_t> bytes) noexcept;
 
       Kind kind = Kind::raw;
       std::size_t size = 0;
 
     private:
-      static std::optional<std::uint64_t> read(std::span<const std::uint8_t> bytes, std::size_t count) noexcept;
+      static ds::Option<std::uint64_t> read(std::span<const std::uint8_t> bytes, std::size_t count) noexcept;
 
       static constexpr unsigned repeated_literals = 1;
     };
@@ -150,14 +151,14 @@ export {
       ZstdDecoder(const ZstdDecoder&) = delete;
       ZstdDecoder& operator=(const ZstdDecoder&) = delete;
 
-      std::optional<Result> decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, std::size_t limit);
+      ds::Option<Result> decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, std::size_t limit);
 
       static constexpr std::size_t minimum_output_capacity = 128 * 1024;
 
       static std::size_t outputCapacity(std::span<const std::uint8_t> input, std::size_t logical_capacity) noexcept;
 
     private:
-      std::optional<std::size_t> copyLiteralPrefix(std::span<const std::uint8_t> input, std::span<std::uint8_t> destination, std::size_t block_capacity);
+      ds::Option<std::size_t> copyLiteralPrefix(std::span<const std::uint8_t> input, std::span<std::uint8_t> destination, std::size_t block_capacity);
 
       static constexpr std::size_t maximum_window_bytes = 8 * 1024 * 1024;
       static constexpr std::size_t frame_descriptor_offset = 4;
@@ -186,11 +187,11 @@ export {
     private:
       DecodedBody<Memory> raw(std::span<const std::uint8_t> input, std::size_t limit, bool failed);
 
-      std::optional<DecodedBody<Memory>> decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit);
+      ds::Option<DecodedBody<Memory>> decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit);
 
       // Not inlined: CaptureProducer::decodeBody decodes every captured body with a coding, and only a
       // small flate limit needs this buffer; in its frame it would sit above every other decoder.
-      [[gnu::noinline]] std::optional<DecodedBody<Memory>> decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit);
+      [[gnu::noinline]] ds::Option<DecodedBody<Memory>> decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit);
 
       Memory& memory_;
     };
@@ -215,9 +216,9 @@ export {
 
       bool publish(Half half) noexcept;
 
-      std::optional<Half> receive();
+      ds::Option<Half> receive();
 
-      std::optional<Half> tryReceive() noexcept;
+      ds::Option<Half> tryReceive() noexcept;
 
       void close() noexcept;
 

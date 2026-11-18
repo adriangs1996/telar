@@ -7,6 +7,7 @@ import std;
 import :sound;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -18,11 +19,11 @@ namespace telar::gui::features::notifications {
 
     [[nodiscard]] bool active() const noexcept;
 
-    [[nodiscard]] std::optional<AgentSound> queued() const noexcept;
+    [[nodiscard]] ds::Option<AgentSound> queued() const noexcept;
 
     [[nodiscard]] SoundRequestOutcome request(AgentSound kind) noexcept;
 
-    [[nodiscard]] std::optional<AgentSound> complete();
+    [[nodiscard]] ds::Option<AgentSound> complete();
 
     void schedulingFailed();
 
@@ -32,7 +33,7 @@ namespace telar::gui::features::notifications {
     [[nodiscard]] bool allows(AgentSound kind) const noexcept;
 
     SoundPolicy configuration_;
-    std::optional<AgentSound> queued_;
+    ds::Option<AgentSound> queued_;
     bool active_ = false;
   };
 

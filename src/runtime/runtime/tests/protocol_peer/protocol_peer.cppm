@@ -16,6 +16,7 @@ import telar.client;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 export {
   class ProtocolFailure : public std::runtime_error {
@@ -106,7 +107,7 @@ export {
 
         const auto payload = client_.receiveFrame(incoming_);
         telar::DecodeStorage storage{scratch_};
-        std::optional<std::variant<Replies...>> reply;
+        telar::ds::Option<std::variant<Replies...>> reply;
 
         ([&] {
           if (payload.front() == static_cast<telar::Byte>(telar::MessageSchema<Replies>::tag)) {
@@ -115,7 +116,7 @@ export {
         }(),
             ...);
         if (reply) {
-          return std::move(*reply);
+          return std::move(reply.getMut());
         }
 
         if (payload.front() == static_cast<telar::Byte>(telar::ServerTag::pane_frame)) {
@@ -145,6 +146,6 @@ export {
     std::vector<telar::Byte> outgoing_;
     std::vector<telar::Byte> scratch_;
     bool acknowledge_frames_;
-    std::optional<std::chrono::steady_clock::time_point> deadline_;
+    telar::ds::Option<std::chrono::steady_clock::time_point> deadline_;
   };
 }

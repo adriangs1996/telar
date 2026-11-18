@@ -7,6 +7,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::features::paths {
 
@@ -23,10 +24,10 @@ namespace telar::gui::features::paths {
     return path;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> PathInsertion::relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> PathInsertion::relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept {
     if (anchor.size() == 1) {
       if (path.size() <= 1) {
-        return std::nullopt;
+        return ds::none;
       }
 
       path.remove_prefix(1);
@@ -35,7 +36,7 @@ namespace telar::gui::features::paths {
     }
 
     if (path.size() <= anchor.size() + 1 || !path.starts_with(anchor) || path[anchor.size()] != '/') {
-      return std::nullopt;
+      return ds::none;
     }
 
     path.remove_prefix(anchor.size() + 1);
@@ -43,7 +44,7 @@ namespace telar::gui::features::paths {
     return path;
   }
 
-  std::optional<PathInsertion::Quoted> PathInsertion::quote(std::string_view word) {
+  ds::Option<PathInsertion::Quoted> PathInsertion::quote(std::string_view word) {
     Quoted output;
 
     if (word.empty()) {
@@ -72,15 +73,15 @@ namespace telar::gui::features::paths {
 
       output.append("'");
     } catch (const std::length_error&) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return output;
   }
 
-  std::optional<PathInsertion::Text> PathInsertion::prepare(const PathPickerPage& page, Choice choice) {
+  ds::Option<PathInsertion::Text> PathInsertion::prepare(const PathPickerPage& page, Choice choice) {
     if (page.matches().empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto& match = page.matches()[std::min(choice.selection, page.matches().size() - 1)];
@@ -95,7 +96,7 @@ namespace telar::gui::features::paths {
 
     const auto quoted = quote(word);
     if (!quoted) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return PasteEncoding::encode<PathPickerLimits::quoted_bytes>(quoted->view(), choice.bracketed);
@@ -259,13 +260,13 @@ namespace telar::gui::features::paths {
     return page.phase() == PathPickerPhase::ready && page.complete() ? "No paths match" : "Searching…";
   }
 
-  PathPickerPlacement PathPickerPlacement::forPage(CellRectangle host, std::optional<CellPosition> cursor, std::uint16_t count) noexcept {
+  PathPickerPlacement PathPickerPlacement::forPage(CellRectangle host, ds::Option<CellPosition> cursor, std::uint16_t count) noexcept {
     const auto rows = std::max<std::uint16_t>(1, std::min(count, maximum_rows));
 
     return place(host, cursor, maximum_width, static_cast<std::uint16_t>(rows + chrome_rows));
   }
 
-  PathPickerPlacement PathPickerPlacement::place(CellRectangle host, std::optional<CellPosition> cursor, std::uint16_t requested_width, std::uint16_t requested_height) noexcept {
+  PathPickerPlacement PathPickerPlacement::place(CellRectangle host, ds::Option<CellPosition> cursor, std::uint16_t requested_width, std::uint16_t requested_height) noexcept {
     const auto width = std::min(requested_width, host.width);
     const auto height = std::min(requested_height, host.height);
 

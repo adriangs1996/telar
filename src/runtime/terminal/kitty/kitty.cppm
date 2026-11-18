@@ -12,6 +12,7 @@ import telar.base.text;
 import telar.config.core;
 import telar.platform.primitives;
 import telar.vocabulary;
+import telar.base.ds;
 
 // What the terminal reads of kitty graphics: command framing, the cursor movement a placement
 // causes, child files and the media budget that graphics queries charge.
@@ -27,7 +28,7 @@ export namespace telar::runtime {
     constexpr explicit KittyControlFields(std::string_view control) noexcept
         : remaining_(control) {}
 
-    std::optional<KittyControlField> next() noexcept;
+    ds::Option<KittyControlField> next() noexcept;
 
     constexpr bool valid() const noexcept {
       return valid_;
@@ -40,7 +41,7 @@ export namespace telar::runtime {
 
   // Generic over the caller's integer width, so it stays here.
   template <std::unsigned_integral Number>
-  TBC_GENERIC std::optional<Number> kittyUnsigned(std::string_view text) noexcept {
+  TBC_GENERIC ds::Option<Number> kittyUnsigned(std::string_view text) noexcept {
     return unsignedDecimal<Number>(text);
   }
 
@@ -92,7 +93,7 @@ export namespace telar::runtime {
 
     bool touches(std::span<const std::uint8_t> bytes) noexcept;
 
-    std::optional<Transition> advance(std::span<const std::uint8_t> bytes, std::size_t& position) noexcept;
+    ds::Option<Transition> advance(std::span<const std::uint8_t> bytes, std::size_t& position) noexcept;
 
     static constexpr bool content(std::uint8_t byte) noexcept {
       return byte < first_c1 && byte != cancel_byte && byte != substitute_byte && byte != escape_byte;
@@ -139,7 +140,7 @@ export namespace telar::runtime {
 
     bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept;
 
-    std::optional<KittyCommandView> next(std::span<const std::uint8_t> bytes) noexcept;
+    ds::Option<KittyCommandView> next(std::span<const std::uint8_t> bytes) noexcept;
 
   private:
     void capture(std::span<const std::uint8_t> bytes) noexcept;
@@ -155,7 +156,7 @@ export namespace telar::runtime {
 
   class KittyCursor {
   public:
-    std::optional<DisplayCells> observe(const KittyCommandView& command, std::uint32_t cell_width, std::uint32_t cell_height) noexcept;
+    ds::Option<DisplayCells> observe(const KittyCommandView& command, std::uint32_t cell_width, std::uint32_t cell_height) noexcept;
 
   private:
     struct ImageSize {
@@ -183,17 +184,17 @@ export namespace telar::runtime {
       }
     };
 
-    std::optional<DisplayCells> execute(const Header& header, std::uint32_t cell_width, std::uint32_t cell_height) noexcept;
+    ds::Option<DisplayCells> execute(const Header& header, std::uint32_t cell_width, std::uint32_t cell_height) noexcept;
 
     ImageSize* find(const Header& header) noexcept;
 
-    static std::optional<Header> parse(const KittyCommandView& command) noexcept;
+    static ds::Option<Header> parse(const KittyCommandView& command) noexcept;
 
-    static std::optional<std::array<std::uint32_t, 2>> pngSize(std::string_view encoded) noexcept;
+    static ds::Option<std::array<std::uint32_t, 2>> pngSize(std::string_view encoded) noexcept;
 
     static constexpr std::size_t image_capacity = 64;
     std::array<ImageSize, image_capacity> sizes_{};
-    std::optional<Header> pending_;
+    ds::Option<Header> pending_;
     std::size_t next_size_ = 0;
   };
 
@@ -220,11 +221,11 @@ export namespace telar::runtime {
     FileDescriptor descriptor;
     std::uint64_t size;
 
-    static std::optional<GraphicsChildFile> open(std::string_view encoded_path) noexcept;
+    static ds::Option<GraphicsChildFile> open(std::string_view encoded_path) noexcept;
 
-    static std::optional<GraphicsChildFile> openDecoded(std::span<const std::uint8_t> decoded_path) noexcept;
+    static ds::Option<GraphicsChildFile> openDecoded(std::span<const std::uint8_t> decoded_path) noexcept;
 
-    static std::optional<GraphicsChildFile> openPath(const char* decoded) noexcept;
+    static ds::Option<GraphicsChildFile> openPath(const char* decoded) noexcept;
 
     bool read(std::span<std::uint8_t> bytes, std::uint64_t offset) const noexcept;
   };

@@ -32,7 +32,7 @@ namespace telar::gui::qt {
 
   void MachineEffects::notePaneInput(application::window::FramePacer::Pane pane) noexcept {
     if (presented() && sinks_.frame_pacer) {
-      sinks_.frame_pacer->noteInput(pane, system::AwakeClock::nowNanoseconds());
+      sinks_.frame_pacer.getMut().noteInput(pane, system::AwakeClock::nowNanoseconds());
     }
   }
 

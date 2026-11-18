@@ -13,6 +13,7 @@ import telar.testing;
 import telar.platform.fs;
 import telar.wire.runtime;
 import telar.cli.control_session;
+import telar.base.ds;
 
 namespace {
 
@@ -36,15 +37,15 @@ namespace {
     return true;
   }
 
-  std::optional<std::string> readFrame(int descriptor) {
+  ds::Option<std::string> readFrame(int descriptor) {
     std::array<unsigned char, 4> prefix{};
     if (!readExactly(descriptor, reinterpret_cast<char*>(prefix.data()), prefix.size())) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::string frame(prefix[0] | prefix[1] << 8 | prefix[2] << 16 | static_cast<std::size_t>(prefix[3]) << 24, '\0');
 
-    return readExactly(descriptor, frame.data(), frame.size()) ? std::optional{frame} : std::nullopt;
+    return readExactly(descriptor, frame.data(), frame.size()) ? ds::Option{frame} : ds::none;
   }
 
   void writeFrame(int descriptor, std::string_view frame) {
@@ -99,7 +100,7 @@ namespace {
         check(hello && hello->starts_with("TELARIPC\x01"));
         writeFrame(connection, "TELARIPC\x02" + hello->substr(9));
         for (std::size_t count = 0; count < requests; ++count) {
-          check(readFrame(connection).has_value());
+          check(readFrame(connection).hasValue());
         }
 
         for (const auto& reply : replies) {

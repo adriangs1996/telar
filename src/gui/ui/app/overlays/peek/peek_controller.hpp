@@ -14,6 +14,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -67,7 +68,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool valid() const;
 
     Store& store_;
-    std::optional<Origin> origin_;
+    ds::Option<Origin> origin_;
     QString editor_;
     std::uint64_t window_generation_ = 0;
     application::window::DisplayMetrics display_{};

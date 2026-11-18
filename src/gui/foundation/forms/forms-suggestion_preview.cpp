@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline forms {
 
@@ -13,14 +14,14 @@ namespace telar::gui::inline foundation::inline forms {
         y_(bounds.y),
         lines_(text, columns(bounds, grid.width)) {}
 
-  std::optional<SuggestionPreviewLine> SuggestionPreview::next() {
+  ds::Option<SuggestionPreviewLine> SuggestionPreview::next() {
     if (finished_ || y_ + line_height_ > bounds_.bottom()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto line = lines_.next();
     if (!line) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const Rect row{.x = bounds_.x, .y = y_, .width = bounds_.width, .height = line_height_};

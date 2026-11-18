@@ -21,6 +21,7 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -242,7 +243,7 @@ namespace telar::gui::qt {
       return span.shown == 0;
     });
 
-    std::optional<application::FoldMap<>::Span> changed;
+    ds::Option<application::FoldMap<>::Span> changed;
     bool closed = false;
     std::size_t changes = 0;
     const auto has = [](std::span<const application::FoldMap<>::Span> list, std::uint32_t first) {
@@ -509,7 +510,7 @@ namespace telar::gui::qt {
     }
 
     layoutRows();
-    top_anchor_ = !view_rows_.empty() && view_rows_.front().exists ? std::optional{view_rows_.front().row} : std::nullopt;
+    top_anchor_ = !view_rows_.empty() && view_rows_.front().exists ? ds::Option{view_rows_.front().row} : ds::none;
     requestViewRows(motion_.moving());
     // A new top row moves the separators; within a row only the shift, the pinned separator and
     // the rail's view change.
@@ -589,10 +590,10 @@ namespace telar::gui::qt {
     session.requestRows(pane_id_, trimmed + run_first, trimmed + run_last);
   }
 
-  std::optional<std::size_t> TerminalItem::screenRowAt(double drawn) const noexcept {
+  ds::Option<std::size_t> TerminalItem::screenRowAt(double drawn) const noexcept {
     const auto* current = pane();
     if (current == nullptr || current->screen.rows() == 0 || !std::isfinite(drawn)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = static_cast<std::int64_t>(std::floor(drawn));
@@ -602,7 +603,7 @@ namespace telar::gui::qt {
     }
 
     if (index < 0 || std::cmp_greater_equal(index, view_rows_.size()) || view_rows_[static_cast<std::size_t>(index)].screen_row < 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return static_cast<std::size_t>(view_rows_[static_cast<std::size_t>(index)].screen_row);
@@ -673,7 +674,7 @@ namespace telar::gui::qt {
     }
 
     if (controller_->prompt().selectedBlock(pane_id_)) {
-      controller_->selectBlock(pane_id_, std::nullopt);
+      controller_->selectBlock(pane_id_, ds::none);
       return;
     }
 
@@ -818,7 +819,7 @@ namespace telar::gui::qt {
     const auto row = view_rows_.front().row;
     const auto& blocks = current->blocks;
     // The last command whose separator is above the top row, or on it and partly scrolled past.
-    std::optional<std::size_t> found;
+    ds::Option<std::size_t> found;
 
     for (std::size_t index = blocks.size(); index-- > 0;) {
       const auto separator = static_cast<std::uint64_t>(blocks[index].row) + blocks[index].rows - 1;
@@ -914,7 +915,7 @@ namespace telar::gui::qt {
     match_marks_.clear();
     QVariantList rail;
     const auto* current = pane();
-    const auto& copy = controller_ == nullptr ? std::optional<application::terminal::copy_mode::CopyState>{} : controller_->copy().state();
+    const auto& copy = controller_ == nullptr ? ds::Option<application::terminal::copy_mode::CopyState>{} : controller_->copy().state();
     if (current != nullptr && copy && copy->pane_id == pane_id_) {
       const auto matches = application::terminal::copy_mode::view(controller_->session()).matches();
       const auto& screen = current->screen;
@@ -941,18 +942,18 @@ namespace telar::gui::qt {
 
   // Where row `row`, counted from the top of the scrollback, is drawn: among the view's rows, or
   // from the screen's first row `first` while the view draws the screen's own.
-  std::optional<std::size_t> TerminalItem::drawnRowOf(std::uint64_t row, std::uint64_t first) const {
+  ds::Option<std::size_t> TerminalItem::drawnRowOf(std::uint64_t row, std::uint64_t first) const {
     if (!view_rows_.empty()) {
       const auto found = std::ranges::find_if(view_rows_, [row](const ViewRow& view) {
         return view.exists && view.row == row;
       });
 
-      return found == view_rows_.end() ? std::nullopt : std::optional{static_cast<std::size_t>(found - view_rows_.begin())};
+      return found == view_rows_.end() ? ds::none : ds::Option{static_cast<std::size_t>(found - view_rows_.begin())};
     }
 
     const auto* current = pane();
     if (current == nullptr || row < first || row >= first + current->screen.rows()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return static_cast<std::size_t>(row - first);

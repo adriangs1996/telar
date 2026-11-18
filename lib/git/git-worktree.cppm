@@ -6,6 +6,7 @@ import telar.platform.primitives;
 import :format;
 import :objects;
 import telar.sys.posix;
+import telar.base.ds;
 
 // The index (versions 2 to 4) and the two comparisons git status makes with
 // it: HEAD's tree against the index (staged) and the index against the
@@ -105,7 +106,7 @@ namespace telar::git {
     explicit StagedComparison(Memory& memory) noexcept;
 
     // `tree` is HEAD's root tree, or nullopt on an unborn branch.
-    bool compare(ObjectDatabase& objects, const Index& index, std::optional<ObjectId> tree, const Limits& limits, ChangeCounts& counts);
+    bool compare(ObjectDatabase& objects, const Index& index, ds::Option<ObjectId> tree, const Limits& limits, ChangeCounts& counts);
 
     std::uint64_t trees_read = 0;
 
@@ -198,8 +199,8 @@ namespace telar::git {
     // git's ce_match_stat, then the content when stat data cannot decide.
     Verdict examine(const IndexEntry& entry, std::int64_t index_time, int parent, const char* name, const struct stat& status, Verified& verified);
 
-    std::optional<ObjectId> hashLink(int parent, const char* name, const struct stat& status);
-    std::optional<ObjectId> hashFile(int parent, const char* name, const struct stat& expected);
+    ds::Option<ObjectId> hashLink(int parent, const char* name, const struct stat& status);
+    ds::Option<ObjectId> hashFile(int parent, const char* name, const struct stat& expected);
 
     Options options_;
     const Limits* limits_ = nullptr;

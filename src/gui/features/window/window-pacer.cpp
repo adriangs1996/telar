@@ -2,16 +2,17 @@ module telar.gui.features.window;
 
 import std;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::window {
 
-  std::uint64_t FramePacer::resolveInterval(std::uint64_t display_interval_ns, std::optional<std::uint16_t> maximum_fps) noexcept {
+  std::uint64_t FramePacer::resolveInterval(std::uint64_t display_interval_ns, ds::Option<std::uint16_t> maximum_fps) noexcept {
     const auto cap_interval_ns = maximum_fps ? nanoseconds_per_second / std::max<std::uint16_t>(*maximum_fps, 1) : 0;
 
     return std::clamp(std::max(display_interval_ns, cap_interval_ns), minimum_interval_ns, maximum_interval_ns);
   }
 
-  std::uint64_t FramePacer::configure(std::uint64_t display_interval_ns, std::optional<std::uint16_t> maximum_fps) noexcept {
+  std::uint64_t FramePacer::configure(std::uint64_t display_interval_ns, ds::Option<std::uint16_t> maximum_fps) noexcept {
     interval_ns_ = resolveInterval(display_interval_ns, maximum_fps);
 
     return interval_ns_;
@@ -26,7 +27,7 @@ namespace telar::gui::features::window {
       return;
     }
 
-    std::optional<std::size_t> vacant;
+    ds::Option<std::size_t> vacant;
     std::size_t oldest = 0;
     auto oldest_started_ns = std::numeric_limits<std::uint64_t>::max();
 
@@ -54,7 +55,7 @@ namespace telar::gui::features::window {
       }
     }
 
-    inputs_[vacant.value_or(oldest)] = InputGrace{.pane = pane, .started_ns = now_ns};
+    inputs_[vacant.valueOr(oldest)] = InputGrace{.pane = pane, .started_ns = now_ns};
   }
 
   bool FramePacer::canAdvanceInput(Pane pane, std::uint64_t now_ns) const noexcept {
@@ -68,24 +69,24 @@ namespace telar::gui::features::window {
     });
   }
 
-  std::optional<std::uint64_t> FramePacer::waitUntil(std::span<const Pane> panes, std::uint64_t now_ns) const noexcept {
+  ds::Option<std::uint64_t> FramePacer::waitUntil(std::span<const Pane> panes, std::uint64_t now_ns) const noexcept {
     if (ordinaryAvailable(now_ns)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     for (const auto& grace : inputs_) {
       if (grace && grace->active(now_ns) && std::ranges::any_of(panes, [&](Pane pane) {
             return grace->includes(pane);
           })) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
-    return after(anchor_ns_.value_or(now_ns), interval_ns_);
+    return after(anchor_ns_.valueOr(now_ns), interval_ns_);
   }
 
   void FramePacer::record(std::span<const Pane> panes, std::uint64_t now_ns) noexcept {
-    const auto due_ns = anchor_ns_ ? std::optional{after(*anchor_ns_, interval_ns_)} : std::nullopt;
+    const auto due_ns = anchor_ns_ ? ds::Option{after(*anchor_ns_, interval_ns_)} : ds::none;
     const bool scheduled = due_ns && *due_ns <= now_ns && now_ns - *due_ns < interval_ns_;
     const bool ordinary_available = ordinaryAvailable(now_ns);
 
@@ -102,10 +103,10 @@ namespace telar::gui::features::window {
       }
 
       if (!ordinary_available && !scheduled && grace->frames_left != 0) {
-        --grace->frames_left;
+        --grace.getMut().frames_left;
       }
 
-      grace->pane = *matched;
+      grace.getMut().pane = *matched;
     }
 
     anchor_ns_ = scheduled ? *due_ns : now_ns;

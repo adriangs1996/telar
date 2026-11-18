@@ -6,6 +6,7 @@ static_assert(true);
 #include "font_source.hpp"
 #include "platform/font.h"
 #include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFileDevice>
@@ -28,7 +29,7 @@ namespace telar::gui::qt {
 
     struct FallbackRequest {
       const fonts::FontQuery& query;
-      std::optional<FontData> candidate;
+      ds::Option<FontData> candidate;
     };
 
     int acceptFallbackFont(const fonts::FontMatch* match, void* context) noexcept {
@@ -86,11 +87,11 @@ namespace telar::gui::qt {
     return data;
   }
 
-  std::optional<FontData> loadFallbackFontData(const fonts::FontQuery& query) {
+  ds::Option<FontData> loadFallbackFontData(const fonts::FontQuery& query) {
     FallbackRequest request{.query = query, .candidate = {}};
     fonts::FontMatch match{};
     if (telarGuiFindValidatedFallbackFont(query.codepoints(), &match, acceptFallbackFont, &request) != telar_font_found) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return std::move(request.candidate);

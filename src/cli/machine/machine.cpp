@@ -22,6 +22,7 @@ import telar.platform.primitives;
 import telar.platform.process;
 import telar.wire.clients;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime::cli::machine::assets {
 
@@ -69,8 +70,8 @@ namespace telar::runtime::cli::machine {
     std::string libc;
     std::string home;
     std::string target;
-    std::optional<std::string> installed;
-    std::optional<std::string> node;
+    ds::Option<std::string> installed;
+    ds::Option<std::string> node;
     std::set<std::string> tools;
     std::map<std::string, std::string> agents;
 
@@ -277,15 +278,15 @@ bash "$installer" </dev/null
   }
 
   // One numeric part of a Node.js version, or nullopt when it is not a u32.
-  std::optional<std::uint32_t> maybeVersion(std::string_view part) noexcept {
+  ds::Option<std::uint32_t> maybeVersion(std::string_view part) noexcept {
     try {
       return parseInt<std::uint32_t>(part);
     } catch (const std::invalid_argument&) {
-      return std::nullopt;
+      return ds::none;
     }
   }
 
-  std::optional<std::string> missingPrerequisite(const Platform& platform, std::string_view agent, const AgentInstaller& installer) {
+  ds::Option<std::string> missingPrerequisite(const Platform& platform, std::string_view agent, const AgentInstaller& installer) {
     if (platform.libc == "musl" && !installer.musl) {
       return "its binary needs glibc and this machine has musl";
     }
@@ -309,7 +310,7 @@ bash "$installer" </dev/null
 
       const auto dot = text.find('.');
       const auto major = maybeVersion(text.substr(0, dot));
-      const auto minor = dot == std::string_view::npos ? std::nullopt : maybeVersion(text.substr(dot + 1, text.find('.', dot + 1) - dot - 1));
+      const auto minor = dot == std::string_view::npos ? ds::none : maybeVersion(text.substr(dot + 1, text.find('.', dot + 1) - dot - 1));
       constexpr std::uint32_t required_major = 22;
       constexpr std::uint32_t required_minor = 19;
       if (!major || !minor || *major < required_major || (*major == required_major && *minor < required_minor)) {
@@ -317,7 +318,7 @@ bash "$installer" </dev/null
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -507,7 +508,7 @@ fetch() {
     return tokens;
   }
 
-  std::optional<std::string> homePath(std::string_view token, const std::string& home) {
+  ds::Option<std::string> homePath(std::string_view token, const std::string& home) {
     for (const auto prefix : {"~/", "$HOME/", "${HOME}/"}) {
       if (token.starts_with(prefix)) {
         return home + "/" + std::string{token.substr(std::string_view{prefix}.size())};
@@ -518,7 +519,7 @@ fetch() {
       return std::string{token};
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -550,9 +551,9 @@ fetch() {
       std::string remote;
       std::string bytes;
       SyncEntry::Format format;
-      std::optional<std::string> hooks;
+      ds::Option<std::string> hooks;
       mode_t mode;
-      std::optional<JsonNode<Memory>> json;
+      ds::Option<JsonNode<Memory>> json;
     };
 
     struct Root {
@@ -695,7 +696,7 @@ fetch() {
       }
 
       total_ += bytes.size();
-      files_.push_back({remote, std::move(bytes), entry.format, entry.hooks ? std::optional<std::string>{entry.name} : std::nullopt, static_cast<mode_t>((state.st_mode & 0111) != 0 ? 0755 : 0644), std::nullopt});
+      files_.push_back({remote, std::move(bytes), entry.format, entry.hooks ? ds::Option<std::string>{entry.name} : ds::none, static_cast<mode_t>((state.st_mode & 0111) != 0 ? 0755 : 0644), ds::none});
     }
 
     static bool safeLocal(const std::string& path) {
@@ -1039,7 +1040,7 @@ fetch() {
         const bool had_items = !node.children().empty();
 
         for (std::size_t index = 0; index < node.children().size();) {
-          auto& child = node.children()[index];
+          auto& child = node.childrenMut()[index];
           const bool container = child.kind() == JsonKind::object || child.kind() == JsonKind::array;
           const bool recurse = container && (node.kind() == JsonKind::array || !child.children().empty());
           if (recurse && !keepCommands(left, remote_home, staged, child, existing, path)) {
@@ -1115,11 +1116,11 @@ fetch() {
           continue;
         }
 
-        if (auto* status = file.json->find("statusLine"); status && !keepCommands(left_, remote_home_, staged, *status, existing, file.remote)) {
-          file.json->remove("statusLine");
+        if (auto* status = file.json.getMut().findMut("statusLine"); status && !keepCommands(left_, remote_home_, staged, *status, existing, file.remote)) {
+          file.json.getMut().remove("statusLine");
         }
 
-        if (auto* hooks = file.json->find("hooks")) {
+        if (auto* hooks = file.json.getMut().findMut("hooks")) {
           keepCommands(left_, remote_home_, staged, *hooks, existing, file.remote);
         }
       }
@@ -1202,16 +1203,16 @@ fetch() {
   struct LoginPlan {
     std::string title;
     std::vector<std::string> arguments;
-    std::optional<std::string> environment;
-    std::optional<std::string> keys;
+    ds::Option<std::string> environment;
+    ds::Option<std::string> keys;
     bool link = true;
     std::vector<std::string_view> hosts;
-    std::optional<std::string> code_marker;
-    std::optional<std::string> paste;
+    ds::Option<std::string> code_marker;
+    ds::Option<std::string> paste;
     std::string instructions;
   };
 
-  tbc::view<std::optional<LoginPlan>, tbc::lt::a> planFor(std::string_view agent, tbc::view<const std::optional<std::string>&, tbc::lt::a> provider) {
+  tbc::view<ds::Option<LoginPlan>, tbc::lt::a> planFor(std::string_view agent, tbc::view<const ds::Option<std::string>&, tbc::lt::a> provider) {
     if (agent == "claude") {
       return LoginPlan{.title = "Log in to Claude Code", .arguments = {"auth", "login"}, .hosts = {"claude.com", "claude.ai", "platform.claude.com"}, .paste = "the code the browser shows", .instructions = "open the page, sign in, and paste the code it shows into this terminal"};
     }
@@ -1232,7 +1233,7 @@ fetch() {
       return LoginPlan{.title = "Log in to OpenCode", .arguments = {"auth", "login", "-p", "openai", "-m", "ChatGPT Pro/Plus (headless)"}, .hosts = {"auth.openai.com"}, .code_marker = "Enter code:", .instructions = "open the page, sign in and enter the code"};
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   struct LoginPane {
@@ -1244,16 +1245,16 @@ fetch() {
 
   struct LoginLink {
     std::string url;
-    std::optional<std::string> code;
+    ds::Option<std::string> code;
   };
 
-  std::optional<LoginLink> findLoginLink(std::string_view text, const LoginPlan& plan) {
+  ds::Option<LoginLink> findLoginLink(std::string_view text, const LoginPlan& plan) {
     std::string_view url;
 
     for (std::size_t start = 0;;) {
       const auto at = text.find("https://", start);
       if (at == std::string_view::npos) {
-        return std::nullopt;
+        return ds::none;
       }
 
       start = at + 1;
@@ -1360,10 +1361,10 @@ fetch() {
       return {number(required(value, "workspace_id")), number(required(value, "tab_id")), number(required(value, "pane_id"))};
     }
 
-    std::string capture(const std::vector<std::string>& words, std::optional<std::string_view> input = std::nullopt) {
+    std::string capture(const std::vector<std::string>& words, ds::Option<std::string_view> input = ds::none) {
       // The same encoded command, length limit included, as every dispatch.
       const auto command = remoteCommand(profile_, words);
-      const auto output = launch::capture(memory_, ssh(memory_, profile_.destination(), command), input.value_or(std::string_view{}), status_timeout);
+      const auto output = launch::capture(memory_, ssh(memory_, profile_.destination(), command), input.valueOr(std::string_view{}), status_timeout);
 
       std::fwrite(output.err.data(), 1, output.err.size(), stderr);
       if (output.status != 0) {
@@ -1377,8 +1378,8 @@ fetch() {
       return runScript(memory_, profile_.destination(), bytes, status_timeout);
     }
 
-    std::optional<std::string> command(const std::vector<std::string>& words, bool missing_pane) {
-      std::string bytes = "exec " + launch::quote(profile_.program().value_or("telar"));
+    ds::Option<std::string> command(const std::vector<std::string>& words, bool missing_pane) {
+      std::string bytes = "exec " + launch::quote(profile_.program().valueOr("telar"));
 
       for (const auto& word : words) {
         bytes += " " + launch::quote(word);
@@ -1394,7 +1395,7 @@ fetch() {
 
       const bool missing = output.out.empty() && (missing_pane ? output.status == 2 && diagnostic == "telar pane: pane not found or its generation is stale" : output.status == 1 && (diagnostic == "telar tab: tab not found" || diagnostic == "telar tab: workspace not found"));
       if (missing) {
-        return std::nullopt;
+        return ds::none;
       }
 
       std::fwrite(output.err.data(), 1, output.err.size(), stderr);
@@ -1426,7 +1427,7 @@ fetch() {
       }
     }
 
-    std::optional<LoginPane> find(const std::string& agent, const std::string& title) {
+    ds::Option<LoginPane> find(const std::string& agent, const std::string& title) {
       const auto output = script("cat \"" + recordPath(agent) + "\" 2>/dev/null || true\n");
       if (output.status != 0) {
         throw CommandError{"LoginRecordUnreadable"};
@@ -1436,7 +1437,7 @@ fetch() {
       LoginPane noted;
       std::string extra;
       if (!(input >> noted.workspace >> noted.tab >> noted.pane) || input >> extra) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto workspaces = capture({"workspace", "list", "--json"});
@@ -1450,7 +1451,7 @@ fetch() {
 
       if (!named) {
         forget(agent);
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto tab = command({"tab", "get", std::to_string(noted.tab), "--workspace", std::to_string(noted.workspace), "--json"}, false);
@@ -1472,7 +1473,7 @@ fetch() {
       }
 
       forget(agent);
-      return std::nullopt;
+      return ds::none;
     }
 
     void closeTab(LoginPane pane) {
@@ -1530,14 +1531,14 @@ fetch() {
       return created;
     }
 
-    std::optional<std::string> provider(const std::string& agent) {
+    ds::Option<std::string> provider(const std::string& agent) {
       if (agent != "pi" && agent != "opencode") {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto* home = std::getenv("HOME");
       if (!home) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto root = localRoot(agent, home);
@@ -1554,7 +1555,7 @@ fetch() {
           const auto plain = filter::stripJsonc(*bytes);
           const auto parsed = JsonValue::parse(plain);
           if (!parsed.encoded().starts_with('{')) {
-            return std::nullopt;
+            return ds::none;
           }
 
           const auto field = parsed.field(agent == "pi" ? "defaultProvider" : "model");
@@ -1576,10 +1577,10 @@ fetch() {
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
-    bool loggedIn(const std::string& agent, const std::string& path, const std::optional<std::string>& provider) {
+    bool loggedIn(const std::string& agent, const std::string& path, const ds::Option<std::string>& provider) {
       std::string check;
 
       if (agent == "claude") {
@@ -1594,7 +1595,7 @@ fetch() {
         check = "[ -n \"$provider\" ] && \"$agent\" auth list 2>/dev/null | grep -qi -- \"$provider\"";
       }
 
-      const auto output = script(assign("agent", path) + assign("provider", provider.value_or("")) + check + "\n");
+      const auto output = script(assign("agent", path) + assign("provider", provider.valueOr("")) + check + "\n");
       if (output.status == launch::ssh_failure) {
         throw CommandError{"SshFailed"};
       }
@@ -1603,14 +1604,14 @@ fetch() {
     }
 
     struct Read {
-      std::optional<int> exit_code;
+      ds::Option<int> exit_code;
       std::string text;
     };
 
-    std::optional<Read> read(LoginPane pane) {
+    ds::Option<Read> read(LoginPane pane) {
       const auto output = command({"pane", "read", std::to_string(pane.pane), "--lines", "80", "--json"}, true);
       if (!output) {
-        return std::nullopt;
+        return ds::none;
       }
 
       try {
@@ -1620,7 +1621,7 @@ fetch() {
         }
 
         const auto exit = required(value, "exit_code").encoded();
-        std::optional<int> code;
+        ds::Option<int> code;
 
         if (exit != "null") {
           const auto parsed = parseExact<int>(exit);
@@ -1637,9 +1638,9 @@ fetch() {
       }
     }
 
-    std::optional<MachineLogin> ended(const std::string& agent, const std::string& path, const std::optional<std::string>& provider, std::optional<Read> read, LoginPane pane) {
+    ds::Option<MachineLogin> ended(const std::string& agent, const std::string& path, const ds::Option<std::string>& provider, ds::Option<Read> read, LoginPane pane) {
       if (read && !read->exit_code) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto logged_in = loggedIn(agent, path, provider);
@@ -1687,7 +1688,7 @@ fetch() {
     struct Request {
       std::string agent;
       std::string path;
-      std::optional<std::string> provider;
+      ds::Option<std::string> provider;
       LoginPlan plan;
     };
 
@@ -1708,7 +1709,7 @@ fetch() {
 
         if (plan.link) {
           const auto deadline = std::chrono::steady_clock::now() + link_timeout;
-          std::optional<LoginLink> found;
+          ds::Option<LoginLink> found;
 
           while (std::chrono::steady_clock::now() < deadline) {
             const auto value = read(pane);
@@ -1847,7 +1848,7 @@ fetch() {
           results[agent] = MachineLogin::done;
           report_.note(Step::logins, agent + ": logged in");
         } else if (!plan) {
-          report_.note(Step::logins, agent + ": log in there yourself; setup has no browser login for " + selected.value_or("its provider"));
+          report_.note(Step::logins, agent + ": log in there yourself; setup has no browser login for " + selected.valueOr("its provider"));
         } else {
           started = true;
           try {
@@ -1981,7 +1982,7 @@ fetch() {
   }
 
   template <Allocator Memory>
-  std::optional<Platform> reach(Memory& memory, SetupReport& report, const Target& target, const std::string& directory) {
+  ds::Option<Platform> reach(Memory& memory, SetupReport& report, const Target& target, const std::string& directory) {
     launch::Output probe;
     bool confirmed = false;
     const auto run = [&] {
@@ -2001,7 +2002,7 @@ fetch() {
       }
     } catch (const std::exception& error) {
       report.end(Step::ssh, Status::failed, std::string{"ssh did not run to the end: "} + error.what());
-      return std::nullopt;
+      return ds::none;
     }
 
     if (probe.status != 0) {
@@ -2017,7 +2018,7 @@ fetch() {
         report.end(Step::ssh, Status::failed, std::string{probe.errorLine()});
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     report.end(Step::ssh, confirmed ? Status::changed : Status::ok, "batch-mode SSH to " + target.destination + " works");
@@ -2028,13 +2029,13 @@ fetch() {
       return platform;
     } catch (const std::exception& error) {
       report.end(Step::platform, Status::failed, std::string{error.what()} + ": " + probe.out.substr(0, probe.out.find('\n')));
-      return std::nullopt;
+      return ds::none;
     }
   }
 
   struct Install {
-    std::optional<std::string> binary;
-    std::optional<std::string> digest;
+    ds::Option<std::string> binary;
+    ds::Option<std::string> digest;
     std::string directory;
   };
 
@@ -2099,7 +2100,7 @@ fetch() {
   }
 
   template <Allocator Memory>
-  std::optional<bool> installRuntime(Memory& memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
+  ds::Option<bool> installRuntime(Memory& memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
     if (!build.binary) {
       return false;
     }
@@ -2142,13 +2143,13 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
         const auto uploaded = launch::captureFile(memory, ssh(memory, target.destination, command), runtime.get(), install_timeout);
         if (uploaded.status != 0) {
           report.end(Step::telar, Status::failed, "the runtime upload failed: " + std::string{uploaded.errorLine()});
-          return std::nullopt;
+          return ds::none;
         }
 
         changed = true;
       } catch (const std::exception& error) {
         report.end(Step::telar, Status::failed, std::string{"the runtime upload did not run to the end: "} + error.what());
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -2408,7 +2409,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
     }
 
     try {
-      const auto previous = target.saved ? target.saved->program() : std::nullopt;
+      const auto previous = target.saved ? target.saved->program() : ds::none;
       const bool changed = !target.saved || previous != platform->target || (!target.saved->enabled() && !options.disabled);
       if (changed) {
         update(memory, path, [&](MachineProfiles& saved) {
@@ -2460,7 +2461,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
     if (options.skip[2]) {
       report.end(Step::logins, Status::skipped, "--skip login");
     } else {
-      std::optional<MachineProfile> saved;
+      ds::Option<MachineProfile> saved;
 
       try {
         const auto profiles_now = load(memory, path);

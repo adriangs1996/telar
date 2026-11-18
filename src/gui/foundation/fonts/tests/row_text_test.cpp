@@ -25,6 +25,7 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.fonts.tests.font_fixture;
+import telar.base.ds;
 
 namespace {
 
@@ -171,7 +172,7 @@ namespace {
     }
 
     check(failed, "row buffers must honor the injected allocator");
-    gate.permit(std::nullopt);
+    gate.permit(telar::ds::none);
     layout.shape(fonts, cells, {.pixel_height = pixel_height, .cell_width = cell_width});
     check(layout.spans().size() == cells.size(), "a failed first allocation must leave the layout reusable");
   }

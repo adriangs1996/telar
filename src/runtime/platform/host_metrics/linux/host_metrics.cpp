@@ -8,6 +8,7 @@ import telar.sys.posix;
 
 import telar.platform.fs;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
   namespace {
@@ -27,7 +28,7 @@ namespace telar::runtime {
       return true;
     }
 
-    std::optional<std::uint8_t> batteryPercent() noexcept {
+    ds::Option<std::uint8_t> batteryPercent() noexcept {
       try {
         DirectoryStream directory{FileDescriptor{::open("/sys/class/power_supply", O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
         std::array<char, PATH_MAX> path;
@@ -51,16 +52,16 @@ namespace telar::runtime {
         }
       } catch (...) {
       }
-      return std::nullopt;
+      return ds::none;
     }
 
   }
 
-  std::optional<HostCounters> NativeHostMetrics::read() noexcept {
+  ds::Option<HostCounters> NativeHostMetrics::read() noexcept {
     TELAR_TRACE("metrics.readHost");
     std::array<char, 16 * 1024> buffer;
     if (!readText("/proc/stat", buffer)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     enum class CpuField : std::size_t {
@@ -77,7 +78,7 @@ namespace telar::runtime {
     std::array<unsigned long long, static_cast<std::size_t>(CpuField::count)> ticks{};
     const auto found = std::sscanf(buffer.data(), "cpu %llu %llu %llu %llu %llu %llu %llu %llu", &ticks[0], &ticks[1], &ticks[2], &ticks[3], &ticks[4], &ticks[5], &ticks[6], &ticks[7]);
     if (found < static_cast<int>(CpuField::idle) + 1) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint64_t total_ticks = 0;
@@ -86,7 +87,7 @@ namespace telar::runtime {
     }
     const auto idle_ticks = ticks[static_cast<std::size_t>(CpuField::idle)] + ticks[static_cast<std::size_t>(CpuField::io_wait)];
     if (!readText("/proc/meminfo", buffer)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     unsigned long long total_kib = 0;
@@ -102,7 +103,7 @@ namespace telar::runtime {
       remaining = newline == std::string_view::npos ? std::string_view{} : remaining.substr(newline + 1);
     }
     if (total_kib == 0 || available_kib > total_kib) {
-      return std::nullopt;
+      return ds::none;
     }
 
     constexpr std::uint64_t bytes_per_kib = 1024;

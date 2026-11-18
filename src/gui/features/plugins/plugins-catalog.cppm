@@ -11,6 +11,7 @@ import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 // Interface: config/plugin_overrides.cppm
 export {
@@ -18,9 +19,9 @@ export {
 
     class PluginOverrides {
     public:
-      void set(const runtime::plugins::ConfiguredPlugin& specification, std::optional<std::uint64_t> identity);
+      void set(const runtime::plugins::ConfiguredPlugin& specification, ds::Option<std::uint64_t> identity);
 
-      [[nodiscard]] std::optional<bool> requested(std::string_view path) const noexcept;
+      [[nodiscard]] ds::Option<bool> requested(std::string_view path) const noexcept;
 
       void apply(runtime::plugins::Specifications& specifications) const noexcept;
 
@@ -29,7 +30,7 @@ export {
     private:
       struct Entry {
         runtime::plugins::ConfiguredPlugin specification;
-        std::optional<std::uint64_t> identity;
+        ds::Option<std::uint64_t> identity;
       };
 
       std::array<Entry, runtime::plugins::PackageLimits::configured> entries_{};

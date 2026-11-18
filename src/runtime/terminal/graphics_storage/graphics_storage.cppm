@@ -13,6 +13,7 @@ import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
+import telar.base.ds;
 
 // Interface: graphics/storage_limits.cppm
 export {
@@ -53,7 +54,7 @@ export {
     private:
       void enforceScreen(GhosttyTerminal terminal);
 
-      std::optional<std::uint32_t> oldestImage(GhosttyKittyGraphics storage, bool placed);
+      ds::Option<std::uint32_t> oldestImage(GhosttyKittyGraphics storage, bool placed);
 
       GhosttyKittyGraphicsPlacementIterator placements(GhosttyKittyGraphics storage);
 
@@ -108,9 +109,9 @@ export {
 
     private:
       // The pixels are the terminal's, which the allocator maps: the view borrows the allocator, region `a`.
-      static tbc::view<std::optional<GraphicsImageView>, tbc::lt::a> readImage(tbc::view<Memory&, tbc::lt::a> memory, GhosttyKittyGraphicsImage image);
+      static tbc::view<ds::Option<GraphicsImageView>, tbc::lt::a> readImage(tbc::view<Memory&, tbc::lt::a> memory, GhosttyKittyGraphicsImage image);
 
-      std::optional<GraphicsPlacement> readPlacement(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyKittyGraphics storage, GhosttyTerminal terminal);
+      ds::Option<GraphicsPlacement> readPlacement(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyKittyGraphics storage, GhosttyTerminal terminal);
 
       GhosttyAllocatorBridge<Memory> allocator_;
       GraphicsStorageLimits<Memory> limits_;

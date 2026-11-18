@@ -18,7 +18,7 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"IPv6 redirect targets require brackets"};
     }
 
-    const auto port = parseExact<std::uint16_t>(text.substr(colon + 1)).value_or(0);
+    const auto port = parseExact<std::uint16_t>(text.substr(colon + 1)).valueOr(0);
     if (port == 0 || !ProxyHostname::validTarget(host)) {
       throw std::invalid_argument{"Invalid redirect target"};
     }

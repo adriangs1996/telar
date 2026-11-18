@@ -57,6 +57,7 @@ import telar.runtime.tls.tests.hello_fixture;
 import telar.runtime.tls.interception;
 import telar.tls;
 import telar.tls.tests.tls_fixture;
+import telar.base.ds;
 
 namespace {
 
@@ -268,7 +269,7 @@ namespace {
     std::array<char, 128> encoded;
     const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
 
-    check(count.has_value());
+    check(count.hasValue());
     return "Proxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n";
   }
 
@@ -280,7 +281,7 @@ namespace {
     const auto secret = ProxySecret::generate();
     const auto credential = authorization(secret);
     ProxyCounters counters;
-    auto origin = ProxyListener::bind(std::nullopt, {});
+    auto origin = ProxyListener::bind(ds::none, {});
 
     for (const auto hostname : {"127.0.0.1", "fixture.invalid"}) {
       SocketPair sockets;
@@ -633,11 +634,11 @@ namespace {
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
     ProxyCounters counters;
-    std::array<std::optional<Resolutions::Ticket>, Resolutions::capacity> tickets;
+    std::array<ds::Option<Resolutions::Ticket>, Resolutions::capacity> tickets;
 
     for (std::size_t index = 0; index < tickets.size(); ++index) {
       tickets[index] = Resolutions::request("host" + std::to_string(index) + ".test");
-      check(tickets[index].has_value());
+      check(tickets[index].hasValue());
     }
 
     {

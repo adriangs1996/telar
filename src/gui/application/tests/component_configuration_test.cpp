@@ -32,6 +32,7 @@ import telar.gui.features.machines;
 import telar.gui.application;
 import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
@@ -80,7 +81,7 @@ namespace {
   }
 
   template <typename Value>
-  Value required(std::optional<Value> value) {
+  Value required(telar::ds::Option<Value> value) {
     if (!value) {
       throw std::runtime_error{"Expected a retained component action"};
     }
@@ -152,7 +153,7 @@ return {api_version = 2, client = {
 
     check(bar.nodes().size() == 2 && bar.text(bar.nodes()[1].text) == "á λ", "static source text must be copied into owned content");
     const auto action = bar.action(bar.nodes()[0]);
-    const auto definition = action ? base.definitionAction(*action) : std::nullopt;
+    const auto definition = action ? base.definitionAction(*action) : telar::ds::none;
 
     check(definition && definition->kind == DefinitionActionDescription::Kind::panel && definition->index == 1, "static component actions must resolve sorted panel indices");
     check(bar.text(bar.nodes().front().url) == "https://action-fallback.test", "components with an action must also retain their configured URL");

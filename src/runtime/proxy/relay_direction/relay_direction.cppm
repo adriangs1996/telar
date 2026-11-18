@@ -12,6 +12,7 @@ import telar.platform.net;
 import telar.runtime.platform.name_resolutions;
 import telar.base.text;
 import telar.platform.primitives;
+import telar.base.ds;
 
 // Interface: proxy/origin_connection.cppm
 export {
@@ -130,7 +131,7 @@ export {
       std::uint16_t port_;
       State state_ = State::resolving;
       FileDescriptor socket_;
-      std::optional<typename Resolutions::Ticket> resolution_;
+      ds::Option<typename Resolutions::Ticket> resolution_;
       typename Resolutions::Result resolved_{};
       std::size_t next_address_ = 0;
     };

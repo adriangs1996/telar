@@ -69,6 +69,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct HistoryPresentation;
@@ -144,7 +145,7 @@ namespace telar::gui::qt {
     [[nodiscard]] application::Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
-    void soundPlaybackFinished(std::optional<CommandFailure> failure);
+    void soundPlaybackFinished(ds::Option<CommandFailure> failure);
 
     [[nodiscard]] static int controlModifier();
     [[nodiscard]] static int superModifier();
@@ -272,9 +273,9 @@ namespace telar::gui::qt {
     void initializePrompt();
     void initializeTerminals();
 
-    [[nodiscard]] GuiSession& session() noexcept;
+    [[nodiscard]] GuiSession& sessionMut() noexcept;
     [[nodiscard]] const GuiSession& session() const noexcept;
-    [[nodiscard]] RuntimeConnection& connection() noexcept;
+    [[nodiscard]] RuntimeConnection& connectionMut() noexcept;
     [[nodiscard]] const RuntimeConnection& connection() const noexcept;
     void runtimeDisconnected(MachineClient& client);
     void initializePalette();
@@ -327,8 +328,8 @@ namespace telar::gui::qt {
     ConfigurationSource configuration_source_;
     tbc::view<WindowDisplay, tbc::lt::self> display_;
     // The theme and font QML reads, built on first read after each configurationChanged.
-    mutable std::optional<QVariantMap> colors_;
-    mutable std::optional<QVariantMap> font_;
+    mutable ds::Option<QVariantMap> colors_;
+    mutable ds::Option<QVariantMap> font_;
     tbc::view<ElementSlots, tbc::lt::self> element_slots_{configuration_source_, [this] {
                                                             return components_.context();
                                                           },

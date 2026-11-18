@@ -22,6 +22,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -72,11 +73,11 @@ namespace telar::gui::qt {
     // window presented it.
     Q_INVOKABLE void selectCaptured();
 
-    [[nodiscard]] std::optional<TabLocation> capturedTab() const noexcept {
+    [[nodiscard]] ds::Option<TabLocation> capturedTab() const noexcept {
       return drag_.source();
     }
 
-    void observeHover(std::optional<QPointF> position);
+    void observeHover(ds::Option<QPointF> position);
     // Escape cancels a drag and swallows its own release. False leaves the key to the window.
     [[nodiscard]] bool key(QKeyEvent& event);
     // A left press on a presented tab captures it. `ratio` is the window's chrome ratio.
@@ -113,14 +114,14 @@ namespace telar::gui::qt {
     Store& store_;
     ElementSlots& elements_;
     ListModel rows_;
-    std::optional<Inputs> synchronized_;
+    ds::Option<Inputs> synchronized_;
     std::uint64_t rebuilds_ = 0;
     QPointer<TabStripLayout> strip_;
     QPointer<QQuickWindow> window_;
     application::workbench::TabDropSurface presented_;
     application::workbench::TabDrag drag_;
     application::workbench::TabDropSlots drop_slots_;
-    std::optional<application::workbench::TabDragMove> pending_move_;
+    ds::Option<application::workbench::TabDragMove> pending_move_;
     application::workbench::TabDropSurface capture_surface_;
     QPointF pointer_;
     qreal grab_offset_ = 0;

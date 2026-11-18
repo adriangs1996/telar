@@ -18,6 +18,7 @@ static_assert(true);
 
 import telar.base.text.utf8;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -105,7 +106,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::open() {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
 
     filters_ = {.author = session.configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
     application::history::inspect(session, false);
@@ -113,7 +114,7 @@ namespace telar::gui::qt {
     QString seed;
 
     const auto line_pane = store_.dialog().line_search_pane;
-    if (const auto line = line_pane == 0 ? std::nullopt : application::prompt::line(session, line_pane)) {
+    if (const auto line = line_pane == 0 ? ds::none : application::prompt::line(session, line_pane)) {
       seed = toQString(line->text());
       seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
     }
@@ -142,7 +143,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    application::history::report(store_.session(), error.what());
+    application::history::report(store_.sessionMut(), error.what());
     synchronize();
   }
 
@@ -393,7 +394,7 @@ namespace telar::gui::qt {
     try {
       const auto query = query_.toUtf8();
 
-      application::history::search(store_.session(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
+      application::history::search(store_.sessionMut(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -406,7 +407,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    application::notifications::reportLimit(store_.session(), {.name = "prompt.history_query_bytes", .noun = "bytes", .value = application::history::HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.sessionMut(), {.name = "prompt.history_query_bytes", .noun = "bytes", .value = application::history::HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 
@@ -439,7 +440,7 @@ namespace telar::gui::qt {
     }
 
     interact([&] {
-      application::history::select(store_.session(), static_cast<std::size_t>(row));
+      application::history::select(store_.sessionMut(), static_cast<std::size_t>(row));
     });
   }
 
@@ -455,7 +456,7 @@ namespace telar::gui::qt {
     }
 
     interact([&] {
-      application::history::select(store_.session(), choice.index);
+      application::history::select(store_.sessionMut(), choice.index);
     });
   }
 
@@ -465,7 +466,7 @@ namespace telar::gui::qt {
     }
 
     interact([&] {
-      auto& session = store_.session();
+      auto& session = store_.sessionMut();
 
       if (action == Action::older || action == Action::newer) {
         application::history::page(session, action == Action::older ? application::history::HistoryPage::older : application::history::HistoryPage::newer);
@@ -499,7 +500,7 @@ namespace telar::gui::qt {
         throw EncodingError{"History search is still loading"};
       }
 
-      application::history::paste(store_.session(), entry_id, alternate);
+      application::history::paste(store_.sessionMut(), entry_id, alternate);
       emit submitted();
       emit closeRequested();
     });

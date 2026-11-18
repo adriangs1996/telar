@@ -1,6 +1,7 @@
 export module telar.gui.foundation.fonts:glyphs;
 
 import std;
+import telar.base.ds;
 
 // Interface: terminal/glyphs/box_edges.cppm
 export {
@@ -66,7 +67,7 @@ export {
       SymbolKind kind = SymbolKind::box;
       std::uint32_t codepoint = 0;
 
-      [[nodiscard]] static std::optional<Symbol> parse(std::string_view text) noexcept;
+      [[nodiscard]] static ds::Option<Symbol> parse(std::string_view text) noexcept;
     };
 
   }

@@ -4,6 +4,7 @@ import std;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::features::activity {
 
@@ -78,7 +79,7 @@ namespace telar::gui::features::activity {
   }
 
   template <Allocator Memory>
-  std::size_t AgentOrder::projectRank(std::optional<std::uint64_t> identity, std::span<const Workspace<Memory>> workspaces) noexcept {
+  std::size_t AgentOrder::projectRank(ds::Option<std::uint64_t> identity, std::span<const Workspace<Memory>> workspaces) noexcept {
     if (identity) {
       for (std::size_t index = 0; index < workspaces.size(); ++index) {
         if (workspaces[index].location.kind == WorkspaceLocation::Kind::workspace && *identity == workspaces[index].location.id) {
@@ -91,25 +92,25 @@ namespace telar::gui::features::activity {
   }
 
   template <Allocator Memory>
-  std::optional<std::uint64_t> AgentOrder::projectOf(const WorkspaceReplica<Memory>& workspaces, const Agent<Memory>& agent) noexcept {
+  ds::Option<std::uint64_t> AgentOrder::projectOf(const WorkspaceReplica<Memory>& workspaces, const Agent<Memory>& agent) noexcept {
     if (const auto* row = workspaces.worktree(agent.work_tree)) {
       return row->source;
     }
 
     if (agent.location.workspace.kind != WorkspaceLocation::Kind::workspace) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto project = workspaces.projectOf(agent.location.workspace.id);
 
-    return workspaces.indexOf(project) < workspaces.entries().size() ? std::optional{project} : std::nullopt;
+    return workspaces.indexOf(project) < workspaces.entries().size() ? ds::Option{project} : ds::none;
   }
 
   template <Allocator Memory>
-  std::optional<std::size_t> AgentOrder::creatorOf(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::span<const Entry> entries, const Entry& entry) noexcept {
+  ds::Option<std::size_t> AgentOrder::creatorOf(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::span<const Entry> entries, const Entry& entry) noexcept {
     const auto* row = entry.card == ActivityCard::agent ? nullptr : taskRow(workspaces, agents[entry.agent]);
     if (row == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     for (const auto& candidate : entries) {
@@ -129,7 +130,7 @@ namespace telar::gui::features::activity {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -148,8 +149,8 @@ namespace telar::gui::features::activity {
     }
 
     if (!left_orphan) {
-      const auto left_root = left.creator.value_or(left.agent);
-      const auto right_root = right.creator.value_or(right.agent);
+      const auto left_root = left.creator.valueOr(left.agent);
+      const auto right_root = right.creator.valueOr(right.agent);
       if (left_root != right_root) {
         return priority(agents[left_root]) < priority(agents[right_root]);
       }
@@ -250,11 +251,11 @@ namespace telar::gui::features::activity {
   }
 
   template <Allocator Memory>
-  std::optional<std::size_t> ActivityOrder<Memory>::parentOf(std::span<const std::size_t> agents, std::size_t index) const noexcept {
+  ds::Option<std::size_t> ActivityOrder<Memory>::parentOf(std::span<const std::size_t> agents, std::size_t index) const noexcept {
     const auto& entry = nodes_[index];
     const auto* row = rowOf(entry);
     if (row == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (row->coordinator) {
@@ -272,11 +273,11 @@ namespace telar::gui::features::activity {
         ++candidate;
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     if (!row->created_by) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t start = index;
@@ -292,7 +293,7 @@ namespace telar::gui::features::activity {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -320,7 +321,7 @@ namespace telar::gui::features::activity {
   template <Allocator Memory>
   void ActivityOrder<Memory>::breakChainCycle(std::size_t start, std::span<Visit> visits, std::span<std::size_t> path) noexcept {
     std::size_t path_length = 0;
-    std::optional<std::size_t> current{start};
+    ds::Option<std::size_t> current{start};
 
     while (current) {
       const auto index = *current;
@@ -378,8 +379,8 @@ namespace telar::gui::features::activity {
   void ActivityOrder<Memory>::emitForest() noexcept {
     const auto children = linkChildren();
     std::array<std::size_t, maximum_entries> positions{};
-    std::optional<std::size_t> previous_source;
-    std::optional<std::uint64_t> previous_project;
+    ds::Option<std::size_t> previous_source;
+    ds::Option<std::uint64_t> previous_project;
 
     output_.count = 0;
     for (std::size_t root_index = 0; root_index < count_; ++root_index) {
@@ -395,7 +396,7 @@ namespace telar::gui::features::activity {
         auto entry = nodes_[current];
 
         entry.depth = depth;
-        entry.parent = entry.parent ? std::optional{positions[*entry.parent]} : std::nullopt;
+        entry.parent = entry.parent ? ds::Option{positions[*entry.parent]} : ds::none;
         positions[current] = output_.count;
         entry.first_in_project = depth == 0 && (output_.count == 0 || previous_source != root.source || previous_project != root.project);
         output_.entries[output_.count++] = entry;

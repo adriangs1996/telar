@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "telar_base/ds/values.hpp"
 #include <QList>
 #include <QObject>
 #include <QPointer>
@@ -28,7 +29,7 @@ namespace telar::gui::qt {
   struct WindowAnimationLane {
     using Make = WindowAnimationLane (*)();
     using Sample = bool (*)(void* items, std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive);
-    using Deadline = std::optional<std::uint64_t> (*)(const void* items, std::uint64_t timestamp);
+    using Deadline = ds::Option<std::uint64_t> (*)(const void* items, std::uint64_t timestamp);
 
     template <typename Items>
     static WindowAnimationLane make();
@@ -70,8 +71,8 @@ namespace telar::gui::qt {
       });
     }
 
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t timestamp) const {
-      std::optional<std::uint64_t> earliest;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t timestamp) const {
+      ds::Option<std::uint64_t> earliest;
 
       for (const auto& item : items_) {
         if (item && item->eligible()) {
@@ -119,7 +120,7 @@ namespace telar::gui::qt {
 
     [[nodiscard]] std::uint64_t now() noexcept;
     [[nodiscard]] std::uint64_t frameInterval() const noexcept;
-    void setMaximumFrameRate(std::optional<std::uint16_t> maximum_fps);
+    void setMaximumFrameRate(ds::Option<std::uint16_t> maximum_fps);
 
     template <typename Item>
     void attach(Item& item) {
@@ -169,8 +170,8 @@ namespace telar::gui::qt {
     QTimer timer_;
     std::vector<WindowAnimationLane> lanes_;
     std::uint64_t now_ns_ = 0;
-    std::optional<std::uint64_t> deadline_ns_;
-    std::optional<std::uint16_t> maximum_fps_;
+    ds::Option<std::uint64_t> deadline_ns_;
+    ds::Option<std::uint16_t> maximum_fps_;
     bool synchronization_pending_ = false;
   };
 

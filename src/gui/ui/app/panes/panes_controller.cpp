@@ -7,6 +7,7 @@ static_assert(true);
 #include "pane_projection.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QList>
 #include <QString>
 #include <algorithm>
@@ -35,7 +36,7 @@ namespace telar::gui::qt {
 
   void PanesController::resizeDivider(int index, qreal x, qreal y, bool commit) {
     try {
-      auto& session = store_.session();
+      auto& session = store_.sessionMut();
       auto* tab = session.activeTab();
       if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
         return;
@@ -144,7 +145,7 @@ namespace telar::gui::qt {
     elements_.begin(ElementSlots::pane_slots);
     if (tab != nullptr) {
       const auto& geometry = application::workbench::geometry(session);
-      const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
+      const auto fullscreen = tab->fullscreen ? ds::Option{tab->focused_pane} : ds::none;
       const auto fullscreen_entries = fullscreenEntries(*tab);
       const auto motion_context = QStringLiteral("%1/%2/%3/%4/%5")
                                       .arg(store_.machineView())

@@ -2,6 +2,7 @@ export module telar.runtime.shell_integration.token;
 
 import std;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 export namespace telar::runtime {
 
@@ -14,7 +15,7 @@ export namespace telar::runtime {
     static ShellToken generate() noexcept;
 
     // A token another shell chose, as 32 lowercase hexadecimal digits.
-    static std::optional<ShellToken> parse(std::string_view text) noexcept;
+    static ds::Option<ShellToken> parse(std::string_view text) noexcept;
 
     std::string_view text() const noexcept;
 

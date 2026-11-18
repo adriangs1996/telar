@@ -155,7 +155,7 @@ namespace {
     for (const auto& [provider, input] : titles) {
       Mapped mapped{provider, input};
 
-      check(mapped.reports.title.has_value(), input);
+      check(mapped.reports.title.hasValue(), input);
       check(encodes(*mapped.reports.title), input);
     }
   }

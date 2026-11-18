@@ -3,6 +3,7 @@ module telar.gui.features.terminal.links;
 import std;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
@@ -15,16 +16,16 @@ namespace telar::gui::features::terminal::links {
     version_ = version;
   }
 
-  void LinkGesture::validate(const std::optional<LinkHit>& current, ViewVersion version) {
+  void LinkGesture::validate(const ds::Option<LinkHit>& current, ViewVersion version) {
     if (pressed_ && (version_ != version || current != pressed_)) {
       cancel();
     }
   }
 
-  std::optional<LinkHit> LinkGesture::finish(const std::optional<LinkHit>& current, ViewVersion version) {
+  ds::Option<LinkHit> LinkGesture::finish(const ds::Option<LinkHit>& current, ViewVersion version) {
     validate(current, version);
 
-    return std::exchange(pressed_, std::nullopt);
+    return std::exchange(pressed_, ds::none);
   }
 
   void LinkGesture::cancel() noexcept {
@@ -32,10 +33,10 @@ namespace telar::gui::features::terminal::links {
   }
 
   bool LinkGesture::active() const noexcept {
-    return pressed_.has_value();
+    return pressed_.hasValue();
   }
 
-  bool LinkHover::assign(std::optional<LinkHit> hit, const TerminalSurface& surface, bool frame_presented) {
+  bool LinkHover::assign(ds::Option<LinkHit> hit, const TerminalSurface& surface, bool frame_presented) {
     const auto changed = hit != current_;
 
     current_ = std::move(hit);
@@ -63,11 +64,11 @@ namespace telar::gui::features::terminal::links {
     return shown_cover_ && shown_cover_->contains(point);
   }
 
-  bool LinkHover::needsPresentation(const TerminalSurface& surface, const std::optional<Rect>& cover) const noexcept {
+  bool LinkHover::needsPresentation(const TerminalSurface& surface, const ds::Option<Rect>& cover) const noexcept {
     return !surfaceVisible(surface) || shown_ != current_ || shown_cover_ != cover;
   }
 
-  LinkPresentation LinkHover::prepare(const TerminalSurface& surface, std::optional<Rect> cover) const {
+  LinkPresentation LinkHover::prepare(const TerminalSurface& surface, ds::Option<Rect> cover) const {
     return {.surface = surface, .link = current_, .cover = cover};
   }
 
@@ -79,7 +80,7 @@ namespace telar::gui::features::terminal::links {
     }
   }
 
-  const std::optional<LinkHit>& LinkHover::current() const noexcept {
+  const ds::Option<LinkHit>& LinkHover::current() const noexcept {
     return current_;
   }
 
@@ -95,11 +96,11 @@ namespace telar::gui::features::terminal::links {
     return true;
   }
 
-  std::optional<LinkTarget> LinkOpening::complete() {
+  ds::Option<LinkTarget> LinkOpening::complete() {
     auto next = std::move(pending_);
 
     pending_.reset();
-    active_ = next.has_value();
+    active_ = next.hasValue();
 
     return next;
   }
@@ -122,7 +123,7 @@ namespace telar::gui::features::terminal::links {
         viewport_{.columns = std::min(grid.columns, viewport.columns), .rows = std::min(grid.rows, viewport.rows)},
         row_(std::max(grid.scroll.offset, match.start.y)) {}
 
-  std::optional<LinkRegion> LinkRegions::next() noexcept {
+  ds::Option<LinkRegion> LinkRegions::next() noexcept {
     if (grid_.columns == 0) {
       return {};
     }
@@ -148,7 +149,7 @@ namespace telar::gui::features::terminal::links {
     return {};
   }
 
-  std::optional<LinkRegion> LinkRegions::nextMetadataRun(std::uint16_t link_index) noexcept {
+  ds::Option<LinkRegion> LinkRegions::nextMetadataRun(std::uint16_t link_index) noexcept {
     while (run_index_ < runs_.size()) {
       const auto& run = runs_[run_index_++];
       if (run.link_index != link_index) {
@@ -164,7 +165,7 @@ namespace telar::gui::features::terminal::links {
     return {};
   }
 
-  std::optional<LinkRegion> LinkRegions::clipped(std::uint32_t row, std::uint32_t left, std::uint32_t right) const noexcept {
+  ds::Option<LinkRegion> LinkRegions::clipped(std::uint32_t row, std::uint32_t left, std::uint32_t right) const noexcept {
     right = std::min<std::uint32_t>(right, viewport_.columns);
     if (row >= viewport_.rows || left >= right) {
       return {};

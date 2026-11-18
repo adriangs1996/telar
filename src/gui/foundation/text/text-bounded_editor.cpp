@@ -4,13 +4,14 @@ import std;
 
 import telar.ghostty.unicode;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline text {
 
   template <bool ReplaceInvalid>
-  std::optional<std::string_view> GraphemeCursor::advance() noexcept(ReplaceInvalid) {
+  ds::Option<std::string_view> GraphemeCursor::advance() noexcept(ReplaceInvalid) {
     if (position_ == text_.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto first = static_cast<unsigned char>(text_[position_]);
@@ -85,11 +86,11 @@ namespace telar::gui::inline foundation::inline text {
     return columns_;
   }
 
-  std::optional<std::string_view> GraphemeCursor::next() {
+  ds::Option<std::string_view> GraphemeCursor::next() {
     return advance<false>();
   }
 
-  std::optional<std::string_view> GraphemeCursor::nextReplacingInvalid() noexcept {
+  ds::Option<std::string_view> GraphemeCursor::nextReplacingInvalid() noexcept {
     return advance<true>();
   }
 
@@ -108,9 +109,9 @@ namespace telar::gui::inline foundation::inline text {
       : cursor_(text),
         bytes_(text.size()) {}
 
-  std::optional<std::string_view> CaptionRuns::next() noexcept {
+  ds::Option<std::string_view> CaptionRuns::next() noexcept {
     if (cursor_.position() == bytes_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t length = 0;
@@ -201,9 +202,9 @@ namespace telar::gui::inline foundation::inline text {
         columns_(columns),
         words_(words) {}
 
-  std::optional<std::string_view> WrappedLines::next() noexcept {
+  ds::Option<std::string_view> WrappedLines::next() noexcept {
     if (finished_ || columns_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto start = position_;
@@ -398,7 +399,7 @@ namespace telar::gui::inline foundation::inline text {
       return;
     }
 
-    head_ = clusterBefore(head_).value_or(head_);
+    head_ = clusterBefore(head_).valueOr(head_);
     if (!extend) {
       anchor_ = head_;
     }
@@ -413,7 +414,7 @@ namespace telar::gui::inline foundation::inline text {
       return;
     }
 
-    head_ = clusterAfter(head_).value_or(head_);
+    head_ = clusterAfter(head_).valueOr(head_);
     if (!extend) {
       anchor_ = head_;
     }
@@ -494,7 +495,7 @@ namespace telar::gui::inline foundation::inline text {
       last = *next;
     }
 
-    EditorView result{.text = text().substr(scroll_, last - scroll_), .cursor = columnsBetween(scroll_, head_), .selection = std::nullopt, .clipped_left = scroll_ > 0, .clipped_right = last < length_};
+    EditorView result{.text = text().substr(scroll_, last - scroll_), .cursor = columnsBetween(scroll_, head_), .selection = ds::none, .clipped_left = scroll_ > 0, .clipped_right = last < length_};
 
     if (hasSelection()) {
       const auto first_selected = std::max(std::min(head_, anchor_), scroll_);
@@ -557,9 +558,9 @@ namespace telar::gui::inline foundation::inline text {
   }
 
   template <std::size_t Capacity>
-  std::optional<std::size_t> BoundedEditor<Capacity>::clusterBefore(std::size_t position) const {
+  ds::Option<std::size_t> BoundedEditor<Capacity>::clusterBefore(std::size_t position) const {
     if (position == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     GraphemeCursor cursor{text()};
@@ -577,14 +578,14 @@ namespace telar::gui::inline foundation::inline text {
   }
 
   template <std::size_t Capacity>
-  std::optional<std::size_t> BoundedEditor<Capacity>::clusterAfter(std::size_t position) const {
+  ds::Option<std::size_t> BoundedEditor<Capacity>::clusterAfter(std::size_t position) const {
     if (position >= length_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     GraphemeCursor cursor{text().substr(position)};
     if (!cursor.next()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return position + cursor.position();

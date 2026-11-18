@@ -8,6 +8,7 @@ import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::plugins {
 
@@ -134,7 +135,7 @@ namespace telar::gui::features::plugins {
     }
   }
 
-  std::optional<runtime::plugins::Capability> PluginEffects::capability(BindingActionKind kind) {
+  ds::Option<runtime::plugins::Capability> PluginEffects::capability(BindingActionKind kind) {
     using Kind = BindingActionKind;
 
     switch (kind) {
@@ -167,7 +168,7 @@ namespace telar::gui::features::plugins {
     case Kind::leave_worktree:
     case Kind::select_tab_offset:
     case Kind::select_tab:
-      return std::nullopt;
+      return ds::none;
     default:
       throw std::invalid_argument{"InvalidPluginEffect"};
     }

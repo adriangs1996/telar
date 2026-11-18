@@ -7,6 +7,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 
 import telar.config.runtime;
+import telar.base.ds;
 
 // Interface: proxy/secret.cppm
 export {
@@ -19,7 +20,7 @@ export {
 
       static ProxySecret generate() noexcept;
 
-      static std::optional<ProxySecret> fromHexadecimal(std::string_view text) noexcept;
+      static ds::Option<ProxySecret> fromHexadecimal(std::string_view text) noexcept;
 
       ~ProxySecret();
 
@@ -28,14 +29,14 @@ export {
 
       bool matches(const ProxySecret& other) const noexcept;
 
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept;
 
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept;
 
     private:
       ProxySecret() noexcept;
 
-      static std::optional<unsigned> digit(char character) noexcept;
+      static ds::Option<unsigned> digit(char character) noexcept;
 
       static constexpr std::string_view hexadecimal = "0123456789abcdef";
       std::array<std::uint8_t, byte_count> bytes_;
@@ -50,12 +51,12 @@ export {
 
     class ProxyAuthorization {
     public:
-      static std::optional<ProxySecret> parse(std::string_view head) noexcept;
+      static ds::Option<ProxySecret> parse(std::string_view head) noexcept;
 
       static bool present(std::string_view head) noexcept;
 
     private:
-      static std::optional<std::string_view> next(std::string_view& head) noexcept;
+      static ds::Option<std::string_view> next(std::string_view& head) noexcept;
 
       static constexpr std::string_view userinfo_prefix = "telar:";
       static constexpr std::size_t decoded_capacity = 192;
@@ -102,7 +103,7 @@ export {
 
     class ProxySecretFile {
     public:
-      static std::optional<ProxySecret> load(Memory& memory, int directory);
+      static ds::Option<ProxySecret> load(Memory& memory, int directory);
 
       template <Allocator Memory>
       static ProxySecret ensure(Memory& memory, int directory);

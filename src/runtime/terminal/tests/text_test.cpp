@@ -20,6 +20,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -145,14 +146,14 @@ namespace {
     pacer.configure(interval);
     for (unsigned index = 0; index < 4; ++index) {
       check(!pacer.deadline(start));
-      pacer.record(start, std::nullopt);
+      pacer.record(start, ds::none);
     }
 
     check(pacer.deadline(start) == start + interval);
     pacer.noteInput(start);
     for (unsigned index = 0; index < 16; ++index) {
       check(!pacer.deadline(start));
-      pacer.record(start, std::nullopt);
+      pacer.record(start, ds::none);
     }
 
     check(pacer.deadline(start) == start + interval);

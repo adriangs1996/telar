@@ -38,6 +38,7 @@ import telar.gui.features.configuration;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.config.core;
+import telar.base.ds;
 
 namespace {
 
@@ -50,8 +51,8 @@ namespace {
   using namespace telar::gui::application::tests::session_fixture;
 
   template <typename Value>
-  Value requireValue(std::optional<Value> value) {
-    check(value.has_value(), "Required command value is missing");
+  Value requireValue(ds::Option<Value> value) {
+    check(value.hasValue(), "Required command value is missing");
 
     return *value;
   }
@@ -85,11 +86,11 @@ namespace {
     for (std::size_t index = 0; index < command_count; ++index) {
       const auto recent = commands.keepReference(arguments, std::to_string(index), limits);
 
-      check(recent.has_value(), "a callback must regain storage by clearing recent rows");
+      check(recent.hasValue(), "a callback must regain storage by clearing recent rows");
     }
 
     check(!commands.load(first), "a cleared recent reference must never name a newer row");
-    check(commands.load(fixed).has_value() && commands.keepReference(command.argv(), {}, limits) == fixed, "recent clearing must preserve fixed commands and their deduplication");
+    check(commands.load(fixed).hasValue() && commands.keepReference(command.argv(), {}, limits) == fixed, "recent clearing must preserve fixed commands and their deduplication");
   }
 
   void commandReferencesPreserveBitPatternsAndRejectMalformedIds() {
@@ -129,10 +130,10 @@ namespace {
       refused |= !commands.keepReference(arguments, std::to_string(index), limits);
     }
 
-    check(refused && commands.load(first).has_value(), "a full render must refuse later rows instead of clearing its earlier commands");
+    check(refused && commands.load(first).hasValue(), "a full render must refuse later rows instead of clearing its earlier commands");
     commands.endRender();
     commands.beginRender();
-    check(!commands.load(first) && commands.load(fixed).has_value(), "the next render must recover recent capacity without expiring fixed commands");
+    check(!commands.load(first) && commands.load(fixed).hasValue(), "the next render must recover recent capacity without expiring fixed commands");
     commands.endRender();
   }
 
@@ -217,8 +218,8 @@ namespace {
     const auto last = batch.actions[batch.length - 1];
     const auto fixed = generation.input().configured[0].action;
 
-    check(!generation.commandTab(first) && generation.commandTab(last).has_value(), "pool clearing must expire earlier batch references while retaining later commands");
-    check(generation.commandTab(fixed).has_value(), "a large callback batch must preserve its configuration's commands");
+    check(!generation.commandTab(first) && generation.commandTab(last).hasValue(), "pool clearing must expire earlier batch references while retaining later commands");
+    check(generation.commandTab(fixed).hasValue(), "a large callback batch must preserve its configuration's commands");
   }
 
   void commandRequestsPreserveLaunchAndRecoverFromDeliveryFailure() {
@@ -254,7 +255,7 @@ namespace {
     check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "confirmation must release tab-operation ownership");
   }
 
-  std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, bool discover_before_confirmation) {
+  std::size_t adoptCommandWithAllocationBudget(ds::Option<std::size_t> budget, bool discover_before_confirmation) {
     SystemAllocator system;
     BudgetAllocator counted{system, std::numeric_limits<std::size_t>::max()};
     AllocationGate gate{counted};
@@ -294,7 +295,7 @@ namespace {
       }
 
       allocations = counted.allocations() - before;
-      gate.permit(std::nullopt);
+      gate.permit(ds::none);
       if (budget) {
         check(rejected && client.tabs().size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
         if (discover_before_confirmation) {
@@ -315,7 +316,7 @@ namespace {
 
   void commandAdoptionIsAtomicAcrossAllocationFailures() {
     for (const bool discover_before_confirmation : {false, true}) {
-      const auto allocations = adoptCommandWithAllocationBudget(std::nullopt, discover_before_confirmation);
+      const auto allocations = adoptCommandWithAllocationBudget(ds::none, discover_before_confirmation);
 
       for (std::size_t permitted = 0; permitted < allocations; ++permitted) {
         static_cast<void>(adoptCommandWithAllocationBudget(permitted, discover_before_confirmation));

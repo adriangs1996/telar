@@ -6,6 +6,7 @@ export module telar.runtime.terminal.control:parser;
 import std;
 import telar.base.memory.allocators;
 import :sequence;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -476,22 +477,22 @@ export namespace telar::runtime::control {
     // Successful delivery borrows the caller's input only during complete(). A
     // blocked delivery retains a bounded copy before any input can be released.
     template <typename Consumer>
-    std::optional<bool> borrowApc(std::span<const std::uint8_t> input, std::size_t& consumed, Consumer& consumer) {
+    ds::Option<bool> borrowApc(std::span<const std::uint8_t> input, std::size_t& consumed, Consumer& consumer) {
       const auto start = consumed - 2;
       const auto remaining = input.subspan(start);
       if (remaining[2] != 'G') {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto length = completeAsciiApc(remaining, apc_limit);
       if (length <= inline_bytes) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto sequence = remaining.first(length);
       const auto* separator = static_cast<const std::uint8_t*>(std::memchr(sequence.data(), ';', sequence.size()));
       if (separator == nullptr || !consumer.borrowableApc(Sequence{Kind::apc, sequence.first(separator + 1 - sequence.data()), Ending::final_byte})) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const bool delivered = consumer.complete(Sequence{Kind::apc, sequence, Ending::escape});

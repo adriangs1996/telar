@@ -8,6 +8,7 @@ import std;
 import :content;
 import telar.base.text;
 import telar.config.client;
+import telar.base.ds;
 
 // Interface: components/source.cppm
 export {
@@ -77,7 +78,7 @@ export {
       static constexpr std::uint64_t minimum_timeout_ms = 100;
       static constexpr std::uint64_t maximum_timeout_ms = 10000;
       SourceKind kind = SourceKind::empty;
-      std::optional<std::chrono::milliseconds> interval = std::nullopt;
+      ds::Option<std::chrono::milliseconds> interval = ds::none;
       std::chrono::milliseconds timeout = default_timeout;
       int reference = no_reference;
       bool has_render = false;
@@ -98,8 +99,8 @@ export {
       static constexpr std::uint16_t maximum_width = 720;
       Heading heading;
       Source source;
-      std::optional<Mark> mark = std::nullopt;
-      std::optional<runtime::FixedText<Node::maximum_icon_bytes>> icon = std::nullopt;
+      ds::Option<Mark> mark = ds::none;
+      ds::Option<runtime::FixedText<Node::maximum_icon_bytes>> icon = ds::none;
       std::uint16_t width = default_width;
     };
 
@@ -142,7 +143,7 @@ export {
       void definePick(std::size_t index, const Pick& pick);
 
       // A layer that lists no panels or picks keeps the ones before it.
-      void count(std::optional<std::size_t> panels, std::optional<std::size_t> picks) noexcept;
+      void count(ds::Option<std::size_t> panels, ds::Option<std::size_t> picks) noexcept;
 
     private:
       std::array<Source, positions> sources_{};

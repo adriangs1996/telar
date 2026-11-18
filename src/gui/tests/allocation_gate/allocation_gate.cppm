@@ -5,6 +5,7 @@ export module telar.gui.tests.allocation_gate;
 
 import std;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 export {
   namespace telar::gui::test {
@@ -15,7 +16,7 @@ export {
       explicit AllocationGate(Memory& memory)
           : memory_(memory) {}
 
-      void permit(std::optional<std::size_t> count) noexcept {
+      void permit(ds::Option<std::size_t> count) noexcept {
         remaining_ = count;
       }
 
@@ -25,7 +26,7 @@ export {
             return nullptr;
           }
 
-          --*remaining_;
+          --remaining_.getMut();
         }
 
         return memory_.allocate(size, alignment);
@@ -37,7 +38,7 @@ export {
 
     private:
       Memory& memory_;
-      std::optional<std::size_t> remaining_;
+      ds::Option<std::size_t> remaining_;
     };
 
   }

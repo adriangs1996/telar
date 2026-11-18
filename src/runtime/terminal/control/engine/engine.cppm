@@ -14,6 +14,7 @@ import telar.runtime.terminal.control.checksum;
 import telar.runtime.terminal.control.clipboard;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -83,7 +84,7 @@ export namespace telar::runtime::control {
     };
 
     // The oldest zone a program closed since the last call, if any.
-    std::optional<Zone> takeZone() noexcept;
+    ds::Option<Zone> takeZone() noexcept;
 
     // Moves the document a program wrote since the last call into into.
     bool takeDocument(Vector<std::uint8_t, ConcurrentMemory>& into) noexcept;
@@ -185,7 +186,7 @@ export namespace telar::runtime::control {
     tbc::view<Reports<ConcurrentMemory>, tbc::lt::a> reports_;
     ColorQueries<ConcurrentMemory> colors_;
     tbc::view<Vector<std::uint8_t, ConcurrentMemory>, tbc::lt::a> document_;
-    std::optional<Zone> open_zone_;
+    ds::Option<Zone> open_zone_;
     tbc::view<Vector<Zone, ConcurrentMemory>, tbc::lt::a> zones_;
     ClientFacts facts_;
     tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;

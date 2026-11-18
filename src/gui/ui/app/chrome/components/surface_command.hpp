@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tbc/view.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QList>
 #include <QObject>
@@ -44,7 +45,7 @@ namespace telar::gui::qt {
 
   struct SurfaceCommandResult {
     QByteArray output;
-    std::optional<SurfaceCommandFailure> failure = std::nullopt;
+    ds::Option<SurfaceCommandFailure> failure = ds::none;
     bool truncated = false;
     int exit_code = -1;
     std::size_t observed_bytes = 0;
@@ -65,7 +66,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool active() const noexcept;
 
   private:
-    void stop(std::optional<SurfaceCommandFailure> failure);
+    void stop(ds::Option<SurfaceCommandFailure> failure);
     [[nodiscard]] std::size_t outputLimit() const noexcept;
     void normalizeOutput();
     void drain();

@@ -46,7 +46,7 @@ namespace telar::runtime::cli::render_command {
         self.pager = true;
       } else if (word == "--width") {
         const auto text = value("MissingRenderWidth");
-        const auto width = parseExact<std::uint16_t>(text).value_or(0);
+        const auto width = parseExact<std::uint16_t>(text).valueOr(0);
         if (width < render::terminal::min_width) {
           throw std::invalid_argument{"InvalidRenderWidth"};
         }
@@ -306,7 +306,7 @@ namespace telar::runtime::cli::render_command {
       return 1;
     }
 
-    render::terminal::render(document, options.width.value_or(terminalWidth(STDOUT_FILENO)), output);
+    render::terminal::render(document, options.width.valueOr(terminalWidth(STDOUT_FILENO)), output);
     if (native) {
       render::appendEnd(output);
     }

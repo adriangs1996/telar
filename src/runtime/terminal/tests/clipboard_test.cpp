@@ -234,7 +234,7 @@ namespace {
     auto& clipboard = terminal.clipboardControl();
     const auto request = clipboard.request(7, 11);
 
-    check(request.has_value());
+    check(request.hasValue());
     const auto ticket = request->ticket;
 
     clipboard.announced();
@@ -313,7 +313,7 @@ namespace {
       RoutedTerminal routed;
 
       routed.terminal.feed(bytes("\x1b]5522;type=read:id=a;" + encode("text/plain") + "\x1b\\"));
-      check(routed.terminal.clipboardControl().request(7, 11).has_value());
+      check(routed.terminal.clipboardControl().request(7, 11).hasValue());
       routed.terminal.feed(bytes("\x1b]5522;type=read:id=b;" + encode("text/plain") + "\x1b\\"));
       check(drain(routed.terminal) == "\x1b]5522;type=read:status=EBUSY:id=b\x1b\\");
       routed.terminal.feed(bytes(kittyWrite("c") + kittyData("text/plain", "x") + std::string{kitty_commit}));

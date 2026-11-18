@@ -31,6 +31,7 @@ static_assert(true);
 
 import telar.gui.features.machines;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace {
 
@@ -103,7 +104,7 @@ namespace {
       source.open(path, QStringLiteral("local"));
       QTRY_VERIFY_WITH_TIMEOUT(source.loaded(), wait_ms);
       const auto file = profileFile(path);
-      std::optional<system::ProfileFileTransaction> held{file.lock()};
+      telar::ds::Option<system::ProfileFileTransaction> held{file.lock()};
       std::string label = "build";
       std::string destination = "dev@build";
       std::string color = "#a0B1c2";
@@ -126,7 +127,7 @@ namespace {
 
       QCOMPARE(fromText(profile.label()), QStringLiteral("build"));
       QCOMPARE(fromText(profile.destination()), QStringLiteral("dev@build"));
-      QCOMPARE(fromText(profile.color().value_or("missing")), QStringLiteral("#a0B1c2"));
+      QCOMPARE(fromText(profile.color().valueOr("missing")), QStringLiteral("#a0B1c2"));
       QVERIFY(!profile.enabled());
       QVERIFY(source.loaded());
       QVERIFY(profile.identity().value() != 0);
@@ -232,7 +233,7 @@ namespace {
       constexpr qint64 shutdown_limit_ms = 1000;
 
       QVERIFY(elapsed.elapsed() < shutdown_limit_ms);
-      QVERIFY(!file.read(memory).has_value());
+      QVERIFY(!file.read(memory).hasValue());
     }
 
     Q_SLOT static void reopeningIgnoresThePreviousWorkerAndSupportsReentrantChanges() {

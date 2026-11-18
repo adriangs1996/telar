@@ -12,6 +12,7 @@ import telar.testing;
 import telar.runtime.terminal.text_reader;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -29,7 +30,7 @@ namespace {
   }
 
   // The text a frame carries for the cell at `position`, or nothing when no span covers it.
-  std::optional<std::string> changedText(const PaneFrame& frame, std::uint32_t position) {
+  ds::Option<std::string> changedText(const PaneFrame& frame, std::uint32_t position) {
     for (const auto& span : frame.spans) {
       if (position < span.start || position - span.start >= span.count) {
         continue;
@@ -38,16 +39,16 @@ namespace {
       auto reader = span.reader();
 
       for (std::uint32_t index = span.start; index < position; ++index) {
-        check(reader.next().has_value());
+        check(reader.next().hasValue());
       }
 
       const auto cell = reader.next();
 
-      check(cell.has_value());
+      check(cell.hasValue());
       return std::string{text(cell->text)};
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void testFrameSync() {
@@ -126,10 +127,10 @@ namespace {
   }
 
   // The URI of the run that starts at `position`, or nothing when no run starts there.
-  std::optional<std::string_view> linkAt(const TextMetadata& metadata, std::uint32_t position) {
+  ds::Option<std::string_view> linkAt(const TextMetadata& metadata, std::uint32_t position) {
     const auto run = std::ranges::find(metadata.runs, position, &MetadataRun::start);
     if (run == metadata.runs.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return text(metadata.link(run->link_index));

@@ -10,6 +10,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: presentation/project_activity.cppm
 export {
@@ -24,14 +25,14 @@ export {
       std::size_t working = 0;
       std::size_t finished = 0;
       std::size_t waiting = 0;
-      std::optional<std::size_t> urgent;
-      std::optional<std::string_view> path;
+      ds::Option<std::size_t> urgent;
+      ds::Option<std::string_view> path;
 
       template <Allocator Memory>
       // The activity names the project's path in the replica, region `a`.
       [[nodiscard]] static tbc::view<ProjectActivity, tbc::lt::a> derive(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
 
-      [[nodiscard]] tbc::view<std::optional<std::string_view>, tbc::lt::a> summary(tbc::view<Text&, tbc::lt::a> storage) const;
+      [[nodiscard]] tbc::view<ds::Option<std::string_view>, tbc::lt::a> summary(tbc::view<Text&, tbc::lt::a> storage) const;
 
       [[nodiscard]] Attention attentionLabel() const;
     };
@@ -62,7 +63,7 @@ export {
 
       Kind kind = Kind::none;
       PaletteRole color = PaletteRole::teal;
-      std::optional<PaletteRole> attention = std::nullopt;
+      ds::Option<PaletteRole> attention = ds::none;
 
       [[nodiscard]] float width() const noexcept;
 

@@ -65,6 +65,7 @@ import telar.runtime.shell_integration.git_context;
 import telar.runtime.transport.connection;
 import telar.runtime.vocabulary.traffic;
 import telar.runtime.workspaces.git_probe;
+import telar.base.ds;
 
 // The workers runRuntime builds for the runtime (telar.runtime.cli.server); the services below are
 // instantiated for them.
@@ -108,9 +109,9 @@ export {
 
       void observeInput(const Pane& pane, std::span<const Byte> bytes);
 
-      std::optional<DescriptionRequest> nextDescription();
+      ds::Option<DescriptionRequest> nextDescription();
 
-      std::optional<HistorySessionTitle> completeDescription(const DescriptionResult& result);
+      ds::Option<HistorySessionTitle> completeDescription(const DescriptionResult& result);
 
       void report(RuntimeModel& model, ClientSession& client, const ReportAgent& request);
 
@@ -118,7 +119,7 @@ export {
 
       void reportTitle(RuntimeModel& model, ClientSession& client, const ReportAgentTitle& request);
 
-      std::optional<SessionFileRequest> nextSessionFile(std::chrono::steady_clock::time_point now) const;
+      ds::Option<SessionFileRequest> nextSessionFile(std::chrono::steady_clock::time_point now) const;
 
       void completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now);
 
@@ -145,7 +146,7 @@ export {
 
       const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
 
-      void observeProcess(Pane& pane, std::optional<ProcessIdentity> identity, AgentProvider provider);
+      void observeProcess(Pane& pane, ds::Option<ProcessIdentity> identity, AgentProvider provider);
 
       void observeProcess(Pane& pane, const ProcessProbeResult& observation);
 
@@ -352,11 +353,11 @@ export {
       struct Notice {
         std::uint64_t workspace = 0;
         std::uint64_t origin = 0;
-        std::optional<std::uint64_t> previous;
+        ds::Option<std::uint64_t> previous;
       };
 
       // Queues a workspace change for the clients that view it but did not make it.
-      void notify(std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept;
+      void notify(std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous = {}) noexcept;
 
       void releaseEmptyTab(RuntimeModel& model, Panes& panes, ClientStore& clients, TabLocation location);
 
@@ -378,9 +379,9 @@ export {
       // A pane launched into a tab whose workspace the client takes the geometry of.
       std::uint64_t createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size);
 
-      static std::optional<std::uint64_t> firstPane(const PaneStore& panes, const Workspace& workspace) noexcept;
+      static ds::Option<std::uint64_t> firstPane(const PaneStore& panes, const Workspace& workspace) noexcept;
 
-      static std::optional<std::uint64_t> firstPane(const PaneStore& panes, const Tab& tab) noexcept;
+      static ds::Option<std::uint64_t> firstPane(const PaneStore& panes, const Tab& tab) noexcept;
 
       static void createDirectories(std::string_view path);
 
@@ -435,7 +436,7 @@ export {
     private:
       static Worktree& require(Worktrees& worktrees, std::uint64_t identity);
 
-      std::optional<std::uint64_t> observing_;
+      ds::Option<std::uint64_t> observing_;
       ConcurrentMemory& memory_;
       LimitService& limits_;
     };

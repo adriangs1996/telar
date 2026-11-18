@@ -10,6 +10,7 @@
 
 import telar.gui.foundation.model;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -77,8 +78,8 @@ namespace telar::gui::qt {
     return isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> PaneMotionLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
-    return frame_requested_ ? std::nullopt : next_sample_ns_;
+  ds::Option<std::uint64_t> PaneMotionLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
+    return frame_requested_ ? ds::none : next_sample_ns_;
   }
 
   void PaneMotionLayout::sample(std::uint64_t now_ns) {
@@ -135,7 +136,7 @@ namespace telar::gui::qt {
     motions_.update(std::span{placements}.first(static_cast<std::size_t>(count)), now, immediate_ || !enabled_ || !eligible() || context != context_);
     context_ = context;
     immediate_ = false;
-    application::workbench::TabMotionFrame frame{.now_ns = now, .interval_ns = clock_ ? clock_->frameInterval() : application::workbench::TabMotionFrame::default_interval_ns, .deadline_ns = std::nullopt};
+    application::workbench::TabMotionFrame frame{.now_ns = now, .interval_ns = clock_ ? clock_->frameInterval() : application::workbench::TabMotionFrame::default_interval_ns, .deadline_ns = ds::none};
 
     for (int index = 0; index < count; ++index) {
       const auto bounds = motions_.place(static_cast<std::size_t>(index), frame);

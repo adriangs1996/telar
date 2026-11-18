@@ -6,6 +6,7 @@ import telar.sys.socket;
 import telar.sys.apple;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -19,14 +20,14 @@ namespace telar::runtime {
     return ProcessArguments::fromMacos(buffer.first(length));
   }
 
-  std::optional<ProcessSnapshot> ProcessInspector::snapshot(pid_t process) const noexcept {
+  ds::Option<ProcessSnapshot> ProcessInspector::snapshot(pid_t process) const noexcept {
     if (process <= 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     proc_bsdinfo information{};
     if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) != sizeof(information) || information.pbi_uid != uid_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return ProcessSnapshot{
@@ -35,11 +36,11 @@ namespace telar::runtime {
     };
   }
 
-  std::optional<ProcessIdentity> ProcessInspector::peer(int socket) const noexcept {
+  ds::Option<ProcessIdentity> ProcessInspector::peer(int socket) const noexcept {
     pid_t process = 0;
     socklen_t length = sizeof(process);
     if (::getsockopt(socket, SOL_LOCAL, LOCAL_PEERPID, &process, &length) != 0 || length != sizeof(process)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return identity(process);

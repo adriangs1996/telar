@@ -4,6 +4,7 @@ import std;
 import telar.wire.vocabulary;
 
 import telar.platform.events;
+import telar.base.ds;
 
 export namespace telar::runtime {
 
@@ -14,7 +15,7 @@ export namespace telar::runtime {
     std::string_view directory;
     ObservationTime started{};
     std::int64_t duration_ns = 0;
-    std::optional<int> exit_code = std::nullopt;
+    ds::Option<int> exit_code = ds::none;
     HistoryStatus status = HistoryStatus::completed;
     HistoryAuthor author = HistoryAuthor::human;
     bool truncated = false;

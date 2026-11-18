@@ -58,7 +58,7 @@ namespace {
     {
       tr::Recordings<Clock> recordings{memory};
       SensitiveAllocation output{memory, rec::Limits::page_bytes};
-      const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 3, .max_age_ms = 10, .selection = tr::Selection::packets}, output.bytes()));
+      const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 3, .max_age_ms = 10, .selection = tr::Selection::packets}, output.bytesMut()));
 
       check(start.id != 0 && start.active && start.count == 0 && recordings.selects(tr::Selection::packets));
       check(!recordings.selects(tr::Selection::flows));
@@ -68,7 +68,7 @@ namespace {
         recordings.record(packet(index, bytes));
       }
 
-      auto page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = 1, .limit = 2}, output.bytes()));
+      auto page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = 1, .limit = 2}, output.bytesMut()));
 
       check(page.gap && page.oldest == 4 && page.next == 6 && page.end == 7 && page.evicted == 3 && page.count == 2 && page.dropped == 0);
       plugins::FrameReader rows{page.rows};
@@ -81,22 +81,22 @@ namespace {
       }
 
       rows.finish();
-      page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = page.next}, output.bytes()));
+      page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = page.next}, output.bytesMut()));
       check(!page.gap && page.count == 1 && page.next == page.end);
-      page = rec::Protocol::page(recordings.handle({.operation = rec::Operation::stop, .id = start.id}, output.bytes()));
+      page = rec::Protocol::page(recordings.handle({.operation = rec::Operation::stop, .id = start.id}, output.bytesMut()));
       check(!page.active && !recordings.selects(tr::Selection::packets));
       recordings.record(packet(7, bytes));
-      page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytes()));
+      page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytesMut()));
       check(page.count == 3 && page.end == 7);
       Clock::instant += std::chrono::milliseconds{11};
       recordings.expire();
-      page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = 4}, output.bytes()));
+      page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = 4}, output.bytesMut()));
       check(page.gap && page.count == 0 && page.evicted == 6 && page.oldest == page.end);
-      recordings.handle({.operation = rec::Operation::erase, .id = start.id}, output.bytes());
+      recordings.handle({.operation = rec::Operation::erase, .id = start.id}, output.bytesMut());
       bool stale = false;
 
       try {
-        recordings.handle({.id = start.id}, output.bytes());
+        recordings.handle({.id = start.id}, output.bytesMut());
       } catch (const EncodingError&) {
         stale = true;
       }
@@ -117,17 +117,17 @@ namespace {
     {
       tr::Recordings recordings{memory};
       SensitiveAllocation output{memory, rec::Limits::page_bytes};
-      const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 1024 * 1024, .max_events = 3}, output.bytes()));
+      const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 1024 * 1024, .max_events = 3}, output.bytesMut()));
       std::vector<Byte> bytes(tr::Limits::packet_bytes, 0x5a);
 
       recordings.record(packet(1, bytes));
       recordings.record(packet(2, bytes));
-      auto page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytes()));
+      auto page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytesMut()));
 
       check(page.count == 1 && page.next == 2 && page.end == 3);
-      page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = page.next}, output.bytes()));
+      page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = page.next}, output.bytesMut()));
       check(page.count == 1 && page.next == 3);
-      page = rec::Protocol::page(recordings.handle({.operation = rec::Operation::pcapng, .id = start.id, .limit = 1}, output.bytes()));
+      page = rec::Protocol::page(recordings.handle({.operation = rec::Operation::pcapng, .id = start.id, .limit = 1}, output.bytesMut()));
       check(page.count == 1 && page.next == 2);
       TemporaryDirectory directory{"/tmp/tlr-recording.XXXXXX"};
       const auto path = std::string{directory.path()} + "/capture.pcapng";
@@ -165,27 +165,27 @@ namespace {
     {
       tr::Recordings recordings{memory};
       SensitiveAllocation output{memory, rec::Limits::page_bytes};
-      const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 512, .max_events = 2, .selection = tr::Selection::packets}, output.bytes()));
+      const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 512, .max_events = 2, .selection = tr::Selection::packets}, output.bytesMut()));
       std::array<Byte, 220> body{};
 
       for (std::uint64_t index = 1; index <= 3; ++index) {
         recordings.record(packet(index, body));
       }
 
-      const auto page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytes()));
+      const auto page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytesMut()));
 
       check(page.count == 1 && page.bytes <= 512 && page.evicted == 2);
-      const auto scoped = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 4, .selection = tr::Selection::flows, .host = "*.example.test"}, output.bytes()));
+      const auto scoped = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 4, .selection = tr::Selection::flows, .host = "*.example.test"}, output.bytesMut()));
       std::array<Byte, 512> flow;
       auto payload = tr::FlowCodec::encode(flow, {.id = 31, .host = "sub.example.test"});
 
       recordings.record({.kind = tr::Kind::flow_open, .bytes = payload});
       payload = tr::FlowCodec::encode(flow, {.id = 32, .host = "other.test"});
       recordings.record({.kind = tr::Kind::flow_open, .bytes = payload});
-      auto selected = rec::Protocol::page(recordings.handle({.id = scoped.id, .host = "SUB.EXAMPLE.TEST"}, output.bytes()));
+      auto selected = rec::Protocol::page(recordings.handle({.id = scoped.id, .host = "SUB.EXAMPLE.TEST"}, output.bytesMut()));
 
       check(selected.count == 1);
-      selected = rec::Protocol::page(recordings.handle({.id = scoped.id, .host = "other.test"}, output.bytes()));
+      selected = rec::Protocol::page(recordings.handle({.id = scoped.id, .host = "other.test"}, output.bytesMut()));
       check(selected.count == 0 && selected.next == selected.end);
     }
 
@@ -204,7 +204,7 @@ namespace {
       SensitiveAllocation output{memory, rec::Limits::page_bytes};
       const auto rejected = [&](const rec::Request& request) {
         try {
-          recordings.handle(request, output.bytes());
+          recordings.handle(request, output.bytesMut());
         } catch (const std::exception&) {
           return true;
         }
@@ -214,19 +214,19 @@ namespace {
 
       check(rejected({.operation = rec::Operation::start, .max_bytes = 1, .max_events = 1}));
       check(rejected({.operation = rec::Operation::start, .filter = "tcp and ("}));
-      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytes())).count == 0);
-      const auto first = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes, .max_events = 1}, output.bytes())).id;
-      const auto second = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes, .max_events = 1}, output.bytes())).id;
+      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytesMut())).count == 0);
+      const auto first = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes, .max_events = 1}, output.bytesMut())).id;
+      const auto second = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes, .max_events = 1}, output.bytesMut())).id;
 
       check(rejected({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 1}));
-      recordings.handle({.operation = rec::Operation::erase, .id = first}, output.bytes());
-      recordings.handle({.operation = rec::Operation::erase, .id = second}, output.bytes());
+      recordings.handle({.operation = rec::Operation::erase, .id = first}, output.bytesMut());
+      recordings.handle({.operation = rec::Operation::erase, .id = second}, output.bytesMut());
       for (std::size_t index = 0; index < rec::Limits::sessions; ++index) {
-        recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 1}, output.bytes());
+        recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 1}, output.bytesMut());
       }
 
       check(rejected({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 1}));
-      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytes())).count == rec::Limits::sessions);
+      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytesMut())).count == rec::Limits::sessions);
     }
 
     check(budget.liveBytes() == 0);
@@ -246,7 +246,7 @@ namespace {
       SensitiveAllocation output{memory, rec::Limits::page_bytes};
       const auto rejected = [&](const rec::Request& request) {
         try {
-          recordings.handle(request, output.bytes());
+          recordings.handle(request, output.bytesMut());
         } catch (const EncodingError&) {
           return true;
         }
@@ -258,7 +258,7 @@ namespace {
       // A whole session's bytes, so its budget holds the larger index and only the event limit refuses.
       check(rejected({.operation = rec::Operation::start, .max_bytes = rec::Limits::session_bytes, .max_events = rec::Limits::events + 1}));
       check(rejected({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 1, .filter = std::string_view{"tcp\0 or udp", 11}}));
-      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytes())).count == 0);
+      check(rec::Protocol::page(recordings.handle({.operation = rec::Operation::list}, output.bytesMut())).count == 0);
     }
 
     check(budget.liveBytes() == 0);

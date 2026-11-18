@@ -4,6 +4,7 @@ import std;
 import telar.sys.posix;
 import telar.sys.process;
 import telar.platform.error;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif
@@ -221,10 +222,10 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<pid_t> PtyProcess::foregroundProcessGroup() const noexcept {
+  ds::Option<pid_t> PtyProcess::foregroundProcessGroup() const noexcept {
     pid_t foreground = 0;
     if (::ioctl(master_.get(), TIOCGPGRP, &foreground) < 0 || foreground <= 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return foreground;
@@ -251,7 +252,7 @@ namespace telar::runtime {
     ::tcflush(master_.get(), TCIOFLUSH);
   }
 
-  std::optional<int> PtyProcess::reap() noexcept {
+  ds::Option<int> PtyProcess::reap() noexcept {
     if (!exit_status_ && process_id_ > 0) {
       int status = 0;
       if (::waitpid(process_id_, &status, WNOHANG) == process_id_) {

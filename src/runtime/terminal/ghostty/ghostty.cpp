@@ -1,4 +1,5 @@
 module telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -42,15 +43,15 @@ namespace telar::runtime {
     release();
   }
 
-  std::optional<std::uint32_t> TrackedRow::row(GhosttyTerminal terminal) const noexcept {
+  ds::Option<std::uint32_t> TrackedRow::row(GhosttyTerminal terminal) const noexcept {
     auto reference = ghosttySized<GhosttyGridRef>();
     if (ref_ == nullptr || ghostty_tracked_grid_ref_snapshot(ref_, &reference) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     GhosttyPointCoordinate coordinate{};
     if (ghostty_terminal_point_from_grid_ref(terminal, &reference, GHOSTTY_POINT_TAG_SCREEN, &coordinate) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return coordinate.y;

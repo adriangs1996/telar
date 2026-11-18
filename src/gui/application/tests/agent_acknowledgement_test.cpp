@@ -18,6 +18,7 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.wire.agents;
+import telar.base.ds;
 
 namespace {
 
@@ -47,13 +48,13 @@ namespace {
 
     check(first && first->pane_id == agent.pane_id && first->pane_generation == agent.pane_generation, "an unseen completion must retain its exact identity");
     check(!acknowledgement.take(focused(agent)), "a retained completion must be acknowledged only once");
-    check(!acknowledgement.take(std::nullopt) && !acknowledgement.take(focused(agent)), "missing focus must retain the current completion reservation");
+    check(!acknowledgement.take(ds::none) && !acknowledgement.take(focused(agent)), "missing focus must retain the current completion reservation");
     agent.status = AgentStatus::working;
     check(!acknowledgement.take(focused(agent)), "a later turn must release the matching reservation");
     agent.status = AgentStatus::done;
-    check(acknowledgement.take(focused(agent)).has_value(), "a later completion of the same agent must be acknowledged again");
+    check(acknowledgement.take(focused(agent)).hasValue(), "a later completion of the same agent must be acknowledged again");
     ++agent.pane_generation;
-    check(acknowledgement.take(focused(agent)).has_value(), "pane reuse must not inherit an older generation's acknowledgement");
+    check(acknowledgement.take(focused(agent)).hasValue(), "pane reuse must not inherit an older generation's acknowledgement");
   }
 
   void committedSnapshotsAcknowledgeTheAlreadyFocusedPane() {

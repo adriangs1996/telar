@@ -4,6 +4,7 @@ import std;
 
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline model {
 
@@ -126,7 +127,7 @@ namespace telar::gui::inline foundation::inline model {
     return false;
   }
 
-  void PaneLayout::setBottomReservation(std::optional<PaneBottomReservation> reservation) noexcept {
+  void PaneLayout::setBottomReservation(ds::Option<PaneBottomReservation> reservation) noexcept {
     reservation_ = reservation;
   }
 
@@ -134,7 +135,7 @@ namespace telar::gui::inline foundation::inline model {
     return reserved_;
   }
 
-  std::span<const PaneLayout::Placement> PaneLayout::arrange(CellRectangle bounds, Metrics metrics, std::optional<std::uint64_t> fullscreen) noexcept {
+  std::span<const PaneLayout::Placement> PaneLayout::arrange(CellRectangle bounds, Metrics metrics, ds::Option<std::uint64_t> fullscreen) noexcept {
     placement_count_ = 0;
     divider_count_ = 0;
     reserved_ = {};
@@ -153,21 +154,21 @@ namespace telar::gui::inline foundation::inline model {
     return {dividers_.data(), divider_count_};
   }
 
-  std::optional<PaneLayout::SplitBounds> PaneLayout::prospectiveSplit(
+  ds::Option<PaneLayout::SplitBounds> PaneLayout::prospectiveSplit(
       CellRectangle area,
       ClientLayoutAxis axis,
       std::uint64_t pane_id,
       Metrics metrics,
-      std::optional<std::uint64_t> fullscreen
+      ds::Option<std::uint64_t> fullscreen
   ) noexcept {
     if (count_ + 2 > maximum_nodes) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto placements = arrange(area, metrics, fullscreen);
     const auto found = std::ranges::find(placements, pane_id, &Placement::pane_id);
     if (found == placements.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto minimum_width = metrics.minimumPaneExtent(ClientLayoutAxis::horizontal);
@@ -175,7 +176,7 @@ namespace telar::gui::inline foundation::inline model {
     const auto bounds = found->bounds;
     const bool enough_space = axis == ClientLayoutAxis::horizontal ? bounds.width >= (2 * minimum_width) + metrics.gap && bounds.height >= minimum_height : bounds.width >= minimum_width && bounds.height >= (2 * minimum_height) + metrics.gap;
     if (!enough_space) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto geometry = partition(bounds, {.axis = axis, .ratio = ratio_half}, metrics.gap);
@@ -241,7 +242,7 @@ namespace telar::gui::inline foundation::inline model {
 
     const auto axis = direction == PaneDirection::left || direction == PaneDirection::right ? ClientLayoutAxis::horizontal : ClientLayoutAxis::vertical;
     const bool decreasing = direction == PaneDirection::left || direction == PaneDirection::up;
-    std::optional<std::size_t> fallback;
+    ds::Option<std::size_t> fallback;
 
     for (std::size_t parent = *target; parent-- > 0;) {
       const auto* split = std::get_if<ClientLayoutSplit>(&nodes_[parent]);
@@ -263,7 +264,7 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   bool PaneLayout::contains(std::uint64_t pane_id) const noexcept {
-    return indexOf(pane_id).has_value();
+    return indexOf(pane_id).hasValue();
   }
 
   std::span<const ClientLayoutNode> PaneLayout::nodes() const noexcept {
@@ -323,7 +324,7 @@ namespace telar::gui::inline foundation::inline model {
     }
   }
 
-  std::optional<std::uint64_t> PaneLayout::FocusOrigin::score(CellRectangle candidate) const noexcept {
+  ds::Option<std::uint64_t> PaneLayout::FocusOrigin::score(CellRectangle candidate) const noexcept {
     const auto horizontal = direction == PaneDirection::left || direction == PaneDirection::right;
     const auto decreasing = direction == PaneDirection::left || direction == PaneDirection::up;
     const auto source_begin = horizontal ? bounds.x : bounds.y;
@@ -332,7 +333,7 @@ namespace telar::gui::inline foundation::inline model {
     const auto candidate_end = horizontal ? candidate.right() : candidate.bottom();
     const auto forward = decreasing ? candidate_end <= source_begin : candidate_begin >= source_end;
     if (!forward) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto primary = decreasing ? source_begin - candidate_end : candidate_begin - source_end;
@@ -421,14 +422,14 @@ namespace telar::gui::inline foundation::inline model {
     return pending.front();
   }
 
-  std::optional<std::size_t> PaneLayout::indexOf(std::uint64_t pane_id) const noexcept {
+  ds::Option<std::size_t> PaneLayout::indexOf(std::uint64_t pane_id) const noexcept {
     for (std::size_t index = 0; index < count_; ++index) {
       if (const auto* pane = std::get_if<ClientLayoutPane>(&nodes_[index]); pane != nullptr && pane->pane_id == pane_id) {
         return index;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::size_t PaneLayout::subtreeEnd(std::size_t beginning) const noexcept {
@@ -500,7 +501,7 @@ namespace telar::gui::inline foundation::inline model {
     }
   }
 
-  std::optional<TerminalSize> WorkbenchGeometry::launchSize() const noexcept {
+  ds::Option<TerminalSize> WorkbenchGeometry::launchSize() const noexcept {
     return contentSize(layout_metrics.content(cellArea()));
   }
 
@@ -510,9 +511,9 @@ namespace telar::gui::inline foundation::inline model {
     return size ? CellRectangle{.width = size->cols, .height = size->rows} : CellRectangle{};
   }
 
-  std::optional<TerminalSize> WorkbenchGeometry::contentSize(CellRectangle content) const noexcept {
+  ds::Option<TerminalSize> WorkbenchGeometry::contentSize(CellRectangle content) const noexcept {
     if (content.empty() || static_cast<std::size_t>(content.width) * content.height > TerminalGrid::maximum_cells) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return TerminalSize{.cols = content.width, .rows = content.height, .cell_width_px = grid.cell_width_px, .cell_height_px = grid.cell_height_px};

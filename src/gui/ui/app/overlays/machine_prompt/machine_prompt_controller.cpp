@@ -12,6 +12,7 @@ static_assert(true);
 
 import telar.gui.foundation.forms;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -21,7 +22,7 @@ namespace telar::gui::qt {
         profiles_(profiles) {}
 
   bool MachinePromptController::isOpen() const noexcept {
-    return store_.dialog().kind == Store::Dialog::machine && prompt_.has_value();
+    return store_.dialog().kind == Store::Dialog::machine && prompt_.hasValue();
   }
 
   void MachinePromptController::setDisplay(const application::window::DisplayMetrics& display) {
@@ -33,16 +34,16 @@ namespace telar::gui::qt {
     prompt_.reset();
   }
 
-  bool MachinePromptController::open(std::optional<application::machines::MachineToken> renamed) {
+  bool MachinePromptController::open(ds::Option<application::machines::MachineToken> renamed) {
     if (renamed && (!store_.machines().contains(*renamed) || renamed->slot == application::machines::Machines::local_slot)) {
       return false;
     }
 
     prompt_.emplace();
-    prompt_->renamed = renamed;
+    prompt_.getMut().renamed = renamed;
     if (renamed) {
-      prompt_->mode = Mode::rename;
-      prompt_->text = toQString(store_.machines().row(renamed->slot).label.view());
+      prompt_.getMut().mode = Mode::rename;
+      prompt_.getMut().text = toQString(store_.machines().row(renamed->slot).label.view());
     }
 
     return true;
@@ -59,9 +60,9 @@ namespace telar::gui::qt {
 
     const auto measured = Utf16Prefix::fit(QStringView{text}, limit(), utf16Encoding());
 
-    prompt_->text = text.first(static_cast<qsizetype>(measured.units));
+    prompt_.getMut().text = text.first(static_cast<qsizetype>(measured.units));
     if (!prompt_->text.isValidUtf16()) {
-      prompt_->text = QString::fromUtf8(prompt_->text.toUtf8());
+      prompt_.getMut().text = QString::fromUtf8(prompt_->text.toUtf8());
     }
 
     emit changed();
@@ -77,7 +78,7 @@ namespace telar::gui::qt {
 
     const auto* const name = prompt_->mode == Mode::add_destination ? "prompt.machine_destination_bytes" : "prompt.machine_label_bytes";
 
-    application::notifications::reportLimit(store_.session(), {.name = name, .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.sessionMut(), {.name = name, .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 
@@ -87,9 +88,9 @@ namespace telar::gui::qt {
     }
 
     if (prompt_->mode == Mode::add_label) {
-      prompt_->label = prompt_->text;
-      prompt_->text.clear();
-      prompt_->mode = Mode::add_destination;
+      prompt_.getMut().label = prompt_->text;
+      prompt_.getMut().text.clear();
+      prompt_.getMut().mode = Mode::add_destination;
       store_.advanceDialog();
       emit changed();
 

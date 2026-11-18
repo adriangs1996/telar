@@ -12,6 +12,7 @@ import telar.cli.plugin;
 import telar.platform.paths;
 import telar.platform.process;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: config_receive.cppm
 export {
@@ -89,9 +90,9 @@ export {
       Action action;
       std::string_view label;
       std::string_view value;
-      std::optional<std::string_view> color;
-      std::optional<std::string_view> new_label;
-      std::optional<std::string_view> binary;
+      ds::Option<std::string_view> color;
+      ds::Option<std::string_view> new_label;
+      ds::Option<std::string_view> binary;
       bool disabled = false;
       bool check = false;
       bool json = false;
@@ -172,7 +173,7 @@ export {
     extern template std::string capture<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words, const char* failure, int input);
 
     // The saved machine `label` names, or nullopt for this machine's own label.
-    std::optional<MachineProfile> resolve(Memory& memory, std::string_view label);
+    ds::Option<MachineProfile> resolve(Memory& memory, std::string_view label);
 
     MachineError sshFailure(const launch::Output& output);
 
@@ -195,7 +196,7 @@ export {
 
     std::string toml(std::string_view bytes, std::vector<std::string>& dropped);
 
-    std::optional<std::pair<std::size_t, std::string_view>> findSecret(std::string_view bytes);
+    ds::Option<std::pair<std::size_t, std::string_view>> findSecret(std::string_view bytes);
 
   }
 }
@@ -205,11 +206,11 @@ export {
   namespace telar::runtime::cli {
 
     struct WindowOptions {
-      std::optional<std::string> config;
-      std::optional<std::string> profile;
-      std::optional<std::string> theme;
-      std::optional<std::string> remote;
-      std::optional<std::string> machine;
+      ds::Option<std::string> config;
+      ds::Option<std::string> profile;
+      ds::Option<std::string> theme;
+      ds::Option<std::string> remote;
+      ds::Option<std::string> machine;
       bool no_config = false;
       bool fresh = false;
       bool login_shell = false;

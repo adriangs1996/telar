@@ -6,6 +6,7 @@ module telar.runtime.proxy.runtime;
 import telar.platform.sha256;
 import telar.sys.socket;
 import telar.tls;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -85,11 +86,11 @@ namespace telar::runtime {
     return outbound_.rejected() || inbound_.rejected();
   }
 
-  std::optional<traffic::FlowControl::Time> FlowState::deadline() const noexcept {
-    std::optional<traffic::FlowControl::Time> soonest;
+  ds::Option<traffic::FlowControl::Time> FlowState::deadline() const noexcept {
+    ds::Option<traffic::FlowControl::Time> soonest;
 
     for (const auto* gate : {&outbound_, &inbound_}) {
-      if (const auto due = gate->ticket_ ? control_->deadline(gate->ticket_) : std::nullopt) {
+      if (const auto due = gate->ticket_ ? control_->deadline(gate->ticket_) : ds::none) {
         soonest = earliest(soonest, due);
       }
     }
@@ -222,7 +223,7 @@ namespace telar::runtime {
                                                                                                           : relays_.duplex_.readsOrigin();
   }
 
-  [[nodiscard]] auto ApplicationRelay::deadline() const noexcept -> std::optional<traffic::FlowControl::Time> {
+  [[nodiscard]] auto ApplicationRelay::deadline() const noexcept -> ds::Option<traffic::FlowControl::Time> {
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->deadline();
     }
@@ -231,7 +232,7 @@ namespace telar::runtime {
       return relays_.http1_->deadline();
     }
 
-    return !protocol_ && sniff_until_ != traffic::FlowControl::Time{} ? std::optional{sniff_until_} : std::nullopt;
+    return !protocol_ && sniff_until_ != traffic::FlowControl::Time{} ? ds::Option{sniff_until_} : ds::none;
   }
 
   [[nodiscard]] auto ApplicationRelay::interest(TlsSide side) const noexcept -> SocketInterest {
@@ -513,10 +514,10 @@ namespace telar::runtime {
     return tls_->interest(side);
   }
 
-  std::optional<traffic::FlowControl::Time> ConnectionTransport::deadline() const noexcept {
-    const auto flow = flow_ ? flow_->deadline() : std::nullopt;
+  ds::Option<traffic::FlowControl::Time> ConnectionTransport::deadline() const noexcept {
+    const auto flow = flow_ ? flow_->deadline() : ds::none;
     const auto tls = plain_ ? plain_->deadline() : tls_ ? tls_->deadline()
-                                                        : std::nullopt;
+                                                        : ds::none;
 
     return earliest(flow, tls);
   }
@@ -582,10 +583,10 @@ namespace telar::runtime {
     set(target, "TELAR_PROXY_TLS", "1");
   }
 
-  ProxyListener ProxyListener::bind(std::optional<std::uint16_t> preferred, const ProxyPortRange::Set& reserved) {
+  ProxyListener ProxyListener::bind(ds::Option<std::uint16_t> preferred, const ProxyPortRange::Set& reserved) {
     if (preferred) {
       if (auto listener = tryPort(*preferred, true)) {
-        return std::move(*listener);
+        return std::move(listener.getMut());
       }
     }
 
@@ -596,7 +597,7 @@ namespace telar::runtime {
         }
 
         if (auto listener = tryPort(ProxyPortRange::first + offset, false)) {
-          return std::move(*listener);
+          return std::move(listener.getMut());
         }
       }
     }
@@ -648,7 +649,7 @@ namespace telar::runtime {
     return NetworkAddress::ipv4(in_addr{.s_addr = htonl(INADDR_LOOPBACK)}, port);
   }
 
-  std::optional<ProxyListener> ProxyListener::tryPort(std::uint16_t port, bool reclaim) {
+  ds::Option<ProxyListener> ProxyListener::tryPort(std::uint16_t port, bool reclaim) {
     auto socket = listen(port, false);
     if (!socket && reclaim && !answers(port)) {
       // BSD reuse can shadow a wildcard listener; reclaim only a refused port.
@@ -656,7 +657,7 @@ namespace telar::runtime {
     }
 
     if (!socket) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return ProxyListener{std::move(socket), port};
@@ -749,7 +750,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::uint16_t> ProxyPortMemory<Memory>::preferred() const noexcept {
+  ds::Option<std::uint16_t> ProxyPortMemory<Memory>::preferred() const noexcept {
     return own_ ? own_ : legacy_;
   }
 
@@ -817,13 +818,13 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto ProxyPortMemory<Memory>::recall(std::string_view name, tbc::view<Vector<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept -> tbc::view<std::optional<Record>, tbc::lt::a> {
+  auto ProxyPortMemory<Memory>::recall(std::string_view name, tbc::view<Vector<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept -> tbc::view<ds::Option<Record>, tbc::lt::a> {
     try {
       if (!readPrivateFile(directory_, name, bytes, maximum_record_bytes)) {
-        return std::nullopt;
+        return ds::none;
       }
     } catch (...) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const std::string_view text{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
@@ -835,7 +836,7 @@ namespace telar::runtime {
 
     const auto port = unsignedDecimal<std::uint16_t>(number);
     if (!port || !ProxyPortRange::contains(*port)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto tail = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);

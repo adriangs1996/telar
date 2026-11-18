@@ -39,6 +39,7 @@ import telar.gui.application;
 import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
 import telar.gui.features.components;
+import telar.base.ds;
 
 namespace {
 
@@ -81,8 +82,8 @@ namespace {
   }
 
   QVariantMap treeProperties(const BarContent& content) {
-    const auto nodes = componentRecords(content, Configuration{}.theme, {}, [](BindingAction) -> std::optional<NamedActionDescription> {
-      return std::nullopt;
+    const auto nodes = componentRecords(content, Configuration{}.theme, {}, [](BindingAction) -> telar::ds::Option<NamedActionDescription> {
+      return telar::ds::none;
     });
 
     return {

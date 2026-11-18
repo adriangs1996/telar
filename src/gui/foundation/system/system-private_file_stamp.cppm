@@ -1,6 +1,7 @@
 export module telar.gui.foundation.system:private_file_stamp;
 
 import std;
+import telar.base.ds;
 
 export {
   namespace telar::gui::inline foundation::inline system {
@@ -19,7 +20,7 @@ export {
 
       bool operator==(const PrivateFileStamp&) const = default;
 
-      [[nodiscard]] static std::optional<PrivateFileStamp> read(const char* path) noexcept;
+      [[nodiscard]] static ds::Option<PrivateFileStamp> read(const char* path) noexcept;
     };
 
   }

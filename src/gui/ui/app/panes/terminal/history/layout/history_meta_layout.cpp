@@ -27,6 +27,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -100,7 +101,7 @@ namespace telar::gui::qt {
         .provider = metaBytes(provider),
         .duration = metaBytes(duration),
         .age = metaBytes(age),
-        .exit_code = record.contains(QStringLiteral("exitCode")) ? std::optional{record.value(QStringLiteral("exitCode")).toInt()} : std::nullopt,
+        .exit_code = record.contains(QStringLiteral("exitCode")) ? ds::Option{record.value(QStringLiteral("exitCode")).toInt()} : ds::none,
         .status = static_cast<HistoryStatus>(record.value(QStringLiteral("status")).toInt()),
         .key_style = style,
         .more = static_cast<std::uint16_t>(std::clamp(input_.value(QStringLiteral("more")).toInt(), 0, static_cast<int>(application::history::HistoryCard::more_bound))),

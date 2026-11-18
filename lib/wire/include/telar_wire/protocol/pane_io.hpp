@@ -2,6 +2,7 @@
 
 #include "../serializers/telar_frame.hpp"
 #include "../serializers/telar_messages.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar {
 
@@ -9,7 +10,7 @@ namespace telar {
     std::uint64_t request_id{};
     PaneTarget target{};
     TerminalSize size{};
-    std::optional<Launch> launch{};
+    ds::Option<Launch> launch{};
   };
 
   template <>
@@ -118,7 +119,7 @@ namespace telar {
     std::uint64_t pane_generation{};
     PaneTextMode mode{};
     std::string_view text{};
-    std::optional<std::uint64_t> sender{};
+    ds::Option<std::uint64_t> sender{};
 
     void validate() const;
   };
@@ -128,9 +129,9 @@ namespace telar {
       : Schema<Direction::client, ClientTag::send_pane_text, Field<&SendPaneText::request_id, NonzeroU64, "request_id">, Field<&SendPaneText::pane_id, NonzeroU64, "pane_id">, Field<&SendPaneText::pane_generation, u64, "pane_generation">, Field<&SendPaneText::mode, EnumByte<PaneTextMode, 2>, "mode">, Field<&SendPaneText::text, Text32<65536>, "text">, Field<&SendPaneText::sender, OptionalValue<NonzeroU64>, "sender">> {};
 
   struct ConfigureTerminalColors {
-    std::optional<std::array<Byte, 3>> foreground{};
-    std::optional<std::array<Byte, 3>> background{};
-    std::optional<std::array<Byte, 48>> palette{};
+    ds::Option<std::array<Byte, 3>> foreground{};
+    ds::Option<std::array<Byte, 3>> background{};
+    ds::Option<std::array<Byte, 48>> palette{};
   };
 
   template <>
@@ -149,10 +150,10 @@ namespace telar {
     bool focused{};
     bool light{};
     bool clipboard{};
-    std::optional<std::array<Byte, 3>> foreground{};
-    std::optional<std::array<Byte, 3>> background{};
-    std::optional<std::array<Byte, 3>> cursor{};
-    std::optional<std::array<Byte, 48>> palette{};
+    ds::Option<std::array<Byte, 3>> foreground{};
+    ds::Option<std::array<Byte, 3>> background{};
+    ds::Option<std::array<Byte, 3>> cursor{};
+    ds::Option<std::array<Byte, 48>> palette{};
 
     void validate() const;
 
@@ -239,7 +240,7 @@ namespace telar {
   struct PaneProgress {
     std::uint64_t pane_id{};
     PaneProgressState state{};
-    std::optional<Byte> percent{};
+    ds::Option<Byte> percent{};
 
     void validate() const;
   };

@@ -98,14 +98,14 @@ namespace {
       const std::array<std::string_view, 2> arguments{bash, option};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-      check(integration.apply(command).has_value(), option);
+      check(integration.apply(command).hasValue(), option);
       check(command.environment("TELAR_BASH_LOGIN") == "1", option);
     }
 
     const std::array<std::string_view, 2> interactive{bash, "-i"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = interactive}};
 
-    check(integration.apply(command).has_value() && !command.environment("TELAR_BASH_LOGIN"));
+    check(integration.apply(command).hasValue() && !command.environment("TELAR_BASH_LOGIN"));
   }
 
   const telar::testing::Case case_replaces_planted_symlink{"shell_integration.replaces_planted_symlink", testReplacesPlantedSymlink};

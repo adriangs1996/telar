@@ -16,6 +16,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 import telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 namespace {
 
@@ -119,7 +120,7 @@ namespace {
     copied = text;
     check(copied.view().empty());
 
-    std::optional<FixedText<4096>> absent;
+    ds::Option<FixedText<4096>> absent;
     auto transferred = absent;
 
     check(!transferred);

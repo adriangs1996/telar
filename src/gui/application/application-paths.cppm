@@ -8,6 +8,7 @@ import :session;
 import telar.gui.features.paths;
 import telar.wire.editor;
 import telar.wire.runtime;
+import telar.base.ds;
 
 export namespace telar::gui::application::paths {
 
@@ -60,6 +61,6 @@ namespace telar::gui::application::paths {
   Change receive(Session& session, const PathResults& results);
 
   // A failed request: none when it is not one of the picker's.
-  std::optional<Change> fail(Session& session, const RequestFailed& failure);
+  ds::Option<Change> fail(Session& session, const RequestFailed& failure);
 
 }

@@ -6,6 +6,7 @@ import telar.base.diagnostics;
 import telar.cli.server;
 import telar.platform.fs;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::runtime::cli::file_transfer {
 
@@ -205,9 +206,9 @@ namespace telar::runtime::cli::diagnostics {
     std::uint32_t pid;
   };
 
-  std::optional<Log> parseLog(std::string_view name, std::string_view base) {
+  ds::Option<Log> parseLog(std::string_view name, std::string_view base) {
     if (!name.starts_with(base) || !name.ends_with(".log")) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto suffix = name.substr(base.size(), name.size() - base.size() - std::string_view{".log"}.size());
@@ -220,7 +221,7 @@ namespace telar::runtime::cli::diagnostics {
       component = DiagnosticsOptions::Component::client;
       suffix.remove_prefix(std::string_view{".client-"}.size());
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto pid = maybeUnsigned<std::uint32_t>(suffix);
@@ -228,7 +229,7 @@ namespace telar::runtime::cli::diagnostics {
       return Log{.name = std::string{name}, .component = component, .pid = *pid};
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::string_view tail(std::string_view bytes, std::uint16_t lines) {
@@ -277,7 +278,7 @@ namespace telar::runtime::cli::diagnostics {
         continue;
       }
 
-      logs.push_back(std::move(*log));
+      logs.push_back(std::move(log.getMut()));
     }
 
     if (options.component != DiagnosticsOptions::Component::client && !options.pid) {
@@ -425,7 +426,7 @@ namespace telar::runtime::cli::diagnostics {
     try {
       ServerOptions server_options{};
 
-      server_options.socket = options.socket.value_or("");
+      server_options.socket = options.socket.valueOr("");
       const RuntimePaths paths{memory, server_options, process_environment};
 
       if (options.action == DiagnosticsOptions::Action::logs) {
@@ -456,7 +457,7 @@ namespace telar::runtime::cli::diagnostics {
 namespace telar::runtime::cli {
 
   void ensureRuntime(Memory& memory, const RuntimePaths<Memory>& paths, const ServerOptions& options) {
-    std::optional<RuntimeConnection> connection;
+    ds::Option<RuntimeConnection> connection;
     if (connectExisting(connection, paths.socket.c_str())) {
       return;
     }
@@ -485,7 +486,7 @@ namespace telar::runtime::cli::history {
     explicit ImportParser(HistoryOptions::ImportKind kind)
         : kind_(kind) {}
 
-    std::optional<ImportedLine> feed(std::string_view line) {
+    ds::Option<ImportedLine> feed(std::string_view line) {
       while (line.ends_with('\r')) {
         line.remove_suffix(1);
       }
@@ -502,16 +503,16 @@ namespace telar::runtime::cli::history {
       }
     }
 
-    std::optional<ImportedLine> flush() {
+    ds::Option<ImportedLine> flush() {
       if (!active_ || bytes_ == 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       active_ = false;
       if (bytes_ > command_.size()) {
         ++skipped;
         largest_skipped = std::max(largest_skipped, bytes_);
-        return std::nullopt;
+        return ds::none;
       }
 
       return ImportedLine{.started_at_ms = time_, .command = command_};
@@ -554,7 +555,7 @@ namespace telar::runtime::cli::history {
       append(command);
     }
 
-    std::optional<ImportedLine> zsh(std::string_view line) {
+    ds::Option<ImportedLine> zsh(std::string_view line) {
       if (active_ && bytes_ != 0 && last_ == '\\') {
         --bytes_;
         if (bytes_ < command_.size()) {
@@ -564,7 +565,7 @@ namespace telar::runtime::cli::history {
         last_ = 0;
         append("\n");
         append(line);
-        return line.ends_with('\\') ? std::nullopt : flush();
+        return line.ends_with('\\') ? ds::none : flush();
       }
 
       auto finished = flush();
@@ -590,9 +591,9 @@ namespace telar::runtime::cli::history {
       return flush();
     }
 
-    std::optional<ImportedLine> plain(std::string_view line) {
+    ds::Option<ImportedLine> plain(std::string_view line) {
       if (line.empty()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       auto finished = flush();
@@ -601,7 +602,7 @@ namespace telar::runtime::cli::history {
       return finished ? finished : flush();
     }
 
-    std::optional<ImportedLine> bash(std::string_view line) {
+    ds::Option<ImportedLine> bash(std::string_view line) {
       if (line.size() > 1 && line.front() == '#') {
         try {
           const auto seconds = parseInt<std::int64_t>(line.substr(1));
@@ -616,7 +617,7 @@ namespace telar::runtime::cli::history {
       return plain(line);
     }
 
-    std::optional<ImportedLine> fish(std::string_view line) {
+    ds::Option<ImportedLine> fish(std::string_view line) {
       constexpr std::string_view command_prefix = "- cmd: ";
       constexpr std::string_view time_prefix = "  when: ";
 
@@ -632,7 +633,7 @@ namespace telar::runtime::cli::history {
         return flush();
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     HistoryOptions::ImportKind kind_;
@@ -759,7 +760,7 @@ namespace telar::runtime::cli::history {
       used = 0;
     };
 
-    auto push = [&](std::optional<ImportedLine> entry) {
+    auto push = [&](ds::Option<ImportedLine> entry) {
       if (!entry || entry->command.empty()) {
         return;
       }
@@ -769,7 +770,7 @@ namespace telar::runtime::cli::history {
       }
 
       used += entry->command.size();
-      batch.push_back(std::move(*entry));
+      batch.push_back(std::move(entry.getMut()));
     };
 
     ImportParser parser{input.kind};
@@ -984,7 +985,7 @@ namespace telar::runtime::cli::history {
 
   int run(Memory& memory, const HistoryOptions& options) {
     try {
-      std::optional<ImportSource> input;
+      ds::Option<ImportSource> input;
 
       if (options.action == HistoryOptions::Action::import) {
         input = loadImport(options);
@@ -992,7 +993,7 @@ namespace telar::runtime::cli::history {
 
       ServerOptions server_options{};
 
-      server_options.socket = options.socket.value_or("");
+      server_options.socket = options.socket.valueOr("");
       const RuntimePaths paths{memory, server_options, process_environment};
 
       ensureRuntime(memory, paths);

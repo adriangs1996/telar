@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -11,7 +12,7 @@ namespace telar {
     std::string_view name{};
     std::string_view noun{};
     std::uint64_t value = 0;
-    std::optional<std::uint64_t> requested{};
+    ds::Option<std::uint64_t> requested{};
     std::string_view route{};
   };
 

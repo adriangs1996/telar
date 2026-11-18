@@ -10,6 +10,7 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: graphics/source_rect.cppm
 export {
@@ -85,14 +86,14 @@ export {
     struct PlaceholderCell {
       std::uint32_t image_low = 0;
       std::uint32_t placement = 0;
-      std::optional<std::uint32_t> row;
-      std::optional<std::uint32_t> column;
-      std::optional<std::uint32_t> image_high;
+      ds::Option<std::uint32_t> row;
+      ds::Option<std::uint32_t> column;
+      ds::Option<std::uint32_t> image_high;
     };
 
-    std::optional<std::uint32_t> placeholderMark(std::string_view& text) noexcept;
+    ds::Option<std::uint32_t> placeholderMark(std::string_view& text) noexcept;
     std::uint32_t placeholderColor(const CellColor& color) noexcept;
-    std::optional<PlaceholderCell> parsePlaceholder(const CellValue& cell) noexcept;
+    ds::Option<PlaceholderCell> parsePlaceholder(const CellValue& cell) noexcept;
 
     struct PlaceholderRun {
       std::uint32_t screen_column = 0;
@@ -102,7 +103,7 @@ export {
       std::uint32_t column = 0;
       std::uint32_t width = 1;
       std::uint32_t image_low = 0;
-      std::optional<std::uint32_t> image_high;
+      ds::Option<std::uint32_t> image_high;
 
       static PlaceholderRun begin(const PlaceholderCell& cell, std::uint32_t screen_column) noexcept;
       bool extend(const PlaceholderCell& cell) noexcept;

@@ -15,6 +15,7 @@ import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
@@ -80,17 +81,17 @@ namespace telar::gui::features::terminal::copy_mode {
   public:
     static constexpr std::size_t maximum_matches = 256;
 
-    [[nodiscard]] const std::optional<CopyState>& state() const noexcept;
+    [[nodiscard]] const ds::Option<CopyState>& state() const noexcept;
 
     [[nodiscard]] bool active() const noexcept;
 
     [[nodiscard]] std::uint64_t revision() const noexcept;
 
-    [[nodiscard]] std::optional<CopyPointerOwner> pointerOwner() const noexcept;
+    [[nodiscard]] ds::Option<CopyPointerOwner> pointerOwner() const noexcept;
 
     bool beginPointer(CopyPress press, const CopyGrid& grid) noexcept;
 
-    [[nodiscard]] std::optional<CopyPlan> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept;
+    [[nodiscard]] ds::Option<CopyPlan> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept;
 
     bool clearPointer() noexcept;
 
@@ -102,11 +103,11 @@ namespace telar::gui::features::terminal::copy_mode {
 
     // Enters at `cursor`, from the top of the scrollback, already selecting from `anchor` when
     // one is given: a command block's text, picked from telar's editor.
-    bool enterAt(std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, std::optional<CopyPoint> anchor, bool linewise) noexcept;
+    bool enterAt(std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept;
 
-    [[nodiscard]] std::optional<CopyPlan> key(const TerminalKey& key, const CopyGrid& grid) const noexcept;
+    [[nodiscard]] ds::Option<CopyPlan> key(const TerminalKey& key, const CopyGrid& grid) const noexcept;
 
-    [[nodiscard]] std::optional<CopyPlan> vertical(std::int32_t rows, const CopyGrid& grid) const noexcept;
+    [[nodiscard]] ds::Option<CopyPlan> vertical(std::int32_t rows, const CopyGrid& grid) const noexcept;
 
     [[nodiscard]] CopyPlan leave(const CopyGrid& grid) const noexcept;
 
@@ -117,24 +118,24 @@ namespace telar::gui::features::terminal::copy_mode {
     // The plan's replacement matches view the results, region `a`, until it is applied. From
     // `origin`, a search typed a letter at a time starts where it began, and comes back there
     // when nothing matches.
-    [[nodiscard]] tbc::view<std::optional<CopyPlan>, tbc::lt::a> search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid& grid, std::optional<CopyPoint> origin = std::nullopt) const;
+    [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::a> search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid& grid, ds::Option<CopyPoint> origin = ds::none) const;
 
     void onFrame(std::uint32_t previous_offset, const CopyGrid& grid) noexcept;
 
     void reset() noexcept;
 
   private:
-    [[nodiscard]] std::optional<SetPaneViewport> viewport(std::uint32_t offset, const CopyGrid& grid) const noexcept;
+    [[nodiscard]] ds::Option<SetPaneViewport> viewport(std::uint32_t offset, const CopyGrid& grid) const noexcept;
 
     [[nodiscard]] CopyPlan plan(CopyState next, const CopyGrid& grid, CopyEffect effect = {}) const noexcept;
 
-    std::optional<CopyState> state_;
+    ds::Option<CopyState> state_;
     std::array<PaneMatch, maximum_matches> matches_{};
     std::size_t match_count_ = 0;
     std::uint64_t revision_ = 0;
     ClickTracker clicks_;
     std::uint64_t click_pane_ = 0;
-    std::optional<std::uint64_t> gesture_;
+    ds::Option<std::uint64_t> gesture_;
   };
 
   // The search of copy mode: the request in flight, the command output it may be confined to,
@@ -142,8 +143,8 @@ namespace telar::gui::features::terminal::copy_mode {
   // matches than it found.
   struct CopySearch {
     std::uint64_t request = 0;
-    std::optional<CopySearchRows> rows;
-    std::optional<CopyPoint> origin;
+    ds::Option<CopySearchRows> rows;
+    ds::Option<CopyPoint> origin;
     std::string query;
     bool truncated = false;
     bool scoped = false;

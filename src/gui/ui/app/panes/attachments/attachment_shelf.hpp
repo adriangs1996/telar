@@ -24,6 +24,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -64,9 +65,9 @@ namespace telar::gui::qt {
     [[nodiscard]] bool hoverReady() const noexcept;
     [[nodiscard]] bool hoverKnown() const noexcept;
     [[nodiscard]] QPointF hoverPosition() const noexcept;
-    void observePointer(std::optional<QPointF> position);
+    void observePointer(ds::Option<QPointF> position);
     void setSource(AttachmentSource source);
-    void setPrompt(std::optional<AttachmentPrompt> prompt, bool presented = true);
+    void setPrompt(ds::Option<AttachmentPrompt> prompt, bool presented = true);
     void requestCapture();
     void clearPrompt(AttachmentTarget target);
     bool remove(std::uint64_t id);
@@ -76,8 +77,8 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList items() const;
     [[nodiscard]] QString paneId() const;
     [[nodiscard]] QVariantMap modal() const;
-    [[nodiscard]] const std::optional<AttachmentPrompt>& prompt() const noexcept;
-    [[nodiscard]] const std::optional<AttachmentPrompt>& capturePrompt() const noexcept;
+    [[nodiscard]] const ds::Option<AttachmentPrompt>& prompt() const noexcept;
+    [[nodiscard]] const ds::Option<AttachmentPrompt>& capturePrompt() const noexcept;
     [[nodiscard]] bool hasVisibleItems() const noexcept;
     Q_INVOKABLE QImage image(const QString& identity, bool full) const;
     Q_INVOKABLE void open(const QString& identity);
@@ -104,20 +105,20 @@ namespace telar::gui::qt {
       void retire(SlotState& slot) noexcept;
       [[nodiscard]] static bool canRelease(const SlotState& slot) noexcept;
 
-      std::optional<AttachmentPreview> landing;
+      ds::Option<AttachmentPreview> landing;
     };
 
     void complete();
     void adopt(ClipboardImageResult& result);
     [[nodiscard]] bool current(const ClipboardImageJob& job) const noexcept;
 
-    std::optional<QPointF> hover_pointer_;
-    std::optional<QPointF> hover_recovery_;
+    ds::Option<QPointF> hover_pointer_;
+    ds::Option<QPointF> hover_recovery_;
     bool hover_ready_ = true;
     application::terminal::attachments::ClipboardCaptureState captures_;
-    std::optional<AttachmentPrompt> prompt_;
-    std::optional<AttachmentPrompt> capture_prompt_;
-    std::optional<AttachmentSource> source_;
+    ds::Option<AttachmentPrompt> prompt_;
+    ds::Option<AttachmentPrompt> capture_prompt_;
+    ds::Option<AttachmentSource> source_;
     Delivery delivery_;
     // The catalog delivers through the delivery stored beside it.
     tbc::view<application::terminal::attachments::AttachmentCatalog<ApplicationAllocator, Delivery>, tbc::lt::self> catalog_;

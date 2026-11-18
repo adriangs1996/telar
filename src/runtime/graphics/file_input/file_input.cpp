@@ -1,10 +1,11 @@
 module telar.runtime.graphics.file_input;
+import telar.base.ds;
 
 namespace telar::runtime {
 
-  std::optional<AtomicFrameControl> AtomicFrameControl::parse(std::string_view text) noexcept {
-    std::optional<std::uint32_t> image, placement, width, height, depth;
-    std::optional<GraphicsInputMedium> medium;
+  ds::Option<AtomicFrameControl> AtomicFrameControl::parse(std::string_view text) noexcept {
+    ds::Option<std::uint32_t> image, placement, width, height, depth;
+    ds::Option<GraphicsInputMedium> medium;
     bool transmit = false;
     bool cursor_static = false;
     bool quiet = false;
@@ -14,28 +15,28 @@ namespace telar::runtime {
       switch (field->key) {
       case 'a':
         if (transmit || field->value != "T") {
-          return std::nullopt;
+          return ds::none;
         }
 
         transmit = true;
         break;
       case 't':
         if (medium || (field->value != "s" && field->value != "f")) {
-          return std::nullopt;
+          return ds::none;
         }
 
         medium = field->value == "s" ? GraphicsInputMedium::shared_memory : GraphicsInputMedium::file;
         break;
       case 'C':
         if (cursor_static || field->value != "1") {
-          return std::nullopt;
+          return ds::none;
         }
 
         cursor_static = true;
         break;
       case 'q':
         if (quiet || field->value != "2") {
-          return std::nullopt;
+          return ds::none;
         }
 
         quiet = true;
@@ -51,69 +52,69 @@ namespace telar::runtime {
                                                                           : depth;
         const auto value = kittyUnsigned<std::uint32_t>(field->value);
         if (destination || !value || *value == 0) {
-          return std::nullopt;
+          return ds::none;
         }
 
         destination = *value;
         break;
       }
       default:
-        return std::nullopt;
+        return ds::none;
       }
     }
 
     constexpr std::uint32_t rgb_depth = 24;
     constexpr std::uint32_t rgba_depth = 32;
     if (!fields.valid() || !transmit || !cursor_static || !quiet || !medium || !image || !placement || !width || !height || !depth || (*depth != rgb_depth && *depth != rgba_depth)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto pixels = static_cast<std::uint64_t>(*width) * *height;
     const auto bytes_per_pixel = *depth == rgb_depth ? 3 : 4;
     if (pixels > std::numeric_limits<std::size_t>::max() / bytes_per_pixel) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return AtomicFrameControl{{*image, *placement}, *medium, *width, *height, static_cast<std::uint8_t>(*depth), static_cast<std::size_t>(pixels * bytes_per_pixel)};
   }
 
-  std::optional<AtomicFrame> AtomicFrame::at(std::string_view bytes, std::size_t start) noexcept {
+  ds::Option<AtomicFrame> AtomicFrame::at(std::string_view bytes, std::size_t start) noexcept {
     if (start > bytes.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const bool wrapped = bytes.substr(start).starts_with(cursor_save);
     const auto envelope = start + (wrapped ? cursor_save.size() : 0);
     if (!bytes.substr(envelope).starts_with(prefix)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto control_start = envelope + prefix.size();
     const auto terminator = bytes.find(command_terminator, control_start);
     if (terminator == std::string_view::npos || !bytes.substr(terminator).starts_with(suffix)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto end = terminator + suffix.size();
     if (wrapped && !bytes.substr(end).starts_with(cursor_restore)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto command = bytes.substr(control_start, terminator - control_start);
     const auto separator = command.find(';');
     if (separator == std::string_view::npos || separator + 1 == command.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto control = AtomicFrameControl::parse(command.substr(0, separator));
     if (!control) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return AtomicFrame{start, end + (wrapped ? cursor_restore.size() : 0), control_start - introducer.size(), terminator + command_terminator.size(), command.substr(separator + 1), *control, wrapped};
   }
 
-  std::optional<AtomicFrame> AtomicFrame::find(std::string_view bytes, std::size_t from) noexcept {
+  ds::Option<AtomicFrame> AtomicFrame::find(std::string_view bytes, std::size_t from) noexcept {
     for (auto start = bytes.find(prefix, from); start != std::string_view::npos; start = bytes.find(prefix, start + prefix.size())) {
       if (start >= cursor_save.size() && start - cursor_save.size() >= from && bytes.substr(start - cursor_save.size()).starts_with(cursor_save)) {
         if (auto wrapped = at(bytes, start - cursor_save.size())) {
@@ -126,10 +127,10 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<KittyFileRange> KittyFileRange::parse(std::string_view control) noexcept {
+  ds::Option<KittyFileRange> KittyFileRange::parse(std::string_view control) noexcept {
     KittyFileRange range;
     bool file = false;
     KittyControlFields fields{control};
@@ -138,13 +139,13 @@ namespace telar::runtime {
       switch (field->key) {
       case 'a':
         if (field->value != "t" && field->value != "T") {
-          return std::nullopt;
+          return ds::none;
         }
 
         break;
       case 't':
         if (field->value != "f" && field->value != "t") {
-          return std::nullopt;
+          return ds::none;
         }
 
         file = true;
@@ -152,7 +153,7 @@ namespace telar::runtime {
         break;
       case 'm':
         if (field->value != "0") {
-          return std::nullopt;
+          return ds::none;
         }
 
         break;
@@ -160,7 +161,7 @@ namespace telar::runtime {
       case 'O': {
         const auto number = kittyUnsigned<std::uint64_t>(field->value);
         if (!number) {
-          return std::nullopt;
+          return ds::none;
         }
 
         if (field->key == 'S') {
@@ -176,7 +177,7 @@ namespace telar::runtime {
       }
     }
 
-    return file && fields.valid() ? std::optional{range} : std::nullopt;
+    return file && fields.valid() ? ds::Option{range} : ds::none;
   }
 
   void GraphicsFileInput::feed(std::span<const std::uint8_t> bytes, std::size_t storage_limit, MediaInputSink& sink) {
@@ -230,16 +231,16 @@ namespace telar::runtime {
     sink.ingest({reinterpret_cast<const std::uint8_t*>(ending.data()), ending.size()});
   }
 
-  auto GraphicsFileInput::nextCommand(tbc::view<std::string_view, tbc::lt::a> text, std::size_t& search_from) noexcept -> tbc::view<std::optional<Command>, tbc::lt::a> {
+  auto GraphicsFileInput::nextCommand(tbc::view<std::string_view, tbc::lt::a> text, std::size_t& search_from) noexcept -> tbc::view<ds::Option<Command>, tbc::lt::a> {
     for (;;) {
       const auto start = text.find(introducer, search_from);
       if (start == std::string_view::npos) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto end = text.find(terminator, start + introducer.size());
       if (end == std::string_view::npos) {
-        return std::nullopt;
+        return ds::none;
       }
 
       search_from = end + terminator.size();
@@ -263,7 +264,7 @@ namespace telar::runtime {
     }
 
     const auto available = file->size - request.range.offset;
-    const auto length = request.range.size.value_or(available);
+    const auto length = request.range.size.valueOr(available);
     if (length == 0 || length > available || length > request.limit) {
       return false;
     }
@@ -322,7 +323,7 @@ namespace telar::runtime {
     }
 
     end = std::copy_n(more ? "m=1;" : "m=0;", 4, end);
-    end += base64::encode(raw, {end, static_cast<std::size_t>(chunk.data() + chunk.size() - end)}).value();
+    end += base64::encode(raw, {end, static_cast<std::size_t>(chunk.data() + chunk.size() - end)}).unwrap();
     end = std::copy(terminator.begin(), terminator.end(), end);
     return {reinterpret_cast<const std::uint8_t*>(chunk.data()), static_cast<std::size_t>(end - chunk.data())};
   }

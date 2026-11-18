@@ -7,6 +7,7 @@ import std;
 
 import :keys;
 import :text;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
@@ -32,7 +33,7 @@ namespace telar::gui::features::prompt {
   public:
     explicit Editor(Keymap keymap = Keymap::emacs);
 
-    Text& text() noexcept;
+    Text& textMut() noexcept;
 
     const Text& text() const noexcept;
 
@@ -141,7 +142,7 @@ namespace telar::gui::features::prompt {
 
     Request normalControl(char32_t character);
 
-    std::optional<Motion> motionFor(char32_t character) const noexcept;
+    ds::Option<Motion> motionFor(char32_t character) const noexcept;
 
     static char reversed(char kind) noexcept;
 
@@ -158,9 +159,9 @@ namespace telar::gui::features::prompt {
 
     Request applyTextObject(char32_t character);
 
-    std::optional<std::pair<std::size_t, std::size_t>> textObject(char32_t character, bool inner) const;
+    ds::Option<std::pair<std::size_t, std::size_t>> textObject(char32_t character, bool inner) const;
 
-    std::optional<std::pair<std::size_t, std::size_t>> bracketObject(char open, char close, bool inner) const;
+    ds::Option<std::pair<std::size_t, std::size_t>> bracketObject(char open, char close, bool inner) const;
 
     // Applies the pending operator to [start, end), whole lines when `linewise`.
     void operate(std::size_t start, std::size_t end, bool linewise);
@@ -208,7 +209,7 @@ namespace telar::gui::features::prompt {
     std::array<Register, 26> registers_;
     std::vector<Recorded> recorded_;
     std::vector<Recorded> last_change_;
-    std::optional<std::size_t> goal_column_;
+    ds::Option<std::size_t> goal_column_;
     std::pair<char, char32_t> last_find_{'f', 0};
     std::size_t count_ = 0;
     std::size_t operator_count_ = 0;

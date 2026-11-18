@@ -6,6 +6,7 @@ import telar.config.runtime;
 import telar.runtime.vocabulary.frames;
 import telar.base.text.utf8;
 import telar.platform.net;
+import telar.base.ds;
 
 namespace telar::runtime::redirect {
 
@@ -184,7 +185,7 @@ namespace telar::runtime::redirect {
     decode(snapshot_->bytes().first(size_), {}, {});
   }
 
-  std::optional<uid_t> SocketAccounts::peer(int descriptor) {
+  ds::Option<uid_t> SocketAccounts::peer(int descriptor) {
     sockaddr_storage local{}, remote{};
     socklen_t length = sizeof(local);
     if (::getsockname(descriptor, reinterpret_cast<sockaddr*>(&local), &length) != 0) {
@@ -210,7 +211,7 @@ namespace telar::runtime::redirect {
     return {};
   }
 
-  std::optional<uid_t> SocketAccounts::decode(std::span<const Byte> bytes, const sockaddr_storage& local, const sockaddr_storage& peer) {
+  ds::Option<uid_t> SocketAccounts::decode(std::span<const Byte> bytes, const sockaddr_storage& local, const sockaddr_storage& peer) {
     if (bytes.size() < sizeof(xinpgen)) {
       throw EncodingError{"Incomplete TCP account snapshot"};
     }
@@ -231,7 +232,7 @@ namespace telar::runtime::redirect {
     }
 
     bytes = bytes.subspan(sizeof(header));
-    std::optional<uid_t> account;
+    ds::Option<uid_t> account;
 
     while (bytes.size() > sizeof(xinpgen)) {
       std::uint32_t length;
@@ -290,7 +291,7 @@ namespace telar::runtime::redirect {
       }
 
       size_ = snapshot_->bytes().size();
-      if (::sysctlbyname("net.inet.tcp.pcblist64", snapshot_->bytes().data(), &size_, nullptr, 0) == 0) {
+      if (::sysctlbyname("net.inet.tcp.pcblist64", snapshot_.getMut().bytesMut().data(), &size_, nullptr, 0) == 0) {
         return;
       }
 
@@ -331,13 +332,13 @@ namespace telar::runtime::redirect {
     return endpointMatches(local, source.endpoint.storage) && endpointMatches(remote, destination.endpoint.storage);
   }
 
-  std::optional<LinuxTcpSocket> LinuxTcpSocket::parse(std::string_view line, int family) noexcept {
+  ds::Option<LinuxTcpSocket> LinuxTcpSocket::parse(std::string_view line, int family) noexcept {
     constexpr std::size_t required_fields = 10;
     std::array<std::string_view, required_fields> fields;
     for (auto& field : fields) {
       const auto first = line.find_first_not_of(" \t");
       if (first == std::string_view::npos) {
-        return std::nullopt;
+        return ds::none;
       }
       line.remove_prefix(first);
       const auto separator = line.find_first_of(" \t");
@@ -347,7 +348,7 @@ namespace telar::runtime::redirect {
 
     LinuxTcpSocket socket;
     if (!endpoint(fields[1], family, socket.local) || !endpoint(fields[2], family, socket.remote) || !number(fields[3], socket.state, 16) || !number(fields[7], socket.user, 10) || !number(fields[9], socket.inode, 10)) {
-      return std::nullopt;
+      return ds::none;
     }
     return socket;
   }
@@ -358,7 +359,7 @@ namespace telar::runtime::redirect {
     if (parsed) {
       output = *parsed;
     }
-    return parsed.has_value();
+    return parsed.hasValue();
   }
 
   bool LinuxTcpSocket::endpoint(std::string_view input, int family, sockaddr_storage& output) noexcept {
@@ -526,7 +527,7 @@ namespace telar::runtime::redirect {
   SocketOwners::Result SocketOwners::find(const FlowKey& flow) noexcept {
     Result result;
     try {
-      std::optional<std::uint64_t> inode;
+      ds::Option<std::uint64_t> inode;
       visitLinuxTcpSockets([&](const LinuxTcpSocket& socket) {
         if (socket.inode != 0 && socket.matches(flow.source, flow.destination)) {
           inode = socket.inode;
@@ -711,8 +712,8 @@ namespace telar::runtime::redirect {
       }
     }
 
-    const PfScope scope{.uid = uid, .label = identity.label, .discovery_interface = discovery_ ? discovery_->name() : "utun0", .flows = std::span{keys}.first(size), .log_interface = packet_log_ ? std::optional{packet_log_->index()} : dry_run && allowsIncoming(direction_) ? std::optional{0u}
-                                                                                                                                                                                                                                                                                : std::nullopt,
+    const PfScope scope{.uid = uid, .label = identity.label, .discovery_interface = discovery_ ? discovery_->name() : "utun0", .flows = std::span{keys}.first(size), .log_interface = packet_log_ ? ds::Option{packet_log_->index()} : dry_run && allowsIncoming(direction_) ? ds::Option{0u}
+                                                                                                                                                                                                                                                                                : ds::none,
         .bypasses = std::span{bypasses}.first(bypass_size),
         .log_all = process_count_ != 0 || allowsIncoming(direction_),
         .direction = direction_,
@@ -740,7 +741,7 @@ namespace telar::runtime::redirect {
 
     if (allowsIncoming(direction_)) {
       accounts_.emplace(memory_);
-      accounts_->validate();
+      accounts_.getMut().validate();
     }
 
     std::array<Byte, Protocol::frame_bytes> hello;
@@ -846,7 +847,7 @@ namespace telar::runtime::redirect {
           int failure = 0;
           socklen_t length = sizeof(failure);
           // The connection leaves the pending table before the handoff, which updates the flows.
-          auto connected = std::move(*pending);
+          auto connected = std::move(pending.getMut());
 
           pending.reset();
           if (::getsockopt(connected.connection.origin.get(), SOL_SOCKET, SO_ERROR, &failure, &length) == 0 && failure == 0) {
@@ -872,7 +873,7 @@ namespace telar::runtime::redirect {
         std::array<Byte, 65540> copied;
 
         for (std::size_t count = 0; count < maximum_accept_batch; ++count) {
-          const auto logged = packet_log_->receive();
+          const auto logged = packet_log_.getMut().receive();
           if (logged.empty()) {
             break;
           }
@@ -942,12 +943,12 @@ namespace telar::runtime::redirect {
 
       const auto index = static_cast<std::size_t>(flow - flows_.begin());
 
-      if (owners_ && !owners_->find((*flow)->key).process) {
+      if (owners_ && !owners_.getMut().find((*flow)->key).process) {
         std::fprintf(stderr, "telar redirect: selected process no longer owns the accepted socket\n");
         continue;
       }
 
-      (*flow)->accepted = true;
+      flow->getMut().accepted = true;
       if ((*flow)->incoming) {
         std::fprintf(stderr, "telar redirect: accepted incoming TCP for destination port %u\n", target.port);
       }
@@ -964,9 +965,9 @@ namespace telar::runtime::redirect {
   }
 
   void Helper::handoff(const Connection& connection, std::size_t flow, uid_t uid) {
-    if (flows_[flow]->incoming && (!accounts_ || accounts_->peer(connection.origin.get()) != uid)) {
+    if (flows_[flow]->incoming && (!accounts_ || accounts_.getMut().peer(connection.origin.get()) != uid)) {
       std::fprintf(stderr, "telar redirect: rejected incoming origin without the runtime account\n");
-      flows_[flow]->deadline = std::chrono::steady_clock::now();
+      flows_[flow].getMut().deadline = std::chrono::steady_clock::now();
       return;
     }
 
@@ -981,8 +982,8 @@ namespace telar::runtime::redirect {
       return;
     }
 
-    flows_[flow]->lifetime = std::move(channel);
-    flows_[flow]->deadline = std::chrono::steady_clock::time_point::max();
+    flows_[flow].getMut().lifetime = std::move(channel);
+    flows_[flow].getMut().deadline = std::chrono::steady_clock::time_point::max();
     if (flows_[flow]->incoming) {
       std::fprintf(stderr, "telar redirect: handed incoming TCP to runtime for destination port %u\n", connection.target.port);
     }

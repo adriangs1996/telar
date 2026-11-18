@@ -141,6 +141,7 @@ import telar.wire.editor;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.gui.features.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -426,14 +427,14 @@ namespace {
 command = "switch" : "Switch branches" | "status" : "Show the working tree status" | "stash" : "Stash the changes" ;)";
 
       runtime.send(CommandSpec{.request_id = spec.request_id, .command = "git", .state = CommandSpecState::available, .digest = 3, .source = git_spec});
-      QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->line(pane_id)->menu().has_value(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->line(pane_id)->menu().hasValue(), wait_ms);
       // The menu's heading says where its choices come from.
       QCOMPARE(application.prompt()->line(pane_id)->menu()->label, std::string{"git"});
       // A choice taken sweeps in, glowing in the accent colour as it settles.
       QKeyEvent take{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
 
       QCoreApplication::sendEvent(&terminal, &take);
-      QVERIFY(!application.prompt()->line(pane_id)->menu().has_value());
+      QVERIFY(!application.prompt()->line(pane_id)->menu().hasValue());
       QVERIFY(!editor->glows().isEmpty());
       QTRY_VERIFY_WITH_TIMEOUT(editor->glows().isEmpty(), wait_ms);
 
@@ -1003,20 +1004,20 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         QTRY_VERIFY_WITH_TIMEOUT(at_bottom(), runtime_wait_ms);
         // The last command selected, as prefix+[ selects it with any keymap.
         application.terminals()->selectBlock(pane, application.pane(pane)->blocks.size() - 1);
-        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).has_value(), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
         // gg goes to the scrollback's top and G back to the live end.
         const auto top_where = [&] {
-          return where() + QStringLiteral(", shown top %1").arg(application.pane(pane)->shown_top.value_or(9999));
+          return where() + QStringLiteral(", shown top %1").arg(application.pane(pane)->shown_top.valueOr(9999));
         };
 
         type(terminal, "gg");
-        QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->screen.scroll().offset == 0 && application.pane(pane)->shown_top == std::optional<std::uint64_t>{0}, qPrintable(top_where()), runtime_wait_ms);
+        QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->screen.scroll().offset == 0 && application.pane(pane)->shown_top == ds::Option<std::uint64_t>{0}, qPrintable(top_where()), runtime_wait_ms);
         QKeyEvent end{QEvent::KeyPress, Qt::Key_G, Qt::ShiftModifier, QStringLiteral("G")};
 
         QCoreApplication::sendEvent(&terminal, &end);
         QTRY_VERIFY2_WITH_TIMEOUT(at_bottom() && terminal.rowsBelow() == 0 && !application.prompt()->selectedBlock(pane), qPrintable(top_where()), runtime_wait_ms);
         application.terminals()->selectBlock(pane, application.pane(pane)->blocks.size() - 1);
-        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).has_value(), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
         QKeyEvent up{QEvent::KeyPress, Qt::Key_U, NativeKeyAdapter::control_modifier};
 
         // A fold in view moves: right after zc the output is shrinking under its separator,
@@ -1059,7 +1060,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         QKeyEvent back{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
         QCoreApplication::sendEvent(&terminal, &back);
-        QTRY_VERIFY_WITH_TIMEOUT(!application.prompt()->selectedBlock(pane).has_value() && at_bottom(), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(!application.prompt()->selectedBlock(pane).hasValue() && at_bottom(), runtime_wait_ms);
       }
 
       // The runtime serves the spec of a command the shell runs: Tab completes git's subcommand.

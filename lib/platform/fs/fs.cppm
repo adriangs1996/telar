@@ -11,6 +11,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.sys.posix;
+import telar.base.ds;
 
 // The C function behind open_directory.h, shared with Qt; the owned header stays in this global
 // module fragment only.
@@ -55,7 +56,7 @@ export {
 export {
   namespace telar::runtime {
 
-    tbc::view<std::optional<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+    tbc::view<ds::Option<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
 
   }
 }

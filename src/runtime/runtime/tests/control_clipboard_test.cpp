@@ -62,6 +62,7 @@ import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -145,7 +146,7 @@ namespace {
         return;
       }
 
-      check(clipboard.execution().has_value());
+      check(clipboard.execution().hasValue());
       clipboard.committed();
       const auto result = executeClipboard(task, consent, provider);
       std::array<ClipboardRepresentation, 4> contents;
@@ -174,7 +175,7 @@ namespace {
       auto& clipboard = terminal.clipboardControl();
       const auto request = clipboard.request(7, 11);
 
-      check(request.has_value());
+      check(request.hasValue());
       std::vector<Byte> wire(Codec::encodedSize(*request));
       std::array<Byte, 32 * 1024> arena;
       DecodeStorage storage{arena};
@@ -736,7 +737,7 @@ namespace {
           const OwnedClipboardTask task{client.receive<ClipboardDesktopRequest>()};
           const CompleteClipboardDesktop prepared{.ticket = task.ticket, .status = ClipboardDesktopStatus::success, .prepared = true};
           MemoryClipboard provider;
-          std::optional<ClipboardResult> result;
+          ds::Option<ClipboardResult> result;
 
           if (stage != Stage::requested) {
             check(service.complete(model.panes, client.session(), prepared) == &pane);
@@ -852,13 +853,13 @@ namespace {
         pane.terminal.feed(bytes("\x1b]5522;type=write:id=pressure\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
         ClipboardService service;
         auto& clipboard = pane.terminal.clipboardControl();
-        std::optional<OwnedClipboardTask> task;
+        ds::Option<OwnedClipboardTask> task;
 
         if (cancellation != Cancellation::unannounced) {
           service.advance(clients, pane, std::chrono::steady_clock::now());
           task.emplace(client.receive<ClipboardDesktopRequest>());
           check(service.complete(model.panes, client.session(), CompleteClipboardDesktop{.ticket = task->ticket, .status = ClipboardDesktopStatus::success, .prepared = true}) == &pane);
-          check(clipboard.execution().has_value());
+          check(clipboard.execution().hasValue());
         }
 
         constexpr auto client_capacity = OutgoingFrames<ConcurrentMemory>::response_capacity;
@@ -875,7 +876,7 @@ namespace {
 
         service.advance(clients, pane, std::chrono::steady_clock::now());
         if (task) {
-          check(clipboard.execution().has_value());
+          check(clipboard.execution().hasValue());
         }
 
         if (cancellation == Cancellation::closing) {
@@ -887,7 +888,7 @@ namespace {
 
         service.advance(clients, pane, std::chrono::steady_clock::now());
         check(!clipboard.execution() && !clipboard.route() && clipboard.hasReply());
-        check(clipboard.cancellation().has_value() == task.has_value());
+        check(clipboard.cancellation().hasValue() == task.hasValue());
         check(!client.session().connection.closing && client.session().connection.responseDepth() == client_capacity);
         check(client.session().connection.droppedResponses() == 0);
         check(pane.pty_responses->snapshot().messages == PtyResponseQueue::message_capacity && pane.pty_responses->snapshot().dropped == 0);

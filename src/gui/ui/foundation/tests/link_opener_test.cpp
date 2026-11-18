@@ -36,6 +36,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -43,9 +44,9 @@ namespace {
   using namespace telar::gui::qt;
 
   struct Observer {
-    std::vector<std::optional<LinkOpeningFailure>> results;
+    std::vector<telar::ds::Option<LinkOpeningFailure>> results;
 
-    void linkOpeningFinished([[maybe_unused]] std::monostate context, std::optional<LinkOpeningFailure> failure) {
+    void linkOpeningFinished([[maybe_unused]] std::monostate context, telar::ds::Option<LinkOpeningFailure> failure) {
       results.push_back(failure);
     }
 
@@ -57,9 +58,9 @@ namespace {
   };
 
   struct ContextObserver {
-    std::vector<std::pair<std::uint64_t, std::optional<LinkOpeningFailure>>> results;
+    std::vector<std::pair<std::uint64_t, telar::ds::Option<LinkOpeningFailure>>> results;
 
-    void linkOpeningFinished(std::uint64_t context, std::optional<LinkOpeningFailure> failure) {
+    void linkOpeningFinished(std::uint64_t context, telar::ds::Option<LinkOpeningFailure> failure) {
       results.emplace_back(context, failure);
     }
   };
@@ -165,7 +166,7 @@ printf '%s' "$1"
       }));
 
       QCOMPARE(observer.results[0].first, first_context);
-      QCOMPARE(observer.results[0].second, std::optional{LinkOpeningFailure::process});
+      QCOMPARE(observer.results[0].second, telar::ds::Option{LinkOpeningFailure::process});
       QCOMPARE(observer.results[1].first, last_context);
       QVERIFY(!observer.results[1].second);
     }
@@ -177,21 +178,21 @@ printf '%s' "$1"
       opener.request(target("https://failure.test"));
       opener.request(target("https://recovery.test"));
       QVERIFY(observer.waitFor(2));
-      QCOMPARE(observer.results.front(), std::optional{LinkOpeningFailure::process});
+      QCOMPARE(observer.results.front(), telar::ds::Option{LinkOpeningFailure::process});
       QVERIFY(!observer.results.back() && !opener.active());
       opener.request(target("https://launch.test"));
       QVERIFY(observer.waitFor(3));
-      QCOMPARE(observer.results.back(), std::optional{LinkOpeningFailure::launch});
+      QCOMPARE(observer.results.back(), telar::ds::Option{LinkOpeningFailure::launch});
       opener.request(target("https://throw.test"));
       QVERIFY(observer.waitFor(4));
-      QCOMPARE(observer.results.back(), std::optional{LinkOpeningFailure::launch});
+      QCOMPARE(observer.results.back(), telar::ds::Option{LinkOpeningFailure::launch});
       QVERIFY(!opener.active());
       opener.request(target("https://read-error.test"));
       opener.request(target("https://recovered.test"));
       constexpr std::size_t completed_requests = 6;
 
       QVERIFY(observer.waitFor(completed_requests));
-      QCOMPARE(observer.results[completed_requests - 2], std::optional{LinkOpeningFailure::process});
+      QCOMPARE(observer.results[completed_requests - 2], telar::ds::Option{LinkOpeningFailure::process});
       QVERIFY(!observer.results.back() && !opener.active());
     }
 
@@ -201,10 +202,10 @@ printf '%s' "$1"
 
       opener.request(target("https://stdout.test"));
       QVERIFY(observer.waitFor(1));
-      QCOMPARE(observer.results.back(), std::optional{LinkOpeningFailure::output_limit});
+      QCOMPARE(observer.results.back(), telar::ds::Option{LinkOpeningFailure::output_limit});
       opener.request(target("https://stderr.test"));
       QVERIFY(observer.waitFor(2));
-      QCOMPARE(observer.results.back(), std::optional{LinkOpeningFailure::output_limit});
+      QCOMPARE(observer.results.back(), telar::ds::Option{LinkOpeningFailure::output_limit});
       opener.request(target("https://limit.test"));
       QVERIFY(observer.waitFor(3));
       QVERIFY(!observer.results.back());
@@ -219,7 +220,7 @@ printf '%s' "$1"
         opener.request(target("https://timeout.test"));
         opener.request(target("https://recovered.test"));
         QVERIFY(observer.waitFor(2));
-        QCOMPARE(observer.results.front(), std::optional{LinkOpeningFailure::timeout});
+        QCOMPARE(observer.results.front(), telar::ds::Option{LinkOpeningFailure::timeout});
         QVERIFY(!observer.results.back() && !opener.active());
       }
 
@@ -282,10 +283,10 @@ printf '%s' "$1"
 
       QVERIFY(retained && *retained == raw_byte);
       QVERIFY(qputenv(name, QByteArray{"changed"}));
-      QVERIFY(captured(name) == retained && retained == std::optional{raw_byte});
+      QVERIFY(captured(name) == retained && retained == telar::ds::Option{raw_byte});
       const qt::ProcessEnvironment replacement;
 
-      QVERIFY(replacement(name) == std::optional{std::string_view{"changed"}});
+      QVERIFY(replacement(name) == telar::ds::Option{std::string_view{"changed"}});
     }
   };
 

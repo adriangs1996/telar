@@ -9,6 +9,7 @@ import telar.base.memory.containers;
 import telar.native.zlib;
 import telar.platform.primitives;
 import :format;
+import telar.base.ds;
 
 // The object database: loose objects, packfiles with their v2 indexes and
 // delta chains, and the commit-graph. Reads use pread on descriptors rather
@@ -156,9 +157,9 @@ namespace telar::git {
     bool openPack(int directory, std::string_view index_name, Pack& pack) noexcept;
 
     // The position of `id` in a pack index, by binary search over pread blocks.
-    std::optional<std::uint32_t> findInPack(const Pack& pack, const ObjectId& id) noexcept;
+    ds::Option<std::uint32_t> findInPack(const Pack& pack, const ObjectId& id) noexcept;
 
-    std::optional<std::uint64_t> packOffset(const Pack& pack, std::uint32_t position) noexcept;
+    ds::Option<std::uint64_t> packOffset(const Pack& pack, std::uint32_t position) noexcept;
     Lookup locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset);
     bool entryAt(const Pack& pack, std::uint64_t offset, Entry& entry) noexcept;
     bool inflatePacked(const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole);
@@ -224,14 +225,14 @@ namespace telar::git {
     bool empty() const noexcept;
 
     // The global position of `id`, nullopt when absent or unreadable.
-    std::optional<std::uint32_t> find(const ObjectId& id) const noexcept;
+    ds::Option<std::uint32_t> find(const ObjectId& id) const noexcept;
 
     // `position` must come from find() or parents().
-    std::optional<ObjectId> id(std::uint32_t position) const noexcept;
+    ds::Option<ObjectId> id(std::uint32_t position) const noexcept;
 
     // The commit at `position`. A generation of 0, which no released git
     // writes, would break the walk's order, so it reads as unreadable.
-    std::optional<Commit> commit(std::uint32_t position) const noexcept;
+    ds::Option<Commit> commit(std::uint32_t position) const noexcept;
 
     // Calls `output` with each parent of `commit`; false when the graph is malformed.
     template <typename Output>

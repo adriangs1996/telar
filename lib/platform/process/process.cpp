@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.tbc;
 import telar.sys.process;
 import telar.platform.error;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif
@@ -118,14 +119,14 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::string_view> Command<Memory>::environment(std::string_view name) const noexcept {
+  ds::Option<std::string_view> Command<Memory>::environment(std::string_view name) const noexcept {
     for (const auto& entry : environment_) {
       if (definesVariable(entry, name)) {
         return std::string_view{entry}.substr(name.size() + 1);
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -446,7 +447,7 @@ namespace telar::runtime {
     path_[directory.size() + name.size()] = '\0';
   }
 
-  std::optional<ExecutablePath> ExecutablePath::sibling(std::initializer_list<std::string_view> candidates) {
+  ds::Option<ExecutablePath> ExecutablePath::sibling(std::initializer_list<std::string_view> candidates) {
     ExecutablePath self;
     const std::string_view own = self.path_.data();
     const auto directory = own.substr(0, own.rfind('/') + 1);
@@ -466,7 +467,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   const char* ExecutablePath::c_str() const noexcept {

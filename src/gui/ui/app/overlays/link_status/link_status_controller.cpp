@@ -19,9 +19,9 @@ namespace telar::gui::qt {
 
   QVariantMap LinkStatusController::state() const {
     const auto& link = store_.connection().link();
-    const auto detail = link.failure().value_or(std::string_view{});
+    const auto detail = link.failure().valueOr(std::string_view{});
 
-    return {{QStringLiteral("visible"), link.phase != application::machines::MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().has_value()}, {QStringLiteral("dimAlpha"), application::terminal::links::LinkStatusGeometry::dim_alpha}};
+    return {{QStringLiteral("visible"), link.phase != application::machines::MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().hasValue()}, {QStringLiteral("dimAlpha"), application::terminal::links::LinkStatusGeometry::dim_alpha}};
   }
 
   QVariantMap LinkStatusController::geometry() const {
@@ -31,7 +31,7 @@ namespace telar::gui::qt {
 
     area.x += display_.geometry.terminal.x;
     area.y += display_.geometry.terminal.y;
-    const auto geometry = application::terminal::links::LinkStatusGeometry::measure(area, display_.chrome, store_.connection().link().failure().has_value());
+    const auto geometry = application::terminal::links::LinkStatusGeometry::measure(area, display_.chrome, store_.connection().link().failure().hasValue());
     const auto local = [&](Rect region) {
       region.x -= area.x;
       region.y -= area.y;

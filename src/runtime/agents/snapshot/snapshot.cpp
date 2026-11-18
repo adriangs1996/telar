@@ -9,6 +9,7 @@ import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.runtime.history.store;
 import telar.platform.error;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -43,7 +44,7 @@ namespace telar::runtime {
         return false;
       }
 
-      report->expires_at = now.milliseconds + AgentEvidence::report_working_expiry.count();
+      report.getMut().expires_at = now.milliseconds + AgentEvidence::report_working_expiry.count();
       return true;
     }
 
@@ -53,7 +54,7 @@ namespace telar::runtime {
     }
 
     if (incoming.state == AgentReportState::exited) {
-      const bool changed = report.has_value();
+      const bool changed = report.hasValue();
 
       clearReport();
       work.reset();
@@ -127,8 +128,8 @@ namespace telar::runtime {
     return true;
   }
 
-  std::optional<AgentEvidence> AgentEvidenceState::choose(std::int64_t now) const noexcept {
-    const auto shown = screen && !screen->expired(now) ? screen : std::nullopt;
+  ds::Option<AgentEvidence> AgentEvidenceState::choose(std::int64_t now) const noexcept {
+    const auto shown = screen && !screen->expired(now) ? screen : ds::none;
 
     if (report && !report->expired(now)) {
       const auto since = work ? work->observed : report->observed;
@@ -145,7 +146,7 @@ namespace telar::runtime {
 
     auto presence = process;
     if (presence && completionRequiresSignal(presence->provider)) {
-      presence->status = AgentStatus::unknown;
+      presence.getMut().status = AgentStatus::unknown;
     }
 
     return presence;
@@ -317,7 +318,7 @@ namespace telar::runtime {
       return false;
     }
 
-    const bool replacing = evidence.process.has_value();
+    const bool replacing = evidence.process.hasValue();
     if ((!replacing && evidence.reporter != AgentProvider::unknown && evidence.reporter != incoming) || (replacing && evidence.process->provider != incoming)) {
       forgetReports();
     }
@@ -341,7 +342,7 @@ namespace telar::runtime {
   }
 
   bool Agent::observeScreen(AgentSignal signal, ObservationTime now) {
-    if (!evidence.applyScreen(signal, now, status, interrupt_at.has_value())) {
+    if (!evidence.applyScreen(signal, now, status, interrupt_at.hasValue())) {
       return false;
     }
 
@@ -359,7 +360,7 @@ namespace telar::runtime {
     return project(now.milliseconds);
   }
 
-  bool Agent::setProcessContext(SessionHost host, bool installed, std::optional<ProcessIdentity> identity) noexcept {
+  bool Agent::setProcessContext(SessionHost host, bool installed, ds::Option<ProcessIdentity> identity) noexcept {
     const bool changed = session_host != host || hooks_installed != installed;
 
     session_host = host;
@@ -553,7 +554,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   auto SessionFileReader<Memory>::observe(const Request& request) noexcept -> Result {
     TELAR_TRACE("agents.readSessionTitle");
-    Result result{.request = request, .offset = request.watch.offset, .title = std::nullopt};
+    Result result{.request = request, .offset = request.watch.offset, .title = ds::none};
 
     try {
       path_ = request.watch.path.view();
@@ -621,7 +622,7 @@ namespace telar::runtime {
       return;
     }
 
-    result.title = readTitle(input, std::nullopt);
+    result.title = readTitle(input, ds::none);
   }
 
   template <Allocator Memory>
@@ -674,7 +675,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<FixedText<96>> SessionFileReader<Memory>::readTitle(std::string_view input, std::optional<std::string_view> session) {
+  ds::Option<FixedText<96>> SessionFileReader<Memory>::readTitle(std::string_view input, ds::Option<std::string_view> session) {
     validateUtf8(input);
     const auto object = JsonValue::parse(input);
     FixedText<96> title;
@@ -703,14 +704,14 @@ namespace telar::runtime {
       }
     });
 
-    return matches_session ? std::optional{title} : std::nullopt;
+    return matches_session ? ds::Option{title} : ds::none;
   }
 
   template <Allocator Memory>
-  std::optional<std::uint64_t> SessionFileReader<Memory>::regularFileSize(const FileDescriptor& file) noexcept {
+  ds::Option<std::uint64_t> SessionFileReader<Memory>::regularFileSize(const FileDescriptor& file) noexcept {
     struct stat metadata{};
     if (!file || ::fstat(file.get(), &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_size < 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return static_cast<std::uint64_t>(metadata.st_size);

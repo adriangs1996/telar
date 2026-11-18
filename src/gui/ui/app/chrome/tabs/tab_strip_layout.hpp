@@ -25,6 +25,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -59,7 +60,7 @@ namespace telar::gui::qt {
     TabStripLayout& operator=(const TabStripLayout&) = delete;
     TabStripLayout(TabStripLayout&&) = delete;
     TabStripLayout& operator=(TabStripLayout&&) = delete;
-    void setContext(std::uint64_t machine_view, std::optional<WorkspaceLocation> workspace);
+    void setContext(std::uint64_t machine_view, ds::Option<WorkspaceLocation> workspace);
     [[nodiscard]] QAbstractItemModel* model() const noexcept;
     void setModel(QAbstractItemModel* model);
     [[nodiscard]] QAbstractItemModel* items() noexcept;
@@ -83,14 +84,14 @@ namespace telar::gui::qt {
     [[nodiscard]] QRectF dropMarker() const noexcept;
     [[nodiscard]] QRectF draggedBounds() const noexcept;
     [[nodiscard]] QString hoveredTab() const;
-    void setPointerHover(std::optional<std::uint64_t> tab);
+    void setPointerHover(ds::Option<std::uint64_t> tab);
 
     [[nodiscard]] bool transitioning() const noexcept {
-      return next_sample_ns_.has_value();
+      return next_sample_ns_.hasValue();
     }
 
     [[nodiscard]] std::size_t dropSlots(std::span<application::workbench::TabDropSlot> output) const;
-    void setDrag(std::optional<application::workbench::TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset);
+    void setDrag(ds::Option<application::workbench::TabDragMove> preview, ds::Option<std::uint64_t> dragged, QPointF pointer, qreal grab_offset);
     [[nodiscard]] QVariantMap counter() const;
     [[nodiscard]] QRectF plus() const noexcept;
     void setPlus(const QRectF& plus);
@@ -113,7 +114,7 @@ namespace telar::gui::qt {
   private:
     friend class WindowAnimationItems<TabStripLayout>;
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);
     void bindClock();
     static constexpr std::size_t model_connection_count = 6;
@@ -129,10 +130,10 @@ namespace telar::gui::qt {
     application::workbench::TabMotions motions_;
     application::workbench::TabCardMotions card_motions_;
     QRectF plus_;
-    std::optional<application::workbench::TabMotion> selection_motion_;
-    std::optional<WorkspaceLocation> workspace_;
+    ds::Option<application::workbench::TabMotion> selection_motion_;
+    ds::Option<WorkspaceLocation> workspace_;
     std::uint64_t machine_view_ = 0;
-    std::optional<std::uint64_t> next_sample_ns_;
+    ds::Option<std::uint64_t> next_sample_ns_;
     bool frame_requested_ = false;
     QPointer<QAbstractItemModel> model_;
     std::array<QMetaObject::Connection, model_connection_count> connections_;
@@ -149,12 +150,12 @@ namespace telar::gui::qt {
     QRectF dragged_bounds_;
     std::array<application::workbench::TabDropSlot, application::workbench::TabDropSlots::capacity> drop_slots_{};
     std::size_t drop_slot_count_ = 0;
-    std::optional<application::workbench::TabDragMove> drag_preview_;
-    std::optional<std::uint64_t> dragged_;
+    ds::Option<application::workbench::TabDragMove> drag_preview_;
+    ds::Option<std::uint64_t> dragged_;
     QPointF drag_pointer_;
     qreal drag_grab_offset_ = 0;
     QVariantMap counter_;
-    std::optional<std::uint64_t> hovered_tab_;
+    ds::Option<std::uint64_t> hovered_tab_;
   };
 
 }

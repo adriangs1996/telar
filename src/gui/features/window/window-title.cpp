@@ -2,25 +2,26 @@ module telar.gui.features.window;
 
 import std;
 import telar.tbc;
+import telar.base.ds;
 
 namespace telar::gui::features::window {
 
-  bool LoadingCue::sample(bool waiting, std::optional<std::uint64_t> now_ns) noexcept {
+  bool LoadingCue::sample(bool waiting, ds::Option<std::uint64_t> now_ns) noexcept {
     if (!waiting || !now_ns) {
       since_ns_.reset();
 
       return waiting;
     }
 
-    const auto since = since_ns_.value_or(*now_ns);
+    const auto since = since_ns_.valueOr(*now_ns);
 
     since_ns_ = since;
 
     return *now_ns >= visibleAt(since);
   }
 
-  std::optional<std::uint64_t> LoadingCue::deadline() const noexcept {
-    return since_ns_ ? std::optional{visibleAt(*since_ns_)} : std::nullopt;
+  ds::Option<std::uint64_t> LoadingCue::deadline() const noexcept {
+    return since_ns_ ? ds::Option{visibleAt(*since_ns_)} : ds::none;
   }
 
   std::uint64_t LoadingCue::visibleAt(std::uint64_t since_ns) noexcept {
@@ -85,7 +86,7 @@ namespace telar::gui::features::window {
     return close + 1;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> WindowTitle::token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> WindowTitle::token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept {
     if (name == "workspace") {
       return values.workspace;
     }
@@ -102,7 +103,7 @@ namespace telar::gui::features::window {
       return values.hostname;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void WindowTitle::append(std::string_view value) noexcept {

@@ -10,6 +10,7 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.gui.features.terminal.links;
+import telar.base.ds;
 
 namespace {
 
@@ -40,9 +41,9 @@ namespace {
   }
 
   struct Environment {
-    std::optional<std::string_view> home = "/home/reader";
+    telar::ds::Option<std::string_view> home = "/home/reader";
 
-    [[nodiscard]] std::optional<std::string_view> operator()(std::string_view name) const noexcept {
+    [[nodiscard]] telar::ds::Option<std::string_view> operator()(std::string_view name) const noexcept {
       if (name == "HOME") {
         return home;
       }
@@ -51,7 +52,7 @@ namespace {
         return "telar";
       }
 
-      return name == "EMPTY" ? std::optional{std::string_view{}} : std::nullopt;
+      return name == "EMPTY" ? telar::ds::Option{std::string_view{}} : telar::ds::none;
     }
   };
 
@@ -88,7 +89,7 @@ namespace {
         "RemoteFileLink");
     const auto web = LinkTarget::fromUri("https://example.test/a");
 
-    check(web.has_value(), "web fixture must classify");
+    check(web.hasValue(), "web fixture must classify");
     requireFailure([&] {
       static_cast<void>(FilePath::parse(*web));
     },
@@ -116,7 +117,7 @@ namespace {
     },
         "BaseUnavailable");
     requireFailure([] {
-      static_cast<void>(PathExpansion::expand({.text = "~/file", .base = "/work"}, Environment{.home = std::nullopt}));
+      static_cast<void>(PathExpansion::expand({.text = "~/file", .base = "/work"}, Environment{.home = telar::ds::none}));
     },
         "HomeUnavailable");
     const std::string oversized(PathExpansion::maximum_bytes, 'x');

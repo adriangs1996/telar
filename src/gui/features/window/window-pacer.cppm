@@ -6,6 +6,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 // Interface: presentation/frame_pacer.cppm
 export {
@@ -29,9 +30,9 @@ export {
       static constexpr std::uint32_t input_frame_budget = 16;
       static constexpr std::size_t capacity = PaneLayout::maximum_panes;
 
-      [[nodiscard]] static std::uint64_t resolveInterval(std::uint64_t display_interval_ns, std::optional<std::uint16_t> maximum_fps) noexcept;
+      [[nodiscard]] static std::uint64_t resolveInterval(std::uint64_t display_interval_ns, ds::Option<std::uint16_t> maximum_fps) noexcept;
 
-      std::uint64_t configure(std::uint64_t display_interval_ns, std::optional<std::uint16_t> maximum_fps) noexcept;
+      std::uint64_t configure(std::uint64_t display_interval_ns, ds::Option<std::uint16_t> maximum_fps) noexcept;
 
       [[nodiscard]] std::uint64_t interval() const noexcept;
 
@@ -39,7 +40,7 @@ export {
 
       [[nodiscard]] bool canAdvanceInput(Pane pane, std::uint64_t now_ns) const noexcept;
 
-      [[nodiscard]] std::optional<std::uint64_t> waitUntil(std::span<const Pane> panes, std::uint64_t now_ns) const noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> waitUntil(std::span<const Pane> panes, std::uint64_t now_ns) const noexcept;
 
       void record(std::span<const Pane> panes, std::uint64_t now_ns) noexcept;
 
@@ -60,10 +61,10 @@ export {
 
       [[nodiscard]] bool ordinaryAvailable(std::uint64_t now_ns) const noexcept;
 
-      std::array<std::optional<InputGrace>, capacity> inputs_{};
+      std::array<ds::Option<InputGrace>, capacity> inputs_{};
       std::uint64_t interval_ns_ = default_interval_ns;
-      std::optional<std::uint64_t> anchor_ns_;
-      std::optional<std::uint64_t> last_preparation_ns_;
+      ds::Option<std::uint64_t> anchor_ns_;
+      ds::Option<std::uint64_t> last_preparation_ns_;
     };
 
   }

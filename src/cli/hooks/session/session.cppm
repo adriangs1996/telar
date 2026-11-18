@@ -15,6 +15,7 @@ import telar.git.checkout;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: hooks/codex_subagents.cppm
 export {
@@ -47,10 +48,10 @@ export {
   namespace telar::runtime::cli::hooks {
 
     struct Reports {
-      std::optional<ReportAgent> lifecycle;
-      std::optional<ReportAgentCommand> command;
-      std::optional<ReportAgentTitle> title;
-      std::optional<ReportAgentProgress> progress;
+      ds::Option<ReportAgent> lifecycle;
+      ds::Option<ReportAgentCommand> command;
+      ds::Option<ReportAgentTitle> title;
+      ds::Option<ReportAgentProgress> progress;
       FixedText<96> event;
       FixedText<96> step;
       FixedText<96> title_text;

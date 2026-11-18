@@ -5,6 +5,7 @@ export module telar.wire.content;
 
 import std;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // The schemas specialize `MessageSchema`, which telar.wire.vocabulary declares in its global
 // fragment; naming the template here keeps it reachable from importers.
@@ -76,7 +77,7 @@ export extern "C++" {
       std::uint64_t pane_id{};
       bool truncated{};
       std::string_view text{};
-      std::optional<std::int32_t> exit_code{};
+      ds::Option<std::int32_t> exit_code{};
     };
 
     template <>
@@ -162,7 +163,7 @@ export extern "C++" {
       std::uint64_t from{};
       std::uint16_t cols{};
       std::uint16_t rows{};
-      std::optional<TextMetadata> text_metadata{};
+      ds::Option<TextMetadata> text_metadata{};
       std::span<const Byte> cells{};
 
       // A reader over the message's cells, which borrows them.

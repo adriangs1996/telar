@@ -3,6 +3,7 @@ module telar.gui.features.workbench;
 import std;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::workbench {
 
@@ -43,9 +44,9 @@ namespace telar::gui::features::workbench {
     return index >= first && index < end;
   }
 
-  std::optional<std::size_t> TabStripGeometry::Plan::nearestHidden() const noexcept {
+  ds::Option<std::size_t> TabStripGeometry::Plan::nearestHidden() const noexcept {
     if (hidden() == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto left = first > 0 ? focus - (first - 1) : std::numeric_limits<std::size_t>::max();
@@ -174,7 +175,7 @@ namespace telar::gui::features::workbench {
     }
 
     for (std::size_t distance = 1; distance < sizes.size(); ++distance) {
-      const std::array<std::optional<std::size_t>, 2> candidates{focus >= distance ? std::optional{focus - distance} : std::nullopt, focus + distance < sizes.size() ? std::optional{focus + distance} : std::nullopt};
+      const std::array<ds::Option<std::size_t>, 2> candidates{focus >= distance ? ds::Option{focus - distance} : ds::none, focus + distance < sizes.size() ? ds::Option{focus + distance} : ds::none};
 
       for (const auto candidate : candidates) {
         if (!candidate) {
@@ -254,13 +255,13 @@ namespace telar::gui::features::workbench {
     dragging_ = false;
   }
 
-  void TabDrag::validate(std::optional<WorkspaceLocation> workspace, std::span<const std::uint64_t> tabs, bool naming) noexcept {
+  void TabDrag::validate(ds::Option<WorkspaceLocation> workspace, std::span<const std::uint64_t> tabs, bool naming) noexcept {
     if (source_ && (naming || !workspace || workspace->kind != source_->workspace.kind || workspace->id != source_->workspace.id || std::ranges::find(tabs, source_->tab_id) == tabs.end())) {
       cancel();
     }
   }
 
-  void TabDrag::update(Position point, std::optional<TabDropTarget> destination) noexcept {
+  void TabDrag::update(Position point, ds::Option<TabDropTarget> destination) noexcept {
     if (!source_) {
       return;
     }
@@ -268,18 +269,18 @@ namespace telar::gui::features::workbench {
     constexpr double threshold = 1;
 
     dragging_ = dragging_ || std::abs(point[0] - origin_[0]) >= threshold || std::abs(point[1] - origin_[1]) >= threshold;
-    destination_ = dragging_ && destination && destination->relative_to != source_->tab_id ? destination : std::nullopt;
+    destination_ = dragging_ && destination && destination->relative_to != source_->tab_id ? destination : ds::none;
   }
 
-  std::optional<TabDragMove> TabDrag::preview() const noexcept {
+  ds::Option<TabDragMove> TabDrag::preview() const noexcept {
     if (!source_ || !destination_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return TabDragMove{.location = *source_, .direction = destination_->direction, .relative_to = destination_->relative_to};
   }
 
-  std::optional<TabDragMove> TabDrag::finish() noexcept {
+  ds::Option<TabDragMove> TabDrag::finish() noexcept {
     const auto result = preview();
 
     *this = {};
@@ -295,11 +296,11 @@ namespace telar::gui::features::workbench {
     return dragging_;
   }
 
-  const std::optional<TabLocation>& TabDrag::source() const noexcept {
+  const ds::Option<TabLocation>& TabDrag::source() const noexcept {
     return source_;
   }
 
-  const std::optional<TabDropTarget>& TabDrag::destination() const noexcept {
+  const ds::Option<TabDropTarget>& TabDrag::destination() const noexcept {
     return destination_;
   }
 
@@ -308,7 +309,7 @@ namespace telar::gui::features::workbench {
     std::copy_n(delivered.begin(), count_, entries_.begin());
   }
 
-  std::optional<TabDropTarget> TabDropSlots::at(TabDrag::Position point) const noexcept {
+  ds::Option<TabDropTarget> TabDropSlots::at(TabDrag::Position point) const noexcept {
     const TabDropSlot* nearest = nullptr;
     double distance = std::numeric_limits<double>::infinity();
     double left = std::numeric_limits<double>::infinity();
@@ -329,7 +330,7 @@ namespace telar::gui::features::workbench {
     }
 
     if (point[0] < left || point[0] >= right || nearest == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return TabDropTarget{.relative_to = nearest->id, .direction = point[0] < nearest->bounds.x + (nearest->bounds.width / 2) ? TabMoveDirection::previous : TabMoveDirection::next};

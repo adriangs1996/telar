@@ -1,6 +1,7 @@
 module telar.git;
 
 import std;
+import telar.base.ds;
 
 namespace telar::git {
 
@@ -80,7 +81,7 @@ namespace telar::git {
         heap_(AllocatorRef<Queued, Memory>{memory}),
         object_(AllocatorRef<char, Memory>{memory}) {}
 
-  std::optional<Divergence> DivergenceWalk::count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right) {
+  ds::Option<Divergence> DivergenceWalk::count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right) {
     if (left == right) {
       return Divergence{};
     }
@@ -90,10 +91,10 @@ namespace telar::git {
     shallow_ = &shallow;
     limits_ = &limits;
     reset();
-    const auto left_node = insert(left, std::nullopt);
-    const auto right_node = insert(right, std::nullopt);
+    const auto left_node = insert(left, ds::none);
+    const auto right_node = insert(right, ds::none);
     if (!left_node || !right_node) {
-      return std::nullopt;
+      return ds::none;
     }
 
     mark(*left_node, left_flag);
@@ -104,7 +105,7 @@ namespace telar::git {
     return result;
   }
 
-  std::optional<Divergence> DivergenceWalk::walk(const CommitGraph& graph) {
+  ds::Option<Divergence> DivergenceWalk::walk(const CommitGraph& graph) {
     // Generation numbers make the order exact (commits outside the graph are
     // newer than all of it and come first); commit dates may be skewed, so
     // like git's limit_list the walk drains a few stale commits past the end.
@@ -136,7 +137,7 @@ namespace telar::git {
       }
 
       if (!expand(index)) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -201,7 +202,7 @@ namespace telar::git {
     }
   }
 
-  std::optional<std::uint32_t> DivergenceWalk::insert(const ObjectId& id, std::optional<std::uint32_t> position) {
+  ds::Option<std::uint32_t> DivergenceWalk::insert(const ObjectId& id, ds::Option<std::uint32_t> position) {
     if (2 * (nodes_.size() + 1) > slots_.size()) {
       grow();
     }
@@ -212,7 +213,7 @@ namespace telar::git {
     }
 
     if (nodes_.size() >= limits_->walk_commits) {
-      return std::nullopt;
+      return ds::none;
     }
 
     Node node{.id = id};
@@ -224,7 +225,7 @@ namespace telar::git {
     if (position) {
       const auto commit = graph_->commit(*position);
       if (!commit) {
-        return std::nullopt;
+        return ds::none;
       }
 
       node.graph = *position;
@@ -234,7 +235,7 @@ namespace telar::git {
 
       node.parents_begin = static_cast<std::uint32_t>(parents_.size());
       if (!readCommit(id, header)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       if (shallow_->contains(id)) {
@@ -345,7 +346,7 @@ namespace telar::git {
 
     for (std::uint32_t offset = 0; offset < count; ++offset) {
       const auto parent = parents_[begin + offset];
-      const auto node = insert(parent, std::nullopt);
+      const auto node = insert(parent, ds::none);
       if (!node) {
         return false;
       }

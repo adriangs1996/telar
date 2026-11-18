@@ -4,6 +4,7 @@ export module telar.wire.agents;
 
 import std;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // The schemas specialize `MessageSchema`, which telar.wire.vocabulary declares in its global
 // fragment; naming the template here keeps it reachable from importers.
@@ -87,7 +88,7 @@ export extern "C++" {
       std::string_view command{};
       std::string_view cwd{};
       std::string_view session{};
-      std::optional<std::int32_t> exit_code{};
+      ds::Option<std::int32_t> exit_code{};
 
       void validate() const;
     };

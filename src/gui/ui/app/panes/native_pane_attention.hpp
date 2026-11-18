@@ -20,6 +20,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -75,16 +76,16 @@ namespace telar::gui::qt {
     void setAlpha(float alpha);
     void sample(std::uint64_t now_ns, application::workbench::AttentionFades& fades);
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
 
-    std::optional<application::workbench::PaneAttentionKey> key_;
+    ds::Option<application::workbench::PaneAttentionKey> key_;
     QColor color_ = Qt::transparent;
     qreal ratio_ = 1;
     qreal radius_ = gui::application::workbench::PaneDecorationGeometry::frame_radius;
     float alpha_ = 0;
     bool active_ = false;
     bool notification_pending_ = false;
-    std::optional<std::uint64_t> deadline_ns_;
+    ds::Option<std::uint64_t> deadline_ns_;
     QPointer<WindowAnimationClock> clock_;
     tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
   };
@@ -103,7 +104,7 @@ namespace telar::gui::qt {
 
     bool sample(std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive);
 
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t timestamp) const {
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t timestamp) const {
       return items_.deadline(timestamp);
     }
 

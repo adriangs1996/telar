@@ -75,9 +75,9 @@ namespace {
     PublishedImage() {
       auto storage = runtime::SharedImageStorage::create(pixels.size());
 
-      check(storage.has_value(), "the private shared-image fixture must allocate");
-      std::ranges::copy(pixels, storage->mapping().bytes().begin());
-      name_ = storage->takeName();
+      check(storage.hasValue(), "the private shared-image fixture must allocate");
+      std::ranges::copy(pixels, storage.getMut().mapping().bytes().begin());
+      name_ = storage.getMut().takeName();
     }
 
     ~PublishedImage() {

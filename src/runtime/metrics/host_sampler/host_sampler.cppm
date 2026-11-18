@@ -7,6 +7,7 @@ import std;
 
 import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.platform.host_metrics;
+import telar.base.ds;
 
 // Interface: metrics/host_sample.cppm
 export {
@@ -17,7 +18,7 @@ export {
       std::uint16_t memory_used_decigib;
       std::uint16_t memory_total_decigib;
       std::uint16_t cpu_count;
-      std::optional<std::uint8_t> battery_percent;
+      ds::Option<std::uint8_t> battery_percent;
       bool operator==(const HostValues&) const = default;
     };
 
@@ -32,7 +33,7 @@ export {
     public:
       void apply(const HostCounters& counters) noexcept;
 
-      const std::optional<HostValues>& latest() const noexcept;
+      const ds::Option<HostValues>& latest() const noexcept;
 
       std::uint64_t revision() const noexcept;
 
@@ -47,7 +48,7 @@ export {
 
       static std::uint16_t decigib(std::uint64_t bytes) noexcept;
 
-      std::optional<HostValues> latest_;
+      ds::Option<HostValues> latest_;
       std::uint64_t revision_ = 1;
       std::uint64_t previous_busy_ = 0;
       std::uint64_t previous_total_ = 0;

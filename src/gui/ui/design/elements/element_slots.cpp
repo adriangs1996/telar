@@ -16,6 +16,7 @@ static_assert(true);
 #include <cstddef>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -25,12 +26,12 @@ namespace telar::gui::qt {
       return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
     }
 
-    QVariant paint(const application::components::ElementColor& color, const Theme& theme, std::optional<Color> fallback = std::nullopt) {
+    QVariant paint(const application::components::ElementColor& color, const Theme& theme, ds::Option<Color> fallback = ds::none) {
       if (!color.value && !fallback) {
         return {};
       }
 
-      auto resolved = componentColor(color.value, theme, fallback.value_or(Color{}));
+      auto resolved = componentColor(color.value, theme, fallback.valueOr(Color{}));
 
       resolved.setAlphaF(resolved.alphaF() * color.alpha / std::numeric_limits<std::uint8_t>::max());
 
@@ -238,7 +239,7 @@ namespace telar::gui::qt {
         } else {
           current.failures = 0;
           current.error.clear();
-          current.rendered = std::shared_ptr<const Rendered>{std::move(*outcome.value)};
+          current.rendered = std::shared_ptr<const Rendered>{std::move(outcome.value.getMut())};
           current.nodes = project(*current.rendered, source_.configuration().theme);
           current.revision = ++next_revision_;
         }

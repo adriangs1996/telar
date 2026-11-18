@@ -10,6 +10,7 @@ import telar.gui.foundation.system;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: application/agent_acknowledgement.cppm
 export {
@@ -24,10 +25,10 @@ export {
 
     class AgentAcknowledgement {
     public:
-      [[nodiscard]] std::optional<AcknowledgeAgent> take(std::optional<FocusedAgent> agent) noexcept;
+      [[nodiscard]] ds::Option<AcknowledgeAgent> take(ds::Option<FocusedAgent> agent) noexcept;
 
     private:
-      std::optional<AcknowledgeAgent> acknowledged_;
+      ds::Option<AcknowledgeAgent> acknowledged_;
     };
 
   }

@@ -14,6 +14,7 @@ import telar.sys.posix;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.lua;
+import telar.base.ds;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
@@ -125,7 +126,7 @@ export {
       AgentProvider named(std::string_view name) const noexcept;
       AgentProvider fromExecutable(std::string_view name) const noexcept;
       AgentProvider fromPath(std::string_view path) const noexcept;
-      std::optional<AgentSignal> detect(std::string_view text) const noexcept;
+      ds::Option<AgentSignal> detect(std::string_view text) const noexcept;
       std::span<const AgentManifest> entries() const noexcept;
 
     private:

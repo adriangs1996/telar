@@ -45,8 +45,8 @@ namespace {
       SensitiveAllocation<Memory> first{memory, 64};
       SensitiveAllocation<Memory> second{memory, 32};
 
-      std::ranges::fill(first.bytes(), std::uint8_t{0x5a});
-      std::ranges::fill(second.bytes(), std::uint8_t{0x5a});
+      std::ranges::fill(first.bytesMut(), std::uint8_t{0x5a});
+      std::ranges::fill(second.bytesMut(), std::uint8_t{0x5a});
       first = std::move(second);
       check(first.bytes().size() == 32);
     }

@@ -4,10 +4,11 @@ import std;
 import telar.gui.foundation.terminal;
 import telar.wire.clipboard;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
-  std::optional<CopySelection> CopyState::selectionRequest() const noexcept {
+  ds::Option<CopySelection> CopyState::selectionRequest() const noexcept {
     if (!anchor) {
       return {};
     }
@@ -63,7 +64,7 @@ namespace telar::gui::features::terminal::copy_mode {
     const auto span = grid.pointerSpan(cursor, granularity);
 
     pointer = CopyPointer{.start = span[0], .end = span[1], .granularity = granularity, .columns = grid.columns, .rows = grid.rows};
-    anchor = granularity == CopyGranularity::character ? std::nullopt : std::optional{span[0]};
+    anchor = granularity == CopyGranularity::character ? ds::none : ds::Option{span[0]};
     cursor = span[1];
     linewise = granularity == CopyGranularity::line;
   }
@@ -91,12 +92,12 @@ namespace telar::gui::features::terminal::copy_mode {
 
       cursor.y -= std::min(cursor.y, pruned);
       if (anchor) {
-        anchor->y -= std::min(anchor->y, pruned);
+        anchor.getMut().y -= std::min(anchor->y, pruned);
       }
 
       if (pointer) {
-        pointer->start.y -= std::min(pointer->start.y, pruned);
-        pointer->end.y -= std::min(pointer->end.y, pruned);
+        pointer.getMut().start.y -= std::min(pointer->start.y, pruned);
+        pointer.getMut().end.y -= std::min(pointer->end.y, pruned);
       }
     }
 
@@ -104,12 +105,12 @@ namespace telar::gui::features::terminal::copy_mode {
 
     cursor.y = std::min(cursor.y, last);
     if (anchor) {
-      anchor->y = std::min(anchor->y, last);
+      anchor.getMut().y = std::min(anchor->y, last);
     }
 
     if (pointer) {
-      pointer->start.y = std::min(pointer->start.y, last);
-      pointer->end.y = std::min(pointer->end.y, last);
+      pointer.getMut().start.y = std::min(pointer->start.y, last);
+      pointer.getMut().end.y = std::min(pointer->end.y, last);
     }
 
     viewport_offset = scroll.offset;

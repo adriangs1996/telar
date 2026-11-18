@@ -8,6 +8,7 @@ import telar.gui.features.notifications;
 import telar.gui.foundation.agents;
 import telar.gui.foundation.model;
 import telar.wire.agents;
+import telar.base.ds;
 
 namespace telar::gui::application::activity {
 
@@ -42,7 +43,7 @@ namespace telar::gui::application::activity {
     }
 
     const auto* agent = features::activity::focused(Access::agents(session).entries(), *active);
-    const auto focused = agent == nullptr ? std::nullopt : std::optional{FocusedAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .status = agent->status}};
+    const auto focused = agent == nullptr ? ds::none : ds::Option{FocusedAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .status = agent->status}};
 
     if (const auto request = Access::agentAcknowledgement(session).take(focused)) {
       Access::send(session, *request);

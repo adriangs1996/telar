@@ -21,6 +21,7 @@ import telar.sys.process;
 import telar.tls;
 import telar.base.text.utf8;
 import telar.cli.command_limit;
+import telar.base.ds;
 
 namespace telar::runtime::cli::window {
 
@@ -158,7 +159,7 @@ namespace telar::runtime::cli::window {
   // Collect owned pages before printing: a concurrent reload must never mix generations.
   void plugins(Session& session, ClientCommand command, ClientCommandResult reply, Text& output) {
     Vector<Text, Memory> entries{AllocatorRef<Text, Memory>{output.get_allocator().memory()}};
-    std::optional<std::int64_t> generation;
+    ds::Option<std::int64_t> generation;
     const std::int64_t limit = command.action == ClientAction::plugin_get ? 65 : 32;
 
     for (std::int64_t page_index = 0;; ++page_index) {
@@ -378,7 +379,7 @@ namespace telar::runtime::cli::window {
   }
 
   int notify(Session& session, NotificationBody notification) {
-    std::optional<LimitReach> reach;
+    ds::Option<LimitReach> reach;
 
     if (notification.title.size() > max_notification_title_bytes) {
       reach = LimitReach{

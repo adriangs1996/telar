@@ -29,6 +29,7 @@ import telar.testing;
 import telar.runtime.model.client_layouts;
 import telar.wire.vocabulary;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -87,7 +88,7 @@ export {
 
       readExact(payload);
       telar::DecodeStorage storage{decode_};
-      std::optional<std::variant<Messages...>> result;
+      telar::ds::Option<std::variant<Messages...>> result;
 
       ([&] {
         if (payload.front() == static_cast<telar::Byte>(telar::MessageSchema<Messages>::tag)) {
@@ -96,8 +97,8 @@ export {
       }(),
           ...);
 
-      check(result.has_value());
-      return std::move(*result);
+      check(result.hasValue());
+      return std::move(result.getMut());
     }
 
   private:

@@ -13,6 +13,7 @@ import telar.wire.clients;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -48,7 +49,7 @@ namespace {
 
   struct Reply {
     std::uint64_t request_id;
-    std::optional<FailureCode> failure;
+    ds::Option<FailureCode> failure;
     std::string message;
   };
 
@@ -78,7 +79,7 @@ namespace {
 
           replies.push_back({failed.request_id, failed.code, std::string{failed.message}});
         } else {
-          replies.push_back({Codec::decode<RequestCompleted>(payload, storage).request_id, std::nullopt, {}});
+          replies.push_back({Codec::decode<RequestCompleted>(payload, storage).request_id, ds::none, {}});
         }
       });
     }

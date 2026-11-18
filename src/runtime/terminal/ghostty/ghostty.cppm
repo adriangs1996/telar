@@ -8,6 +8,7 @@ import std;
 import telar.ghostty.vt;
 import telar.tbc;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 export namespace telar::runtime {
 
@@ -148,7 +149,7 @@ export namespace telar::runtime {
     }
 
     // The row from the top of the scrollback; nothing once the scrollback dropped it.
-    [[nodiscard]] std::optional<std::uint32_t> row(GhosttyTerminal terminal) const noexcept;
+    [[nodiscard]] ds::Option<std::uint32_t> row(GhosttyTerminal terminal) const noexcept;
 
   private:
     void release() noexcept;

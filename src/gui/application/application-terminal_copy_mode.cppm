@@ -9,6 +9,7 @@ import :workspace_replica;
 import telar.gui.features.terminal.copy_mode;
 import telar.gui.foundation.keys;
 import telar.wire.content;
+import telar.base.ds;
 
 export namespace telar::gui::application::terminal::copy_mode {
 
@@ -56,7 +57,7 @@ export namespace telar::gui::application::terminal::copy_mode {
   void stepMatch(Session& session, bool forward);
 
   // The command whose output the search reads, while it reads only that output.
-  [[nodiscard]] std::optional<std::size_t> searchBlock(const Session& session) noexcept;
+  [[nodiscard]] ds::Option<std::size_t> searchBlock(const Session& session) noexcept;
 
   // Whether a search can be confined to a command's output, as one begun from a command can.
   [[nodiscard]] bool searchScopes(const Session& session) noexcept;

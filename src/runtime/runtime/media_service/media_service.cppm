@@ -48,6 +48,7 @@ import telar.runtime.terminal.graphics_storage;
 import telar.runtime.transport.connection;
 import telar.base.diagnostics;
 import telar.runtime.platform.git_status;
+import telar.base.ds;
 
 // Interface: runtime/background_pool.cppm
 export {
@@ -201,9 +202,9 @@ export {
 
       void project(std::size_t pending, Agent& agent) noexcept;
 
-      std::optional<DescriptionRequest> nextDescription(AgentRegistry<ConcurrentMemory>& agents);
+      ds::Option<DescriptionRequest> nextDescription(AgentRegistry<ConcurrentMemory>& agents);
 
-      std::optional<HistorySessionTitle> completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result);
+      ds::Option<HistorySessionTitle> completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result);
 
     private:
       static constexpr std::size_t description_queue_capacity = 8;
@@ -221,8 +222,8 @@ export {
     template <typename Agents>
     concept DescriptionObserver = requires(Agents& agents, const DescriptionResult& result) {
       { agents.enableDescriptions(true) } noexcept -> std::same_as<void>;
-      { agents.nextDescription() } -> std::same_as<std::optional<DescriptionRequest>>;
-      { agents.completeDescription(result) } -> std::same_as<std::optional<HistorySessionTitle>>;
+      { agents.nextDescription() } -> std::same_as<ds::Option<DescriptionRequest>>;
+      { agents.completeDescription(result) } -> std::same_as<ds::Option<HistorySessionTitle>>;
     };
 
     // Generates session descriptions on a worker; the agents it describes are lent to each call.
@@ -238,7 +239,7 @@ export {
       }
 
       inline bool enabled() const noexcept {
-        return worker_.has_value();
+        return worker_.hasValue();
       }
 
       // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
@@ -251,7 +252,7 @@ export {
         collect(agents);
         if (!pending_) {
           if (auto request = agents.nextDescription()) {
-            pending_ = worker_->submit(*request);
+            pending_ = worker_.getMut().submit(*request);
           }
         }
       }
@@ -261,7 +262,7 @@ export {
           return;
         }
 
-        worker_->collect([&](const DescriptionResult& result) {
+        worker_.getMut().collect([&](const DescriptionResult& result) {
           pending_ = false;
           if (const auto title = agents.completeDescription(result)) {
             history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::session_title, .session = {}, .title = *title});
@@ -275,7 +276,7 @@ export {
 
     private:
       History& history_;
-      std::optional<ObservationWorker<DescriptionGenerator<Memory>>> worker_;
+      ds::Option<ObservationWorker<DescriptionGenerator<Memory>>> worker_;
       bool pending_ = false;
     };
 
@@ -613,7 +614,7 @@ export {
           workspace->git_timed_out = result.timed_out;
           workspace->git_checked_at = now;
           const auto branch = result.present ? result.branch.view() : std::string_view{};
-          const bool dirty = result.present && result.dirty.value_or(workspace->git_dirty);
+          const bool dirty = result.present && result.dirty.valueOr(workspace->git_dirty);
           if (workspace->git_branch.view() != branch || workspace->git_dirty != dirty) {
             workspace->git_branch.assign(branch);
             workspace->git_dirty = dirty;
@@ -629,7 +630,7 @@ export {
     private:
       LimitService& limits_;
       ObservationWorker<Probe> worker_;
-      std::optional<std::uint64_t> pending_;
+      ds::Option<std::uint64_t> pending_;
       Clock::time_point next_check_{};
       std::uint64_t checked_revision_ = 0;
     };

@@ -114,7 +114,7 @@ namespace {
         auto second = budget.charge(3);
 
         check(second && budget.used() == 10);
-        auto moved = std::move(*first);
+        auto moved = std::move(first.getMut());
 
         first.reset();
         check(budget.used() == 10);
@@ -134,7 +134,7 @@ namespace {
       const auto identity = specification("echo");
       const auto publish = [&](std::uint64_t event_id) {
         SensitiveAllocation storage{memory, 64};
-        const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
+        const auto size = tap::Protocol::encodeEffects(storage.bytesMut(), event_id, {}).size();
 
         results.publish(makeOwned<tap::Result<Memory>>(memory, identity, std::move(storage), 0, size));
       };
@@ -177,7 +177,7 @@ namespace {
       const auto identity = specification("echo");
       const auto publish = [&](std::uint64_t event_id) {
         SensitiveAllocation storage{memory, 64};
-        const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
+        const auto size = tap::Protocol::encodeEffects(storage.bytesMut(), event_id, {}).size();
 
         results.publish(makeOwned<tap::Result<ConcurrentMemory>>(memory, identity, std::move(storage), 0, size));
       };
@@ -571,8 +571,8 @@ namespace {
         auto exchange = captured(memory, quota);
         auto charge = held.charge(tap::SharedExchange::capturedBytes(exchange));
 
-        check(charge.has_value());
-        worker.submit(std::make_shared<tap::SharedExchange>(std::move(*charge), event_id, std::move(exchange)));
+        check(charge.hasValue());
+        worker.submit(std::make_shared<tap::SharedExchange>(std::move(charge.getMut()), event_id, std::move(exchange)));
       };
 
       submit(1);

@@ -12,6 +12,7 @@ import telar.config.client;
 import telar.config.core;
 import telar.gui.foundation.actions;
 import telar.gui.features.configuration;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -50,7 +51,7 @@ namespace telar::gui::application {
         commands_(commands),
         generation_(generation) {}
 
-  std::optional<BindingAction> BindingActionReader::read(const runtime::lua::Value& value, bool expression) const {
+  ds::Option<BindingAction> BindingActionReader::read(const runtime::lua::Value& value, bool expression) const {
     using Kind = runtime::config::ActionKind;
 
     const auto setting = validator_.read(value, expression);
@@ -175,7 +176,7 @@ namespace telar::gui::application {
         references_(references),
         next_reference_(next_reference) {}
 
-  std::optional<BindingAction> ComponentActionReader::read(const runtime::lua::Value& value) const {
+  ds::Option<BindingAction> ComponentActionReader::read(const runtime::lua::Value& value) const {
     auto action = reader_.read(value);
     if (action && action->kind == BindingActionKind::extended) {
       if (next_reference_ == static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
@@ -184,7 +185,7 @@ namespace telar::gui::application {
         throw std::length_error{"Component action identity exhausted"};
       }
 
-      action->parameter = -static_cast<std::int32_t>(++next_reference_);
+      action.getMut().parameter = -static_cast<std::int32_t>(++next_reference_);
       references_.keep(*action);
     }
 
@@ -213,7 +214,7 @@ namespace telar::gui::application {
     builder_.report(Bounds);
   }
 
-  std::optional<ContentReader::Parent> ContentReader::Builder::node(const runtime::lua::Value& value, const Shape& shape, const Position& position) {
+  ds::Option<ContentReader::Parent> ContentReader::Builder::node(const runtime::lua::Value& value, const Shape& shape, const Position& position) {
     const auto values = runtime::config::ComponentValuesReader::read(value, shape, features::components::ComponentColors{});
     features::components::Input input;
 
@@ -224,8 +225,8 @@ namespace telar::gui::application {
     input.node.icon = features::components::ValueMapper::icon(values.icon);
     input.node.mark = features::components::ValueMapper::mark(values.mark);
     input.node.metric = static_cast<BarMetric>(std::to_underlying(values.metric));
-    input.node.value = features::components::ValueMapper::fraction(values.value.value_or(0));
-    input.node.marker = values.marker ? std::optional{features::components::ValueMapper::fraction(*values.marker)} : std::nullopt;
+    input.node.value = features::components::ValueMapper::fraction(values.value.valueOr(0));
+    input.node.marker = values.marker ? ds::Option{features::components::ValueMapper::fraction(*values.marker)} : ds::none;
     input.node.primary = values.primary;
     input.text = shape.text;
     input.detail = shape.detail;
@@ -235,7 +236,7 @@ namespace telar::gui::application {
     return append(value, shape, input, position);
   }
 
-  std::optional<ContentReader::Parent> ContentReader::Builder::append(const runtime::lua::Value& value, const Shape& shape, features::components::Input& input, const Position& position) {
+  ds::Option<ContentReader::Parent> ContentReader::Builder::append(const runtime::lua::Value& value, const Shape& shape, features::components::Input& input, const Position& position) {
     const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
 
     if (counting_) {
@@ -250,7 +251,7 @@ namespace telar::gui::application {
     }
 
     if (!budget_.admit(shape, rank)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (shape.action_field != nullptr) {
@@ -261,12 +262,12 @@ namespace telar::gui::application {
       if (!input.action) {
         budget_.release(shape, rank);
 
-        return std::nullopt;
+        return ds::none;
       }
     }
 
     if (!budget_.stage(shape)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     input.node.parent = position.parent;
@@ -289,7 +290,7 @@ namespace telar::gui::application {
     });
 
     for (const auto& reach : reaches) {
-      if (reach.requested.value_or(0) > reach.value) {
+      if (reach.requested.valueOr(0) > reach.value) {
         limits_.add(reach);
       }
     }
@@ -452,7 +453,7 @@ namespace telar::gui::application {
     });
   }
 
-  ComponentInvocation::ComponentInvocation(int reference, const features::components::Context& context, const char* field, std::optional<std::string_view> item) noexcept
+  ComponentInvocation::ComponentInvocation(int reference, const features::components::Context& context, const char* field, ds::Option<std::string_view> item) noexcept
       : reference_(reference),
         context_(context),
         field_(field),
@@ -504,7 +505,7 @@ namespace telar::gui::application {
     lua_setfield(state, -2, "time");
 
     lua_newtable(state);
-    runtime::lua::setField(state, "available", static_cast<bool>(context_.metrics.has_value()));
+    runtime::lua::setField(state, "available", static_cast<bool>(context_.metrics.hasValue()));
     if (context_.metrics) {
       runtime::lua::setField(state, "cpu_percent", static_cast<lua_Integer>(context_.metrics->cpu_percent));
       runtime::lua::setField(state, "memory_used_decigib", static_cast<lua_Integer>(context_.metrics->memory_used_decigib));
@@ -579,7 +580,7 @@ namespace telar::gui::application {
   void PickItemsReader::keep(const Read& read, features::components::PickItems& output, runtime::config::LimitNotices& limits) {
     output.clear();
     read([&](const runtime::config::PickItemSetting& option, const runtime::lua::Value&) {
-      output.keep({.label = option.label, .detail = option.detail.value_or(std::string_view{}), .value = option.value, .swatch = option.swatch, .selected = option.selected});
+      output.keep({.label = option.label, .detail = option.detail.valueOr(std::string_view{}), .value = option.value, .swatch = option.swatch, .selected = option.selected});
     });
 
     output.report(limits);

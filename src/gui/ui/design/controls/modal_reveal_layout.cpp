@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "modal_reveal_layout.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QMetaObject>
 #include <QPointer>
 #include <QQuickItem>
@@ -50,7 +51,7 @@ namespace telar::gui::qt {
     bool valid = false;
     const auto identity = generation.toULongLong(&valid);
 
-    identity_ = valid ? std::optional<std::uint64_t>{identity} : std::nullopt;
+    identity_ = valid ? ds::Option<std::uint64_t>{identity} : ds::none;
     dirty_ = true;
     synchronize();
     emit generationChanged();
@@ -71,8 +72,8 @@ namespace telar::gui::qt {
     return isVisible();
   }
 
-  std::optional<std::uint64_t> ModalRevealLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
-    return frame_requested_ ? std::nullopt : next_sample_ns_;
+  ds::Option<std::uint64_t> ModalRevealLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
+    return frame_requested_ ? ds::none : next_sample_ns_;
   }
 
   // Prepare the zero-reveal sample before polish so geometry and targets share
@@ -92,7 +93,7 @@ namespace telar::gui::qt {
     }
 
     const auto timestamp = clock_->now();
-    const auto reveal = motion_.sample(active_ ? identity_ : std::nullopt, timestamp);
+    const auto reveal = motion_.sample(active_ ? identity_ : ds::none, timestamp);
     const bool changed = reveal_ != reveal;
 
     reveal_ = reveal;

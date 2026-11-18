@@ -16,6 +16,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -158,7 +159,7 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::mode() const {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
     if (!line || line->keymap() == application::prompt::Keymap::emacs) {
       return QStringLiteral("emacs");
     }
@@ -182,7 +183,7 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::block() const noexcept {
-    const auto selected = controller_ == nullptr ? std::nullopt : controller_->selectedBlock(pane_id_);
+    const auto selected = controller_ == nullptr ? ds::none : controller_->selectedBlock(pane_id_);
 
     return selected ? static_cast<int>(*selected) + 1 : 0;
   }
@@ -207,9 +208,9 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::queued() const noexcept {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
 
-    return line.has_value() && line->queued();
+    return line.hasValue() && line->queued();
   }
 
   bool PromptEditorItem::cursorHidden() const noexcept {
@@ -217,13 +218,13 @@ namespace telar::gui::qt {
   }
 
   bool PromptEditorItem::answering() const noexcept {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
 
-    return line.has_value() && line->answering();
+    return line.hasValue() && line->answering();
   }
 
   int PromptEditorItem::secretKeys() const noexcept {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
 
     return !line ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), 64));
   }
@@ -248,7 +249,7 @@ namespace telar::gui::qt {
   // QML reads the choices on every state change, which a pane's output sends with each frame: the
   // list is rebuilt only when the line's menu or text moved on.
   QVariantList PromptEditorItem::choices() const {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
     if (!line || !line->menu()) {
       choices_line_ = nullptr;
       return {};
@@ -309,7 +310,7 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::choice() const noexcept {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
     if (!line || !line->menu()) {
       return -1;
     }
@@ -318,7 +319,7 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::menuLabel() const {
-    const auto line = controller_ == nullptr ? std::nullopt : controller_->line(pane_id_);
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
     if (!line || !line->menu()) {
       return {};
     }
@@ -590,7 +591,7 @@ namespace telar::gui::qt {
     const auto mark = shifted(anchor);
     const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_ == laid_.display && styles_ == laid_.styles && groups_ == laid_.groups && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
     if (unchanged) {
-      if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.has_value()) {
+      if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue()) {
         emit stateChanged();
       }
 
@@ -622,7 +623,7 @@ namespace telar::gui::qt {
 
     ++revision_;
     emit layoutChanged();
-    if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.has_value()) {
+    if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue()) {
       emit stateChanged();
     }
 

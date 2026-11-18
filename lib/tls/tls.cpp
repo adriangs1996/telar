@@ -19,6 +19,7 @@ import telar.base.text.utf8;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -280,13 +281,13 @@ namespace telar::runtime {
 
   tbc::view<CertificateAuthority, tbc::lt::a> CertificateAuthority::loadOrCreate(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
     if (auto existing = loadExisting(memory, library, directory, kind)) {
-      return std::move(*existing);
+      return std::move(existing.getMut());
     }
 
     return create(memory, library, directory, AuthorityFiles::forKind(kind), kind);
   }
 
-  tbc::view<std::optional<CertificateAuthority>, tbc::lt::a> CertificateAuthority::loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
+  tbc::view<ds::Option<CertificateAuthority>, tbc::lt::a> CertificateAuthority::loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
     TELAR_TRACE("tls.loadAuthority");
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto files = AuthorityFiles::forKind(kind);
@@ -299,7 +300,7 @@ namespace telar::runtime {
     requireTls(has_key == has_certificate, "TLS authority is incomplete");
 
     if (!has_key) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto pair = CertificatePair::parse(key_bytes, certificate_bytes);
@@ -538,10 +539,10 @@ namespace telar::runtime::proxy_trust {
     return record;
   }
 
-  std::optional<Record> Record::read(ConcurrentMemory& memory, int directory) {
+  ds::Option<Record> Record::read(ConcurrentMemory& memory, int directory) {
     Vector<unsigned char, ConcurrentMemory> source{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
     if (!readPrivateFile(directory, filename, source, maximum_bytes - 1)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return parse(memory, {reinterpret_cast<const char*>(source.data()), source.size()});
@@ -640,7 +641,7 @@ namespace telar::runtime::proxy_trust {
     return result;
   }
 
-  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, std::optional<Backend> selected, const void* environment, Lookup lookup) const {
+  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const void* environment, Lookup lookup) const {
 #if defined(__APPLE__)
     if (selected && *selected != Backend::macos) {
       throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
@@ -650,7 +651,7 @@ namespace telar::runtime::proxy_trust {
 #else
     (void)environment;
     (void)lookup;
-    auto backend = selected.value_or(Backend::trust);
+    auto backend = selected.valueOr(Backend::trust);
     if (!selected) {
       const auto directory = open();
       if (directory) {
@@ -717,7 +718,7 @@ namespace telar::runtime::proxy_trust {
     try {
       auto existing = CertificateAuthority::loadExisting(memory, library, directory, options.kind);
       if (existing && !options.force_rotation && !existing->expiresWithin(rotation_window)) {
-        authority_.emplace(std::move(*existing));
+        authority_.emplace(std::move(existing.getMut()));
         return;
       }
     } catch (const TlsError&) {
@@ -835,7 +836,7 @@ namespace telar::runtime::proxy_trust {
     return proxy_trust::inspect(memory_, library_, paths_, destination_);
   }
 
-  Record Service::install(const std::optional<Record>& previous, bool force_rotation) {
+  Record Service::install(const ds::Option<Record>& previous, bool force_rotation) {
     TELAR_TRACE("proxy.installSystemTrust");
     if (destination_.store.view().empty()) {
       throw std::invalid_argument{"Home directory unavailable for proxy trust"};
@@ -890,14 +891,14 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  std::optional<Record> Service::rotateIfNeeded() {
+  ds::Option<Record> Service::rotateIfNeeded() {
     const auto current = inspect();
     if (current.status != Status::stale || !current.record) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (destination_.backend != Backend::macos) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return install(current.record);

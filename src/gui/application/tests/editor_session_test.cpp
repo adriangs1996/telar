@@ -25,6 +25,7 @@ import telar.gui.application;
 import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -34,8 +35,8 @@ namespace {
   using namespace telar::gui::application::tests::session_fixture;
 
   struct Environment {
-    [[nodiscard]] std::optional<std::string_view> operator()(std::string_view name) const noexcept {
-      return name == "HOME" ? std::optional{std::string_view{"/home/reader"}} : std::nullopt;
+    [[nodiscard]] ds::Option<std::string_view> operator()(std::string_view name) const noexcept {
+      return name == "HOME" ? ds::Option{std::string_view{"/home/reader"}} : ds::none;
     }
   };
 

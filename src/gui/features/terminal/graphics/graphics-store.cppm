@@ -12,6 +12,7 @@ import telar.config.core;
 import telar.gui.foundation.core;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: graphics/lifetime.cppm
 export {
@@ -208,7 +209,7 @@ export {
       std::uint64_t latest_revision_ = 0;
       std::uint64_t revision_ = 0;
       GraphicsLifetime lifetime_ = GraphicsLifetime::next();
-      std::optional<std::uint64_t> snapshot_revision_;
+      ds::Option<std::uint64_t> snapshot_revision_;
       bool awaiting_snapshot_ = false;
     };
 

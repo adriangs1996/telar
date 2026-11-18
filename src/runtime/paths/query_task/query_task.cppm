@@ -14,6 +14,7 @@ import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: paths/fuzzy_match.cppm
 export {
@@ -24,7 +25,7 @@ export {
     public:
       explicit FuzzyMatch(Memory& memory);
 
-      std::optional<std::int32_t> score(std::string_view path, std::string_view query, std::span<std::uint16_t> positions = {});
+      ds::Option<std::int32_t> score(std::string_view path, std::string_view query, std::span<std::uint16_t> positions = {});
 
     private:
       static char lower(char value) noexcept;

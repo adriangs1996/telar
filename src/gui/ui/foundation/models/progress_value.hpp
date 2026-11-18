@@ -14,6 +14,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 Q_DECLARE_METATYPE(telar::gui::application::workbench::ProgressSample)
 Q_DECLARE_TYPEINFO(telar::gui::application::workbench::ProgressSample, Q_RELOCATABLE_TYPE);
@@ -24,8 +25,8 @@ namespace telar::gui::qt {
     return QVariant::fromValue(sample);
   }
 
-  inline std::optional<application::workbench::ProgressSample> progressSample(const QVariant& value) {
-    return value.canConvert<application::workbench::ProgressSample>() ? std::optional{value.value<application::workbench::ProgressSample>()} : std::nullopt;
+  inline ds::Option<application::workbench::ProgressSample> progressSample(const QVariant& value) {
+    return value.canConvert<application::workbench::ProgressSample>() ? ds::Option{value.value<application::workbench::ProgressSample>()} : ds::none;
   }
 
 }

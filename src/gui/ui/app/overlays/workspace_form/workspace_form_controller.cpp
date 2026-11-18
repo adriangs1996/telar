@@ -159,7 +159,7 @@ namespace telar::gui::qt {
     }
 
     if (result.matched > DirectoryCompletion::maximum_entries) {
-      application::notifications::reportLimit(store_.session(), {.name = "workspace_form.completion_entries", .noun = "directories", .value = DirectoryCompletion::maximum_entries, .requested = result.matched, .route = {}});
+      application::notifications::reportLimit(store_.sessionMut(), {.name = "workspace_form.completion_entries", .noun = "directories", .value = DirectoryCompletion::maximum_entries, .requested = result.matched, .route = {}});
       store_.commit();
     }
 
@@ -208,7 +208,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    application::workbench::createWorkspace(store_.session(), {.name = view(label), .path = view(folder), .create_directory = create});
+    application::workbench::createWorkspace(store_.sessionMut(), {.name = view(label), .path = view(folder), .create_directory = create});
 
     return true;
   }

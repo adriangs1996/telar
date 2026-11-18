@@ -6,6 +6,7 @@ module;
 module telar.runtime.terminal.control;
 
 import telar.base.text;
+import telar.base.ds;
 
 namespace telar::runtime::control {
 
@@ -141,7 +142,7 @@ namespace telar::runtime::control {
 
   }
 
-  std::optional<std::size_t> decodeGraphicsPayload(std::string_view encoded, std::span<std::uint8_t> output) noexcept {
+  ds::Option<std::size_t> decodeGraphicsPayload(std::string_view encoded, std::span<std::uint8_t> output) noexcept {
     std::array<unsigned, 4> group;
     unsigned count = 0;
     unsigned padding = 0;
@@ -183,7 +184,7 @@ namespace telar::runtime::control {
 
       if (byte == '=') {
         if (count < 2 || padding == 2 || count + padding >= 4) {
-          return std::nullopt;
+          return ds::none;
         }
 
         ++padding;
@@ -191,18 +192,18 @@ namespace telar::runtime::control {
       }
 
       if (padding != 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto digit = graphics_base64_digits[static_cast<std::uint8_t>(byte)];
       if (digit == std::numeric_limits<std::uint8_t>::max()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       group[count++] = static_cast<unsigned>(digit);
       if (count == group.size()) {
         if (!emit(3)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         count = 0;
@@ -210,11 +211,11 @@ namespace telar::runtime::control {
     }
 
     if (count == 1 || (padding != 0 && count + padding != 4)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (count != 0 && !emit(count - 1)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return written;

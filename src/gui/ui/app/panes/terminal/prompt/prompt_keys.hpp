@@ -11,16 +11,17 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   // A key for telar's command editor, from the same normalized key the terminal would encode.
   // `text` keeps the typed characters alive while the editor reads them. Keys the editor has no
   // use for, and every combination with Command (super), stay with the terminal and bindings.
-  inline std::optional<application::prompt::KeyPress> promptKey(const QKeyEvent& event, QByteArray& text) {
+  inline ds::Option<application::prompt::KeyPress> promptKey(const QKeyEvent& event, QByteArray& text) {
     const auto key = NativeKeyAdapter::terminalKey(event);
     if (!key || key->has(KeyChord::Modifier::super)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     application::prompt::KeyPress result{.modifiers = {.control = key->has(KeyChord::Modifier::control), .alt = key->has(KeyChord::Modifier::alt), .shift = key->has(KeyChord::Modifier::shift)}};
@@ -75,7 +76,7 @@ namespace telar::gui::qt {
       result.key = application::prompt::Key::backtab;
       return result;
     default:
-      return std::nullopt;
+      return ds::none;
     }
   }
 

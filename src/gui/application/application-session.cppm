@@ -41,6 +41,7 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.shell.syntax;
+import telar.base.ds;
 
 // Interface: application/session.cppm
 export {
@@ -166,10 +167,10 @@ export {
 
       // ---- command blocks, selected from the editor -------------------------------------------
 
-      [[nodiscard]] std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
       // Selects the block at `index`, shown from the top of the pane, or none: the pane's live end.
-      void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
+      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index);
 
       // prefix+[ where telar's editor stands in for the prompt: the last command block, selected,
       // instead of copy mode from the live end.
@@ -293,18 +294,18 @@ export {
         ClientLayoutAxis axis = ClientLayoutAxis::horizontal;
         TabLocation location{};
         TerminalSize size = default_terminal_size;
-        std::optional<std::uint64_t> fallback_workspace = std::nullopt;
+        ds::Option<std::uint64_t> fallback_workspace = ds::none;
       };
 
       struct MachineBookmark {
         TabLocation location;
         std::uint64_t pane_id = 0;
-        std::optional<std::uint64_t> fallback_workspace;
+        ds::Option<std::uint64_t> fallback_workspace;
       };
 
       template <typename Request>
         requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
-      void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), std::optional<std::uint64_t> fallback_workspace = std::nullopt);
+      void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), ds::Option<std::uint64_t> fallback_workspace = ds::none);
 
       template <typename Request>
         requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
@@ -334,7 +335,7 @@ export {
 
       std::uint64_t pending(RequestKind kind, std::uint64_t pane_id = 0, ClientLayoutAxis axis = ClientLayoutAxis::horizontal);
 
-      std::optional<Pending> complete(std::uint64_t request_id) noexcept;
+      ds::Option<Pending> complete(std::uint64_t request_id) noexcept;
 
       [[nodiscard]] Tab<Memory>* findTab(TabLocation location) const noexcept;
 
@@ -344,13 +345,13 @@ export {
 
       void openDefault();
 
-      [[nodiscard]] std::optional<MachineBookmark> machineBookmark() const noexcept;
+      [[nodiscard]] ds::Option<MachineBookmark> machineBookmark() const noexcept;
 
       bool recoverMissingWorkspacePane(const Pending& request, const RequestFailed& failure);
 
-      void handoffPane(std::uint64_t pane_id, std::optional<std::uint64_t> fallback_workspace);
+      void handoffPane(std::uint64_t pane_id, ds::Option<std::uint64_t> fallback_workspace);
 
-      void handoffWorkspace(PaneTarget target, std::optional<std::uint64_t> fallback_workspace);
+      void handoffWorkspace(PaneTarget target, ds::Option<std::uint64_t> fallback_workspace);
 
       void releaseWorkspacePresentation() noexcept;
 
@@ -525,7 +526,7 @@ export {
       // or bottom; za, zc and zo fold its output, zM and zR every block's; / searches its output;
       // v and V select its output, Y copies it and yc its command; Esc, q, i, a, I, A and any other
       // key go back to the prompt.
-      std::optional<features::prompt::Outcome> blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key);
+      ds::Option<features::prompt::Outcome> blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key);
 
       // The shown row at the view's top: as its view says, or as the runtime's view puts it.
       [[nodiscard]] static std::uint64_t shownTop(const Pane<Memory>& pane) noexcept;
@@ -558,7 +559,7 @@ export {
 
       // The row the shell's live prompt starts on, from the top of the scrollback, while the pane
       // shows its live end.
-      [[nodiscard]] static std::optional<std::uint32_t> livePromptRow(const Pane<Memory>& pane);
+      [[nodiscard]] static ds::Option<std::uint32_t> livePromptRow(const Pane<Memory>& pane);
 
       bool chrome_changed_ = false;
       bool clipboard_written_ = false;
@@ -598,10 +599,10 @@ export {
       std::size_t launch_argument_count_ = 0;
       std::array<Pending, maximum_pending> pending_;
       std::size_t pending_count_ = 0;
-      std::optional<TabLocation> active_tab_;
+      ds::Option<TabLocation> active_tab_;
       features::workbench::State workbench_;
-      std::optional<TabLocation> deferred_tab_;
-      std::optional<MachineBookmark> left_machine_;
+      ds::Option<TabLocation> deferred_tab_;
+      ds::Option<MachineBookmark> left_machine_;
       std::uint64_t request_id_ = 0;
       std::uint64_t attachment_generation_ = 0;
       std::uint64_t changed_pane_ = 0;

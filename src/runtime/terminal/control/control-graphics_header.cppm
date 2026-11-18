@@ -4,12 +4,13 @@ module;
 export module telar.runtime.terminal.control:graphics_header;
 
 import std;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
   class GraphicsHeader {
   public:
-    static std::optional<std::uint32_t> value(std::uint8_t key, std::string_view text) noexcept;
+    static ds::Option<std::uint32_t> value(std::uint8_t key, std::string_view text) noexcept;
 
     // Field views borrow this call's scratch buffer. Classification and query
     // validation share framing, while their callbacks decide which values matter.

@@ -147,12 +147,12 @@ return {}
       SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
       auto setup = makeOwned<app::TrafficReply>(memory);
 
-      app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
       check(setup->changed && setup->registration_count == 2);
       check(setup->registrations[0].filter.view() == "udp port 53535" && setup->registrations[1].stage == app::TrafficStage::http);
       constexpr std::string_view bytes{"a\0b", 3};
       app::TrafficEvent packet{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::packet, .original_bytes = 3, .bytes = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}}};
-      const auto response = host.invokeTraffic(packet, output.bytes());
+      const auto response = host.invokeTraffic(packet, output.bytesMut());
       const auto observed = app::TrafficProtocol::readReply(response, *setup);
 
       check(setup->changed && setup->registration_count == 1 && observed.decision_count == 0);
@@ -162,10 +162,10 @@ return {}
       HttpMessageView message{.method = "POST", .target = "/", .body = {reinterpret_cast<const Byte*>(body.data()), body.size()}};
       SensitiveAllocation encoded_message{memory, HttpMessageLimits::message_bytes};
       SensitiveAllocation encoded_flow{memory, HttpMessageLimits::message_bytes + traffic::Limits::metadata_bytes};
-      const auto payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
-      const auto flow = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = payload});
+      const auto payload = HttpMessageCodec::encode(encoded_message.bytesMut(), message);
+      const auto flow = traffic::FlowCodec::encode(encoded_flow.bytesMut(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = payload});
       app::TrafficEvent request{.event_id = 2, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::http_intercept_request, .bytes = flow}};
-      const auto decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
+      const auto decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytesMut()), *setup);
 
       check(!setup->changed && decided.decision_count == 1);
       app::FrameReader decision{decided.decisions[0].payload};
@@ -181,11 +181,11 @@ return {}
       message.stream = 7;
       message.scheme = "https";
       message.authority = "example.test";
-      const auto h2_payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
+      const auto h2_payload = HttpMessageCodec::encode(encoded_message.bytesMut(), message);
 
       request.event_id = 3;
-      request.event.bytes = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = h2_payload});
-      const auto h2_decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
+      request.event.bytes = traffic::FlowCodec::encode(encoded_flow.bytesMut(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = h2_payload});
+      const auto h2_decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytesMut()), *setup);
 
       check(h2_decided.decision_count == 1);
       app::FrameReader h2_decision{h2_decided.decisions[0].payload};
@@ -210,7 +210,7 @@ return {}
       const auto identity = specification(false);
       app::Host host{memory, entry.c_str(), &identity};
       SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
-      const auto setup = app::TrafficProtocol::reply(host.trafficSetup(output.bytes()));
+      const auto setup = app::TrafficProtocol::reply(host.trafficSetup(output.bytesMut()));
 
       check(setup.registration_count == 1 && setup.registrations[0].stage == app::TrafficStage::observe);
     }
@@ -360,23 +360,23 @@ return {}
       SensitiveAllocation incoming{memory, traffic::control::Limits::reply_bytes};
       auto setup = makeOwned<app::TrafficReply>(memory);
 
-      app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
       check(setup->registration_count == 1 && setup->registrations[0].stage == app::TrafficStage::control);
       const auto original = setup->registrations[0].id;
 
       check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).operation == traffic::control::Operation::status);
-      auto reply = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.status = {.proxy = true, .administration = true, .port = 41234}});
+      auto reply = traffic::control::Protocol::encode(incoming.bytesMut(), traffic::control::Reply{.status = {.proxy = true, .administration = true, .port = 41234}});
       app::TrafficEvent event{.event_id = 1, .registration = original, .dropped = 0, .event = {}, .control = reply};
 
-      app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytesMut()), *setup);
       check(setup->changed && setup->registration_count == 1 && setup->registrations[0].id != original);
       check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).operation == traffic::control::Operation::ca_certificate);
       constexpr std::string_view bytes{"pem\0blob", 8};
 
       event.event_id = 2;
       event.registration = setup->registrations[0].id;
-      event.control = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.certificate = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}});
-      app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
+      event.control = traffic::control::Protocol::encode(incoming.bytesMut(), traffic::control::Reply{.certificate = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}});
+      app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytesMut()), *setup);
       check(setup->changed && setup->registration_count == 0);
     }
 
@@ -424,7 +424,7 @@ return {}
       std::array<Byte, 256> payload;
       auto setup = makeOwned<app::TrafficReply>(memory);
 
-      app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
       check(setup->registration_count == 1 && setup->registrations[0].selection == traffic::Selection::datagrams);
       const auto registration = setup->registrations[0].id;
       constexpr std::array<Byte, 3> body{'a', 0, 'b'};
@@ -435,7 +435,7 @@ return {}
       item.destination_address[3] = 2;
       app::TrafficEvent incoming{.event_id = 1, .registration = registration, .event = {.kind = traffic::Kind::datagram, .offline = true, .interface = "fixture", .bytes = traffic::DatagramCodec::encode(payload, item)}};
 
-      app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytesMut()), *setup);
       check(setup->registration_count == 0 && !setup->changed);
       constexpr std::array<Byte, 8> echo{128, 0, 0, 0, 0, 22, 0, 33};
 
@@ -444,7 +444,7 @@ return {}
       item.destination_address[15] = 2;
       incoming.event_id = 2;
       incoming.event.bytes = traffic::DatagramCodec::encode(payload, item);
-      app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytesMut()), *setup);
       check(setup->changed && setup->registration_count == 0);
     }
 
@@ -496,11 +496,11 @@ return {}
     std::vector<Byte> buffer(traffic::Limits::metadata_bytes + 1024);
     auto setup = makeOwned<app::TrafficReply>(memory);
 
-    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
     check(setup->registration_count == 1);
     const auto registration = setup->registrations[0].id;
     const auto invoke = [&](std::uint64_t ticket) {
-      return host.invokeTraffic(interception(buffer, registration, ticket), output.bytes());
+      return host.invokeTraffic(interception(buffer, registration, ticket), output.bytesMut());
     };
 
     for (std::uint64_t ticket = 1; ticket <= app::TrafficLimits::decisions; ++ticket) {
@@ -548,15 +548,15 @@ return {}
     SensitiveAllocation encoded_flow{memory, HttpMessageLimits::message_bytes + traffic::Limits::metadata_bytes};
     auto setup = makeOwned<app::TrafficReply>(memory);
 
-    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
-    const auto payload = HttpMessageCodec::encode(encoded_message.bytes(), HttpMessageView{.method = "GET", .target = "/"});
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
+    const auto payload = HttpMessageCodec::encode(encoded_message.bytesMut(), HttpMessageView{.method = "GET", .target = "/"});
     const HttpMessageView capacity{};
     std::uint64_t ticket = 0;
     const auto invoke = [&](std::size_t fields, bool headers) {
       ++ticket;
-      const auto flow = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = fields * 2 + (headers ? 0 : 1), .ticket = ticket, .host = "example.test", .bytes = payload});
+      const auto flow = traffic::FlowCodec::encode(encoded_flow.bytesMut(), {.id = fields * 2 + (headers ? 0 : 1), .ticket = ticket, .host = "example.test", .bytes = payload});
 
-      return host.invokeTraffic({.event_id = ticket, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::http_intercept_request, .bytes = flow}}, output.bytes());
+      return host.invokeTraffic({.event_id = ticket, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::http_intercept_request, .bytes = flow}}, output.bytesMut());
     };
 
     for (const bool headers : {true, false}) {
@@ -618,7 +618,7 @@ return {}
     SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
     auto setup = makeOwned<app::TrafficReply>(memory);
 
-    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
     check(setup->registration_count == 1);
     check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).process_count == traffic::control::Limits::processes);
   }
@@ -700,7 +700,7 @@ return {}
     SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
     auto setup = makeOwned<app::TrafficReply>(memory);
 
-    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
     return setup->registration_count;
   }
 
@@ -825,10 +825,10 @@ return {}
       SensitiveAllocation output{host_memory, app::TrafficLimits::reply_bytes};
       auto setup = makeOwned<app::TrafficReply>(host_memory);
 
-      app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+      app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
       check(setup->registration_count == 1);
       app::TrafficEvent event{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::exchange, .bytes = bytes}};
-      const auto reply = app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
+      const auto reply = app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytesMut()), *setup);
       const auto effects = app::Protocol::decodeEffects(reply.effects);
 
       check(effects.batch.count == 1 && effects.batch.notifications[0].title == "exchange verified");

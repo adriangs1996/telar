@@ -1121,7 +1121,7 @@ namespace {
         check(count > 0 && static_cast<std::size_t>(count) < expected.size());
         const auto actual = queue.peek();
 
-        check(actual.has_value());
+        check(actual.hasValue());
         check(std::string_view{reinterpret_cast<const char*>(actual->data()), actual->size()} == std::string_view{expected.data(), static_cast<std::size_t>(count)});
         queue.consumeBytes(actual->size());
       };

@@ -19,6 +19,7 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -27,13 +28,13 @@ namespace telar::gui::qt {
       return {.r = color.redF(), .g = color.greenF(), .b = color.blueF(), .a = color.alphaF()};
     }
 
-    std::optional<Rect> physicalClipBounds(const QRectF& bounds, qreal density) {
+    ds::Option<Rect> physicalClipBounds(const QRectF& bounds, qreal density) {
       const std::array values{bounds.x() * density, bounds.y() * density, bounds.width() * density, bounds.height() * density};
       constexpr auto maximum = static_cast<qreal>(std::numeric_limits<float>::max());
 
       for (const auto value : values) {
         if (!std::isfinite(value) || std::abs(value) > maximum) {
-          return std::nullopt;
+          return ds::none;
         }
       }
 
@@ -138,7 +139,7 @@ namespace telar::gui::qt {
   }
 
   QRectF NativeRoundedRectangle::paintClip() const {
-    return paint_clip_.value_or(QRectF{});
+    return paint_clip_.valueOr(QRectF{});
   }
 
   void NativeRoundedRectangle::setPaintClip(const QRectF& bounds) {

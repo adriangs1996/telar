@@ -51,7 +51,7 @@ namespace {
     const std::string hexadecimal(64, 'a');
     const auto secret = ProxySecret::fromHexadecimal(hexadecimal);
 
-    check(secret.has_value());
+    check(secret.hasValue());
     check(secret->matches(*ProxySecret::fromHexadecimal(std::string(64, 'A'))));
     for (std::size_t position = 0; position < hexadecimal.size(); ++position) {
       auto different = hexadecimal;
@@ -106,7 +106,7 @@ namespace {
     check(std::get<ProxyRejection>(decision).reason == ProxyRejection::Reason::unknown_credential);
 
     for (const auto valid : {"CONNECT localhost:1 HTTP/1.1\r\n", "CONNECT example.com.:65535 HTTP/1.1\r\n", "CONNECT 127.0.0.1:00443 HTTP/1.1\r\n"}) {
-      check(ProxyTarget::parse(valid).has_value());
+      check(ProxyTarget::parse(valid).hasValue());
     }
 
     for (const auto invalid : {"connect localhost:443 HTTP/1.1\r\n", "CONNECT localhost:443 HTTP/1.0\r\n", "CONNECT localhost:443 HTTP/1.1 extra\r\n", "CONNECT  localhost:443 HTTP/1.1\r\n", "CONNECT localhost:443  HTTP/1.1\r\n", "CONNECT localhost:443 HTTP/1.1", "CONNECT localhost:0 HTTP/1.1\r\n", "CONNECT localhost:65536 HTTP/1.1\r\n", "CONNECT localhost:+443 HTTP/1.1\r\n", "CONNECT localhost:-1 HTTP/1.1\r\n", "CONNECT localhost:44_3 HTTP/1.1\r\n", "CONNECT [::1]:443 HTTP/1.1\r\n", "CONNECT *.example.com:443 HTTP/1.1\r\n", "CONNECT a..b:443 HTTP/1.1\r\n"}) {

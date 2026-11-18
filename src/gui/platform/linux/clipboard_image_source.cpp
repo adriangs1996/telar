@@ -40,6 +40,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.platform;
+import telar.base.ds;
 
 namespace telar::gui::platform {
 
@@ -135,7 +136,7 @@ namespace telar::gui::platform {
       try {
         png = ClipboardImagePipe::read(memory, transfer.pipe.get());
       } catch (const ClipboardImageFailure& error) {
-        const auto failure = transfer.status ? transfer.status->failure() : std::nullopt;
+        const auto failure = transfer.status ? transfer.status->failure() : ds::none;
         if (failure && (error.code() == ClipboardImageError::read_failed || error.code() == ClipboardImageError::no_image)) {
           throw ClipboardImageFailure{*failure};
         }
@@ -143,7 +144,7 @@ namespace telar::gui::platform {
         throw;
       }
 
-      if (const auto failure = transfer.status ? transfer.status->failure() : std::nullopt) {
+      if (const auto failure = transfer.status ? transfer.status->failure() : ds::none) {
         throw ClipboardImageFailure{*failure};
       }
     } else {

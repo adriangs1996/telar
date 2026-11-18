@@ -6,6 +6,7 @@ export module telar.base.text.json;
 import std;
 import telar.tbc;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: telar_base/text/json_error.cppm
 export {
@@ -56,7 +57,7 @@ export {
         }
       }
 
-      tbc::view<std::optional<JsonValue>, tbc::lt::b> field(std::string_view name) const;
+      tbc::view<ds::Option<JsonValue>, tbc::lt::b> field(std::string_view name) const;
       bool equals(std::string_view expected) const;
       bool boolean() const noexcept;
 
@@ -179,8 +180,8 @@ namespace telar::runtime {
 
   // What JsonFields does that depends on neither its allocator nor its count.
   std::size_t jsonFieldPosition(std::span<const std::string_view> names, std::string_view name);
-  std::size_t unsetJsonFieldPosition(std::span<const std::string_view> names, std::span<const std::optional<JsonValue>> values, std::string_view name);
-  const JsonValue& requiredJsonField(const std::optional<JsonValue>& value);
+  std::size_t unsetJsonFieldPosition(std::span<const std::string_view> names, std::span<const ds::Option<JsonValue>> values, std::string_view name);
+  const JsonValue& requiredJsonField(const ds::Option<JsonValue>& value);
 
 }
 
@@ -200,7 +201,7 @@ export {
         });
       }
 
-      inline const std::optional<JsonValue>& optional(std::string_view name) const {
+      inline const ds::Option<JsonValue>& optional(std::string_view name) const {
         return values_[jsonFieldPosition(names_, name)];
       }
 
@@ -215,7 +216,7 @@ export {
 
     private:
       tbc::view<std::array<std::string_view, Count>, tbc::lt::a> names_;
-      tbc::view<std::array<std::optional<JsonValue>, Count>, tbc::lt::a> values_;
+      tbc::view<std::array<ds::Option<JsonValue>, Count>, tbc::lt::a> values_;
       tbc::view<String<Memory>, tbc::lt::a> text_;
     };
 
@@ -246,9 +247,9 @@ export {
 
       JsonKind kind() const noexcept;
       std::string_view text() const noexcept;
-      std::span<JsonNode> children() noexcept;
+      std::span<JsonNode> childrenMut() noexcept;
       std::span<const JsonNode> children() const noexcept;
-      JsonNode* find(std::string_view name) noexcept;
+      JsonNode* findMut(std::string_view name) noexcept;
       const JsonNode* find(std::string_view name) const noexcept;
       void erase(std::size_t index);
       JsonNode& ensure(std::string_view name, JsonKind kind);

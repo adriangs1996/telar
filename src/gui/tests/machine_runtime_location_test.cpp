@@ -18,6 +18,7 @@ static_assert(true);
 
 import telar.gui.features.machines;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace {
 
@@ -29,14 +30,14 @@ namespace {
   struct Environment {
     std::array<std::pair<std::string_view, std::string_view>, 4> values;
 
-    [[nodiscard]] std::optional<std::string_view> operator()(const char* name) const {
+    [[nodiscard]] telar::ds::Option<std::string_view> operator()(const char* name) const {
       for (const auto& [key, value] : values) {
         if (key == name) {
           return value;
         }
       }
 
-      return std::nullopt;
+      return telar::ds::none;
     }
   };
 

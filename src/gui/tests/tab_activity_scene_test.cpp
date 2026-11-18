@@ -56,6 +56,7 @@ static_assert(true);
 import telar.gui.features.workbench;
 import telar.gui.foundation.drawing;
 import telar.gui.features.activity;
+import telar.base.ds;
 
 namespace {
 
@@ -144,7 +145,7 @@ namespace {
         item->setRatio(source.value(QStringLiteral("ratio")).toDouble() / density);
         item->setColor(color);
         const auto percent = source.value(QStringLiteral("percent"));
-        const ProgressSample sample{.pane_id = 1, .attachment = 1, .state = static_cast<PaneProgressState>(source.value(QStringLiteral("state")).toInt()), .percent = percent.isNull() ? std::nullopt : std::optional{static_cast<Byte>(percent.toInt())}};
+        const ProgressSample sample{.pane_id = 1, .attachment = 1, .state = static_cast<PaneProgressState>(source.value(QStringLiteral("state")).toInt()), .percent = percent.isNull() ? ds::none : ds::Option{static_cast<Byte>(percent.toInt())}};
 
         item->setRecord(record(TabActivity::Kind::progress, sample));
         items.push_back(std::move(item));
@@ -429,7 +430,7 @@ namespace {
       const QSignalSpy changes{&layout, &TabStripLayout::layoutChanged};
 
       layout.setContext(2, replacement);
-      layout.setDrag(move, std::nullopt, {}, 0);
+      layout.setDrag(move, ds::none, {}, 0);
       QTRY_VERIFY_WITH_TIMEOUT(!changes.isEmpty(), wait_ms);
       QCOMPARE(layout.dropMarker(), QRectF{});
       QCOMPARE(layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("1"));

@@ -23,6 +23,7 @@ static_assert(true);
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -110,7 +111,7 @@ namespace telar::gui::qt {
 
     [[nodiscard]] application::palette::PaletteMode mode() const;
     [[nodiscard]] const QString& query() const noexcept;
-    [[nodiscard]] std::optional<application::machines::MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
+    [[nodiscard]] ds::Option<application::machines::MachinePickerTarget> chosenMachine(const QVariantMap& choice) const;
     // Returns to the actions palette the suggestion was opened from; false when the palette is
     // closed or was not opened from one.
     bool restoreParent();
@@ -141,7 +142,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap record(const PaletteTarget& target, bool queried) const;
     [[nodiscard]] QVariantMap machineRecord(application::machines::MachinePickerTarget target) const;
     // The row a choice from QML names, while it is the one the palette shows.
-    [[nodiscard]] std::optional<Choice> chosen(const QVariantMap& choice) const;
+    [[nodiscard]] ds::Option<Choice> chosen(const QVariantMap& choice) const;
     // The actions palette as it is, to return to from the suggestion opened from its row.
     [[nodiscard]] Parent parentFor(const QVariantMap& choice, std::size_t index) const;
     void adoptParent(Parent parent);
@@ -159,7 +160,7 @@ namespace telar::gui::qt {
     Store& store_;
     PaletteAction suggestion_;
     QString query_;
-    std::optional<Parent> parent_;
+    ds::Option<Parent> parent_;
     EditorPosition editor_restore_;
     QVariantList rows_;
     QVariantList commands_;

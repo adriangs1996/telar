@@ -10,6 +10,7 @@ import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import :screen;
+import telar.base.ds;
 
 export namespace telar::gui::inline foundation::inline terminal {
 
@@ -77,13 +78,13 @@ export namespace telar::gui::inline foundation::inline terminal {
       }
     }
 
-    [[nodiscard]] std::optional<Row> find(std::uint64_t stable) const noexcept;
+    [[nodiscard]] ds::Option<Row> find(std::uint64_t stable) const noexcept;
 
     [[nodiscard]] bool holds(std::uint64_t stable) const noexcept;
 
     // The first of the rows from `first` to `last` neither held nor asked for, if any: the next
     // request starts there.
-    [[nodiscard]] std::optional<std::uint64_t> missing(std::uint64_t first, std::uint64_t last) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> missing(std::uint64_t first, std::uint64_t last) const noexcept;
 
     [[nodiscard]] bool full() const noexcept;
 

@@ -27,6 +27,7 @@ import telar.gui.foundation.system;
 import telar.plugins;
 import telar.config.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -39,7 +40,7 @@ namespace telar::gui::qt {
 
   struct ConfigurationDependency {
     QString path;
-    std::optional<system::FileStamp> stamp;
+    ds::Option<system::FileStamp> stamp;
 
     bool operator==(const ConfigurationDependency&) const = default;
   };
@@ -48,8 +49,8 @@ namespace telar::gui::qt {
     using Modules = QMap<QString, ConfigurationDependency>;
 
     Modules modules;
-    std::optional<system::FileStamp> root;
-    std::optional<system::PrivateFileStamp> trust;
+    ds::Option<system::FileStamp> root;
+    ds::Option<system::PrivateFileStamp> trust;
 
     bool operator==(const ConfigurationWatch&) const = default;
   };
@@ -72,7 +73,7 @@ namespace telar::gui::qt {
         : commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {}
 
     Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
-    std::array<std::optional<BarRender>, application::components::Definitions::positions> fixed_bars{};
+    std::array<ds::Option<BarRender>, application::components::Definitions::positions> fixed_bars{};
     CommandArguments arguments;
   };
 
@@ -93,10 +94,10 @@ namespace telar::gui::qt {
     ConfigurationWatch observed;
     ConfigurationWatch::Modules modules;
     Configuration configuration;
-    std::optional<ThemeValues> locked_theme;
+    ds::Option<ThemeValues> locked_theme;
     Owned<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
     ConfigurationSnapshot snapshot;
-    std::optional<PluginPackages> plugins;
+    ds::Option<PluginPackages> plugins;
     runtime::plugins::TrustStore trust;
     QString directory;
     QString error;

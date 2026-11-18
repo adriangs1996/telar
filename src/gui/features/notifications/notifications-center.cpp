@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.base.text.utf8;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -211,23 +212,23 @@ namespace telar::gui::features::notifications {
     return false;
   }
 
-  std::optional<NotificationTarget> NotificationCenter::activate(NotificationId id, std::uint64_t now_ns) noexcept {
+  ds::Option<NotificationTarget> NotificationCenter::activate(NotificationId id, std::uint64_t now_ns) noexcept {
     for (auto& item : std::span{items_}.first(count_)) {
       if (item.id == id && item.beginExit(now_ns)) {
         return item.target;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<std::uint64_t> NotificationCenter::nextDeadline(std::uint64_t now_ns, std::uint64_t frame_interval_ns) const {
+  ds::Option<std::uint64_t> NotificationCenter::nextDeadline(std::uint64_t now_ns, std::uint64_t frame_interval_ns) const {
     if (frame_interval_ns == 0) {
       throw std::invalid_argument{"InvalidNotificationFrameInterval"};
     }
 
     if (count_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto deadline = std::numeric_limits<std::uint64_t>::max();

@@ -19,6 +19,7 @@ import telar.wire.agents;
 import telar.wire.history;
 import telar.platform.primitives;
 import telar.runtime.history.command;
+import telar.base.ds;
 
 // Interface: history/database.cppm
 export {
@@ -382,7 +383,7 @@ export {
       struct FuzzyCandidate {
         std::int64_t id;
         std::uint64_t command_hash = 0;
-        std::optional<std::uint32_t> score;
+        ds::Option<std::uint32_t> score;
       };
 
       void queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply);
@@ -402,9 +403,9 @@ export {
       Database database_;
       HistoryRows rows_;
       bool indexed_ = false;
-      std::optional<AgentCommandWriter> agent_commands_;
-      std::optional<PaneHistoryWriter> pane_writer_;
-      std::optional<LaunchHistoryWriter> launch_writer_;
+      ds::Option<AgentCommandWriter> agent_commands_;
+      ds::Option<PaneHistoryWriter> pane_writer_;
+      ds::Option<LaunchHistoryWriter> launch_writer_;
     };
 
   }

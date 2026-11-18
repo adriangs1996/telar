@@ -12,6 +12,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.model;
 import telar.wire.content;
+import telar.base.ds;
 
 namespace telar::gui::features::peek {
 
@@ -39,7 +40,7 @@ export namespace telar::gui::features::peek {
     std::string_view message;
   };
 
-  [[nodiscard]] const std::optional<PeekTarget>& target(const State& state) noexcept;
+  [[nodiscard]] const ds::Option<PeekTarget>& target(const State& state) noexcept;
 
   [[nodiscard]] std::string_view text(const State& state) noexcept;
 
@@ -59,14 +60,14 @@ export namespace telar::gui::features::peek {
 
   // The read of the agent's recent rows under `request_id`; none while one is in flight or no
   // peek is open.
-  [[nodiscard]] std::optional<ReadPane> read(State& state, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<ReadPane> read(State& state, std::uint64_t request_id);
 
   // The read `request_id` failed: false when it is not the one in flight.
   bool fail(State& state, std::uint64_t request_id) noexcept;
 
   // The agent's screen arrived: the bytes dropped from its head to fit PeekLimits::text_bytes,
   // or none when the reply is not the open peek's.
-  [[nodiscard]] std::optional<std::size_t> receive(State& state, const PaneText& reply);
+  [[nodiscard]] ds::Option<std::size_t> receive(State& state, const PaneText& reply);
 
   // What submitting `text` asks for. Throws std::length_error past PeekLimits::message_bytes.
   [[nodiscard]] Submission submit(std::string_view text);

@@ -37,6 +37,7 @@ static_assert(true);
 import telar.platform.process;
 import telar.gui.application;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -79,9 +80,9 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::shutdown() {
-    for (auto& client : store_.clients()) {
+    for (auto& client : store_.clientsMut()) {
       if (client) {
-        release(**client);
+        release(*client.getMut());
       }
     }
   }
@@ -99,13 +100,13 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::initialize() {
-    const auto slot = store_.machines().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, application::machines::Machines::local_slot);
+    const auto slot = store_.machinesMut().add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, application::machines::Machines::local_slot);
 
     static_cast<void>(createClient(slot));
     const system::login_shell::Command shell;
     const auto directory = QDir::currentPath().toUtf8();
 
-    store_.session().setLaunch(Launch{
+    store_.sessionMut().setLaunch(Launch{
         .cwd = {
             directory.constData(),
             static_cast<std::size_t>(directory.size()),
@@ -115,27 +116,27 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::configure() {
-    for (auto& client : store_.clients()) {
+    for (auto& client : store_.clientsMut()) {
       if (!client) {
         continue;
       }
 
-      application::configuration::configure((*client)->session, configuration_source_.configuration());
-      if ((*client)->session.ready()) {
-        application::window::pace((*client)->session);
+      application::configuration::configure(client.getMut()->session, configuration_source_.configuration());
+      if (client->get()->session.ready()) {
+        application::window::pace(client.getMut()->session);
       }
     }
   }
 
   void MachinesCoordinator::setDisplayRefresh(std::uint16_t fps) {
-    for (auto& client : store_.clients()) {
+    for (auto& client : store_.clientsMut()) {
       if (!client) {
         continue;
       }
 
-      application::window::setRefreshRate((*client)->session, fps);
-      if ((*client)->session.ready()) {
-        application::window::pace((*client)->session);
+      application::window::setRefreshRate(client.getMut()->session, fps);
+      if (client->get()->session.ready()) {
+        application::window::pace(client.getMut()->session);
       }
     }
   }
@@ -165,13 +166,13 @@ namespace telar::gui::qt {
       host_.forgetView();
     }
 
-    if (auto& previous = store_.clients()[slot]) {
-      release(**previous);
+    if (auto& previous = store_.clientsMut()[slot]) {
+      release(*previous.getMut());
       previous.reset();
     }
 
-    store_.clients()[slot] = std::move(owned);
-    store_.machines().setLive(slot, true);
+    store_.clientsMut()[slot] = std::move(owned);
+    store_.machinesMut().setLive(slot, true);
     connectMachine(slot);
     if (replacing_active) {
       emit changed();
@@ -241,19 +242,19 @@ namespace telar::gui::qt {
     emit selecting();
     host_.releaseInput();
     dialogs_.show(Store::Dialog::none);
-    application::palette::discard(store_.session());
-    store_.session().setPresented(false);
+    application::palette::discard(store_.sessionMut());
+    store_.sessionMut().setPresented(false);
     store_.advanceMachineView();
     host_.forgetView();
-    if (!store_.machines().select(target.slot)) {
+    if (!store_.machinesMut().select(target.slot)) {
       return;
     }
 
-    store_.connection().resumeSession();
+    store_.connectionMut().resumeSession();
     emit changed();
     emit listChanged();
     display_.layoutWorkbench();
-    store_.session().setPresented(true);
+    store_.sessionMut().setPresented(true);
     host_.presentMachine();
   }
 
@@ -289,7 +290,7 @@ namespace telar::gui::qt {
       });
     }
 
-    if (store_.machines().summarize(slot, observation)) {
+    if (store_.machinesMut().summarize(slot, observation)) {
       emit listChanged();
     }
   }
@@ -339,8 +340,8 @@ namespace telar::gui::qt {
     };
   }
 
-  void MachinesCoordinator::soundFinished([[maybe_unused]] std::optional<CommandFailure> failure) {
-    const auto owner = std::exchange(sound_owner_, std::nullopt);
+  void MachinesCoordinator::soundFinished([[maybe_unused]] ds::Option<CommandFailure> failure) {
+    const auto owner = std::exchange(sound_owner_, ds::none);
     auto* client = owner ? findClient(*owner) : nullptr;
     if (client == nullptr) {
       return;

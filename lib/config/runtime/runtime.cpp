@@ -4,6 +4,7 @@ import std;
 import telar.lua;
 import telar.tbc;
 import telar.sys.socket;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -194,7 +195,7 @@ namespace telar::runtime {
     return AgentProvider::unknown;
   }
 
-  std::optional<AgentSignal> AgentManifests::detect(std::string_view text) const noexcept {
+  ds::Option<AgentSignal> AgentManifests::detect(std::string_view text) const noexcept {
     for (const auto& entry : entries()) {
       if (entry.blocked.matches(text)) {
         return AgentSignal{inferProvider(text), AgentStatus::blocked, 88};
@@ -219,7 +220,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::span<const AgentManifest> AgentManifests::entries() const noexcept {

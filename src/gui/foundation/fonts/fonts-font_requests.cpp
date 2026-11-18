@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts {
 
@@ -36,9 +37,9 @@ namespace telar::gui::inline foundation::inline fonts {
     return codepoint == non_joiner || codepoint == joiner || (codepoint >= first_selector && codepoint <= last_selector) || (codepoint >= first_extended_selector && codepoint <= last_extended_selector);
   }
 
-  std::optional<FontQuery> FontQuery::create(std::string_view text) {
+  ds::Option<FontQuery> FontQuery::create(std::string_view text) {
     if (text.size() > maximum_bytes) {
-      return std::nullopt;
+      return ds::none;
     }
 
     FontQuery query;
@@ -60,7 +61,7 @@ namespace telar::gui::inline foundation::inline fonts {
       text.remove_prefix(length);
     }
 
-    return query.query_length_ == 0 ? std::nullopt : std::optional{query};
+    return query.query_length_ == 0 ? ds::none : ds::Option{query};
   }
 
   std::string_view FontQuery::text() const noexcept {
@@ -91,9 +92,9 @@ namespace telar::gui::inline foundation::inline fonts {
     ++count_;
   }
 
-  std::optional<FontQuery> FontRequests::take() {
+  ds::Option<FontQuery> FontRequests::take() {
     if (in_flight_ || count_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     in_flight_ = pending_[head_];
@@ -134,7 +135,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
   void FontRequests::Misses::remember(std::string_view text) {
     const auto hash = digest(text);
-    auto entries = bucket(hash);
+    auto entries = bucketMut(hash);
 
     for (auto& entry : entries) {
       if (entry == hash) {
@@ -157,7 +158,7 @@ namespace telar::gui::inline foundation::inline fonts {
     return static_cast<std::uint64_t>(std::hash<std::string_view>{}(text)) | std::uint64_t{1};
   }
 
-  std::span<std::uint64_t> FontRequests::Misses::bucket(std::uint64_t hash) noexcept {
+  std::span<std::uint64_t> FontRequests::Misses::bucketMut(std::uint64_t hash) noexcept {
     return std::span{hashes_}.subspan((hash % sets) * ways, ways);
   }
 

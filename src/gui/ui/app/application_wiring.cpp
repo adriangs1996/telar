@@ -196,7 +196,7 @@ namespace telar::gui::qt {
     graphics_resume_timer_.setTimerType(Qt::PreciseTimer);
     connect(&graphics_resume_timer_, &QTimer::timeout, this, [this] {
       try {
-        application::terminal::graphics::resume(session());
+        application::terminal::graphics::resume(sessionMut());
       } catch (const std::exception& error) {
         status_.fail(error);
       }

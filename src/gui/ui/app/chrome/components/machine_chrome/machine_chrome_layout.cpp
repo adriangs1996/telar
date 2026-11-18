@@ -43,6 +43,7 @@ static_assert(true);
 
 import telar.gui.foundation.drawing;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -140,7 +141,7 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeLayout::observeSources() {
-    std::array<std::optional<Source>, application::machines::MachineLimits::window_slots> incoming;
+    std::array<ds::Option<Source>, application::machines::MachineLimits::window_slots> incoming;
     const bool shown = controller_ != nullptr && controller_->store().machines().count() > 1;
     const bool attention = controller_ != nullptr && controller_->store().machines().attentionElsewhere();
 
@@ -150,9 +151,9 @@ namespace telar::gui::qt {
         if (controller_->store().machines().shown(slot)) {
           const auto& row = controller_->store().machines().row(slot);
 
-          incoming[index] = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
+          incoming[index] = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
           if (mode_ == Mode::list && !incoming[index]->active) {
-            collectCards(slot, *incoming[index]);
+            collectCards(slot, incoming[index].getMut());
           }
         }
       }
@@ -199,7 +200,7 @@ namespace telar::gui::qt {
 
   QColor MachineChromeLayout::ink(std::string_view written) const {
     const auto& theme = controller_->configuration().theme;
-    const auto parsed = ColorName::parse(written).value_or(ColorName::Value{PaletteRole::accent});
+    const auto parsed = ColorName::parse(written).valueOr(ColorName::Value{PaletteRole::accent});
     const auto* role = std::get_if<PaletteRole>(&parsed);
     const auto value = role != nullptr ? theme.chrome[static_cast<std::size_t>(*role)] : std::get<CellColor>(parsed);
 

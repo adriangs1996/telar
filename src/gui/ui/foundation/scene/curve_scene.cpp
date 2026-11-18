@@ -8,6 +8,7 @@ static_assert(true);
 #include "curve_mask_node.hpp"
 #include "scene_nodes.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QImage>
 #include <QPainter>
 #include <QRectF>
@@ -41,14 +42,14 @@ namespace telar::gui::qt {
   CurveScene::CurveScene(QQuickWindow& window) noexcept
       : window_(window) {}
 
-  std::optional<CurveMaskRef> CurveScene::createMask(glyphs::BoxCurve::Shape shape, Rect cell, float thickness) {
+  ds::Option<CurveMaskRef> CurveScene::createMask(glyphs::BoxCurve::Shape shape, Rect cell, float thickness) {
     if (cell.width > Cache::raster_limit || cell.height > Cache::raster_limit || cell.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     QImage alpha{static_cast<int>(std::ceil(cell.width)), static_cast<int>(std::ceil(cell.height)), QImage::Format_Alpha8};
     if (alpha.isNull()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     glyphs::BoxCurve{shape, cell, thickness}.rasterize({.pixels = std::span{alpha.bits(), static_cast<std::size_t>(alpha.sizeInBytes())}, .stride = static_cast<std::size_t>(alpha.bytesPerLine()), .width = static_cast<std::uint16_t>(alpha.width()), .height = static_cast<std::uint16_t>(alpha.height())});
@@ -57,7 +58,7 @@ namespace telar::gui::qt {
     if (window_.rendererInterface()->graphicsApi() != QSGRendererInterface::Software) {
       texture.reset(window_.createTextureFromImage(alpha.convertToFormat(QImage::Format_RGBA8888_Premultiplied)));
       if (!texture) {
-        return std::nullopt;
+        return ds::none;
       }
 
       texture->setFiltering(QSGTexture::Linear);
@@ -84,7 +85,7 @@ namespace telar::gui::qt {
 
     auto& reserved = fallback_[index];
     if (!reserved) {
-      reserved = createMask(paint.shape, {.width = Cache::fallback_width, .height = Cache::fallback_height}, 1).value_or(CurveMaskRef{});
+      reserved = createMask(paint.shape, {.width = Cache::fallback_width, .height = Cache::fallback_height}, 1).valueOr(CurveMaskRef{});
     }
 
     return *reserved;
@@ -134,7 +135,7 @@ namespace telar::gui::qt {
 
   void CurveScene::reset() noexcept {
     masks_.reset();
-    std::ranges::fill(fallback_, std::nullopt);
+    std::ranges::fill(fallback_, ds::none);
   }
 
 }

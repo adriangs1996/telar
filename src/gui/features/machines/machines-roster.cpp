@@ -1,6 +1,7 @@
 module telar.gui.features.machines;
 
 import telar.base.history;
+import telar.base.ds;
 
 namespace telar::gui::features::machines {
 
@@ -8,14 +9,14 @@ namespace telar::gui::features::machines {
     id = fields.id;
     label.assign(fields.label.substr(0, MachineLimits::label_bytes));
     destination.assign(fields.destination.substr(0, MachineLimits::destination_bytes));
-    color.assign(fields.color.value_or("").substr(0, MachineLimits::color_bytes));
-    const auto path = fields.program.value_or("");
+    color.assign(fields.color.valueOr("").substr(0, MachineLimits::color_bytes));
+    const auto path = fields.program.valueOr("");
 
     program.assign(path.size() <= MachineLimits::program_bytes ? path : std::string_view{});
     enabled = fields.enabled;
   }
 
-  Machines::Slot Machines::add(MachineFields fields, std::optional<Slot> wanted) {
+  Machines::Slot Machines::add(MachineFields fields, ds::Option<Slot> wanted) {
     const auto slot = wanted ? wanted : freeSlot();
     if (!slot) {
       throw MachineFailure{MachineError::too_many};
@@ -66,9 +67,9 @@ namespace telar::gui::features::machines {
     return rows_;
   }
 
-  std::optional<Machines::Slot> Machines::find(MachineId id) const noexcept {
+  ds::Option<Machines::Slot> Machines::find(MachineId id) const noexcept {
     if (id.value() == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     for (std::size_t slot = 0; slot < capacity; ++slot) {
@@ -77,17 +78,17 @@ namespace telar::gui::features::machines {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<Machines::Slot> Machines::findDestination(std::string_view destination) const noexcept {
+  ds::Option<Machines::Slot> Machines::findDestination(std::string_view destination) const noexcept {
     for (std::size_t slot = 0; slot < capacity; ++slot) {
       if (rows_[slot].used && rows_[slot].destination.view() == destination) {
         return static_cast<Slot>(slot);
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::size_t Machines::count() const noexcept {
@@ -179,7 +180,7 @@ namespace telar::gui::features::machines {
 
     row.agent_revision = observation.agent_revision;
     row.workspace_revision = observation.workspace_revision;
-    const auto cpu = observation.metrics ? std::optional{observation.metrics->cpu_percent} : std::nullopt;
+    const auto cpu = observation.metrics ? ds::Option{observation.metrics->cpu_percent} : ds::none;
     if (row.phase == observation.phase && row.needs_setup == needs_setup && row.attention == attention && row.cpu_percent == cpu && !agents_changed && !workspaces_changed) {
       return false;
     }
@@ -197,14 +198,14 @@ namespace telar::gui::features::machines {
     return revision_;
   }
 
-  std::optional<Machines::Slot> Machines::freeSlot() const noexcept {
+  ds::Option<Machines::Slot> Machines::freeSlot() const noexcept {
     for (std::size_t slot = 1; slot < capacity; ++slot) {
       if (!rows_[slot].used && slot != active_) {
         return static_cast<Slot>(slot);
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   MachineRow& Machines::require(Slot slot) {
@@ -224,19 +225,19 @@ namespace telar::gui::features::machines {
     return require(slot);
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> MachineOpening::saved(tbc::view<const MachineProfiles&, tbc::lt::a> profiles, std::string_view label, std::string_view hostname) {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> MachineOpening::saved(tbc::view<const MachineProfiles&, tbc::lt::a> profiles, std::string_view label, std::string_view hostname) {
     if (const auto index = profiles.find(label)) {
       return profiles.rows()[*index].destination();
     }
 
-    if (profiles.localLabel().value_or(hostname) == label) {
-      return std::nullopt;
+    if (profiles.localLabel().valueOr(hostname) == label) {
+      return ds::none;
     }
 
     throw MachineFailure{MachineError::unknown_machine};
   }
 
-  std::optional<Machines::Slot> MachineOpening::admitted(const Machines& machines, std::string_view name) noexcept {
+  ds::Option<Machines::Slot> MachineOpening::admitted(const Machines& machines, std::string_view name) noexcept {
     const auto rows = machines.rows();
 
     for (std::size_t index = 1; index < Machines::capacity; ++index) {
@@ -247,7 +248,7 @@ namespace telar::gui::features::machines {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   MachinePicker::Matches MachinePicker::collect(const Machines& machines, std::string_view query) {
@@ -273,7 +274,7 @@ namespace telar::gui::features::machines {
     return matches;
   }
 
-  MachinePicker::Intent MachinePicker::choose(const Machines& machines, std::optional<MachineToken> chosen, bool alternate) {
+  MachinePicker::Intent MachinePicker::choose(const Machines& machines, ds::Option<MachineToken> chosen, bool alternate) {
     if (!chosen) {
       return Intent::add;
     }

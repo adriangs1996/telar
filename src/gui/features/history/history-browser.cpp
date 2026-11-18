@@ -8,6 +8,7 @@ import telar.tbc;
 import telar.base.memory.allocators;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -224,7 +225,7 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  std::optional<QueryHistory> HistoryBrowser<Memory>::page(HistoryPage direction, std::uint64_t request_id) {
+  ds::Option<QueryHistory> HistoryBrowser<Memory>::page(HistoryPage direction, std::uint64_t request_id) {
     if (!canPage(direction)) {
       return {};
     }
@@ -329,7 +330,7 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  std::optional<QueryHistory> HistoryBrowser<Memory>::readCommand(std::uint64_t request_id) {
+  ds::Option<QueryHistory> HistoryBrowser<Memory>::readCommand(std::uint64_t request_id) {
     if (state_.phase != HistoryPhase::ready || page_.rows().empty()) {
       return {};
     }
@@ -377,7 +378,7 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  std::optional<ReadHistoryOutput> HistoryBrowser<Memory>::readOutput(std::uint64_t request_id) {
+  ds::Option<ReadHistoryOutput> HistoryBrowser<Memory>::readOutput(std::uint64_t request_id) {
     if (!state_.inspecting || state_.phase != HistoryPhase::ready || page_.rows().empty()) {
       return {};
     }
@@ -531,7 +532,7 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  std::optional<HistoryChoice> HistoryBrowser<Memory>::choice() const noexcept {
+  ds::Option<HistoryChoice> HistoryBrowser<Memory>::choice() const noexcept {
     if (state_.phase != HistoryPhase::ready || state_.selection >= page_.rows().size()) {
       return {};
     }
@@ -596,7 +597,7 @@ namespace telar::gui::features::history {
 
     criteria_ = {
         .scope = query.scope,
-        .scope_id = scope_id == nullptr ? std::nullopt : std::optional{*scope_id},
+        .scope_id = scope_id == nullptr ? ds::none : ds::Option{*scope_id},
         .scope_path = std::holds_alternative<std::string_view>(query.scope_value),
         .failed_only = query.failed_only,
         .author = query.author,

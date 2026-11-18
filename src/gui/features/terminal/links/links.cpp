@@ -3,6 +3,7 @@ module telar.gui.features.terminal.links;
 import std;
 
 import telar.wire.editor;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
@@ -14,12 +15,12 @@ namespace telar::gui::features::terminal::links {
     pending_ = request;
   }
 
-  std::optional<EditorRequest> EditorOpening::complete(std::uint64_t request_id) {
+  ds::Option<EditorRequest> EditorOpening::complete(std::uint64_t request_id) {
     if (!owns(request_id)) {
       return {};
     }
 
-    return std::exchange(pending_, std::nullopt);
+    return std::exchange(pending_, ds::none);
   }
 
   bool EditorOpening::owns(std::uint64_t request_id) const noexcept {
@@ -38,7 +39,7 @@ namespace telar::gui::features::terminal::links {
     return request.message();
   }
 
-  std::optional<EditorRequest> complete(State& state, std::uint64_t request_id) {
+  ds::Option<EditorRequest> complete(State& state, std::uint64_t request_id) {
     return Access::opening(state).complete(request_id);
   }
 

@@ -19,6 +19,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -104,7 +105,7 @@ namespace telar::gui::qt {
     void markDisconnected(MachineClient& client);
     void publishList();
     // The desktop finished the sound a client's agent asked for.
-    void soundFinished(std::optional<CommandFailure> failure);
+    void soundFinished(ds::Option<CommandFailure> failure);
 
     [[nodiscard]] QVariantMap context() const;
 
@@ -133,7 +134,7 @@ namespace telar::gui::qt {
     MachinesHost& host_;
     QByteArray hostname_;
     // The client whose agent the desktop's one sound plays for.
-    std::optional<application::machines::MachineClientKey> sound_owner_;
+    ds::Option<application::machines::MachineClientKey> sound_owner_;
   };
 
 }

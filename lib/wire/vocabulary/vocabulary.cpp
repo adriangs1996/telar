@@ -3,6 +3,7 @@ module telar.wire.vocabulary;
 import std;
 import telar.base.diagnostics;
 import telar.tbc;
+import telar.base.ds;
 
 // The owned header declares these in the global module, so their definitions belong to it too.
 extern "C++" {
@@ -441,7 +442,7 @@ namespace telar {
     }
   }
 
-  void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, std::optional<std::uint64_t> previous) {
+  void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, ds::Option<std::uint64_t> previous) {
     if (previous && (!closed || workspace.kind != WorkspaceLocation::Kind::workspace ||
                         *previous == workspace.id)) {
       throw EncodingError{"Invalid previous workspace"};
@@ -460,7 +461,7 @@ namespace telar {
     }
   }
 
-  void validateLayoutCollection(std::optional<TabLocation> active, std::span<const ClientTabLayout> tabs) {
+  void validateLayoutCollection(ds::Option<TabLocation> active, std::span<const ClientTabLayout> tabs) {
     std::size_t nodes = 0;
     bool active_found = !active;
 
@@ -500,7 +501,7 @@ namespace telar {
   }
 
   std::size_t TargetLaunch::encodedSize(const value_type& value, const PaneTarget& target) {
-    if ((target.kind == PaneTarget::Kind::default_target) != value.has_value()) {
+    if ((target.kind == PaneTarget::Kind::default_target) != value.hasValue()) {
       throw EncodingError{"Launch and pane target do not match"};
     }
 
@@ -516,7 +517,7 @@ namespace telar {
 
   auto TargetLaunch::decode(DecodeInput input, DecodeStorage& storage, const PaneTarget& target) -> Decoded<value_type> {
     if (target.kind != PaneTarget::Kind::default_target) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return ValueCodec<Launch>::decode(input, storage);
@@ -548,13 +549,13 @@ namespace telar {
       throw EncodingError{"Invalid progress percentage"};
     }
 
-    u8::encode(value.value_or(255), output);
+    u8::encode(value.valueOr(255), output);
   }
 
   auto PercentSentinel::decode(std::span<const Byte>& input) -> value_type {
     const auto value = u8::decode(input);
     if (value == 255) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (value > 100) {
@@ -610,13 +611,13 @@ namespace telar {
       : input{bytes},
         remaining{count} {}
 
-  std::optional<Cell> CellReader::next() {
+  ds::Option<Cell> CellReader::next() {
     if (remaining == 0) {
       if (!input.empty()) {
         throw EncodingError{"Trailing cell bytes"};
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto header = u8::decode(input);
@@ -819,7 +820,7 @@ namespace telar {
   auto FrameMetadataCodec::decode(DecodeInput input, DecodeStorage& storage) -> Decoded<value_type> {
     const auto length = u32::decode(input);
     if (length == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (length > 153098 || length > input.size()) {

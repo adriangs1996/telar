@@ -13,13 +13,14 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   struct MachineClient;
 
   // The client of each window slot, as the store holds them.
-  using MachineClients = std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, application::machines::Machines::capacity>;
+  using MachineClients = std::array<ds::Option<Owned<MachineClient, ApplicationAllocator>>, application::machines::Machines::capacity>;
 
   // What one machine's session asks of the desktop. Only the client the window holds for the
   // active machine reaches it: the others' notifications, sounds and input are dropped.
@@ -32,9 +33,9 @@ namespace telar::gui::qt {
       // The desktop's notifications and sounds.
       HostEffects& desktop;
       // The client whose sound plays, which the window tells when the sound ends.
-      std::optional<application::machines::MachineClientKey>& sound_owner;
+      ds::Option<application::machines::MachineClientKey>& sound_owner;
       // The pacer of the window's frames, while the window has one.
-      std::optional<WindowFramePacer<>>& frame_pacer;
+      ds::Option<WindowFramePacer<>>& frame_pacer;
     };
 
     MachineEffects(const Sinks& sinks, application::machines::MachineClientKey source) noexcept

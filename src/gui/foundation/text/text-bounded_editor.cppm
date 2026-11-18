@@ -1,6 +1,7 @@
 export module telar.gui.foundation.text:bounded_editor;
 
 import std;
+import telar.base.ds;
 
 // Interface: text/grapheme_cursor.cppm
 export {
@@ -14,13 +15,13 @@ export {
 
       [[nodiscard]] std::uint8_t columns() const noexcept;
 
-      [[nodiscard]] std::optional<std::string_view> next();
+      [[nodiscard]] ds::Option<std::string_view> next();
 
-      [[nodiscard]] std::optional<std::string_view> nextReplacingInvalid() noexcept;
+      [[nodiscard]] ds::Option<std::string_view> nextReplacingInvalid() noexcept;
 
     private:
       template <bool ReplaceInvalid>
-      [[nodiscard]] std::optional<std::string_view> advance() noexcept(ReplaceInvalid);
+      [[nodiscard]] ds::Option<std::string_view> advance() noexcept(ReplaceInvalid);
 
       static constexpr std::size_t codepoint_window = 16;
       static constexpr unsigned char first_printable_ascii = 0x20;
@@ -57,7 +58,7 @@ export {
     struct EditorView {
       std::string_view text;
       std::uint16_t cursor = 0;
-      std::optional<EditorColumns> selection;
+      ds::Option<EditorColumns> selection;
       bool clipped_left = false;
       bool clipped_right = false;
     };
@@ -129,9 +130,9 @@ export {
 
       void remove(std::size_t first, std::size_t last) noexcept;
 
-      [[nodiscard]] std::optional<std::size_t> clusterBefore(std::size_t position) const;
+      [[nodiscard]] ds::Option<std::size_t> clusterBefore(std::size_t position) const;
 
-      [[nodiscard]] std::optional<std::size_t> clusterAfter(std::size_t position) const;
+      [[nodiscard]] ds::Option<std::size_t> clusterAfter(std::size_t position) const;
 
       [[nodiscard]] std::size_t startOfLine(std::size_t position, std::uint16_t width) const;
 
@@ -159,7 +160,7 @@ export {
     public:
       explicit CaptionRuns(std::string_view text) noexcept;
 
-      [[nodiscard]] std::optional<std::string_view> next() noexcept;
+      [[nodiscard]] ds::Option<std::string_view> next() noexcept;
 
     private:
       static constexpr std::size_t maximum_bytes = 64;
@@ -214,7 +215,7 @@ export {
     public:
       explicit WrappedLines(std::string_view text, std::uint16_t columns, bool words = false) noexcept;
 
-      [[nodiscard]] std::optional<std::string_view> next() noexcept;
+      [[nodiscard]] ds::Option<std::string_view> next() noexcept;
 
     private:
       std::string_view text_;

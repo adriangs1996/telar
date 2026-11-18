@@ -54,12 +54,13 @@ import telar.gui.features.plugins;
 import telar.gui.features.configuration;
 import telar.base.text.json;
 import telar.plugins;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   // Waits for the Lua thread, as a binding does before it applies its effects.
   inline BindingEffects invokeNow(ConfigurationSource& source, BindingAction action, BindingContext context) {
-    std::optional<LuaOutcome<ConfigurationSource::Effects>> result;
+    ds::Option<LuaOutcome<ConfigurationSource::Effects>> result;
 
     source.invoke(action, context, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
       result.emplace(std::move(outcome));
@@ -755,7 +756,7 @@ namespace {
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
       QCOMPARE(source.error(), QString{});
-      std::optional<LuaOutcome<ConfigurationSource::BarRender>> result;
+      telar::ds::Option<LuaOutcome<ConfigurationSource::BarRender>> result;
       QElapsedTimer clock;
 
       clock.start();
@@ -773,8 +774,8 @@ namespace {
       });
 
       QTRY_VERIFY_WITH_TIMEOUT(ticked, 1000);
-      QVERIFY(!result.has_value());
-      QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), 5000);
+      QVERIFY(!result.hasValue());
+      QTRY_VERIFY_WITH_TIMEOUT(result.hasValue(), 5000);
       QVERIFY(!result->value);
       QVERIFY(result->error.contains(QStringLiteral("budget")));
     }

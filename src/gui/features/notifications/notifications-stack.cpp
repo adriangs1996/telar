@@ -2,6 +2,7 @@ module telar.gui.features.notifications;
 
 import std;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -75,8 +76,8 @@ namespace telar::gui::features::notifications {
     return std::span{placements}.first(count);
   }
 
-  std::optional<std::uint64_t> NotificationStack::nextDeadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
-    std::optional<std::uint64_t> earliest;
+  ds::Option<std::uint64_t> NotificationStack::nextDeadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
+    ds::Option<std::uint64_t> earliest;
 
     for (const auto& motion : motions_) {
       if (motion.id.value == 0 || motion.from == motion.to || (now_ns >= motion.started_ns && now_ns - motion.started_ns >= motion_duration_ns)) {
@@ -112,7 +113,7 @@ namespace telar::gui::features::notifications {
     return from + ((to - from) * phase * phase * (quadratic_weight - (cubic_weight * phase)));
   }
 
-  std::optional<std::size_t> NotificationStack::motion(NotificationId id, float y) noexcept {
+  ds::Option<std::size_t> NotificationStack::motion(NotificationId id, float y) noexcept {
     auto* const found = std::ranges::find(motions_, id, &Motion::id);
     if (found != motions_.end()) {
       return static_cast<std::size_t>(found - motions_.begin());
@@ -121,7 +122,7 @@ namespace telar::gui::features::notifications {
     constexpr NotificationId invalid;
     auto* const vacant = std::ranges::find(motions_, invalid, &Motion::id);
     if (vacant == motions_.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     *vacant = {.id = id, .from = y, .to = y};

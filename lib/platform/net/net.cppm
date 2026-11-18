@@ -5,6 +5,7 @@ import std;
 import telar.platform.primitives;
 import telar.sys.posix;
 import telar.sys.socket;
+import telar.base.ds;
 
 // Interface: platform/byte_stream.cppm
 export {
@@ -86,7 +87,7 @@ export {
       gid_t group;
     };
 
-    std::optional<PeerCredentials> peerCredentials(int socket) noexcept;
+    ds::Option<PeerCredentials> peerCredentials(int socket) noexcept;
 
   }
 }
@@ -101,7 +102,7 @@ export {
 
       static NetworkAddress ipv4(const in_addr& host, std::uint16_t port = 0) noexcept;
       static NetworkAddress ipv6(const in6_addr& host, std::uint16_t port = 0) noexcept;
-      static std::optional<NetworkAddress> copy(const sockaddr* source, socklen_t size) noexcept;
+      static ds::Option<NetworkAddress> copy(const sockaddr* source, socklen_t size) noexcept;
 
       void setPort(std::uint16_t port) noexcept;
       const sockaddr* address() const noexcept;

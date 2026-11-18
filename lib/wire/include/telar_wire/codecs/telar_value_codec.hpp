@@ -2,6 +2,7 @@
 
 #include "telar_base/text/utf8.hpp"
 #include "telar_codec.hpp"
+#include "telar_base/ds/values.hpp"
 
 #include <bit>
 #include <limits>
@@ -308,7 +309,7 @@ namespace telar {
   };
 
   struct PercentSentinel {
-    using value_type = std::optional<Byte>;
+    using value_type = ds::Option<Byte>;
     static constexpr std::size_t width = 1;
 
     static void encode(value_type value, std::span<Byte>& output);
@@ -317,7 +318,7 @@ namespace telar {
 
   template <typename ValueCodec>
   struct OptionalValue {
-    using value_type = std::optional<typename ValueCodec::value_type>;
+    using value_type = ds::Option<typename ValueCodec::value_type>;
     static constexpr std::size_t min_width = 1;
 
     static std::size_t encodedSize(const value_type& value) {
@@ -329,7 +330,7 @@ namespace telar {
         throw EncodingError{"Output buffer too small"};
       }
 
-      BoolByte::encode(value.has_value(), output);
+      BoolByte::encode(value.hasValue(), output);
       if (value) {
         ValueCodec::encode(*value, output);
       }
@@ -337,7 +338,7 @@ namespace telar {
 
     static Decoded<value_type> decode(DecodeInput input, DecodeStorage& storage) {
       if (!BoolByte::decode(input)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return decodeValue<ValueCodec>(input, storage);

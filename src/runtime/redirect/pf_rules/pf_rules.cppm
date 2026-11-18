@@ -12,6 +12,7 @@ import telar.vocabulary;
 import telar.sys.socket;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: redirect/flow_key.cppm
 export {
@@ -25,7 +26,7 @@ export {
 
       static bool same(const Target& left, const Target& right) noexcept;
 
-      static std::optional<FlowKey> syn(std::span<const Byte> frame);
+      static ds::Option<FlowKey> syn(std::span<const Byte> frame);
 
     private:
       static std::uint16_t number(std::span<const Byte> bytes, std::size_t offset) noexcept;
@@ -129,7 +130,7 @@ export {
       std::string_view label;
       std::string_view discovery_interface;
       std::span<const FlowKey> flows;
-      std::optional<unsigned> log_interface{};
+      ds::Option<unsigned> log_interface{};
       std::span<const Bypass> bypasses{};
       bool log_all = false;
       Direction direction = Direction::outbound;

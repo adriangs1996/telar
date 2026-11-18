@@ -11,6 +11,7 @@ import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: telar_config/named_definitions_validator.cppm
 namespace telar::runtime::config {
@@ -23,9 +24,9 @@ namespace telar::runtime::config {
     // returns how many it kept, if the table is present. Stays in the interface because it is a
     // template over the caller's callable.
     template <typename Validator>
-    TBC_GENERIC static std::optional<std::size_t> validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
+    TBC_GENERIC static ds::Option<std::size_t> validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
       if (!table.present()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       std::array<std::string_view, maximum_definitions> names;
@@ -62,10 +63,10 @@ export {
     public:
       explicit ClientDefinitions(const lua::Value& client, const lua::Value* inherited = nullptr);
       bool contains(const char* section, std::string_view name) const;
-      std::optional<std::uint8_t> index(const char* section, std::string_view name) const;
+      ds::Option<std::uint8_t> index(const char* section, std::string_view name) const;
 
     private:
-      static std::optional<std::uint8_t> indexOf(const lua::Value& definitions, std::string_view name);
+      static ds::Option<std::uint8_t> indexOf(const lua::Value& definitions, std::string_view name);
 
       const lua::Value& client_;
       const lua::Value* inherited_;
@@ -128,8 +129,8 @@ export {
       };
 
       bool keep(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits);
-      std::optional<CommandTabReference> keepReference(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits);
-      [[nodiscard]] std::optional<CommandTabView> load(CommandTabReference reference) const;
+      ds::Option<CommandTabReference> keepReference(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits);
+      [[nodiscard]] ds::Option<CommandTabView> load(CommandTabReference reference) const;
 
       void seal() noexcept
         requires(Lifetime == CommandTabLifetime::retained);
@@ -264,7 +265,7 @@ export {
       bool component(const lua::Value& action) const;
 
       // Validates the action and reads it; nothing when a limit drops it.
-      [[nodiscard]] tbc::view<std::optional<ActionSetting>, tbc::lt::a> read(const lua::Value& action, bool expression = false) const;
+      [[nodiscard]] tbc::view<ds::Option<ActionSetting>, tbc::lt::a> read(const lua::Value& action, bool expression = false) const;
 
     private:
       static void command(const lua::Value& action, tbc::view<CommandTabView&, tbc::lt::a> command);
@@ -444,7 +445,7 @@ export {
     template <typename Colors>
     concept UiColors = requires(const Colors& colors, std::uint8_t index, std::string_view name) {
       { colors.index(index) } -> std::same_as<typename Colors::Color>;
-      { colors.name(name) } -> std::same_as<std::optional<typename Colors::Color>>;
+      { colors.name(name) } -> std::same_as<ds::Option<typename Colors::Color>>;
     };
 
     // What a component shows beyond its shape. The views are the component's strings.
@@ -453,18 +454,18 @@ export {
       static constexpr std::size_t maximum_samples = 120;
       static constexpr double sample_percent = 100;
       ComponentTone tone = ComponentTone::neutral;
-      std::optional<Color> foreground;
-      std::optional<Color> background;
+      ds::Option<Color> foreground;
+      ds::Option<Color> background;
       bool bold = false;
       bool italic = false;
       bool faint = false;
       bool underline = false;
       bool strikethrough = false;
-      std::optional<std::string_view> icon;
-      std::optional<UiMark> mark;
+      ds::Option<std::string_view> icon;
+      ds::Option<UiMark> mark;
       ComponentMetric metric = ComponentMetric::cpu;
-      std::optional<double> value;
-      std::optional<double> marker;
+      ds::Option<double> value;
+      ds::Option<double> marker;
       bool primary = false;
       // A sparkline's last samples, as percentages of its scale.
       std::array<std::uint8_t, maximum_samples> samples{};
@@ -555,9 +556,9 @@ export {
       }
 
       template <typename Colors>
-      TBC_GENERIC static std::optional<typename Colors::Color> color(const lua::Value& value, const Colors& colors) {
+      TBC_GENERIC static ds::Option<typename Colors::Color> color(const lua::Value& value, const Colors& colors) {
         if (!value.present()) {
-          return std::nullopt;
+          return ds::none;
         }
 
         if (const auto index = value.asInteger()) {
@@ -576,10 +577,10 @@ export {
         return parsed;
       }
 
-      static std::optional<std::string_view> icon(const lua::Value& value);
-      static std::optional<UiMark> mark(const lua::Value& value);
+      static ds::Option<std::string_view> icon(const lua::Value& value);
+      static ds::Option<UiMark> mark(const lua::Value& value);
       static ComponentMetric metric(const lua::Value& value);
-      static std::optional<double> number(const lua::Value& value);
+      static ds::Option<double> number(const lua::Value& value);
 
       template <typename Values>
       TBC_GENERIC static void samples(const lua::Value& value, Values& result) {
@@ -658,7 +659,7 @@ export {
 
       // Places a node on the builder, which the walk reaches through a reference: the walk itself
       // does not change.
-      virtual std::optional<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const = 0;
+      virtual ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const = 0;
 
     private:
       enum class Phase : std::uint8_t {
@@ -671,7 +672,7 @@ export {
       };
 
       struct Frame {
-        std::optional<lua::Value> value = std::nullopt;
+        ds::Option<lua::Value> value = ds::none;
         ComponentPosition position;
         ComponentPosition child;
         Phase phase = Phase::visit;
@@ -691,7 +692,7 @@ export {
       // Each reads the frame on top of the stack, which stays there while they run.
       void visit();
       void component();
-      std::optional<ComponentParent> node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const;
+      ds::Option<ComponentParent> node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const;
 
       lua_State& state_;
       LimitNotices& limits_;
@@ -709,7 +710,7 @@ export {
             builder_(builder) {}
 
     private:
-      inline std::optional<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const override {
+      inline ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const override {
         return builder_.node(value, shape, position);
       }
 
@@ -775,7 +776,7 @@ export {
 
     template <typename Color>
     struct ElementColorSetting {
-      std::optional<Color> value = std::nullopt;
+      ds::Option<Color> value = ds::none;
       std::uint8_t alpha = std::numeric_limits<std::uint8_t>::max();
     };
 
@@ -822,7 +823,7 @@ export {
       ComponentTone tone = ComponentTone::neutral;
       std::uint8_t align = 0;
       std::uint8_t justify = 0;
-      std::optional<std::uint8_t> align_self = std::nullopt;
+      ds::Option<std::uint8_t> align_self = ds::none;
       std::uint8_t easing = 0;
       std::uint8_t size_role = 1;
       std::uint8_t max_lines = 1;
@@ -1103,7 +1104,7 @@ export {
             }
 
             element.action = actions_++;
-            sink_.bind(std::move(*resolved));
+            sink_.bind(std::move(resolved.getMut()));
           }
         }
       }
@@ -1402,7 +1403,7 @@ export {
       SourceKind kind = SourceKind::tabs;
       // How often a dynamic or command source renders. A panel's renders when it opens, unless
       // it sets an interval.
-      std::optional<std::uint32_t> every_ms;
+      ds::Option<std::uint32_t> every_ms;
       std::uint32_t timeout_ms = default_timeout_ms;
       // Whether it has a render function; a command source without one shows the output.
       bool render = false;
@@ -1816,9 +1817,9 @@ export {
     struct PickItemSetting {
       using Swatch = std::array<std::uint32_t, 3>;
       std::string_view label;
-      std::optional<std::string_view> value;
-      std::optional<std::string_view> detail;
-      std::optional<Swatch> swatch;
+      ds::Option<std::string_view> value;
+      ds::Option<std::string_view> detail;
+      ds::Option<Swatch> swatch;
       bool selected = false;
     };
 
@@ -1846,7 +1847,7 @@ export {
 
     private:
       static PickItemSetting option(const lua::Value& item);
-      static std::optional<PickItemSetting::Swatch> swatch(const lua::Value& value);
+      static ds::Option<PickItemSetting::Swatch> swatch(const lua::Value& value);
     };
 
   }
@@ -1868,9 +1869,9 @@ export {
       static constexpr std::uint16_t default_width = 420;
       DefinitionHeading heading;
       std::uint16_t width = default_width;
-      std::optional<UiMark> mark;
+      ds::Option<UiMark> mark;
       // An icon name, as uiIcon admits it.
-      std::optional<std::string_view> icon;
+      ds::Option<std::string_view> icon;
       SourceSetting source;
     };
 
@@ -1886,8 +1887,8 @@ export {
 
     // How many panels and picks a client table defines, for each list it has.
     struct DefinitionCounts {
-      std::optional<std::size_t> panels;
-      std::optional<std::size_t> picks;
+      ds::Option<std::size_t> panels;
+      ds::Option<std::size_t> picks;
     };
 
     class ClientDefinitionsReader {
@@ -2018,12 +2019,12 @@ export {
 
     // The `client.prompt` table as read: each field the configuration sets, within its bounds.
     struct PromptSettings {
-      std::optional<PromptMode> mode;
-      std::optional<PromptSkin> skin;
-      std::optional<PromptMotion> motion;
-      std::optional<PromptKeymap> keymap;
-      std::optional<bool> ghost;
-      std::optional<std::uint8_t> max_lines;
+      ds::Option<PromptMode> mode;
+      ds::Option<PromptSkin> skin;
+      ds::Option<PromptMotion> motion;
+      ds::Option<PromptKeymap> keymap;
+      ds::Option<bool> ghost;
+      ds::Option<std::uint8_t> max_lines;
       // Whether it lists bindings, which replace the defaults even when empty.
       bool bindings = false;
     };
@@ -2092,8 +2093,8 @@ export {
     // `client.prefix` and `client.input`.
     struct ClientInputSettings {
       static constexpr Bounds<double> sequence_timeout_bounds{10, 10'000};
-      std::optional<KeyChord> prefix;
-      std::optional<std::uint16_t> sequence_timeout_ms;
+      ds::Option<KeyChord> prefix;
+      ds::Option<std::uint16_t> sequence_timeout_ms;
     };
 
     // The settings of a `client` table, each one as the configuration sets it.
@@ -2115,25 +2116,25 @@ export {
       };
 
       struct History {
-        std::optional<bool> show_agent_commands;
-        std::optional<HistoryEnter> enter;
-        std::optional<HistoryMatch> match;
+        ds::Option<bool> show_agent_commands;
+        ds::Option<HistoryEnter> enter;
+        ds::Option<HistoryMatch> match;
       };
 
       struct Sound {
-        std::optional<bool> enabled;
-        std::optional<bool> ready;
-        std::optional<bool> needs_input;
+        ds::Option<bool> enabled;
+        ds::Option<bool> ready;
+        ds::Option<bool> needs_input;
       };
 
-      std::optional<bool> sidebar_visible;
-      std::optional<bool> pane_gaps;
+      ds::Option<bool> sidebar_visible;
+      ds::Option<bool> pane_gaps;
       // Views of the configuration's strings, alive while its table is.
-      std::optional<std::string_view> editor;
-      std::optional<std::string_view> window_title;
+      ds::Option<std::string_view> editor;
+      ds::Option<std::string_view> window_title;
       History history;
       Sound sound;
-      std::optional<Delivery> delivery;
+      ds::Option<Delivery> delivery;
       ClientInputSettings input;
       PromptSettings prompt;
     };
@@ -2160,9 +2161,9 @@ export {
       // Hands each `client.keybindings` entry to `visit` with its action, `prefix` in front of the
       // prefixed ones, and returns how many it lists, if it lists them.
       template <typename Visit>
-      [[nodiscard]] TBC_GENERIC static std::optional<std::size_t> bindings(const lua::Value& client, KeyChord prefix, Visit&& visit) {
+      [[nodiscard]] TBC_GENERIC static ds::Option<std::size_t> bindings(const lua::Value& client, KeyChord prefix, Visit&& visit) {
         if (!listsBindings(client)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         return BindingReader::read(client.field("keybindings"), prefix, std::forward<Visit>(visit));
@@ -2190,7 +2191,7 @@ export {
       static ClientSettings readSettings(const lua::Value& client);
       // The index of the slot `name` names in component_slots.
       static std::size_t slot(std::string_view name, const lua::Value& entry);
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> printableText(const lua::Value& value, std::size_t maximum, bool allow_empty);
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> printableText(const lua::Value& value, std::size_t maximum, bool allow_empty);
       static void sidebar(const lua::Value& table, ClientSettings& settings);
       static void sound(const lua::Value& table, ClientSettings::Sound& sound);
       static void notifications(const lua::Value& table, ClientSettings& settings);

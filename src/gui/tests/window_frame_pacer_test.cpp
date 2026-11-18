@@ -20,6 +20,7 @@ static_assert(true);
 #include <stdexcept>
 
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace {
 
@@ -89,8 +90,8 @@ namespace {
   public:
     FrameFixture() {
       pacing_.emplace(window_);
-      pacing_->configure(FramePacer::default_interval_ns, telar::gui::Configuration::minimum_fps);
-      pacing_->record(panes_, ControlledClock::now_ns);
+      pacing_.getMut().configure(FramePacer::default_interval_ns, telar::gui::Configuration::minimum_fps);
+      pacing_.getMut().record(panes_, ControlledClock::now_ns);
       window_.installEventFilter(this);
     }
 
@@ -107,7 +108,7 @@ namespace {
         throw std::logic_error{"The frame pacer has already been released"};
       }
 
-      return *pacing_;
+      return pacing_.getMut();
     }
 
     FramePacer::Pane& pane() noexcept {
@@ -132,11 +133,11 @@ namespace {
       }
 
       if (pacing_) {
-        if (pacing_->defer(panes_)) {
+        if (pacing_.getMut().defer(panes_)) {
           return true;
         }
 
-        pacing_->record(panes_, ControlledClock::now_ns);
+        pacing_.getMut().record(panes_, ControlledClock::now_ns);
       }
 
       return false;
@@ -144,7 +145,7 @@ namespace {
 
   private:
     ControlledWindow window_;
-    std::optional<TestFramePacer> pacing_;
+    telar::ds::Option<TestFramePacer> pacing_;
     std::array<FramePacer::Pane, 1> panes_{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
   };
 
@@ -277,7 +278,7 @@ namespace {
     Q_SLOT static void graphicsGraceConsumesTheExistingFrameBudget() {
       FramePacer pacing;
 
-      pacing.configure(FramePacer::maximum_interval_ns, std::nullopt);
+      pacing.configure(FramePacer::maximum_interval_ns, telar::ds::none);
       std::array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
 
       pacing.record(panes, started_ns);

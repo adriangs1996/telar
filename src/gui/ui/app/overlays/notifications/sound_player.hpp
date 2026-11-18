@@ -24,6 +24,7 @@ static_assert(true);
 #include "tbc/view.hpp"
 
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -48,7 +49,7 @@ namespace telar::gui::qt {
   };
 
   template <typename Observer>
-  concept SoundObserver = requires(Observer& observer, std::optional<CommandFailure> failure) {
+  concept SoundObserver = requires(Observer& observer, ds::Option<CommandFailure> failure) {
     { observer.soundPlaybackFinished(failure) } -> std::same_as<void>;
   };
 
@@ -81,7 +82,7 @@ namespace telar::gui::qt {
       return process_.active();
     }
 
-    void commandFinished(std::optional<CommandFailure> failure) {
+    void commandFinished(ds::Option<CommandFailure> failure) {
       if (failure && attempt_.backend + 1 < Host::attempts) {
         ++attempt_.backend;
         try {

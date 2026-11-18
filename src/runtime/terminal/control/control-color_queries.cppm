@@ -14,6 +14,7 @@ import :pty_response_queue;
 import :reply;
 import :sequence;
 import :vt_state;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -54,7 +55,7 @@ export namespace telar::runtime::control {
           const auto value = takeField(remaining);
           if (value == "?") {
             if (selector <= 12) {
-              traditionalColor(context, selector, std::nullopt, sequence.terminator());
+              traditionalColor(context, selector, ds::none, sequence.terminator());
             }
           } else {
             forwardOsc(context, selector, value);
@@ -195,12 +196,12 @@ export namespace telar::runtime::control {
       context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
     }
 
-    void traditionalColor(Context context, unsigned operation, std::optional<unsigned> index, std::string_view terminator) {
+    void traditionalColor(Context context, unsigned operation, ds::Option<unsigned> index, std::string_view terminator) {
       if (!enabled_ || context.policy.color_format == ColorFormat::none) {
         return;
       }
 
-      const auto selector = index.value_or(VtState::foreground + operation - 10);
+      const auto selector = index.valueOr(VtState::foreground + operation - 10);
       auto color = context.state.color(selector);
       if (!color && operation == 12) {
         color = context.state.color(VtState::foreground);
@@ -251,7 +252,7 @@ export namespace telar::runtime::control {
       context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
     }
 
-    static std::optional<unsigned> colorKey(std::string_view key) noexcept {
+    static ds::Option<unsigned> colorKey(std::string_view key) noexcept {
       if (key == "foreground") {
         return VtState::foreground;
       }
@@ -266,7 +267,7 @@ export namespace telar::runtime::control {
 
       const auto index = decimal(key);
 
-      return index && *index < 256 ? index : std::nullopt;
+      return index && *index < 256 ? index : ds::none;
     }
 
     // The frozen application bounds the complete transaction at 526 items.
@@ -293,7 +294,7 @@ export namespace telar::runtime::control {
         const auto first = value.find_first_not_of(' ');
 
         value = first == std::string_view::npos ? std::string_view{} : value.substr(first, value.find_last_not_of(' ') - first + 1);
-        const bool known = colorKey(key).has_value() || std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end();
+        const bool known = colorKey(key).hasValue() || std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end();
         if (known && (value.empty() || value == "?" || colorValue(value))) {
           ++keys;
         }

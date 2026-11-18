@@ -18,6 +18,7 @@ import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.wire.vocabulary;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 export {
   namespace telar::gui::application::tests::session_fixture {
@@ -119,8 +120,8 @@ export {
       bool reject_create_tab = false;
       bool reject_forget_worktree = false;
       bool reject_next_pane_resize = false;
-      std::optional<std::size_t> reject_input_after;
-      std::optional<std::size_t> reject_detach_after;
+      ds::Option<std::size_t> reject_input_after;
+      ds::Option<std::size_t> reject_detach_after;
       static constexpr std::size_t decode_capacity = 4096;
       mutable std::array<Byte, decode_capacity> storage{};
 

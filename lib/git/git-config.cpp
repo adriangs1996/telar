@@ -2,6 +2,7 @@ module telar.git;
 
 import std;
 import telar.base.text;
+import telar.base.ds;
 
 namespace telar::git {
 
@@ -183,7 +184,7 @@ namespace telar::git {
         character = next();
       }
 
-      std::optional<std::string_view> value;
+      ds::Option<std::string_view> value;
 
       if (character != '\n') {
         if (character != '=') {
@@ -272,7 +273,7 @@ namespace telar::git {
     }
   }
 
-  std::optional<bool> configBoolean(std::optional<std::string_view> value) noexcept {
+  ds::Option<bool> configBoolean(ds::Option<std::string_view> value) noexcept {
     if (!value) {
       return true;
     }
@@ -289,7 +290,7 @@ namespace telar::git {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
 }

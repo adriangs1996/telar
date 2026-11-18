@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: application/pane_bottom_reservation.cppm
 export {
@@ -86,11 +87,11 @@ export {
       void restore(std::span<const ClientLayoutNode> nodes);
       bool add(std::uint64_t pane_id, ClientLayoutAxis axis, std::uint64_t beside) noexcept;
       bool remove(std::uint64_t pane_id) noexcept;
-      void setBottomReservation(std::optional<PaneBottomReservation> reservation) noexcept;
+      void setBottomReservation(ds::Option<PaneBottomReservation> reservation) noexcept;
       [[nodiscard]] CellRectangle reservedArea() const noexcept;
-      std::span<const Placement> arrange(CellRectangle bounds, Metrics metrics, std::optional<std::uint64_t> fullscreen = {}) noexcept;
+      std::span<const Placement> arrange(CellRectangle bounds, Metrics metrics, ds::Option<std::uint64_t> fullscreen = {}) noexcept;
       [[nodiscard]] std::span<const Divider> dividers() const noexcept;
-      [[nodiscard]] std::optional<SplitBounds> prospectiveSplit(CellRectangle area, ClientLayoutAxis axis, std::uint64_t pane_id, Metrics metrics, std::optional<std::uint64_t> fullscreen = {}) noexcept;
+      [[nodiscard]] ds::Option<SplitBounds> prospectiveSplit(CellRectangle area, ClientLayoutAxis axis, std::uint64_t pane_id, Metrics metrics, ds::Option<std::uint64_t> fullscreen = {}) noexcept;
       bool setSplitRatio(DividerPosition position) noexcept;
       [[nodiscard]] std::uint64_t focusTarget(CellRectangle area, Metrics metrics, FocusRequest request) noexcept;
       bool resize(std::uint64_t pane_id, PaneDirection direction, CellRectangle area, Metrics metrics) noexcept;
@@ -104,7 +105,7 @@ export {
         CellRectangle bounds;
         PaneDirection direction = PaneDirection::right;
 
-        [[nodiscard]] std::optional<std::uint64_t> score(CellRectangle candidate) const noexcept;
+        [[nodiscard]] ds::Option<std::uint64_t> score(CellRectangle candidate) const noexcept;
       };
 
       struct SplitGeometry {
@@ -117,7 +118,7 @@ export {
       bool moveDivider(std::size_t index, bool decreasing, CellRectangle area, Metrics metrics) noexcept;
       [[nodiscard]] std::uint64_t fullscreenFocusTarget(FocusRequest request) const noexcept;
       [[nodiscard]] std::uint16_t minimumExtent(std::size_t root, ClientLayoutAxis axis, Metrics metrics) const noexcept;
-      [[nodiscard]] std::optional<std::size_t> indexOf(std::uint64_t pane_id) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> indexOf(std::uint64_t pane_id) const noexcept;
       [[nodiscard]] std::size_t subtreeEnd(std::size_t beginning) const noexcept;
       static SplitGeometry partition(CellRectangle bounds, const ClientLayoutSplit& split, std::uint16_t gap) noexcept;
       void arrangeNodes(CellRectangle bounds, Metrics metrics) noexcept;
@@ -125,7 +126,7 @@ export {
       std::array<ClientLayoutNode, maximum_nodes> nodes_;
       std::array<Placement, maximum_panes> placements_;
       std::array<Divider, maximum_panes - 1> dividers_;
-      std::optional<PaneBottomReservation> reservation_;
+      ds::Option<PaneBottomReservation> reservation_;
       CellRectangle reserved_;
       std::size_t count_ = 0;
       std::size_t placement_count_ = 0;
@@ -150,9 +151,9 @@ export {
       bool operator==(const WorkbenchGeometry&) const = default;
 
       // A new pane opens alone in its tab, framed like any other pane.
-      [[nodiscard]] std::optional<TerminalSize> launchSize() const noexcept;
+      [[nodiscard]] ds::Option<TerminalSize> launchSize() const noexcept;
       [[nodiscard]] CellRectangle cellArea() const noexcept;
-      [[nodiscard]] std::optional<TerminalSize> contentSize(CellRectangle content) const noexcept;
+      [[nodiscard]] ds::Option<TerminalSize> contentSize(CellRectangle content) const noexcept;
       [[nodiscard]] Rect pixels(CellRectangle cells) const noexcept;
     };
 

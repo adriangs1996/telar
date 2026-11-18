@@ -12,6 +12,7 @@ import telar.config.runtime;
 import telar.platform.primitives;
 import telar.wire.clipboard;
 import telar.runtime.terminal.control;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -56,7 +57,7 @@ export namespace telar::runtime::control {
     FixedText<maximum_password> password;
     FixedText<maximum_name> name;
 
-    static std::optional<ClipboardMetadata> parse(std::string_view input);
+    static ds::Option<ClipboardMetadata> parse(std::string_view input);
 
   private:
     template <std::size_t Capacity>
@@ -77,7 +78,7 @@ export namespace telar::runtime::control {
 
     void grant(std::string_view password, ClipboardRoute route, bool write, bool once);
 
-    std::optional<ClipboardRoute> use(std::string_view password, bool write);
+    ds::Option<ClipboardRoute> use(std::string_view password, bool write);
 
     void retain(std::span<const ClipboardRoute> routes) noexcept;
 
@@ -123,7 +124,7 @@ export namespace telar::runtime::control {
 
     std::span<const ClipboardContentView> contents() const noexcept;
 
-    static std::optional<std::string_view> token(std::string_view& remaining) noexcept;
+    static ds::Option<std::string_view> token(std::string_view& remaining) noexcept;
 
     ClipboardMetadata metadata;
 
@@ -153,7 +154,7 @@ export namespace telar::runtime::control {
     std::size_t entry_count_ = 0;
     std::size_t alias_count_ = 0;
     std::size_t content_count_ = 0;
-    std::optional<std::size_t> current_;
+    ds::Option<std::size_t> current_;
     std::array<char, 4> group_;
     std::size_t group_size_ = 0;
   };
@@ -165,8 +166,8 @@ export namespace telar::runtime::control {
     ClipboardStatus status = ClipboardStatus::ok;
     bool primary = false;
     std::string_view id{};
-    std::optional<std::string_view> mime{};
-    std::optional<std::string_view> password{};
+    ds::Option<std::string_view> mime{};
+    ds::Option<std::string_view> password{};
     std::span<const std::uint8_t> payload{};
     Ending ending = Ending::escape;
   };
@@ -188,7 +189,7 @@ export namespace telar::runtime::control {
 
     explicit Clipboard(ConcurrentMemory& memory);
 
-    void routes(std::span<const ClipboardRoute> routes, std::optional<ClipboardRoute> preferred);
+    void routes(std::span<const ClipboardRoute> routes, ds::Option<ClipboardRoute> preferred);
 
     void traditional(std::string_view payload, const Policy& policy);
 
@@ -196,9 +197,9 @@ export namespace telar::runtime::control {
 
     // All views are synchronous. Connection::send must copy/encode them before
     // returning; only the owning Pending crosses event-loop turns.
-    std::optional<ClipboardDesktopRequest> request(std::uint64_t pane, std::uint64_t generation);
+    ds::Option<ClipboardDesktopRequest> request(std::uint64_t pane, std::uint64_t generation);
 
-    std::optional<ClipboardRoute> route() const noexcept;
+    ds::Option<ClipboardRoute> route() const noexcept;
 
     void announced() noexcept;
 
@@ -240,11 +241,11 @@ export namespace telar::runtime::control {
       ClipboardTicket ticket;
     };
 
-    std::optional<Cancellation> cancellation() const noexcept;
+    ds::Option<Cancellation> cancellation() const noexcept;
 
     void cancelled() noexcept;
 
-    std::optional<ClipboardDesktopExecute> execution() const noexcept;
+    ds::Option<ClipboardDesktopExecute> execution() const noexcept;
 
     void committed() noexcept;
 
@@ -298,7 +299,7 @@ export namespace telar::runtime::control {
     void finish(ClipboardStatus result);
 
     // Uses only the grants, so the metadata may live in what this sequence holds.
-    static std::optional<ClipboardRoute> authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt);
+    static ds::Option<ClipboardRoute> authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt);
 
     void read(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
 
@@ -335,8 +336,8 @@ export namespace telar::runtime::control {
     ClipboardGrants grants_;
     std::array<ClipboardRoute, ClipboardGrants::capacity> routes_;
     std::size_t route_count_ = 0;
-    std::optional<ClipboardRoute> preferred_;
-    std::optional<Cancellation> cancellation_;
+    ds::Option<ClipboardRoute> preferred_;
+    ds::Option<Cancellation> cancellation_;
   };
 
 }

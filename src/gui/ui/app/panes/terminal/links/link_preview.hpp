@@ -21,6 +21,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -38,7 +39,7 @@ namespace telar::gui::qt {
     qreal row_height = 0;
     qreal corner_radius = 0;
 
-    [[nodiscard]] static std::optional<LinkPreview> layout(const application::terminal::links::LinkHit& hit, const TerminalSurface& surface, const QFont& font, qreal chrome_scale);
+    [[nodiscard]] static ds::Option<LinkPreview> layout(const application::terminal::links::LinkHit& hit, const TerminalSurface& surface, const QFont& font, qreal chrome_scale);
   };
 
 }

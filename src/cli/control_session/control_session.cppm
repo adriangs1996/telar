@@ -11,6 +11,7 @@ import telar.client;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
+import telar.base.ds;
 
 // Interface: control_failure.cppm
 export {
@@ -107,7 +108,7 @@ export {
 
       // Subscription events may interleave with a reply; snapshots have no request id.
       template <typename Reply>
-      TBC_GENERIC inline Reply receive(std::optional<std::uint64_t> request_id = std::nullopt) {
+      TBC_GENERIC inline Reply receive(ds::Option<std::uint64_t> request_id = ds::none) {
         for (;;) {
           const auto frame = connection_.receive(incoming_);
           DecodeStorage storage{decoded_};

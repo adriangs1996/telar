@@ -5,6 +5,7 @@ import std;
 
 import telar.gui.foundation.actions;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: input/key_label.cppm
 export {
@@ -20,7 +21,7 @@ export {
       static constexpr std::size_t capacity = 64;
       using Text = BoundedText<capacity>;
 
-      [[nodiscard]] static Text chord(std::optional<KeyChord> prefix, KeyChord key, KeyLabelStyle style);
+      [[nodiscard]] static Text chord(ds::Option<KeyChord> prefix, KeyChord key, KeyLabelStyle style);
 
     private:
       struct ModifierLabel {

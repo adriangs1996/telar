@@ -3,6 +3,7 @@ module telar.runtime.agents.screen_inference;
 import std;
 import telar.tbc;
 import telar.config.core;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -145,10 +146,10 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<AgentSignal> AgentScreenReader::signal(AgentProvider provider) const noexcept {
+  ds::Option<AgentSignal> AgentScreenReader::signal(AgentProvider provider) const noexcept {
     const auto observation = observe(provider);
     if (!observation.status || (provider == AgentProvider::claude && observation.status == AgentStatus::working)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return AgentSignal{provider, *observation.status, static_cast<Byte>(provider == AgentProvider::claude ? 96 : 94), observation.identity_confirmed, observation.status == AgentStatus::ready};
@@ -388,9 +389,9 @@ namespace telar::runtime {
     return {bytes_.data() + start_, bytes_.size() - start_};
   }
 
-  std::optional<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+  ds::Option<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
     if (!terminal.outputSettled()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     terminal.refresh();
@@ -400,9 +401,9 @@ namespace telar::runtime {
     return infer(AgentScreenReader{screen, terminal.effects.title(), manifests}, screen, manifests, provider, now);
   }
 
-  std::optional<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
-    const auto phrases = provider == AgentProvider::codex ? std::nullopt : manifests.detect(sample_.capture(screen));
-    const auto codex = provider == AgentProvider::unknown || provider == AgentProvider::codex ? reader.signal(AgentProvider::codex) : std::nullopt;
+  ds::Option<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+    const auto phrases = provider == AgentProvider::codex ? ds::none : manifests.detect(sample_.capture(screen));
+    const auto codex = provider == AgentProvider::unknown || provider == AgentProvider::codex ? reader.signal(AgentProvider::codex) : ds::none;
     auto signal = phrases;
 
     if (provider == AgentProvider::codex || (provider == AgentProvider::unknown && codex && codex->identity_confirmed)) {
@@ -415,7 +416,7 @@ namespace telar::runtime {
       const auto* manifest = phrases ? manifests.find(phrases->provider) : nullptr;
       if (!phrases || (phrases->status != AgentStatus::blocked && (manifest == nullptr || manifest->ready_prompt.entries().empty()))) {
         if (auto prompt = reader.signal(AgentProvider::claude)) {
-          prompt->identity_confirmed = phrases && phrases->provider == prompt->provider && phrases->identity_confirmed;
+          prompt.getMut().identity_confirmed = phrases && phrases->provider == prompt->provider && phrases->identity_confirmed;
           signal = prompt;
         }
       }
@@ -425,17 +426,17 @@ namespace telar::runtime {
       if (signal->status == AgentStatus::working) {
         composer_lost_ = false;
       } else if (composer_lost_) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
     if (!signal) {
       last_signal_.reset();
-      return std::nullopt;
+      return ds::none;
     }
 
     if (signal == last_signal_ && !(signal->provider == AgentProvider::codex && signal->ready_confirmed) && now.milliseconds - last_signal_time_ < signal_refresh.count()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     last_signal_ = signal;

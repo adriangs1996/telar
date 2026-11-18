@@ -14,6 +14,7 @@ import telar.wire.editor;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -86,17 +87,17 @@ namespace telar::gui::application {
     return {first, std::max(first, end)};
   }
 
-  std::optional<std::size_t> Session::selectedBlock(std::uint64_t pane_id) const noexcept {
+  ds::Option<std::size_t> Session::selectedBlock(std::uint64_t pane_id) const noexcept {
     const auto block = features::prompt::selectedBlock(prompt_, pane_id);
     const auto* pane = findPane(pane_id);
     if (!block || pane == nullptr || *block >= pane->blocks.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return block;
   }
 
-  void Session::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
+  void Session::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index) {
     const auto* pane = findPane(pane_id);
     if (pane == nullptr) {
       return;
@@ -105,12 +106,12 @@ namespace telar::gui::application {
     auto& line = prompt::open(*this, pane_id);
 
     if (index && *index < pane->blocks.size()) {
-      features::prompt::selectBlock(line, index, features::prompt::selectedBlock(line) ? std::nullopt : livePromptRow(*pane));
+      features::prompt::selectBlock(line, index, features::prompt::selectedBlock(line) ? ds::none : livePromptRow(*pane));
       const auto row = pane->blocks[*index].row;
 
       scrollToRow(pane_id, row == 0 ? 0 : row - 1);
     } else {
-      features::prompt::selectBlock(line, std::nullopt, std::nullopt);
+      features::prompt::selectBlock(line, ds::none, ds::none);
       scrollToRow(pane_id, std::numeric_limits<std::uint32_t>::max());
     }
 
@@ -215,11 +216,11 @@ namespace telar::gui::application {
     return Change::terminal;
   }
 
-  std::optional<features::prompt::Outcome> Session::blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
+  ds::Option<features::prompt::Outcome> Session::blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
     using features::prompt::Outcome;
     auto* pane = findPane(pane_id);
     if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto editor = features::prompt::view(prompt_, line);
@@ -229,12 +230,12 @@ namespace telar::gui::application {
     const bool selected = selection && *selection < count;
     if (!selected && !normal) {
       static_cast<void>(features::prompt::takeChord(line));
-      return std::nullopt;
+      return ds::none;
     }
 
     const bool plain = key.key == features::prompt::Key::character && !key.modifiers.control && !key.modifiers.alt;
     const auto character = plain ? key.character : 0U;
-    const auto select = [&](std::optional<std::size_t> index) {
+    const auto select = [&](ds::Option<std::size_t> index) {
       recordJump(*pane, line);
       selectBlock(pane_id, index);
     };
@@ -255,7 +256,7 @@ namespace telar::gui::application {
       if (direction < 0) {
         select(*selection == 0 ? 0 : *selection - 1);
       } else {
-        select(*selection + 1 < count ? std::optional<std::size_t>{*selection + 1} : std::nullopt);
+        select(*selection + 1 < count ? ds::Option<std::size_t>{*selection + 1} : ds::none);
       }
     };
 
@@ -307,7 +308,7 @@ namespace telar::gui::application {
     }
 
     if (!selected) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = *selection;
@@ -380,7 +381,7 @@ namespace telar::gui::application {
       scrollToShownRow(*pane, character == 'j' ? top + 1 : (top == 0 ? 0 : top - 1));
       return Outcome::edited;
     case 'G':
-      select(std::nullopt);
+      select(ds::none);
       return Outcome::edited;
     case 'g':
     case 'z':
@@ -398,7 +399,7 @@ namespace telar::gui::application {
       copyBlockOutput(*pane, index);
       return Outcome::edited;
     case 'q':
-      selectBlock(pane_id, std::nullopt);
+      selectBlock(pane_id, ds::none);
       return Outcome::edited;
     default:
       break;
@@ -406,16 +407,16 @@ namespace telar::gui::application {
 
     // Back to the prompt: Esc and q stay in normal mode; i, a, I, A and any other key go on
     // to the editor, which enters insert mode or edits.
-    selectBlock(pane_id, std::nullopt);
+    selectBlock(pane_id, ds::none);
     if (key.key == features::prompt::Key::escape) {
       return Outcome::edited;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::uint64_t Session::shownTop(const Pane<Memory>& pane) noexcept {
-    return pane.shown_top.value_or(pane.folds.display(pane.screen.scroll().offset));
+    return pane.shown_top.valueOr(pane.folds.display(pane.screen.scroll().offset));
   }
 
   void Session::scrollToShownRow(const Pane<Memory>& pane, std::uint64_t display) {
@@ -509,11 +510,11 @@ namespace telar::gui::application {
     }
   }
 
-  std::optional<std::uint32_t> Session::livePromptRow(const Pane<Memory>& pane) {
+  ds::Option<std::uint32_t> Session::livePromptRow(const Pane<Memory>& pane) {
     const auto& screen = pane.screen;
     const auto& scroll = screen.scroll();
     if (static_cast<std::uint64_t>(scroll.offset) + screen.rows() < scroll.total_rows) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto cursor = static_cast<std::size_t>(screen.cursor().y);
@@ -524,7 +525,7 @@ namespace telar::gui::application {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
 }

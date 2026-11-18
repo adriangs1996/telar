@@ -3,6 +3,7 @@ module telar.render.document;
 import std;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::render {
 
@@ -348,10 +349,10 @@ namespace telar::render {
   template struct Document<Memory>;
 
   template <Allocator Memory>
-  std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
+  ds::Option<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
     const auto size = detail::encodedSize(document.blocks.size(), document.cells.size(), document.runs.size(), document.text.size());
 
-    return size <= max_document_bytes ? std::optional<std::size_t>{static_cast<std::size_t>(size)} : std::nullopt;
+    return size <= max_document_bytes ? ds::Option<std::size_t>{static_cast<std::size_t>(size)} : ds::none;
   }
 
   template <Allocator Memory>
@@ -394,7 +395,7 @@ namespace telar::render {
     return DecodeError::none;
   }
 
-  template std::optional<std::size_t> encodedSize<Memory>(const Document<Memory>& document) noexcept;
+  template ds::Option<std::size_t> encodedSize<Memory>(const Document<Memory>& document) noexcept;
   template void encode<Memory>(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
   template DecodeError decode<Memory>(std::span<const std::uint8_t> input, Document<Memory>& document);
 

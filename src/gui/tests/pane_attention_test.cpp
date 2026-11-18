@@ -52,6 +52,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.features.workbench;
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace {
 
@@ -202,7 +203,7 @@ namespace {
       QVERIFY(frameAt(window, half_ns));
       QCOMPARE(item.alpha(), half_alpha);
 
-      clock.setMaximumFrameRate(std::nullopt);
+      clock.setMaximumFrameRate(telar::ds::none);
       QCOMPARE(clock.frameInterval(), uncapped_interval);
       QVERIFY(frameAt(window, half_ns));
       QCOMPARE(item.alpha(), half_alpha);
@@ -337,9 +338,9 @@ namespace {
       constexpr PaneAttentionKey key{.pane_id = 0xFEDCBA9876543210, .attachment_generation = 0xABCDEF0123456789};
       const auto restored = paneAttentionKey(paneAttentionValue(key));
 
-      QVERIFY(restored.has_value());
-      QCOMPARE(restored.value_or(PaneAttentionKey{}), key);
-      QVERIFY(!paneAttentionKey(QVariant::fromValue(1)).has_value());
+      QVERIFY(restored.hasValue());
+      QCOMPARE(restored.valueOr(PaneAttentionKey{}), key);
+      QVERIFY(!paneAttentionKey(QVariant::fromValue(1)).hasValue());
 
       QQmlEngine engine;
       QQmlComponent component{&engine};
@@ -358,7 +359,7 @@ namespace {
       const auto* ring = qobject_cast<NativePaneAttention*>(item.get());
 
       QVERIFY(ring != nullptr);
-      QCOMPARE(paneAttentionKey(ring->attachment()).value_or(PaneAttentionKey{}), key);
+      QCOMPARE(paneAttentionKey(ring->attachment()).valueOr(PaneAttentionKey{}), key);
     }
 
     Q_SLOT static void originalShaderAtlasAtFourFadePhases() {

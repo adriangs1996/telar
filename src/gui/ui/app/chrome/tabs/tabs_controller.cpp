@@ -7,6 +7,7 @@ static_assert(true);
 #include "tab_strip_layout.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QList>
 #include <QtCore/qnamespace.h>
 #include <algorithm>
@@ -108,7 +109,7 @@ namespace telar::gui::qt {
     if (strip_ != nullptr) {
       const auto* active = store_.session().activeTab();
 
-      strip_->setContext(store_.machineView(), active == nullptr ? std::nullopt : std::optional{active->location.workspace});
+      strip_->setContext(store_.machineView(), active == nullptr ? ds::none : ds::Option{active->location.workspace});
     }
   }
 
@@ -158,7 +159,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  void TabsController::observeHover(std::optional<QPointF> position) {
+  void TabsController::observeHover(ds::Option<QPointF> position) {
     if (strip_ == nullptr) {
       return;
     }
@@ -166,7 +167,7 @@ namespace telar::gui::qt {
     const auto& surface = presented_;
     const auto* target = position && store_.dialog().kind == Store::Dialog::none && surface.machine_view == store_.machineView() ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
 
-    strip_->setPointerHover(target == nullptr ? std::nullopt : std::optional{target->id});
+    strip_->setPointerHover(target == nullptr ? ds::none : ds::Option{target->id});
   }
 
   bool TabsController::key(QKeyEvent& event) {
@@ -204,20 +205,20 @@ namespace telar::gui::qt {
   }
 
   void TabsController::leave() {
-    observeHover(std::nullopt);
+    observeHover(ds::none);
     if (drag_.captured()) {
       const auto scale = capture_surface_.scale / capture_surface_.threshold;
 
-      drag_.update({pointer_.x() * scale, pointer_.y() * scale}, std::nullopt);
+      drag_.update({pointer_.x() * scale, pointer_.y() * scale}, ds::none);
       updateDragVisual();
     }
   }
 
   void TabsController::updateDragVisual() {
     if (strip_ != nullptr) {
-      const auto source = drag_.dragging() && drag_.source() ? std::optional{drag_.source()->tab_id} : std::nullopt;
+      const auto source = drag_.dragging() && drag_.source() ? ds::Option{drag_.source()->tab_id} : ds::none;
 
-      strip_->setDrag(drag_.preview().has_value() ? drag_.preview() : pending_move_, source, pointer_, grab_offset_);
+      strip_->setDrag(drag_.preview().hasValue() ? drag_.preview() : pending_move_, source, pointer_, grab_offset_);
     }
   }
 
@@ -310,7 +311,7 @@ namespace telar::gui::qt {
 
     drag_.update({point[0] / capture_surface_.threshold, point[1] / capture_surface_.threshold}, drop_slots_.at(point));
     if (released) {
-      if (const auto move = drag_.finish(); move && application::workbench::dropTab(store_.session(), *move)) {
+      if (const auto move = drag_.finish(); move && application::workbench::dropTab(store_.sessionMut(), *move)) {
         pending_move_ = move;
       }
 

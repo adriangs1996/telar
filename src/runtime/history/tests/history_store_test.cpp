@@ -13,6 +13,7 @@ import telar.runtime.transport.connection;
 import telar.wire.agents;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -57,7 +58,7 @@ namespace {
     return HistorySession{.id = {identity}, .pane = 1, .workspace_path = workspace, .shell = "/bin/sh"};
   }
 
-  void finished(HistoryStore& store, const HistorySession& owner, std::string_view command, std::string_view directory, std::optional<int> exit_code = 0) {
+  void finished(HistoryStore& store, const HistorySession& owner, std::string_view command, std::string_view directory, ds::Option<int> exit_code = 0) {
     store.record({.kind = HistoryEventKind::command_finished, .session = owner, .command = {.command = command, .directory = directory, .started = {}, .exit_code = exit_code}});
   }
 
@@ -194,7 +195,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
     finished(store, owner, "succeeded", "/tmp", 0);
     finished(store, owner, "failed", "/tmp", 2);
-    finished(store, owner, "unknown exit", "/tmp", std::nullopt);
+    finished(store, owner, "unknown exit", "/tmp", ds::none);
     finished(store, owner, "also failed", "/tmp", 1);
     store.prune(PruneHistory{.request_id = 1, .failed_only = true}, reply);
     check(decodeReply<HistoryPruned>(reply, storage).removed == 2);
@@ -225,10 +226,10 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
   // The failure code `run` threw, or nothing when it returned.
   template <typename Run>
-  std::optional<FailureCode> requestFailure(Run run) {
+  ds::Option<FailureCode> requestFailure(Run run) {
     try {
       run();
-      return std::nullopt;
+      return ds::none;
     } catch (const RequestError& error) {
       return error.code();
     }

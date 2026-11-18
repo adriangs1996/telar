@@ -24,6 +24,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -74,7 +75,7 @@ namespace telar::gui::qt {
     void clearHover();
     // Marks a card hovered for a peek opened from it, unless the pointer moved since.
     void showHover(const QString& identity, std::uint64_t pointer_revision);
-    void observePointer(bool hover_input = true, std::optional<QPointF> position = {});
+    void observePointer(bool hover_input = true, ds::Option<QPointF> position = {});
     // Counts pointer moves, so a peek opened late knows whether the pointer moved since.
     [[nodiscard]] std::uint64_t pointerRevision() const noexcept;
     void setWindow(QQuickWindow* window) noexcept;
@@ -115,15 +116,15 @@ namespace telar::gui::qt {
     ElementSlots& elements_;
     ApplicationAllocator& memory_;
     ListModel rows_;
-    std::array<std::optional<SourceVersion>, application::machines::Machines::capacity> versions_;
-    std::optional<Selection> selection_;
+    std::array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions_;
+    ds::Option<Selection> selection_;
     Vector<RowTarget, ApplicationAllocator> targets_;
     int agent_count_ = 0;
     std::uint64_t rebuilds_ = 0;
     QPointer<QQuickWindow> window_;
     QString hovered_;
     QPointer<QQuickItem> hover_card_;
-    std::optional<QPointF> pointer_position_;
+    ds::Option<QPointF> pointer_position_;
     bool hover_pending_ = false;
     bool hover_seen_ = false;
     bool hover_reset_queued_ = false;

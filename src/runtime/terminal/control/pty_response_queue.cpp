@@ -4,6 +4,7 @@ module;
 module telar.runtime.terminal.control;
 
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -135,11 +136,11 @@ namespace telar::runtime {
     return true;
   }
 
-  std::optional<std::span<const std::uint8_t>> PtyResponseQueue::peek() const noexcept {
+  ds::Option<std::span<const std::uint8_t>> PtyResponseQueue::peek() const noexcept {
     const std::lock_guard lock{mutex_};
 
     if (count_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto head = owned_[head_] ? views_[head_] : std::span<const std::uint8_t>{bytes_[head_]}.first(lengths_[head_]);
@@ -178,7 +179,7 @@ namespace telar::runtime {
   }
 
   std::span<const std::uint8_t> PtyResponseQueue::readable() const noexcept {
-    return peek().value_or(std::span<const std::uint8_t>{});
+    return peek().valueOr(std::span<const std::uint8_t>{});
   }
 
   void PtyResponseQueue::consume(std::size_t bytes) noexcept {

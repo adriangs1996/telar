@@ -21,6 +21,7 @@ import telar.runtime.terminal.text_reader;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 // The work is in tracker.cpp. What stays here are the relays over the caller's sinks, which hand
 // each sink to that work behind a virtual call.
@@ -57,7 +58,7 @@ export namespace telar::runtime {
   struct CommandByteObservation {
     std::span<const Byte> bytes;
     ObservationTime time;
-    std::optional<bool> shell_foreground;
+    ds::Option<bool> shell_foreground;
   };
 
   class CommandInputScanner {
@@ -69,7 +70,7 @@ export namespace telar::runtime {
 
     Event feed(std::span<const Byte> bytes) noexcept;
     void reset() noexcept;
-    std::optional<std::string_view> typedText() const noexcept;
+    ds::Option<std::string_view> typedText() const noexcept;
 
   private:
     enum class State {
@@ -98,7 +99,7 @@ export namespace telar::runtime {
 
   struct CommandCompletion {
     ObservationTime time;
-    std::optional<int> exit_code;
+    ds::Option<int> exit_code;
     HistoryStatus status = HistoryStatus::completed;
   };
 
@@ -150,9 +151,9 @@ export namespace telar::runtime {
   public:
     // With a token, only marks signed with it count: the pane's shell integration signs its
     // own, and a program cannot sign the ones it prints.
-    explicit CommandZones(std::string_view directory, std::optional<ShellToken> token = std::nullopt);
+    explicit CommandZones(std::string_view directory, ds::Option<ShellToken> token = ds::none);
 
-    std::optional<ShellToken> token() const noexcept;
+    ds::Option<ShellToken> token() const noexcept;
 
     // Whether the marks come from a shell on another host, which `ssh` started with telar's
     // integration, and which shell that is.
@@ -224,9 +225,9 @@ export namespace telar::runtime {
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters metrics_;
 #endif
-    std::optional<ShellToken> token_;
-    std::optional<ShellToken> remote_;
-    std::optional<ShellToken> nest_;
+    ds::Option<ShellToken> token_;
+    ds::Option<ShellToken> remote_;
+    ds::Option<ShellToken> nest_;
     IntegratedShell remote_shell_ = IntegratedShell::none;
     ParserState parser_ = ParserState::ground;
     Zone zone_ = Zone::unknown;
@@ -297,7 +298,7 @@ export namespace telar::runtime {
 
     // Cuts the text to a whole UTF-8 prefix of at most CommandSelection::maximum_bytes. Whether
     // that cut it short, or nothing when it is empty.
-    std::optional<bool> finish() noexcept;
+    ds::Option<bool> finish() noexcept;
     std::size_t length() const noexcept;
 
   private:
@@ -320,10 +321,10 @@ export namespace telar::runtime {
 
     bool primary(CommandScreen screen) const;
     void begin(CommandScreen screen);
-    void rebase(CommandScreen screen, std::optional<std::string_view> typed);
+    void rebase(CommandScreen screen, ds::Option<std::string_view> typed);
 
     // What to read from the anchor to the cursor, or nothing when there is no text to read.
-    std::optional<GhosttySelection> select(CommandScreen screen) const;
+    ds::Option<GhosttySelection> select(CommandScreen screen) const;
 
   private:
     using TrackedReference = GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>;
@@ -339,7 +340,7 @@ export namespace telar::runtime {
   };
 
   // Reads `selection` into `destination`. Whether it was cut short, or nothing when it is empty.
-  std::optional<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination);
+  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination);
 
   // The commands a pane's integrated shell ran, each anchored to the row its prompt starts on
   // in the pane's own terminal, so a client can mark them in the scrollback and jump to them.
@@ -357,7 +358,7 @@ export namespace telar::runtime {
     void mark(char action, std::chrono::steady_clock::time_point now);
 
     // The status a D mark reported, for the block it ends: ssh's own, after its session.
-    void finished(std::optional<int> status, std::chrono::steady_clock::time_point now);
+    void finished(ds::Option<int> status, std::chrono::steady_clock::time_point now);
 
     // Reads where the blocks are now: output scrolled them, the scrollback dropped some, or a
     // resize reflowed them. Only the oldest is read unless it moved. The anchors are on the
@@ -408,20 +409,20 @@ export namespace telar::runtime {
     virtual CommandScreen screen() const noexcept = 0;
 
     // Reads `selection` into the buffer `captured` shows.
-    virtual std::optional<bool> capture(const GhosttySelection& selection) = 0;
+    virtual ds::Option<bool> capture(const GhosttySelection& selection) = 0;
     virtual std::span<const Byte> captured() const noexcept = 0;
 
-    Entry& entry(std::size_t index) noexcept;
+    Entry& entryMut(std::size_t index) noexcept;
     const Entry& entry(std::size_t index) const noexcept;
-    std::optional<TrackedReference> track();
-    std::optional<std::uint32_t> row(const TrackedReference& tracked) const;
+    ds::Option<TrackedReference> track();
+    ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
     void start(std::chrono::steady_clock::time_point now);
     void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void end(Entry& block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
 
     CommandSelection selection_;
-    std::optional<TrackedReference> prompt_;
+    ds::Option<TrackedReference> prompt_;
     std::array<Entry, capacity> entries_{};
     std::size_t first_ = 0;
     std::size_t count_ = 0;
@@ -438,7 +439,7 @@ export namespace telar::runtime {
 
   private:
     CommandScreen screen() const noexcept override;
-    std::optional<bool> capture(const GhosttySelection& selection) override;
+    ds::Option<bool> capture(const GhosttySelection& selection) override;
     std::span<const Byte> captured() const noexcept override;
 
     Terminal& terminal_;
@@ -467,7 +468,7 @@ export namespace telar::runtime {
 #endif
 
   protected:
-    CommandTrackerCore(GhosttyTerminal terminal, std::string_view directory, std::optional<ShellToken> shell_token);
+    CommandTrackerCore(GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token);
     ~CommandTrackerCore() = default;
 
   private:
@@ -486,7 +487,7 @@ export namespace telar::runtime {
     virtual void feedTerminal(std::span<const Byte> bytes) = 0;
 
     // Reads `selection` into the buffer `command` shows.
-    virtual std::optional<bool> capture(const GhosttySelection& selection) = 0;
+    virtual ds::Option<bool> capture(const GhosttySelection& selection) = 0;
     virtual std::span<const Byte> command() const noexcept = 0;
     virtual void clearCommand() noexcept = 0;
 
@@ -517,7 +518,7 @@ export namespace telar::runtime {
 
   class CommandTracker final : public CommandTrackerCore {
   public:
-    explicit CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt);
+    explicit CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
 
     void enableOutputCapture();
 
@@ -550,7 +551,7 @@ export namespace telar::runtime {
   private:
     CommandScreen screen() const noexcept override;
     void feedTerminal(std::span<const Byte> bytes) override;
-    std::optional<bool> capture(const GhosttySelection& selection) override;
+    ds::Option<bool> capture(const GhosttySelection& selection) override;
     std::span<const Byte> command() const noexcept override;
     void clearCommand() noexcept override;
     bool adoptSubmitted() noexcept override;

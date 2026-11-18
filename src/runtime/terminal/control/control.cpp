@@ -1,6 +1,7 @@
 module telar.runtime.terminal.control;
 
 import telar.render.document;
+import telar.base.ds;
 
 namespace telar::runtime::control {
 
@@ -18,9 +19,9 @@ namespace telar::runtime::control {
     return result;
   }
 
-  std::optional<Parameters> Parameters::parse(std::string_view body) noexcept {
+  ds::Option<Parameters> Parameters::parse(std::string_view body) noexcept {
     if (body.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     Parameters result;
@@ -38,7 +39,7 @@ namespace telar::runtime::control {
 
       if (!intermediate_phase && byte >= '0' && byte <= '9') {
         if (++digits > maximum_digits) {
-          return std::nullopt;
+          return ds::none;
         }
 
         accumulator = std::min(maximum_value, accumulator * 10 + static_cast<unsigned>(byte - '0'));
@@ -47,7 +48,7 @@ namespace telar::runtime::control {
 
       if (!intermediate_phase && (byte == ';' || byte == ':')) {
         if (result.count == capacity) {
-          return std::nullopt;
+          return ds::none;
         }
 
         result.values[result.count++] = static_cast<std::uint16_t>(accumulator);
@@ -60,7 +61,7 @@ namespace telar::runtime::control {
       const bool prefix = byte >= '<' && byte <= '?' && !intermediate_phase && digits == 0 && result.count == 0;
       if (prefix || (byte >= ' ' && byte <= '/')) {
         if (result.intermediate_count == intermediate_capacity) {
-          return std::nullopt;
+          return ds::none;
         }
 
         result.intermediate[result.intermediate_count++] = byte;
@@ -68,12 +69,12 @@ namespace telar::runtime::control {
         continue;
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     if (digits != 0) {
       if (result.count == capacity) {
-        return std::nullopt;
+        return ds::none;
       }
 
       result.values[result.count++] = static_cast<std::uint16_t>(accumulator);
@@ -106,7 +107,7 @@ namespace telar::runtime::control {
     return maximum_offset <= last_ascii - space ? count + 3 : 0;
   }
 
-  std::optional<std::uint32_t> GraphicsHeader::value(std::uint8_t key, std::string_view text) noexcept {
+  ds::Option<std::uint32_t> GraphicsHeader::value(std::uint8_t key, std::string_view text) noexcept {
     if (text.size() == 1 && (text.front() < '0' || text.front() > '9')) {
       return static_cast<std::uint8_t>(text.front());
     }
@@ -118,21 +119,21 @@ namespace telar::runtime::control {
 
     const auto magnitude = kittyUnsigned<std::uint32_t>(text);
     if (!magnitude) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const bool signed_field = key == 'z' || key == 'H' || key == 'V';
 
     if (negative) {
       if (signed_field ? *magnitude > std::uint32_t{std::numeric_limits<std::int32_t>::max()} + 1 : *magnitude != 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return 0u - *magnitude;
     }
 
     if (signed_field && *magnitude > std::numeric_limits<std::int32_t>::max()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return magnitude;
@@ -237,17 +238,17 @@ namespace telar::runtime::control {
     }
   }
 
-  std::optional<GraphicsQuery> GraphicsQuery::parse(std::string_view header, bool has_payload) noexcept {
+  ds::Option<GraphicsQuery> GraphicsQuery::parse(std::string_view header, bool has_payload) noexcept {
     bool query = false;
 
     return parse(header, has_payload, query);
   }
 
-  std::optional<GraphicsQuery> GraphicsQuery::parse(std::string_view header, bool has_payload, bool& query) noexcept {
+  ds::Option<GraphicsQuery> GraphicsQuery::parse(std::string_view header, bool has_payload, bool& query) noexcept {
     query = false;
     bool values_valid = true;
     GraphicsQuery result;
-    std::array<std::optional<std::uint32_t>, static_cast<std::size_t>(Field::ignored)> values;
+    std::array<ds::Option<std::uint32_t>, static_cast<std::size_t>(Field::ignored)> values;
     const bool valid = GraphicsHeader::scan(header, has_payload, [&](std::uint8_t key, std::string_view text) noexcept {
       const auto value = GraphicsHeader::value(key, text);
 
@@ -268,14 +269,14 @@ namespace telar::runtime::control {
       return true;
     });
     if (!valid || !values_valid) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto number = [&](Field field, std::uint32_t fallback = 0) {
-      return values[static_cast<std::size_t>(field)].value_or(fallback);
+      return values[static_cast<std::size_t>(field)].valueOr(fallback);
     };
     if (number(Field::action) != 'q') {
-      return std::nullopt;
+      return ds::none;
     }
 
     result.image = number(Field::image);
@@ -293,16 +294,16 @@ namespace telar::runtime::control {
     result.length = number(Field::length);
     const auto medium = number(Field::medium, 'd');
     if (medium > std::numeric_limits<std::uint8_t>::max() || std::string_view{"dfst"}.find(static_cast<char>(medium)) == std::string_view::npos) {
-      return std::nullopt;
+      return ds::none;
     }
 
     result.medium = static_cast<char>(medium);
     const auto compression = values[static_cast<std::size_t>(Field::compression)];
     if (compression && *compression != 'z') {
-      return std::nullopt;
+      return ds::none;
     }
 
-    result.compressed = compression.has_value();
+    result.compressed = compression.hasValue();
     return result;
   }
 

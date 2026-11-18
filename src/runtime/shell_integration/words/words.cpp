@@ -556,7 +556,7 @@ namespace telar::runtime {
           break;
         }
         const std::string_view name{entry->d_name};
-        const auto pid = parseExact<int>(name).value_or(0);
+        const auto pid = parseExact<int>(name).valueOr(0);
         if (pid <= 0) {
           continue;
         }

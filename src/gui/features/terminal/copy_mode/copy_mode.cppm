@@ -18,6 +18,7 @@ import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
@@ -45,7 +46,7 @@ export namespace telar::gui::features::terminal::copy_mode {
     inline explicit CopyModeView(const CopyMode& mode) noexcept
         : mode_(&mode) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline const std::optional<CopyState>& state() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline const ds::Option<CopyState>& state() const noexcept {
       return mode_->state();
     }
 
@@ -57,7 +58,7 @@ export namespace telar::gui::features::terminal::copy_mode {
       return mode_->revision();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPointerOwner> pointerOwner() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPointerOwner> pointerOwner() const noexcept {
       return mode_->pointerOwner();
     }
 
@@ -79,7 +80,7 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // Copy mode at `cursor`, already selecting from `anchor` when one is given: a command block's
   // text, picked from telar's editor.
-  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, std::optional<CopyPoint> anchor, bool linewise) noexcept;
+  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept;
 
   // Copy mode at the first row of a command's output, the scrollback search asked for and,
   // `scoped`, confined to `rows`.
@@ -98,16 +99,16 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // The plan a key asks for; none when copy mode does not take keys. A key that begins a search
   // begins it from where the cursor is now.
-  [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid);
+  [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid);
 
   // A press at `press.position` selects from there, a word or a line on a second or third click.
   TBC_HOT_PATH inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
 
   // The plan a drag to `local` asks for, ending the gesture when `released`.
-  [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
 
   // The plan a wheel step of `rows` asks for.
-  [[nodiscard]] TBC_HOT_PATH inline std::optional<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
 
   // Typing drops a selection the pointer made; false when there was none.
   TBC_HOT_PATH inline bool clearPointer(State& state) noexcept;
@@ -131,7 +132,7 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // The search typed so far is `needle`; it begins where the first letter found the cursor. With
   // nothing to look for, the plan back to where it began, and no answer awaited.
-  [[nodiscard]] std::optional<CopyPlan> type(State& state, std::string_view needle, const CopyGrid& grid);
+  [[nodiscard]] ds::Option<CopyPlan> type(State& state, std::string_view needle, const CopyGrid& grid);
 
   // The search of pane `pane_id` under `request_id`: through a command's output when it is
   // confined there and the runtime reads rows, else through the whole scrollback. The request
@@ -145,7 +146,7 @@ export namespace telar::gui::features::terminal::copy_mode {
   [[nodiscard]] bool awaits(const State& state, const PaneMatches& message) noexcept;
 
   // The matches arrived: the plan that takes the cursor to the first, which views them.
-  [[nodiscard]] std::optional<CopyPlan> receive(State& state, const PaneMatches& message, const CopyGrid& grid);
+  [[nodiscard]] ds::Option<CopyPlan> receive(State& state, const PaneMatches& message, const CopyGrid& grid);
 
   // The search typed so far ends: its matches stay for n and N, from wherever they took the
   // cursor.
@@ -154,7 +155,7 @@ export namespace telar::gui::features::terminal::copy_mode {
   [[nodiscard]] CopySearchState search(const State& state) noexcept;
 
   // The command whose output the search reads, while it reads only that output.
-  [[nodiscard]] std::optional<std::size_t> searchBlock(const State& state) noexcept;
+  [[nodiscard]] ds::Option<std::size_t> searchBlock(const State& state) noexcept;
 
   // Whether a search can be confined to a command's output, as one begun from a command can.
   [[nodiscard]] bool searchScopes(const State& state, bool reads_rows) noexcept;
@@ -200,7 +201,7 @@ namespace telar::gui::features::terminal::copy_mode {
     Access::mode(state).onFrame(previous_offset, grid);
   }
 
-  inline std::optional<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid) {
+  inline ds::Option<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid) {
     auto plan = Access::mode(state).key(key, grid);
     if (plan && plan->effect.search) {
       auto& search = Access::search(state);
@@ -216,11 +217,11 @@ namespace telar::gui::features::terminal::copy_mode {
     return Access::mode(state).beginPointer(press, grid);
   }
 
-  inline std::optional<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
+  inline ds::Option<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
     return Access::mode(state).pointer(local, grid, released);
   }
 
-  inline std::optional<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
+  inline ds::Option<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
     return Access::mode(state).vertical(rows, grid);
   }
 

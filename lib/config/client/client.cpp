@@ -4,6 +4,7 @@ import std;
 import telar.lua;
 import telar.tbc;
 import telar.wire.clients;
+import telar.base.ds;
 
 namespace telar::runtime::config {
 
@@ -53,10 +54,10 @@ namespace telar::runtime::config {
         inherited_(inherited) {}
 
   bool ClientDefinitions::contains(const char* section, std::string_view name) const {
-    return index(section, name).has_value();
+    return index(section, name).hasValue();
   }
 
-  std::optional<std::uint8_t> ClientDefinitions::index(const char* section, std::string_view name) const {
+  ds::Option<std::uint8_t> ClientDefinitions::index(const char* section, std::string_view name) const {
     if (client_.present()) {
       const auto definitions = client_.field(section);
       if (definitions.present()) {
@@ -68,12 +69,12 @@ namespace telar::runtime::config {
       return indexOf(inherited_->field(section), name);
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<std::uint8_t> ClientDefinitions::indexOf(const lua::Value& definitions, std::string_view name) {
+  ds::Option<std::uint8_t> ClientDefinitions::indexOf(const lua::Value& definitions, std::string_view name) {
     if (!definitions.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     bool found = false;
@@ -85,7 +86,7 @@ namespace telar::runtime::config {
     });
 
     if (!found) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return preceding < NamedDefinitionsValidator::maximum_definitions ? static_cast<std::uint8_t>(preceding) : std::numeric_limits<std::uint8_t>::max();
@@ -117,11 +118,11 @@ namespace telar::runtime::config {
 
   template <CommandTabLifetime Lifetime>
   bool CommandTabStorage<Lifetime>::keep(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits) {
-    return keepReference(arguments, label, limits).has_value();
+    return keepReference(arguments, label, limits).hasValue();
   }
 
   template <CommandTabLifetime Lifetime>
-  std::optional<CommandTabReference> CommandTabStorage<Lifetime>::keepReference(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits) {
+  ds::Option<CommandTabReference> CommandTabStorage<Lifetime>::keepReference(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits) {
     std::array<Byte, maximum_encoded_bytes> encoded{};
     const auto length = encode(arguments, label, encoded);
     const auto row = std::span{encoded}.first(length);
@@ -134,7 +135,7 @@ namespace telar::runtime::config {
     }
 
     if (!admit(row.size(), limits)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = rows_++;
@@ -147,9 +148,9 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabLifetime Lifetime>
-  std::optional<CommandTabView> CommandTabStorage<Lifetime>::load(CommandTabReference reference) const {
+  ds::Option<CommandTabView> CommandTabStorage<Lifetime>::load(CommandTabReference reference) const {
     if (reference.id >= rows_ || reference != this->reference(reference.id)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto row = rowBytes(reference.id);
@@ -332,7 +333,7 @@ namespace telar::runtime::config {
       result.body = utf8Prefix(body.string(), max_notification_message_bytes);
     }
 
-    result.level = optionalChoice<NotificationLevel>(action.field("level"), notification_level_names).value_or(NotificationLevel::info);
+    result.level = optionalChoice<NotificationLevel>(action.field("level"), notification_level_names).valueOr(NotificationLevel::info);
     result.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms));
     constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
 
@@ -415,9 +416,9 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  tbc::view<std::optional<ActionSetting>, tbc::lt::a> BasicActionValidator<Commands>::read(const lua::Value& action, bool expression) const {
+  tbc::view<ds::Option<ActionSetting>, tbc::lt::a> BasicActionValidator<Commands>::read(const lua::Value& action, bool expression) const {
     if (!validate(action, expression)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ActionSetting setting;
@@ -1008,18 +1009,18 @@ namespace telar::runtime::config {
     return static_cast<ComponentTone>(found - component_tone_names.begin());
   }
 
-  std::optional<std::string_view> ComponentValuesReader::icon(const lua::Value& value) {
+  ds::Option<std::string_view> ComponentValuesReader::icon(const lua::Value& value) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     uiIcon(value);
     return value.string();
   }
 
-  std::optional<UiMark> ComponentValuesReader::mark(const lua::Value& value) {
+  ds::Option<UiMark> ComponentValuesReader::mark(const lua::Value& value) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     uiMark(value);
@@ -1035,9 +1036,9 @@ namespace telar::runtime::config {
     return static_cast<ComponentMetric>(found - component_metric_names.begin());
   }
 
-  std::optional<double> ComponentValuesReader::number(const lua::Value& value) {
+  ds::Option<double> ComponentValuesReader::number(const lua::Value& value) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
@@ -1222,7 +1223,7 @@ namespace telar::runtime::config {
     }
   }
 
-  std::optional<ComponentParent> ComponentTreeWalker::node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const {
+  ds::Option<ComponentParent> ComponentTreeWalker::node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const {
     if (!componentAllowed(shape.kind, position.place)) {
       value.fail("contains a component unsupported in this position");
     }
@@ -1883,9 +1884,9 @@ namespace telar::runtime::config {
     return setting;
   }
 
-  std::optional<PickItemSetting::Swatch> PickItemsReader::swatch(const lua::Value& value) {
+  ds::Option<PickItemSetting::Swatch> PickItemsReader::swatch(const lua::Value& value) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     PickItemSetting::Swatch result{};
@@ -1918,7 +1919,7 @@ namespace telar::runtime::config {
       std::size_t count = 0;
 
       PickItemsReader::read(items, [&](const PickItemSetting& option, const lua::Value& item) {
-        keep(item, option.label, option.value.value_or(option.label), option.detail.value_or(std::string_view{}));
+        keep(item, option.label, option.value.valueOr(option.label), option.detail.valueOr(std::string_view{}));
         ++count;
       });
 
@@ -2157,9 +2158,9 @@ namespace telar::runtime::config {
     return settings;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> ClientReader::printableText(const lua::Value& value, std::size_t maximum, bool allow_empty) {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ClientReader::printableText(const lua::Value& value, std::size_t maximum, bool allow_empty) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     optionalUtf8Text(value, maximum);

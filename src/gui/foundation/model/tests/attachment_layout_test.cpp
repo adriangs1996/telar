@@ -13,6 +13,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.foundation.model;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
@@ -44,7 +45,7 @@ namespace {
       check(layout.reservedArea().height == reserved, "insufficient shelf height must reserve nothing");
     }
 
-    layout.setBottomReservation(std::nullopt);
+    layout.setBottomReservation(ds::none);
     const auto restored = layout.arrange({.width = columns, .height = tall_rows}, {});
 
     check(restored.front().bounds.height == tall_rows && layout.reservedArea().empty(), "removing the shelf must restore every terminal row");

@@ -4,6 +4,7 @@ import telar.native.pcap;
 import telar.sys.socket;
 import telar.runtime.vocabulary.frames;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::runtime::traffic {
 
@@ -61,7 +62,7 @@ namespace telar::runtime::traffic {
     return text;
   }
 
-  std::optional<IpPayload> IpPayload::decode(std::span<const Byte> bytes) noexcept {
+  ds::Option<IpPayload> IpPayload::decode(std::span<const Byte> bytes) noexcept {
     if (bytes.empty()) {
       return {};
     }
@@ -176,7 +177,7 @@ namespace telar::runtime::traffic {
     return event;
   }
 
-  std::optional<DatagramEvent> DatagramCodec::parse(const IpPayload& ip) noexcept {
+  ds::Option<DatagramEvent> DatagramCodec::parse(const IpPayload& ip) noexcept {
     DatagramEvent event{.ipv6 = ip.ipv6, .source_address = ip.source, .destination_address = ip.destination};
 
     if (ip.protocol == IPPROTO_UDP) {
@@ -232,7 +233,7 @@ namespace telar::runtime::traffic {
   IpFragments::IpFragments(ConcurrentMemory& memory) noexcept
       : memory_(memory) {}
 
-  auto IpFragments::parse(std::span<const Byte> bytes) noexcept -> std::optional<Fragment> {
+  auto IpFragments::parse(std::span<const Byte> bytes) noexcept -> ds::Option<Fragment> {
     if (bytes.empty()) {
       return {};
     }
@@ -323,7 +324,7 @@ namespace telar::runtime::traffic {
     }
 
     for (const auto& range : std::span{entry.ranges}.first(entry.count)) {
-      if (range.offset == part.offset && range.size == part.payload.size() && range.more == part.more && std::ranges::equal(entry.storage->bytes().subspan(maximum_prefix + part.offset, range.size), part.payload)) {
+      if (range.offset == part.offset && range.size == part.payload.size() && range.more == part.more && std::ranges::equal(entry.storage.getMut().bytesMut().subspan(maximum_prefix + part.offset, range.size), part.payload)) {
         if (part.offset == 0 && (entry.prefix != part.prefix.size() || (part.key.ipv6 && entry.next_header != part.next_header))) {
           return "ip_fragment_overlap";
         }
@@ -347,13 +348,13 @@ namespace telar::runtime::traffic {
     if (part.offset == 0) {
       entry.prefix = part.prefix.size();
       entry.next_header = part.next_header;
-      std::ranges::copy(part.prefix, entry.storage->bytes().begin() + maximum_prefix - entry.prefix);
+      std::ranges::copy(part.prefix, entry.storage.getMut().bytesMut().begin() + maximum_prefix - entry.prefix);
       if (part.key.ipv6) {
-        entry.storage->bytes()[maximum_prefix - entry.prefix + part.previous_header] = part.next_header;
+        entry.storage.getMut().bytesMut()[maximum_prefix - entry.prefix + part.previous_header] = part.next_header;
       }
     }
 
-    std::ranges::copy(part.payload, entry.storage->bytes().begin() + maximum_prefix + part.offset);
+    std::ranges::copy(part.payload, entry.storage.getMut().bytesMut().begin() + maximum_prefix + part.offset);
     entry.ranges[entry.count++] = {part.offset, part.payload.size(), part.more};
     entry.received += part.payload.size();
     if (!part.more) {
@@ -368,7 +369,7 @@ namespace telar::runtime::traffic {
   }
 
   std::span<const Byte> IpFragments::assembled(Entry& entry) {
-    auto bytes = entry.storage->bytes().subspan(maximum_prefix - entry.prefix, entry.prefix + *entry.length);
+    auto bytes = entry.storage.getMut().bytesMut().subspan(maximum_prefix - entry.prefix, entry.prefix + *entry.length);
     const auto length = bytes.size() - (entry.key.ipv6 ? 40 : 0);
     const auto offset = entry.key.ipv6 ? 4u : 2u;
 
@@ -405,17 +406,17 @@ namespace telar::runtime::traffic {
     return NetworkPacket::word(bytes, offset);
   }
 
-  std::optional<TcpPacket> TcpPacketDecoder::decode(const Event& event) noexcept {
+  ds::Option<TcpPacket> TcpPacketDecoder::decode(const Event& event) noexcept {
     return decodeNetwork(NetworkPacket::decode(event));
   }
 
-  std::optional<TcpPacket> TcpPacketDecoder::decodeNetwork(std::span<const Byte> bytes) noexcept {
+  ds::Option<TcpPacket> TcpPacketDecoder::decodeNetwork(std::span<const Byte> bytes) noexcept {
     const auto ip = IpPayload::decode(bytes);
 
-    return ip ? decodePayload(*ip) : std::nullopt;
+    return ip ? decodePayload(*ip) : ds::none;
   }
 
-  tbc::view<std::optional<TcpPacket>, tbc::lt::a> TcpPacketDecoder::decodePayload(const IpPayload& ip) noexcept {
+  tbc::view<ds::Option<TcpPacket>, tbc::lt::a> TcpPacketDecoder::decodePayload(const IpPayload& ip) noexcept {
     if (ip.protocol != IPPROTO_TCP) {
       return {};
     }

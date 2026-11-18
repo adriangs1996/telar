@@ -20,6 +20,7 @@ import telar.testing;
 import telar.gui.tests.allocation_gate;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.fonts.tests.font_fixture;
+import telar.base.ds;
 
 namespace {
 
@@ -38,13 +39,13 @@ namespace {
   void queryPreservesWholeClusters() {
     const auto query = FontQuery::create("e\u200d\ufe0f\U000e0100\u0301");
 
-    check(query.has_value(), "valid graphemes must produce a native query");
+    check(query.hasValue(), "valid graphemes must produce a native query");
     check(query->text() == "e\u200d\ufe0f\U000e0100\u0301", "queries must retain the complete original cluster");
     check(std::string_view{query->codepoints()} == "e\u0301", "native queries must remove selectors and joiners without dropping combining marks");
     check(!FontQuery::create("\u200d\ufe0f"), "selector-only queries must not reach the platform");
     const std::string maximum(FontQuery::maximum_bytes, 'a');
 
-    check(FontQuery::create(maximum).has_value(), "a full query must fit with its native terminator");
+    check(FontQuery::create(maximum).hasValue(), "a full query must fit with its native terminator");
     check(!FontQuery::create(maximum + 'a'), "oversized clusters must remain bounded");
     bool rejected = false;
 
@@ -68,14 +69,14 @@ namespace {
 
     const auto first = requests.take();
 
-    check(first.has_value(), "the first query must be admitted");
+    check(first.hasValue(), "the first query must be admitted");
     check(first->text() == "0" && !requests.take(), "one oldest query may be in flight");
     requests.request("0");
     check(!requests.finish(*first, false), "a queued suffix must finish before retry invalidation");
     for (std::size_t index = 1; index < FontRequests::pending_capacity; ++index) {
       const auto current = requests.take();
 
-      check(current.has_value(), "admitted queries must remain discoverable");
+      check(current.hasValue(), "admitted queries must remain discoverable");
       check(current->text() == std::to_string(index), "queries must retain FIFO order after duplicate reports");
       const auto invalidate = requests.finish(*current, false);
 
@@ -87,7 +88,7 @@ namespace {
     requests.request(std::to_string(FontRequests::pending_capacity));
     const auto retried = requests.take();
 
-    check(retried.has_value(), "a refused suffix must be allowed after the queue drains");
+    check(retried.hasValue(), "a refused suffix must be allowed after the queue drains");
     check(requests.finish(*retried, true), "an adopted font must invalidate shaped labels");
   }
 
@@ -181,7 +182,7 @@ namespace {
       }
 
       check(rejected, "layout allocation must flow through the injected allocator");
-      gate.permit(std::nullopt);
+      gate.permit(telar::ds::none);
       layout.shape(fonts, mixed_text, request);
       check(layout.spans().size() == mixed_span_count, "failed shaping must remain retryable");
     }

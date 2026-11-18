@@ -12,6 +12,7 @@ export import :opening;
 import std;
 
 import telar.wire.editor;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
@@ -35,7 +36,7 @@ export namespace telar::gui::features::terminal::links {
 
   // The runtime answered `request_id`, or it failed: the request it answered, none when it is
   // not the one pending.
-  [[nodiscard]] std::optional<EditorRequest> complete(State& state, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<EditorRequest> complete(State& state, std::uint64_t request_id);
 
   [[nodiscard]] bool pending(const State& state, std::uint64_t request_id) noexcept;
 

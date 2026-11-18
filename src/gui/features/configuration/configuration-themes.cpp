@@ -7,6 +7,7 @@ import telar.config.gui;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.text;
+import telar.base.ds;
 
 namespace telar::gui::features::configuration {
 
@@ -75,18 +76,18 @@ namespace telar::gui::features::configuration {
     return {.kind = CellColor::Kind::rgb, .channels = *color.rgb};
   }
 
-  void ThemeReader::applyVariant(const std::optional<Settings>& settings, std::optional<ThemeValues>& variant, const ThemeValues& base) {
+  void ThemeReader::applyVariant(const ds::Option<Settings>& settings, ds::Option<ThemeValues>& variant, const ThemeValues& base) {
     if (!settings) {
       return;
     }
 
-    auto result = variant.value_or(base);
+    auto result = variant.valueOr(base);
 
     applyTheme(settings, result);
     variant = result;
   }
 
-  void ThemeReader::applyTheme(const std::optional<Settings>& settings, ThemeValues& theme) {
+  void ThemeReader::applyTheme(const ds::Option<Settings>& settings, ThemeValues& theme) {
     if (!settings) {
       return;
     }
@@ -106,8 +107,8 @@ namespace telar::gui::features::configuration {
   }
 
   void ThemeReader::applyTerminal(const Settings::Terminal& settings, TerminalThemeValues& terminal) noexcept {
-    terminal.foreground = settings.foreground.value_or(terminal.foreground);
-    terminal.background = settings.background.value_or(terminal.background);
+    terminal.foreground = settings.foreground.valueOr(terminal.foreground);
+    terminal.background = settings.background.valueOr(terminal.background);
     if (settings.cursor_color) {
       terminal.cursor_color = settings.cursor_color;
     }
@@ -116,7 +117,7 @@ namespace telar::gui::features::configuration {
       terminal.cursor_text_color = settings.cursor_text_color;
     }
 
-    terminal.palette = settings.palette.value_or(terminal.palette);
+    terminal.palette = settings.palette.valueOr(terminal.palette);
   }
 
   void ThemeReader::applySyntax(const Settings& settings, ThemeValues& theme) {
@@ -132,8 +133,8 @@ namespace telar::gui::features::configuration {
         style.color = color(*entry->color);
       }
 
-      style.italic = entry->italic.value_or(style.italic);
-      style.bold = entry->bold.value_or(style.bold);
+      style.italic = entry->italic.valueOr(style.italic);
+      style.bold = entry->bold.valueOr(style.bold);
       theme.syntax_styles[index] = style;
     }
   }

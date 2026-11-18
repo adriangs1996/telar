@@ -1,6 +1,7 @@
 module telar.gui.features.machines;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::features::machines {
 
@@ -95,7 +96,7 @@ namespace telar::gui::features::machines {
   }
 
   std::string_view MachineProfileMessages::failure(MachineError error) {
-    return MachineFailure::description(error).value_or(MachineFailure::name(error));
+    return MachineFailure::description(error).valueOr(MachineFailure::name(error));
   }
 
   MachineRuntimeLocation MachineRuntimeLocation::explicitPath(std::string_view path) {
@@ -108,7 +109,7 @@ namespace telar::gui::features::machines {
     return location_.path();
   }
 
-  std::optional<std::string_view> MachineRuntimeLocation::managedDirectory() const noexcept {
+  ds::Option<std::string_view> MachineRuntimeLocation::managedDirectory() const noexcept {
     return location_.managedDirectory();
   }
 

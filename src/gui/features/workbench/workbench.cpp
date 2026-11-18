@@ -5,13 +5,14 @@ import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.gui.foundation.model;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::workbench {
 
   namespace {
 
     // The tabs of the workspace `active` shows, in the order it shows them.
-    std::size_t ordered(Tabs tabs, std::optional<TabLocation> active, std::array<Tab<Memory>*, maximum_tabs>& output) noexcept {
+    std::size_t ordered(Tabs tabs, ds::Option<TabLocation> active, std::array<Tab<Memory>*, maximum_tabs>& output) noexcept {
       std::size_t count = 0;
 
       if (!active) {
@@ -44,7 +45,7 @@ namespace telar::gui::features::workbench {
     return true;
   }
 
-  Reservation reserve(State& state, std::optional<PaneBottomReservation> reservation, Tabs tabs) noexcept {
+  Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, Tabs tabs) noexcept {
     auto& current = Access::reservation(state);
     const auto changed = current != reservation;
 
@@ -76,18 +77,18 @@ namespace telar::gui::features::workbench {
     return *size;
   }
 
-  std::optional<SplitSizes> splitSizes(const State& state, Tab<Memory>& tab, std::uint64_t pane_id, ClientLayoutAxis axis) noexcept {
+  ds::Option<SplitSizes> splitSizes(const State& state, Tab<Memory>& tab, std::uint64_t pane_id, ClientLayoutAxis axis) noexcept {
     const auto& geometry = Access::geometry(state);
-    const auto fullscreen = tab.fullscreen ? std::optional{tab.focused_pane} : std::nullopt;
+    const auto fullscreen = tab.fullscreen ? ds::Option{tab.focused_pane} : ds::none;
     const auto bounds = tab.layout.prospectiveSplit(geometry.cellArea(), axis, pane_id, geometry.layout_metrics, fullscreen);
     if (!bounds) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto existing = geometry.contentSize(bounds->existing_content);
     const auto added = geometry.contentSize(bounds->added_content);
     if (!existing || !added) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return SplitSizes{.existing = *existing, .added = *added};
@@ -105,20 +106,20 @@ namespace telar::gui::features::workbench {
     return !tab.fullscreen && tab.layout.resize(tab.focused_pane, direction, geometry.cellArea(), geometry.layout_metrics);
   }
 
-  std::optional<TabLocation> tabAt(Tabs tabs, std::optional<TabLocation> active, std::size_t index) noexcept {
+  ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept {
     std::array<Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
 
-    return index < count ? std::optional{sorted[index]->location} : std::nullopt;
+    return index < count ? ds::Option{sorted[index]->location} : ds::none;
   }
 
-  std::optional<TabLocation> tabBeside(Tabs tabs, std::optional<TabLocation> active, std::int32_t offset) noexcept {
+  ds::Option<TabLocation> tabBeside(Tabs tabs, ds::Option<TabLocation> active, std::int32_t offset) noexcept {
     std::array<Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
     const auto* current = active ? find(tabs, *active) : nullptr;
     const auto found = std::find(sorted.begin(), sorted.begin() + count, current);
     if (count == 0 || found == sorted.begin() + count) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = static_cast<std::int64_t>(found - sorted.begin());
@@ -128,7 +129,7 @@ namespace telar::gui::features::workbench {
     return sorted[static_cast<std::size_t>(next)]->location;
   }
 
-  std::optional<TabLocation> tabAfterClose(Tabs tabs, TabLocation closing, std::uint16_t position) noexcept {
+  ds::Option<TabLocation> tabAfterClose(Tabs tabs, TabLocation closing, std::uint16_t position) noexcept {
     const Tab<Memory>* previous = nullptr;
     const Tab<Memory>* next = nullptr;
 
@@ -146,7 +147,7 @@ namespace telar::gui::features::workbench {
 
     const auto* selected = next == nullptr ? previous : next;
 
-    return selected == nullptr ? std::nullopt : std::optional{selected->location};
+    return selected == nullptr ? ds::none : ds::Option{selected->location};
   }
 
   void clear(State& state) noexcept {
@@ -155,17 +156,17 @@ namespace telar::gui::features::workbench {
     Access::saved(state).clear();
   }
 
-  std::optional<std::uint64_t> bookmark(const State& state, WorkspaceLocation workspace) noexcept {
+  ds::Option<std::uint64_t> bookmark(const State& state, WorkspaceLocation workspace) noexcept {
     const auto* found = Access::history(state).find(workspace);
 
-    return found == nullptr ? std::nullopt : std::optional{found->pane_id};
+    return found == nullptr ? ds::none : ds::Option{found->pane_id};
   }
 
   void forget(State& state, WorkspaceLocation workspace) noexcept {
     Access::history(state).forget(workspace);
   }
 
-  void leave(State& state, Tabs tabs, std::optional<TabLocation> active, const Tab<Memory>* bookmarked) noexcept {
+  void leave(State& state, Tabs tabs, ds::Option<TabLocation> active, const Tab<Memory>* bookmarked) noexcept {
     if (bookmarked != nullptr) {
       Access::history(state).remember({.location = bookmarked->location, .pane_id = bookmarked->focused_pane, .layout = NavigationHistory::Layout{bookmarked->layout, bookmarked->focused_pane}, .fullscreen = bookmarked->fullscreen});
     }
@@ -179,10 +180,10 @@ namespace telar::gui::features::workbench {
     Access::restoring(state).reset();
   }
 
-  std::optional<std::uint64_t> savedPane(const State& state, TabLocation location) {
+  ds::Option<std::uint64_t> savedPane(const State& state, TabLocation location) {
     const auto saved = Access::saved(state).find(location);
 
-    return saved ? std::optional{saved->pane_id} : std::nullopt;
+    return saved ? ds::Option{saved->pane_id} : ds::none;
   }
 
   void adopt(State& state, std::span<const ClientTabLayout> saved) {

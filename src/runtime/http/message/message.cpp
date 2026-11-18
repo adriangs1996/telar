@@ -3,6 +3,7 @@ module telar.runtime.http.message;
 import telar.native.brotli;
 import telar.native.zlib;
 import telar.native.zstd;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -60,12 +61,12 @@ namespace telar::runtime {
   template <Allocator Memory>
   auto HttpContentCodec<Memory>::materialize(Coded coded, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     if (coded.storage) {
-      return std::move(*coded.storage);
+      return std::move(coded.storage.getMut());
     }
 
     DecodedBody<Memory> result{memory_, coded.input.size()};
 
-    std::ranges::copy(coded.input, result.storage.bytes().begin());
+    std::ranges::copy(coded.input, result.storage.bytesMut().begin());
     result.size = coded.input.size();
     result.decoded = !encode;
     return result;
@@ -92,7 +93,7 @@ namespace telar::runtime {
 
     // `input` moves from the entity to each coding's output; with no coding applied it is the entity.
     auto input = entity;
-    std::optional<DecodedBody<Memory>> previous;
+    ds::Option<DecodedBody<Memory>> previous;
 
     for (std::size_t step = 0; step < count; ++step) {
       const auto selected = codings[encode ? step : count - step - 1];
@@ -115,13 +116,13 @@ namespace telar::runtime {
       return {std::move(previous), {}};
     }
 
-    return {std::nullopt, entity};
+    return {ds::none, entity};
   }
 
   template <Allocator Memory>
   auto HttpContentCodec<Memory>::one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     DecodedBody<Memory> result{memory_, limit + 1};
-    auto output = result.storage.bytes();
+    auto output = result.storage.bytesMut();
 
     if (selected == ContentCoding::gzip || selected == ContentCoding::deflate) {
       result.size = flate(input, output, selected == ContentCoding::gzip, encode);
@@ -289,7 +290,7 @@ namespace telar::runtime {
   HttpFields<Memory>::Field::Field(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, std::string_view value)
       : storage_(memory, name.size() + value.size()),
         name_bytes_(name.size()) {
-    auto bytes = storage_.bytes();
+    auto bytes = storage_.bytesMut();
 
     std::ranges::copy(name, bytes.begin());
     std::ranges::copy(value, bytes.begin() + name.size());
@@ -378,14 +379,14 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto HttpFields<Memory>::get(std::string_view name) const noexcept -> std::optional<std::string_view> {
+  auto HttpFields<Memory>::get(std::string_view name) const noexcept -> ds::Option<std::string_view> {
     for (const auto& field : fields_) {
       if (asciiEqualIgnoreCase(field.name(), name)) {
         return field.value();
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -846,7 +847,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpMessage<Memory>::validateLengths() const {
-    std::optional<std::size_t> length;
+    ds::Option<std::size_t> length;
     bool transfer = false;
 
     for (const auto& field : headers.fields()) {

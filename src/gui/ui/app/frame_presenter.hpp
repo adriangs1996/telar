@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.gui.foundation.model;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct FramePacing;
@@ -67,7 +68,7 @@ namespace telar::gui::qt {
     void configure();
 
     [[nodiscard]] bool pacing() const noexcept {
-      return frame_pacer_.has_value();
+      return frame_pacer_.hasValue();
     }
 
     // Whether the update the window asked for waits for a later frame.
@@ -77,7 +78,7 @@ namespace telar::gui::qt {
     // The pane the session last changed asks for a frame.
     void request();
     // The pacer the clients' sessions ask frames from.
-    [[nodiscard]] std::optional<WindowFramePacer<>>& pacer() noexcept;
+    [[nodiscard]] ds::Option<WindowFramePacer<>>& pacer() noexcept;
 
   private:
     struct PresentedPane {
@@ -126,7 +127,7 @@ namespace telar::gui::qt {
     WindowStatus& status_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
-    std::optional<WindowFramePacer<>> frame_pacer_;
+    ds::Option<WindowFramePacer<>> frame_pacer_;
   };
 
 }

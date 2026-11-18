@@ -52,6 +52,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -108,7 +109,7 @@ namespace telar::gui::qt {
     MemoryAdapter<SystemAllocator> adapter_{memory_};
     fonts::TextLayout<ConcurrentMemory> layout_;
     fonts::RowTextLayout<ConcurrentMemory> row_;
-    std::optional<Batch> batch_;
+    ds::Option<Batch> batch_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>>, tbc::lt::a> resident_glyphs_;

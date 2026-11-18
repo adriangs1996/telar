@@ -6,6 +6,7 @@ module telar.runtime.plugins.worker;
 import telar.sys.socket;
 import telar.sys.process;
 import telar.runtime.http.message;
+import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
@@ -50,7 +51,7 @@ namespace telar::runtime::plugins {
   template <Allocator Memory>
   void ResultQueue<Memory>::publish(tbc::view<OwnedResult<Memory>, tbc::lt::a> result) noexcept {
     if (results_.publish(std::move(result))) {
-      ready_->notify();
+      ready_.getMut().notify();
     }
   }
 
@@ -226,7 +227,7 @@ namespace telar::runtime::plugins {
 
 #endif
     process_.signal(SIGKILL);
-    stream_.wait().drainError();
+    stream_.waitMut().drainError();
     const auto error = stream_.wait().retainedError();
     if (!error.empty()) {
       std::fputs("tap worker stderr: ", stderr);
@@ -256,9 +257,9 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   SensitiveAllocation<Memory> Session<Memory>::request(std::span<const Byte> frame, std::size_t maximum_bytes) {
-    stream_.wait().deadline(timeout_);
+    stream_.waitMut().deadline(timeout_);
     channel_.send(frame);
-    stream_.wait().deadline(timeout_);
+    stream_.waitMut().deadline(timeout_);
     auto received = channel_.receive(memory_, maximum_bytes);
     if (!received) {
       throw SystemError{"Tap worker closed", EPIPE};
@@ -268,7 +269,7 @@ namespace telar::runtime::plugins {
       throw SystemError{"Tap worker request cancelled or expired"};
     }
 
-    return std::move(*received);
+    return std::move(received.getMut());
   }
 
   template <Allocator Memory>
@@ -310,7 +311,7 @@ namespace telar::runtime::plugins {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{100};
 
     while (!process_.reap() && std::chrono::steady_clock::now() < deadline) {
-      stream_.wait().drainError();
+      stream_.waitMut().drainError();
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
   }
@@ -555,7 +556,7 @@ namespace telar::runtime::plugins {
     for (auto& connection : connections_) {
       if (connection && connection->registration.stage != TrafficStage::control) {
         port_.setPackageAvailable(connection->owner, true);
-        connection->notify_ready = connection->ready;
+        connection.getMut().notify_ready = connection->ready;
       }
     }
   }
@@ -566,7 +567,7 @@ namespace telar::runtime::plugins {
         connection.reset();
       } else if (connection) {
         port_.setPackageAvailable(connection->owner, false);
-        connection->notify_ready = false;
+        connection.getMut().notify_ready = false;
       }
     }
   }
@@ -588,7 +589,7 @@ namespace telar::runtime::plugins {
   auto TrafficBridge::find(std::uint32_t id) noexcept -> Connection* {
     for (auto& connection : connections_) {
       if (connection && connection->registration.id == id) {
-        return &*connection;
+        return &connection.getMut();
       }
     }
 
@@ -649,8 +650,8 @@ namespace telar::runtime::plugins {
 
           if (registration.stage == TrafficStage::control) {
             connection.emplace(secure_, registration, traffic::PackageChannel{FileDescriptor{}, 0});
-            connection->output.append(traffic::control::Protocol::prefix(registration.requestBytes().size()));
-            connection->output.append(registration.requestBytes());
+            connection.getMut().output.append(traffic::control::Protocol::prefix(registration.requestBytes().size()));
+            connection.getMut().output.append(registration.requestBytes());
             break;
           }
 
@@ -658,11 +659,11 @@ namespace telar::runtime::plugins {
           std::array<Byte, traffic::Protocol::greeting_bytes + traffic::Limits::filter_bytes> greeting;
           const auto hello = traffic::Protocol::greeting(greeting, registration.stage == TrafficStage::observe ? traffic::Role::subscribe : traffic::Role::intercept, registration.filter.view(), registration.selection);
 
-          connection->output.append(hello);
+          connection.getMut().output.append(hello);
           if (registration.stage != TrafficStage::observe) {
             const auto rule = traffic::InterceptionCodec::rule(greeting, registration.rule());
 
-            enqueue(*connection, rule);
+            enqueue(connection.getMut(), rule);
           }
 
           break;
@@ -723,12 +724,12 @@ namespace telar::runtime::plugins {
     connection.output.consume(static_cast<std::size_t>(count));
   }
 
-  tbc::view<std::optional<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> TrafficBridge::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection) {
+  tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> TrafficBridge::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
       const auto count = ::recv(connection.socket.get(), connection.prefix.data() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
       if (count < 0 && socketWouldBlock(sys::lastError())) {
-        return std::nullopt;
+        return ds::none;
       }
 
       if (count <= 0) {
@@ -737,7 +738,7 @@ namespace telar::runtime::plugins {
 
       connection.prefix_bytes += static_cast<std::size_t>(count);
       if (connection.prefix_bytes != prefix_bytes) {
-        return std::nullopt;
+        return ds::none;
       }
 
       FrameReader prefix{std::span<const Byte>{connection.prefix}.first(prefix_bytes)};
@@ -757,10 +758,10 @@ namespace telar::runtime::plugins {
       connection.received = 0;
     }
 
-    const auto bytes = connection.input->bytes();
+    const auto bytes = connection.input.getMut().bytesMut();
     const auto count = ::recv(connection.socket.get(), bytes.data() + connection.received, bytes.size() - connection.received, 0);
     if (count < 0 && socketWouldBlock(sys::lastError())) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (count <= 0) {
@@ -769,7 +770,7 @@ namespace telar::runtime::plugins {
 
     connection.received += static_cast<std::size_t>(count);
     if (connection.received != bytes.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto frame = std::move(connection.input);
@@ -894,7 +895,7 @@ namespace telar::runtime::plugins {
             bridge_ = makeOwned<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
           }
 
-          bridge_->attach(*session_);
+          bridge_->attach(session_.getMut());
         }
 
         wake_.drain();
@@ -906,7 +907,7 @@ namespace telar::runtime::plugins {
           continue;
         }
 
-        bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
+        bridge_->step(session_ ? &session_.getMut() : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
           results_.publish(std::move(result));
         },
             requests_.metrics().queued != 0);
@@ -945,7 +946,7 @@ namespace telar::runtime::plugins {
       }
 
       SensitiveAllocation frame{memory_, encoded_size};
-      const auto payload = Protocol::encodeExchange(frame.bytes(), {shared.event_id, specification_.generation}, shared.exchange);
+      const auto payload = Protocol::encodeExchange(frame.bytesMut(), {shared.event_id, specification_.generation}, shared.exchange);
 
       exchange(shared.event_id, payload);
     } catch (...) {
@@ -955,7 +956,7 @@ namespace telar::runtime::plugins {
   template <WorkerClock Clock>
   void Worker<Clock>::exchange(std::uint64_t event_id, std::span<const Byte> payload) noexcept {
     try {
-      auto result = session_->exchange(specification_, event_id, payload);
+      auto result = session_.getMut().exchange(specification_, event_id, payload);
       if (result) {
         results_.publish(std::move(result));
       }

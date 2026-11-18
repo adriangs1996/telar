@@ -19,10 +19,11 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  std::optional<LinkPreview> LinkPreview::layout(const application::terminal::links::LinkHit& hit, const TerminalSurface& surface, const QFont& font, qreal chrome_scale) {
+  ds::Option<LinkPreview> LinkPreview::layout(const application::terminal::links::LinkHit& hit, const TerminalSurface& surface, const QFont& font, qreal chrome_scale) {
     if (surface.cell.x <= 0 || surface.cell.y <= 0 || !std::isfinite(chrome_scale) || chrome_scale <= 0) {
       return {};
     }

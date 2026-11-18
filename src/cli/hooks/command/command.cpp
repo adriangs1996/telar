@@ -3,6 +3,7 @@ module telar.cli.hooks.command;
 import telar.config.core;
 import telar.base.text.utf8;
 import telar.config.runtime;
+import telar.base.ds;
 
 namespace telar::runtime::cli::hooks {
 
@@ -18,51 +19,51 @@ namespace telar::runtime::cli::hooks {
       String<Memory> name{AllocatorRef<char, Memory>{memory_}};
 
       key.string(name);
-      members_.push_back(Member{.name = std::move(name), .value = entry, .text = std::nullopt, .position = members_.size()});
+      members_.push_back(Member{.name = std::move(name), .value = entry, .text = ds::none, .position = members_.size()});
     });
 
     indexMembers();
   }
 
-  std::optional<JsonValue> Object::value(std::string_view name) const {
+  ds::Option<JsonValue> Object::value(std::string_view name) const {
     const auto* member = find(name);
     if (member != nullptr) {
       checkUnique(*member);
     }
 
-    return member == nullptr ? std::nullopt : std::optional{member->value};
+    return member == nullptr ? ds::none : ds::Option{member->value};
   }
 
-  std::optional<std::string_view> Object::optionalText(std::string_view name) {
-    auto* member = find(name);
+  ds::Option<std::string_view> Object::optionalText(std::string_view name) {
+    auto* member = findMut(name);
     if (member == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     checkUnique(*member);
     if (member->value.encoded() == "null") {
-      return std::nullopt;
+      return ds::none;
     }
 
     return decode(*member);
   }
 
   std::string_view Object::text(std::string_view name) {
-    auto* member = find(name);
+    auto* member = findMut(name);
 
     return member == nullptr ? std::string_view{} : decode(*member);
   }
 
-  std::optional<std::string_view> Object::stringField(std::string_view name) {
+  ds::Option<std::string_view> Object::stringField(std::string_view name) {
     const auto field = value(name);
 
-    return field && field->encoded().starts_with('"') ? optionalText(name) : std::nullopt;
+    return field && field->encoded().starts_with('"') ? optionalText(name) : ds::none;
   }
 
-  std::optional<bool> Object::boolean(std::string_view name) const {
+  ds::Option<bool> Object::boolean(std::string_view name) const {
     const auto field = value(name);
     if (!field || field->encoded() == "null") {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (field->encoded() != "true" && field->encoded() != "false") {
@@ -87,7 +88,7 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  auto Object::find(std::string_view name) noexcept -> Member* {
+  auto Object::findMut(std::string_view name) noexcept -> Member* {
     const auto found = std::lower_bound(members_.begin(), members_.end(), name, [](const Member& member, std::string_view key) {
       return member.name < key;
     });
@@ -96,7 +97,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   auto Object::find(std::string_view name) const noexcept -> const Member* {
-    return const_cast<Object*>(this)->find(name);
+    return const_cast<Object*>(this)->findMut(name);
   }
 
   void Object::indexMembers() {
@@ -237,7 +238,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   bool Payload::subagent() {
-    return !fields.optionalText("agent_id").value_or("").empty();
+    return !fields.optionalText("agent_id").valueOr("").empty();
   }
 
   std::string_view Payload::workspace() const noexcept {
@@ -274,7 +275,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   void Payload::strictBoolean(std::string_view name) {
-    if (fields.value(name) && !fields.boolean(name).has_value()) {
+    if (fields.value(name) && !fields.boolean(name).hasValue()) {
       throw std::invalid_argument{"Expected hook boolean"};
     }
   }
@@ -291,7 +292,7 @@ namespace telar::runtime::cli::hooks {
     }
 
     String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
-    std::optional<std::size_t> start;
+    ds::Option<std::size_t> start;
 
     for (std::size_t index = 0; index < input.size(); ++index) {
       if (start && input[index] == '\\') {
@@ -469,13 +470,13 @@ namespace telar::runtime::cli::hooks {
     return found;
   }
 
-  std::optional<std::int32_t> commandExitCode(Payload& input) {
+  ds::Option<std::int32_t> commandExitCode(Payload& input) {
     if (input.provider == AgentProvider::claude) {
-      return input.event() == "PostToolUse" ? std::optional<std::int32_t>{0} : std::nullopt;
+      return input.event() == "PostToolUse" ? ds::Option<std::int32_t>{0} : ds::none;
     }
 
     if (input.provider == AgentProvider::codex) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (input.provider != AgentProvider::cursor) {
@@ -483,7 +484,7 @@ namespace telar::runtime::cli::hooks {
     }
 
     if (input.event() != "postToolUse" || input.fields.text("tool_name") != "Shell") {
-      return std::nullopt;
+      return ds::none;
     }
 
     try {
@@ -491,20 +492,20 @@ namespace telar::runtime::cli::hooks {
 
       return output.template integer<std::int32_t>("exitCode");
     } catch (const std::exception&) {
-      return std::nullopt;
+      return ds::none;
     }
   }
 
-  std::optional<ReportAgentCommand> commandReport(Payload& input) {
+  ds::Option<ReportAgentCommand> commandReport(Payload& input) {
     if ((input.provider == AgentProvider::claude || input.provider == AgentProvider::codex) && input.subagent()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto event = input.toolEvent();
     const bool started = event == "PreToolUse" || event == "tool_execution_start" || event == "tool.execute.before";
     const bool finished = event == "PostToolUse" || event == "tool_execution_end" || event == "tool.execute.after";
     if (!started && !finished) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto provider = describeProvider(input.provider).name;
@@ -512,7 +513,7 @@ namespace telar::runtime::cli::hooks {
     const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.fields.text("tool_name"));
     const auto command = input.tools.stringField(field);
     if (!command || command->empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto cwd = input.fields.text("cwd");
@@ -524,7 +525,7 @@ namespace telar::runtime::cli::hooks {
         .command = *command,
         .cwd = input.provider == AgentProvider::cursor && cwd.empty() ? input.workspace() : cwd,
         .session = sessionReference(input.session()),
-        .exit_code = started ? std::nullopt : commandExitCode(input),
+        .exit_code = started ? ds::none : commandExitCode(input),
     };
   }
 
@@ -547,7 +548,7 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"Missing hook agent"};
     }
 
-    std::optional<AgentProvider> provider;
+    ds::Option<AgentProvider> provider;
 
     for (const auto candidate : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
       if (describeProvider(candidate).name == arguments.front()) {

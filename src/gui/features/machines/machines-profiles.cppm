@@ -14,6 +14,7 @@ import telar.base.memory.containers;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.machines;
+import telar.base.ds;
 
 // Interface: machines/field_rules.cppm
 // Shared with the CLI: telar.machines defines it.
@@ -57,7 +58,7 @@ export {
       MachineEditKind kind;
       std::string_view label;
       std::string_view value;
-      std::optional<std::string_view> color = std::nullopt;
+      ds::Option<std::string_view> color = ds::none;
       bool enabled = true;
       MachineAgent login_agent = MachineAgent::claude;
       MachineLogin login = MachineLogin::pending;
@@ -125,7 +126,7 @@ export {
 
     template <typename Source, typename Memory>
     concept MachineProfileSource = Allocator<Memory> && requires(Source& source, Memory& memory) {
-      { source.read(memory) } -> std::same_as<std::optional<Vector<Byte, Memory>>>;
+      { source.read(memory) } -> std::same_as<ds::Option<Vector<Byte, Memory>>>;
     };
 
     template <typename Storage, typename Memory>

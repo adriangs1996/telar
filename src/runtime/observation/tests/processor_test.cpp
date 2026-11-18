@@ -141,7 +141,7 @@ namespace {
     for (const auto& [index, provider, directory] : {std::tuple{0, AgentProvider::claude, "/first"}, std::tuple{1, AgentProvider::codex, "/second"}}) {
       const auto& entry = result.entries[index];
 
-      check(entry.process_result.has_value() && entry.process_result->request.pane == entry.pane, "a pane got another pane's process");
+      check(entry.process_result.hasValue() && entry.process_result->request.pane == entry.pane, "a pane got another pane's process");
       check(entry.process_result->provider == provider && entry.process_result->cwd.view() == directory);
       check(entry.process_result->name.view() == builtin_manifests.find(provider)->displayName());
       check(entry.observer->observedDirectory() == directory);

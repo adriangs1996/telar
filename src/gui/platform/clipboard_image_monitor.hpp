@@ -6,6 +6,7 @@
 #ifdef __linux__
 #include "platform/linux/wayland_clipboard_image_monitor.hpp"
 #include "platform/linux/xcb_clipboard_image_monitor.hpp"
+#include "telar_base/ds/values.hpp"
 #include <optional>
 #endif
 
@@ -28,7 +29,7 @@ namespace telar::gui::platform {
     ApplicationAllocator& memory_;
 #ifdef __linux__
     WaylandClipboardImageMonitor native_;
-    std::optional<XcbClipboardImageMonitor> xcb_;
+    ds::Option<XcbClipboardImageMonitor> xcb_;
 #else
     struct Native;
     Owned<Native, ApplicationAllocator> native_;

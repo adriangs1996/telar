@@ -11,6 +11,7 @@ import telar.platform.error;
 import telar.platform.net;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -100,7 +101,7 @@ namespace telar::runtime {
         }
 
         const auto data = record.field("data");
-        const auto text = data ? data->field("text") : std::nullopt;
+        const auto text = data ? data->field("text") : ds::none;
         if (!text) {
           throw Rejected{};
         }
@@ -190,7 +191,7 @@ namespace telar::runtime {
           throw Rejected{};
         }
 
-        process_->closeError();
+        process_.getMut().closeError();
       } else if (!socketWouldBlock(sys::lastError())) {
         throw SystemError{"Read suggestion engine"};
       }

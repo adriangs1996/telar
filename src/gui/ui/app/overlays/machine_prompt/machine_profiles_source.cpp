@@ -30,6 +30,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -144,7 +145,7 @@ namespace telar::gui::qt {
   }
 
   bool MachineProfilesSource::editing() const noexcept {
-    return editing_ || pending_edit_.has_value();
+    return editing_ || pending_edit_.hasValue();
   }
 
   bool MachineProfilesSource::loaded() const noexcept {
@@ -160,7 +161,7 @@ namespace telar::gui::qt {
   }
 
   MachineProfilesSource::Result MachineProfilesSource::prepare(ApplicationAllocator& memory, const Request& request) {
-    Result result{.profiles = std::nullopt, .observed = system::FileStamp::read(request.path.constData(), system::FileSymlinks::inspect), .error = {}, .generation = request.generation};
+    Result result{.profiles = ds::none, .observed = system::FileStamp::read(request.path.constData(), system::FileSymlinks::inspect), .error = {}, .generation = request.generation};
     if (!request.edit && !request.force && result.observed == request.known) {
       return result;
     }
@@ -215,7 +216,7 @@ namespace telar::gui::qt {
 
       pending_edit_.reset();
       busy_ = true;
-      editing_ = request.edit.has_value();
+      editing_ = request.edit.hasValue();
       reopen_pending_ = false;
       task_.setFuture(QtConcurrent::run([memory = &memory_, request = std::move(request)] {
         return prepare(*memory, request);

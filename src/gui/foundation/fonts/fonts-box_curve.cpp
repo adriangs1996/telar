@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts::glyphs {
 
@@ -126,13 +127,13 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     count_ = curve_segments + 1;
   }
 
-  std::optional<BoxCurve::Shape> BoxCurve::shape(std::uint32_t codepoint) noexcept {
+  ds::Option<BoxCurve::Shape> BoxCurve::shape(std::uint32_t codepoint) noexcept {
     if (codepoint >= Symbol::first_powerline && codepoint <= Symbol::last_powerline) {
       return static_cast<Shape>(static_cast<std::uint32_t>(Shape::powerline_right_triangle) + (codepoint - Symbol::first_powerline));
     }
 
     if (codepoint < Symbol::first_box_curve || codepoint > Symbol::last_box_curve) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return static_cast<Shape>(codepoint - Symbol::first_box_curve);

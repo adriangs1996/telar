@@ -8,6 +8,7 @@ import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::application::terminal::copy_mode {
 
@@ -49,7 +50,7 @@ namespace telar::gui::application::terminal::copy_mode {
         const auto* pane = session.findPane(owner->pane_id);
         const auto available = pane != nullptr && pane->attached && pane->screen.columns() != 0 && pane->screen.rows() != 0;
 
-        return {.kind = feature::CopyPointerAuthority::Kind::selection, .dragging = owner->dragging, .position = available && input.pane_id == owner->pane_id ? std::optional{input.position} : std::nullopt};
+        return {.kind = feature::CopyPointerAuthority::Kind::selection, .dragging = owner->dragging, .position = available && input.pane_id == owner->pane_id ? ds::Option{input.position} : ds::none};
       }
 
       const auto& state = copy.state();
@@ -68,7 +69,7 @@ namespace telar::gui::application::terminal::copy_mode {
     void move(Session& session, const CopyPointerDecision& decision, bool released, Pane<Memory>& pane) {
       const auto& state = Access::copyMode(session);
       const auto grid = copyGrid(pane.screen);
-      std::optional<feature::CopyPlan> plan;
+      ds::Option<feature::CopyPlan> plan;
 
       if (decision.motion) {
         plan = feature::drag(state, *decision.motion, grid, released);
@@ -221,7 +222,7 @@ namespace telar::gui::application::terminal::copy_mode {
     static_cast<void>(copy_mode::key(session, key));
   }
 
-  std::optional<std::size_t> searchBlock(const Session& session) noexcept {
+  ds::Option<std::size_t> searchBlock(const Session& session) noexcept {
     return feature::searchBlock(Access::copyMode(session));
   }
 

@@ -171,7 +171,7 @@ namespace {
     const auto atomic = fragment(original, 0, 36, false);
     std::size_t completed = 0;
     const auto consume = [&](std::span<const Byte> bytes) {
-      check(TcpPacketDecoder::decodeNetwork(bytes).has_value());
+      check(TcpPacketDecoder::decodeNetwork(bytes).hasValue());
       ++completed;
     };
 

@@ -6,6 +6,7 @@ static_assert(true);
 #include "workspaces_controller.hpp"
 #include "project_projection.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "telar_base/ds/values.hpp"
 #include <algorithm>
 #include <span>
 #include <utility>
@@ -64,7 +65,7 @@ namespace telar::gui::qt {
     const auto* active = session.activeTab();
     QList<QVariantMap> workspaces;
     QVariantMap context;
-    std::optional<std::uint64_t> selected_project;
+    ds::Option<std::uint64_t> selected_project;
 
     if (active != nullptr && active->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
       selected_project = session.workspaceList().projectOf(active->location.workspace.id);

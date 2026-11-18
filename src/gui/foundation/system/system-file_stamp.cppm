@@ -1,6 +1,7 @@
 export module telar.gui.foundation.system:file_stamp;
 
 import std;
+import telar.base.ds;
 
 export {
   namespace telar::gui::inline foundation::inline system {
@@ -18,7 +19,7 @@ export {
 
       bool operator==(const FileStamp&) const = default;
 
-      [[nodiscard]] static std::optional<FileStamp> read(const char* path, FileSymlinks symlinks = FileSymlinks::follow) noexcept;
+      [[nodiscard]] static ds::Option<FileStamp> read(const char* path, FileSymlinks symlinks = FileSymlinks::follow) noexcept;
     };
 
   }

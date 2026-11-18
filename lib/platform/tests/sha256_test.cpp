@@ -31,8 +31,8 @@ namespace {
     const auto empty = md5("");
     const auto abc = md5("abc");
 
-    check(empty.has_value() && hex(*empty) == "d41d8cd98f00b204e9800998ecf8427e");
-    check(abc.has_value() && hex(*abc) == "900150983cd24fb0d6963f7d28e17f72");
+    check(empty.hasValue() && hex(*empty) == "d41d8cd98f00b204e9800998ecf8427e");
+    check(abc.hasValue() && hex(*abc) == "900150983cd24fb0d6963f7d28e17f72");
   }
 
   const telar::testing::Case case_md5{"sha256.md5_known_vectors", testMd5KnownVectors};

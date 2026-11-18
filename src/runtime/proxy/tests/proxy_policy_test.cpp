@@ -90,9 +90,9 @@ namespace {
       ProxyClientConfiguration{identity}.apply(command);
       const auto url = command.environment("HTTPS_PROXY");
 
-      check(url.has_value() == https_proxy && command.environment("https_proxy") == url);
+      check(url.hasValue() == https_proxy && command.environment("https_proxy") == url);
       check(!https_proxy || (url->starts_with("http://telar:") && url->ends_with("@127.0.0.1:45100")));
-      check(command.environment("NODE_USE_ENV_PROXY").has_value() == https_proxy);
+      check(command.environment("NODE_USE_ENV_PROXY").hasValue() == https_proxy);
       check(command.environment("NODE_EXTRA_CA_CERTS") == "/authority/ca-cert.pem" && command.environment("SSL_CERT_FILE") == "/authority/ca-bundle.pem");
       check(command.environment("TELAR_PROXY_TLS") == "1");
     }

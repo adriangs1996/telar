@@ -16,6 +16,7 @@ import telar.vocabulary;
 import telar.platform.fs;
 import telar.platform.process;
 import telar.git.checkout;
+import telar.base.ds;
 
 namespace {
 
@@ -53,7 +54,7 @@ namespace {
       }
     }
 
-    std::optional<int> status;
+    ds::Option<int> status;
 
     while (!(status = process.reap())) {
       std::this_thread::sleep_for(std::chrono::milliseconds{5});

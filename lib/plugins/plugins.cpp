@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.base.text.utf8;
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime::plugins {
   namespace {
@@ -315,7 +316,7 @@ namespace telar::runtime::plugins {
       throw std::invalid_argument{"ManifestTooLarge"};
     }
 
-    std::optional<JsonValue> root;
+    ds::Option<JsonValue> root;
 
     try {
       validateUtf8(bytes);

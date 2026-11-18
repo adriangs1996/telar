@@ -18,6 +18,7 @@
 #include <utility>
 
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -95,9 +96,9 @@ namespace {
 
   void observersMayRetireOutOfOrder(ApplicationAllocator& memory) {
     const auto* const original = QWindowSystemInterfacePrivate::eventHandler;
-    std::optional<NativePointerEvents> first{std::in_place, memory};
-    std::optional<NativePointerEvents> second{std::in_place, memory};
-    std::optional<NativePointerEvents> third{std::in_place, memory};
+    telar::ds::Option<NativePointerEvents> first{std::in_place, memory};
+    telar::ds::Option<NativePointerEvents> second{std::in_place, memory};
+    telar::ds::Option<NativePointerEvents> third{std::in_place, memory};
     const auto* const head = QWindowSystemInterfacePrivate::eventHandler;
 
     second.reset();
@@ -121,7 +122,7 @@ namespace {
 
   class RetiringObserver final : public QObject {
   public:
-    explicit RetiringObserver(std::optional<NativePointerEvents>& events)
+    explicit RetiringObserver(telar::ds::Option<NativePointerEvents>& events)
         : events_(events) {}
 
     ~RetiringObserver() override = default;
@@ -132,7 +133,7 @@ namespace {
 
     bool eventFilter([[maybe_unused]] QObject* watched, QEvent* event) override {
       if (event->type() == QEvent::MouseMove) {
-        check(events_.has_value() && events_->moving(), "the retiring observer must see its active native motion");
+        check(events_.hasValue() && events_->moving(), "the retiring observer must see its active native motion");
         events_.reset();
       }
 
@@ -140,12 +141,12 @@ namespace {
     }
 
   private:
-    std::optional<NativePointerEvents>& events_;
+    telar::ds::Option<NativePointerEvents>& events_;
   };
 
   void observerMayRetireDuringDelivery(ApplicationAllocator& memory) {
     const auto* const original = QWindowSystemInterfacePrivate::eventHandler;
-    std::optional<NativePointerEvents> events{std::in_place, memory};
+    telar::ds::Option<NativePointerEvents> events{std::in_place, memory};
     QWindow window;
 
     window.show();
@@ -156,7 +157,7 @@ namespace {
     constexpr QPointF point{100, 100};
 
     deliver(window, QEvent::MouseMove, point, Qt::NoButton, Qt::NoButton);
-    check(!events.has_value(), "native dispatch must survive the recipient destroying its observer");
+    check(!events.hasValue(), "native dispatch must survive the recipient destroying its observer");
     check(QWindowSystemInterfacePrivate::eventHandler == original, "synchronous retirement must restore Qt's previous handler");
   }
 

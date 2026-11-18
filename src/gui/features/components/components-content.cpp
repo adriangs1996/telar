@@ -9,6 +9,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
 import telar.config.core;
+import telar.base.ds;
 
 namespace telar::gui::features::components {
 
@@ -35,7 +36,7 @@ namespace telar::gui::features::components {
     }
 
     validateParent(input.node);
-    if (input.node.value > Node::full_scale || input.node.marker.value_or(0) > Node::full_scale) {
+    if (input.node.value > Node::full_scale || input.node.marker.valueOr(0) > Node::full_scale) {
       throw std::invalid_argument{"InvalidBarValue"};
     }
 
@@ -117,9 +118,9 @@ namespace telar::gui::features::components {
   }
 
   template <Capacity Bounds>
-  std::optional<BindingAction> Content<Bounds>::action(const Node& node) const {
+  ds::Option<BindingAction> Content<Bounds>::action(const Node& node) const {
     if (node.action == Node::no_action) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (node.action >= action_count_) {
@@ -295,7 +296,7 @@ namespace telar::gui::features::components {
     return CellColor{.kind = CellColor::Kind::indexed, .channels = {index, 0, 0}};
   }
 
-  std::optional<ComponentColors::Color> ComponentColors::name(std::string_view name) const noexcept {
+  ds::Option<ComponentColors::Color> ComponentColors::name(std::string_view name) const noexcept {
     return ColorName::parse(name);
   }
 
@@ -316,12 +317,12 @@ namespace telar::gui::features::components {
     return result;
   }
 
-  std::optional<runtime::FixedText<Node::maximum_icon_bytes>> ValueMapper::icon(const std::optional<std::string_view>& name) {
-    return name ? std::optional{iconName(*name)} : std::nullopt;
+  ds::Option<runtime::FixedText<Node::maximum_icon_bytes>> ValueMapper::icon(const ds::Option<std::string_view>& name) {
+    return name ? ds::Option{iconName(*name)} : ds::none;
   }
 
-  std::optional<Mark> ValueMapper::mark(std::optional<runtime::config::UiMark> mark) noexcept {
-    return mark ? std::optional{static_cast<Mark>(std::to_underlying(*mark))} : std::nullopt;
+  ds::Option<Mark> ValueMapper::mark(ds::Option<runtime::config::UiMark> mark) noexcept {
+    return mark ? ds::Option{static_cast<Mark>(std::to_underlying(*mark))} : ds::none;
   }
 
   Tone ValueMapper::tone(runtime::config::ComponentTone tone) noexcept {

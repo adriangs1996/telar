@@ -14,6 +14,7 @@ import telar.runtime.redirect.direction;
 import telar.base.text;
 import telar.vocabulary;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: traffic/protocol.cppm
 export {
@@ -252,7 +253,7 @@ export {
       Operation operation = Operation::status;
       std::array<std::string_view, Limits::targets> targets{};
       std::size_t target_count = 0;
-      std::optional<recording::Request> recording;
+      ds::Option<recording::Request> recording;
       std::array<std::uint32_t, Limits::processes> processes{};
       std::size_t process_count = 0;
       redirect::Direction direction = redirect::Direction::outbound;
@@ -351,7 +352,7 @@ export {
 
       FixedText<Limits::filter_bytes> expression_;
       Program validation_;
-      std::array<std::optional<Entry>, Limits::filter_link_types> programs_;
+      std::array<ds::Option<Entry>, Limits::filter_link_types> programs_;
     };
 
   }
@@ -434,7 +435,7 @@ export {
       virtual std::uint64_t intercept(const FlowEvent& event) noexcept = 0;
       virtual Decision poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept = 0;
       virtual void cancel(std::uint64_t ticket) noexcept = 0;
-      virtual std::optional<Time> deadline(std::uint64_t ticket) noexcept = 0;
+      virtual ds::Option<Time> deadline(std::uint64_t ticket) noexcept = 0;
       virtual int descriptor() const noexcept = 0;
       virtual void drain() noexcept = 0;
 
@@ -453,7 +454,7 @@ export {
       virtual std::uint64_t interceptHttp(const FlowEvent& event) noexcept = 0;
       virtual FlowControl::Decision pollHttp(std::uint64_t ticket, std::span<Byte> replacement) noexcept = 0;
       virtual void cancelHttp(std::uint64_t ticket) noexcept = 0;
-      virtual std::optional<FlowControl::Time> httpDeadline(std::uint64_t ticket) noexcept = 0;
+      virtual ds::Option<FlowControl::Time> httpDeadline(std::uint64_t ticket) noexcept = 0;
       virtual void httpUnavailable(const FlowEvent& event) noexcept = 0;
     };
 

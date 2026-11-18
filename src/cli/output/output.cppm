@@ -5,6 +5,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.vocabulary;
+import telar.base.ds;
 
 // Interface: failure.cppm
 export {
@@ -15,15 +16,15 @@ export {
     // target, 3 for a timeout), and `code` the runtime's refusal, if any.
     class Failure : public std::runtime_error {
     public:
-      explicit Failure(std::string_view message, int status = 1, std::optional<FailureCode> code = std::nullopt);
+      explicit Failure(std::string_view message, int status = 1, ds::Option<FailureCode> code = ds::none);
 
       [[nodiscard]] int status() const noexcept;
 
-      [[nodiscard]] std::optional<FailureCode> code() const noexcept;
+      [[nodiscard]] ds::Option<FailureCode> code() const noexcept;
 
     private:
       int status_;
-      std::optional<FailureCode> code_;
+      ds::Option<FailureCode> code_;
     };
 
   }
@@ -73,7 +74,7 @@ export {
 
     std::string_view familyName(Family family) noexcept;
 
-    std::optional<Family> parseFamily(std::string_view word) noexcept;
+    ds::Option<Family> parseFamily(std::string_view word) noexcept;
 
   }
 }

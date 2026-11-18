@@ -9,6 +9,7 @@ import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.history;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -350,7 +351,7 @@ namespace telar::runtime {
         .pane_id = static_cast<std::uint64_t>(row.integer(1)),
         .started_at_ms = row.integer(2),
         .duration_ns = row.integer(3),
-        .exit_code = row.isNull(4) ? std::nullopt : std::optional{static_cast<std::int32_t>(row.integer(4))},
+        .exit_code = row.isNull(4) ? ds::none : ds::Option{static_cast<std::int32_t>(row.integer(4))},
         .status = static_cast<HistoryStatus>(row.integer(5)),
         .author = static_cast<HistoryAuthor>(row.integer(9)),
         .origin = static_cast<HistoryOrigin>(row.integer(10)),
@@ -445,7 +446,7 @@ END;
       agent_commands_.emplace(database_);
     }
 
-    agent_commands_->persist(request, context);
+    agent_commands_.getMut().persist(request, context);
     reply.send(RequestCompleted{.request_id = request.request_id});
   }
 
@@ -459,7 +460,7 @@ END;
         launch_writer_.emplace(database_);
       }
 
-      launch_writer_->persist(event);
+      launch_writer_.getMut().persist(event);
       return;
     }
 
@@ -467,7 +468,7 @@ END;
       pane_writer_.emplace(database_);
     }
 
-    pane_writer_->persist(event);
+    pane_writer_.getMut().persist(event);
   }
 
   bool HistoryStore::accepts(const HistoryEventView& event) const noexcept {

@@ -32,6 +32,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -95,7 +96,7 @@ namespace telar::gui::qt {
     kind_ = kind >= static_cast<int>(application::activity::TabActivity::Kind::none) && kind <= static_cast<int>(application::activity::TabActivity::Kind::progress) ? static_cast<application::activity::TabActivity::Kind>(kind) : application::activity::TabActivity::Kind::none;
     const auto value = record.value(QStringLiteral("progressSample"));
 
-    progress_ = progressSample(value).value_or(application::workbench::ProgressSample{});
+    progress_ = progressSample(value).valueOr(application::workbench::ProgressSample{});
     if (kind_ != application::activity::TabActivity::Kind::progress) {
       motion_ = {};
     }
@@ -142,13 +143,13 @@ namespace telar::gui::qt {
     return running_ && isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> NativeTabActivity::deadline(std::uint64_t now_ns) const noexcept {
+  ds::Option<std::uint64_t> NativeTabActivity::deadline(std::uint64_t now_ns) const noexcept {
     if (kind_ == application::activity::TabActivity::Kind::spinner) {
       return application::workbench::ProgressAnimation::nextStep(now_ns, application::activity::TabActivity::spinner_interval_ns);
     }
 
     if (kind_ != application::activity::TabActivity::Kind::progress) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto interval = clock_ ? clock_->frameInterval() : 1;
@@ -160,7 +161,7 @@ namespace telar::gui::qt {
 
     const auto end = motion_.deadline(now_ns);
 
-    return end ? std::optional{std::min(next_frame, *end)} : std::nullopt;
+    return end ? ds::Option{std::min(next_frame, *end)} : ds::none;
   }
 
   void NativeTabActivity::sample(std::uint64_t now_ns) {

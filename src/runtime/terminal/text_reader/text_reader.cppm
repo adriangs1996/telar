@@ -25,6 +25,7 @@ import telar.runtime.terminal.control.engine;
 import telar.runtime.terminal.control.clipboard;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
+import telar.base.ds;
 
 // Interface: terminal/text_metadata.cppm
 export {
@@ -68,7 +69,7 @@ export {
 
       static std::size_t hash(const Identity& identity) noexcept;
 
-      std::optional<std::uint16_t> intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity);
+      ds::Option<std::uint16_t> intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity);
 
       void captureRow(LinkTable& table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start);
 
@@ -190,7 +191,7 @@ export {
 
       std::string_view cwd() const noexcept;
 
-      void setProgress(PaneProgressState state, std::optional<Byte> percent) noexcept;
+      void setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept;
 
       Vector<Byte, ConcurrentMemory> clipboard;
       // The encoded document the pane's program shows over the pane, empty when none.
@@ -207,7 +208,7 @@ export {
       std::uint64_t clipboard_revision = 0;
       std::uint64_t progress_revision = 1;
       PaneProgressState progress_state = PaneProgressState::remove;
-      std::optional<Byte> progress_percent;
+      ds::Option<Byte> progress_percent;
       bool title_pending = false;
       bool cwd_pending = false;
 
@@ -372,7 +373,7 @@ export {
 
       void configureColors(const ConfigureTerminalColors& colors);
 
-      void configureCursorColor(std::optional<std::array<Byte, 3>> color);
+      void configureCursorColor(ds::Option<std::array<Byte, 3>> color);
 
       bool mode(GhosttyMode mode) const;
 
@@ -469,7 +470,7 @@ export {
       void trackScrollbackOrigin();
 
       // The tracked row, from the top of the scrollback; nothing once it was dropped.
-      std::optional<std::uint32_t> scrollbackOriginRow() const;
+      ds::Option<std::uint32_t> scrollbackOriginRow() const;
 
       void updateScroll();
 

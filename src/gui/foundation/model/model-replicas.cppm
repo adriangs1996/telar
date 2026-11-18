@@ -113,8 +113,7 @@ export {
       [[nodiscard]] const Vector<Workspace<Memory>, Memory>& entries() const noexcept;
       [[nodiscard]] std::span<const Workspace<Memory>> projects() const noexcept;
       [[nodiscard]] const Vector<Worktree<Memory>, Memory>& worktrees() const noexcept;
-      [[nodiscard]] typename Vector<Workspace<Memory>, Memory>::iterator begin() noexcept;
-      [[nodiscard]] typename Vector<Workspace<Memory>, Memory>::iterator end() noexcept;
+      [[nodiscard]] std::span<Workspace<Memory>> entriesMut() noexcept;
       [[nodiscard]] typename Vector<Workspace<Memory>, Memory>::const_iterator begin() const noexcept;
       [[nodiscard]] typename Vector<Workspace<Memory>, Memory>::const_iterator end() const noexcept;
       [[nodiscard]] std::uint64_t revision() const noexcept;

@@ -7,6 +7,7 @@ import std;
 import :catalog;
 import telar.gui.foundation.actions;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: attachments/capture_state.cppm
 export {
@@ -16,19 +17,19 @@ export {
     public:
       explicit ClipboardCaptureState(std::uint64_t next_id = ClipboardCapture::first_id) noexcept;
 
-      [[nodiscard]] const std::optional<ClipboardCapture>& current() const noexcept;
+      [[nodiscard]] const ds::Option<ClipboardCapture>& current() const noexcept;
 
       [[nodiscard]] std::uint64_t nextId() const noexcept;
 
-      [[nodiscard]] std::optional<ClipboardCapture> reserve(AttachmentTarget target);
+      [[nodiscard]] ds::Option<ClipboardCapture> reserve(AttachmentTarget target);
 
-      [[nodiscard]] std::optional<ClipboardCapture> finish(std::uint64_t id) noexcept;
+      [[nodiscard]] ds::Option<ClipboardCapture> finish(std::uint64_t id) noexcept;
 
       bool cancel(AttachmentTarget target) noexcept;
 
     private:
       std::uint64_t next_id_;
-      std::optional<ClipboardCapture> capture_;
+      ds::Option<ClipboardCapture> capture_;
     };
 
   }

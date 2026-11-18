@@ -66,6 +66,7 @@ import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.config.client;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -103,10 +104,10 @@ namespace telar::gui::qt {
     void invoke(BindingAction action, BindingContext context, Done<Effects> done);
     void expression(BindingAction action, BindingContext context, Done<InputExpression> done);
     // A command tab comes from the configured rows or from the actions a render resolved.
-    [[nodiscard]] tbc::view<std::optional<runtime::config::CommandTabView>, tbc::lt::a> commandTab(BindingAction action, tbc::view<const Actions*, tbc::lt::a> resolved = nullptr) const;
-    [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action, const Actions* resolved = nullptr) const;
-    [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action, const Actions* resolved = nullptr) const;
-    [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] tbc::view<ds::Option<runtime::config::CommandTabView>, tbc::lt::a> commandTab(BindingAction action, tbc::view<const Actions*, tbc::lt::a> resolved = nullptr) const;
+    [[nodiscard]] ds::Option<NotificationActionDescription> notificationAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] ds::Option<DefinitionActionDescription> definitionAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] ds::Option<NamedActionDescription> namedAction(BindingAction action, const Actions* resolved = nullptr) const;
     [[nodiscard]] const application::components::Definitions* definitions() const noexcept;
     [[nodiscard]] const application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>* fixedBar(application::components::Position position) const noexcept;
     void renderBar(application::components::Position position, const application::components::Context& context, Done<BarRender> done);
@@ -123,7 +124,7 @@ namespace telar::gui::qt {
     [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
     // No Lua call is queued or running, so every result has been delivered.
     [[nodiscard]] bool luaIdle() const noexcept;
-    [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action, const Actions* resolved = nullptr) const;
+    [[nodiscard]] ds::Option<PluginActionDescription> pluginAction(BindingAction action, const Actions* resolved = nullptr) const;
     [[nodiscard]] application::plugins::PluginInvocation pluginInvocation(const ClientCommand& request, BindingContext context) const;
     [[nodiscard]] application::plugins::PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
     void authorizePlugin(const application::plugins::PluginInvocation& invocation, const application::plugins::PluginEffects& effects) const;
@@ -140,7 +141,7 @@ namespace telar::gui::qt {
     // arrive after that generation was replaced.
     template <typename Value, typename Work>
     void run(Work work, Done<Value> done);
-    [[nodiscard]] std::optional<ExtendedActionDescription> extendedAction(BindingAction action, const Actions* resolved) const;
+    [[nodiscard]] ds::Option<ExtendedActionDescription> extendedAction(BindingAction action, const Actions* resolved) const;
     void retire();
     [[nodiscard]] ConfigurationReloadRequest request(bool force);
     void schedule(bool force);
@@ -157,15 +158,15 @@ namespace telar::gui::qt {
     ConfigurationWatch watch_;
     Configuration configuration_;
     Appearance appearance_ = Appearance::unknown;
-    std::optional<ThemeValues> locked_theme_;
+    ds::Option<ThemeValues> locked_theme_;
     InputConfiguration default_input_;
     // The default keymap is compiled from the input beside it, so the source stays where Qt made it.
     tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
     tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
     tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
-    tbc::view<std::array<std::optional<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
+    tbc::view<std::array<ds::Option<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
     ConfigurationSnapshot::CommandArguments arguments_;
-    tbc::view<std::optional<PluginPackages>, tbc::lt::a> plugins_;
+    tbc::view<ds::Option<PluginPackages>, tbc::lt::a> plugins_;
     application::plugins::PluginOverrides plugin_overrides_;
     runtime::plugins::TrustStore trust_;
     std::uint64_t next_generation_ = 1;

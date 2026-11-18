@@ -34,6 +34,7 @@ import telar.wire.agents;
 import telar.wire.vocabulary;
 import telar.config.runtime;
 import telar.runtime.platform.session_host;
+import telar.base.ds;
 
 namespace {
 
@@ -242,14 +243,14 @@ namespace {
   struct LeaderlessGroupInspector {
     mutable unsigned identifications = 0;
 
-    std::optional<ProcessIdentity> identity(pid_t process) const noexcept {
-      return process == 10 ? std::optional{ProcessIdentity{10, 1, 1, 0, 10}} : std::nullopt;
+    ds::Option<ProcessIdentity> identity(pid_t process) const noexcept {
+      return process == 10 ? ds::Option{ProcessIdentity{10, 1, 1, 0, 10}} : ds::none;
     }
 
-    std::optional<ProcessSnapshot> snapshot(pid_t process) const noexcept {
+    ds::Option<ProcessSnapshot> snapshot(pid_t process) const noexcept {
       const auto identified = identity(process);
 
-      return identified ? std::optional{ProcessSnapshot{*identified, 20}} : std::nullopt;
+      return identified ? ds::Option{ProcessSnapshot{*identified, 20}} : ds::none;
     }
 
     FixedText<4096> directory(pid_t) const noexcept {
@@ -399,7 +400,7 @@ namespace {
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
 
-    check(process.reap().has_value() && !inspector.snapshot(process.processId()));
+    check(process.reap().hasValue() && !inspector.snapshot(process.processId()));
   }
 
   void testProcessIdentification() {

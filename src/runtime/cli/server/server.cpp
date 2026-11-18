@@ -29,6 +29,7 @@ import telar.runtime.shell_integration;
 import telar.runtime.vocabulary.traffic;
 import telar.runtime.suggestions.engine;
 import telar.runtime.platform.name_resolutions;
+import telar.base.ds;
 #ifdef __APPLE__
 import telar.runtime.redirect.socket_owners;
 import telar.runtime.platform.process_probe;
@@ -257,7 +258,7 @@ namespace telar::runtime::cli {
     }
 
     SqliteAllocator sqlite_memory{memory};
-    std::optional<traffic::Service> traffic_service;
+    ds::Option<traffic::Service> traffic_service;
 
     if (configuration.proxy.network_capture) {
       String<ConcurrentMemory> endpoint{paths.socket, AllocatorRef<char, ConcurrentMemory>{memory}};
@@ -266,15 +267,18 @@ namespace telar::runtime::cli {
       traffic_service.emplace(memory, endpoint, configuration.proxy.stream_interception);
     }
 
-    plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace, traffic_service ? &*traffic_service : nullptr};
+    // The plugins, the tap and the control backend share the one traffic service.
+    auto* const shared_traffic = traffic_service ? &traffic_service.getMut() : nullptr;
+
+    plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace, shared_traffic};
 
     if (!tap_configuration.specifications().empty()) {
       plugin_service.watchTrust(plugins::Paths::trust(memory, process_environment));
     }
 
-    traffic::Tap<plugins::Service> tap{plugin_service, traffic_service ? &*traffic_service : nullptr};
+    traffic::Tap<plugins::Service> tap{plugin_service, shared_traffic};
     ProxyRuntime<NativeEventLoop<ConcurrentMemory>, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(process_environment), tap};
-    traffic::control::Backend network_backend{memory, proxy, traffic_service ? &*traffic_service : nullptr, traffic::control::Configuration{
+    traffic::control::Backend network_backend{memory, proxy, shared_traffic, traffic::control::Configuration{
                                                                                                                 .endpoint = paths.socket,
                                                                                                                 .executable = executable.view(),
                                                                                                                 .proxy = configuration.proxy.enabled,
@@ -284,14 +288,14 @@ namespace telar::runtime::cli {
                                                                                                                 .administration = configuration.proxy.network_control,
                                                                                                             }};
 
-    std::optional<traffic::control::Service<ConcurrentMemory, decltype(network_backend)>> network_control;
+    ds::Option<traffic::control::Service<ConcurrentMemory, decltype(network_backend)>> network_control;
 
-    if (traffic_service) {
+    if (shared_traffic != nullptr) {
       String<ConcurrentMemory> endpoint{paths.socket, AllocatorRef<char, ConcurrentMemory>{memory}};
 
       endpoint += traffic::control::socket_suffix;
       network_control.emplace(memory, endpoint, network_backend);
-      traffic_service->packageControl(&*network_control);
+      shared_traffic->packageControl(&network_control.getMut());
     }
 
     // Queued halves borrow the proxy's capture quota, so workers must release them before the proxy is destroyed.

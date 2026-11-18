@@ -16,7 +16,7 @@ namespace telar::gui::inline foundation::inline drawing {
 
     const auto stroke = stroke_width > 0 ? std::min(side / 2, stroke_width) : std::min(side / 4, std::max(1.0F, side * stroke_ratio));
     const Point origin{.x = area.x + ((area.width - side) / 2), .y = area.y + ((area.height - side) / 2)};
-    auto ring_track = track.value_or(color);
+    auto ring_track = track.valueOr(color);
 
     if (!track) {
       ring_track.a *= track_alpha;

@@ -3,6 +3,7 @@
 #include "../codecs/telar_codec.hpp"
 #include "../codecs/telar_value_codec.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
+#include "telar_base/ds/values.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -461,8 +462,8 @@ namespace telar {
   struct WorktreeListEntry {
     std::uint64_t worktree = 0;
     std::uint64_t source = 0;
-    std::optional<std::uint64_t> workspace{};
-    std::optional<std::uint64_t> created_by{};
+    ds::Option<std::uint64_t> workspace{};
+    ds::Option<std::uint64_t> created_by{};
     WorktreeOrigin origin = WorktreeOrigin::telar;
     WorktreeState state = WorktreeState::active;
     std::string_view path{};
@@ -471,7 +472,7 @@ namespace telar {
     std::string_view title{};
     std::string_view brief{};
     std::string_view dispatched_from{};
-    std::optional<CoordinatorReference> coordinator{};
+    ds::Option<CoordinatorReference> coordinator{};
     std::uint32_t diff_added = 0;
     std::uint32_t diff_removed = 0;
     std::uint32_t diff_files = 0;
@@ -486,7 +487,7 @@ namespace telar {
     std::uint64_t pane_id = 0;
     std::int64_t started_at_ms = 0;
     std::int64_t duration_ns = 0;
-    std::optional<std::int32_t> exit_code{};
+    ds::Option<std::int32_t> exit_code{};
     HistoryStatus status = HistoryStatus::completed;
     HistoryAuthor author = HistoryAuthor::human;
     HistoryOrigin origin = HistoryOrigin::pane;
@@ -1125,7 +1126,7 @@ namespace telar {
 
   void validateAgentSession(std::string_view session, bool empty_allowed);
 
-  void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, std::optional<std::uint64_t> previous);
+  void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, ds::Option<std::uint64_t> previous);
 
   void validateSharedImageName(std::string_view name);
 
@@ -1137,7 +1138,7 @@ namespace telar {
     return sameWorkspace(left.workspace, right.workspace) && left.tab_id == right.tab_id;
   }
 
-  void validateLayoutCollection(std::optional<TabLocation> active, std::span<const ClientTabLayout> tabs);
+  void validateLayoutCollection(ds::Option<TabLocation> active, std::span<const ClientTabLayout> tabs);
 
   struct ScopedHistoryValue {
     using value_type = HistoryScopeValue;
@@ -1149,7 +1150,7 @@ namespace telar {
   };
 
   struct TargetLaunch {
-    using value_type = std::optional<Launch>;
+    using value_type = ds::Option<Launch>;
     static constexpr std::size_t min_width = 0;
 
     static std::size_t encodedSize(const value_type& value, const PaneTarget& target);

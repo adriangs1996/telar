@@ -15,6 +15,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.actions;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -164,7 +165,7 @@ namespace telar::gui::qt {
     const auto& local = store_.client(application::machines::Machines::local_slot);
 
     shelf_.setSource({.source = local.key, .runtime_generation = local.runtime_generation});
-    std::optional<AttachmentPrompt> prompt;
+    ds::Option<AttachmentPrompt> prompt;
     const auto* const pane = local.session.focusedPane();
     if (pane != nullptr && pane->attached && !pane->exited) {
       const auto& agents = local.session.agents();
@@ -177,7 +178,7 @@ namespace telar::gui::qt {
     }
 
     shelf_.setPrompt(prompt, store_.machines().active() == application::machines::Machines::local_slot);
-    std::optional<PaneBottomReservation> reservation;
+    ds::Option<PaneBottomReservation> reservation;
 
     if (prompt && shelf_.hasVisibleItems()) {
       reservation = PaneBottomReservation{.pane_id = prompt->target.pane_id};
@@ -208,7 +209,7 @@ namespace telar::gui::qt {
 
   void AttachmentsController::dismiss(std::uint64_t identity) try {
     synchronize();
-    const auto target = shelf_.prompt() ? std::optional{shelf_.prompt()->target.pane_id} : std::nullopt;
+    const auto target = shelf_.prompt() ? ds::Option{shelf_.prompt()->target.pane_id} : ds::none;
     const auto* const pane = target ? store_.session().findPane(*target) : nullptr;
     if (pane == nullptr || !pane->attached || pane->exited) {
       return;
@@ -236,7 +237,7 @@ namespace telar::gui::qt {
         break;
       }
 
-      application::notifications::reportLimit(store_.session(), {.name = name, .noun = noun, .value = value, .requested = plan.requested});
+      application::notifications::reportLimit(store_.sessionMut(), {.name = name, .noun = noun, .value = value, .requested = plan.requested});
 
       return;
     }
@@ -244,7 +245,7 @@ namespace telar::gui::qt {
     if (plan.removal) {
       const application::terminal::attachments::AttachmentMarkerInput input{*plan.removal, pane->screen.modes()};
 
-      store_.session().input(pane->id, input.view());
+      store_.sessionMut().input(pane->id, input.view());
       static_cast<void>(shelf_.remove(identity));
     }
   } catch (const std::exception& error) {

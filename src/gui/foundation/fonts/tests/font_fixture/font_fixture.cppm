@@ -18,6 +18,7 @@ import telar.gui.foundation.core;
 import telar.base.memory.allocators;
 import telar.gui.foundation.fonts;
 import telar.platform.fs;
+import telar.base.ds;
 
 export {
   namespace telar::gui::inline foundation::inline fonts::tests::font_fixture {
@@ -55,7 +56,7 @@ export {
         }
       }
 
-      [[nodiscard]] std::optional<fonts::FontRole> source(std::string_view text, fonts::FontRole preferred) {
+      [[nodiscard]] ds::Option<fonts::FontRole> source(std::string_view text, fonts::FontRole preferred) {
         return fonts::FontCascade::source(*this, text, preferred);
       }
 

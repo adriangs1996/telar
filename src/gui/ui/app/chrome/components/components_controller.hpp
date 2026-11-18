@@ -28,6 +28,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct ComponentActions;
@@ -115,7 +116,7 @@ namespace telar::gui::qt {
   private:
     // What a surface's node runs when it is pressed.
     struct Activation {
-      std::optional<BindingAction> action;
+      ds::Option<BindingAction> action;
       std::string_view url;
       QString identity;
       const ConfigurationSource::Actions* actions = nullptr;
@@ -126,7 +127,7 @@ namespace telar::gui::qt {
     friend class PickController;
 
     // The node a press in QML names, while its surface still shows it.
-    [[nodiscard]] std::optional<Activation> activation(int source, int node, const QString& generation, const QString& revision) const;
+    [[nodiscard]] ds::Option<Activation> activation(int source, int node, const QString& generation, const QString& revision) const;
     // The panel the pick was opened over takes the keyboard back; without one, the terminal does.
     void restorePickFocus();
     void tick();
@@ -153,7 +154,7 @@ namespace telar::gui::qt {
     ComponentSurfaceState surfaces_;
     QTimer timer_;
     tbc::view<SurfaceCommand, tbc::lt::self> command_;
-    std::optional<ComponentCommandOwner> command_owner_;
+    ds::Option<ComponentCommandOwner> command_owner_;
     std::uint64_t next_revision_ = 0;
     tbc::view<PickController<ComponentsController, ApplicationAllocator, ConfigurationSource>, tbc::lt::self> pick_;
     QPointer<QQuickWindow> window_;

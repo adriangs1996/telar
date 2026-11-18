@@ -11,6 +11,7 @@ import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 // Interface: config/plugin_effects.cppm
 export {
@@ -35,7 +36,7 @@ export {
       static BindingAction indexed(std::span<const BindingActionKind> kinds, std::span<const Byte>& input);
       static NotificationActionDescription notification(std::span<const Byte>& input);
       static Effect decodeEffect(std::span<const Byte>& input);
-      static std::optional<runtime::plugins::Capability> capability(BindingActionKind kind);
+      static ds::Option<runtime::plugins::Capability> capability(BindingActionKind kind);
 
       std::array<Effect, BindingEffects::maximum_effects> effects_{};
       std::size_t count_ = 0;

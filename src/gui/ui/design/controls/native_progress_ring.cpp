@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "native_progress_ring.hpp"
 #include "ui/foundation/scene/rounded_paints_scene.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -97,7 +98,7 @@ namespace telar::gui::qt {
     }
 
     const Color color{.r = color_.redF(), .g = color_.greenF(), .b = color_.blueF(), .a = color_.alphaF()};
-    const auto track = track_color_.isValid() ? std::optional<Color>{Color{.r = track_color_.redF(), .g = track_color_.greenF(), .b = track_color_.blueF(), .a = track_color_.alphaF()}} : std::nullopt;
+    const auto track = track_color_.isValid() ? ds::Option<Color>{Color{.r = track_color_.redF(), .g = track_color_.greenF(), .b = track_color_.blueF(), .a = track_color_.alphaF()}} : ds::none;
 
     return paintRoundedShapes<ProgressRing::maximum_paints>(*this, root.release(), [&](auto append, Rect area) {
       ProgressRing{.area = area, .color = color, .fraction = static_cast<float>(fraction_), .rotation = static_cast<float>(turns_), .stroke_width = static_cast<float>(stroke_width_), .track = track}.visit(append);

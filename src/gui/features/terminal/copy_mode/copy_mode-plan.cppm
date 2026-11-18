@@ -9,6 +9,7 @@ import telar.gui.foundation.terminal;
 import telar.wire.clipboard;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: terminal/copy_navigation.cppm
 export {
@@ -18,7 +19,7 @@ export {
       bool handled = true;
       bool exit = false;
       bool copy = false;
-      std::optional<CopyDirection> search = std::nullopt;
+      ds::Option<CopyDirection> search = ds::none;
       bool open_link = false;
     };
 
@@ -31,11 +32,11 @@ export {
 
     struct CopyPlan {
       std::uint64_t revision = 0;
-      std::optional<CopyState> next = std::nullopt;
+      ds::Option<CopyState> next = ds::none;
       CopyEffect effect{};
-      std::optional<CopySelection> selection = std::nullopt;
-      std::optional<SetPaneViewport> viewport = std::nullopt;
-      std::optional<std::span<const PaneMatch>> replacement_matches = std::nullopt;
+      ds::Option<CopySelection> selection = ds::none;
+      ds::Option<SetPaneViewport> viewport = ds::none;
+      ds::Option<std::span<const PaneMatch>> replacement_matches = ds::none;
     };
 
     // The output a search begun from a command reads, and whether it reads only that.

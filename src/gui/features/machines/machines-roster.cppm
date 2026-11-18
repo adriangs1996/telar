@@ -13,6 +13,7 @@ import telar.gui.foundation.model;
 import telar.gui.foundation.text;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: machines/machine_row.cppm
 export {
@@ -22,9 +23,9 @@ export {
       MachineId id{};
       std::string_view label;
       std::string_view destination;
-      std::optional<std::string_view> color = std::nullopt;
+      ds::Option<std::string_view> color = ds::none;
       bool enabled = true;
-      std::optional<std::string_view> program = std::nullopt;
+      ds::Option<std::string_view> program = ds::none;
     };
 
     enum class MachinePhase : std::uint8_t {
@@ -46,7 +47,7 @@ export {
       MachinePhase phase = MachinePhase::connecting;
       bool needs_setup = false;
       bool attention = false;
-      std::optional<MachineMetrics> metrics = std::nullopt;
+      ds::Option<MachineMetrics> metrics = ds::none;
       std::uint64_t metrics_revision = 0;
       std::uint64_t agent_revision = 0;
       std::uint64_t workspace_revision = 0;
@@ -67,7 +68,7 @@ export {
       MachinePhase phase = MachinePhase::connecting;
       bool needs_setup = false;
       bool attention = false;
-      std::optional<std::uint8_t> cpu_percent;
+      ds::Option<std::uint8_t> cpu_percent;
       std::uint16_t cpu_count = 0;
       std::uint16_t memory_used_decigib = 0;
       std::uint16_t memory_total_decigib = 0;
@@ -106,7 +107,7 @@ export {
       static constexpr Slot local_slot = 0;
       static constexpr std::size_t capacity = MachineLimits::window_slots;
 
-      [[nodiscard]] Slot add(MachineFields fields, std::optional<Slot> wanted = std::nullopt);
+      [[nodiscard]] Slot add(MachineFields fields, ds::Option<Slot> wanted = ds::none);
 
       void update(Slot slot, MachineFields fields);
 
@@ -116,9 +117,9 @@ export {
 
       [[nodiscard]] std::span<const MachineRow> rows() const noexcept;
 
-      [[nodiscard]] std::optional<Slot> find(MachineId id) const noexcept;
+      [[nodiscard]] ds::Option<Slot> find(MachineId id) const noexcept;
 
-      [[nodiscard]] std::optional<Slot> findDestination(std::string_view destination) const noexcept;
+      [[nodiscard]] ds::Option<Slot> findDestination(std::string_view destination) const noexcept;
 
       [[nodiscard]] std::size_t count() const noexcept;
 
@@ -145,7 +146,7 @@ export {
       [[nodiscard]] std::uint64_t revision() const noexcept;
 
     private:
-      [[nodiscard]] std::optional<Slot> freeSlot() const noexcept;
+      [[nodiscard]] ds::Option<Slot> freeSlot() const noexcept;
 
       MachineRow& require(Slot slot);
 
@@ -166,9 +167,9 @@ export {
 
     struct MachineOpening {
       // The destination is one of the profiles', region `a`.
-      [[nodiscard]] static tbc::view<std::optional<std::string_view>, tbc::lt::a> saved(tbc::view<const MachineProfiles&, tbc::lt::a> profiles, std::string_view label, std::string_view hostname);
+      [[nodiscard]] static tbc::view<ds::Option<std::string_view>, tbc::lt::a> saved(tbc::view<const MachineProfiles&, tbc::lt::a> profiles, std::string_view label, std::string_view hostname);
 
-      [[nodiscard]] static std::optional<Machines::Slot> admitted(const Machines& machines, std::string_view name) noexcept;
+      [[nodiscard]] static ds::Option<Machines::Slot> admitted(const Machines& machines, std::string_view name) noexcept;
     };
 
   }
@@ -192,7 +193,7 @@ export {
 
       [[nodiscard]] static Matches collect(const Machines& machines, std::string_view query);
 
-      [[nodiscard]] static Intent choose(const Machines& machines, std::optional<MachineToken> chosen, bool alternate);
+      [[nodiscard]] static Intent choose(const Machines& machines, ds::Option<MachineToken> chosen, bool alternate);
     };
 
   }
@@ -203,7 +204,7 @@ export {
   namespace telar::gui::features::machines {
 
     struct MachinePickerTarget {
-      std::optional<MachineToken> machine;
+      ds::Option<MachineToken> machine;
     };
 
   }

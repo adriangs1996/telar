@@ -25,6 +25,7 @@ import telar.wire.vocabulary;
 import telar.runtime.history.command;
 import telar.runtime.shell_integration.token;
 import telar.runtime.terminal.text_reader;
+import telar.base.ds;
 
 namespace {
 
@@ -61,11 +62,11 @@ namespace {
       commands.push_back({std::string{command.command}, std::string{command.directory}, std::string{reinterpret_cast<const char*>(command.output.data()), command.output.size()}, metadata});
     }
 
-    void input(std::string_view text, std::int64_t time = 100, std::optional<bool> foreground = true) {
+    void input(std::string_view text, std::int64_t time = 100, ds::Option<bool> foreground = true) {
       tracker.input({byteSpan(text), {time, time * 1'000'000}, foreground}, *this);
     }
 
-    void output(std::string_view text, std::int64_t time = 110, std::optional<bool> foreground = true) {
+    void output(std::string_view text, std::int64_t time = 110, ds::Option<bool> foreground = true) {
       tracker.output({byteSpan(text), {time, time * 1'000'000}, foreground}, *this);
     }
 
@@ -193,8 +194,8 @@ namespace {
     CaptureFixture fixture;
 
     fixture.output("\x1b]7;file://host/new%20path\x07\x1b]133;A\x07$ \x1b]133;B\x07");
-    fixture.input("false\r", 100, std::nullopt);
-    fixture.output("false\r\n\x1b]133;C\x07output\r\n\x1b]133;D;7;ignored\x1b\\", 130, std::nullopt);
+    fixture.input("false\r", 100, ds::none);
+    fixture.output("false\r\n\x1b]133;C\x07output\r\n\x1b]133;D;7;ignored\x1b\\", 130, ds::none);
     check(fixture.commands.size() == 1);
     check(fixture.commands[0].command == "false");
     check(fixture.commands[0].directory == "/new path");

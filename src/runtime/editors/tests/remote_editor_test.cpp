@@ -82,7 +82,7 @@ namespace {
       RequestContext context;
       const auto identity = ProcessInspector{}.identity(process_);
 
-      check(identity.has_value());
+      check(identity.hasValue());
       context.editor_candidates[0] = {.pane = 7, .generation = 9, .process = *identity};
       context.editor_candidate_count = 1;
       return context;

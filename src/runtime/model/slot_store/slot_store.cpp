@@ -1,4 +1,5 @@
 module telar.runtime.model.slot_store;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -30,7 +31,7 @@ namespace telar::runtime {
 
     entry.pane_id = pane_id;
     entry.generation = generation;
-    entry.exit_code = text.exit_code.value_or(0);
+    entry.exit_code = text.exit_code.valueOr(0);
     entry.length = std::min(text.text.size(), maximum_bytes);
     entry.truncated = text.truncated || entry.length != text.text.size();
     std::copy_n(text.text.end() - entry.length, entry.length, entry.bytes.begin());
@@ -49,7 +50,7 @@ namespace telar::runtime {
   }
 
   bool HeldTabs::contains(TabLocation location) const noexcept {
-    return find(location).has_value();
+    return find(location).hasValue();
   }
 
   bool HeldTabs::insert(TabLocation location) noexcept {
@@ -75,15 +76,15 @@ namespace telar::runtime {
     return true;
   }
 
-  std::optional<TabLocation> HeldTabs::pop() noexcept {
+  ds::Option<TabLocation> HeldTabs::pop() noexcept {
     if (count_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return locations_[--count_];
   }
 
-  std::optional<std::size_t> HeldTabs::find(TabLocation location) const noexcept {
+  ds::Option<std::size_t> HeldTabs::find(TabLocation location) const noexcept {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& candidate = locations_[index];
       if (candidate.workspace.kind == location.workspace.kind && candidate.workspace.id == location.workspace.id && candidate.tab_id == location.tab_id) {
@@ -91,7 +92,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void advanceIdentityCounter(std::uint64_t& counter, std::uint64_t next) noexcept {

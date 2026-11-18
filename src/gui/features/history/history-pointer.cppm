@@ -10,6 +10,7 @@ import :entry;
 import :filters;
 import :cards;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 // Interface: input/history_action_capture.cppm
 export {
@@ -32,7 +33,7 @@ export {
       std::array<HistoryActionTarget, HistoryActions::count> targets{};
       std::uint64_t generation = 0;
       double scale = 1;
-      std::optional<HistoryChoice> choice = std::nullopt;
+      ds::Option<HistoryChoice> choice = ds::none;
 
       [[nodiscard]] const HistoryActionTarget* find(HistoryCardAction action) const noexcept;
     };
@@ -43,11 +44,11 @@ export {
       [[nodiscard]] bool held() const noexcept;
       void cancel() noexcept;
       void present(const HistoryActionSurface& surface) noexcept;
-      [[nodiscard]] std::optional<HistoryCardAction> release(const HistoryActionSurface& surface, HistoryActionPosition position) noexcept;
+      [[nodiscard]] ds::Option<HistoryCardAction> release(const HistoryActionSurface& surface, HistoryActionPosition position) noexcept;
 
     private:
-      std::optional<HistoryCardAction> action_;
-      std::optional<HistoryChoice> choice_;
+      ds::Option<HistoryCardAction> action_;
+      ds::Option<HistoryChoice> choice_;
       std::uint64_t generation_ = 0;
       bool held_ = false;
     };
@@ -112,13 +113,13 @@ export {
         leave,
       };
 
-      [[nodiscard]] const std::optional<HistoryHoverIdentity>& hovered() const noexcept;
+      [[nodiscard]] const ds::Option<HistoryHoverIdentity>& hovered() const noexcept;
       bool cancel() noexcept;
       bool present(std::span<const HistoryHoverTarget> targets) noexcept;
       bool observe(std::span<const HistoryHoverTarget> targets, HistoryActionPosition position, Observation observation) noexcept;
 
     private:
-      std::optional<HistoryHoverIdentity> hovered_;
+      ds::Option<HistoryHoverIdentity> hovered_;
     };
 
   }

@@ -21,6 +21,7 @@ import telar.base.diagnostics;
 import telar.gui.foundation.core;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -53,7 +54,7 @@ export namespace telar::gui::features::notifications {
   [[nodiscard]] bool dismiss(State& state, NotificationId id, std::uint64_t now_ns) noexcept;
 
   // The user chose notice `id`: it fades out, and what it points at is for the caller to show.
-  [[nodiscard]] std::optional<NotificationTarget> activate(State& state, NotificationId id, std::uint64_t now_ns) noexcept;
+  [[nodiscard]] ds::Option<NotificationTarget> activate(State& state, NotificationId id, std::uint64_t now_ns) noexcept;
 
   // What the window paints: the notices, valid until a use case changes them.
   [[nodiscard]] TBC_HOT_PATH inline const NotificationCenter& center(const State& state) noexcept;
@@ -70,7 +71,7 @@ export namespace telar::gui::features::notifications {
   [[nodiscard]] SoundRequestOutcome requestSound(State& state, AgentSound sound) noexcept;
 
   // The playing sound ended: the queued one, if any, starts. Throws when none was playing.
-  [[nodiscard]] std::optional<AgentSound> completeSound(State& state);
+  [[nodiscard]] ds::Option<AgentSound> completeSound(State& state);
 
   // The host could not start the sound that was to play.
   void soundFailed(State& state);
@@ -84,7 +85,7 @@ export namespace telar::gui::features::notifications {
 
   // The report the runtime is due for the limit in `slot`, its hits since the last one; none
   // until the report interval passed. The reach views the state until it changes.
-  [[nodiscard]] std::optional<ReportLimit> takeReport(State& state, LimitSlot slot, std::int64_t awake_ms);
+  [[nodiscard]] ds::Option<ReportLimit> takeReport(State& state, LimitSlot slot, std::int64_t awake_ms);
 
   // The report the transport refused: its hits count again for the next one.
   void restoreReport(State& state, LimitSlot slot, std::uint32_t hits) noexcept;

@@ -8,6 +8,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline model {
 
@@ -242,13 +243,8 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   template <Allocator Memory>
-  typename Vector<Workspace<Memory>, Memory>::iterator WorkspaceReplica<Memory>::begin() noexcept {
-    return entries_.begin();
-  }
-
-  template <Allocator Memory>
-  typename Vector<Workspace<Memory>, Memory>::iterator WorkspaceReplica<Memory>::end() noexcept {
-    return entries_.end();
+  std::span<Workspace<Memory>> WorkspaceReplica<Memory>::entriesMut() noexcept {
+    return entries_;
   }
 
   template <Allocator Memory>
@@ -284,7 +280,7 @@ namespace telar::gui::inline foundation::inline model {
 
   template <Allocator Memory>
   const Worktree<Memory>* WorkspaceReplica<Memory>::worktreeOfWorkspace(std::uint64_t identity) const noexcept {
-    const auto row = std::ranges::find(worktrees_, std::optional{identity}, &Worktree<Memory>::workspace);
+    const auto row = std::ranges::find(worktrees_, ds::Option{identity}, &Worktree<Memory>::workspace);
 
     return row == worktrees_.end() ? nullptr : &*row;
   }

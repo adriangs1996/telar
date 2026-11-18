@@ -56,7 +56,7 @@ namespace telar::gui {
       return std::as_writable_bytes(std::span{data_, size_});
     }
 
-    [[nodiscard]] std::span<std::uint8_t> unsignedBytes() noexcept {
+    [[nodiscard]] std::span<std::uint8_t> unsignedBytesMut() noexcept {
       return {data_, size_};
     }
 

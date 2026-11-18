@@ -325,7 +325,7 @@ namespace {
     const auto checked = transport.last<CompleteWords>();
 
     typeKeys(client, "ls");
-    check(prompt::line(client, 1).has_value(), "the pane has a line");
+    check(prompt::line(client, 1).hasValue(), "the pane has a line");
 
     deliver(client, PaneExited{.pane_id = 1, .kind = ExitKind::exited});
     check(!prompt::line(client, 1), "the line goes with its pane");

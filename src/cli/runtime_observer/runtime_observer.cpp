@@ -325,7 +325,7 @@ namespace telar::runtime::cli::runtime_clipboard {
     try {
       ServerOptions server_options{};
 
-      server_options.socket = options.socket.value_or("");
+      server_options.socket = options.socket.valueOr("");
       const RuntimePaths paths{memory, server_options, process_environment};
       constexpr std::size_t frame_bytes = runtime_clipboard_chunk_bytes + 1024;
       ControlSession session{memory, paths.socket.c_str(), frame_bytes, 128};
@@ -421,7 +421,7 @@ namespace telar::runtime::cli {
   void observeRuntime(Memory& memory, const RuntimeOptions& options) {
     ServerOptions server_options{};
 
-    server_options.socket = options.socket.value_or("");
+    server_options.socket = options.socket.valueOr("");
     const RuntimePaths paths{memory, server_options, process_environment};
     RuntimeConnection connection{paths.socket.c_str()};
 

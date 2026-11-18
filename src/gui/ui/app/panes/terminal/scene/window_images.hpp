@@ -31,6 +31,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -70,9 +71,9 @@ namespace telar::gui::qt {
     void beginCatalogSnapshot() noexcept;
     void observeCatalog(const application::terminal::graphics::GraphicsStore<Memory>& store) noexcept;
     // The reach names the selection's declared limit.
-    [[nodiscard]] tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
+    [[nodiscard]] tbc::view<ds::Option<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
     [[nodiscard]] const application::terminal::graphics::ImagePlacementSelection& placements() const noexcept;
-    [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key);
+    [[nodiscard]] ds::Option<WindowImage> resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key);
     void append(GraphicsScene& scene, QSGNode& parent, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry);
     void requestUpdate(const GraphicsScene& scene);
     [[nodiscard]] WindowImageStatistics statistics() const noexcept;
@@ -128,7 +129,7 @@ namespace telar::gui::qt {
     [[nodiscard]] std::size_t catalogBucket(application::terminal::graphics::GraphicsLifetime lifetime) const noexcept;
     [[nodiscard]] bool upload(application::terminal::graphics::ImageTextureHandle handle, const Image& image);
     [[nodiscard]] bool canRetry(const Image& image, std::size_t retained_bytes) const noexcept;
-    [[nodiscard]] std::optional<WindowImage> newest(application::terminal::graphics::ImageTextureIdentity identity) const noexcept;
+    [[nodiscard]] ds::Option<WindowImage> newest(application::terminal::graphics::ImageTextureIdentity identity) const noexcept;
 
     QQuickWindow& window_;
     QTimer timer_;

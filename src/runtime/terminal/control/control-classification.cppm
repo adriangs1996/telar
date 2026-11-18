@@ -5,6 +5,7 @@ export module telar.runtime.terminal.control:classification;
 
 import std;
 import :sequence;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -27,16 +28,16 @@ export namespace telar::runtime::control {
     return number == 4 || number == 5 || (number >= 10 && number <= 21) || number == 52 || (number >= 104 && number <= 119) || number == 5522;
   }
 
-  constexpr std::optional<unsigned> decimal(std::string_view text) noexcept {
+  constexpr ds::Option<unsigned> decimal(std::string_view text) noexcept {
     if (text.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     unsigned value = 0;
 
     for (const auto byte : text) {
       if (byte < '0' || byte > '9' || value > (std::numeric_limits<std::uint16_t>::max() - static_cast<unsigned>(byte - '0')) / 10) {
-        return std::nullopt;
+        return ds::none;
       }
 
       value = value * 10 + static_cast<unsigned>(byte - '0');
@@ -45,9 +46,9 @@ export namespace telar::runtime::control {
     return value;
   }
 
-  constexpr std::optional<unsigned> oscOperation(std::string_view text) noexcept {
+  constexpr ds::Option<unsigned> oscOperation(std::string_view text) noexcept {
     if (text.size() > 1 && text.front() == '0') {
-      return std::nullopt;
+      return ds::none;
     }
 
     return decimal(text);

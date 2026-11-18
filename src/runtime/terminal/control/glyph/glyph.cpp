@@ -1,8 +1,9 @@
 module telar.runtime.terminal.control.glyph;
+import telar.base.ds;
 
 namespace telar::runtime::control {
 
-  std::optional<std::uint32_t> glyphCodepoint(std::string_view value) noexcept {
+  ds::Option<std::uint32_t> glyphCodepoint(std::string_view value) noexcept {
     if (value.starts_with('+')) {
       value.remove_prefix(1);
     }
@@ -10,11 +11,11 @@ namespace telar::runtime::control {
     constexpr std::uint32_t maximum_codepoint = (1u << 21) - 1;
     const auto result = unsignedNumber<std::uint32_t>(value, maximum_codepoint, 16);
 
-    return result ? std::optional{*result} : std::nullopt;
+    return result ? ds::Option{*result} : ds::none;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
-    std::optional<std::string_view> result;
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
+    ds::Option<std::string_view> result;
 
     while (!options.empty()) {
       const auto end = options.find(';');
@@ -47,7 +48,7 @@ namespace telar::runtime::control {
       break;
     case 'q': {
       const auto encoded = glyphOption(options, "cp");
-      const auto codepoint = encoded ? glyphCodepoint(*encoded) : std::nullopt;
+      const auto codepoint = encoded ? glyphCodepoint(*encoded) : ds::none;
       if (codepoint) {
         reply.append("\x1b_25a1;q;cp=");
         reply.hex(*codepoint, 1);
@@ -68,10 +69,10 @@ namespace telar::runtime::control {
       }
 
       const auto encoded = glyphOption(metadata, "cp");
-      const auto codepoint = encoded ? glyphCodepoint(*encoded) : std::nullopt;
+      const auto codepoint = encoded ? glyphCodepoint(*encoded) : ds::none;
 
       reply.append("\x1b_25a1;r;cp=");
-      reply.hex(codepoint.value_or(0), 1);
+      reply.hex(codepoint.valueOr(0), 1);
       reply.append(";status=1;reason=unsupported_format\x1b\\");
       break;
     }

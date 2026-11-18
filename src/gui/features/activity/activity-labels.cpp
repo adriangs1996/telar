@@ -7,6 +7,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::features::activity {
 
@@ -42,10 +43,10 @@ namespace telar::gui::features::activity {
     return result;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> ProjectActivity::summary(tbc::view<Text&, tbc::lt::a> storage) const {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ProjectActivity::summary(tbc::view<Text&, tbc::lt::a> storage) const {
     storage.truncate(0);
     if (worktrees == 0 || !path) {
-      return std::nullopt;
+      return ds::none;
     }
 
     storage.append("\u2387 ");
@@ -56,7 +57,7 @@ namespace telar::gui::features::activity {
     storage.appendDecimal(finished);
     storage.append("  ");
     if (path->size() > label_text_capacity - storage.view().size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     storage.append(*path);

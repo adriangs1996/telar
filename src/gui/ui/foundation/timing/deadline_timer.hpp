@@ -12,10 +12,11 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  inline void scheduleDeadline(QTimer& timer, std::optional<std::uint64_t> deadline_ns, std::uint64_t now_ns) {
+  inline void scheduleDeadline(QTimer& timer, ds::Option<std::uint64_t> deadline_ns, std::uint64_t now_ns) {
     timer.stop();
     if (!deadline_ns) {
       return;

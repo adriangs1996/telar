@@ -49,7 +49,7 @@ namespace {
     const Command administration{memory, launch, CommandPurpose::administration};
 
     for (const auto name : pane_identity) {
-      check(!administration.environment(name).has_value());
+      check(!administration.environment(name).hasValue());
     }
 
     check(administration.environment("PATH") == "/usr/bin:/bin");
@@ -121,8 +121,8 @@ namespace {
 
     const Command terminal{memory, Launch{.cwd = "/", .arguments = arguments, .environment_mode = EnvironmentMode::replace, .environment = environment}};
 
-    check(!terminal.environment("TELAR_SOCKET").has_value());
-    check(!terminal.environment("GHOSTTY_RESOURCES_DIR").has_value());
+    check(!terminal.environment("TELAR_SOCKET").hasValue());
+    check(!terminal.environment("GHOSTTY_RESOURCES_DIR").hasValue());
     check(terminal.environment("TERM") == "xterm-256color");
     check(terminal.environment("COLORTERM") == "truecolor");
     check(terminal.environment("TELAR_TERM_PROGRAM") == "telar");

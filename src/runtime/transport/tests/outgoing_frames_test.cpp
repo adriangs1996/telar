@@ -16,6 +16,7 @@ import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -30,7 +31,7 @@ namespace {
       std::vector<Byte> bytes{};
       DeliveryLane lane;
       std::size_t sent = 0;
-      std::optional<std::uint64_t> deferred_id{};
+      ds::Option<std::uint64_t> deferred_id{};
     };
 
     std::vector<Byte> encodeFrame(const auto& message) {
@@ -47,7 +48,7 @@ namespace {
       BudgetAllocator memory{system, 2 * 1024 * 1024};
       OutgoingFrames queue{memory};
       std::vector<ExpectedFrame> pending;
-      std::optional<ExpectedFrame> active;
+      ds::Option<ExpectedFrame> active;
       std::mt19937 random{0x525350};
       const std::array tags{ServerTag::request_completed, ServerTag::history_results, ServerTag::pane_frame, ServerTag::pane_title, ServerTag::graphics_image, ServerTag::runtime_stopping};
 
@@ -64,7 +65,7 @@ namespace {
 
           active = std::move(*first);
           if (active->deferred_id) {
-            active->bytes = encodeFrame(PaneText{.request_id = *active->deferred_id, .pane_id = 1, .text = current_text});
+            active.getMut().bytes = encodeFrame(PaneText{.request_id = *active->deferred_id, .pane_id = 1, .text = current_text});
           }
 
           pending.erase(first);
@@ -85,11 +86,11 @@ namespace {
 
         while (consumed < count) {
           select();
-          check(active.has_value());
+          check(active.hasValue());
           const auto amount = std::min(count - consumed, active->bytes.size() - active->sent);
 
           check(std::equal(bytes.begin() + consumed, bytes.begin() + consumed + amount, active->bytes.begin() + active->sent));
-          active->sent += amount;
+          active.getMut().sent += amount;
           consumed += amount;
           if (active->sent == active->bytes.size()) {
             active.reset();

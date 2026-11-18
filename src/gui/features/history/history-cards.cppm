@@ -12,6 +12,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: presentation/history_row_geometry.cppm
 export {
@@ -145,7 +146,7 @@ export {
       std::string_view provider;
       std::string_view duration;
       std::string_view age;
-      std::optional<std::int32_t> exit_code;
+      ds::Option<std::int32_t> exit_code;
       HistoryStatus status = HistoryStatus::completed;
       HistoryKeyStyle key_style = HistoryKeyStyle::pc;
       std::uint16_t more = 0;

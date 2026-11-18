@@ -12,6 +12,7 @@ import telar.wire.agents;
 import telar.base.text;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: hook_options.cppm
 export {
@@ -36,18 +37,18 @@ export {
     public:
       explicit Object(Memory& memory, JsonValue value, bool reject_duplicates = false);
 
-      std::optional<JsonValue> value(std::string_view name) const;
-      std::optional<std::string_view> optionalText(std::string_view name);
+      ds::Option<JsonValue> value(std::string_view name) const;
+      ds::Option<std::string_view> optionalText(std::string_view name);
       std::string_view text(std::string_view name);
-      std::optional<std::string_view> stringField(std::string_view name);
-      std::optional<bool> boolean(std::string_view name) const;
+      ds::Option<std::string_view> stringField(std::string_view name);
+      ds::Option<bool> boolean(std::string_view name) const;
 
       // Generic over the caller's integer type, so it stays here and reads the field through text.
       template <typename Integer>
-      TBC_GENERIC inline std::optional<Integer> integer(std::string_view name) {
+      TBC_GENERIC inline ds::Option<Integer> integer(std::string_view name) {
         const auto field = value(name);
         if (!field || field->encoded() == "null") {
-          return std::nullopt;
+          return ds::none;
         }
 
         const auto input = field->encoded().starts_with('"') ? text(name) : field->encoded();
@@ -68,12 +69,12 @@ export {
       struct Member {
         String<Memory> name;
         JsonValue value;
-        std::optional<String<Memory>> text;
+        ds::Option<String<Memory>> text;
         std::size_t position;
         bool duplicate = false;
       };
 
-      Member* find(std::string_view name) noexcept;
+      Member* findMut(std::string_view name) noexcept;
       const Member* find(std::string_view name) const noexcept;
       void indexMembers();
       tbc::view<std::string_view, tbc::lt::a> decode(tbc::view<Member&, tbc::lt::a> member);
@@ -130,7 +131,7 @@ export {
       void strictBoolean(std::string_view name);
       static JsonValue toolObject(const Object& fields);
 
-      std::optional<String<Memory>> workspace_;
+      ds::Option<String<Memory>> workspace_;
     };
 
   }
@@ -161,7 +162,7 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    std::optional<ReportAgentCommand> commandReport(Payload& input);
+    ds::Option<ReportAgentCommand> commandReport(Payload& input);
 
   }
 }

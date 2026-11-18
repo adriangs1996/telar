@@ -17,6 +17,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -45,17 +46,17 @@ namespace telar::gui::qt {
     [[nodiscard]] application::prompt::Surface surface(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] bool edits(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] bool hidesTerminalCursor(std::uint64_t pane_id) const noexcept;
-    [[nodiscard]] std::optional<application::prompt::LineView> line(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] ds::Option<application::prompt::LineView> line(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] std::string_view suggestion(std::uint64_t pane_id) const noexcept;
     // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
     [[nodiscard]] application::prompt::CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
     // The command block selected in the pane, by index among its blocks.
-    [[nodiscard]] std::optional<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
     // What an editor shows around the line: its pane, the configuration and copy mode.
     [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
-    [[nodiscard]] const std::optional<application::terminal::copy_mode::CopyState>& copy() const noexcept;
+    [[nodiscard]] const ds::Option<application::terminal::copy_mode::CopyState>& copy() const noexcept;
 
     // The keys and text telar's command editor takes. False hands the key or the text back to the
     // terminal.

@@ -14,6 +14,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.drawing;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -53,18 +54,18 @@ namespace telar::gui::qt {
   private:
     friend class WindowAnimationItems<ModalRevealLayout>;
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);
     void prepareFrame();
     void bindClock();
     void synchronize();
 
     QString generation_;
-    std::optional<std::uint64_t> identity_;
+    ds::Option<std::uint64_t> identity_;
     QPointer<WindowAnimationClock> clock_;
     QMetaObject::Connection frame_connection_;
     ModalMotion motion_;
-    std::optional<std::uint64_t> next_sample_ns_;
+    ds::Option<std::uint64_t> next_sample_ns_;
     qreal reveal_ = 1;
     bool active_ = false;
     bool dirty_ = true;

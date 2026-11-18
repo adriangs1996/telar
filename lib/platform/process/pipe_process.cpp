@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.sys.process;
 import telar.sys.socket;
 import telar.platform.error;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #else
@@ -126,7 +127,7 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<int> PipeProcess::reap() noexcept {
+  ds::Option<int> PipeProcess::reap() noexcept {
     if (!exit_status_) {
       int status;
       if (::waitpid(process_id_, &status, WNOHANG) == process_id_) {

@@ -13,6 +13,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 // Interface: config/query.cppm
 export {
@@ -80,13 +81,13 @@ export {
       static void writeColor(JsonWriter& writer, CellColor color);
       static void writeTheme(JsonWriter& writer, const ThemeValues& theme);
       static void writePalette(JsonWriter& writer, const ThemeValues& theme);
-      static void writeOptionalRgb(JsonWriter& writer, const std::optional<ThemeRgb>& color);
+      static void writeOptionalRgb(JsonWriter& writer, const ds::Option<ThemeRgb>& color);
       static void writeTerminal(JsonWriter& writer, const TerminalThemeValues& terminal);
       static void writeRgbPalette(JsonWriter& writer, std::span<const ThemeRgb> colors);
       static void writeSyntaxStyles(JsonWriter& writer, const ThemeValues& theme);
       static void writeStyles(JsonWriter& writer, const ThemeValues& theme);
       static void writeStyle(JsonWriter& writer, const SyntaxStyleValues& style);
-      static void writeOptionalTheme(JsonWriter& writer, const std::optional<ThemeValues>& theme);
+      static void writeOptionalTheme(JsonWriter& writer, const ds::Option<ThemeValues>& theme);
     };
 
   }
@@ -98,7 +99,7 @@ export {
 
     [[nodiscard]] BindingAction commandTabAction(runtime::config::CommandTabReference reference, std::uint64_t generation) noexcept;
 
-    [[nodiscard]] std::optional<runtime::config::CommandTabReference> commandTabReference(BindingAction action) noexcept;
+    [[nodiscard]] ds::Option<runtime::config::CommandTabReference> commandTabReference(BindingAction action) noexcept;
 
   }
 }
@@ -192,7 +193,7 @@ export {
       [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const runtime::config::RuntimeValues<Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
 
     private:
-      static std::optional<std::string_view> nullablePath(std::string_view path) noexcept;
+      static ds::Option<std::string_view> nullablePath(std::string_view path) noexcept;
 
       template <Allocator Memory>
       static void writeProxy(JsonWriter& writer, const runtime::ProxyOptions<Memory>& proxy);

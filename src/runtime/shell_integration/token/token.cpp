@@ -3,6 +3,7 @@ module telar.runtime.shell_integration.token;
 import std;
 import telar.platform.primitives;
 import telar.base.text;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -16,11 +17,11 @@ namespace telar::runtime {
     return token;
   }
 
-  std::optional<ShellToken> ShellToken::parse(std::string_view text) noexcept {
+  ds::Option<ShellToken> ShellToken::parse(std::string_view text) noexcept {
     if (text.size() != length || !std::ranges::all_of(text, [](char digit) {
           return (digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f');
         })) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ShellToken token;

@@ -7,6 +7,7 @@ import telar.base.text.utf8;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::paths {
 
@@ -333,7 +334,7 @@ namespace telar::gui::features::paths {
     return false;
   }
 
-  std::optional<PathInsertion::Text> insertion(const State& state, PathInsertion::Choice choice) {
+  ds::Option<PathInsertion::Text> insertion(const State& state, PathInsertion::Choice choice) {
     return PathInsertion::prepare(page(state), choice);
   }
 
@@ -341,11 +342,11 @@ namespace telar::gui::features::paths {
     return Access::picker(state).receive(results);
   }
 
-  std::optional<bool> fail(State& state, const RequestFailed& failure) {
+  ds::Option<bool> fail(State& state, const RequestFailed& failure) {
     auto& picker = Access::picker(state);
     const auto revision = picker.revision();
     if (!picker.fail(failure)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return revision != picker.revision();

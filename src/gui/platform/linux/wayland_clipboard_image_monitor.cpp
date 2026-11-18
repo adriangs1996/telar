@@ -5,6 +5,7 @@
 #include "platform/clipboard_image_source.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <QtWaylandClient/private/qwayland-wayland.h>
@@ -171,9 +172,9 @@ namespace telar::gui::platform {
       select(nullptr);
       if (device_) {
         if (device_->version() >= WL_DATA_DEVICE_RELEASE_SINCE_VERSION) {
-          device_->release();
+          device_.getMut().release();
         } else {
-          wl_data_device_destroy(device_->object());
+          wl_data_device_destroy(device_.getMut().object());
         }
 
         device_.reset();
@@ -183,9 +184,9 @@ namespace telar::gui::platform {
     void clearSeat() noexcept {
       if (seat_) {
         if (seat_->version() >= WL_SEAT_RELEASE_SINCE_VERSION) {
-          seat_->release();
+          seat_.getMut().release();
         } else {
-          wl_seat_destroy(seat_->object());
+          wl_seat_destroy(seat_.getMut().object());
         }
 
         seat_.reset();
@@ -197,7 +198,7 @@ namespace telar::gui::platform {
         return;
       }
 
-      auto* const device = wl_data_device_manager_get_data_device(manager_, seat_->object());
+      auto* const device = wl_data_device_manager_get_data_device(manager_, seat_.getMut().object());
       if (device == nullptr) {
         failed_ = true;
 
@@ -205,7 +206,7 @@ namespace telar::gui::platform {
       }
 
       device_.emplace(*this);
-      device_->init(device);
+      device_.getMut().init(device);
       flush();
     }
 
@@ -220,7 +221,7 @@ namespace telar::gui::platform {
         }
 
         seat_.emplace();
-        seat_->init(seat);
+        seat_.getMut().init(seat);
         seat_global_ = name;
       } else if (manager_ == nullptr && interface == QStringLiteral("wl_data_device_manager")) {
         constexpr std::uint32_t maximum_manager_version = 3;
@@ -294,8 +295,8 @@ namespace telar::gui::platform {
     static constexpr std::size_t maximum_pending_offers = 16;
     ::wl_display* display_;
     Registry registry_;
-    std::optional<Device> device_;
-    std::optional<QtWayland::wl_seat> seat_;
+    ds::Option<Device> device_;
+    ds::Option<QtWayland::wl_seat> seat_;
     std::uint32_t seat_global_ = 0;
     std::uint32_t manager_global_ = 0;
     ::wl_data_device_manager* manager_ = nullptr;

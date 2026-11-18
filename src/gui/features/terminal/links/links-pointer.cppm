@@ -7,6 +7,7 @@ import std;
 import :text;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: links/pointer_policy.cppm
 export {
@@ -51,7 +52,7 @@ export {
 
     class LinkPointerPolicy {
     public:
-      [[nodiscard]] static constexpr LinkAffordance hover(std::optional<LinkScheme> scheme, LinkModifiers modifiers, bool eligible = true) noexcept {
+      [[nodiscard]] static constexpr LinkAffordance hover(ds::Option<LinkScheme> scheme, LinkModifiers modifiers, bool eligible = true) noexcept {
         if (!eligible || !scheme) {
           return LinkAffordance::text;
         }
@@ -114,16 +115,16 @@ export {
     public:
       void begin(const LinkHit& hit, ViewVersion version);
 
-      void validate(const std::optional<LinkHit>& current, ViewVersion version);
+      void validate(const ds::Option<LinkHit>& current, ViewVersion version);
 
-      [[nodiscard]] std::optional<LinkHit> finish(const std::optional<LinkHit>& current, ViewVersion version);
+      [[nodiscard]] ds::Option<LinkHit> finish(const ds::Option<LinkHit>& current, ViewVersion version);
 
       void cancel() noexcept;
 
       [[nodiscard]] bool active() const noexcept;
 
     private:
-      std::optional<LinkHit> pressed_;
+      ds::Option<LinkHit> pressed_;
       ViewVersion version_;
     };
 
@@ -136,13 +137,13 @@ export {
 
     struct LinkPresentation {
       TerminalSurface surface;
-      std::optional<LinkHit> link;
-      std::optional<Rect> cover;
+      ds::Option<LinkHit> link;
+      ds::Option<Rect> cover;
     };
 
     class LinkHover {
     public:
-      [[nodiscard]] bool assign(std::optional<LinkHit> hit, const TerminalSurface& surface, bool frame_presented);
+      [[nodiscard]] bool assign(ds::Option<LinkHit> hit, const TerminalSurface& surface, bool frame_presented);
 
       void clear() noexcept;
 
@@ -152,19 +153,19 @@ export {
 
       [[nodiscard]] bool covers(Point point) const noexcept;
 
-      [[nodiscard]] bool needsPresentation(const TerminalSurface& surface, const std::optional<Rect>& cover) const noexcept;
+      [[nodiscard]] bool needsPresentation(const TerminalSurface& surface, const ds::Option<Rect>& cover) const noexcept;
 
-      [[nodiscard]] LinkPresentation prepare(const TerminalSurface& surface, std::optional<Rect> cover) const;
+      [[nodiscard]] LinkPresentation prepare(const TerminalSurface& surface, ds::Option<Rect> cover) const;
 
       void present(const LinkPresentation& frame, bool delivered = true);
 
-      [[nodiscard]] const std::optional<LinkHit>& current() const noexcept;
+      [[nodiscard]] const ds::Option<LinkHit>& current() const noexcept;
 
     private:
-      std::optional<LinkHit> current_;
-      std::optional<LinkHit> shown_;
-      std::optional<TerminalSurface> shown_surface_;
-      std::optional<Rect> shown_cover_;
+      ds::Option<LinkHit> current_;
+      ds::Option<LinkHit> shown_;
+      ds::Option<TerminalSurface> shown_surface_;
+      ds::Option<Rect> shown_cover_;
     };
 
   }
@@ -178,7 +179,7 @@ export {
     public:
       [[nodiscard]] bool request(const LinkTarget& target);
 
-      [[nodiscard]] std::optional<LinkTarget> complete();
+      [[nodiscard]] ds::Option<LinkTarget> complete();
 
       void schedulingFailed() noexcept;
 
@@ -186,7 +187,7 @@ export {
 
     private:
       bool active_ = false;
-      std::optional<LinkTarget> pending_;
+      ds::Option<LinkTarget> pending_;
     };
 
   }
@@ -215,12 +216,12 @@ export {
 
       LinkRegions(const LinkMatch& match, LinkGrid grid, std::span<const MetadataRun> runs, Viewport viewport);
 
-      [[nodiscard]] std::optional<LinkRegion> next() noexcept;
+      [[nodiscard]] ds::Option<LinkRegion> next() noexcept;
 
     private:
-      [[nodiscard]] std::optional<LinkRegion> nextMetadataRun(std::uint16_t link_index) noexcept;
+      [[nodiscard]] ds::Option<LinkRegion> nextMetadataRun(std::uint16_t link_index) noexcept;
 
-      [[nodiscard]] std::optional<LinkRegion> clipped(std::uint32_t row, std::uint32_t left, std::uint32_t right) const noexcept;
+      [[nodiscard]] ds::Option<LinkRegion> clipped(std::uint32_t row, std::uint32_t left, std::uint32_t right) const noexcept;
 
       const LinkMatch& match_;
       LinkGrid grid_;
@@ -240,7 +241,7 @@ export {
     struct PresentedLink {
       TerminalSurface surface;
       std::shared_ptr<const LinkHit> link;
-      std::optional<Rect> cover;
+      ds::Option<Rect> cover;
     };
 
   }

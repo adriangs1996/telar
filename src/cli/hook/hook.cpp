@@ -17,14 +17,15 @@ import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace telar::runtime::cli::hooks {
 
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
     const auto name = input.event();
 
     if (input.subagent()) {
-      return name == "PreToolUse" || name == "PostToolUse" ? std::optional{ReportAgent{.state = AgentReportState::continuing}} : std::nullopt;
+      return name == "PreToolUse" || name == "PostToolUse" ? ds::Option{ReportAgent{.state = AgentReportState::continuing}} : ds::none;
     }
 
     const auto file = input.fields.text("transcript_path");
@@ -64,17 +65,17 @@ namespace telar::runtime::cli::hooks {
         report.blocked_reason = notification == "permission_prompt" ? AgentBlockedReason::permission : AgentBlockedReason::question;
         eventLine(event, input.fields.text("message"));
       } else {
-        return std::nullopt;
+        return ds::none;
       }
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     report.event = event.view();
     return report;
   }
 
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
     const auto name = input.event();
 
     if (input.subagent()) {
@@ -91,7 +92,7 @@ namespace telar::runtime::cli::hooks {
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     ReportAgent report{.session = sessionReference(input.session()), .session_file = database.size() <= 1024 ? database : "", .session_file_kind = AgentSessionFileKind::codex_state};
@@ -115,22 +116,22 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::exited;
       report.session = {};
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     report.event = event.view();
     return report;
   }
 
-  std::optional<ReportAgent> piLifecycle(Payload& input) {
+  ds::Option<ReportAgent> piLifecycle(Payload& input) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session())};
 
     if (name == "session_start" || name == "agent_settled" || name == "ui_prompt_end" || name == "state_snapshot") {
-      const bool idle = input.fields.boolean("idle").value_or(name == "session_start" || name == "agent_settled");
+      const bool idle = input.fields.boolean("idle").valueOr(name == "session_start" || name == "agent_settled");
 
       report.state = idle ? AgentReportState::ready : AgentReportState::working;
-      if (input.fields.boolean("blocked").value_or(false)) {
+      if (input.fields.boolean("blocked").valueOr(false)) {
         report.state = AgentReportState::blocked;
         report.blocked_reason = AgentBlockedReason::question;
       }
@@ -143,26 +144,26 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::exited;
       report.session = {};
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     return report;
   }
 
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
     const auto name = input.event();
     const auto blocked = input.blockedReason();
     ReportAgent report{.session = sessionReference(input.session())};
 
     if (name == "tool.execute.before") {
       if (blocked != AgentBlockedReason::none) {
-        return std::nullopt;
+        return ds::none;
       }
 
       report.state = AgentReportState::working;
       toolEvent(event, input);
     } else if (name == "load" || name == "chat.message" || name == "session.status" || name == "permission.asked" || name == "question.asked" || name == "permission.replied" || name == "question.replied" || name == "question.rejected" || name == "state_snapshot") {
-      report.state = input.fields.boolean("busy").value_or(false) ? AgentReportState::working : AgentReportState::ready;
+      report.state = input.fields.boolean("busy").valueOr(false) ? AgentReportState::working : AgentReportState::ready;
       if (blocked != AgentBlockedReason::none) {
         report.state = AgentReportState::blocked;
         report.blocked_reason = blocked;
@@ -176,14 +177,14 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::exited;
       report.session = {};
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     report.event = event.view();
     return report;
   }
 
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= 1024 ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
 
@@ -198,18 +199,18 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::exited;
       report.session = {};
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     report.event = event.view();
     return report;
   }
 
-  std::optional<AgentPlanStatus> planStatus(std::string_view text) noexcept {
+  ds::Option<AgentPlanStatus> planStatus(std::string_view text) noexcept {
     constexpr std::array names{"pending", "in_progress", "completed", "deleted"};
     const auto found = std::ranges::find(names, text);
 
-    return found == names.end() ? std::nullopt : std::optional{static_cast<AgentPlanStatus>(found - names.begin())};
+    return found == names.end() ? ds::none : ds::Option{static_cast<AgentPlanStatus>(found - names.begin())};
   }
 
   void setPlan(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
@@ -228,7 +229,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       Object item{input.memory, value};
-      const auto status = planStatus(item.stringField("status").value_or("pending")).value_or(AgentPlanStatus::pending);
+      const auto status = planStatus(item.stringField("status").valueOr("pending")).valueOr(AgentPlanStatus::pending);
       if (status == AgentPlanStatus::deleted) {
         return;
       }
@@ -237,9 +238,9 @@ namespace telar::runtime::cli::hooks {
       if (status == AgentPlanStatus::completed) {
         report.plan_done += report.plan_done < std::numeric_limits<std::uint16_t>::max();
       } else if (status == AgentPlanStatus::in_progress && current.empty()) {
-        current = item.stringField(todo ? "activeForm" : "step").value_or(item.stringField(todo ? "content" : "step").value_or(""));
+        current = item.stringField(todo ? "activeForm" : "step").valueOr(item.stringField(todo ? "content" : "step").valueOr(""));
       } else if (status == AgentPlanStatus::pending && pending.empty()) {
-        pending = item.stringField(todo ? "content" : "step").value_or("");
+        pending = item.stringField(todo ? "content" : "step").valueOr("");
       }
     });
 
@@ -267,7 +268,7 @@ namespace telar::runtime::cli::hooks {
       }
     } else if (tool == "TaskUpdate") {
       const auto text = input.tools.stringField("taskId");
-      const auto status = planStatus(input.tools.stringField("status").value_or(""));
+      const auto status = planStatus(input.tools.stringField("status").valueOr(""));
       if (!text || !status) {
         return;
       }
@@ -283,9 +284,9 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  tbc::view<std::optional<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports) {
+  tbc::view<ds::Option<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports) {
     if ((input.provider != AgentProvider::claude && input.provider != AgentProvider::codex) || input.subagent()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ReportAgentProgress report;
@@ -305,24 +306,24 @@ namespace telar::runtime::cli::hooks {
 
     updatePlan(input, reports, report);
     if (input.event() == "Stop") {
-      displayText(reports.message, input.fields.optionalText("last_assistant_message").value_or(""), true);
+      displayText(reports.message, input.fields.optionalText("last_assistant_message").valueOr(""), true);
       report.final_message = reports.message.view();
     }
 
-    return report.cwd.empty() && report.plan_op == AgentPlanOp::none && report.final_message.empty() ? std::nullopt : std::optional{report};
+    return report.cwd.empty() && report.plan_op == AgentPlanOp::none && report.final_message.empty() ? ds::none : ds::Option{report};
   }
 
   // The title an agent sets, on one line without control bytes, which the codec refuses in a title.
-  std::optional<ReportAgentTitle> titleReport(Payload& input, FixedText<96>& text) {
-    std::optional<std::string_view> title;
+  ds::Option<ReportAgentTitle> titleReport(Payload& input, FixedText<96>& text) {
+    ds::Option<std::string_view> title;
 
     if (input.provider == AgentProvider::claude) {
-      if (input.event() == "SessionStart" && !input.fields.optionalText("agent_id").has_value() && !input.fields.text("session_title").empty()) {
+      if (input.event() == "SessionStart" && !input.fields.optionalText("agent_id").hasValue() && !input.fields.text("session_title").empty()) {
         title = input.fields.text("session_title");
       }
     } else if (input.provider == AgentProvider::pi) {
       if (input.event() == "session_info_changed") {
-        title = input.fields.optionalText("name").value_or("");
+        title = input.fields.optionalText("name").valueOr("");
       } else if (input.event() == "session_start") {
         title = input.fields.optionalText("name");
       }
@@ -334,7 +335,7 @@ namespace telar::runtime::cli::hooks {
     }
 
     if (!title) {
-      return std::nullopt;
+      return ds::none;
     }
 
     displayText(text, *title, false);
@@ -357,7 +358,7 @@ namespace telar::runtime::cli::hooks {
         CodexSubagents children;
 
         children.read(input.fields.text("transcript_path"));
-        input.running_subagents = children.countExcept(input.fields.optionalText("agent_id").value_or(""));
+        input.running_subagents = children.countExcept(input.fields.optionalText("agent_id").valueOr(""));
       }
 
       const auto database = files.codex(environment);
@@ -380,16 +381,16 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  std::optional<std::uint64_t> unsignedValue(std::string_view value) noexcept {
+  ds::Option<std::uint64_t> unsignedValue(std::string_view value) noexcept {
     return unsignedDecimal<std::uint64_t>(value);
   }
 
   template <EnvironmentLookup Environment>
-  std::optional<PaneTarget> paneTarget(const Environment& environment, AgentProvider provider) noexcept {
+  ds::Option<PaneTarget> paneTarget(const Environment& environment, AgentProvider provider) noexcept {
     const auto pane = unsignedValue(environment.lookup("TELAR_PANE_ID"));
     const auto generation = unsignedValue(environment.lookup("TELAR_PANE_GENERATION"));
     if (!pane || *pane == 0 || !generation) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return PaneTarget{.pane_id = *pane, .generation = *generation, .provider = provider};
@@ -679,7 +680,7 @@ namespace telar::runtime::cli::hooks {
   Worktrees(Memory& memory, const Environment& environment, std::string_view socket) -> Worktrees<Environment>;
 
   template <EnvironmentLookup Environment>
-  std::optional<int> answerWorktree(Memory& memory, const Environment& environment, Object& fields, std::string_view socket) {
+  ds::Option<int> answerWorktree(Memory& memory, const Environment& environment, Object& fields, std::string_view socket) {
     try {
       for (const auto name : {"hook_event_name", "cwd", "name", "worktree_path"}) {
         fields.text(name);
@@ -698,7 +699,7 @@ namespace telar::runtime::cli::hooks {
     } catch (const std::exception&) {
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
 }
@@ -708,7 +709,7 @@ namespace telar::runtime::cli {
   template <EnvironmentLookup Environment>
   int runHook(Memory& memory, const HookOptions& options, const Environment& environment) noexcept {
 #if TELAR_DEBUG
-    std::optional<trace::Session<Memory>> tracing;
+    ds::Option<trace::Session<Memory>> tracing;
 
     try {
       const String<Memory> path{environment.lookup("TELAR_HOOK_TRACE"), AllocatorRef<char, Memory>{memory}};
@@ -729,9 +730,9 @@ namespace telar::runtime::cli {
 
       hooks::validateUnicodeEscapes(memory, input.text());
       hooks::Object fields{memory, parsed, true};
-      const auto worktree_status = options.provider == AgentProvider::claude ? hooks::answerWorktree(memory, environment, fields, options.socket) : std::nullopt;
+      const auto worktree_status = options.provider == AgentProvider::claude ? hooks::answerWorktree(memory, environment, fields, options.socket) : ds::none;
 
-      status = worktree_status.value_or(0);
+      status = worktree_status.valueOr(0);
       const auto target = hooks::paneTarget(environment, options.provider);
       if (!worktree_status && target) {
         hooks::Payload payload{memory, options.provider, std::move(fields)};
@@ -917,7 +918,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       DirectoryStream directory{FileDescriptor{::open(home->data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
-      std::optional<std::uint32_t> best;
+      ds::Option<std::uint32_t> best;
 
       while (const auto* entry = directory.next()) {
         const std::string_view name{entry->d_name, std::strlen(entry->d_name)};
@@ -939,7 +940,7 @@ namespace telar::runtime::cli::hooks {
       std::array<char, 32> filename;
       const auto length = std::snprintf(filename.data(), filename.size(), "state_%u.sqlite", *best);
 
-      return join(*home, {filename.data(), static_cast<std::size_t>(length)}, path_).value_or("");
+      return join(*home, {filename.data(), static_cast<std::size_t>(length)}, path_).valueOr("");
     } catch (const std::exception&) {
       return {};
     }
@@ -964,7 +965,7 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
-      const auto digest = input.workspace().empty() ? std::nullopt : md5(input.workspace());
+      const auto digest = input.workspace().empty() ? ds::none : md5(input.workspace());
       if (digest) {
         std::array<char, 2 * MD5_DIGEST_LENGTH> encoded;
         if (const auto path = cursorPath(*root, encodeLowerHex(*digest, encoded), chat)) {
@@ -999,7 +1000,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   template <EnvironmentLookup Environment>
-  std::optional<std::string_view> SessionFiles::cursorRoot(const Environment& environment) {
+  ds::Option<std::string_view> SessionFiles::cursorRoot(const Environment& environment) {
     if (const auto configured = environment.lookup("CURSOR_CONFIG_DIR"); !configured.empty()) {
       return copy(configured, root_);
     }
@@ -1011,20 +1012,20 @@ namespace telar::runtime::cli::hooks {
     return join(environment.lookup("HOME"), ".cursor", root_);
   }
 
-  std::optional<std::string_view> SessionFiles::cursorPath(std::string_view root, std::string_view digest, std::string_view chat) {
+  ds::Option<std::string_view> SessionFiles::cursorPath(std::string_view root, std::string_view digest, std::string_view chat) {
     const auto length = std::snprintf(path_.data(), path_.size(), "%.*s/chats/%.*s/%.*s/meta.json", static_cast<int>(root.size()), root.data(), static_cast<int>(digest.size()), digest.data(), static_cast<int>(chat.size()), chat.data());
     if (length < 0 || static_cast<std::size_t>(length) >= path_.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     struct stat status;
 
-    return ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) ? std::optional{std::string_view{path_.data(), static_cast<std::size_t>(length)}} : std::nullopt;
+    return ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) ? ds::Option{std::string_view{path_.data(), static_cast<std::size_t>(length)}} : ds::none;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> SessionFiles::copy(std::string_view value, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> SessionFiles::copy(std::string_view value, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     if (value.empty() || value.size() >= buffer.size() || value.contains('\0')) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::memcpy(buffer.data(), value.data(), value.size());
@@ -1032,8 +1033,8 @@ namespace telar::runtime::cli::hooks {
     return std::string_view{buffer.data(), value.size()};
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> SessionFiles::join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
-    return root.empty() ? std::nullopt : GitFiles::join(root, suffix, buffer);
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> SessionFiles::join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+    return root.empty() ? ds::none : GitFiles::join(root, suffix, buffer);
   }
 
 }

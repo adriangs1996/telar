@@ -4,6 +4,7 @@ import std;
 
 import telar.base.text;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::components {
 
@@ -57,9 +58,9 @@ namespace telar::gui::features::components {
     picks_[index] = pick;
   }
 
-  void Definitions::count(std::optional<std::size_t> panels, std::optional<std::size_t> picks) noexcept {
-    panel_count_ = panels.value_or(panel_count_);
-    pick_count_ = picks.value_or(pick_count_);
+  void Definitions::count(ds::Option<std::size_t> panels, ds::Option<std::size_t> picks) noexcept {
+    panel_count_ = panels.valueOr(panel_count_);
+    pick_count_ = picks.valueOr(pick_count_);
   }
 
   bool builtinSource(SourceKind kind) noexcept {

@@ -9,6 +9,7 @@ static_assert(true);
 #include "form_text_grid.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "ui/foundation/text/utf16_encoding.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QInputMethod>
@@ -241,7 +242,7 @@ namespace telar::gui::qt {
   }
 
   void NativeFormField::updateInputContext() {
-    std::optional<FormInputContext::Replacement> replacement;
+    ds::Option<FormInputContext::Replacement> replacement;
 
     if (!composition_.isEmpty()) {
       replacement = FormInputContext::Replacement{.first = utf16Position(editor_.text(), composition_first_), .last = utf16Position(editor_.text(), composition_last_)};

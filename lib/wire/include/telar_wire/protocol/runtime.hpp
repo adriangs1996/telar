@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../serializers/telar_messages.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar {
 
@@ -60,8 +61,8 @@ namespace telar {
     bool active{};
     ProxyScope scope{};
     bool system_trusted{};
-    std::optional<std::uint16_t> port{};
-    std::optional<std::uint16_t> preferred_port{};
+    ds::Option<std::uint16_t> port{};
+    ds::Option<std::uint16_t> preferred_port{};
   };
 
   template <>

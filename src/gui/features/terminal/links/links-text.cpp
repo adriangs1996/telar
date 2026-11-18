@@ -8,6 +8,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
@@ -25,7 +26,7 @@ namespace telar::gui::features::terminal::links {
     }
   }
 
-  std::optional<std::size_t> LinkGrid::cellIndex(CellPosition point) const noexcept {
+  ds::Option<std::size_t> LinkGrid::cellIndex(CellPosition point) const noexcept {
     if (columns == 0 || cells.size() != static_cast<std::size_t>(columns) * rows || point.x >= columns || point.y < scroll.offset || point.y - scroll.offset >= rows) {
       return {};
     }
@@ -46,7 +47,7 @@ namespace telar::gui::features::terminal::links {
     return index;
   }
 
-  std::optional<std::size_t> LinkGrid::previous(std::size_t index) const noexcept {
+  ds::Option<std::size_t> LinkGrid::previous(std::size_t index) const noexcept {
     while (index != 0) {
       if (index % columns == 0 && !joins((index / columns) - 1)) {
         return {};
@@ -61,7 +62,7 @@ namespace telar::gui::features::terminal::links {
     return {};
   }
 
-  std::optional<std::size_t> LinkGrid::next(std::size_t index) const noexcept {
+  ds::Option<std::size_t> LinkGrid::next(std::size_t index) const noexcept {
     while (index + 1 < cells.size()) {
       if ((index + 1) % columns == 0 && !joins(index / columns)) {
         return {};
@@ -116,12 +117,12 @@ namespace telar::gui::features::terminal::links {
   }
 
   template <Allocator Memory>
-  std::optional<LinkMatch> CellLinks::text(const Screen<Memory>& screen, CellPosition point) {
+  ds::Option<LinkMatch> CellLinks::text(const Screen<Memory>& screen, CellPosition point) {
     return match({.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = {}}, point);
   }
 
   template <Allocator Memory>
-  std::optional<LinkMatch> CellLinks::resolve(const Screen<Memory>& screen, CellPosition point) {
+  ds::Option<LinkMatch> CellLinks::resolve(const Screen<Memory>& screen, CellPosition point) {
     const LinkGrid grid{.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
     const auto index = grid.cellIndex(point);
     if (!index) {
@@ -144,10 +145,10 @@ namespace telar::gui::features::terminal::links {
     return match(grid, point);
   }
 
-  template std::optional<LinkMatch> CellLinks::text<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
-  template std::optional<LinkMatch> CellLinks::text<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
-  template std::optional<LinkMatch> CellLinks::resolve<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
-  template std::optional<LinkMatch> CellLinks::resolve<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
+  template ds::Option<LinkMatch> CellLinks::text<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
+  template ds::Option<LinkMatch> CellLinks::text<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
+  template ds::Option<LinkMatch> CellLinks::resolve<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
+  template ds::Option<LinkMatch> CellLinks::resolve<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
 
   template <std::size_t Capacity>
   BoundedText<Capacity> FilePath::decode(std::string_view text, EscapePolicy policy) {
@@ -178,7 +179,7 @@ namespace telar::gui::features::terminal::links {
     return decoded;
   }
 
-  std::optional<UriView> UriView::parse(std::string_view text) {
+  ds::Option<UriView> UriView::parse(std::string_view text) {
     const auto colon = text.find(':');
     if (colon == std::string_view::npos || colon == 0) {
       return {};
@@ -213,7 +214,7 @@ namespace telar::gui::features::terminal::links {
     return result;
   }
 
-  std::optional<std::uint16_t> UriView::parsePort(std::string_view text) noexcept {
+  ds::Option<std::uint16_t> UriView::parsePort(std::string_view text) noexcept {
     const auto negative = text.starts_with('-');
     if (text.starts_with('+') || negative) {
       text.remove_prefix(1);
@@ -221,7 +222,7 @@ namespace telar::gui::features::terminal::links {
 
     const auto value = runtime::unsignedDecimal<std::uint16_t>(text);
 
-    return !value || (negative && *value != 0) ? std::nullopt : value;
+    return !value || (negative && *value != 0) ? ds::none : value;
   }
 
   bool UriView::authority(tbc::view<std::string_view, tbc::lt::a> text, bool empty_authority_has_path) {
@@ -281,7 +282,7 @@ namespace telar::gui::features::terminal::links {
     return true;
   }
 
-  std::optional<LinkScheme> UriRecognizer::classify(std::string_view text) {
+  ds::Option<LinkScheme> UriRecognizer::classify(std::string_view text) {
     if (text.empty() || text.size() > LinkText::maximum_uri_bytes || std::ranges::any_of(text, LinkText::separator) || !LinkText::validUtf8(text)) {
       return {};
     }
@@ -300,9 +301,9 @@ namespace telar::gui::features::terminal::links {
       switch (prefix.scheme) {
       case LinkScheme::http:
       case LinkScheme::https:
-        return uri->host ? std::optional{prefix.scheme} : std::nullopt;
+        return uri->host ? ds::Option{prefix.scheme} : ds::none;
       case LinkScheme::file:
-        return uri->path.starts_with('/') ? std::optional{prefix.scheme} : std::nullopt;
+        return uri->path.starts_with('/') ? ds::Option{prefix.scheme} : ds::none;
       case LinkScheme::external:
         if (text.size() <= uri->scheme.size() + 1 || (text.substr(uri->scheme.size() + 1).starts_with("//") && !uri->host)) {
           return {};
@@ -317,7 +318,7 @@ namespace telar::gui::features::terminal::links {
     return {};
   }
 
-  std::optional<LinkTextMatch> UriRecognizer::extract(std::string_view line, std::size_t byte_offset) {
+  ds::Option<LinkTextMatch> UriRecognizer::extract(std::string_view line, std::size_t byte_offset) {
     if (byte_offset >= line.size()) {
       return {};
     }
@@ -354,7 +355,7 @@ namespace telar::gui::features::terminal::links {
     return {};
   }
 
-  std::optional<UriRecognizer::Prefix> UriRecognizer::prefixAt(std::string_view text) {
+  ds::Option<UriRecognizer::Prefix> UriRecognizer::prefixAt(std::string_view text) {
     for (const auto& prefix : prefixes) {
       if (text.size() >= prefix.text.size() && runtime::asciiEqualIgnoreCase(text.substr(0, prefix.text.size()), prefix.text)) {
         return prefix;
@@ -404,13 +405,13 @@ namespace telar::gui::features::terminal::links {
     return end;
   }
 
-  std::optional<LinkTarget> LinkTarget::fromUri(std::string_view text) {
+  ds::Option<LinkTarget> LinkTarget::fromUri(std::string_view text) {
     const auto scheme = UriRecognizer::classify(text);
 
-    return scheme ? std::optional{LinkTarget{*scheme, text}} : std::nullopt;
+    return scheme ? ds::Option{LinkTarget{*scheme, text}} : ds::none;
   }
 
-  std::optional<LinkTarget> LinkTarget::fromPath(std::string_view text) {
+  ds::Option<LinkTarget> LinkTarget::fromPath(std::string_view text) {
     if (text.empty() || text.size() > LinkText::maximum_uri_bytes || !LinkText::validUtf8(text) || std::ranges::any_of(text, LinkText::control)) {
       return {};
     }
@@ -435,7 +436,7 @@ namespace telar::gui::features::terminal::links {
     text_.assign(text);
   }
 
-  std::optional<LinkTextMatch> MarkdownLinks::extract(std::string_view line, std::size_t byte_offset) {
+  ds::Option<LinkTextMatch> MarkdownLinks::extract(std::string_view line, std::size_t byte_offset) {
     if (byte_offset >= line.size()) {
       return {};
     }
@@ -450,14 +451,14 @@ namespace telar::gui::features::terminal::links {
       }
 
       if (const auto found = parseAt(line, index)) {
-        return byte_offset < found->extent.end ? found : std::nullopt;
+        return byte_offset < found->extent.end ? found : ds::none;
       }
     }
 
     return {};
   }
 
-  std::optional<LinkTextMatch> MarkdownLinks::parseAt(std::string_view line, std::size_t start) {
+  ds::Option<LinkTextMatch> MarkdownLinks::parseAt(std::string_view line, std::size_t start) {
     constexpr std::size_t label_delimiters = 2;
     const auto label_limit = start + std::min(line.size() - start, label_delimiters + LinkText::maximum_label_bytes);
     auto label_end = start + 1;
@@ -508,7 +509,7 @@ namespace telar::gui::features::terminal::links {
     return LinkTextMatch{.scheme = *scheme, .extent = {.start = start, .end = end + 1}, .destination = {.start = destination_start, .end = end}};
   }
 
-  std::optional<LinkTextMatch> PathRecognizer::extract(std::string_view line, std::size_t byte_offset) {
+  ds::Option<LinkTextMatch> PathRecognizer::extract(std::string_view line, std::size_t byte_offset) {
     if (byte_offset >= line.size() || !tokenByte(line[byte_offset])) {
       return {};
     }
@@ -567,7 +568,7 @@ namespace telar::gui::features::terminal::links {
     return result;
   }
 
-  std::optional<PathLocation> PathRecognizer::fragment(std::string_view text) {
+  ds::Option<PathLocation> PathRecognizer::fragment(std::string_view text) {
     if (text.starts_with('L') || text.starts_with('l')) {
       text.remove_prefix(1);
     }
@@ -590,7 +591,7 @@ namespace telar::gui::features::terminal::links {
       text.remove_prefix(1 + column_digits);
     }
 
-    return text.empty() || text.starts_with('-') ? std::optional{result} : std::nullopt;
+    return text.empty() || text.starts_with('-') ? ds::Option{result} : ds::none;
   }
 
   std::size_t PathRecognizer::numberLength(std::string_view text) noexcept {
@@ -672,7 +673,7 @@ namespace telar::gui::features::terminal::links {
     return LinkText::alphanumeric(byte) || std::string_view{"/._-~+@%:"}.contains(byte) || static_cast<unsigned char>(byte) >= LinkText::first_non_ascii;
   }
 
-  std::optional<LinkMatch> CellLinks::match(const LinkGrid& grid, CellPosition point) {
+  ds::Option<LinkMatch> CellLinks::match(const LinkGrid& grid, CellPosition point) {
     const auto cursor = grid.cellIndex(point);
     if (!cursor) {
       return {};
@@ -711,10 +712,10 @@ namespace telar::gui::features::terminal::links {
     const auto destination = found->destination.view(bytes);
     const auto target = found->scheme == LinkScheme::path ? LinkTarget::fromPath(destination) : LinkTarget::fromUri(destination);
 
-    return target ? std::optional{LinkMatch{.target = *target, .start = extent->first, .end = extent->second}} : std::nullopt;
+    return target ? ds::Option{LinkMatch{.target = *target, .start = extent->first, .end = extent->second}} : ds::none;
   }
 
-  std::optional<std::size_t> CellLinks::windowStart(const LinkGrid& grid, std::size_t index) noexcept {
+  ds::Option<std::size_t> CellLinks::windowStart(const LinkGrid& grid, std::size_t index) noexcept {
     std::size_t visited = 0;
     std::size_t bytes = 0;
 
@@ -735,10 +736,10 @@ namespace telar::gui::features::terminal::links {
     return index;
   }
 
-  std::optional<CellLinks::Window> CellLinks::readWindow(const LinkGrid& grid, std::size_t index, std::size_t cursor, std::span<char> storage) noexcept {
+  ds::Option<CellLinks::Window> CellLinks::readWindow(const LinkGrid& grid, std::size_t index, std::size_t cursor, std::span<char> storage) noexcept {
     std::size_t visited = 0;
     std::size_t length = 0;
-    std::optional<std::size_t> cursor_offset;
+    ds::Option<std::size_t> cursor_offset;
 
     while (true) {
       if (visited++ == maximum_walk_cells) {
@@ -768,12 +769,12 @@ namespace telar::gui::features::terminal::links {
       index = *next;
     }
 
-    return cursor_offset ? std::optional{Window{.length = length, .cursor = *cursor_offset}} : std::nullopt;
+    return cursor_offset ? ds::Option{Window{.length = length, .cursor = *cursor_offset}} : ds::none;
   }
 
-  std::optional<std::pair<CellPosition, CellPosition>> CellLinks::positions(const LinkGrid& grid, std::size_t index, TextRange extent) noexcept {
+  ds::Option<std::pair<CellPosition, CellPosition>> CellLinks::positions(const LinkGrid& grid, std::size_t index, TextRange extent) noexcept {
     std::size_t offset = 0;
-    std::optional<CellPosition> first;
+    ds::Option<CellPosition> first;
 
     while (true) {
       const auto end = offset + grid.cells[index].utf8().size();
@@ -782,7 +783,7 @@ namespace telar::gui::features::terminal::links {
       }
 
       if (end >= extent.end) {
-        return first ? std::optional{std::pair{*first, grid.cellEnd(index)}} : std::nullopt;
+        return first ? ds::Option{std::pair{*first, grid.cellEnd(index)}} : ds::none;
       }
 
       offset = end;
@@ -833,7 +834,7 @@ namespace telar::gui::features::terminal::links {
     return FilePath{location};
   }
 
-  std::optional<char> FilePath::escapedByte(std::string_view text, EscapePolicy policy) noexcept {
+  ds::Option<char> FilePath::escapedByte(std::string_view text, EscapePolicy policy) noexcept {
     if (text.size() < escape_bytes) {
       return {};
     }
@@ -845,7 +846,7 @@ namespace telar::gui::features::terminal::links {
       return static_cast<char>(byte);
     }
 
-    return policy == EscapePolicy::tolerant && text[1] == '-' && text[2] == '0' ? std::optional{char{0}} : std::nullopt;
+    return policy == EscapePolicy::tolerant && text[1] == '-' && text[2] == '0' ? ds::Option{char{0}} : ds::none;
   }
 
   void FilePath::validateHost(std::string_view host) {

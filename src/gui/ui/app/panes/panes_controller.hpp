@@ -16,6 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -83,7 +84,7 @@ namespace telar::gui::qt {
     ListModel rows_;
     ListModel dividers_;
     double scale_ = 1;
-    std::optional<Inputs> synchronized_;
+    ds::Option<Inputs> synchronized_;
     std::uint64_t rebuilds_ = 0;
   };
 

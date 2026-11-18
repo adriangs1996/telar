@@ -12,6 +12,7 @@ import :center;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/notification_action_label.cppm
 export {
@@ -243,7 +244,7 @@ export {
         return result;
       }
 
-      [[nodiscard]] std::optional<std::uint64_t> nextDeadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> nextDeadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept;
 
     private:
       struct Motion {
@@ -256,7 +257,7 @@ export {
         [[nodiscard]] float value(std::uint64_t now_ns) const noexcept;
       };
 
-      [[nodiscard]] std::optional<std::size_t> motion(NotificationId id, float y) noexcept;
+      [[nodiscard]] ds::Option<std::size_t> motion(NotificationId id, float y) noexcept;
 
       std::array<Motion, NotificationCenter::capacity> motions_{};
     };

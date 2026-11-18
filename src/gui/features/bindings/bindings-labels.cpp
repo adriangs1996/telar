@@ -5,10 +5,11 @@ import std;
 import telar.base.text;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::bindings {
 
-  KeyLabel::Text KeyLabel::chord(std::optional<KeyChord> prefix, KeyChord key, KeyLabelStyle style) {
+  KeyLabel::Text KeyLabel::chord(ds::Option<KeyChord> prefix, KeyChord key, KeyLabelStyle style) {
     Text text;
 
     if (prefix) {

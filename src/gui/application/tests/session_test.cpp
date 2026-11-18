@@ -503,9 +503,9 @@ namespace {
     transport.reject_copy = false;
     check(application::terminal::copy_mode::copy(client, 1), "retained selection must remain copyable after transport recovery");
     client.input(1, "mouse", application::PaneInputSource::mouse);
-    check(application::terminal::copy_mode::view(client).state().has_value(), "mouse reports must preserve highlighting");
+    check(application::terminal::copy_mode::view(client).state().hasValue(), "mouse reports must preserve highlighting");
     client.input(1, "\x1b[O", application::PaneInputSource::terminal_report);
-    check(application::terminal::copy_mode::view(client).state().has_value(), "focus reports must preserve highlighting");
+    check(application::terminal::copy_mode::view(client).state().hasValue(), "focus reports must preserve highlighting");
     client.input(1, "release", application::PaneInputSource::key_release);
     check(!application::terminal::copy_mode::view(client).state() && client.focusedPane()->screen.scroll().offset == 0, "key releases must clear highlighting without changing the viewport");
     check(application::terminal::copy_mode::press(client, {.pane_id = 1, .now_ns = 2}), "a new pointer gesture must be available after typing");

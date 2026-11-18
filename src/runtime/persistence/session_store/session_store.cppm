@@ -22,6 +22,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.runtime.agents.screen_inference;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 // Interface: persistence/records.cppm
 export {
@@ -245,7 +246,7 @@ export {
 
       std::span<const Byte> bytes32();
 
-      std::optional<PaneRecord> pane();
+      ds::Option<PaneRecord> pane();
 
       WorktreeRecord worktree();
 
@@ -383,7 +384,7 @@ export {
           remaining.remove_prefix(end + 1);
         }
 
-        std::optional<AgentResume> resume = resumable(record);
+        ds::Option<AgentResume> resume = resumable(record);
         std::array<std::string_view, 4> resume_storage;
         auto resumed = resume ? resumeArguments(*resume, resume_storage) : std::span<const std::string_view>{};
         const bool direct = !resumed.empty() && original[0].substr(original[0].rfind('/') + 1) == resumed[0];
@@ -398,7 +399,7 @@ export {
         // No client asked for it: its shell keeps its prompt, which telar's editor covers.
         const auto identity = panes_.launch(model_, nullptr, false, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
 
-        model_.workspaces.find(record.workspace)->tab(record.tab)->panes.push_back(identity);
+        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push_back(identity);
         auto& pane = *model_.panes.find(identity);
 
         pane.launch.restore(record.arguments, record.argument_count);
@@ -428,14 +429,14 @@ export {
         input.append({&enter, 1});
       }
 
-      inline std::optional<AgentResume> resumable(const PaneRecord& record) const {
+      inline ds::Option<AgentResume> resumable(const PaneRecord& record) const {
         if (!resume_agents_ || !validResumeSession(record.provider, record.session)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         for (const auto* pane : model_.panes.items()) {
           if (pane != nullptr && pane->restored_agent && pane->restored_agent->provider == record.provider && pane->restored_agent->session.view() == record.session) {
-            return std::nullopt;
+            return ds::none;
           }
         }
 
@@ -583,7 +584,7 @@ export {
 
           const auto entry = worktree->entry();
 
-          writer.append(WorktreeRecord{entry.worktree, entry.workspace.value_or(0), RegisterWorktree{.source = entry.source, .created_by = entry.created_by, .origin = entry.origin, .path = entry.path, .branch = entry.branch, .base = entry.base, .title = entry.title, .brief = entry.brief, .dispatched_from = entry.dispatched_from, .coordinator = entry.coordinator}});
+          writer.append(WorktreeRecord{entry.worktree, entry.workspace.valueOr(0), RegisterWorktree{.source = entry.source, .created_by = entry.created_by, .origin = entry.origin, .path = entry.path, .branch = entry.branch, .base = entry.base, .title = entry.title, .brief = entry.brief, .dispatched_from = entry.dispatched_from, .coordinator = entry.coordinator}});
         }
 
         for (const auto* pane : model.panes.items()) {
@@ -634,7 +635,7 @@ export {
 
         for (std::size_t index = 0; index < panes.size(); ++index) {
           const auto* pane = panes[index];
-          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->output_closed || pane->exit_status.has_value() || pane->close_requested};
+          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
 
           changed |= stamp != stamps_[index];
           stamps_[index] = stamp;
@@ -678,7 +679,7 @@ export {
 
       inline ~SessionStore() {
         if (worker_) {
-          worker_->wait([](int) {});
+          worker_.getMut().wait([](int) {});
         }
       }
 
@@ -736,7 +737,7 @@ export {
           TELAR_TRACE("checkpoint.encode");
           const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_, dropped_records);
 
-          pending_ = worker_->submit(bytes);
+          pending_ = worker_.getMut().submit(bytes);
           dirty_ = !pending_;
         } catch (const std::exception&) {
           dirty_ = false;
@@ -748,7 +749,7 @@ export {
 
       inline void collect() {
         if (worker_) {
-          worker_->collect([&](int error) {
+          worker_.getMut().collect([&](int error) {
             completed(error);
           });
         }
@@ -760,14 +761,14 @@ export {
         }
 
         try {
-          worker_->wait([&](int error) {
+          worker_.getMut().wait([&](int error) {
             completed(error);
           });
 
           if (snapshot_.changed(model, layouts, agents) || dirty_) {
             const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_, dropped_records);
-            if (worker_->submit(bytes)) {
-              worker_->wait([&](int error) {
+            if (worker_.getMut().submit(bytes)) {
+              worker_.getMut().wait([&](int error) {
                 completed(error);
               });
             }
@@ -801,7 +802,7 @@ export {
       Snapshot<Agents> snapshot_;
       Vector<Byte, ConcurrentMemory> buffer_;
       // The worker stores the encoded buffer above until its result is collected, so the store stays put.
-      tbc::view<std::optional<ObservationWorker<FileStore<ConcurrentMemory>>>, tbc::lt::self> worker_;
+      tbc::view<ds::Option<ObservationWorker<FileStore<ConcurrentMemory>>>, tbc::lt::self> worker_;
       Clock::time_point due_{};
       bool dirty_ = false;
       bool pending_ = false;

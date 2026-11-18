@@ -9,6 +9,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
 import :pane_layout;
+import telar.base.ds;
 
 // Interface: presentation/status_age.cppm
 export {
@@ -130,9 +131,9 @@ export {
 
       std::uint64_t id = 0;
       std::uint64_t source = 0;
-      std::optional<std::uint64_t> workspace;
-      std::optional<std::uint64_t> created_by;
-      std::optional<CoordinatorReference> coordinator;
+      ds::Option<std::uint64_t> workspace;
+      ds::Option<std::uint64_t> created_by;
+      ds::Option<CoordinatorReference> coordinator;
       WorktreeState state = WorktreeState::active;
       String<Memory> path;
       String<Memory> branch;

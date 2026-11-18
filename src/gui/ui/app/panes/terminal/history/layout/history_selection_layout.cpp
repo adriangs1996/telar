@@ -20,6 +20,7 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -82,8 +83,8 @@ namespace telar::gui::qt {
     return isVisible();
   }
 
-  std::optional<std::uint64_t> HistorySelectionLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
-    return frame_requested_ ? std::nullopt : next_sample_ns_;
+  ds::Option<std::uint64_t> HistorySelectionLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
+    return frame_requested_ ? ds::none : next_sample_ns_;
   }
 
   // Queue a frame without advancing the transition: its initial zero-open sample

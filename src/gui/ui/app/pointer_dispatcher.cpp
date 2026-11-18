@@ -55,6 +55,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -129,7 +130,7 @@ namespace telar::gui::qt {
   }
 
   void PointerDispatcher::cancel() {
-    tabs_.observeHover(std::nullopt);
+    tabs_.observeHover(ds::none);
     tabs_.cancelDrag();
     history_.retireHover();
     for (auto& lease : captures_) {
@@ -276,7 +277,7 @@ namespace telar::gui::qt {
       case QEvent::Leave:
         tabs_.leave();
         history_.retireHover();
-        attachments_.shelf()->observePointer(std::nullopt);
+        attachments_.shelf()->observePointer(ds::none);
         activity_.observePointer(false);
         return false;
       case QEvent::MouseButtonRelease: {

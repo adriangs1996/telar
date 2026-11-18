@@ -23,6 +23,7 @@ import :client_view_state;
 import :session;
 import telar.gui.features.configuration;
 import :configuration_readers;
+import telar.base.ds;
 
 // Interface: config/reader.cppm
 export {
@@ -131,7 +132,7 @@ export {
       void forgetElements(std::uint64_t instance) noexcept;
 
       // Safe on the window thread: configured bindings are fixed when the generation loads.
-      [[nodiscard]] std::optional<ExtendedActionDescription> configuredAction(BindingAction action) const;
+      [[nodiscard]] ds::Option<ExtendedActionDescription> configuredAction(BindingAction action) const;
 
       void renderPick(std::size_t index, const features::components::Context& context, features::components::PickItems& items);
 
@@ -148,17 +149,17 @@ export {
 
       [[nodiscard]] const runtime::config::RetainedCommandTabRegistry& commandTabs() const noexcept;
 
-      [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action) const;
+      [[nodiscard]] ds::Option<runtime::config::CommandTabView> commandTab(BindingAction action) const;
 
-      [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const;
+      [[nodiscard]] ds::Option<NotificationActionDescription> notificationAction(BindingAction action) const;
 
       [[nodiscard]] const InputConfiguration& input() const noexcept;
 
-      [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action) const;
+      [[nodiscard]] ds::Option<PluginActionDescription> pluginAction(BindingAction action) const;
 
-      [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action) const;
+      [[nodiscard]] ds::Option<DefinitionActionDescription> definitionAction(BindingAction action) const;
 
-      [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action) const;
+      [[nodiscard]] ds::Option<NamedActionDescription> namedAction(BindingAction action) const;
 
       template <typename Visitor>
       TBC_GENERIC void visitPluginActions(const Visitor& visitor) const {
@@ -208,9 +209,9 @@ export {
 
       // Reads an element's `on_click` action table and resolves it at once. Its registry entry is
       // released here, so the action carries a reference private to its element tree.
-      std::optional<features::components::ResolvedAction> elementAction(const runtime::lua::Value& value, std::uint32_t index);
+      ds::Option<features::components::ResolvedAction> elementAction(const runtime::lua::Value& value, std::uint32_t index);
 
-      [[nodiscard]] std::optional<ExtendedActionDescription> extendedAction(BindingAction action) const;
+      [[nodiscard]] ds::Option<ExtendedActionDescription> extendedAction(BindingAction action) const;
 
       template <typename Consumer>
       auto withDefinitions(Consumer&& consume) const;
@@ -237,7 +238,7 @@ export {
       tbc::view<runtime::lua::Vm<Memory>, tbc::lt::a> machine_;
       tbc::view<Owned<runtime::config::RuntimeValues<Memory>, Memory>, tbc::lt::a> runtime_;
       tbc::view<Owned<ComponentConfiguration, Memory>, tbc::lt::a> components_;
-      std::optional<runtime::config::LocalModules> modules_;
+      ds::Option<runtime::config::LocalModules> modules_;
       runtime::config::LimitNotices notices_;
       runtime::config::RetainedClientValidationState client_state_;
       tbc::view<ActionDescriptions<Memory>, tbc::lt::a> descriptions_;
@@ -268,8 +269,8 @@ export {
   namespace telar::gui::application {
 
     struct ClientQueryContext {
-      std::optional<std::string_view> source;
-      std::optional<std::string_view> profile;
+      ds::Option<std::string_view> source;
+      ds::Option<std::string_view> profile;
       std::uint64_t generation = 0;
       ClientViewState view;
     };
@@ -280,7 +281,7 @@ export {
       [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const Configuration& configuration, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
 
     private:
-      static void writeOptionalBytes(JsonWriter& writer, std::optional<std::string_view> text);
+      static void writeOptionalBytes(JsonWriter& writer, ds::Option<std::string_view> text);
       static void writeSound(JsonWriter& writer, SoundPolicy policy);
       static void writeSections(JsonWriter& writer);
     };

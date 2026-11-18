@@ -16,6 +16,7 @@ import :face_views;
 import :face;
 import :font_requests;
 import :text_runs;
+import telar.base.ds;
 
 // Interface: fonts/font_runs.cppm
 export {
@@ -23,12 +24,12 @@ export {
 
     template <typename Fonts>
     concept CascadingFontProvider = FontProvider<Fonts> && requires(Fonts& fonts, std::string_view text, FontRole role) {
-      { fonts.source(text, role) } -> std::same_as<std::optional<FontRole>>;
+      { fonts.source(text, role) } -> std::same_as<ds::Option<FontRole>>;
     };
 
     struct FontSpan {
       std::string_view text;
-      std::optional<FontRole> role = std::nullopt;
+      ds::Option<FontRole> role = ds::none;
       std::uint32_t columns = 0;
     };
 
@@ -42,15 +43,15 @@ export {
             cursor_(text),
             preferred_(preferred) {}
 
-      [[nodiscard]] inline std::optional<FontSpan> next() {
+      [[nodiscard]] inline ds::Option<FontSpan> next() {
         const auto start = cursor_.position();
         const auto cluster = cursor_.next();
         if (!cluster) {
-          return std::nullopt;
+          return ds::none;
         }
 
         auto role = fonts_.source(*cluster, preferred_);
-        const auto resolved = role.value_or(FontRole::primary);
+        const auto resolved = role.valueOr(FontRole::primary);
         std::uint32_t columns = cursor_.columns();
 
         if (resolved == preferred_) {
@@ -62,7 +63,7 @@ export {
             }
 
             const auto following_role = fonts_.source(*following, preferred_);
-            if (following_role.value_or(FontRole::primary) != resolved) {
+            if (following_role.valueOr(FontRole::primary) != resolved) {
               break;
             }
 
@@ -144,7 +145,7 @@ export {
         std::int32_t advance = 0;
 
         visit(fonts, text, request, [&](FontSpan span) {
-          const auto run = fonts.face(span.role.value_or(FontRole::primary)).shape(span.text, request.pixel_height);
+          const auto run = fonts.face(span.role.valueOr(FontRole::primary)).shape(span.text, request.pixel_height);
 
           advance = addAdvance(advance, spanAdvance(fonts, span, request, run.advance()));
         });
@@ -158,7 +159,7 @@ export {
       template <CascadingFontProvider Fonts>
       TBC_GENERIC void append(Fonts& fonts, std::string_view text, TextRequest request) {
         visit(fonts, text, request, [&](FontSpan span) {
-          const auto role = span.role.value_or(FontRole::primary);
+          const auto role = span.role.valueOr(FontRole::primary);
           const auto run = fonts.face(role).shape(span.text, request.pixel_height);
           const auto start = glyphs_.size();
 
@@ -211,7 +212,7 @@ export {
 
       Vector<ShapedGlyph, Memory> glyphs_;
       Vector<TextSpan, Memory> spans_;
-      std::optional<TextSpan> single_span_;
+      ds::Option<TextSpan> single_span_;
       std::int32_t advance_ = 0;
     };
 
@@ -240,7 +241,7 @@ export {
         GraphemeCursor cursor{text};
 
         while (const auto cluster_text = cursor.next()) {
-          const auto role = fonts.source(*cluster_text, FontRole::primary).value_or(FontRole::primary);
+          const auto role = fonts.source(*cluster_text, FontRole::primary).valueOr(FontRole::primary);
 
           append(fonts.face(role).shape(*cluster_text, grid.pixel_height), role, grid, cursor.columns());
         }
@@ -444,7 +445,7 @@ export {
     struct RowTextRequest {
       std::uint16_t pixel_height = 1;
       std::uint16_t cell_width = 1;
-      std::optional<std::size_t> cursor = std::nullopt;
+      ds::Option<std::size_t> cursor = ds::none;
       CellSelection selection{};
       std::size_t first_cell = 0;
     };
@@ -613,7 +614,7 @@ export {
       Vector<ShapedGlyph, Memory> glyphs_;
       Vector<TextSpan, Memory> spans_;
       Vector<CellTextRange, Memory> cells_;
-      std::array<std::optional<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
+      std::array<ds::Option<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
       std::array<Cluster, std::size_t{1} << cluster_bits> clusters_{};
       const Face* cached_face_ = nullptr;
       std::uint16_t cached_height_ = 0;

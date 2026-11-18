@@ -4,6 +4,7 @@ import std;
 import telar.base.text.utf8;
 import telar.gui.features.machines;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -28,7 +29,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  std::optional<std::span<const Byte>> FrameStream<Memory>::next(std::span<const Byte>& input) {
+  ds::Option<std::span<const Byte>> FrameStream<Memory>::next(std::span<const Byte>& input) {
     while (!input.empty()) {
       if (prefix_used_ < prefix_.size()) {
         const auto count = std::min(input.size(), prefix_.size() - prefix_used_);
@@ -38,7 +39,7 @@ namespace telar::gui::application {
         input = input.subspan(count);
 
         if (prefix_used_ != prefix_.size()) {
-          return std::nullopt;
+          return ds::none;
         }
 
         std::span<const Byte> prefix{prefix_};
@@ -72,7 +73,7 @@ namespace telar::gui::application {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template class FrameStream<telar::Memory>;
@@ -92,7 +93,7 @@ namespace telar::gui::application {
     return schema == handshake::schema_id || schema == cqp00003;
   }
 
-  std::optional<SchemaId> RuntimeProtocol::retry(std::span<const Byte> payload, const SchemaId& requested) {
+  ds::Option<SchemaId> RuntimeProtocol::retry(std::span<const Byte> payload, const SchemaId& requested) {
     try {
       const auto response = HandshakeCodec::decodeResponse(payload);
       const auto* rejected = std::get_if<ServerReject>(&response);
@@ -100,10 +101,10 @@ namespace telar::gui::application {
         return rejected->expected_schema;
       }
     } catch (const EncodingError&) {
-      return std::nullopt;
+      return ds::none;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   RuntimeHandshake::Result RuntimeHandshake::inspect(std::span<const Byte> payload, const SchemaId& requested) {
@@ -198,8 +199,8 @@ namespace telar::gui::application {
     failure_storage.append({cleaned.data(), kept.size()});
   }
 
-  std::optional<std::string_view> RuntimeLink::failure() const noexcept {
-    return failure_storage.view().empty() ? std::nullopt : std::optional{failure_storage.view()};
+  ds::Option<std::string_view> RuntimeLink::failure() const noexcept {
+    return failure_storage.view().empty() ? ds::none : ds::Option{failure_storage.view()};
   }
 
   void RuntimeLink::clearFailure() noexcept {

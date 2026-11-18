@@ -8,17 +8,18 @@ import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 export {
   namespace telar::gui::test {
 
-    inline SystemMetrics hostSample(std::uint64_t revision, std::uint8_t cpu_percent, std::uint16_t memory_used = 0, std::optional<std::uint8_t> battery = std::nullopt) {
+    inline SystemMetrics hostSample(std::uint64_t revision, std::uint8_t cpu_percent, std::uint16_t memory_used = 0, ds::Option<std::uint8_t> battery = ds::none) {
       return {
           .revision = revision,
           .cpu_percent = cpu_percent,
           .memory_used_decigib = memory_used,
-          .has_battery = battery.has_value(),
-          .battery_percent = battery.value_or(0),
+          .has_battery = battery.hasValue(),
+          .battery_percent = battery.valueOr(0),
           .cpu_count = 0,
           .memory_total_decigib = 0,
       };

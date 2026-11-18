@@ -15,6 +15,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -72,7 +73,7 @@ namespace telar::gui::qt {
   }
 
   bool TerminalController::input(std::uint64_t pane_id, const QByteArray& bytes, application::PaneInputSource source) {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     const auto* const current = session.findPane(pane_id);
     if (current == nullptr || !current->attached || current->exited || bytes.isEmpty()) {
       return false;
@@ -100,7 +101,7 @@ namespace telar::gui::qt {
     try {
       const auto bytes = text.toUtf8();
 
-      store_.session().paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+      store_.sessionMut().paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -110,7 +111,7 @@ namespace telar::gui::qt {
 
   void TerminalController::resize(std::uint64_t pane_id, TerminalSize size) {
     try {
-      store_.session().resize(pane_id, size);
+      store_.sessionMut().resize(pane_id, size);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -118,7 +119,7 @@ namespace telar::gui::qt {
 
   void TerminalController::scroll(application::PaneScrollDelta delta) {
     try {
-      store_.session().scroll(delta);
+      store_.sessionMut().scroll(delta);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -126,15 +127,15 @@ namespace telar::gui::qt {
 
   void TerminalController::scrollToRow(std::uint64_t pane_id, std::uint32_t row) {
     try {
-      store_.session().scrollToRow(pane_id, row);
+      store_.sessionMut().scrollToRow(pane_id, row);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
   }
 
-  void TerminalController::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index) {
+  void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index) {
     try {
-      store_.session().selectBlock(pane_id, index);
+      store_.sessionMut().selectBlock(pane_id, index);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -159,7 +160,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     std::array<ImagePlacementSource, PaneLayout::maximum_panes> sources;
     std::size_t count = 0;
     const auto* tab = session.activeTab();
@@ -246,7 +247,7 @@ namespace telar::gui::qt {
     return {.button = button, .phase = phase, .position = {.x = static_cast<float>(event.position().x()), .y = static_cast<float>(event.position().y())}, .modifiers = TerminalItem::mouseModifiers(event.modifiers())};
   }
 
-  void TerminalController::report(std::uint64_t pane_id, const std::optional<application::terminal::input::ChildMouseReport>& report) {
+  void TerminalController::report(std::uint64_t pane_id, const ds::Option<application::terminal::input::ChildMouseReport>& report) {
     if (!report) {
       return;
     }
@@ -274,7 +275,7 @@ namespace telar::gui::qt {
 
     for (auto& lease : captures_) {
       const auto pane_id = lease.pane_id;
-      const auto outcome = lease.child.owned() ? std::optional{lease.child.cancel(view(lease))} : std::nullopt;
+      const auto outcome = lease.child.owned() ? ds::Option{lease.child.cancel(view(lease))} : ds::none;
 
       lease.terminal.clear();
       if (outcome) {

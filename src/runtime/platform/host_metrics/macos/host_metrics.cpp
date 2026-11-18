@@ -9,33 +9,34 @@ import telar.sys.posix;
 
 import telar.platform.primitives;
 import telar.runtime.platform.frameworks;
+import telar.base.ds;
 
 namespace telar::runtime {
   namespace {
 
-    std::optional<std::int32_t> integerValue(CFDictionaryRef dictionary, CFStringRef key) noexcept {
+    ds::Option<std::int32_t> integerValue(CFDictionaryRef dictionary, CFStringRef key) noexcept {
       const auto value = CFDictionaryGetValue(dictionary, key);
       if (value == nullptr || CFGetTypeID(value) != CFNumberGetTypeID()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       std::int32_t integer = 0;
       if (!CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberSInt32Type, &integer)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return integer;
     }
 
-    std::optional<std::uint8_t> batteryPercent() noexcept {
+    ds::Option<std::uint8_t> batteryPercent() noexcept {
       const std::unique_ptr<const void, decltype(&CFRelease)> information{IOPSCopyPowerSourcesInfo(), &CFRelease};
       if (!information) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const std::unique_ptr<const void, decltype(&CFRelease)> sources{IOPSCopyPowerSourcesList(information.get()), &CFRelease};
       if (!sources) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto array = static_cast<CFArrayRef>(sources.get());
@@ -56,7 +57,7 @@ namespace telar::runtime {
         return static_cast<std::uint8_t>(std::min<std::int64_t>(100, static_cast<std::int64_t>(*current) * 100 / *maximum));
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     template <typename Integer>
@@ -72,7 +73,7 @@ namespace telar::runtime {
 
   }
 
-  std::optional<HostCounters> NativeHostMetrics::read() noexcept {
+  ds::Option<HostCounters> NativeHostMetrics::read() noexcept {
     TELAR_TRACE("metrics.readHost");
     const auto host = ::mach_host_self();
     host_cpu_load_info_data_t cpu{};
@@ -84,7 +85,7 @@ namespace telar::runtime {
 
     ::mach_port_deallocate(::mach_task_self(), host);
     if (cpu_result != KERN_SUCCESS || memory_result != KERN_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto busy = static_cast<std::uint64_t>(cpu.cpu_ticks[CPU_STATE_USER]) + cpu.cpu_ticks[CPU_STATE_SYSTEM] + cpu.cpu_ticks[CPU_STATE_NICE];

@@ -123,8 +123,8 @@ namespace telar::gui::qt {
       batch_ = Batch{.first_column = column, .last_column = column, .first_span = range.first_span, .span_count = 0, .foreground = foreground, .style = style, .font = font};
     }
 
-    batch_->last_column = column;
-    batch_->span_count += range.span_count;
+    batch_.getMut().last_column = column;
+    batch_.getMut().span_count += range.span_count;
   }
 
   std::unique_ptr<QSGNode> TextScene::takeChunk() {
@@ -162,7 +162,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto batch = std::move(*batch_);
+    const auto batch = std::move(batch_.getMut());
 
     batch_.reset();
     ChromeTextPaint paint;

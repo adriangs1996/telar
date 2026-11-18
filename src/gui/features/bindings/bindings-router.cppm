@@ -10,6 +10,7 @@ import std;
 
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 // Interface: input/key_router.cppm
 export {
@@ -31,14 +32,14 @@ export {
         application,
       };
 
-      [[nodiscard]] std::optional<Owner> owner(std::uint64_t physical) const noexcept;
+      [[nodiscard]] ds::Option<Owner> owner(std::uint64_t physical) const noexcept;
 
       // A new press of a held key gives it back to the bindings; nothing is held past the table's size.
       bool acquire(std::uint64_t physical) noexcept;
 
       void transfer(std::uint64_t physical) noexcept;
 
-      std::optional<Owner> release(std::uint64_t physical) noexcept;
+      ds::Option<Owner> release(std::uint64_t physical) noexcept;
 
       void clear() noexcept;
 
@@ -81,10 +82,10 @@ export {
 
       struct Context {
         bool captures_keys = false;
-        std::optional<BindingRepeat> repeat;
+        ds::Option<BindingRepeat> repeat;
       };
 
-      inline explicit KeyRouter(BindingMap<Action> map = BindingMap<Action>{}, std::optional<KeyChord> prefix = {})
+      inline explicit KeyRouter(BindingMap<Action> map = BindingMap<Action>{}, ds::Option<KeyChord> prefix = {})
           : map_(std::move(map)),
             prefix_(prefix),
             candidates_{0, map_.size()} {}
@@ -103,9 +104,9 @@ export {
         return prefix_pending_;
       }
 
-      [[nodiscard]] inline std::optional<KeyChord> prefixedKeyForAction(const Action& action) const noexcept {
+      [[nodiscard]] inline ds::Option<KeyChord> prefixedKeyForAction(const Action& action) const noexcept {
         if (!prefix_) {
-          return std::nullopt;
+          return ds::none;
         }
 
         for (const auto& binding : map_.configured()) {
@@ -114,14 +115,14 @@ export {
           }
         }
 
-        return std::nullopt;
+        return ds::none;
       }
 
       [[nodiscard]] inline bool hasPhysicalKey(std::uint64_t physical) const noexcept {
-        return leases_.owner(physical).has_value();
+        return leases_.owner(physical).hasValue();
       }
 
-      [[nodiscard]] inline std::optional<std::uint64_t> deadline() const noexcept {
+      [[nodiscard]] inline ds::Option<std::uint64_t> deadline() const noexcept {
         if (prefix_pending_ || !since_) {
           return {};
         }
@@ -191,14 +192,14 @@ export {
         return decision;
       }
 
-      inline void actionCompleted(const Decision& decision, std::optional<BindingRepeat> policy) {
+      inline void actionCompleted(const Decision& decision, ds::Option<BindingRepeat> policy) {
         if (!decision.repeated && decision.event.physical != 0 && policy && policy->interval_ns != 0) {
           repeating_ = Repeating{decision.event, decision.action, *policy, decision.now_ns};
         }
       }
 
-      [[nodiscard]] inline std::optional<Action> repeatAction() const {
-        return repeating_ ? std::optional{repeating_->action} : std::nullopt;
+      [[nodiscard]] inline ds::Option<Action> repeatAction() const {
+        return repeating_ ? ds::Option{repeating_->action} : ds::none;
       }
 
       inline void eventFailed(const Event& event) noexcept {
@@ -252,7 +253,7 @@ export {
         leases_.transfer(physical);
       }
 
-      inline std::optional<Owner> release(std::uint64_t physical) noexcept {
+      inline ds::Option<Owner> release(std::uint64_t physical) noexcept {
         if (repeating_ && repeating_->event.physical == physical) {
           repeating_.reset();
         }
@@ -260,7 +261,7 @@ export {
         return leases_.release(physical);
       }
 
-      inline Decision routeLease(const Event& event, std::uint64_t now_ns, std::optional<BindingRepeat> policy) {
+      inline Decision routeLease(const Event& event, std::uint64_t now_ns, ds::Option<BindingRepeat> policy) {
         if (event.phase == KeyPhase::release) {
           return release(event.physical) == Owner::application ? Decision{.outcome = Outcome::forward, .event = event} : Decision{};
         }
@@ -288,7 +289,7 @@ export {
           return {};
         }
 
-        repeating_->last_ns = now_ns;
+        repeating_.getMut().last_ns = now_ns;
 
         return {.outcome = Outcome::action, .action = repeating_->action, .event = event, .repeated = true, .now_ns = now_ns};
       }
@@ -365,12 +366,12 @@ export {
       }
 
       BindingMap<Action> map_;
-      std::optional<KeyChord> prefix_;
+      ds::Option<KeyChord> prefix_;
       BindingMap<Action>::Range candidates_;
       std::array<Event, BindingLimits::keys> held_{};
       KeyLeases leases_;
-      std::optional<Repeating> repeating_;
-      std::optional<std::uint64_t> since_;
+      ds::Option<Repeating> repeating_;
+      ds::Option<std::uint64_t> since_;
       std::uint64_t timeout_ns_ = BindingLimits::sequence_timeout_ns;
       std::size_t depth_ = 0;
       bool prefix_pending_ = false;

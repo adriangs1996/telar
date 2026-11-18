@@ -5,6 +5,7 @@ import telar.base.diagnostics;
 import telar.gui.foundation.core;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -33,7 +34,7 @@ namespace telar::gui::features::notifications {
     return true;
   }
 
-  std::optional<NotificationTarget> activate(State& state, NotificationId id, std::uint64_t now_ns) noexcept {
+  ds::Option<NotificationTarget> activate(State& state, NotificationId id, std::uint64_t now_ns) noexcept {
     const auto target = Access::center(state).activate(id, now_ns);
     if (target) {
       ++Access::revision(state);
@@ -50,7 +51,7 @@ namespace telar::gui::features::notifications {
     return Access::sound(state).request(sound);
   }
 
-  std::optional<AgentSound> completeSound(State& state) {
+  ds::Option<AgentSound> completeSound(State& state) {
     return Access::sound(state).complete();
   }
 
@@ -68,11 +69,11 @@ namespace telar::gui::features::notifications {
     return Access::limits(state).record(reach, sampled, 1);
   }
 
-  std::optional<ReportLimit> takeReport(State& state, LimitSlot slot, std::int64_t awake_ms) {
+  ds::Option<ReportLimit> takeReport(State& state, LimitSlot slot, std::int64_t awake_ms) {
     auto& limits = Access::limits(state);
     const auto hits = limits.takeReport(slot, awake_ms);
     if (!hits) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return ReportLimit{.reach = limits.row(slot).reach(), .hits = *hits};

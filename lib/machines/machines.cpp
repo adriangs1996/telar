@@ -3,6 +3,7 @@ module telar.machines;
 import std;
 import telar.sys.posix;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::runtime::machines {
 
@@ -120,17 +121,17 @@ namespace telar::runtime::machines {
     return names.at(static_cast<std::size_t>(code));
   }
 
-  std::optional<MachineError> MachineFailure::named(std::string_view text) noexcept {
+  ds::Option<MachineError> MachineFailure::named(std::string_view text) noexcept {
     for (auto code = std::uint8_t{0}; code <= static_cast<std::uint8_t>(MachineError::invalid_runtime_directory); ++code) {
       if (text == name(static_cast<MachineError>(code))) {
         return static_cast<MachineError>(code);
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<std::string_view> MachineFailure::description(MachineError code) noexcept {
+  ds::Option<std::string_view> MachineFailure::description(MachineError code) noexcept {
     switch (code) {
     case MachineError::unknown_machine:
       return "no saved machine has that label; see `telar machine list`";
@@ -153,7 +154,7 @@ namespace telar::runtime::machines {
     case MachineError::incompatible_profiles:
       return "machines.json was written by a newer telar; update this one to read it";
     default:
-      return std::nullopt;
+      return ds::none;
     }
   }
 
@@ -727,11 +728,11 @@ namespace telar::runtime::machines {
     return destination_.view();
   }
 
-  std::optional<std::string_view> MachineProfile::color() const noexcept {
+  ds::Option<std::string_view> MachineProfile::color() const noexcept {
     return optional(color_.view());
   }
 
-  std::optional<std::string_view> MachineProfile::program() const noexcept {
+  ds::Option<std::string_view> MachineProfile::program() const noexcept {
     return optional(program_.view());
   }
 
@@ -753,24 +754,24 @@ namespace telar::runtime::machines {
     program_.assign(path);
   }
 
-  void MachineProfile::recordLogin(MachineAgent agent, std::optional<MachineLogin> login) {
+  void MachineProfile::recordLogin(MachineAgent agent, ds::Option<MachineLogin> login) {
     logins_.at(static_cast<std::size_t>(agent)) = login;
   }
 
-  std::optional<MachineLogin> MachineProfile::login(MachineAgent agent) const {
+  ds::Option<MachineLogin> MachineProfile::login(MachineAgent agent) const {
     return logins_.at(static_cast<std::size_t>(agent));
   }
 
-  std::optional<std::string_view> MachineProfile::optional(std::string_view value) noexcept {
-    return value.empty() ? std::nullopt : std::optional{value};
+  ds::Option<std::string_view> MachineProfile::optional(std::string_view value) noexcept {
+    return value.empty() ? ds::none : ds::Option{value};
   }
 
   std::span<const MachineProfile> MachineProfiles::rows() const noexcept {
     return std::span{rows_}.first(length_);
   }
 
-  std::optional<std::string_view> MachineProfiles::localLabel() const noexcept {
-    return local_label_.view().empty() ? std::nullopt : std::optional{local_label_.view()};
+  ds::Option<std::string_view> MachineProfiles::localLabel() const noexcept {
+    return local_label_.view().empty() ? ds::none : ds::Option{local_label_.view()};
   }
 
   void MachineProfiles::relabelLocal(std::string_view label) {
@@ -778,16 +779,16 @@ namespace telar::runtime::machines {
     local_label_.assign(label);
   }
 
-  std::optional<std::size_t> MachineProfiles::find(std::string_view label) const noexcept {
+  ds::Option<std::size_t> MachineProfiles::find(std::string_view label) const noexcept {
     const auto found = std::ranges::find(rows(), label, &MachineProfile::label);
 
-    return found == rows().end() ? std::nullopt : std::optional{static_cast<std::size_t>(found - rows().begin())};
+    return found == rows().end() ? ds::none : ds::Option{static_cast<std::size_t>(found - rows().begin())};
   }
 
-  std::optional<std::size_t> MachineProfiles::findDestination(std::string_view destination) const noexcept {
+  ds::Option<std::size_t> MachineProfiles::findDestination(std::string_view destination) const noexcept {
     const auto found = std::ranges::find(rows(), destination, &MachineProfile::destination);
 
-    return found == rows().end() ? std::nullopt : std::optional{static_cast<std::size_t>(found - rows().begin())};
+    return found == rows().end() ? ds::none : ds::Option{static_cast<std::size_t>(found - rows().begin())};
   }
 
   void MachineProfiles::add(const MachineProfile& profile) {
@@ -846,7 +847,7 @@ namespace telar::runtime::machines {
   std::uint16_t MachineProfiles::version() const {
     for (const auto& profile : rows()) {
       if (profile.program() || std::ranges::any_of(machine_agents, [&](MachineAgent agent) {
-            return profile.login(agent).has_value();
+            return profile.login(agent).hasValue();
           })) {
         return extended_format_version;
       }
@@ -960,7 +961,7 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  void MachineProfileCodec::validateOptionalString(const std::optional<runtime::JsonValue>& value, String<Memory>& scratch) {
+  void MachineProfileCodec::validateOptionalString(const ds::Option<runtime::JsonValue>& value, String<Memory>& scratch) {
     if (value && !isNull(*value)) {
       value->string(scratch);
     }
@@ -1028,16 +1029,16 @@ namespace telar::runtime::machines {
     const auto label = readString(memory, fields.required("label"));
     const auto destination = readString(memory, fields.required("destination"));
     const auto& color_value = fields.optional("color");
-    const auto color = color_value && !isNull(*color_value) ? std::optional{readString(memory, *color_value)} : std::nullopt;
+    const auto color = color_value && !isNull(*color_value) ? ds::Option{readString(memory, *color_value)} : ds::none;
     const auto& program_value = fields.optional("telar_path");
-    const auto program = program_value && !isNull(*program_value) ? std::optional{readString(memory, *program_value)} : std::nullopt;
+    const auto program = program_value && !isNull(*program_value) ? ds::Option{readString(memory, *program_value)} : ds::none;
     const auto& enabled = fields.optional("enabled");
     auto profile = MachineProfile::create(identity, {
                                                         .label = label,
                                                         .destination = destination,
-                                                        .color = color ? std::optional<std::string_view>{*color} : std::nullopt,
+                                                        .color = color ? ds::Option<std::string_view>{*color} : ds::none,
                                                         .enabled = !enabled || enabled->boolean(),
-                                                        .program = program ? std::optional<std::string_view>{*program} : std::nullopt,
+                                                        .program = program ? ds::Option<std::string_view>{*program} : ds::none,
                                                     });
 
     if (const auto& logins = fields.optional("logins"); logins && !isNull(*logins)) {
@@ -1099,15 +1100,15 @@ namespace telar::runtime::machines {
   template void MachineProfileCodec::appendProfile<Memory>(String<Memory>&, const MachineProfile&);
   template void MachineProfileCodec::appendProfile<ConcurrentMemory>(String<ConcurrentMemory>&, const MachineProfile&);
 
-  MachineRemoteCommand::Text MachineRemoteCommand::discovery(std::optional<std::string_view> program) {
+  MachineRemoteCommand::Text MachineRemoteCommand::discovery(ds::Option<std::string_view> program) {
     return format(discovery_prefix, program, discovery_suffix);
   }
 
-  MachineRemoteCommand::Text MachineRemoteCommand::bridge(std::optional<std::string_view> program) {
+  MachineRemoteCommand::Text MachineRemoteCommand::bridge(ds::Option<std::string_view> program) {
     return format(bridge_prefix, program, bridge_suffix);
   }
 
-  MachineRemoteCommand::Text MachineRemoteCommand::format(std::string_view prefix, std::optional<std::string_view> program, std::string_view suffix) {
+  MachineRemoteCommand::Text MachineRemoteCommand::format(std::string_view prefix, ds::Option<std::string_view> program, std::string_view suffix) {
     if (program) {
       MachineFieldRules::program(*program);
     }
@@ -1115,7 +1116,7 @@ namespace telar::runtime::machines {
     Text command;
 
     command.append(prefix);
-    command.append(program.value_or("telar"));
+    command.append(program.valueOr("telar"));
     command.append(suffix);
 
     return command;

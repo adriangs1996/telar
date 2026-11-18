@@ -137,7 +137,7 @@ namespace telar::runtime::control {
 
         const auto style_id = static_cast<GhosttyStyleId>(cell_layout::style_id(cell));
         if (needs_style && style_id != 0 && style_id != previous_style_id) {
-          reference->x = static_cast<std::uint16_t>(column);
+          reference.getMut().x = static_cast<std::uint16_t>(column);
           auto style = ghosttySized<GhosttyStyle>();
 
           checkGhostty(ghostty_grid_ref_style(&*reference, &style));
@@ -163,7 +163,7 @@ namespace telar::runtime::control {
 
       if (no_trim && !full && grapheme_count != 0) {
         if (grapheme_count == 1) {
-          reference->x = grapheme_columns.front();
+          reference.getMut().x = grapheme_columns.front();
           sum = static_cast<std::uint16_t>(sum + combining(*reference));
         } else {
           sum = static_cast<std::uint16_t>(sum + combiningBatch(*reference, std::span{grapheme_columns}.first(grapheme_count)));

@@ -43,6 +43,7 @@ import telar.base.history;
 import telar.config.runtime;
 import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -729,13 +730,13 @@ namespace {
   struct DescribedAgents {
     void enableDescriptions(bool) noexcept {}
 
-    std::optional<DescriptionRequest> nextDescription() {
-      return std::exchange(pending, std::nullopt);
+    ds::Option<DescriptionRequest> nextDescription() {
+      return std::exchange(pending, ds::none);
     }
 
-    std::optional<HistorySessionTitle> completeDescription(const DescriptionResult& result) {
+    ds::Option<HistorySessionTitle> completeDescription(const DescriptionResult& result) {
       if (result.status != DescriptionStatus::success) {
-        return std::nullopt;
+        return ds::none;
       }
 
       HistorySessionTitle title{.session = result.identity.session, .source = AgentTitleSource::generated, .state = AgentTitleState::ready};
@@ -744,7 +745,7 @@ namespace {
       return title;
     }
 
-    std::optional<DescriptionRequest> pending = DescriptionRequest{.identity = {.pane = 1, .generation = 1, .session = {7}, .revision = 1}};
+    ds::Option<DescriptionRequest> pending = DescriptionRequest{.identity = {.pane = 1, .generation = 1, .session = {7}, .revision = 1}};
   };
 
   struct RecordedTitles {

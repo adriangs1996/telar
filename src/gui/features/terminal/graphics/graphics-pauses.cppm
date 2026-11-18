@@ -10,6 +10,7 @@ import std;
 import :store;
 import telar.gui.foundation.model;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -29,7 +30,7 @@ namespace telar::gui::features::terminal::graphics {
       std::uint64_t pane_id = 0;
       std::uint64_t since_ns = 0;
       std::uint64_t due_ns = 0;
-      std::optional<std::uint64_t> resumed_ns = std::nullopt;
+      ds::Option<std::uint64_t> resumed_ns = ds::none;
       std::uint8_t resyncs = 0;
       std::uint8_t backoff = 0;
       bool waiting = false;
@@ -39,7 +40,7 @@ namespace telar::gui::features::terminal::graphics {
     [[nodiscard]] bool contains(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] std::span<const Row> rows() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> nextDeadline() const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> nextDeadline() const noexcept;
 
     // The callers' callables are erased here so that the work stays in pauses.cpp.
     template <typename Request, typename Notice>
@@ -98,7 +99,7 @@ namespace telar::gui::features::terminal::graphics {
     [[nodiscard]] static std::uint64_t elapsed(std::uint64_t now_ns, std::uint64_t since_ns) noexcept;
     [[nodiscard]] static std::uint64_t deadlineAfter(std::uint64_t now_ns, std::uint64_t duration_ns) noexcept;
     static void increment(std::uint8_t& value) noexcept;
-    [[nodiscard]] std::optional<std::size_t> find(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] ds::Option<std::size_t> find(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] std::size_t oldest() const noexcept;
     std::size_t start(std::uint64_t pane_id, std::uint64_t now_ns, PaneCall<void> request);
     void remove(std::size_t slot) noexcept;

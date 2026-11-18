@@ -20,6 +20,7 @@ import telar.testing;
 import telar.platform.net;
 import telar.runtime.platform.name_resolutions;
 import telar.runtime.platform.signals;
+import telar.base.ds;
 
 namespace {
 
@@ -96,7 +97,7 @@ namespace {
       check(reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_port == 0);
     }
 
-    auto moved = std::move(*second);
+    auto moved = std::move(second.getMut());
 
     check(!second->collect(result) && moved.collect(result));
     moved.reset();
@@ -109,17 +110,17 @@ namespace {
     {
       CompletionSignal signal;
       Resolutions::Notifications notifications{signal};
-      std::array<std::optional<Resolutions::Ticket>, Resolutions::capacity> tickets;
+      std::array<ds::Option<Resolutions::Ticket>, Resolutions::capacity> tickets;
 
       for (std::size_t index = 0; index < tickets.size(); ++index) {
         tickets[index] = Resolutions::request("host" + std::to_string(index) + ".example");
-        check(tickets[index].has_value());
+        check(tickets[index].hasValue());
       }
 
       check(Resolutions::pending() == Resolutions::capacity && !Resolutions::request("overflow.example"));
       auto shared = Resolutions::request("HOST0.EXAMPLE");
 
-      check(shared.has_value());
+      check(shared.hasValue());
       shared.reset();
     }
 
@@ -133,7 +134,7 @@ namespace {
     Resolutions::Notifications notifications{signal};
     auto next = Resolutions::request("reused.example");
 
-    check(next.has_value());
+    check(next.hasValue());
     BlockingNameResolver::permits.release();
     waitSignal(signal);
     Resolutions::Result result;
@@ -147,7 +148,7 @@ namespace {
     Resolutions::Notifications notifications{signal};
     auto local = Resolutions::request("localhost");
 
-    check(local.has_value());
+    check(local.hasValue());
     waitSignal(signal);
     Resolutions::Result result;
 

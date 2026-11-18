@@ -5,6 +5,7 @@ export module telar.gui.features.terminal.links:opening;
 import std;
 
 import :editor;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
@@ -13,14 +14,14 @@ namespace telar::gui::features::terminal::links {
   public:
     void begin(const EditorRequest& request);
 
-    [[nodiscard]] std::optional<EditorRequest> complete(std::uint64_t request_id);
+    [[nodiscard]] ds::Option<EditorRequest> complete(std::uint64_t request_id);
 
     [[nodiscard]] bool owns(std::uint64_t request_id) const noexcept;
 
     void reset() noexcept;
 
   private:
-    std::optional<EditorRequest> pending_;
+    ds::Option<EditorRequest> pending_;
   };
 
 }

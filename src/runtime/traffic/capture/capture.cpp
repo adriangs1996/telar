@@ -208,7 +208,7 @@ namespace telar::runtime::traffic {
 
     for (auto& device : devices_) {
       if (device) {
-        device->seen = false;
+        device.getMut().seen = false;
       }
     }
 
@@ -224,7 +224,7 @@ namespace telar::runtime::traffic {
       });
       if (existing != devices_.end()) {
         if ((*existing)->index == index) {
-          (*existing)->seen = true;
+          existing->getMut().seen = true;
           continue;
         }
 
@@ -246,7 +246,7 @@ namespace telar::runtime::traffic {
       }
 
       slot->emplace(handle, name, index);
-      auto& capture = slot->value();
+      auto& capture = slot->getMut();
       constexpr int read_timeout_ms = 50;
       constexpr int kernel_buffer_bytes = 1024 * 1024;
       if (pcap_set_snaplen(handle, Limits::packet_bytes) != 0 || pcap_set_promisc(handle, 0) != 0 || pcap_set_timeout(handle, read_timeout_ms) != 0 || pcap_set_buffer_size(handle, kernel_buffer_bytes) != 0 || pcap_set_immediate_mode(handle, 1) != 0 || pcap_activate(handle) < 0 || pcap_setnonblock(handle, 1, error.data()) != 0) {
@@ -316,7 +316,7 @@ namespace telar::runtime::traffic {
   void Capture::statistics() {
     for (auto& device : devices_) {
       if (device) {
-        sample(kernel_drops_, *device);
+        sample(kernel_drops_, device.getMut());
       }
     }
 
@@ -331,7 +331,7 @@ namespace telar::runtime::traffic {
   }
 
   void Capture::close(std::size_t slot) {
-    sample(kernel_drops_, *devices_[slot]);
+    sample(kernel_drops_, devices_[slot].getMut());
     const auto name = devices_[slot]->name;
     const auto index = devices_[slot]->index;
 

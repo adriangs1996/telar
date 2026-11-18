@@ -8,6 +8,7 @@ module telar.runtime.graphics.prepared_images;
 import telar.sys.posix;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -87,8 +88,8 @@ namespace telar::runtime {
       return false;
     }
 
-    std::memcpy(shared->mapping().bytes().data(), pixels.data(), pixels.size());
-    name_ = shared->takeName();
+    std::memcpy(shared.getMut().mapping().bytes().data(), pixels.data(), pixels.size());
+    name_ = shared.getMut().takeName();
     owns_name_ = true;
     return true;
   }
@@ -159,17 +160,17 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<FrozenImage> PreparedImages::take(ImageKey key) noexcept {
+  ds::Option<FrozenImage> PreparedImages::take(ImageKey key) noexcept {
     for (auto& slot : entries_) {
       if (slot && sameImage(slot->key, key)) {
-        auto frozen = std::move(slot->frozen);
+        auto frozen = std::move(slot.getMut().frozen);
 
         slot.reset();
         return frozen;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool PreparedImages::put(ImageKey key, FrozenImage&& image) noexcept {
@@ -235,8 +236,8 @@ namespace telar::runtime {
     });
   }
 
-  auto PreparedImages::availableSlot(std::uint32_t identity) noexcept -> std::optional<Entry>* {
-    std::optional<Entry>* free = nullptr;
+  auto PreparedImages::availableSlot(std::uint32_t identity) noexcept -> ds::Option<Entry>* {
+    ds::Option<Entry>* free = nullptr;
 
     for (auto& slot : entries_) {
       if (slot && slot->key.image_id == identity) {
@@ -271,7 +272,7 @@ namespace telar::runtime {
         budget_(budget) {}
 
   bool TransferRequests::request(ImageKey key, bool shared) noexcept {
-    std::optional<Entry>* free = nullptr;
+    ds::Option<Entry>* free = nullptr;
 
     for (auto& entry : entries_) {
       if (entry && entry->shared == shared && sameImage(entry->key, key)) {
@@ -291,14 +292,14 @@ namespace telar::runtime {
     return true;
   }
 
-  std::optional<FrozenImage> TransferRequests::take(ImageKey key, bool shared) {
+  ds::Option<FrozenImage> TransferRequests::take(ImageKey key, bool shared) {
     for (auto& entry : entries_) {
       if (!entry || entry->shared != shared || !sameImage(entry->key, key) || entry->state == State::pending) {
         continue;
       }
 
       const bool failed = entry->state == State::failed;
-      auto frozen = std::move(entry->frozen);
+      auto frozen = std::move(entry.getMut().frozen);
 
       entry.reset();
       if (failed) {
@@ -308,7 +309,7 @@ namespace telar::runtime {
       return frozen;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void TransferRequests::process(std::span<const GraphicsImageView> images) noexcept {
@@ -331,10 +332,12 @@ namespace telar::runtime {
       }
 
       try {
-        entry->frozen.emplace(memory_, budget_, image->pixels, entry->shared);
-        entry->state = State::ready;
+        const bool shared = entry->shared;
+
+        entry.getMut().frozen.emplace(memory_, budget_, image->pixels, shared);
+        entry.getMut().state = State::ready;
       } catch (...) {
-        entry->state = State::failed;
+        entry.getMut().state = State::failed;
       }
     }
   }

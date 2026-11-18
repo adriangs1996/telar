@@ -40,6 +40,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -136,9 +137,9 @@ namespace telar::gui::qt {
     return controller_ && !controller_->center().items().empty() && isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> NotificationLayout::deadline(std::uint64_t now_ns) const {
+  ds::Option<std::uint64_t> NotificationLayout::deadline(std::uint64_t now_ns) const {
     if (!controller_ || controller_->center().items().empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto interval = clock_ ? clock_->frameInterval() : 1;

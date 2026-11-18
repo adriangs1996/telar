@@ -18,6 +18,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 Q_DECLARE_METATYPE(telar::gui::application::workbench::PaneAttentionKey)
 Q_DECLARE_TYPEINFO(telar::gui::application::workbench::PaneAttentionKey, Q_RELOCATABLE_TYPE);
@@ -28,8 +29,8 @@ namespace telar::gui::qt {
     return QVariant::fromValue(key);
   }
 
-  inline std::optional<application::workbench::PaneAttentionKey> paneAttentionKey(const QVariant& value) {
-    return value.canConvert<application::workbench::PaneAttentionKey>() ? std::optional{value.value<application::workbench::PaneAttentionKey>()} : std::nullopt;
+  inline ds::Option<application::workbench::PaneAttentionKey> paneAttentionKey(const QVariant& value) {
+    return value.canConvert<application::workbench::PaneAttentionKey>() ? ds::Option{value.value<application::workbench::PaneAttentionKey>()} : ds::none;
   }
 
 }

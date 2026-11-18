@@ -14,6 +14,7 @@ import telar.cli.history;
 import telar.platform.paths;
 import telar.machines;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: repository_options.cppm
 export {
@@ -26,9 +27,9 @@ export {
         tips,
       };
       Action action;
-      std::optional<std::string_view> machine = std::nullopt;
+      ds::Option<std::string_view> machine = ds::none;
       std::string_view from = "HEAD";
-      std::optional<std::string_view> workspace = std::nullopt;
+      ds::Option<std::string_view> workspace = ds::none;
       std::string_view identity;
       std::string_view transport;
       std::string_view commit;

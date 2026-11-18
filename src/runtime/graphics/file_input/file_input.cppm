@@ -8,6 +8,7 @@ import telar.base.text;
 import telar.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
+import telar.base.ds;
 
 // Interface: graphics/atomic_frame.cppm
 export {
@@ -33,7 +34,7 @@ export {
       std::uint8_t depth;
       std::size_t byte_count;
 
-      static std::optional<AtomicFrameControl> parse(std::string_view text) noexcept;
+      static ds::Option<AtomicFrameControl> parse(std::string_view text) noexcept;
     };
 
     struct AtomicFrame {
@@ -45,9 +46,9 @@ export {
       AtomicFrameControl control;
       bool cursor_wrapped;
 
-      static std::optional<AtomicFrame> at(std::string_view bytes, std::size_t start) noexcept;
+      static ds::Option<AtomicFrame> at(std::string_view bytes, std::size_t start) noexcept;
 
-      static std::optional<AtomicFrame> find(std::string_view bytes, std::size_t from) noexcept;
+      static ds::Option<AtomicFrame> find(std::string_view bytes, std::size_t from) noexcept;
 
       static constexpr std::string_view prefix = "\x1b[?2026h\x1b[H\x1b_G";
       static constexpr std::string_view suffix = "\x1b\\\x1b[?2026l";
@@ -83,10 +84,10 @@ export {
 
     struct KittyFileRange {
       std::uint64_t offset = 0;
-      std::optional<std::uint64_t> size;
+      ds::Option<std::uint64_t> size;
       bool temporary = false;
 
-      static std::optional<KittyFileRange> parse(std::string_view control) noexcept;
+      static ds::Option<KittyFileRange> parse(std::string_view control) noexcept;
     };
 
   }
@@ -125,7 +126,7 @@ export {
         std::string_view path;
       };
 
-      static tbc::view<std::optional<Command>, tbc::lt::a> nextCommand(tbc::view<std::string_view, tbc::lt::a> text, std::size_t& search_from) noexcept;
+      static tbc::view<ds::Option<Command>, tbc::lt::a> nextCommand(tbc::view<std::string_view, tbc::lt::a> text, std::size_t& search_from) noexcept;
 
       struct Transmission {
         std::string_view control;

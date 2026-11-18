@@ -44,6 +44,7 @@ import telar.vocabulary;
 import telar.runtime.model.client_layouts;
 import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.vocabulary.exchange;
+import telar.base.ds;
 
 namespace {
 
@@ -155,7 +156,7 @@ namespace {
 
       line.reset();
       line.literal("role", "\"runtime\"");
-      line.field("port", std::optional<std::uint64_t>{});
+      line.field("port", ds::Option<std::uint64_t>{});
       line.timing("average", "maximum", timing);
       check(line.finish() == "{\"role\":\"runtime\",\"port\":null,\"average\":3,\"maximum\":4}\n");
 

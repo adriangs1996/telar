@@ -5,6 +5,7 @@ import telar.base.memory.sensitive;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -15,9 +16,9 @@ namespace telar::runtime {
     return secret;
   }
 
-  std::optional<ProxySecret> ProxySecret::fromHexadecimal(std::string_view text) noexcept {
+  ds::Option<ProxySecret> ProxySecret::fromHexadecimal(std::string_view text) noexcept {
     if (text.size() != hexadecimal_bytes) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ProxySecret secret;
@@ -26,7 +27,7 @@ namespace telar::runtime {
       const auto high = digit(text[index * 2]);
       const auto low = digit(text[index * 2 + 1]);
       if (!high || !low) {
-        return std::nullopt;
+        return ds::none;
       }
 
       secret.bytes_[index] = static_cast<std::uint8_t>((*high << 4) | *low);
@@ -49,9 +50,9 @@ namespace telar::runtime {
     return difference == 0;
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> ProxySecret::formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ProxySecret::formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept {
     if (destination.size() < hexadecimal_bytes) {
-      return std::nullopt;
+      return ds::none;
     }
 
     for (std::size_t index = 0; index < byte_count; ++index) {
@@ -62,12 +63,12 @@ namespace telar::runtime {
     return std::string_view{destination.data(), hexadecimal_bytes};
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> ProxySecret::formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ProxySecret::formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept {
     constexpr std::string_view prefix = "http://telar:";
     constexpr std::string_view address = "@127.0.0.1:";
     constexpr std::size_t port_digits = 5;
     if (destination.size() < prefix.size() + hexadecimal_bytes + address.size() + port_digits) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto* end = std::copy(prefix.begin(), prefix.end(), destination.data());
@@ -81,39 +82,39 @@ namespace telar::runtime {
 
   ProxySecret::ProxySecret() noexcept {}
 
-  std::optional<unsigned> ProxySecret::digit(char character) noexcept {
+  ds::Option<unsigned> ProxySecret::digit(char character) noexcept {
     const auto position = hexadecimal.find(asciiLower(character));
 
-    return position == std::string_view::npos ? std::nullopt : std::optional{static_cast<unsigned>(position)};
+    return position == std::string_view::npos ? ds::none : ds::Option{static_cast<unsigned>(position)};
   }
 
-  std::optional<ProxySecret> ProxyAuthorization::parse(std::string_view head) noexcept {
-    std::optional<ProxySecret> secret;
+  ds::Option<ProxySecret> ProxyAuthorization::parse(std::string_view head) noexcept {
+    ds::Option<ProxySecret> secret;
 
     while (const auto value = next(head)) {
       if (secret) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto authorization = trimText(*value, " \t");
       if (authorization.size() < 7 || !asciiEqualIgnoreCase(authorization.substr(0, 5), "basic") || authorization[5] != ' ') {
-        return std::nullopt;
+        return ds::none;
       }
 
       SensitiveBuffer<decoded_capacity> decoded;
       const auto length = base64::decode(trimText(authorization.substr(6), " \t"), decoded.bytes());
       if (!length || *length != userinfo_prefix.size() + ProxySecret::hexadecimal_bytes) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const std::string_view userinfo{reinterpret_cast<const char*>(decoded.bytes().data()), *length};
       if (!userinfo.starts_with(userinfo_prefix)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       secret = ProxySecret::fromHexadecimal(userinfo.substr(userinfo_prefix.size()));
       if (!secret) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -121,14 +122,14 @@ namespace telar::runtime {
   }
 
   bool ProxyAuthorization::present(std::string_view head) noexcept {
-    return next(head).has_value();
+    return next(head).hasValue();
   }
 
-  std::optional<std::string_view> ProxyAuthorization::next(std::string_view& head) noexcept {
+  ds::Option<std::string_view> ProxyAuthorization::next(std::string_view& head) noexcept {
     auto line_end = head.find("\r\n");
     if (line_end == std::string_view::npos) {
       head = {};
-      return std::nullopt;
+      return ds::none;
     }
 
     head.remove_prefix(line_end + 2);
@@ -143,7 +144,7 @@ namespace telar::runtime {
       head.remove_prefix(line_end == std::string_view::npos ? head.size() : line_end + 2);
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   tbc::view<std::string_view, tbc::lt::static_storage> ProxyRejection::response() const noexcept {
@@ -186,11 +187,11 @@ namespace telar::runtime {
     return ProxyAdmission{*target, true};
   }
 
-  std::optional<ProxySecret> ProxySecretFile::load(Memory& memory, int directory) {
+  ds::Option<ProxySecret> ProxySecretFile::load(Memory& memory, int directory) {
     ErasingAllocator sensitive{memory};
     Vector<unsigned char, decltype(sensitive)> bytes{AllocatorRef<unsigned char, decltype(sensitive)>{sensitive}};
     if (!readPrivateFile(directory, filename, bytes, maximum_file_bytes)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::string_view text{reinterpret_cast<const char*>(bytes.data()), bytes.size()};

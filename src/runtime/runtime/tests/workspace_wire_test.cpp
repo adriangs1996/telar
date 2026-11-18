@@ -11,6 +11,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -23,10 +24,10 @@ namespace {
 
   // The code a request that answers `Reply` failed with, or nothing when it was answered.
   template <typename Reply, typename Request>
-  std::optional<FailureCode> failure(ProtocolPeer& peer, const Request& request) {
+  ds::Option<FailureCode> failure(ProtocolPeer& peer, const Request& request) {
     try {
       peer.exchange<Reply>(request);
-      return std::nullopt;
+      return ds::none;
     } catch (const ProtocolFailure& failure) {
       return failure.code;
     }
@@ -46,7 +47,7 @@ namespace {
   void testWorkspaceCapacity() {
     RuntimeHost host;
     ProtocolPeer control{host.socket()};
-    std::optional<FailureCode> refused;
+    ds::Option<FailureCode> refused;
     std::uint64_t request = 1;
 
     // Workspaces until the runtime holds no more.
@@ -109,8 +110,8 @@ namespace {
     const std::array<std::string_view, 1> missing{"/nonexistent/telar-missing-program"};
 
     // A tab whose program cannot start leaves no empty tab behind, opened either way.
-    check(failure<TabCreated>(control, CreateTab{.request_id = 2, .workspace = workspace, .label = "Broken", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = missing}}).has_value());
-    check(failure<PaneOpened>(control, LaunchTab{.request_id = 3, .workspace = workspace.id, .label = "Broken", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = missing}}).has_value());
+    check(failure<TabCreated>(control, CreateTab{.request_id = 2, .workspace = workspace, .label = "Broken", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = missing}}).hasValue());
+    check(failure<PaneOpened>(control, LaunchTab{.request_id = 3, .workspace = workspace.id, .label = "Broken", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = missing}}).hasValue());
     check(tabOrder(control, workspace, 4).size() == 1, "a failed launch left an empty tab");
 
     // Background tabs up to the workspace's 64.

@@ -26,7 +26,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::span<std::uint8_t> ByteStorage<Memory>::bytes() noexcept {
+  std::span<std::uint8_t> ByteStorage<Memory>::bytesMut() noexcept {
     return {storage_, size_};
   }
 

@@ -92,7 +92,7 @@ namespace telar::gui::qt {
       const auto runtime = application::machines::MachineRuntimeLocation::resolve(environment, system::currentUserId());
 
       control_endpoint_ = toQString(runtime.endpoint());
-      prepare_directory_ = runtime.managedDirectory().has_value();
+      prepare_directory_ = runtime.managedDirectory().hasValue();
     } catch (const application::machines::MachineFailure&) {
       control_endpoint_.clear();
       prepare_directory_ = false;
@@ -130,9 +130,9 @@ namespace telar::gui::qt {
     // A copy: reconciling mutates the application that owns the profiles, which are few and bounded.
     const auto profiles = profiles_.profiles();
     const auto hostname = bytes(hostname_);
-    const auto local_label = profiles.localLabel().value_or(hostname);
+    const auto local_label = profiles.localLabel().valueOr(hostname);
     if (store_.machines().row(application::machines::Machines::local_slot).label.view() != local_label) {
-      store_.machines().update(application::machines::Machines::local_slot, {.label = local_label, .destination = {}});
+      store_.machinesMut().update(application::machines::Machines::local_slot, {.label = local_label, .destination = {}});
     }
 
     for (std::size_t index = 1; index < application::machines::Machines::capacity; ++index) {
@@ -143,9 +143,9 @@ namespace telar::gui::qt {
       });
       if (row.used && row.id.value() != 0 && !profile_exists) {
         retire(slot, Retirement::removed);
-        store_.clients()[slot].reset();
-        store_.machines().setLive(slot, false);
-        store_.machines().remove(slot);
+        store_.clientsMut()[slot].reset();
+        store_.machinesMut().setLive(slot, false);
+        store_.machinesMut().remove(slot);
       }
     }
 
@@ -165,7 +165,7 @@ namespace telar::gui::qt {
     }
 
     if (!slot) {
-      const auto added = store_.machines().add(fields);
+      const auto added = store_.machinesMut().add(fields);
 
       if (fields.enabled) {
         admit(added);
@@ -175,16 +175,16 @@ namespace telar::gui::qt {
     }
 
     if (profile.enabled()) {
-      store_.machines().unpin(*slot);
+      store_.machinesMut().unpin(*slot);
     }
 
     const auto& previous = store_.machines().row(*slot);
 
     fields.enabled = profile.enabled() || previous.pinned;
     const auto was_enabled = previous.enabled;
-    const auto moved = previous.destination.view() != fields.destination || previous.program.view() != fields.program.value_or("");
+    const auto moved = previous.destination.view() != fields.destination || previous.program.view() != fields.program.valueOr("");
 
-    store_.machines().update(*slot, fields);
+    store_.machinesMut().update(*slot, fields);
     if (!fields.enabled) {
       if (was_enabled) {
         retire(*slot, Retirement::disabled);
@@ -194,7 +194,7 @@ namespace telar::gui::qt {
     }
 
     const auto& client = store_.clients()[*slot];
-    const auto admitted = client && (*client)->key.machine == store_.machines().token(*slot) && (*client)->admitted_program.view() == fields.program.value_or("");
+    const auto admitted = client && (*client)->key.machine == store_.machines().token(*slot) && (*client)->admitted_program.view() == fields.program.valueOr("");
     if (!was_enabled || moved || !admitted) {
       admit(*slot);
     }
@@ -257,7 +257,7 @@ namespace telar::gui::qt {
       setup(token);
     } else if (intent == application::machines::MachinePicker::Intent::enable || intent == application::machines::MachinePicker::Intent::disable) {
       if (intent == application::machines::MachinePicker::Intent::disable) {
-        store_.machines().unpin(token.slot);
+        store_.machinesMut().unpin(token.slot);
       }
 
       const auto label = store_.machines().row(token.slot).label.view();
@@ -294,7 +294,7 @@ namespace telar::gui::qt {
 
     std::ranges::copy(arguments, command.arguments.begin());
     machines_.select(store_.machines().token(application::machines::Machines::local_slot));
-    static_cast<void>(application::workbench::createCommandTab(store_.session(), command));
+    static_cast<void>(application::workbench::createCommandTab(store_.sessionMut(), command));
   }
 
   void MachineRoster::configureRemoteLaunch(const QString& destination, const QStringList& arguments) {
@@ -322,10 +322,10 @@ namespace telar::gui::qt {
     const auto request = *remote_launch_;
     const auto destination = request.destination.toUtf8();
     const std::string_view name{destination.constData(), static_cast<std::size_t>(destination.size())};
-    const auto slot = application::machines::MachineOpening::admitted(store_.machines(), name).value_or(application::machines::Machines::local_slot);
-    const auto opened = slot == application::machines::Machines::local_slot ? store_.machines().add({.label = name, .destination = name}) : slot;
+    const auto slot = application::machines::MachineOpening::admitted(store_.machines(), name).valueOr(application::machines::Machines::local_slot);
+    const auto opened = slot == application::machines::Machines::local_slot ? store_.machinesMut().add({.label = name, .destination = name}) : slot;
     if (!store_.machines().row(opened).pinned) {
-      store_.machines().pin(opened);
+      store_.machinesMut().pin(opened);
     }
 
     if (!store_.clients()[opened] || machines_.clientAt(opened).phase == application::machines::MachinePhase::stopped) {
@@ -351,9 +351,9 @@ namespace telar::gui::qt {
     const LaunchArguments prepared{arguments};
     const auto command = arguments.isEmpty() ? shell.arguments() : prepared.argv();
 
-    store_.session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
+    store_.sessionMut().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
     restore_layout_ = restore;
-    store_.session().setRestoreLayout(restore);
+    store_.sessionMut().setRestoreLayout(restore);
   }
 
 }

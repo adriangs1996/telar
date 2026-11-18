@@ -2,6 +2,7 @@ export module telar.runtime.diagnostics.line;
 
 import std;
 import telar.base.diagnostics;
+import telar.base.ds;
 
 export namespace telar::runtime::diagnostics {
 
@@ -17,7 +18,7 @@ export namespace telar::runtime::diagnostics {
 
     void reset() noexcept;
     void field(std::string_view name, std::uint64_t value);
-    void field(std::string_view name, std::optional<std::uint64_t> value);
+    void field(std::string_view name, ds::Option<std::uint64_t> value);
     void literal(std::string_view name, std::string_view value);
     // The average and the maximum of `value`, in microseconds.
     void timing(std::string_view average_name, std::string_view maximum_name, const Timing& value);

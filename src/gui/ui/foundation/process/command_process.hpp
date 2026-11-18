@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QIODevice>
 #include <QObject>
 #include <QProcess>
@@ -34,7 +35,7 @@ namespace telar::gui::qt {
   };
 
   template <typename Observer>
-  concept CommandObserver = requires(Observer& observer, std::optional<CommandFailure> failure) {
+  concept CommandObserver = requires(Observer& observer, ds::Option<CommandFailure> failure) {
     { observer.commandFinished(failure) } -> std::same_as<void>;
   };
 
@@ -211,14 +212,14 @@ namespace telar::gui::qt {
       deadline_.stop();
       drain(QProcess::StandardOutput);
       drain(QProcess::StandardError);
-      observer_.commandFinished(std::exchange(failure_, std::nullopt));
+      observer_.commandFinished(std::exchange(failure_, ds::none));
     }
 
     Observer& observer_;
     QProcess process_;
     QTimer deadline_;
     std::array<std::size_t, 2> output_bytes_{};
-    std::optional<CommandFailure> failure_;
+    ds::Option<CommandFailure> failure_;
     bool running_ = false;
     bool pending_ = false;
     bool stopping_ = false;

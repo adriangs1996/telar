@@ -39,6 +39,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.gui.foundation.actions;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -50,7 +51,7 @@ namespace telar::gui::qt {
     return QColor::fromRgbF(color.r, color.g, color.b, color.a);
   }
 
-  inline QColor componentColor(const std::optional<ColorName::Value>& value, const Theme& theme, Color fallback) {
+  inline QColor componentColor(const ds::Option<ColorName::Value>& value, const Theme& theme, Color fallback) {
     if (!value) {
       return componentColor(fallback);
     }
@@ -70,7 +71,7 @@ namespace telar::gui::qt {
     return application::components::Icon::find(node.icon ? node.icon->view() : std::string_view{});
   }
 
-  inline QString componentActionIdentity(const std::optional<BindingAction>& action, std::string_view url, std::optional<NamedActionDescription> named = std::nullopt) {
+  inline QString componentActionIdentity(const ds::Option<BindingAction>& action, std::string_view url, ds::Option<NamedActionDescription> named = ds::none) {
     if (action) {
       if (named) {
         if (const auto* definition = std::get_if<DefinitionActionDescription>(&*named)) {
@@ -122,7 +123,7 @@ namespace telar::gui::qt {
 
       const auto glyph = !icon.glyph.empty() ? componentText(icon.glyph) : QString{};
       const auto action = content.action(node);
-      const auto named = action && action->kind == BindingActionKind::extended ? resolve(*action) : std::nullopt;
+      const auto named = action && action->kind == BindingActionKind::extended ? resolve(*action) : ds::none;
       const QVariantMap record{
           {QStringLiteral("index"), static_cast<int>(index)},
           {QStringLiteral("parent"), node.parent == application::components::Node::no_parent ? -1 : static_cast<int>(node.parent)},
@@ -131,7 +132,7 @@ namespace telar::gui::qt {
           {QStringLiteral("text"), text},
           {QStringLiteral("accessibleName"), text},
           {QStringLiteral("detail"), componentText(content.text(node.detail))},
-          {QStringLiteral("clickable"), action.has_value() || node.url.length != 0},
+          {QStringLiteral("clickable"), action.hasValue() || node.url.length != 0},
           {QStringLiteral("actionIdentity"), componentActionIdentity(action, content.text(node.url), named)},
           {QStringLiteral("ink"), componentColor(node.style.foreground, theme, ink)},
           // 0 neutral, 1 muted, 2 accent, 3 success, 4 warning, 5 danger: bar chrome tints by the worst of a group.

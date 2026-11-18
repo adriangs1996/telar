@@ -5,6 +5,7 @@ import std;
 
 import telar.gui.foundation.actions;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: palette/navigation_label.cppm
 export {
@@ -44,7 +45,7 @@ export {
       PaletteMode mode = PaletteMode::navigate;
       std::string_view text;
 
-      [[nodiscard]] static constexpr std::optional<PaletteMode> prefix(char byte) noexcept {
+      [[nodiscard]] static constexpr ds::Option<PaletteMode> prefix(char byte) noexcept {
         switch (byte) {
         case static_cast<char>(PaletteMode::actions):
           return PaletteMode::actions;
@@ -55,7 +56,7 @@ export {
         case static_cast<char>(PaletteMode::machines):
           return PaletteMode::machines;
         default:
-          return std::nullopt;
+          return ds::none;
         }
       }
 

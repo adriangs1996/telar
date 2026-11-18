@@ -3,6 +3,7 @@ module telar.git;
 import std;
 import telar.platform.sha256;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::git {
 
@@ -75,10 +76,10 @@ namespace telar::git {
     return {buffer.data(), digits};
   }
 
-  std::optional<ObjectId> ObjectId::fromHex(std::string_view text, ObjectFormat format) noexcept {
+  ds::Option<ObjectId> ObjectId::fromHex(std::string_view text, ObjectFormat format) noexcept {
     const auto size = hashSize(format);
     if (text.size() != 2 * size) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ObjectId id;
@@ -88,7 +89,7 @@ namespace telar::git {
       const auto high = hexValue(text[2 * index]);
       const auto low = hexValue(text[2 * index + 1]);
       if (high < 0 || low < 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       id.bytes[index] = static_cast<std::uint8_t>(high << 4 | low);

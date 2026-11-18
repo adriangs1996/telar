@@ -21,6 +21,7 @@ import telar.runtime.http.message;
 import telar.runtime.http1.head;
 import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.traffic.control_protocol;
+import telar.base.ds;
 
 namespace {
 
@@ -74,7 +75,7 @@ namespace {
         ticket = 0;
       }
 
-      auto httpDeadline(std::uint64_t) noexcept -> std::optional<FlowControl::Time> override {
+      auto httpDeadline(std::uint64_t) noexcept -> ds::Option<FlowControl::Time> override {
         return std::chrono::steady_clock::now() + std::chrono::seconds{1};
       }
 
@@ -95,7 +96,7 @@ namespace {
         }
 
         SensitiveAllocation output{memory, HttpMessageLimits::message_bytes};
-        const auto encoded = HttpMessageCodec::encode(output.bytes(), view);
+        const auto encoded = HttpMessageCodec::encode(output.bytesMut(), view);
 
         replacement.assign(encoded.begin(), encoded.end());
         answer = Verdict::replace;

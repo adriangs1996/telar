@@ -3,6 +3,7 @@ export module telar.render.document;
 import std;
 import telar.base.memory.allocators;
 import telar.base.text;
+import telar.base.ds;
 
 export namespace telar::render {
 
@@ -218,13 +219,13 @@ export namespace telar::render {
 
   // The encoded size, or nothing when the document exceeds max_document_bytes.
   template <Allocator Memory>
-  [[nodiscard]] std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept;
+  [[nodiscard]] ds::Option<std::size_t> encodedSize(const Document<Memory>& document) noexcept;
 
   // Writes exactly encodedSize(document) bytes into output.
   template <Allocator Memory>
   void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
 
-  extern template std::optional<std::size_t> encodedSize<Memory>(const Document<Memory>& document) noexcept;
+  extern template ds::Option<std::size_t> encodedSize<Memory>(const Document<Memory>& document) noexcept;
   extern template void encode<Memory>(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
 
   // Appends the OSC that begins document, or returns false when the document

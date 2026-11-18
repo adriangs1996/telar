@@ -265,7 +265,7 @@ namespace telar::runtime {
         return StageResult::blocked;
       }
 
-      Transfer transfer{.image = image.description, .revision = std::max<std::uint64_t>(1, storage.revision()), .frozen = std::move(*frozen)};
+      Transfer transfer{.image = image.description, .revision = std::max<std::uint64_t>(1, storage.revision()), .frozen = std::move(frozen.getMut())};
 
       for (const auto& placement : storage.placements()) {
         if (sameImage(placement.key, image.description.key)) {
@@ -319,7 +319,7 @@ namespace telar::runtime {
   }
 
   bool GraphicsSynchronizer::publishTransfer(Connection<ConcurrentMemory>& connection, GraphicsHeader header) {
-    auto& transfer = *transfer_;
+    auto& transfer = transfer_.getMut();
 
     header.revision = transfer.revision;
     if (!transfer.metadata_sent) {

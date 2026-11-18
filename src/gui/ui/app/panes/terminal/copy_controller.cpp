@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "copy_controller.hpp"
 #include "ui/foundation/input/key_adapter.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <exception>
 
@@ -24,7 +25,7 @@ namespace telar::gui::qt {
     return application::terminal::copy_mode::view(store_.session()).active();
   }
 
-  const std::optional<application::terminal::copy_mode::CopyState>& CopyController::state() const noexcept {
+  const ds::Option<application::terminal::copy_mode::CopyState>& CopyController::state() const noexcept {
     return application::terminal::copy_mode::view(store_.session()).state();
   }
 
@@ -65,7 +66,7 @@ namespace telar::gui::qt {
     }
 
     try {
-      const auto effect = application::terminal::copy_mode::key(store_.session(), *semantic);
+      const auto effect = application::terminal::copy_mode::key(store_.sessionMut(), *semantic);
       if (effect.search) {
         emit searchRequested();
       }
@@ -88,7 +89,7 @@ namespace telar::gui::qt {
     if (copy && !copy->pointer) {
       const auto pane_id = copy->pane_id;
 
-      application::terminal::copy_mode::leave(store_.session());
+      application::terminal::copy_mode::leave(store_.sessionMut());
       publishChange(pane_id);
     }
   }
@@ -101,7 +102,7 @@ namespace telar::gui::qt {
     emit inputStarted();
     const auto& copy = state();
     const auto previous = copy ? copy->pane_id : 0;
-    const auto began = application::terminal::copy_mode::press(store_.session(), {.pane_id = pane_id, .position = local, .now_ns = static_cast<std::uint64_t>(clock_.nsecsElapsed())});
+    const auto began = application::terminal::copy_mode::press(store_.sessionMut(), {.pane_id = pane_id, .position = local, .now_ns = static_cast<std::uint64_t>(clock_.nsecsElapsed())});
     if (began) {
       publishChange(previous);
     }
@@ -110,7 +111,7 @@ namespace telar::gui::qt {
   }
 
   bool CopyController::handlePointer(const application::terminal::copy_mode::CopyPointerInput& input) {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     const auto owner = application::terminal::copy_mode::view(session).pointerOwner();
     if (!idle() && (!owner || !owner->dragging)) {
       return true;
@@ -141,14 +142,14 @@ namespace telar::gui::qt {
 
   void CopyController::copySelection(std::uint64_t pane_id) {
     try {
-      static_cast<void>(application::terminal::copy_mode::copy(store_.session(), pane_id));
+      static_cast<void>(application::terminal::copy_mode::copy(store_.sessionMut(), pane_id));
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
   }
 
   void CopyController::toggleSearchScope() {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
 
     application::terminal::copy_mode::toggleSearchScope(session);
     emit searchChanged();
@@ -169,7 +170,7 @@ namespace telar::gui::qt {
     try {
       const auto bytes = text.toUtf8();
 
-      application::terminal::copy_mode::search(store_.session(), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+      application::terminal::copy_mode::search(store_.sessionMut(), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -187,7 +188,7 @@ namespace telar::gui::qt {
     const auto pane_id = copy->pane_id;
 
     try {
-      application::terminal::copy_mode::stepMatch(store_.session(), forward);
+      application::terminal::copy_mode::stepMatch(store_.sessionMut(), forward);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -197,7 +198,7 @@ namespace telar::gui::qt {
   }
 
   void CopyController::finishSearch() {
-    application::terminal::copy_mode::finishSearch(store_.session());
+    application::terminal::copy_mode::finishSearch(store_.sessionMut());
     emit closeRequested();
     emit searchChanged();
   }

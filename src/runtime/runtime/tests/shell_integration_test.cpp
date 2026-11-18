@@ -28,6 +28,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.shell_integration.token;
 import telar.runtime.terminal.text_reader;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 namespace {
 
@@ -110,7 +111,7 @@ namespace {
         const std::array<std::string_view, 3> arguments{bash, "-l", "-i"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-        check(integration.apply(command).has_value());
+        check(integration.apply(command).hasValue());
         check(spawnedArguments(command) == std::vector<std::string>{bash, "--rcfile", text(directory) + "/bash/telar.bash", "-i"});
         check(command.arguments().size() == 3 && command.arguments()[1] == "-l");
         check(command.environment("TELAR_BASH_LOGIN") == "1");
@@ -122,11 +123,11 @@ namespace {
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
         command.removeEnvironment("XDG_DATA_DIRS");
-        check(integration.apply(command).has_value());
+        check(integration.apply(command).hasValue());
         check(command.environment("XDG_DATA_DIRS") == text(directory) + "/fish:/usr/local/share:/usr/share");
         check(!command.environment("TELAR_FISH_XDG_DATA_DIRS"));
         command.setEnvironment("XDG_DATA_DIRS", "/a:/b");
-        check(integration.apply(command).has_value());
+        check(integration.apply(command).hasValue());
         check(command.environment("TELAR_FISH_XDG_DATA_DIRS") == "/a:/b");
       }
 
@@ -155,11 +156,11 @@ namespace {
       const std::array<std::string_view, 1> arguments{"/bin/zsh"};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-      check(integration.apply(command).has_value());
+      check(integration.apply(command).hasValue());
       check(::access(sentinel.c_str(), R_OK) == 0);
     }
 
-    std::optional<std::string> findProgram(std::string_view name) {
+    ds::Option<std::string> findProgram(std::string_view name) {
       const char* variable = std::getenv("PATH");
       std::string_view path = variable == nullptr ? "/usr/bin:/bin" : variable;
 
@@ -173,7 +174,7 @@ namespace {
         path.remove_prefix(separator == std::string_view::npos ? path.size() : separator + 1);
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     // Answers the primary device attributes query, as a terminal does: fish 4 waits for it.
@@ -186,7 +187,7 @@ namespace {
     }
 
     struct Completions {
-      std::vector<std::optional<int>> exit_codes;
+      std::vector<ds::Option<int>> exit_codes;
       std::string marks;
 
       void complete(CommandCompletion completion) {
@@ -227,8 +228,8 @@ namespace {
 
       const auto launch = integration.apply(command, bare);
 
-      check(launch.has_value());
-      check(command.environment("TELAR_PROMPT_MODE") == (bare ? std::optional<std::string_view>{"telar"} : std::nullopt));
+      check(launch.hasValue());
+      check(command.environment("TELAR_PROMPT_MODE") == (bare ? ds::Option<std::string_view>{"telar"} : ds::none));
       std::string drawn;
       PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
       CommandZones zones{"/", launch->token};
@@ -271,7 +272,7 @@ namespace {
         return completions.exit_codes.size() == 2 && zones.editing();
       });
 
-      check(completions.exit_codes == std::vector<std::optional<int>>{1, 3});
+      check(completions.exit_codes == std::vector<ds::Option<int>>{1, 3});
       check((drawn.find(user_prompt) == std::string::npos) == bare);
       type("exit\r");
     }
@@ -814,7 +815,7 @@ namespace {
     ShellGitService service;
 
     service.request(7, 1, repository.path());
-    std::optional<ShellGitResult> result;
+    ds::Option<ShellGitResult> result;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
 
     while (!result) {

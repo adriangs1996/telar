@@ -7,6 +7,7 @@ import telar.base.memory.allocators;
 import telar.gui.features.history;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::application::history {
 
@@ -176,10 +177,10 @@ namespace telar::gui::application::history {
     return Change::history;
   }
 
-  std::optional<Change> fail(Session& session, std::uint64_t request_id, std::string_view message) {
+  ds::Option<Change> fail(Session& session, std::uint64_t request_id, std::string_view message) {
     auto& state = Access::history(session);
     if (!features::history::view(state).owns(request_id)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return features::history::fail(state, request_id, message) ? Change::history : Change::none;

@@ -7,6 +7,7 @@ import telar.native.brotli;
 import telar.native.zlib;
 import telar.native.zstd;
 import telar.base.memory.sensitive;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -22,9 +23,9 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::size_t> BrotliDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept {
+  ds::Option<std::size_t> BrotliDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept {
     if (state_ == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto available_input = input.size();
@@ -36,11 +37,11 @@ namespace telar::runtime {
       return output.size() - available_output;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
-  [[gnu::noinline]] std::optional<std::size_t> decodeBrotli(Memory& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept {
+  [[gnu::noinline]] ds::Option<std::size_t> decodeBrotli(Memory& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept {
     // Isolate scratch storage from the stack frames of the other content decoders.
     constexpr std::size_t decoder_scratch_capacity = 32 * 1024;
     alignas(std::max_align_t) std::array<std::byte, decoder_scratch_capacity> storage;
@@ -79,17 +80,17 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::size_t> FlateDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, FlateContainer container, std::size_t requested) noexcept {
+  ds::Option<std::size_t> FlateDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, FlateContainer container, std::size_t requested) noexcept {
     const auto offset = FlateEnvelope::bodyOffset(input, container);
     if (!initialized_ || !offset || input.size() > std::numeric_limits<uInt>::max() || output.size() > std::numeric_limits<uInt>::max()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     // Capture in the reference consumes these checksums without validating them.
     // Parsing the envelope separately preserves that best-effort observation contract.
     input = input.subspan(*offset);
     // zlib holds the caller's buffers only for this call, so the stream lets go of them before it returns.
-    const auto produced = [&]() noexcept -> std::optional<std::size_t> {
+    const auto produced = [&]() noexcept -> ds::Option<std::size_t> {
       stream_.next_in = const_cast<Bytef*>(input.data());
       stream_.avail_in = static_cast<uInt>(input.size());
       stream_.next_out = output.data();
@@ -104,7 +105,7 @@ namespace telar::runtime {
         const auto previous_output = stream_.total_out;
         const auto status = inflate(&stream_, flush);
         if (status != Z_OK && status != Z_STREAM_END && status != Z_BUF_ERROR) {
-          return std::nullopt;
+          return ds::none;
         }
 
         const auto written = output.size() - stream_.avail_out;
@@ -113,11 +114,11 @@ namespace telar::runtime {
         }
 
         if (status == Z_STREAM_END) {
-          return stream_.avail_in >= FlateEnvelope::footerSize(container) ? std::optional{written} : std::nullopt;
+          return stream_.avail_in >= FlateEnvelope::footerSize(container) ? ds::Option{written} : ds::none;
         }
 
         if (previous_input == stream_.total_in && previous_output == stream_.total_out) {
-          return std::nullopt;
+          return ds::none;
         }
 
         if ((stream_.data_type & block_boundary) != 0 && (stream_.data_type & final_block) == 0) {
@@ -155,9 +156,9 @@ namespace telar::runtime {
     return {static_cast<Kind>((value >> 1) & 3), static_cast<std::size_t>(value >> 3)};
   }
 
-  auto ZstdBlock::literals(std::span<const std::uint8_t> bytes) noexcept -> std::optional<Literals> {
+  auto ZstdBlock::literals(std::span<const std::uint8_t> bytes) noexcept -> ds::Option<Literals> {
     if (bytes.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto kind = static_cast<unsigned>(bytes[0] & 3);
@@ -171,7 +172,7 @@ namespace telar::runtime {
                                                                    : 3;
       const auto header = read(bytes, header_size);
       if (!header) {
-        return std::nullopt;
+        return ds::none;
       }
 
       regenerated_size = *header >> (header_size == 1 ? 3 : 4);
@@ -181,7 +182,7 @@ namespace telar::runtime {
                                                   : 5;
       const auto header = read(bytes, header_size);
       if (!header) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto field_bits = format <= 1 ? 10 : format == 2 ? 14
@@ -192,15 +193,15 @@ namespace telar::runtime {
     }
 
     if (payload_size >= bytes.size() - header_size) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return Literals{regenerated_size, bytes[header_size + payload_size] != 0};
   }
 
-  std::optional<std::uint64_t> ZstdBlock::read(std::span<const std::uint8_t> bytes, std::size_t count) noexcept {
+  ds::Option<std::uint64_t> ZstdBlock::read(std::span<const std::uint8_t> bytes, std::size_t count) noexcept {
     if (bytes.size() < count) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint64_t value = 0;
@@ -228,9 +229,9 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto ZstdDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, std::size_t limit) -> std::optional<Result> {
+  auto ZstdDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, std::size_t limit) -> ds::Option<Result> {
     if (state_ == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t produced = 0;
@@ -239,11 +240,11 @@ namespace telar::runtime {
       ZSTD_frameHeader frame{};
       const auto header = ZSTD_getFrameHeader(&frame, input.data(), input.size());
       if (header != 0 || frame.windowSize > maximum_window_bytes || (frame.frameType == ZSTD_frame && (input[frame_descriptor_offset] & dictionary_flags) != 0)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       if (ZSTD_isError(ZSTD_decompressBegin(state_))) {
-        return std::nullopt;
+        return ds::none;
       }
 
       ZstdBlock block;
@@ -263,7 +264,7 @@ namespace telar::runtime {
             return Result{limit, true};
           }
 
-          return std::nullopt;
+          return ds::none;
         }
 
         bool requires_block_capacity = false;
@@ -271,30 +272,30 @@ namespace telar::runtime {
         if (kind == ZSTDnit_blockHeader) {
           block = ZstdBlock::parse(input.first<3>());
           if (block.size > frame.blockSizeMax) {
-            return std::nullopt;
+            return ds::none;
           }
         } else if ((kind == ZSTDnit_block || kind == ZSTDnit_lastBlock) && block.kind == ZstdBlock::Kind::compressed) {
           const auto literals = ZstdBlock::literals(input.first(needed));
           if (!literals) {
-            return std::nullopt;
+            return ds::none;
           }
 
           requires_block_capacity = literals->has_sequences;
           if (!literals->has_sequences && literals->regenerated_size > remaining) {
             if (!fits) {
-              return std::nullopt;
+              return ds::none;
             }
 
             const auto copied = copyLiteralPrefix(input.first(needed), output.subspan(produced, remaining), frame.blockSizeMax);
 
-            return copied ? std::optional{Result{produced + *copied, true}} : std::nullopt;
+            return copied ? ds::Option{Result{produced + *copied, true}} : ds::none;
           }
         }
 
         // A full capture stops at the writer boundary before later frame validation.
         if ((kind == ZSTDnit_block || kind == ZSTDnit_lastBlock) && block.kind != ZstdBlock::Kind::compressed && block.size > remaining) {
           if (!fits) {
-            return std::nullopt;
+            return ds::none;
           }
 
           if (block.kind == ZstdBlock::Kind::raw) {
@@ -302,7 +303,7 @@ namespace telar::runtime {
           } else if (block.kind == ZstdBlock::Kind::repeated) {
             std::fill_n(output.data() + produced, remaining, input.front());
           } else {
-            return std::nullopt;
+            return ds::none;
           }
 
           return Result{limit, true};
@@ -315,7 +316,7 @@ namespace telar::runtime {
 
         const auto decoded = ZSTD_decompressContinue(state_, output.data() + produced, output.size() - produced, input.data(), needed);
         if (ZSTD_isError(decoded)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         if (decoded > remaining) {
@@ -324,14 +325,14 @@ namespace telar::runtime {
 
         produced += decoded;
         if (known_size && produced - frame_start > frame.frameContentSize) {
-          return std::nullopt;
+          return ds::none;
         }
 
         input = input.subspan(needed);
       }
 
       if (known_size && produced - frame_start != frame.frameContentSize) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -353,11 +354,11 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::size_t> ZstdDecoder<Memory>::copyLiteralPrefix(std::span<const std::uint8_t> input, std::span<std::uint8_t> destination, std::size_t block_capacity) {
+  ds::Option<std::size_t> ZstdDecoder<Memory>::copyLiteralPrefix(std::span<const std::uint8_t> input, std::span<std::uint8_t> destination, std::size_t block_capacity) {
     SensitiveAllocation storage{allocator_, block_capacity};
-    const auto decoded = ZSTD_decompressContinue(state_, storage.bytes().data(), storage.bytes().size(), input.data(), input.size());
+    const auto decoded = ZSTD_decompressContinue(state_, storage.bytesMut().data(), storage.bytesMut().size(), input.data(), input.size());
     if (ZSTD_isError(decoded)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto accepted = std::min(decoded, destination.size());
@@ -389,7 +390,7 @@ namespace telar::runtime {
     }
 
     auto current = input;
-    std::optional<DecodedBody<Memory>> decoded;
+    ds::Option<DecodedBody<Memory>> decoded;
 
     while (count != 0) {
       const auto coding = parsed.codings[--count];
@@ -402,7 +403,7 @@ namespace telar::runtime {
         return raw(input, limit, false);
       }
 
-      std::optional<DecodedBody<Memory>> result;
+      ds::Option<DecodedBody<Memory>> result;
 
       try {
         result = decodeOne(current, coding, limit);
@@ -419,21 +420,21 @@ namespace telar::runtime {
       current = decoded->bytes();
     }
 
-    return decoded ? std::move(*decoded) : raw(input, limit, false);
+    return decoded ? std::move(decoded.getMut()) : raw(input, limit, false);
   }
 
   DecodedBody<Memory> CaptureContentDecoder::raw(std::span<const std::uint8_t> input, std::size_t limit, bool failed) {
     const auto accepted = std::min(input.size(), limit);
     DecodedBody<Memory> result{memory_, accepted};
 
-    std::copy_n(input.data(), accepted, result.storage.bytes().data());
+    std::copy_n(input.data(), accepted, result.storage.bytesMut().data());
     result.size = accepted;
     result.truncated = accepted != input.size();
     result.failed = failed;
     return result;
   }
 
-  std::optional<DecodedBody<Memory>> CaptureContentDecoder::decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit) {
+  ds::Option<DecodedBody<Memory>> CaptureContentDecoder::decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit) {
     const bool zstd = coding == ContentCoding::zstd;
     const bool brotli = coding == ContentCoding::brotli;
     const auto container = coding == ContentCoding::gzip ? FlateContainer::gzip : FlateContainer::zlib;
@@ -448,21 +449,21 @@ namespace telar::runtime {
     // Complete Zstd frames may need less storage while retaining the same logical validation boundary.
     const auto storage_capacity = zstd ? ZstdDecoder<Memory>::outputCapacity(input, capacity) : capacity;
     DecodedBody<Memory> result{memory_, storage_capacity};
-    std::optional<std::size_t> decoded;
+    ds::Option<std::size_t> decoded;
 
     if (zstd) {
-      if (const auto progress = ZstdDecoder{memory_}.decode(input, result.storage.bytes(), capacity)) {
+      if (const auto progress = ZstdDecoder{memory_}.decode(input, result.storage.bytesMut(), capacity)) {
         decoded = progress->bytes;
         result.truncated = progress->truncated;
       }
     } else if (brotli) {
-      decoded = decodeBrotli(memory_, input, result.storage.bytes());
+      decoded = decodeBrotli(memory_, input, result.storage.bytesMut());
     } else {
-      decoded = FlateDecoder{memory_}.decode(input, result.storage.bytes(), container, limit + 1);
+      decoded = FlateDecoder{memory_}.decode(input, result.storage.bytesMut(), container, limit + 1);
     }
 
     if (!decoded) {
-      return std::nullopt;
+      return ds::none;
     }
 
     result.size = std::min(*decoded, limit);
@@ -471,18 +472,18 @@ namespace telar::runtime {
     return result;
   }
 
-  std::optional<DecodedBody<Memory>> CaptureContentDecoder::decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit) {
+  ds::Option<DecodedBody<Memory>> CaptureContentDecoder::decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit) {
     // Keep the reference's validation boundary beyond the requested prefix before truncating.
     SensitiveBuffer<FlateDecoder<Memory>::minimum_output_capacity> temporary;
     const auto decoded = FlateDecoder{memory_}.decode(input, temporary.bytes(), container, limit + 1);
     if (!decoded) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto accepted = std::min(*decoded, limit);
     DecodedBody<Memory> result{memory_, accepted};
 
-    std::copy_n(temporary.bytes().data(), accepted, result.storage.bytes().data());
+    std::copy_n(temporary.bytes().data(), accepted, result.storage.bytesMut().data());
     result.size = accepted;
     result.truncated = *decoded > limit;
     result.decoded = true;
@@ -531,11 +532,11 @@ namespace telar::runtime {
     return channel_.publish(std::move(half));
   }
 
-  auto CaptureProducer::receive() -> std::optional<Half> {
+  auto CaptureProducer::receive() -> ds::Option<Half> {
     return channel_.receive();
   }
 
-  auto CaptureProducer::tryReceive() noexcept -> std::optional<Half> {
+  auto CaptureProducer::tryReceive() noexcept -> ds::Option<Half> {
     return channel_.tryReceive();
   }
 

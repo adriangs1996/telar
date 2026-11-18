@@ -11,6 +11,7 @@ import telar.base.memory.sensitive;
 
 import telar.config.runtime;
 import telar.base.text;
+import telar.base.ds;
 
 // Interface: exchange_capture/quota.cppm
 export {
@@ -264,7 +265,7 @@ export {
 
     class FlateEnvelope {
     public:
-      static std::optional<std::size_t> bodyOffset(std::span<const std::uint8_t> input, FlateContainer container) noexcept;
+      static ds::Option<std::size_t> bodyOffset(std::span<const std::uint8_t> input, FlateContainer container) noexcept;
 
       static constexpr std::size_t footerSize(FlateContainer container) noexcept {
         return container == FlateContainer::gzip ? 2 * sizeof(std::uint32_t) : sizeof(std::uint32_t);

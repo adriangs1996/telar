@@ -11,6 +11,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: input/key_character.cppm
 export {
@@ -67,8 +68,8 @@ export {
 
     struct KittyCodepoints {
       std::uint32_t primary = 0;
-      std::optional<std::uint32_t> shifted = std::nullopt;
-      std::optional<std::uint32_t> base = std::nullopt;
+      ds::Option<std::uint32_t> shifted = ds::none;
+      ds::Option<std::uint32_t> base = ds::none;
     };
 
     struct TerminalKey {
@@ -76,7 +77,7 @@ export {
       std::uint32_t codepoint = 0;
       unsigned modifiers = 0;
       KeyPhase phase = KeyPhase::press;
-      std::optional<KittyCodepoints> kitty = std::nullopt;
+      ds::Option<KittyCodepoints> kitty = ds::none;
 
       [[nodiscard]] bool has(KeyChord::Modifier modifier) const noexcept;
     };
@@ -129,7 +130,7 @@ export {
         unsigned modifier;
         unsigned flags;
         bool cursor_keys;
-        std::optional<unsigned> event;
+        ds::Option<unsigned> event;
       };
 
       [[nodiscard]] std::string_view view() const noexcept;
@@ -144,7 +145,7 @@ export {
 
       bool encodeText(const TerminalKey& key, const Encoding& encoding);
 
-      static std::optional<std::uint32_t> associatedText(const TerminalKey& key, const Encoding& encoding);
+      static ds::Option<std::uint32_t> associatedText(const TerminalKey& key, const Encoding& encoding);
 
       void kittyCodepoints(const TerminalKey& key, const Encoding& encoding);
 
@@ -152,7 +153,7 @@ export {
 
       void altText(const TerminalKey& key, std::string_view text);
 
-      static std::optional<char> controlByte(std::uint32_t codepoint) noexcept;
+      static ds::Option<char> controlByte(std::uint32_t codepoint) noexcept;
 
       void legacyCharacter(const TerminalKey& key);
 

@@ -28,6 +28,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -55,7 +56,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QRectF host() const noexcept;
     [[nodiscard]] QVariantMap style() const;
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const;
     void sample(std::uint64_t now_ns);
 
   signals:
@@ -132,7 +133,7 @@ namespace telar::gui::qt {
     qreal density_ = 1;
     std::uint64_t now_ns_ = 0;
     std::uint64_t machine_view_ = 0;
-    std::optional<std::uint64_t> motion_end_ns_;
+    ds::Option<std::uint64_t> motion_end_ns_;
   };
 
 }

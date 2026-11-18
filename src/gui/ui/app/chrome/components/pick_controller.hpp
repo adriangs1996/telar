@@ -28,6 +28,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -47,7 +48,7 @@ namespace telar::gui::qt {
           items_(nullptr, AllocationDeleter<application::components::PickItems, Memory>{memory}) {}
 
     [[nodiscard]] bool isOpen() const noexcept {
-      return index_.has_value();
+      return index_.hasValue();
     }
 
     [[nodiscard]] QVariantMap state() const {
@@ -247,7 +248,7 @@ namespace telar::gui::qt {
             return;
           }
 
-          items_ = std::move(*outcome.value);
+          items_ = std::move(outcome.value.getMut());
           project();
           error_.clear();
           loading_ = false;
@@ -309,7 +310,7 @@ namespace telar::gui::qt {
     QString placeholder_;
     QString error_;
     PickOwner owner_;
-    std::optional<std::size_t> index_ = std::nullopt;
+    ds::Option<std::size_t> index_ = ds::none;
     std::uint64_t identity_ = 0;
     int preferred_row_ = 0;
     bool loading_ = false;

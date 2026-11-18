@@ -185,7 +185,7 @@ namespace {
   void recordedDatagrams(TlsTestMemory& memory) {
     Recordings recordings{memory};
     SensitiveAllocation output{memory, recording::Limits::page_bytes};
-    const auto started = recording::Protocol::page(recordings.handle({.operation = recording::Operation::start, .max_bytes = 16384, .max_events = 4, .selection = Selection::datagrams}, output.bytes()));
+    const auto started = recording::Protocol::page(recordings.handle({.operation = recording::Operation::start, .max_bytes = 16384, .max_events = 4, .selection = Selection::datagrams}, output.bytesMut()));
 
     check(recordings.selects(Selection::datagrams) && !recordings.selects(Selection::flows));
     CaptureAnalysis analysis{memory};
@@ -195,7 +195,7 @@ namespace {
       recordings.record(item, {});
     });
 
-    const auto page = recording::Protocol::page(recordings.handle({.id = started.id}, output.bytes()));
+    const auto page = recording::Protocol::page(recordings.handle({.id = started.id}, output.bytesMut()));
 
     check(page.count == 1);
     plugins::FrameReader rows{page.rows};
@@ -255,7 +255,7 @@ namespace {
     const auto bytes = packet(false, false, "body");
     const auto ip = IpPayload::decode(bytes);
 
-    check(ip.has_value());
+    check(ip.hasValue());
     auto message = *DatagramCodec::parse(*ip);
     std::array<Byte, 256> output;
     const auto encoded = DatagramCodec::encode(output, message);

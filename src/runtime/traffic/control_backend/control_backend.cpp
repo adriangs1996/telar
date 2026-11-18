@@ -3,6 +3,7 @@ module telar.runtime.traffic.control_backend;
 import telar.sys.socket;
 import telar.tls;
 import telar.platform.thread;
+import telar.base.ds;
 
 namespace telar::runtime::traffic::control {
 
@@ -161,7 +162,7 @@ namespace telar::runtime::traffic {
 
     for (auto& slot : pending_) {
       if (slot && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
-        advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
+        advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
       }
     }
   }
@@ -177,7 +178,7 @@ namespace telar::runtime::traffic {
     entry->available = false;
     for (auto& pending : pending_) {
       if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) {
-        advance(*pending, failure(*pending), registrations_, next_, completion_, request_signal_);
+        advance(pending.getMut(), failure(*pending), registrations_, next_, completion_, request_signal_);
       }
     }
 
@@ -246,7 +247,7 @@ namespace telar::runtime::traffic {
           }
 
           slot.emplace(memory_, ++next_, event, std::span{matches}.first(count));
-          slot->deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{matches[0].timeout_ms};
+          slot.getMut().deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{matches[0].timeout_ms};
           request_signal_.notify();
           return slot->ticket;
         } catch (...) {
@@ -275,16 +276,16 @@ namespace telar::runtime::traffic {
     for (auto& slot : pending_) {
       if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
         if (std::chrono::steady_clock::now() >= slot->deadline) {
-          advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
+          advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
           return;
         }
 
         if (verdict == Verdict::replace) {
-          slot->bytes.assign(bytes.begin(), bytes.end());
-          slot->replaced = true;
+          slot.getMut().bytes.assign(bytes.begin(), bytes.end());
+          slot.getMut().replaced = true;
         }
 
-        advance(*slot, verdict, registrations_, next_, completion_, request_signal_);
+        advance(slot.getMut(), verdict, registrations_, next_, completion_, request_signal_);
         return;
       }
     }
@@ -302,7 +303,7 @@ namespace telar::runtime::traffic {
     for (auto& slot : pending_) {
       if (slot && slot->ticket == ticket) {
         if (slot->verdict == Verdict::pending && std::chrono::steady_clock::now() >= slot->deadline) {
-          advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
+          advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
         }
 
         const auto verdict = slot->verdict;
@@ -374,7 +375,7 @@ namespace telar::runtime::traffic {
   }
 
   template <std::size_t maximum_bytes>
-  std::optional<FlowControl::Time> Interception<maximum_bytes>::deadline(std::uint64_t ticket) noexcept {
+  ds::Option<FlowControl::Time> Interception<maximum_bytes>::deadline(std::uint64_t ticket) noexcept {
     std::lock_guard lock{mutex_};
 
     for (const auto& slot : pending_) {
@@ -400,7 +401,7 @@ namespace telar::runtime::traffic {
   auto Interception<maximum_bytes>::registration(Owner owner) noexcept -> Registration* {
     for (auto& slot : registrations_) {
       if (slot && slot->route.owner == owner) {
-        return &*slot;
+        return &slot.getMut();
       }
     }
 
@@ -643,7 +644,7 @@ namespace telar::runtime::traffic {
     interception_.cancel(ticket);
   }
 
-  auto Service::deadline(std::uint64_t ticket) noexcept -> std::optional<Time> {
+  auto Service::deadline(std::uint64_t ticket) noexcept -> ds::Option<Time> {
     return interception_.deadline(ticket);
   }
 
@@ -675,7 +676,7 @@ namespace telar::runtime::traffic {
     http_interception_.cancel(ticket);
   }
 
-  auto Service::httpDeadline(std::uint64_t ticket) noexcept -> std::optional<Time> {
+  auto Service::httpDeadline(std::uint64_t ticket) noexcept -> ds::Option<Time> {
     return http_interception_.deadline(ticket);
   }
 
@@ -719,7 +720,7 @@ namespace telar::runtime::traffic {
     if (stop_capture != capture_stopped_.load(std::memory_order_relaxed)) {
       for (auto& peer : peers_) {
         if (peer && (peer->role == Role::live_capture || peer->role == Role::offline_capture)) {
-          peer->failed = true;
+          peer.getMut().failed = true;
         }
       }
     }
@@ -729,9 +730,9 @@ namespace telar::runtime::traffic {
       while (auto attachment = attachments_.tryReceive()) {
         for (auto& slot : peers_) {
           if (!slot) {
-            slot.emplace(memory_, std::move(attachment->socket), ::geteuid());
-            slot->package = attachment->package;
-            slot->owner = attachment->owner;
+            slot.emplace(memory_, std::move(attachment.getMut().socket), ::geteuid());
+            slot.getMut().package = attachment->package;
+            slot.getMut().owner = attachment->owner;
             break;
           }
         }
@@ -740,7 +741,7 @@ namespace telar::runtime::traffic {
       while (auto frame = injections_.tryReceive()) {
         const auto event = Protocol::decode((*frame)->bytes.bytes());
 
-        publish(event, std::move(*frame));
+        publish(event, std::move(frame.getMut()));
       }
     }
 
@@ -758,14 +759,14 @@ namespace telar::runtime::traffic {
 
       try {
         if (ready & (POLLIN | POLLHUP)) {
-          read(*peer);
+          read(peer.getMut());
         }
 
         if (ready & POLLOUT) {
-          write(*peer);
+          write(peer.getMut());
         }
       } catch (const std::exception&) {
-        peer->failed = true;
+        peer.getMut().failed = true;
       }
 
       constexpr auto handshake_timeout = std::chrono::seconds{5};
@@ -825,10 +826,10 @@ namespace telar::runtime::traffic {
         }
 
         SensitiveAllocation output{upstream_, flow.bytes.size() + Limits::metadata_bytes};
-        const auto payload = FlowCodec::encode(output.bytes(), flow);
+        const auto payload = FlowCodec::encode(output.bytesMut(), flow);
         const auto now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-        enqueue(*peer, encode(Event{.kind = peer->http ? Kind::http_intercept_request : Kind::intercept_request, .session = session_, .sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed), .timestamp_us = static_cast<std::uint64_t>(now), .bytes = payload}));
+        enqueue(peer.getMut(), encode(Event{.kind = peer->http ? Kind::http_intercept_request : Kind::intercept_request, .session = session_, .sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed), .timestamp_us = static_cast<std::uint64_t>(now), .bytes = payload}));
         return true;
       };
 
@@ -1093,7 +1094,7 @@ namespace telar::runtime::traffic {
   auto Service::encode(const Event& event) -> std::shared_ptr<Frame> {
     auto frame = std::allocate_shared<Frame>(AllocatorRef<Frame, SensitiveMemory>{memory_}, upstream_, Protocol::encodedSize(event));
 
-    Protocol::encode(frame->bytes.bytes(), event);
+    Protocol::encode(frame->bytes.bytesMut(), event);
     return frame;
   }
 
@@ -1113,7 +1114,7 @@ namespace telar::runtime::traffic {
           continue;
         }
 
-        if (peer->filter && !peer->filter->matches(event)) {
+        if (peer.getMut().filter && !peer.getMut().filter.getMut().matches(event)) {
           continue;
         }
 
@@ -1121,9 +1122,9 @@ namespace telar::runtime::traffic {
           shared = encode(event);
         }
 
-        enqueue(*peer, shared);
+        enqueue(peer.getMut(), shared);
       } catch (const std::exception&) {
-        peer->failed = true;
+        peer.getMut().failed = true;
       }
     }
   }

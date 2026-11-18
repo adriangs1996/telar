@@ -10,6 +10,7 @@ import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 // Interface: presentation/agent_order.cppm
 export {
@@ -29,8 +30,8 @@ export {
 
       struct Entry {
         std::size_t agent = 0;
-        std::optional<std::uint64_t> project = std::nullopt;
-        std::optional<std::size_t> creator = std::nullopt;
+        ds::Option<std::uint64_t> project = ds::none;
+        ds::Option<std::size_t> creator = ds::none;
         ActivityCard card = ActivityCard::agent;
         bool first_in_project = false;
       };
@@ -62,13 +63,13 @@ export {
 
     private:
       template <Allocator Memory>
-      [[nodiscard]] static std::size_t projectRank(std::optional<std::uint64_t> identity, std::span<const Workspace<Memory>> workspaces) noexcept;
+      [[nodiscard]] static std::size_t projectRank(ds::Option<std::uint64_t> identity, std::span<const Workspace<Memory>> workspaces) noexcept;
 
       template <Allocator Memory>
-      [[nodiscard]] static std::optional<std::uint64_t> projectOf(const WorkspaceReplica<Memory>& workspaces, const Agent<Memory>& agent) noexcept;
+      [[nodiscard]] static ds::Option<std::uint64_t> projectOf(const WorkspaceReplica<Memory>& workspaces, const Agent<Memory>& agent) noexcept;
 
       template <Allocator Memory>
-      [[nodiscard]] static std::optional<std::size_t> creatorOf(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::span<const Entry> entries, const Entry& entry) noexcept;
+      [[nodiscard]] static ds::Option<std::size_t> creatorOf(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::span<const Entry> entries, const Entry& entry) noexcept;
 
       template <Allocator Memory>
       [[nodiscard]] static bool lessThan(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, const Entry& left, const Entry& right) noexcept;
@@ -102,11 +103,11 @@ export {
 
       struct Entry {
         std::size_t source = 0;
-        std::optional<std::size_t> agent = std::nullopt;
-        std::optional<std::size_t> worktree = std::nullopt;
-        std::optional<std::uint64_t> project = std::nullopt;
+        ds::Option<std::size_t> agent = ds::none;
+        ds::Option<std::size_t> worktree = ds::none;
+        ds::Option<std::uint64_t> project = ds::none;
         ActivityCard card = ActivityCard::agent;
-        std::optional<std::size_t> parent = std::nullopt;
+        ds::Option<std::size_t> parent = ds::none;
         std::size_t depth = 0;
         bool coordinator = false;
         bool first_in_project = false;
@@ -136,7 +137,7 @@ export {
 
       [[nodiscard]] const Worktree<Memory>* rowOf(const Entry& entry) const noexcept;
 
-      [[nodiscard]] std::optional<std::size_t> parentOf(std::span<const std::size_t> agents, std::size_t index) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> parentOf(std::span<const std::size_t> agents, std::size_t index) const noexcept;
 
       void findParents();
 
@@ -145,9 +146,9 @@ export {
       void breakCycles() noexcept;
 
       struct Children {
-        std::array<std::optional<std::size_t>, maximum_entries> first;
-        std::array<std::optional<std::size_t>, maximum_entries> last;
-        std::array<std::optional<std::size_t>, maximum_entries> next;
+        std::array<ds::Option<std::size_t>, maximum_entries> first;
+        std::array<ds::Option<std::size_t>, maximum_entries> last;
+        std::array<ds::Option<std::size_t>, maximum_entries> next;
       };
 
       [[nodiscard]] Children linkChildren() noexcept;

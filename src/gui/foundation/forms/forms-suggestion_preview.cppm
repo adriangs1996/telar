@@ -6,6 +6,7 @@ import telar.base.text;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: presentation/suggestion_preview.cppm
 export {
@@ -23,7 +24,7 @@ export {
 
       SuggestionPreview(std::string_view text, Rect bounds, const FontGrid& grid);
 
-      [[nodiscard]] std::optional<SuggestionPreviewLine> next();
+      [[nodiscard]] ds::Option<SuggestionPreviewLine> next();
 
     private:
       [[nodiscard]] static std::uint16_t columns(Rect bounds, std::uint16_t width);

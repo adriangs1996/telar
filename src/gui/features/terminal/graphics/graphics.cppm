@@ -16,6 +16,7 @@ export import :pauses;
 import std;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -44,7 +45,7 @@ export namespace telar::gui::features::terminal::graphics {
   [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision(const State& state) noexcept;
 
   // When the next paused pane asks the runtime again; none while none waits.
-  [[nodiscard]] inline std::optional<std::uint64_t> deadline(const State& state) noexcept;
+  [[nodiscard]] inline ds::Option<std::uint64_t> deadline(const State& state) noexcept;
 
   // Pane `pane_id` reached a limit at `now_ns`: its images pause. `request` asks the runtime for
   // a pane's images again, `notice` tells the user once a pause begins.
@@ -105,7 +106,7 @@ namespace telar::gui::features::terminal::graphics {
     return Access::pauses(state).revision();
   }
 
-  inline std::optional<std::uint64_t> deadline(const State& state) noexcept {
+  inline ds::Option<std::uint64_t> deadline(const State& state) noexcept {
     return Access::pauses(state).nextDeadline();
   }
 

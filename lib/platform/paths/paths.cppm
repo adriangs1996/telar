@@ -6,6 +6,7 @@ import telar.tbc;
 import telar.base.memory.allocators;
 
 import telar.sys.socket;
+import telar.base.ds;
 
 // Interface: telar_platform/process_environment.cppm
 export {
@@ -148,7 +149,7 @@ export {
       [[nodiscard]] std::string_view path() const noexcept;
 
       // The directory a managed socket lives in, which its runtime creates; none for an explicit path.
-      [[nodiscard]] std::optional<std::string_view> managedDirectory() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> managedDirectory() const noexcept;
 
     private:
       void managed(std::string_view base, std::string_view name);

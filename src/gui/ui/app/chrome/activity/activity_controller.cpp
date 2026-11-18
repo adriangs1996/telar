@@ -22,6 +22,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -56,7 +57,7 @@ namespace telar::gui::qt {
 
       const auto& row = source.session.workspaceList().worktrees()[*entry.worktree];
 
-      return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Command{.worktree = row.id, .workspace = row.workspace.value_or(0)}};
+      return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Command{.worktree = row.id, .workspace = row.workspace.valueOr(0)}};
     }
 
     struct ListedProcess {
@@ -188,7 +189,7 @@ namespace telar::gui::qt {
       return slot == active ? std::string_view{} : version.label.view();
     };
 
-    std::array<std::optional<SourceVersion>, application::machines::Machines::capacity> versions;
+    std::array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions;
 
     for (std::size_t index = 0; index < store_.clients().size(); ++index) {
       const auto& client = store_.clients()[index];
@@ -375,7 +376,7 @@ namespace telar::gui::qt {
     emit hoveredChanged();
   }
 
-  void ActivityController::observePointer(bool hover_input, std::optional<QPointF> position) {
+  void ActivityController::observePointer(bool hover_input, ds::Option<QPointF> position) {
     ++pointer_revision_;
     pointer_position_ = position;
     hover_pending_ = hover_input;

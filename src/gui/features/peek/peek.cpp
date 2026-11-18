@@ -7,6 +7,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.gui.foundation.model;
 import telar.wire.content;
+import telar.base.ds;
 
 namespace telar::gui::features::peek {
 
@@ -29,7 +30,7 @@ namespace telar::gui::features::peek {
   }
 
   template <Allocator Memory>
-  const std::optional<PeekTarget>& PeekScreen<Memory>::target() const noexcept {
+  const ds::Option<PeekTarget>& PeekScreen<Memory>::target() const noexcept {
     return target_;
   }
 
@@ -49,9 +50,9 @@ namespace telar::gui::features::peek {
   }
 
   template <Allocator Memory>
-  std::optional<ReadPane> PeekScreen<Memory>::request(std::uint64_t identity) {
+  ds::Option<ReadPane> PeekScreen<Memory>::request(std::uint64_t identity) {
     if (!target_ || reading()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (identity == 0) {
@@ -81,14 +82,14 @@ namespace telar::gui::features::peek {
   }
 
   template <Allocator Memory>
-  std::optional<std::size_t> PeekScreen<Memory>::store(const PaneText& reply) {
+  ds::Option<std::size_t> PeekScreen<Memory>::store(const PaneText& reply) {
     if (!owns(reply.request_id)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     request_id_ = 0;
     if (!target_ || target_->agent.pane_id != reply.pane_id) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto start = reply.text.size() - std::min(reply.text.size(), PeekLimits::text_bytes);
@@ -109,7 +110,7 @@ namespace telar::gui::features::peek {
   State::State(Memory& memory)
       : screen_(memory) {}
 
-  const std::optional<PeekTarget>& target(const State& state) noexcept {
+  const ds::Option<PeekTarget>& target(const State& state) noexcept {
     return Access::screen(state).target();
   }
 
@@ -143,7 +144,7 @@ namespace telar::gui::features::peek {
     Access::screen(state).close();
   }
 
-  std::optional<ReadPane> read(State& state, std::uint64_t request_id) {
+  ds::Option<ReadPane> read(State& state, std::uint64_t request_id) {
     return Access::screen(state).request(request_id);
   }
 
@@ -151,7 +152,7 @@ namespace telar::gui::features::peek {
     return Access::screen(state).fail(request_id);
   }
 
-  std::optional<std::size_t> receive(State& state, const PaneText& reply) {
+  ds::Option<std::size_t> receive(State& state, const PaneText& reply) {
     return Access::screen(state).store(reply);
   }
 

@@ -13,6 +13,7 @@ import telar.platform.primitives;
 import telar.cli.runtime_observer;
 import telar.cli.control_session;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: diagnostics_options.cppm
 export {
@@ -32,10 +33,10 @@ export {
       static constexpr std::uint16_t max_lines = 10000;
       Action action;
       Component component = Component::all;
-      std::optional<std::uint32_t> pid = std::nullopt;
+      ds::Option<std::uint32_t> pid = ds::none;
       std::uint16_t lines = default_lines;
       bool json = false;
-      std::optional<std::string_view> socket = std::nullopt;
+      ds::Option<std::string_view> socket = ds::none;
 
       static DiagnosticsOptions parse(Arguments words);
     };
@@ -127,7 +128,7 @@ export {
       static constexpr std::uint16_t max_results = 1000;
       Action action;
       ImportKind import_kind = ImportKind::automatic;
-      std::optional<std::string_view> import_file = std::nullopt;
+      ds::Option<std::string_view> import_file = ds::none;
       std::uint64_t id = 0;
       std::int64_t before_ms = 0;
       std::uint16_t period_days = 0;
@@ -140,7 +141,7 @@ export {
       bool failed_only = false;
       HistoryAuthorFilter author = HistoryAuthorFilter::all;
       std::uint16_t limit = default_limit;
-      std::optional<std::string_view> socket = std::nullopt;
+      ds::Option<std::string_view> socket = ds::none;
 
       void setScope(HistoryScope value, tbc::view<std::string_view, tbc::lt::a> path = {});
 

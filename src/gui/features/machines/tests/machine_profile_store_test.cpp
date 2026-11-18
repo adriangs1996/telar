@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.features.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -45,9 +46,9 @@ namespace {
     telar::runtime::FixedText<MachineLimits::file_bytes> source;
 
     template <Allocator Memory>
-    std::optional<Vector<telar::Byte, Memory>> read(Memory& memory) const {
+    telar::ds::Option<Vector<telar::Byte, Memory>> read(Memory& memory) const {
       if (source.view().empty()) {
-        return std::nullopt;
+        return telar::ds::none;
       }
 
       const auto bytes = telar::byteView(source.view());
@@ -73,7 +74,7 @@ namespace {
       Transaction& operator=(Transaction&&) = delete;
 
       template <Allocator Memory>
-      std::optional<Vector<telar::Byte, Memory>> read(Memory& memory) const {
+      telar::ds::Option<Vector<telar::Byte, Memory>> read(Memory& memory) const {
         check(file_.locked, "transaction reads must hold the file lock");
 
         return file_.read(memory);

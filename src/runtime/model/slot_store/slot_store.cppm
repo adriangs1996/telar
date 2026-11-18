@@ -23,6 +23,7 @@ import telar.config.core;
 import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
 import telar.runtime.shell_integration.token;
+import telar.base.ds;
 
 // Interface: model/client_role.cppm
 export {
@@ -251,10 +252,10 @@ export {
 
       bool erase(TabLocation location) noexcept;
 
-      std::optional<TabLocation> pop() noexcept;
+      ds::Option<TabLocation> pop() noexcept;
 
     private:
-      std::optional<std::size_t> find(TabLocation location) const noexcept;
+      ds::Option<std::size_t> find(TabLocation location) const noexcept;
 
       std::array<TabLocation, capacity> locations_;
       std::size_t count_ = 0;
@@ -281,7 +282,7 @@ export {
       MediaBudget& media_budget;
       GraphicsLimits graphics;
       // Present when the pane runs a shell telar integrated with.
-      std::optional<ShellLaunch> shell{};
+      ds::Option<ShellLaunch> shell{};
     };
 
   }
@@ -395,10 +396,10 @@ export {
         return items_;
       }
 
-      inline std::optional<std::size_t> slotOf(std::uint64_t id) const noexcept {
+      inline ds::Option<std::size_t> slotOf(std::uint64_t id) const noexcept {
         const auto stored = id == 0 ? 0 : lookup_[bucket(id)];
 
-        return stored == 0 ? std::nullopt : std::optional<std::size_t>{stored - 1};
+        return stored == 0 ? ds::none : ds::Option<std::size_t>{stored - 1};
       }
 
     private:

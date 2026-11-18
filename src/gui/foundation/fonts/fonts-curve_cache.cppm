@@ -8,6 +8,7 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import :glyphs;
+import telar.base.ds;
 
 // Interface: terminal/glyphs/ink.cppm
 export {
@@ -322,7 +323,7 @@ export {
       static constexpr std::size_t shape_count = 23;
 
       BoxCurve(Shape shape, Rect cell, float thickness);
-      [[nodiscard]] static std::optional<Shape> shape(std::uint32_t codepoint) noexcept;
+      [[nodiscard]] static ds::Option<Shape> shape(std::uint32_t codepoint) noexcept;
       void rasterize(AlphaRaster raster) const;
 
     private:
@@ -402,13 +403,13 @@ export {
       static constexpr std::uint16_t fallback_height = 32;
 
       template <typename Builder>
-        requires std::invocable<Builder> && std::same_as<std::invoke_result_t<Builder>, std::optional<Payload>>
+        requires std::invocable<Builder> && std::same_as<std::invoke_result_t<Builder>, ds::Option<Payload>>
       [[nodiscard]] Payload* resolve(const BoxMetrics& metrics, BoxCurve::Shape shape, Builder&& build) {
         const Key key{.width_bits = std::bit_cast<std::uint32_t>(metrics.width), .height_bits = std::bit_cast<std::uint32_t>(metrics.height), .thickness_bits = std::bit_cast<std::uint32_t>(metrics.light), .shape = shape};
 
         for (auto& entry : std::span{entries_}.first(count_)) {
           if (entry.key == key) {
-            return entry.payload ? &*entry.payload : nullptr;
+            return entry.payload ? &entry.payload.getMut() : nullptr;
           }
         }
 
@@ -421,7 +422,7 @@ export {
         entry.key = key;
         entry.payload = std::invoke(std::forward<Builder>(build));
 
-        return entry.payload ? &*entry.payload : nullptr;
+        return entry.payload ? &entry.payload.getMut() : nullptr;
       }
 
       inline void reset() noexcept {
@@ -448,7 +449,7 @@ export {
 
       struct Entry {
         Key key;
-        std::optional<Payload> payload;
+        ds::Option<Payload> payload;
       };
 
       std::array<Entry, capacity> entries_{};

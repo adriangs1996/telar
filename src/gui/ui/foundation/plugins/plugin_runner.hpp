@@ -16,6 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -61,7 +62,7 @@ namespace telar::gui::qt {
     Store& store_;
     ConfigurationSource& configuration_;
     tbc::view<PluginWorker<PluginRunner>, tbc::lt::self> worker_;
-    std::optional<Owner> owner_;
+    ds::Option<Owner> owner_;
     std::uint64_t next_execution_ = 1;
   };
 

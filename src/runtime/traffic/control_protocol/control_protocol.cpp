@@ -396,7 +396,7 @@ namespace telar::runtime::traffic::control {
       }
     }
 
-    if ((request.operation == Operation::recording) != request.recording.has_value()) {
+    if ((request.operation == Operation::recording) != request.recording.hasValue()) {
       throw EncodingError{"Recording operation requires a recording request"};
     }
 
@@ -461,8 +461,8 @@ namespace telar::runtime::traffic {
     for (auto& entry : programs_) {
       if (!entry) {
         entry.emplace();
-        entry->link_type = event.link_type;
-        compile(expression_.view(), static_cast<int>(event.link_type), entry->program);
+        entry.getMut().link_type = event.link_type;
+        compile(expression_.view(), static_cast<int>(event.link_type), entry.getMut().program);
         return apply(entry->program, event);
       }
     }

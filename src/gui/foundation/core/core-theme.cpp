@@ -4,11 +4,12 @@ import std;
 
 import telar.base.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline core {
 
   float BackgroundOpacity::resolve(Surface surface, float fallback) const noexcept {
-    return overrides[static_cast<std::size_t>(surface)].value_or(fallback);
+    return overrides[static_cast<std::size_t>(surface)].valueOr(fallback);
   }
 
   float BackgroundOpacity::minimum(float fallback) const noexcept {
@@ -29,10 +30,10 @@ namespace telar::gui::inline foundation::inline core {
     const auto index = static_cast<std::size_t>(role);
     constexpr std::array defaults{PaletteRole::text, PaletteRole::mauve, PaletteRole::green, PaletteRole::peach, PaletteRole::subtext0, PaletteRole::peach, PaletteRole::peach, PaletteRole::teal, PaletteRole::blue, PaletteRole::yellow, PaletteRole::text, PaletteRole::text, PaletteRole::mauve, PaletteRole::subtext0, PaletteRole::subtext0};
 
-    return syntax_styles[index].value_or(SyntaxStyleValues{.color = color(defaults[index])});
+    return syntax_styles[index].valueOr(SyntaxStyleValues{.color = color(defaults[index])});
   }
 
-  ThemeValues ThemeSelection::resolve(Appearance appearance, const std::optional<ThemeValues>& locked) const noexcept {
+  ThemeValues ThemeSelection::resolve(Appearance appearance, const ds::Option<ThemeValues>& locked) const noexcept {
     if (locked) {
       return *locked;
     }
@@ -99,7 +100,7 @@ namespace telar::gui::inline foundation::inline core {
     return (style.flags & static_cast<std::uint16_t>(attribute)) != 0;
   }
 
-  std::optional<ColorName::Value> ColorName::parse(std::string_view name) noexcept {
+  ds::Option<ColorName::Value> ColorName::parse(std::string_view name) noexcept {
     if (runtime::asciiEqualIgnoreCase(name, "default")) {
       return CellColor{};
     }
@@ -130,12 +131,12 @@ namespace telar::gui::inline foundation::inline core {
     return true;
   }
 
-  std::optional<ColorName::Value> ColorName::literal(std::string_view name) noexcept {
+  ds::Option<ColorName::Value> ColorName::literal(std::string_view name) noexcept {
     constexpr std::string_view pattern = "#RRGGBB";
     constexpr std::string_view digits = "0123456789abcdef";
 
     if (name.size() != pattern.size() || name.front() != '#') {
-      return std::nullopt;
+      return ds::none;
     }
 
     name.remove_prefix(1);
@@ -145,7 +146,7 @@ namespace telar::gui::inline foundation::inline core {
     }
 
     if (name.front() == '_' || name.back() == '_') {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint32_t value = 0;
@@ -157,7 +158,7 @@ namespace telar::gui::inline foundation::inline core {
 
       const auto digit = digits.find(runtime::asciiLower(byte));
       if (digit == std::string_view::npos || (negative && digit != 0)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       value = (value * static_cast<std::uint32_t>(digits.size())) + static_cast<std::uint32_t>(digit);
@@ -182,7 +183,7 @@ namespace telar::gui::inline foundation::inline core {
     result.background = themeRgb(values.terminal.background);
     std::ranges::transform(values.terminal.palette, result.palette.begin(), themeRgb);
     result.cursor = values.terminal.cursor_color ? themeRgb(*values.terminal.cursor_color) : result.foreground;
-    result.cursor_text = values.terminal.cursor_text_color ? std::optional{themeRgb(*values.terminal.cursor_text_color)} : std::nullopt;
+    result.cursor_text = values.terminal.cursor_text_color ? ds::Option{themeRgb(*values.terminal.cursor_text_color)} : ds::none;
     result.chrome = values.palette;
     for (std::size_t index = 0; index < result.syntax.size(); ++index) {
       result.syntax[index] = values.syntaxStyle(static_cast<SyntaxRole>(index)).color;

@@ -2,6 +2,7 @@
 
 #include "tbc/view.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QRectF>
@@ -67,7 +68,7 @@ namespace telar::gui::qt {
     qreal border_width_ = 0;
     float border_alpha_ = 1;
     tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
-    std::optional<QRectF> paint_clip_;
+    ds::Option<QRectF> paint_clip_;
   };
 
 }

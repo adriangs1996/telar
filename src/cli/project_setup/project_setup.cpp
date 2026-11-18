@@ -13,6 +13,7 @@ import telar.platform.primitives;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::runtime::cli::pane_agents {
 
@@ -526,7 +527,7 @@ namespace telar::runtime::cli::pane_agents {
     const auto list = runtimeList(session);
 
     for (const bool branch : {true, false}) {
-      std::optional<std::uint64_t> found;
+      ds::Option<std::uint64_t> found;
 
       for (const auto& tree : list.worktrees) {
         if (branch ? tree.branch == reference : equalTitle(tree.title, reference)) {
@@ -546,9 +547,9 @@ namespace telar::runtime::cli::pane_agents {
     throw Failure{"no tracked worktree matches that branch or title", 2};
   }
 
-  tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, std::optional<std::uint64_t> worktree) {
-    const auto wanted = target == "--current" ? std::optional{current("TELAR_PANE_ID")} : maybeUnsigned(target);
-    std::optional<AgentSnapshotEntry> found;
+  tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, ds::Option<std::uint64_t> worktree) {
+    const auto wanted = target == "--current" ? ds::Option{current("TELAR_PANE_ID")} : maybeUnsigned(target);
+    ds::Option<AgentSnapshotEntry> found;
 
     for (const auto& entry : snapshot.entries) {
       if (worktree ? entry.work_tree == *worktree : wanted ? entry.pane_id == *wanted
@@ -568,18 +569,18 @@ namespace telar::runtime::cli::pane_agents {
     return *found;
   }
 
-  std::optional<std::uint64_t> senderPane(const Options& options, std::uint64_t target) {
+  ds::Option<std::uint64_t> senderPane(const Options& options, std::uint64_t target) {
     const ProcessEnvironment environment;
     const auto id = maybeUnsigned(environment.lookup("TELAR_PANE_ID"));
     // A later lookup may overwrite the storage an earlier one returned.
     const std::string own{environment.lookup("TELAR_SOCKET_PATH")};
     if (!id || *id == target || own.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto socket = options.socket ? std::string_view{options.socket} : environment.lookup("TELAR_SOCKET");
     if (!socket.empty() && socket != own) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (*id == 0) {
@@ -614,7 +615,7 @@ namespace telar::runtime::cli::pane_agents {
     session.template exchange<RequestCompleted>(InterruptAgent{.pane_id = agent.pane_id, .pane_generation = agent.pane_generation});
   }
 
-  int waitAgent(ControlSession& session, const Options& options, std::optional<std::uint64_t> worktree, Output& out) {
+  int waitAgent(ControlSession& session, const Options& options, ds::Option<std::uint64_t> worktree, Output& out) {
     const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds{options.timeout};
 
     for (;;) {
@@ -735,7 +736,7 @@ namespace telar::runtime::cli::pane_agents {
 
     session.receiveTimeout(30);
     const bool report = options.action == "report-title" || options.action == "report-state" || options.action == "report-command";
-    std::optional<std::uint64_t> tree;
+    ds::Option<std::uint64_t> tree;
     constexpr std::string_view prefix = "worktree:";
     if (options.target.starts_with(prefix) && options.target.size() > prefix.size()) {
       if (report) {
@@ -1122,7 +1123,7 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   void watchPane(ControlSession& session, const Options& options, const PaneDescriptor& pane, Output& out) {
-    std::optional<std::array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
+    ds::Option<std::array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
     bool previous_truncated = false;
     std::uint64_t count = 0;
 
@@ -1438,7 +1439,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  std::optional<std::vector<std::string>> loadRecipe(Memory& memory, std::string_view cwd, bool authorized) {
+  ds::Option<std::vector<std::string>> loadRecipe(Memory& memory, std::string_view cwd, bool authorized) {
     const auto path = std::string{cwd} + "/.telar/setup.json";
     FileDescriptor parent;
     FileDescriptor file;
@@ -1448,7 +1449,7 @@ namespace telar::runtime::cli::project_setup {
       file = file_transfer::openRegular(parent.get(), "setup.json");
     } catch (const std::runtime_error& error) {
       if (std::string_view{error.what()} == "FileNotFound") {
-        return std::nullopt;
+        return ds::none;
       }
 
       throw;
@@ -1544,19 +1545,19 @@ namespace telar::runtime::cli::project_setup {
     return id;
   }
 
-  std::optional<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
+  ds::Option<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return execute(session, cwd, *recipe, detach);
   }
 
-  std::optional<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
+  ds::Option<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ServerOptions server_options{};

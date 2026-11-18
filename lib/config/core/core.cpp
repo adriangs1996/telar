@@ -4,6 +4,7 @@ import std;
 import telar.tbc;
 import telar.sys.posix;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::runtime::config {
 
@@ -11,7 +12,7 @@ namespace telar::runtime::config {
     for (auto& entry : std::span{entries_}.first(count_)) {
       if (entry.name == reach.name) {
         if (reach.requested) {
-          entry.requested = std::max(entry.requested.value_or(0), *reach.requested);
+          entry.requested = std::max(entry.requested.valueOr(0), *reach.requested);
         }
 
         return;
@@ -75,9 +76,9 @@ namespace telar::runtime::config {
     }
   }
 
-  std::optional<std::size_t> optionalChoiceIndex(const lua::Value& value, std::span<const std::string_view> names) {
+  ds::Option<std::size_t> optionalChoiceIndex(const lua::Value& value, std::span<const std::string_view> names) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto found = std::ranges::find(names, value.string());
@@ -88,17 +89,17 @@ namespace telar::runtime::config {
     return static_cast<std::size_t>(found - names.begin());
   }
 
-  std::optional<double> optionalNumber(const lua::Value& value, Bounds<double> bounds) {
-    return value.present() ? std::optional{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : std::nullopt;
+  ds::Option<double> optionalNumber(const lua::Value& value, Bounds<double> bounds) {
+    return value.present() ? ds::Option{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : ds::none;
   }
 
-  std::optional<double> optionalWholeValue(const lua::Value& value, Bounds<double> bounds) {
+  ds::Option<double> optionalWholeValue(const lua::Value& value, Bounds<double> bounds) {
     optionalWholeNumber(value, bounds.minimum, bounds.maximum);
-    return value.present() ? std::optional{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : std::nullopt;
+    return value.present() ? ds::Option{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : ds::none;
   }
 
-  std::optional<bool> optionalBoolean(const lua::Value& value) {
-    return value.present() ? std::optional{value.boolean(false)} : std::nullopt;
+  ds::Option<bool> optionalBoolean(const lua::Value& value) {
+    return value.present() ? ds::Option{value.boolean(false)} : ds::none;
   }
 
   void printableUiText(const lua::Value& source, std::string_view text, bool allow_tab) {

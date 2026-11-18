@@ -1,6 +1,7 @@
 module telar.gui.features.machines;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::features::machines {
 
@@ -40,7 +41,7 @@ namespace telar::gui::features::machines {
   }
 
   void MachineProfileEdits::requireRemoteLabel(const MachineProfiles& profiles, std::string_view label, std::string_view fallback) {
-    if (label == profiles.localLabel().value_or(fallback)) {
+    if (label == profiles.localLabel().valueOr(fallback)) {
       throw MachineFailure{MachineError::duplicate_label};
     }
   }
@@ -60,7 +61,7 @@ namespace telar::gui::features::machines {
     result.enabled_ = edit.enabled;
     result.login_agent_ = edit.login_agent;
     result.login_ = edit.login;
-    result.has_color_ = edit.color.has_value();
+    result.has_color_ = edit.color.hasValue();
     result.label_.assign(edit.label);
     result.value_.assign(edit.value);
     if (edit.color) {
@@ -75,7 +76,7 @@ namespace telar::gui::features::machines {
         .kind = kind_,
         .label = label_.view(),
         .value = value_.view(),
-        .color = has_color_ ? std::optional{color_.view()} : std::nullopt,
+        .color = has_color_ ? ds::Option{color_.view()} : ds::none,
         .enabled = enabled_,
         .login_agent = login_agent_,
         .login = login_,

@@ -41,6 +41,7 @@ import telar.config.runtime;
 import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.history.event;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 // Interface: runtime/limit_service.cppm
 export {
@@ -73,7 +74,7 @@ export {
         FixedText<32> noun;
         FixedText<32> route;
         std::uint64_t value = 0;
-        std::optional<std::uint64_t> requested;
+        ds::Option<std::uint64_t> requested;
       };
 
       void queueShow(Ledger ledger, std::size_t slot) noexcept;
@@ -115,7 +116,7 @@ export {
         }
 
         try {
-          admit(std::move(*descriptor));
+          admit(std::move(descriptor.getMut()));
         } catch (const std::exception&) {
         }
       }
@@ -126,14 +127,14 @@ export {
 
     private:
       // Advances the handshake an event names; the descriptor of the client it accepts, if any.
-      std::optional<FileDescriptor> advance(const Event& event);
+      ds::Option<FileDescriptor> advance(const Event& event);
 
       std::uint64_t token(std::size_t slot) const noexcept;
 
       void drop(std::size_t slot) noexcept;
 
       static constexpr std::size_t capacity = 16;
-      std::array<std::optional<ClientHandshake>, capacity> pending_;
+      std::array<ds::Option<ClientHandshake>, capacity> pending_;
       std::array<std::uint64_t, capacity> generations_{};
       std::size_t count_ = 0;
       Poller& poller_;
@@ -149,9 +150,9 @@ export {
 export {
   namespace telar::runtime {
 
-    void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept;
+    void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous = {}) noexcept;
 
-    std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore& workspaces, std::uint64_t identity) noexcept;
+    ds::Option<std::uint64_t> previousWorkspace(const WorkspaceStore& workspaces, std::uint64_t identity) noexcept;
 
   }
 }
@@ -697,8 +698,8 @@ export {
 
         try {
           auto& pane = require(panes, client.search->pane_id);
-          if (client.search->advance(pane.terminal.handle(), pane.terminal.contentRevision())) {
-            client.connection.send(client.search->result());
+          if (client.search.getMut().advance(pane.terminal.handle(), pane.terminal.contentRevision())) {
+            client.connection.send(client.search.getMut().result());
             client.search.reset();
           }
         } catch (const std::exception&) {
@@ -706,7 +707,7 @@ export {
           client.search.reset();
         }
 
-        return client.search.has_value();
+        return client.search.hasValue();
       }
 
     private:
@@ -771,7 +772,7 @@ export {
           const auto* owner = workspace != nullptr && workspace->geometry_client ? clients.find(*workspace->geometry_client) : nullptr;
 
           pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
-          pane.terminal.configureCursorColor(std::nullopt);
+          pane.terminal.configureCursorColor(ds::none);
         }
 
         pane.terminal.configureClientFacts(facts);

@@ -77,7 +77,7 @@ namespace {
     std::string encoded(std::span<const Byte> raw, bool padded = true) {
       std::string result((raw.size() + 2) / 3 * 4, '\0');
 
-      check(base64::encode(raw, result).has_value());
+      check(base64::encode(raw, result).hasValue());
       if (!padded) {
         while (!result.empty() && result.back() == '=') {
           result.pop_back();
@@ -178,9 +178,9 @@ namespace {
       check(!std::filesystem::exists(quiet));
       auto storage = SharedImageStorage::create(4);
 
-      check(storage.has_value());
-      std::ranges::fill(storage->mapping().bytes(), 0);
-      const auto shared_name = storage->takeName();
+      check(storage.hasValue());
+      std::ranges::fill(storage.getMut().mapping().bytes(), 0);
+      const auto shared_name = storage.getMut().takeName();
 
       check(query(terminal, "t=s,s=1,v=1", encoded(bytes(shared_name.data()), false)) == "\x1b_Gi=9;OK\x1b\\");
       FileDescriptor reopened{::shm_open(shared_name.data(), O_RDONLY, 0)};
@@ -876,16 +876,16 @@ namespace {
       constexpr std::size_t size = 4096;
       auto storage = SharedImageStorage::create(size);
 
-      check(storage.has_value());
-      std::ranges::fill(storage->mapping().bytes(), 23);
-      const auto name = storage->takeName();
+      check(storage.hasValue());
+      std::ranges::fill(storage.getMut().mapping().bytes(), 23);
+      const auto name = storage.getMut().takeName();
       FileDescriptor writer{::shm_open(name.data(), O_RDWR, 0)};
 
       check(static_cast<bool>(writer));
       const auto payload = encoded(bytes(name.data()));
       const auto pixels = GraphicsFramePixels::open({payload, size, size, GraphicsInputMedium::shared_memory});
 
-      check(pixels.has_value());
+      check(pixels.hasValue());
       std::array<Byte, size> output;
 
       check(pixels->copyTo(output) && output.front() == 23 && output.back() == 23);

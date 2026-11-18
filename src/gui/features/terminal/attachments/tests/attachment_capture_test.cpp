@@ -28,7 +28,7 @@ namespace {
     ClipboardCaptureState state;
     const auto first_value = state.reserve(first_prompt);
 
-    check(first_value.has_value(), "the first valid prompt must reserve a capture");
+    check(first_value.hasValue(), "the first valid prompt must reserve a capture");
     const auto first = *first_value;
 
     check(!state.reserve(replacement_prompt), "only one capture may run at a time");
@@ -38,7 +38,7 @@ namespace {
 
     const auto second_value = state.reserve(replacement_prompt);
 
-    check(second_value.has_value(), "a cancelled capture must release its reservation");
+    check(second_value.hasValue(), "a cancelled capture must release its reservation");
     const auto second = *second_value;
 
     check(second.id == first.id + 1, "cancellation must not reuse the capture identity");
@@ -52,7 +52,7 @@ namespace {
     ClipboardCaptureState state{final_id};
     const auto final_value = state.reserve(first_prompt);
 
-    check(final_value.has_value(), "the final nonzero identity must remain valid");
+    check(final_value.hasValue(), "the final nonzero identity must remain valid");
     const auto final = *final_value;
 
     check(final.id == final_id && state.nextId() == ClipboardCapture::invalid_id, "the next identity must become the exhausted sentinel");

@@ -3,12 +3,13 @@ module telar.runtime.terminal.kitty;
 import telar.platform.error;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.platform.descriptor_path;
+import telar.base.ds;
 
 namespace telar::runtime {
 
-  std::optional<KittyControlField> KittyControlFields::next() noexcept {
+  ds::Option<KittyControlField> KittyControlFields::next() noexcept {
     if (remaining_.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto comma = remaining_.find(',');
@@ -18,7 +19,7 @@ namespace telar::runtime {
     if (field.size() < 3 || field.find('=') != 1 || (comma != std::string_view::npos && remaining_.empty())) {
       valid_ = false;
       remaining_ = {};
-      return std::nullopt;
+      return ds::none;
     }
 
     return KittyControlField{field.front(), field.substr(2)};
@@ -86,13 +87,13 @@ namespace telar::runtime {
     return kitty;
   }
 
-  std::optional<KittyFraming::Transition> KittyFraming::advance(std::span<const std::uint8_t> bytes, std::size_t& position) noexcept {
+  ds::Option<KittyFraming::Transition> KittyFraming::advance(std::span<const std::uint8_t> bytes, std::size_t& position) noexcept {
     while (position < bytes.size()) {
       if (state_ == State::ground) {
         const auto* escape = static_cast<const std::uint8_t*>(std::memchr(bytes.data() + position, escape_byte, bytes.size() - position));
         if (escape == nullptr) {
           position = bytes.size();
-          return std::nullopt;
+          return ds::none;
         }
 
         position = static_cast<std::size_t>(escape - bytes.data()) + 1;
@@ -127,7 +128,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool KittyCommandScanner::canSkip(std::span<const std::uint8_t> bytes) const noexcept {
@@ -138,7 +139,7 @@ namespace telar::runtime {
     return framing_.canSkipCsi(bytes);
   }
 
-  std::optional<KittyCommandView> KittyCommandScanner::next(std::span<const std::uint8_t> bytes) noexcept {
+  ds::Option<KittyCommandView> KittyCommandScanner::next(std::span<const std::uint8_t> bytes) noexcept {
     std::size_t position = 0;
 
     for (;;) {
@@ -150,7 +151,7 @@ namespace telar::runtime {
           capture(bytes.subspan(start));
         }
 
-        return std::nullopt;
+        return ds::none;
       }
 
       if (*transition == KittyFraming::Transition::started) {
@@ -187,16 +188,16 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<DisplayCells> KittyCursor::observe(const KittyCommandView& command, std::uint32_t cell_width, std::uint32_t cell_height) noexcept {
+  ds::Option<DisplayCells> KittyCursor::observe(const KittyCommandView& command, std::uint32_t cell_width, std::uint32_t cell_height) noexcept {
     const auto header = parse(command);
     if (!header || command.truncated || (header->image_id != 0 && header->image_number != 0)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (pending_) {
       if (header->transmits()) {
         if (header->more) {
-          return std::nullopt;
+          return ds::none;
         }
 
         const auto first = *pending_;
@@ -210,13 +211,13 @@ namespace telar::runtime {
       }
     } else if (header->transmits() && header->more) {
       pending_ = *header;
-      return std::nullopt;
+      return ds::none;
     }
 
     return execute(*header, cell_width, cell_height);
   }
 
-  std::optional<DisplayCells> KittyCursor::execute(const Header& header, std::uint32_t cell_width, std::uint32_t cell_height) noexcept {
+  ds::Option<DisplayCells> KittyCursor::execute(const Header& header, std::uint32_t cell_width, std::uint32_t cell_height) noexcept {
     if (header.transmits() && header.width != 0 && header.height != 0 && (header.image_id != 0 || header.image_number != 0)) {
       auto* slot = find(header);
       if (slot == nullptr) {
@@ -236,11 +237,11 @@ namespace telar::runtime {
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     if ((header.action != 'T' && header.action != 'p') || header.stays) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto width = header.width;
@@ -249,7 +250,7 @@ namespace telar::runtime {
     if (header.action == 'p') {
       const auto* known = find(header);
       if (known == nullptr) {
-        return std::nullopt;
+        return ds::none;
       }
 
       width = known->width;
@@ -257,14 +258,14 @@ namespace telar::runtime {
     }
 
     if ((width == 0 || height == 0) && (header.requested.columns == 0 || header.requested.rows == 0)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto source_x = std::min(header.source_x, width);
     const auto source_y = std::min(header.source_y, height);
     const auto cells = displayCells({.width = std::min(header.source_width != 0 ? header.source_width : width, width - source_x), .height = std::min(header.source_height != 0 ? header.source_height : height, height - source_y), .requested = header.requested, .offset_x = header.offset_x, .offset_y = header.offset_y, .cell_width = cell_width, .cell_height = cell_height});
 
-    return cells.columns != 0 && cells.rows != 0 ? std::optional{cells} : std::nullopt;
+    return cells.columns != 0 && cells.rows != 0 ? ds::Option{cells} : ds::none;
   }
 
   KittyCursor::ImageSize* KittyCursor::find(const Header& header) noexcept {
@@ -277,7 +278,7 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  std::optional<KittyCursor::Header> KittyCursor::parse(const KittyCommandView& command) noexcept {
+  ds::Option<KittyCursor::Header> KittyCursor::parse(const KittyCommandView& command) noexcept {
     Header header;
     constexpr std::uint32_t png_format = 100;
     constexpr std::uint32_t rgba_format = 32;
@@ -287,7 +288,7 @@ namespace telar::runtime {
     KittyControlFields fields{command.control};
 
     while (const auto field = fields.next()) {
-      const auto number = kittyUnsigned<std::uint32_t>(field->value).value_or(0);
+      const auto number = kittyUnsigned<std::uint32_t>(field->value).valueOr(0);
 
       switch (field->key) {
       case 'a':
@@ -357,7 +358,7 @@ namespace telar::runtime {
     }
 
     if (!fields.valid()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (format == png_format) {
@@ -374,7 +375,7 @@ namespace telar::runtime {
     return header;
   }
 
-  std::optional<std::array<std::uint32_t, 2>> KittyCursor::pngSize(std::string_view encoded) noexcept {
+  ds::Option<std::array<std::uint32_t, 2>> KittyCursor::pngSize(std::string_view encoded) noexcept {
     constexpr std::string_view signature = "\x89PNG\r\n\x1a\n";
     constexpr std::size_t encoded_header_size = 32;
     constexpr std::size_t width_offset = 16;
@@ -383,7 +384,7 @@ namespace telar::runtime {
     std::array<std::uint8_t, 24> bytes;
     if (encoded.size() < encoded_header_size || base64::decode(encoded.substr(0, encoded_header_size), bytes) != bytes.size() ||
         std::memcmp(bytes.data(), signature.data(), signature.size()) != 0 || std::memcmp(bytes.data() + chunk_type_offset, "IHDR", 4) != 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto bigEndian = [&](std::size_t offset) {
@@ -449,28 +450,28 @@ namespace telar::runtime {
     checkGhostty(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_CURSOR_X, &column));
   }
 
-  std::optional<GraphicsChildFile> GraphicsChildFile::open(std::string_view encoded_path) noexcept {
+  ds::Option<GraphicsChildFile> GraphicsChildFile::open(std::string_view encoded_path) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> path;
     const auto* decoded = decodeGraphicsName(encoded_path, path);
 
     return openPath(decoded);
   }
 
-  std::optional<GraphicsChildFile> GraphicsChildFile::openDecoded(std::span<const std::uint8_t> decoded_path) noexcept {
+  ds::Option<GraphicsChildFile> GraphicsChildFile::openDecoded(std::span<const std::uint8_t> decoded_path) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> path;
 
     return openPath(copyGraphicsName(decoded_path, path));
   }
 
-  std::optional<GraphicsChildFile> GraphicsChildFile::openPath(const char* decoded) noexcept {
+  ds::Option<GraphicsChildFile> GraphicsChildFile::openPath(const char* decoded) noexcept {
     if (decoded == nullptr || decoded[0] != '/') {
-      return std::nullopt;
+      return ds::none;
     }
 
     FileDescriptor file{::open(decoded, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
     struct stat metadata{};
     if (!file || ::fstat(file.get(), &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_uid != ::getuid() || metadata.st_size < 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return GraphicsChildFile{std::move(file), static_cast<std::uint64_t>(metadata.st_size)};

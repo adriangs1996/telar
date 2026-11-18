@@ -6,6 +6,7 @@ module telar.runtime.model.client_layouts;
 import telar.sys.process;
 import telar.base.text.utf8;
 import telar.platform.events;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -119,7 +120,7 @@ namespace telar::runtime {
         location(location),
         launch(memory),
         pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
-        observer(std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? std::optional{settings.shell->token} : std::nullopt)),
+        observer(std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? ds::Option{settings.shell->token} : ds::none)),
         media(std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
@@ -160,7 +161,7 @@ namespace telar::runtime {
         observeShell();
         terminal.followScrollback();
         if (blocks) {
-          blocks->follow();
+          blocks.getMut().follow();
         }
       }
 
@@ -176,14 +177,14 @@ namespace telar::runtime {
 
       const auto count = ::read(process->descriptor(), buffer.data(), capacity);
       if (count > 0 && echo_sent) {
-        timeLink(std::chrono::steady_clock::now() - *std::exchange(echo_sent, std::nullopt));
+        timeLink(std::chrono::steady_clock::now() - *std::exchange(echo_sent, ds::none));
       }
 
       if (count > 0) {
         const auto bytes = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
 
         TELAR_DIAGNOSTIC(recordRead(bytes.size(), batch_bytes != 0));
-        const auto foreground = needs_foreground_observation ? shellForeground() : std::nullopt;
+        const auto foreground = needs_foreground_observation ? shellForeground() : ds::none;
 
         expireProgress(foreground);
         observer->bytes(ObservationKind::output, bytes, foreground);
@@ -192,7 +193,7 @@ namespace telar::runtime {
         if (shell_zones) {
           const auto before = shell_state.commands;
 
-          shell_zones->feed(bytes, ObservationTime{}, completions);
+          shell_zones.getMut().feed(bytes, ObservationTime{}, completions);
           shell_revision += shell_state.commands != before;
         }
 
@@ -209,9 +210,9 @@ namespace telar::runtime {
             }
 
             if (mark.action == 'D') {
-              blocks->finished(mark.status, now);
+              blocks.getMut().finished(mark.status, now);
             } else {
-              blocks->mark(mark.action, now);
+              blocks.getMut().mark(mark.action, now);
             }
           }
 
@@ -300,7 +301,7 @@ namespace telar::runtime {
     });
     observer->bytes(ObservationKind::input, bytes, shellForeground());
     if (shell_zones) {
-      shell_zones->input(bytes);
+      shell_zones.getMut().input(bytes);
     }
 
     ++input_revision;
@@ -322,31 +323,31 @@ namespace telar::runtime {
 
     terminal.resize(size, *media);
     if (blocks) {
-      blocks->follow(true);
+      blocks.getMut().follow(true);
     }
 
-    process->resize(size);
+    process.getMut().resize(size);
     observer->resize(size);
     media->resize(size);
   }
 
-  std::optional<bool> Pane::shellForeground() const noexcept {
+  ds::Option<bool> Pane::shellForeground() const noexcept {
     if (shell_markers) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto foreground = process->foregroundProcessGroup();
 
-    return foreground ? std::optional<bool>{*foreground == process->processId()} : std::nullopt;
+    return foreground ? ds::Option<bool>{*foreground == process->processId()} : ds::none;
   }
 
-  std::optional<std::int32_t> Pane::exitCode() const noexcept {
-    return exit_status ? std::optional{shellExitCode(*exit_status)} : std::nullopt;
+  ds::Option<std::int32_t> Pane::exitCode() const noexcept {
+    return exit_status ? ds::Option{shellExitCode(*exit_status)} : ds::none;
   }
 
   void Pane::ShellCompletions::complete(CommandCompletion completion) noexcept {
     ++state.commands;
-    state.status = completion.exit_code.value_or(0);
+    state.status = completion.exit_code.valueOr(0);
     if (count != 0 && kept[count - 1].action == 'D') {
       kept[count - 1].status = completion.exit_code;
     }
@@ -354,7 +355,7 @@ namespace telar::runtime {
 
   void Pane::ShellCompletions::mark(CommandMark mark) noexcept {
     if (count < kept.size()) {
-      kept[count++] = Mark{.action = mark.action, .end = mark.end, .status = std::nullopt};
+      kept[count++] = Mark{.action = mark.action, .end = mark.end, .status = ds::none};
     }
   }
 
@@ -378,7 +379,7 @@ namespace telar::runtime {
     }
   }
 
-  void Pane::expireProgress(std::optional<bool> shell_foreground) noexcept {
+  void Pane::expireProgress(ds::Option<bool> shell_foreground) noexcept {
     if (terminal.effects.progress_state == PaneProgressState::remove) {
       return;
     }
@@ -390,7 +391,7 @@ namespace telar::runtime {
     }
 
     if (*shell_foreground) {
-      terminal.effects.setProgress(PaneProgressState::remove, std::nullopt);
+      terminal.effects.setProgress(PaneProgressState::remove, ds::none);
     }
   }
 
@@ -421,7 +422,7 @@ namespace telar::runtime {
     tabs.reserve(64);
   }
 
-  Tab* Workspace::tab(std::uint64_t tab_id) noexcept {
+  Tab* Workspace::tabMut(std::uint64_t tab_id) noexcept {
     for (auto& entry : tabs) {
       if (entry.id == tab_id) {
         return &entry;
@@ -432,7 +433,7 @@ namespace telar::runtime {
   }
 
   const Tab* Workspace::tab(std::uint64_t tab_id) const noexcept {
-    return const_cast<Workspace*>(this)->tab(tab_id);
+    return const_cast<Workspace*>(this)->tabMut(tab_id);
   }
 
   std::string_view Workspace::displayName() const noexcept {
@@ -690,7 +691,7 @@ namespace telar::runtime {
 
     std::array<ClientTabLayout, maximum_tabs> tabs;
     std::size_t count = 0;
-    std::optional<TabLocation> active;
+    ds::Option<TabLocation> active;
 
     for (std::size_t index = 0; index < record->tab_count; ++index) {
       const auto tab = record->tabAt(index);
@@ -715,7 +716,7 @@ namespace telar::runtime {
     });
   }
 
-  std::optional<std::uint64_t> ClientLayouts::focusedPane(std::uint64_t identity) const noexcept {
+  ds::Option<std::uint64_t> ClientLayouts::focusedPane(std::uint64_t identity) const noexcept {
     for (const auto& record : records_) {
       if (record.identity != identity) {
         continue;
@@ -729,7 +730,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::uint64_t ClientLayouts::revision() const noexcept {

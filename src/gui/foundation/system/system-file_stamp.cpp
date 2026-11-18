@@ -2,10 +2,11 @@ module telar.gui.foundation.system;
 
 import std;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline system {
 
-  std::optional<FileStamp> FileStamp::read(const char* path, FileSymlinks symlinks) noexcept {
+  ds::Option<FileStamp> FileStamp::read(const char* path, FileSymlinks symlinks) noexcept {
     struct stat status{};
     const auto result = symlinks == FileSymlinks::follow ? ::stat(path, &status) : ::lstat(path, &status);
     if (result != 0) {

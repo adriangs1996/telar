@@ -12,6 +12,7 @@ import telar.wire.vocabulary;
 import :fold_map;
 import telar.base.memory.allocators;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 // Interface: application/records.cppm
 export {
@@ -77,7 +78,7 @@ export {
       bool snapshot_requested = false;
       std::uint64_t acknowledged_frame = 0;
       PaneProgressState progress_state = PaneProgressState::remove;
-      std::optional<Byte> progress_percent;
+      ds::Option<Byte> progress_percent;
       // The integrated shell's phase and the terminal's line discipline, for the command editor.
       PaneShell shell{};
       // The document the pane's program shows natively (`telar render`) while `document_shown`;
@@ -128,9 +129,9 @@ export {
       std::uint64_t fold_revision = 0;
       // The shown row at the top of the pane's view, folds counted, while the view draws its own
       // rows; the runtime's view need not start there.
-      std::optional<std::uint64_t> shown_top;
+      ds::Option<std::uint64_t> shown_top;
       // The row the live prompt starts on, as the view last showed it.
-      std::optional<std::uint32_t> live_prompt_row;
+      ds::Option<std::uint32_t> live_prompt_row;
       // The folded blocks by index while renumbered rows wait for the blocks numbered anew.
       std::vector<std::size_t> refold;
     };

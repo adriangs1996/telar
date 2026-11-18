@@ -23,6 +23,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace {
 
@@ -101,7 +102,7 @@ namespace {
 
       check(rejected && replica.revision() == 2 && replica.worktrees().front().title == "Fix the task", "worktree allocation failure must preserve the entire published snapshot");
       check(budget.liveBytes() == live, "rejected metadata must not leak storage");
-      gate.permit(std::nullopt);
+      gate.permit(ds::none);
       check(replica.apply({.revision = 3, .entries = projects, .worktrees = tasks}), "failed workspace snapshots must be retryable");
     }
 

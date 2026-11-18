@@ -9,6 +9,7 @@ import telar.platform.paths;
 import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: integration_options.cppm
 export {
@@ -46,7 +47,7 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    std::optional<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes);
+    ds::Option<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes);
 
   }
 }
@@ -104,7 +105,7 @@ export {
   namespace telar::runtime::cli::integration {
 
     // The agent skill `telar --skill NAME` prints, `telar` or `coordinator`, or nullopt for any other name.
-    std::optional<std::string_view> skillText(std::string_view name) noexcept;
+    ds::Option<std::string_view> skillText(std::string_view name) noexcept;
 
     template <EnvironmentLookup Environment>
     int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable);

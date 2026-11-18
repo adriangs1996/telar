@@ -5,6 +5,7 @@ module;
 export module telar.platform.sha256;
 
 import std;
+import telar.base.ds;
 
 // Interface: telar_platform/sha256.cppm
 export {
@@ -22,7 +23,7 @@ export {
     };
 
     // The MD5 digest of `bytes`, or nothing if OpenSSL could not compute it.
-    std::optional<std::array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept;
+    ds::Option<std::array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept;
 
   }
 }

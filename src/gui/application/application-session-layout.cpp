@@ -25,6 +25,7 @@ import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.base.memory.allocators;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -47,7 +48,7 @@ namespace telar::gui::application {
 
   template <typename Request>
     requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
-  void Session::sendOpeningRequest(RequestKind kind, Request request, TabLocation location, std::optional<std::uint64_t> fallback_workspace) {
+  void Session::sendOpeningRequest(RequestKind kind, Request request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace) {
     sendRegistered(kind, request, 0, [&](Pending& registered, const Request& sent) {
       registered.size = sent.size;
       registered.location = location;
@@ -222,13 +223,13 @@ namespace telar::gui::application {
     sendOpeningRequest(RequestKind::open_default, OpenPane{.size = features::workbench::launchSize(workbench_), .launch = launch});
   }
 
-  auto Session::machineBookmark() const noexcept -> std::optional<MachineBookmark> {
+  auto Session::machineBookmark() const noexcept -> ds::Option<MachineBookmark> {
     const auto* tab = activeTab();
     if (tab == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
-    std::optional<std::uint64_t> fallback;
+    ds::Option<std::uint64_t> fallback;
 
     if (tab->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
       fallback = tab->location.workspace.id;
@@ -250,11 +251,11 @@ namespace telar::gui::application {
     return true;
   }
 
-  void Session::handoffPane(std::uint64_t pane_id, std::optional<std::uint64_t> fallback_workspace) {
+  void Session::handoffPane(std::uint64_t pane_id, ds::Option<std::uint64_t> fallback_workspace) {
     handoffWorkspace({.kind = PaneTarget::Kind::pane, .id = pane_id}, fallback_workspace);
   }
 
-  void Session::handoffWorkspace(PaneTarget target, std::optional<std::uint64_t> fallback_workspace) {
+  void Session::handoffWorkspace(PaneTarget target, ds::Option<std::uint64_t> fallback_workspace) {
     const OpenPane opening{.target = target, .size = features::workbench::launchSize(workbench_)};
 
     try {
@@ -335,7 +336,7 @@ namespace telar::gui::application {
 
     if (left_machine_) {
       const auto bookmark = *left_machine_;
-      const auto target = bookmark.pane_id != 0 ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark.pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = bookmark.fallback_workspace.value_or(bookmark.location.workspace.id)};
+      const auto target = bookmark.pane_id != 0 ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark.pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = bookmark.fallback_workspace.valueOr(bookmark.location.workspace.id)};
 
       sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = target, .size = features::workbench::launchSize(workbench_)}, bookmark.location, bookmark.fallback_workspace);
     }
@@ -347,7 +348,7 @@ namespace telar::gui::application {
       throw EncodingError{"InvalidClientLayoutActiveTab"};
     }
 
-    const auto fallback = location.workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{location.workspace.id} : std::nullopt;
+    const auto fallback = location.workspace.kind == WorkspaceLocation::Kind::workspace ? ds::Option{location.workspace.id} : ds::none;
 
     sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = *saved}, .size = features::workbench::launchSize(workbench_)}, location, fallback);
   }
@@ -622,7 +623,7 @@ namespace telar::gui::application {
       discardTab(location);
     }
 
-    for (auto& workspace : workspaces_) {
+    for (auto& workspace : workspaces_.entriesMut()) {
       if (sameWorkspace(workspace.location, message.workspace)) {
         if (workspace.name != message.name) {
           ++view_version_.workspace;
@@ -919,8 +920,8 @@ namespace telar::gui::application {
   // The requests application::workbench registers and sends.
   template void Session::sendRegistered<ClosePane>(RequestKind kind, ClosePane request, std::uint64_t pane_id);
   template void Session::sendRegistered<ForgetWorktree>(RequestKind kind, ForgetWorktree request, std::uint64_t pane_id);
-  template void Session::sendOpeningRequest<OpenPane>(RequestKind kind, OpenPane request, TabLocation location, std::optional<std::uint64_t> fallback_workspace);
-  template void Session::sendOpeningRequest<CreateWorkspace>(RequestKind kind, CreateWorkspace request, TabLocation location, std::optional<std::uint64_t> fallback_workspace);
+  template void Session::sendOpeningRequest<OpenPane>(RequestKind kind, OpenPane request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
+  template void Session::sendOpeningRequest<CreateWorkspace>(RequestKind kind, CreateWorkspace request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
   template void Session::sendSnapshotRequest<RequestTabSnapshot>(RequestTabSnapshot request);
   template void Session::sendTabOperation<CreateTab>(RequestKind kind, CreateTab request);
   template void Session::sendTabOperation<RenameTab>(RequestKind kind, RenameTab request);

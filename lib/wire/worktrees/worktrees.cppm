@@ -4,6 +4,7 @@ export module telar.wire.worktrees;
 
 import std;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // The schemas specialize `MessageSchema`, which telar.wire.vocabulary declares in its global
 // fragment; naming the template here keeps it reachable from importers.
@@ -19,7 +20,7 @@ export extern "C++" {
     struct RegisterWorktree {
       std::uint64_t request_id{};
       std::uint64_t source{};
-      std::optional<std::uint64_t> created_by{};
+      ds::Option<std::uint64_t> created_by{};
       WorktreeOrigin origin{};
       std::string_view path{};
       std::string_view branch{};
@@ -27,7 +28,7 @@ export extern "C++" {
       std::string_view title{};
       std::string_view brief{};
       std::string_view dispatched_from{};
-      std::optional<CoordinatorReference> coordinator{};
+      ds::Option<CoordinatorReference> coordinator{};
 
       void validate() const;
     };

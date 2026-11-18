@@ -13,6 +13,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.features.notifications;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
@@ -27,7 +28,7 @@ namespace {
       return features::notifications::requestSound(state_, sound);
     }
 
-    std::optional<AgentSound> complete() {
+    ds::Option<AgentSound> complete() {
       return features::notifications::completeSound(state_);
     }
 
@@ -43,7 +44,7 @@ namespace {
       return features::notifications::sound(state_).playing;
     }
 
-    [[nodiscard]] std::optional<AgentSound> queued() const noexcept {
+    [[nodiscard]] ds::Option<AgentSound> queued() const noexcept {
       return features::notifications::sound(state_).queued;
     }
 

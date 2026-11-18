@@ -10,6 +10,7 @@ import telar.config.client;
 import telar.gui.foundation.actions;
 import :content;
 import :elements;
+import telar.base.ds;
 
 // Interface: components/rendered_content.cppm
 export {
@@ -34,8 +35,8 @@ export {
     // What an action produced by Lua means, read on the Lua thread so the window never reads the VM.
     struct ResolvedAction {
       BindingAction action;
-      std::optional<ExtendedActionDescription> description = std::nullopt;
-      std::optional<CommandTabCopy> command = std::nullopt;
+      ds::Option<ExtendedActionDescription> description = ds::none;
+      ds::Option<CommandTabCopy> command = ds::none;
     };
 
     template <Allocator Memory>

@@ -13,6 +13,7 @@ import telar.gui.features.terminal.copy_mode;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -29,7 +30,7 @@ namespace {
       return feature::enter(state_, pane_id, grid, cursor);
     }
 
-    [[nodiscard]] std::optional<CopyPlan> key(const TerminalKey& key, const CopyGrid& grid) {
+    [[nodiscard]] telar::ds::Option<CopyPlan> key(const TerminalKey& key, const CopyGrid& grid) {
       return feature::key(state_, key, grid);
     }
 
@@ -46,7 +47,7 @@ namespace {
     }
 
     // The matches of a search the runtime answered.
-    [[nodiscard]] std::optional<CopyPlan> search(std::span<const telar::PaneMatch> results, const CopyGrid& grid) {
+    [[nodiscard]] telar::ds::Option<CopyPlan> search(std::span<const telar::PaneMatch> results, const CopyGrid& grid) {
       return feature::receive(state_, {.request_id = 0, .pane_id = state() ? state()->pane_id : 0, .matches = results}, grid);
     }
 
@@ -58,7 +59,7 @@ namespace {
       return feature::press(state_, press, grid);
     }
 
-    [[nodiscard]] std::optional<CopyPlan> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
+    [[nodiscard]] telar::ds::Option<CopyPlan> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
       return feature::drag(state_, local, grid, released);
     }
 
@@ -74,7 +75,7 @@ namespace {
       feature::close(state_);
     }
 
-    [[nodiscard]] const std::optional<CopyState>& state() const noexcept {
+    [[nodiscard]] const telar::ds::Option<CopyState>& state() const noexcept {
       return feature::view(state_).state();
     }
 
@@ -86,7 +87,7 @@ namespace {
       return feature::view(state_).matches();
     }
 
-    [[nodiscard]] std::optional<CopyPointerOwner> pointerOwner() const noexcept {
+    [[nodiscard]] telar::ds::Option<CopyPointerOwner> pointerOwner() const noexcept {
       return feature::view(state_).pointerOwner();
     }
 
@@ -95,8 +96,8 @@ namespace {
   };
 
   template <typename Value>
-  const Value& requiredValue(const std::optional<Value>& value) {
-    check(value.has_value(), "Expected an engaged copy-mode test value");
+  const Value& requiredValue(const telar::ds::Option<Value>& value) {
+    check(value.hasValue(), "Expected an engaged copy-mode test value");
 
     return *value;
   }
@@ -163,7 +164,7 @@ namespace {
     grid.scroll.offset = 0;
     const auto leave = mode.leave(grid);
 
-    check(leave.viewport && leave.viewport.value().offset == offset, "leaving keyboard copy mode must restore its entry viewport");
+    check(leave.viewport && leave.viewport.get().offset == offset, "leaving keyboard copy mode must restore its entry viewport");
     mode.reset();
     grid.scroll.offset = offset;
     check(mode.enter(1, grid, {.visible = true, .y = 2}), "copy mode must allow a new activation");

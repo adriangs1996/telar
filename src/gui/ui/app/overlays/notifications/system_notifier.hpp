@@ -32,6 +32,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -99,13 +100,13 @@ namespace telar::gui::qt {
     struct Delivery {
       CommandProcess<Host, NotificationPayload, Delivery> process{*this};
 
-      void commandFinished([[maybe_unused]] std::optional<CommandFailure> failure) noexcept {
+      void commandFinished([[maybe_unused]] ds::Option<CommandFailure> failure) noexcept {
         assert(!process.active());
       }
     };
 
     Memory& memory_;
-    std::array<std::optional<Owned<Delivery, Memory>>, maximum_active> deliveries_;
+    std::array<ds::Option<Owned<Delivery, Memory>>, maximum_active> deliveries_;
   };
 
 }

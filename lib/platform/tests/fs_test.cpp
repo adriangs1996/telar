@@ -17,6 +17,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 namespace {
 
@@ -191,14 +192,14 @@ namespace {
 
   // Calls `read` and returns how it failed: the FileReadError's failure, or none.
   template <typename Read>
-  std::optional<FileReadFailure> readFailure(Read&& read) {
+  ds::Option<FileReadFailure> readFailure(Read&& read) {
     try {
       read();
     } catch (const FileReadError& error) {
       return error.failure();
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   // readFile reads a regular file of at most `maximum_bytes`, opened without following a final

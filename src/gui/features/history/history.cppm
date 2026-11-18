@@ -16,6 +16,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -96,7 +97,7 @@ export namespace telar::gui::features::history {
       return browser_->rowsVersion();
     }
 
-    [[nodiscard]] inline std::optional<HistoryChoice> choice() const noexcept {
+    [[nodiscard]] inline ds::Option<HistoryChoice> choice() const noexcept {
       return browser_->choice();
     }
 
@@ -136,7 +137,7 @@ export namespace telar::gui::features::history {
   [[nodiscard]] QueryHistory search(State& state, QueryHistory request);
 
   // The next older or newer page of the search; none at its end or while a page loads.
-  [[nodiscard]] std::optional<QueryHistory> page(State& state, HistoryPage direction, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<QueryHistory> page(State& state, HistoryPage direction, std::uint64_t request_id);
 
   // The search again from its newest command, as the history changed under it.
   [[nodiscard]] QueryHistory refresh(State& state, std::uint64_t request_id);
@@ -148,10 +149,10 @@ export namespace telar::gui::features::history {
   void inspect(State& state, bool enabled);
 
   // The read of the selected command's whole text, when the page holds only its preview.
-  [[nodiscard]] std::optional<QueryHistory> readCommand(State& state, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<QueryHistory> readCommand(State& state, std::uint64_t request_id);
 
   // The read of the selected command's output, while it is inspected.
-  [[nodiscard]] std::optional<ReadHistoryOutput> readOutput(State& state, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<ReadHistoryOutput> readOutput(State& state, std::uint64_t request_id);
 
   // Deletes command `id` from the history.
   [[nodiscard]] DeleteHistory erase(State& state, std::uint64_t id, std::uint64_t request_id);

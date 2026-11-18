@@ -3,13 +3,14 @@ module telar.gui.features.prompt;
 import std;
 
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
   Line::Line(Keymap keymap)
       : editor_(keymap) {}
 
-  Editor& Line::editor() noexcept {
+  Editor& Line::editorMut() noexcept {
     return editor_;
   }
 
@@ -92,7 +93,7 @@ namespace telar::gui::features::prompt {
 
         const std::string copy{taken};
 
-        editor_.text().insert(copy);
+        editor_.textMut().insert(copy);
         return Outcome::edited;
       }
     }
@@ -125,7 +126,7 @@ namespace telar::gui::features::prompt {
       if (const auto rest = suggestion(history); !rest.empty()) {
         const std::string copy{rest};
 
-        editor_.text().insert(copy);
+        editor_.textMut().insert(copy);
       }
 
       return Outcome::edited;
@@ -141,10 +142,10 @@ namespace telar::gui::features::prompt {
 
   void Line::replaceText(std::size_t begin, std::size_t end, std::string_view text) {
     closeMenu();
-    editor_.text().replace(begin, end, text);
+    editor_.textMut().replace(begin, end, text);
   }
 
-  const std::optional<Menu>& Line::menu() const noexcept {
+  const ds::Option<Menu>& Line::menu() const noexcept {
     return menu_;
   }
 
@@ -162,11 +163,11 @@ namespace telar::gui::features::prompt {
   }
 
   bool Line::receive(std::uint64_t request, std::span<const Choice> paths, bool truncated) {
-    if (!menu_ || std::erase(menu_->requests, request) == 0) {
+    if (!menu_ || std::erase(menu_.getMut().requests, request) == 0) {
       return false;
     }
 
-    menu_->whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
+    menu_.getMut().whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
     // Answers to an older word join, narrowed to the word as it is now.
     const auto word = typedWord();
 
@@ -174,9 +175,9 @@ namespace telar::gui::features::prompt {
       if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
             return choice.text == path.text;
           })) {
-        menu_->all.push_back(path);
+        menu_.getMut().all.push_back(path);
         if (path.text.starts_with(word)) {
-          menu_->choices.push_back(path);
+          menu_.getMut().choices.push_back(path);
         }
       }
     }
@@ -316,12 +317,12 @@ namespace telar::gui::features::prompt {
     const auto end = std::min(menu.end, editor_.text().size());
 
     menu_.reset();
-    editor_.text().replace(begin, end, word);
+    editor_.textMut().replace(begin, end, word);
     ++revision_;
   }
 
-  std::optional<Outcome> Line::menuKey(const KeyPress& key, bool& refining) {
-    auto& menu = *menu_;
+  ds::Option<Outcome> Line::menuKey(const KeyPress& key, bool& refining) {
+    auto& menu = menu_.getMut();
     const auto count = menu.choices.size();
     const bool forward = (key.key == Key::tab && !key.modifiers.shift) || key.key == Key::down || (key.key == Key::character && key.modifiers.control && key.character == 'n');
     const bool backward = key.key == Key::backtab || (key.key == Key::tab && key.modifiers.shift) || key.key == Key::up || (key.key == Key::character && key.modifiers.control && key.character == 'p');
@@ -347,11 +348,11 @@ namespace telar::gui::features::prompt {
     const bool typing = key.key == Key::character && plain && key.character > U' ' && key.character != 0x7f;
     if (inserting && (typing || (key.key == Key::backspace && plain))) {
       refining = true;
-      return std::nullopt;
+      return ds::none;
     }
 
     closeMenu();
-    return std::nullopt;
+    return ds::none;
   }
 
   std::string_view Line::typedWord() const noexcept {
@@ -364,7 +365,7 @@ namespace telar::gui::features::prompt {
   }
 
   Outcome Line::refine(Outcome outcome) {
-    auto& menu = *menu_;
+    auto& menu = menu_.getMut();
     const auto& text = editor_.text();
     const auto cursor = text.cursor();
     if (cursor < menu.begin || text.view().substr(menu.begin, cursor - menu.begin).find_first_of(" \t\n") != std::string_view::npos) {
@@ -456,13 +457,13 @@ namespace telar::gui::features::prompt {
 
     if (static_cast<std::size_t>(next) >= recent_.size()) {
       history_index_.reset();
-      editor_.text().assign(draft_);
+      editor_.textMut().assign(draft_);
     } else {
       history_index_ = static_cast<std::size_t>(next);
-      editor_.text().assign(recent_[*history_index_]);
+      editor_.textMut().assign(recent_[*history_index_]);
     }
 
-    editor_.text().moveTo(editor_.text().size());
+    editor_.textMut().moveTo(editor_.textMut().size());
     ++revision_;
     return Outcome::edited;
   }

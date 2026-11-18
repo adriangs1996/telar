@@ -10,6 +10,7 @@ import :workspace_replica;
 import telar.gui.features.workbench;
 import telar.gui.foundation.model;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 export namespace telar::gui::application::workbench {
 
@@ -55,7 +56,7 @@ export namespace telar::gui::application::workbench {
 
   // The attachment shelf reserves `reservation` at the bottom of every tab; the panes on screen
   // take the sizes it leaves them.
-  void reserveBottom(Session& session, std::optional<PaneBottomReservation> reservation);
+  void reserveBottom(Session& session, ds::Option<PaneBottomReservation> reservation);
 
   // ---- tabs ---------------------------------------------------------------------------------
 
@@ -77,7 +78,7 @@ export namespace telar::gui::application::workbench {
   void closeTab(Session& session, TabLocation location);
 
   // Moves the active tab one place toward `direction`, or beside `relative_to`.
-  void moveTab(Session& session, TabMoveDirection direction, std::optional<std::uint64_t> relative_to = {});
+  void moveTab(Session& session, TabMoveDirection direction, ds::Option<std::uint64_t> relative_to = {});
 
   // The user dropped a tab they dragged; false when the move cannot be asked for now.
   [[nodiscard]] bool dropTab(Session& session, const TabDragMove& move);
@@ -137,7 +138,7 @@ namespace telar::gui::application::workbench {
 
   // Shows pane `pane_id`, at `generation` when one is given: here when it is in the active
   // workspace, else by opening the workspace it lives in.
-  void visit(Session& session, std::uint64_t pane_id, std::optional<std::uint64_t> generation = {});
+  void visit(Session& session, std::uint64_t pane_id, ds::Option<std::uint64_t> generation = {});
 
   // Opens a tab, or the first pane, running `arguments` from the default launch's directory.
   void launchTab(Session& session, std::span<const std::string_view> arguments);

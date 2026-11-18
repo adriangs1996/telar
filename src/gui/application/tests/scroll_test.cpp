@@ -221,7 +221,7 @@ namespace {
     const RowsReply reply{{.request_id = asked.request_id, .generation = generation, .from = asked.from}, kept};
 
     deliver(client, reply.reply);
-    check(client.findPane(1)->rows.find(asked.from + 1).has_value(), "the reply's rows are kept");
+    check(client.findPane(1)->rows.find(asked.from + 1).hasValue(), "the reply's rows are kept");
     deliver(client, PaneScrollback{.pane_id = 1, .generation = generation, .trimmed = trimmed + dropped});
     check(client.takeDroppedRows(1) == dropped && client.takeDroppedRows(1) == 0, "the view learns how many rows the scrollback dropped, once");
 

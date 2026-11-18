@@ -10,6 +10,7 @@ import telar.sys.posix;
 import telar.render.document;
 import telar.platform.graphics;
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -35,7 +36,7 @@ namespace telar::runtime {
 
         for (auto& entry : entries) {
           for (auto recent = entry.recent_count; recent != 0; --recent) {
-            const auto frame = AtomicFrame::at(text, entry.recent[recent - 1]).value();
+            const auto frame = AtomicFrame::at(text, entry.recent[recent - 1]).unwrap();
             if (source.available(resource(frame, storage_limit))) {
               entry.selected = frame.start;
               break;
@@ -47,7 +48,7 @@ namespace telar::runtime {
         auto position = first->start;
 
         while (position < end) {
-          const auto frame = AtomicFrame::at(text, position).value();
+          const auto frame = AtomicFrame::at(text, position).unwrap();
           const auto selected = selectedStart(entries, frame.control.key);
           if (selected == frame.start) {
             const AtomicFrameView view{bytes.subspan(frame.start, frame.end - frame.start), frame.command_start - frame.start, frame.command_end - frame.start, frame.encoded_name, frame.control};
@@ -68,8 +69,8 @@ namespace telar::runtime {
               sink.output({reinterpret_cast<const std::uint8_t*>(AtomicFrame::cursor_save.data()), AtomicFrame::cursor_save.size()});
             }
 
-            statistics.unavailable += !selected.has_value();
-            statistics.discarded += selected.has_value();
+            statistics.unavailable += !selected.hasValue();
+            statistics.discarded += selected.hasValue();
           }
 
           position = frame.end;
@@ -113,14 +114,14 @@ namespace telar::runtime {
     return true;
   }
 
-  std::optional<std::size_t> AtomicFrameFilter::selectedStart(std::span<const SelectedFrame> entries, AtomicFrameKey key) noexcept {
+  ds::Option<std::size_t> AtomicFrameFilter::selectedStart(std::span<const SelectedFrame> entries, AtomicFrameKey key) noexcept {
     for (const auto& entry : entries) {
       if (entry.key == key) {
         return entry.selected;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   AtomicFrameResource AtomicFrameFilter::resource(const AtomicFrame& frame, std::size_t storage_limit) noexcept {
@@ -133,9 +134,9 @@ namespace telar::runtime {
     }
   }
 
-  auto GraphicsFrameSource::validate(const AtomicFrameResource& resource, std::array<std::uint8_t, PATH_MAX + 1>& name) noexcept -> std::optional<Handle> {
+  auto GraphicsFrameSource::validate(const AtomicFrameResource& resource, std::array<std::uint8_t, PATH_MAX + 1>& name) noexcept -> ds::Option<Handle> {
     if (resource.byte_count == 0 || resource.byte_count > resource.limit) {
-      return std::nullopt;
+      return ds::none;
     }
 
     Handle handle;
@@ -143,7 +144,7 @@ namespace telar::runtime {
     if (resource.medium == GraphicsInputMedium::file) {
       handle.file = GraphicsChildFile::open(resource.encoded_name);
       if (!handle.file || handle.file->size < resource.byte_count) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return handle;
@@ -152,7 +153,7 @@ namespace telar::runtime {
     handle.shared = GraphicsChildSharedMemory::open(resource.encoded_name, name);
     struct stat metadata{};
     if (!handle.shared || ::fstat(handle.shared.get(), &metadata) != 0 || metadata.st_size < 0 || static_cast<std::uint64_t>(metadata.st_size) < resource.byte_count) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return handle;
@@ -161,7 +162,7 @@ namespace telar::runtime {
   bool GraphicsFrameSource::available(const AtomicFrameResource& resource) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> name;
 
-    return validate(resource, name).has_value();
+    return validate(resource, name).hasValue();
   }
 
   void GraphicsFrameSource::release(const AtomicFrameResource& resource) noexcept {
@@ -170,21 +171,21 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<GraphicsFramePixels> GraphicsFramePixels::open(const AtomicFrameResource& resource) noexcept {
+  ds::Option<GraphicsFramePixels> GraphicsFramePixels::open(const AtomicFrameResource& resource) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> name;
     auto handle = GraphicsFrameSource::validate(resource, name);
     if (!handle) {
-      return std::nullopt;
+      return ds::none;
     }
 
     GraphicsFramePixels pixels;
 
     if (resource.medium == GraphicsInputMedium::file) {
-      pixels.file_ = std::move(handle->file);
+      pixels.file_ = std::move(handle.getMut().file);
       return pixels;
     }
 
-    pixels.shared_ = std::move(handle->shared);
+    pixels.shared_ = std::move(handle.getMut().shared);
     pixels.shared_bytes_ = resource.byte_count;
     ::shm_unlink(reinterpret_cast<const char*>(name.data()));
     return pixels;
@@ -224,7 +225,7 @@ namespace telar::runtime {
     return observe(terminal, envelope);
   }
 
-  std::optional<std::uint32_t> GraphicsUploadLimits::enforce(GhosttyTerminal terminal, const Observation& observation) {
+  ds::Option<std::uint32_t> GraphicsUploadLimits::enforce(GhosttyTerminal terminal, const Observation& observation) {
     const auto graphics = storage(terminal);
     const auto loading = loadingImage(graphics);
     if (loading || observation.loading_image) {
@@ -243,14 +244,14 @@ namespace telar::runtime {
         return observation.loading_image;
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t bytes = 0;
 
     checkGhostty(ghostty_kitty_graphics_get(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES, &bytes));
     if (!exceeded_chunks && bytes <= byte_limit_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     checkGhostty(ghostty_kitty_graphics_loading_abort(terminal));
@@ -271,11 +272,11 @@ namespace telar::runtime {
     return graphics;
   }
 
-  std::optional<std::uint32_t> GraphicsUploadLimits::loadingImage(GhosttyKittyGraphics graphics) {
+  ds::Option<std::uint32_t> GraphicsUploadLimits::loadingImage(GhosttyKittyGraphics graphics) {
     std::uint32_t identity = 0;
     const auto result = ghostty_kitty_graphics_get(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_IMAGE_ID, &identity);
     if (result == GHOSTTY_NO_VALUE) {
-      return std::nullopt;
+      return ds::none;
     }
 
     checkGhostty(result);
@@ -534,7 +535,7 @@ namespace telar::runtime {
     }
 
     auto storage = SharedImageStorage::create(frame.control.byte_count);
-    if (!storage || !child->copyTo(storage->mapping().bytes()) || !storage->mapping().protect(PROT_READ) || !allocation.adopt(storage->mapping())) {
+    if (!storage || !child->copyTo(storage.getMut().mapping().bytes()) || !storage.getMut().mapping().protect(PROT_READ) || !allocation.adopt(storage.getMut().mapping())) {
       return false;
     }
 
@@ -553,7 +554,7 @@ namespace telar::runtime {
     place(frame.control.key);
     terminal_.feed(frame.bytes.subspan(frame.command_end));
     if (shared_transport) {
-      auto frozen = FrozenImage::adoptSharedName(storage->takeName(), frame.control.byte_count);
+      auto frozen = FrozenImage::adoptSharedName(storage.getMut().takeName(), frame.control.byte_count);
 
       prepared_.put(terminal_.imageKey(frame.control.key.image_id), std::move(frozen));
     }
@@ -750,7 +751,7 @@ namespace telar::runtime {
 
     if (drain_only_) {
       if (terminal_) {
-        terminal_->drainResponses();
+        terminal_.getMut().drainResponses();
         responseProgress();
       }
 
@@ -773,7 +774,7 @@ namespace telar::runtime {
         terminal_.emplace(memory_, sealed_size_, limits_, responses_);
       }
 
-      MediaInput input{memory_, *terminal_, prepared_, shared_clients_};
+      MediaInput input{memory_, terminal_.getMut(), prepared_, shared_clients_};
 
       for (const auto& event : batch.events()) {
         if (const auto* output = std::get_if<MediaBatch::Output>(&event)) {
@@ -789,7 +790,7 @@ namespace telar::runtime {
         }
       }
 
-      terminal_->refresh();
+      terminal_.getMut().refresh();
       if (shared_clients_.load(std::memory_order_acquire) != 0) {
         prepared_.prepare(terminal_->graphics.images());
       }
@@ -836,7 +837,7 @@ namespace telar::runtime {
       return {.busy_panes = 1};
     }
 
-    auto sample = terminal_ ? terminal_->storageMetrics() : diagnostics::GraphicsStorageSnapshot{};
+    auto sample = terminal_ ? terminal_.getMut().storageMetrics() : diagnostics::GraphicsStorageSnapshot{};
 
     sample.prepared_bytes = prepared_.storedBytes();
     sample.staged_bytes = requests_.storedBytes();
@@ -884,7 +885,7 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<FrozenImage> PaneMedia::takeTransfer(ImageKey key, bool shared) {
+  ds::Option<FrozenImage> PaneMedia::takeTransfer(ImageKey key, bool shared) {
     if (shared) {
       if (auto prepared = prepared_.take(key)) {
         return prepared;
@@ -904,7 +905,7 @@ namespace telar::runtime {
   }
 
   auto PaneMedia::terminal() noexcept -> MediaTerminal* {
-    return busy_ || !terminal_ ? nullptr : &*terminal_;
+    return busy_ || !terminal_ ? nullptr : &terminal_.getMut();
   }
 
   std::uint64_t PaneMedia::takeDroppedBytes() noexcept {
@@ -913,7 +914,7 @@ namespace telar::runtime {
 
   void PaneMedia::responseProgress() noexcept {
     if (terminal_) {
-      terminal_->drainResponses();
+      terminal_.getMut().drainResponses();
       progress_.pending_responses = terminal_->pendingResponses();
       progress_.next_response_bytes = terminal_->nextResponseSize();
     }

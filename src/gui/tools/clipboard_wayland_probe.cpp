@@ -1,5 +1,6 @@
 #include "foundation/core/application_memory.hpp"
 #include "ui/app/panes/attachments/clipboard_images.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QClipboard>
@@ -121,7 +122,7 @@ namespace {
       started_ = true;
       initial_heartbeat_ = heartbeats_;
       elapsed_.start();
-      worker_->capture({.source = {.machine = {.slot = 0, .generation = 0}, .generation = 1}, .runtime_generation = 1, .attachment_generation = 1, .request = {.capture = {.id = 1, .target = {.pane_id = 1, .pane_generation = 1}}}});
+      worker_.getMut().capture({.source = {.machine = {.slot = 0, .generation = 0}, .generation = 1}, .runtime_generation = 1, .attachment_generation = 1, .request = {.capture = {.id = 1, .target = {.pane_id = 1, .pane_generation = 1}}}});
       snapshot_us_ = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::nanoseconds{elapsed_.nsecsElapsed()}).count();
       if (expected_ == QStringLiteral("cancelled")) {
         constexpr std::chrono::milliseconds cancellation_delay{100};
@@ -146,7 +147,7 @@ namespace {
         return;
       }
 
-      result_ = worker_->takeResult();
+      result_ = worker_.getMut().takeResult();
       QTimer::singleShot(std::chrono::milliseconds::zero(), this, &ClipboardProbe::finish);
     }
 
@@ -198,8 +199,8 @@ namespace {
     std::uint64_t initial_heartbeat_ = 0;
     qint64 snapshot_us_ = 0;
     bool started_ = false;
-    std::optional<ClipboardImageResult> result_;
-    std::optional<ClipboardImages> worker_;
+    telar::ds::Option<ClipboardImageResult> result_;
+    telar::ds::Option<ClipboardImages> worker_;
     qint64 retirement_us_ = 0;
   };
 

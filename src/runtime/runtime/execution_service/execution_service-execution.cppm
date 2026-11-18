@@ -7,6 +7,7 @@ import telar.base.memory.containers;
 import telar.platform.process;
 import telar.wire.vocabulary;
 import telar.wire.execution;
+import telar.base.ds;
 
 // Interface: execution/execution.cppm
 export {
@@ -24,8 +25,8 @@ export {
       std::uint64_t token;
       std::uint64_t id;
       std::uint64_t workspace;
-      std::optional<std::uint64_t> input_owner;
-      std::optional<PipeProcess> process;
+      ds::Option<std::uint64_t> input_owner;
+      ds::Option<PipeProcess> process;
       ByteQueue<Memory> input;
       RetainedStream<Memory> output;
       RetainedStream<Memory> error;

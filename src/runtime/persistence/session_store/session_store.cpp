@@ -3,6 +3,7 @@ module telar.runtime.persistence.session_store;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime::checkpoint {
 
@@ -143,7 +144,7 @@ namespace telar::runtime::checkpoint {
     return {reinterpret_cast<const Byte*>(value.data()), value.size()};
   }
 
-  std::optional<PaneRecord> Reader::pane() {
+  ds::Option<PaneRecord> Reader::pane() {
     PaneRecord record{u64::decode(input_), u64::decode(input_), u64::decode(input_), text16(), u16::decode(input_), u16::decode(input_), u16::decode(input_), {}};
 
     record.arguments = version_ >= 9 ? text(u32::decode(input_)) : text16();
@@ -167,7 +168,7 @@ namespace telar::runtime::checkpoint {
 
     record.in_pane = version_ >= 8 && boolean();
     if (version_ == 4 && boolean()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (record.argument_count == 0) {
@@ -352,7 +353,7 @@ namespace telar::runtime::checkpoint {
     integer(record.id);
     integer(registration.source);
     integer(record.workspace);
-    integer(registration.created_by.value_or(0));
+    integer(registration.created_by.valueOr(0));
     integer(static_cast<Byte>(registration.origin));
     text16(registration.path);
     text16(registration.branch);
@@ -360,7 +361,7 @@ namespace telar::runtime::checkpoint {
     text16(registration.title);
     text16(registration.brief);
     text16(registration.dispatched_from);
-    integer(static_cast<Byte>(registration.coordinator.has_value()));
+    integer(static_cast<Byte>(registration.coordinator.hasValue()));
     if (registration.coordinator) {
       const auto& coordinator = *registration.coordinator;
 

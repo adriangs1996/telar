@@ -1,6 +1,7 @@
 module telar.runtime.terminal.control.clipboard;
 
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::runtime::control {
 
@@ -29,7 +30,7 @@ namespace telar::runtime::control {
     return "EINVAL";
   }
 
-  std::optional<ClipboardMetadata> ClipboardMetadata::parse(std::string_view input) {
+  ds::Option<ClipboardMetadata> ClipboardMetadata::parse(std::string_view input) {
     std::string_view operation, location, id, mime, password, name;
 
     while (true) {
@@ -37,7 +38,7 @@ namespace telar::runtime::control {
       const auto record = input.substr(0, colon);
       const auto equal = record.find('=');
       if (equal == std::string_view::npos) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto key = record.substr(0, equal);
@@ -75,7 +76,7 @@ namespace telar::runtime::control {
     } else if (operation == "walias") {
       result.operation = ClipboardOperation::alias;
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     result.primary = location == "primary";
@@ -167,8 +168,8 @@ namespace telar::runtime::control {
     }
   }
 
-  std::optional<ClipboardRoute> ClipboardGrants::use(std::string_view password, bool write) {
-    std::optional<std::size_t> matching;
+  ds::Option<ClipboardRoute> ClipboardGrants::use(std::string_view password, bool write) {
+    ds::Option<std::size_t> matching;
 
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& entry = entries_[index];
@@ -183,7 +184,7 @@ namespace telar::runtime::control {
     }
 
     if (!matching) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = *matching;
@@ -196,7 +197,7 @@ namespace telar::runtime::control {
       --count_;
     }
 
-    return permitted ? std::optional{route} : std::nullopt;
+    return permitted ? ds::Option{route} : ds::none;
   }
 
   void ClipboardGrants::retain(std::span<const ClipboardRoute> routes) noexcept {
@@ -366,7 +367,7 @@ namespace telar::runtime::control {
     }
 
     for (const auto& alias : std::span{aliases_}.first(alias_count_)) {
-      std::optional<std::span<const std::uint8_t>> target;
+      ds::Option<std::span<const std::uint8_t>> target;
 
       for (const auto& content : std::span{contents_}.first(content_count_)) {
         if (content.mime == alias.target.view()) {
@@ -413,12 +414,12 @@ namespace telar::runtime::control {
     return std::span{contents_}.first(content_count_);
   }
 
-  std::optional<std::string_view> ClipboardWrite::token(std::string_view& remaining) noexcept {
+  ds::Option<std::string_view> ClipboardWrite::token(std::string_view& remaining) noexcept {
     constexpr std::string_view whitespace = " \t\n\r\f\v";
     const auto first = remaining.find_first_not_of(whitespace);
     if (first == std::string_view::npos) {
       remaining = {};
-      return std::nullopt;
+      return ds::none;
     }
 
     remaining.remove_prefix(first);
@@ -559,7 +560,7 @@ namespace telar::runtime::control {
         pending_(nullptr, AllocationDeleter<Pending, ConcurrentMemory>{memory}),
         asynchronous_replies_{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}} {}
 
-  void Clipboard::routes(std::span<const ClipboardRoute> routes, std::optional<ClipboardRoute> preferred) {
+  void Clipboard::routes(std::span<const ClipboardRoute> routes, ds::Option<ClipboardRoute> preferred) {
     if (routes.size() > routes_.size()) {
       throw std::logic_error{"Too many clipboard client routes"};
     }
@@ -684,9 +685,9 @@ namespace telar::runtime::control {
     }
   }
 
-  std::optional<ClipboardDesktopRequest> Clipboard::request(std::uint64_t pane, std::uint64_t generation) {
+  ds::Option<ClipboardDesktopRequest> Clipboard::request(std::uint64_t pane, std::uint64_t generation) {
     if (!pending_ || pending_->announced) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto& pending = *pending_;
@@ -707,8 +708,8 @@ namespace telar::runtime::control {
     };
   }
 
-  std::optional<ClipboardRoute> Clipboard::route() const noexcept {
-    return pending_ ? std::optional{pending_->route} : std::nullopt;
+  ds::Option<ClipboardRoute> Clipboard::route() const noexcept {
+    return pending_ ? ds::Option{pending_->route} : ds::none;
   }
 
   void Clipboard::announced() noexcept {
@@ -886,7 +887,7 @@ namespace telar::runtime::control {
     }
   }
 
-  auto Clipboard::cancellation() const noexcept -> std::optional<Cancellation> {
+  auto Clipboard::cancellation() const noexcept -> ds::Option<Cancellation> {
     return cancellation_;
   }
 
@@ -894,12 +895,12 @@ namespace telar::runtime::control {
     cancellation_.reset();
   }
 
-  std::optional<ClipboardDesktopExecute> Clipboard::execution() const noexcept {
+  ds::Option<ClipboardDesktopExecute> Clipboard::execution() const noexcept {
     if (pending_ && pending_->prepared && !pending_->committed) {
       return ClipboardDesktopExecute{pending_->ticket};
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void Clipboard::committed() noexcept {
@@ -985,14 +986,14 @@ namespace telar::runtime::control {
     pending_.reset();
   }
 
-  std::optional<ClipboardRoute> Clipboard::authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt) {
+  ds::Option<ClipboardRoute> Clipboard::authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt) {
     if (!exempt && !metadata.name.view().empty()) {
       if (const auto granted = grants.use(metadata.password.view(), write)) {
         return granted;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void Clipboard::read(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply) {
@@ -1033,7 +1034,7 @@ namespace telar::runtime::control {
 
     const auto granted = authorizedRoute(grants_, metadata, false, request.mime_count == 0);
 
-    request.route = granted.value_or(*preferred_);
+    request.route = granted.valueOr(*preferred_);
     request.prompt = policy.clipboard_read == Access::ask && request.mime_count != 0 && !granted;
   }
 
@@ -1062,7 +1063,7 @@ namespace telar::runtime::control {
     request.ending = ending;
     const auto granted = authorizedRoute(grants_, request.metadata, true, false);
 
-    request.route = granted.value_or(*preferred_);
+    request.route = granted.valueOr(*preferred_);
     request.prompt = policy.clipboard_write == Access::ask && !granted;
     request.transaction = std::move(transaction_);
   }

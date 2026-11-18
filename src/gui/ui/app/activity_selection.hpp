@@ -12,6 +12,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -66,7 +67,7 @@ namespace telar::gui::qt {
     PeekController& peek_;
     Dialogs& dialogs_;
     MachinesCoordinator& machines_;
-    std::optional<Pending> pending_;
+    ds::Option<Pending> pending_;
     std::uint64_t window_generation_ = 0;
   };
 

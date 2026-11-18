@@ -16,6 +16,7 @@ import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -428,7 +429,7 @@ namespace telar::gui::application {
       }
 
       if (pane->live_prompt_row) {
-        pane->live_prompt_row = *pane->live_prompt_row >= dropped ? std::optional{static_cast<std::uint32_t>(*pane->live_prompt_row - dropped)} : std::nullopt;
+        pane->live_prompt_row = *pane->live_prompt_row >= dropped ? ds::Option{static_cast<std::uint32_t>(*pane->live_prompt_row - dropped)} : ds::none;
       }
     } else if (pane->scrollback_generation != 0 && pane->scrollback_generation != message.generation && !pane->folded.empty()) {
       // Renumbered rows: the blocks come again with their new rows, and their folds follow them

@@ -19,6 +19,7 @@ import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::workbench {
 
@@ -55,11 +56,11 @@ export namespace telar::gui::features::workbench {
     friend struct Access;
 
     WorkbenchGeometry geometry_;
-    std::optional<PaneBottomReservation> reservation_;
+    ds::Option<PaneBottomReservation> reservation_;
     bool resize_pending_ = false;
     NavigationHistory history_;
     SavedLayouts saved_;
-    std::optional<NavigationHistory::Bookmark> restoring_;
+    ds::Option<NavigationHistory::Bookmark> restoring_;
   };
 
   // ---- the area the panes share -------------------------------------------------------------
@@ -71,7 +72,7 @@ export namespace telar::gui::features::workbench {
   [[nodiscard]] bool place(State& state, WorkbenchGeometry geometry) noexcept;
 
   // The attachment shelf reserves `reservation` at the bottom of every tab in `tabs`.
-  [[nodiscard]] Reservation reserve(State& state, std::optional<PaneBottomReservation> reservation, Tabs tabs) noexcept;
+  [[nodiscard]] Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, Tabs tabs) noexcept;
 
   // The panes on screen took the sizes the reservation leaves them.
   void resized(State& state) noexcept;
@@ -85,7 +86,7 @@ export namespace telar::gui::features::workbench {
   // ---- the panes of a tab -------------------------------------------------------------------
 
   // The sizes splitting pane `pane_id` of `tab` along `axis` gives; none when it does not fit.
-  [[nodiscard]] std::optional<SplitSizes> splitSizes(const State& state, Tab<Memory>& tab, std::uint64_t pane_id, ClientLayoutAxis axis) noexcept;
+  [[nodiscard]] ds::Option<SplitSizes> splitSizes(const State& state, Tab<Memory>& tab, std::uint64_t pane_id, ClientLayoutAxis axis) noexcept;
 
   // Calls `visit(pane_id, size)` for each pane of `tab` on screen, with the size its place leaves
   // its terminal.
@@ -106,15 +107,15 @@ export namespace telar::gui::features::workbench {
   [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
 
   // The tab at `index` in the order the workspace of `active` shows its tabs.
-  [[nodiscard]] std::optional<TabLocation> tabAt(Tabs tabs, std::optional<TabLocation> active, std::size_t index) noexcept;
+  [[nodiscard]] ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept;
 
   // The tab `offset` places from `active` in the order its workspace shows its tabs, wrapping
   // around; none when the session holds no record of `active`.
-  [[nodiscard]] std::optional<TabLocation> tabBeside(Tabs tabs, std::optional<TabLocation> active, std::int32_t offset) noexcept;
+  [[nodiscard]] ds::Option<TabLocation> tabBeside(Tabs tabs, ds::Option<TabLocation> active, std::int32_t offset) noexcept;
 
   // The tab that takes the place of the tab `closing` at `position` once it is gone: the next one,
   // else the previous one.
-  [[nodiscard]] std::optional<TabLocation> tabAfterClose(Tabs tabs, TabLocation closing, std::uint16_t position) noexcept;
+  [[nodiscard]] ds::Option<TabLocation> tabAfterClose(Tabs tabs, TabLocation closing, std::uint16_t position) noexcept;
 
   // ---- the layouts the session keeps --------------------------------------------------------
 
@@ -122,17 +123,17 @@ export namespace telar::gui::features::workbench {
   void clear(State& state) noexcept;
 
   // The pane the user left `workspace` on, if the session remembers one.
-  [[nodiscard]] std::optional<std::uint64_t> bookmark(const State& state, WorkspaceLocation workspace) noexcept;
+  [[nodiscard]] ds::Option<std::uint64_t> bookmark(const State& state, WorkspaceLocation workspace) noexcept;
 
   // The runtime no longer holds the pane the user left `workspace` on.
   void forget(State& state, WorkspaceLocation workspace) noexcept;
 
   // The user leaves the workspace `active` shows: its focused pane and layout are remembered, when
   // `active` holds one, and the layout of every loaded tab of `tabs` is saved for its return.
-  void leave(State& state, Tabs tabs, std::optional<TabLocation> active, const Tab<Memory>* bookmarked) noexcept;
+  void leave(State& state, Tabs tabs, ds::Option<TabLocation> active, const Tab<Memory>* bookmarked) noexcept;
 
   // The pane the layout saved for `location` focuses, the one to open the tab at.
-  [[nodiscard]] std::optional<std::uint64_t> savedPane(const State& state, TabLocation location);
+  [[nodiscard]] ds::Option<std::uint64_t> savedPane(const State& state, TabLocation location);
 
   // The runtime gave back the layouts the session last retained: each one is saved for its tab, and
   // the active tab of each workspace is remembered. Throws when a layout is invalid or they do not
@@ -161,11 +162,11 @@ namespace telar::gui::features::workbench {
       return state.geometry_;
     }
 
-    [[nodiscard]] static constexpr std::optional<PaneBottomReservation>& reservation(State& state) noexcept {
+    [[nodiscard]] static constexpr ds::Option<PaneBottomReservation>& reservation(State& state) noexcept {
       return state.reservation_;
     }
 
-    [[nodiscard]] static constexpr const std::optional<PaneBottomReservation>& reservation(const State& state) noexcept {
+    [[nodiscard]] static constexpr const ds::Option<PaneBottomReservation>& reservation(const State& state) noexcept {
       return state.reservation_;
     }
 
@@ -189,7 +190,7 @@ namespace telar::gui::features::workbench {
       return state.saved_;
     }
 
-    [[nodiscard]] static constexpr std::optional<NavigationHistory::Bookmark>& restoring(State& state) noexcept {
+    [[nodiscard]] static constexpr ds::Option<NavigationHistory::Bookmark>& restoring(State& state) noexcept {
       return state.restoring_;
     }
   };
@@ -209,7 +210,7 @@ namespace telar::gui::features::workbench {
   template <typename Visit>
   void arrange(const State& state, Tab<Memory>& tab, Visit&& visit) {
     const auto& geometry = Access::geometry(state);
-    const auto fullscreen = tab.fullscreen ? std::optional{tab.focused_pane} : std::nullopt;
+    const auto fullscreen = tab.fullscreen ? ds::Option{tab.focused_pane} : ds::none;
     const auto placements = tab.layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen);
 
     for (const auto& placement : placements) {

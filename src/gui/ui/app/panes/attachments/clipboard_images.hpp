@@ -15,6 +15,7 @@
 #include <optional>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -27,9 +28,9 @@ namespace telar::gui::qt {
 
   struct ClipboardImageResult {
     ClipboardImageJob job;
-    std::optional<AttachmentCapture<ApplicationAllocator>> capture = std::nullopt;
-    std::optional<AttachmentPreview> preview = std::nullopt;
-    std::optional<platform::ClipboardImageError> failure = std::nullopt;
+    ds::Option<AttachmentCapture<ApplicationAllocator>> capture = ds::none;
+    ds::Option<AttachmentPreview> preview = ds::none;
+    ds::Option<platform::ClipboardImageError> failure = ds::none;
     QString error = {};
   };
 
@@ -46,7 +47,7 @@ namespace telar::gui::qt {
     ClipboardImages& operator=(ClipboardImages&&) = delete;
 
     void capture(ClipboardImageJob job);
-    [[nodiscard]] tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> takeResult();
+    [[nodiscard]] tbc::view<ds::Option<ClipboardImageResult>, tbc::lt::a> takeResult();
     [[nodiscard]] bool busy() const noexcept;
 
   signals:
@@ -65,9 +66,9 @@ namespace telar::gui::qt {
     tbc::view<platform::ClipboardImageMonitor, tbc::lt::a> clipboard_;
     QThreadPool worker_pool_;
     QFutureWatcher<ClipboardImageResult> task_;
-    std::optional<ClipboardImageJob> running_;
-    std::optional<ClipboardImageJob> queued_;
-    tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> result_;
+    ds::Option<ClipboardImageJob> running_;
+    ds::Option<ClipboardImageJob> queued_;
+    tbc::view<ds::Option<ClipboardImageResult>, tbc::lt::a> result_;
     bool busy_ = false;
   };
 

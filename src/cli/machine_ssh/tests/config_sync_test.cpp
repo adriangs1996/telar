@@ -106,7 +106,7 @@ namespace {
     for (const auto& sample : samples) {
       const auto found = machine::filter::findSecret(sample.text);
 
-      expect(found.has_value() && found->first == sample.line, sample.text);
+      expect(found.hasValue() && found->first == sample.line, sample.text);
     }
 
     for (const std::string_view text : {

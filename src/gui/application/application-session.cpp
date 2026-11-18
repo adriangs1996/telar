@@ -29,6 +29,7 @@ import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.base.memory.allocators;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -483,7 +484,7 @@ namespace telar::gui::application {
     return request;
   }
 
-  auto Session::complete(std::uint64_t request_id) noexcept -> std::optional<Pending> {
+  auto Session::complete(std::uint64_t request_id) noexcept -> ds::Option<Pending> {
     for (std::size_t index = 0; index < pending_count_; ++index) {
       if (pending_[index].id == request_id) {
         const auto result = pending_[index];

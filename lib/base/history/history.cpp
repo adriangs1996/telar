@@ -1,10 +1,11 @@
 module telar.base.history;
 
 import std;
+import telar.base.ds;
 
 namespace telar::runtime {
 
-  std::optional<std::uint32_t> historyScore(std::string_view command, std::string_view query) noexcept {
+  ds::Option<std::uint32_t> historyScore(std::string_view command, std::string_view query) noexcept {
     if (query.empty()) {
       return 1;
     }
@@ -32,7 +33,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::string_view historyGroup(std::string_view command) noexcept {

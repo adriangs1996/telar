@@ -8,6 +8,7 @@ import std;
 
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: application/notification_item.cppm
 export {
@@ -89,8 +90,8 @@ export {
       NotificationId push(std::uint64_t now_ns, NotificationInput input);
       bool advance(std::uint64_t now_ns) noexcept;
       bool dismiss(NotificationId id, std::uint64_t now_ns) noexcept;
-      [[nodiscard]] std::optional<NotificationTarget> activate(NotificationId id, std::uint64_t now_ns) noexcept;
-      [[nodiscard]] std::optional<std::uint64_t> nextDeadline(std::uint64_t now_ns, std::uint64_t frame_interval_ns) const;
+      [[nodiscard]] ds::Option<NotificationTarget> activate(NotificationId id, std::uint64_t now_ns) noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> nextDeadline(std::uint64_t now_ns, std::uint64_t frame_interval_ns) const;
 
     private:
       std::array<NotificationItem, capacity> items_;

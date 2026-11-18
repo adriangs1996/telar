@@ -4,6 +4,7 @@ export module telar.gui.features.window:title;
 
 import std;
 import telar.tbc;
+import telar.base.ds;
 
 // Interface: presentation/window_title.cppm
 export {
@@ -28,7 +29,7 @@ export {
     private:
       std::size_t expand(std::string_view pattern, Tokens values);
       // A token's value is one of the values, region `a`.
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept;
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept;
       void append(std::string_view value) noexcept;
       void filter();
 
@@ -47,13 +48,13 @@ export {
     public:
       static constexpr std::uint64_t delay_ns = 150'000'000;
 
-      [[nodiscard]] bool sample(bool waiting, std::optional<std::uint64_t> now_ns) noexcept;
-      [[nodiscard]] std::optional<std::uint64_t> deadline() const noexcept;
+      [[nodiscard]] bool sample(bool waiting, ds::Option<std::uint64_t> now_ns) noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> deadline() const noexcept;
 
     private:
       [[nodiscard]] static std::uint64_t visibleAt(std::uint64_t since_ns) noexcept;
 
-      std::optional<std::uint64_t> since_ns_;
+      ds::Option<std::uint64_t> since_ns_;
     };
 
   }

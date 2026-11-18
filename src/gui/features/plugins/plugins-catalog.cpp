@@ -8,10 +8,11 @@ import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::plugins {
 
-  void PluginOverrides::set(const runtime::plugins::ConfiguredPlugin& specification, std::optional<std::uint64_t> identity) {
+  void PluginOverrides::set(const runtime::plugins::ConfiguredPlugin& specification, ds::Option<std::uint64_t> identity) {
     for (auto& entry : std::span{entries_}.first(count_)) {
       if (entry.specification.path.view() == specification.path.view()) {
         entry.specification = specification;
@@ -31,14 +32,14 @@ namespace telar::gui::features::plugins {
     ++count_;
   }
 
-  std::optional<bool> PluginOverrides::requested(std::string_view path) const noexcept {
+  ds::Option<bool> PluginOverrides::requested(std::string_view path) const noexcept {
     for (const auto& entry : std::span{entries_}.first(count_)) {
       if (entry.specification.path.view() == path) {
         return entry.specification.enabled;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void PluginOverrides::apply(runtime::plugins::Specifications& specifications) const noexcept {
@@ -104,7 +105,7 @@ namespace telar::gui::features::plugins {
   bool PluginCatalog::requestedEnabled(std::size_t index) const {
     const auto& configured = specification(index);
 
-    return overrides_ == nullptr ? configured.enabled : overrides_->requested(configured.path.view()).value_or(configured.enabled);
+    return overrides_ == nullptr ? configured.enabled : overrides_->requested(configured.path.view()).valueOr(configured.enabled);
   }
 
   std::size_t PluginCatalog::find(std::string_view name) const {
@@ -207,8 +208,8 @@ namespace telar::gui::features::plugins {
     writer.object([&](JsonWriter& object) {
       object.member("index", index);
       object.member("path", specification.path.view());
-      object.member("id", package == nullptr ? std::nullopt : std::optional{package->manifest.id.view()});
-      object.member("version", package == nullptr ? std::nullopt : std::optional{package->manifest.version.view()});
+      object.member("id", package == nullptr ? ds::none : ds::Option{package->manifest.id.view()});
+      object.member("version", package == nullptr ? ds::none : ds::Option{package->manifest.version.view()});
       object.member("requested_enabled", catalog.requestedEnabled(index));
       object.member("enabled", specification.enabled);
     });

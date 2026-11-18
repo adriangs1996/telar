@@ -4,6 +4,7 @@ import std;
 import telar.base.memory.allocators;
 import :format;
 import :objects;
+import telar.base.ds;
 
 // Counts how far two commits diverged, as `git rev-list --left-right --count
 // left...right` does: commits reachable from one side and not the other.
@@ -42,12 +43,12 @@ namespace telar::git {
     // Counts the commits only `left` reaches (ahead) and only `right` reaches
     // (behind). Returns nullopt when an object is unreadable or the walk would
     // visit more than limits.walk_commits commits.
-    std::optional<Divergence> count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right);
+    ds::Option<Divergence> count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right);
 
     std::uint64_t commits_read = 0;
 
   private:
-    std::optional<Divergence> walk(const CommitGraph& graph);
+    ds::Option<Divergence> walk(const CommitGraph& graph);
 
     static constexpr std::uint8_t left_flag = 1;
     static constexpr std::uint8_t right_flag = 2;
@@ -84,7 +85,7 @@ namespace telar::git {
     std::uint32_t& slot(const ObjectId& id) noexcept;
 
     // The node of commit `id`, read on first sight so its order key is known.
-    std::optional<std::uint32_t> insert(const ObjectId& id, std::optional<std::uint32_t> position);
+    ds::Option<std::uint32_t> insert(const ObjectId& id, ds::Option<std::uint32_t> position);
 
     bool readCommit(const ObjectId& id, CommitHeader& header);
     void classify(std::uint8_t flags, bool add) noexcept;

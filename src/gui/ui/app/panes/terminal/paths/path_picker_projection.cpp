@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -130,10 +131,10 @@ namespace telar::gui::qt {
     const auto& workbench = application::workbench::geometry(session);
     const auto host = workbench.cellArea();
     auto* tab = session.activeTab();
-    std::optional<CellPosition> cursor;
+    ds::Option<CellPosition> cursor;
 
     if (tab != nullptr) {
-      const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
+      const auto fullscreen = tab->fullscreen ? ds::Option{tab->focused_pane} : ds::none;
 
       for (const auto& placement : tab->layout.arrange(host, workbench.layout_metrics, fullscreen)) {
         const auto* pane = session.findPane(placement.pane_id);

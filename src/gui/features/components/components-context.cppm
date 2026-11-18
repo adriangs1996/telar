@@ -7,6 +7,7 @@ import std;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: components/invocation.cppm
 export {
@@ -26,8 +27,8 @@ export {
     struct Context {
       BindingContext client;
       Time time;
-      std::optional<SystemMetrics> metrics = std::nullopt;
-      std::optional<std::string_view> output = std::nullopt;
+      ds::Option<SystemMetrics> metrics = ds::none;
+      ds::Option<std::string_view> output = ds::none;
       std::string_view pane_title;
     };
 

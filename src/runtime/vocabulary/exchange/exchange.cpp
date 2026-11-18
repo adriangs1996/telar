@@ -1,5 +1,6 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
+#include "telar_base/ds/values.hpp"
 
 module telar.runtime.vocabulary.exchange;
 
@@ -297,13 +298,13 @@ namespace telar::runtime {
     (half->side == CaptureSide::request ? request : response) = std::move(half);
   }
 
-  std::optional<std::size_t> FlateEnvelope::bodyOffset(std::span<const std::uint8_t> input, FlateContainer container) noexcept {
+  ds::Option<std::size_t> FlateEnvelope::bodyOffset(std::span<const std::uint8_t> input, FlateContainer container) noexcept {
     if (container == FlateContainer::zlib) {
       constexpr std::size_t header_size = 2;
       constexpr unsigned compression_method = 8;
       constexpr unsigned maximum_window_bits = 7;
       if (input.size() < header_size || (input[0] & 15) != compression_method || (input[0] >> 4) > maximum_window_bits) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return header_size;
@@ -314,7 +315,7 @@ namespace telar::runtime {
     constexpr std::uint8_t magic_second = 0x8b;
     constexpr std::uint8_t compression_method = 8;
     if (input.size() < header_size || input[0] != magic_first || input[1] != magic_second || input[2] != compression_method) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto flags = input[3];
@@ -322,14 +323,14 @@ namespace telar::runtime {
 
     if (flags & static_cast<unsigned>(GzipFlag::extra)) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto length = static_cast<std::size_t>(input[offset] | (input[offset + 1] << 8));
 
       offset += sizeof(std::uint16_t);
       if (length > input.size() - offset) {
-        return std::nullopt;
+        return ds::none;
       }
 
       offset += length;
@@ -342,7 +343,7 @@ namespace telar::runtime {
         }
 
         if (offset == input.size()) {
-          return std::nullopt;
+          return ds::none;
         }
 
         ++offset;
@@ -351,7 +352,7 @@ namespace telar::runtime {
 
     if (flags & static_cast<unsigned>(GzipFlag::header_checksum)) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       offset += sizeof(std::uint16_t);

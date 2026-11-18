@@ -1,13 +1,14 @@
 module telar.gui.features.prompt;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
   Editor::Editor(Keymap keymap)
       : keymap_(keymap) {}
 
-  Text& Editor::text() noexcept {
+  Text& Editor::textMut() noexcept {
     return text_;
   }
 
@@ -676,7 +677,7 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  std::optional<Editor::Motion> Editor::motionFor(char32_t character) const noexcept {
+  ds::Option<Editor::Motion> Editor::motionFor(char32_t character) const noexcept {
     const auto cursor = text_.cursor();
     const auto repeat = count();
     auto apply = [&](auto step) {
@@ -780,7 +781,7 @@ namespace telar::gui::features::prompt {
     case '%':
       return matchingBracket(cursor);
     default:
-      return std::nullopt;
+      return ds::none;
     }
   }
 
@@ -949,7 +950,7 @@ namespace telar::gui::features::prompt {
     return Request::none;
   }
 
-  std::optional<std::pair<std::size_t, std::size_t>> Editor::textObject(char32_t character, bool inner) const {
+  ds::Option<std::pair<std::size_t, std::size_t>> Editor::textObject(char32_t character, bool inner) const {
     const auto cursor = text_.cursor();
     const auto view = text_.view();
 
@@ -959,7 +960,7 @@ namespace telar::gui::features::prompt {
       const bool big = character == 'W';
 
       if (cursor >= view.size()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto run = kind(cursor, big);
@@ -1010,7 +1011,7 @@ namespace telar::gui::features::prompt {
       }
 
       if (open == std::string_view::npos || close == std::string_view::npos || open < line || close >= end || close <= open) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return inner ? std::pair{open + 1, close} : std::pair{open, close + 1};
@@ -1030,15 +1031,15 @@ namespace telar::gui::features::prompt {
     case '>':
       return bracketObject('<', '>', inner);
     default:
-      return std::nullopt;
+      return ds::none;
     }
   }
 
-  std::optional<std::pair<std::size_t, std::size_t>> Editor::bracketObject(char open, char close, bool inner) const {
+  ds::Option<std::pair<std::size_t, std::size_t>> Editor::bracketObject(char open, char close, bool inner) const {
     const auto view = text_.view();
     const auto cursor = std::min(text_.cursor(), view.empty() ? 0 : view.size() - 1);
     int depth = 0;
-    std::optional<std::size_t> start;
+    ds::Option<std::size_t> start;
 
     for (auto index = static_cast<std::ptrdiff_t>(cursor); index >= 0; --index) {
       const auto byte = view[static_cast<std::size_t>(index)];
@@ -1055,7 +1056,7 @@ namespace telar::gui::features::prompt {
     }
 
     if (!start) {
-      return std::nullopt;
+      return ds::none;
     }
 
     depth = 0;
@@ -1067,7 +1068,7 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void Editor::operate(std::size_t start, std::size_t end, bool linewise) {

@@ -9,6 +9,7 @@ import :limits;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -29,12 +30,12 @@ namespace telar::gui::features::notifications {
       runtime::FixedText<noun_capacity> noun;
       runtime::FixedText<route_capacity> route;
       std::uint64_t value = 0;
-      std::optional<std::uint64_t> requested = std::nullopt;
+      ds::Option<std::uint64_t> requested = ds::none;
       std::uint64_t hits = 0;
       std::uint32_t unreported = 0;
       std::int64_t last_ms = 0;
-      std::optional<std::int64_t> shown_ms = std::nullopt;
-      std::optional<std::int64_t> reported_ms = std::nullopt;
+      ds::Option<std::int64_t> shown_ms = ds::none;
+      ds::Option<std::int64_t> reported_ms = ds::none;
 
       [[nodiscard]] LimitReach reach() const noexcept;
     };
@@ -45,7 +46,7 @@ namespace telar::gui::features::notifications {
 
     [[nodiscard]] Recorded record(LimitReach reach, Time sampled, std::uint32_t hits);
 
-    [[nodiscard]] std::optional<std::uint32_t> takeReport(Slot slot, std::int64_t awake_ms) noexcept;
+    [[nodiscard]] ds::Option<std::uint32_t> takeReport(Slot slot, std::int64_t awake_ms) noexcept;
 
     void restoreReport(Slot slot, std::uint32_t hits) noexcept;
 
@@ -65,7 +66,7 @@ namespace telar::gui::features::notifications {
 
     static void appendNoun(BoundedText<description_capacity>& text, std::string_view noun);
 
-    [[nodiscard]] std::optional<std::size_t> find(std::string_view name) const noexcept;
+    [[nodiscard]] ds::Option<std::size_t> find(std::string_view name) const noexcept;
 
     std::size_t insert(std::string_view name);
 

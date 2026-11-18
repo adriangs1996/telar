@@ -10,6 +10,7 @@ import telar.runtime.shell_integration.token;
 import telar.base.text;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // The scripts of shell_integration/, which the build compiles in.
 namespace telar::runtime::shell_scripts {
@@ -159,7 +160,7 @@ namespace telar::runtime::shell_files {
 export namespace telar::runtime {
 
   // The shell `program` names, when telar can integrate with it.
-  std::optional<IntegratedShell> integrableShellProgram(std::string_view program) noexcept;
+  ds::Option<IntegratedShell> integrableShellProgram(std::string_view program) noexcept;
 
   // Whether a shell started with `option` still runs interactively, as the integration needs.
   bool integrableShellOption(std::string_view option) noexcept;
@@ -169,17 +170,17 @@ export namespace telar::runtime {
   // keeps the startup the user asked for. A template over the caller's argument range, so only
   // the walk stays here.
   template <std::ranges::input_range Arguments>
-  TBC_GENERIC inline std::optional<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
+  TBC_GENERIC inline ds::Option<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
     auto argument = std::ranges::begin(arguments);
     if (argument == std::ranges::end(arguments)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto shell = integrableShellProgram(std::string_view{*argument});
 
     for (++argument; shell && argument != std::ranges::end(arguments); ++argument) {
       if (!integrableShellOption(std::string_view{*argument})) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -201,7 +202,7 @@ export namespace telar::runtime {
     // with. Leaves every other command untouched, and a shell too if the scripts are gone and
     // cannot be written again. `bare_prompt`: telar's editor stands in for the shell's prompt, so
     // the shell prints only its marks (TELAR_PROMPT_MODE=telar).
-    std::optional<ShellLaunch> apply(Command<Memory>& command, bool bare_prompt = false) const;
+    ds::Option<ShellLaunch> apply(Command<Memory>& command, bool bare_prompt = false) const;
 
   private:
     static constexpr const auto& files = shell_files::installed;

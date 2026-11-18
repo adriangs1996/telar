@@ -5,6 +5,7 @@ import telar.base.memory.allocators;
 import telar.platform.sha256;
 import telar.platform.primitives;
 import telar.sys.posix;
+import telar.base.ds;
 
 // Byte-level primitives every other part of the reader shares: object ids,
 // hashing, bounded file reads beneath a directory descriptor and file
@@ -77,7 +78,7 @@ export namespace telar::git {
     // The first `digits` hexadecimal digits, written into `buffer`.
     std::string_view hex(std::span<char, 2 * maximum_hash_size> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
 
-    static std::optional<ObjectId> fromHex(std::string_view text, ObjectFormat format) noexcept;
+    static ds::Option<ObjectId> fromHex(std::string_view text, ObjectFormat format) noexcept;
 
     // `raw` holds at most maximum_hash_size bytes; callers check its bounds.
     static ObjectId fromBytes(std::span<const std::uint8_t> raw) noexcept;

@@ -14,6 +14,7 @@ import telar.base.memory.containers;
 import telar.gui.foundation.text;
 import telar.wire.editor;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: links/editor_launch.cppm
 export {
@@ -112,7 +113,7 @@ export {
 
     template <typename Environment>
     concept PathEnvironment = requires(const Environment& environment, const char* name) {
-      { environment(name) } -> std::same_as<std::optional<std::string_view>>;
+      { environment(name) } -> std::same_as<ds::Option<std::string_view>>;
     };
 
     struct PathExpansionInput {
@@ -136,7 +137,7 @@ export {
       // The variables expand reads, whatever environment the caller holds them in.
       class Variables {
       public:
-        [[nodiscard]] virtual std::optional<std::string_view> operator()(const char* name) const = 0;
+        [[nodiscard]] virtual ds::Option<std::string_view> operator()(const char* name) const = 0;
 
       protected:
         Variables() = default;
@@ -151,7 +152,7 @@ export {
         explicit Lookup(const Environment& source) noexcept
             : source_(source) {}
 
-        [[nodiscard]] std::optional<std::string_view> operator()(const char* name) const override {
+        [[nodiscard]] ds::Option<std::string_view> operator()(const char* name) const override {
           return source_(name);
         }
 

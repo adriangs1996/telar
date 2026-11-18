@@ -2,6 +2,7 @@ module telar.runtime.plugins.tap_configuration;
 
 import telar.lua;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
@@ -259,10 +260,10 @@ namespace telar::runtime::plugins {
   TapBudget::TapBudget(std::size_t limit) noexcept
       : quota_(limit) {}
 
-  auto TapBudget::charge(std::size_t bytes) noexcept -> std::optional<Charge> {
+  auto TapBudget::charge(std::size_t bytes) noexcept -> ds::Option<Charge> {
     if (!quota_.reserveExact(bytes)) {
       dropped_.fetch_add(1, std::memory_order_relaxed);
-      return std::nullopt;
+      return ds::none;
     }
 
     return Charge{quota_, bytes};

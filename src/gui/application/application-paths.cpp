@@ -7,6 +7,7 @@ import telar.gui.features.paths;
 import telar.gui.features.prompt;
 import telar.wire.editor;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::gui::application::paths {
 
@@ -146,10 +147,10 @@ namespace telar::gui::application::paths {
     return features::paths::receive(Access::paths(session), results) ? Change::paths : Change::none;
   }
 
-  std::optional<Change> fail(Session& session, const RequestFailed& failure) {
+  ds::Option<Change> fail(Session& session, const RequestFailed& failure) {
     const auto changed = features::paths::fail(Access::paths(session), failure);
     if (!changed) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return *changed ? Change::paths : Change::none;

@@ -9,6 +9,7 @@ import telar.platform.process;
 import telar.git.checkout;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: platform/git_repository.cppm
 export {
@@ -58,7 +59,7 @@ export {
 
     struct GitStatus {
       FixedText<4096> branch;
-      std::optional<bool> dirty;
+      ds::Option<bool> dirty;
       bool present = false;
       bool timed_out = false;
     };

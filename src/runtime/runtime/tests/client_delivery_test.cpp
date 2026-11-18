@@ -385,7 +385,7 @@ namespace {
       const auto body = sequence.size();
 
       sequence.resize(body + (document.size() + 2) / 3 * 4);
-      check(base64::encode(document, std::span<char>{sequence}.subspan(body)).has_value());
+      check(base64::encode(document, std::span<char>{sequence}.subspan(body)).hasValue());
       sequence += "\x1b\\";
 
       // On the primary screen a sequence alone opens a zone no end closed: nothing shows.

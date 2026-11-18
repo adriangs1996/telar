@@ -14,6 +14,7 @@ import telar.base.memory.containers;
 import telar.gui.foundation.core;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: history/page_storage.cppm
 namespace telar::gui::features::history {
@@ -75,7 +76,7 @@ namespace telar::gui::features::history {
 
     [[nodiscard]] bool canPage(HistoryPage direction) const noexcept;
 
-    [[nodiscard]] std::optional<QueryHistory> page(HistoryPage direction, std::uint64_t request_id);
+    [[nodiscard]] ds::Option<QueryHistory> page(HistoryPage direction, std::uint64_t request_id);
 
     bool apply(const HistoryResults& message);
 
@@ -89,13 +90,13 @@ namespace telar::gui::features::history {
 
     [[nodiscard]] std::string_view selectedCommand() const;
 
-    [[nodiscard]] std::optional<QueryHistory> readCommand(std::uint64_t request_id);
+    [[nodiscard]] ds::Option<QueryHistory> readCommand(std::uint64_t request_id);
 
     bool select(std::size_t index);
 
     void setInspecting(bool enabled);
 
-    [[nodiscard]] std::optional<ReadHistoryOutput> readOutput(std::uint64_t request_id);
+    [[nodiscard]] ds::Option<ReadHistoryOutput> readOutput(std::uint64_t request_id);
 
     bool apply(const HistoryOutput& message);
 
@@ -123,7 +124,7 @@ namespace telar::gui::features::history {
 
     [[nodiscard]] std::uint64_t revision() const noexcept;
 
-    [[nodiscard]] std::optional<HistoryChoice> choice() const noexcept;
+    [[nodiscard]] ds::Option<HistoryChoice> choice() const noexcept;
 
     [[nodiscard]] bool acceptsRow(HistoryChoice candidate) const noexcept;
 
@@ -141,7 +142,7 @@ namespace telar::gui::features::history {
     // What a search asks for, without the text the stored strings hold.
     struct Criteria {
       HistoryScope scope{};
-      std::optional<std::uint64_t> scope_id;
+      ds::Option<std::uint64_t> scope_id;
       bool scope_path = false;
       bool failed_only = false;
       HistoryAuthorFilter author{};

@@ -34,7 +34,7 @@ namespace telar::gui::test {
       std::array<features::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
       const auto count = application.frames_.collectPacingPanes(panes);
 
-      application.frames_.frame_pacer_->record(std::span{panes}.first(count), now_ns);
+      application.frames_.frame_pacer_.getMut().record(std::span{panes}.first(count), now_ns);
     }
 
     [[nodiscard]] static bool pending(const qt::ApplicationController& application) noexcept {

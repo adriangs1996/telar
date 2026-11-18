@@ -6,6 +6,7 @@ import std;
 import :suggestion;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/palette_geometry.cppm
 export {
@@ -13,7 +14,7 @@ export {
 
     struct PaletteGeometry {
       struct Options {
-        std::optional<std::uint16_t> pick_rows;
+        ds::Option<std::uint16_t> pick_rows;
         bool suggest = false;
       };
 

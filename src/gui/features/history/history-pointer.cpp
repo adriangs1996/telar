@@ -3,6 +3,7 @@ module telar.gui.features.history;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -54,13 +55,13 @@ namespace telar::gui::features::history {
     }
   }
 
-  std::optional<HistoryCardAction> HistoryActionCapture::release(const HistoryActionSurface& surface, HistoryActionPosition position) noexcept {
+  ds::Option<HistoryCardAction> HistoryActionCapture::release(const HistoryActionSurface& surface, HistoryActionPosition position) noexcept {
     present(surface);
     held_ = false;
-    const auto action = std::exchange(action_, std::nullopt);
+    const auto action = std::exchange(action_, ds::none);
     const auto* target = action ? surface.find(*action) : nullptr;
 
-    return target != nullptr && target->contains(position) ? action : std::nullopt;
+    return target != nullptr && target->contains(position) ? action : ds::none;
   }
 
   bool HistoryFooterIdentity::submission() const noexcept {
@@ -121,12 +122,12 @@ namespace telar::gui::features::history {
     return position.x >= bounds.x && position.y >= bounds.y && position.x < static_cast<double>(bounds.x) + bounds.width && position.y < static_cast<double>(bounds.y) + bounds.height;
   }
 
-  const std::optional<HistoryHoverIdentity>& HistoryHover::hovered() const noexcept {
+  const ds::Option<HistoryHoverIdentity>& HistoryHover::hovered() const noexcept {
     return hovered_;
   }
 
   bool HistoryHover::cancel() noexcept {
-    const bool changed = hovered_.has_value();
+    const bool changed = hovered_.hasValue();
 
     hovered_.reset();
 
@@ -148,7 +149,7 @@ namespace telar::gui::features::history {
       return false;
     }
 
-    std::optional<HistoryHoverIdentity> next;
+    ds::Option<HistoryHoverIdentity> next;
 
     if (observation == Observation::point) {
       for (auto index = targets.size(); index > 0; --index) {

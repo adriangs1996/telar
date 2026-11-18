@@ -16,6 +16,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.features.machines;
 import telar.client;
+import telar.base.ds;
 
 namespace {
 
@@ -102,11 +103,11 @@ namespace {
   void sshFailuresPreservePrecedenceAndRetryPolicy() {
     constexpr std::uint8_t ssh_failed = 255;
     constexpr std::uint8_t program_missing = 127;
-    const auto failed = [](std::optional<std::uint8_t> status, std::string_view text) {
+    const auto failed = [](telar::ds::Option<std::uint8_t> status, std::string_view text) {
       return MachineConnectionPolicy::failure({.exit_status = status, .standard_error = text});
     };
 
-    check(failed(std::nullopt, "telar protocol mismatch") == MachineError::endpoint_unavailable, "a signaled process must remain a transient endpoint failure");
+    check(failed(telar::ds::none, "telar protocol mismatch") == MachineError::endpoint_unavailable, "a signaled process must remain a transient endpoint failure");
     check(failed(program_missing, "telar protocol mismatch") == MachineError::remote_runtime_incompatible, "a reported runtime mismatch must precede shell exit classification");
     check(failed(program_missing, "Host key verification failed") == MachineError::remote_program_missing, "shell command failure must precede SSH diagnostics");
     check(failed(ssh_failed, "Permission denied (publickey). Host key verification failed") == MachineError::host_key_rejected, "host key refusal must precede authentication refusal");

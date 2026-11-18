@@ -43,6 +43,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -179,32 +180,32 @@ namespace telar::gui::qt {
   }
 
   bool ComponentsController::panelOpen() const noexcept {
-    return surfaces_.open_panel.has_value();
+    return surfaces_.open_panel.hasValue();
   }
 
   bool ComponentsController::panelCurrent() const noexcept {
     return surfaces_.open_panel && surfaces_.generation == configuration_.configurationGeneration();
   }
 
-  std::optional<ComponentsController::Activation> ComponentsController::activation(int source, int node, const QString& generation, const QString& revision) const {
+  ds::Option<ComponentsController::Activation> ComponentsController::activation(int source, int node, const QString& generation, const QString& revision) const {
     if (source < 0 || node < 0 || generation != QString::number(surfaces_.generation)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = static_cast<std::size_t>(source);
     const bool panel = index == ComponentSurfaceState::bar_slots;
     if (configuration_.definitions() == nullptr || index > ComponentSurfaceState::bar_slots || (panel && !surfaces_.open_panel)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto& state = surfaceState(surfaces_, index, panel);
     if (revision != QString::number(state.revision)) {
-      return std::nullopt;
+      return ds::none;
     }
 
-    const auto activate = [&](const auto* rendered) -> std::optional<Activation> {
+    const auto activate = [&](const auto* rendered) -> ds::Option<Activation> {
       if (rendered == nullptr || static_cast<std::size_t>(node) >= rendered->content.nodes().size() || node >= state.nodes.size()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto& content = rendered->content;
@@ -260,10 +261,10 @@ namespace telar::gui::qt {
     }
 
     const auto& action = pressed->action;
-    std::optional<application::terminal::links::LinkTarget> link;
+    ds::Option<application::terminal::links::LinkTarget> link;
 
     try {
-      const auto named = action && action->kind == BindingActionKind::extended ? configuration_.namedAction(*action, pressed->actions) : std::nullopt;
+      const auto named = action && action->kind == BindingActionKind::extended ? configuration_.namedAction(*action, pressed->actions) : ds::none;
       if (pressed->identity != componentActionIdentity(action, pressed->url, named)) {
         return;
       }
@@ -574,11 +575,11 @@ namespace telar::gui::qt {
       if (!outcome.value) {
         current.error = outcome.error;
       } else {
-        if constexpr (std::is_same_v<decltype(*outcome.value), ConfigurationSource::PanelRender&>) {
-          current.panel = std::shared_ptr<const ComponentSlotState::Panel>{std::move(*outcome.value)};
+        if constexpr (std::is_same_v<decltype(outcome.value.getMut()), ConfigurationSource::PanelRender&>) {
+          current.panel = std::shared_ptr<const ComponentSlotState::Panel>{std::move(outcome.value.getMut())};
           surfaces_.last_render = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
         } else {
-          current.bar = std::shared_ptr<const ComponentSlotState::Bar>{std::move(*outcome.value)};
+          current.bar = std::shared_ptr<const ComponentSlotState::Bar>{std::move(outcome.value.getMut())};
         }
 
         current.error = truncated ? QStringLiteral("Command output exceeded its limit; showing what fits") : QString{};

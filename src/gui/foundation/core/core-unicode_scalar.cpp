@@ -1,6 +1,7 @@
 module telar.gui.foundation.core;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline core {
 
@@ -52,10 +53,10 @@ namespace telar::gui::inline foundation::inline core {
     throw std::invalid_argument{"Invalid Unicode decoding state"};
   }
 
-  std::optional<std::uint32_t> Utf8Scalar::tryDecode(std::string_view text) noexcept {
+  ds::Option<std::uint32_t> Utf8Scalar::tryDecode(std::string_view text) noexcept {
     const auto decoded = read(text);
     if (decoded.error != DecodeError::none) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return decoded.value;

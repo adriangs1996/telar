@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QMetaObject>
 #include <QObject>
 #include <QString>
@@ -15,7 +16,7 @@ namespace telar::gui::qt {
 
   template <typename Value>
   struct LuaOutcome {
-    std::optional<Value> value;
+    ds::Option<Value> value;
     QString error;
     // The configuration that ran the call was replaced before its result arrived.
     bool stale = false;

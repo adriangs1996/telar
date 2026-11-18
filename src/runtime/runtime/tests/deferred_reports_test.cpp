@@ -31,6 +31,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.session_host;
 import telar.runtime.platform.process_probe;
+import telar.base.ds;
 
 namespace {
 
@@ -118,7 +119,7 @@ namespace {
     ++fixture.pane().process_rechecks;
     fixture.answerDue(ObservationTime::now(), receive);
     check(answered == 1 && !client.connection.read_paused);
-    check(fixture.pane().rejected_reporter == std::optional{RejectedReporter{42, 42, 70}});
+    check(fixture.pane().rejected_reporter == ds::Option{RejectedReporter{42, 42, 70}});
     check(fixture.evaluate(client, payload) == ReportDecision::rejected);
 
     client.verified_lineage = {.processes = {42}, .count = 1, .descends = true};

@@ -29,6 +29,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.wire.layout;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -339,7 +340,7 @@ namespace {
     check(rejected && transport.sent.size() == before, "a zero-sized workbench must reject creation before registering or sending a request");
   }
 
-  std::size_t adoptSplitWithAllocationBudget(std::optional<std::size_t> budget) {
+  std::size_t adoptSplitWithAllocationBudget(ds::Option<std::size_t> budget) {
     SystemAllocator system;
     BudgetAllocator counted{system, std::numeric_limits<std::size_t>::max()};
     AllocationGate gate{counted};
@@ -366,7 +367,7 @@ namespace {
       }
 
       allocations = counted.allocations() - before;
-      gate.permit(std::nullopt);
+      gate.permit(ds::none);
       if (budget) {
         check(rejected && client.findPane(2) == nullptr && client.focusedPane()->id == 1 && client.activeTab()->layout.nodes().size() == 1, "a failed allocation must preserve the source and the semantic layout");
         check(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == application::workbench::geometry(client).launchSize()->cols, "a failed adoption must release the new attachment and restore the source PTY");
@@ -381,7 +382,7 @@ namespace {
   }
 
   void adoptionRecoversFromEveryAllocationFailure() {
-    const auto allocations = adoptSplitWithAllocationBudget(std::nullopt);
+    const auto allocations = adoptSplitWithAllocationBudget(ds::none);
 
     for (std::size_t permitted = 0; permitted < allocations; ++permitted) {
       static_cast<void>(adoptSplitWithAllocationBudget(permitted));

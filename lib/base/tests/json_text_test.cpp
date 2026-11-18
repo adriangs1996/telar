@@ -50,9 +50,9 @@ namespace {
   // A field the object does not hold reads as absent, wherever the lookup stops: optional
   // fields are read this way. Looking a field up in anything but an object is an error.
   void missingFieldsAreAbsent() {
-    check(!JsonValue::parse(R"({"a":1,"b":2})").field("c").has_value());
-    check(!JsonValue::parse("{}").field("a").has_value());
-    check(JsonValue::parse(R"({"a":1,"b":2})").field("b").has_value());
+    check(!JsonValue::parse(R"({"a":1,"b":2})").field("c").hasValue());
+    check(!JsonValue::parse("{}").field("a").hasValue());
+    check(JsonValue::parse(R"({"a":1,"b":2})").field("b").hasValue());
 
     bool refused = false;
 

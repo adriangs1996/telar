@@ -6,6 +6,7 @@ module telar.runtime.paths.query_task;
 import telar.platform.error;
 import telar.runtime.platform.git_status;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -16,13 +17,13 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::int32_t> FuzzyMatch<Memory>::score(std::string_view path, std::string_view query, std::span<std::uint16_t> positions) {
+  ds::Option<std::int32_t> FuzzyMatch<Memory>::score(std::string_view path, std::string_view query, std::span<std::uint16_t> positions) {
     if (query.empty()) {
       return 0;
     }
 
     if (query.size() > maximum_needle || query.size() > path.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::array<std::uint16_t, maximum_needle> first_matches;
@@ -36,7 +37,7 @@ namespace telar::runtime {
       }
 
       if (offset == path.size()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       first_matches[matched] = static_cast<std::uint16_t>(offset);

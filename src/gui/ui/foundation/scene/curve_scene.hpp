@@ -28,6 +28,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -48,13 +49,13 @@ namespace telar::gui::qt {
   private:
     using Cache = glyphs::CurveCache<CurveMaskRef>;
 
-    [[nodiscard]] std::optional<CurveMaskRef> createMask(glyphs::BoxCurve::Shape shape, Rect cell, float thickness);
+    [[nodiscard]] ds::Option<CurveMaskRef> createMask(glyphs::BoxCurve::Shape shape, Rect cell, float thickness);
     [[nodiscard]] CurveMaskRef mask(const CurvePaint& paint);
     void software(QSGNode& parent, const CurveMaskRef& mask, const CurvePaint& paint) const;
 
     QQuickWindow& window_;
     Cache masks_;
-    std::array<std::optional<CurveMaskRef>, glyphs::BoxCurve::shape_count> fallback_{};
+    std::array<ds::Option<CurveMaskRef>, glyphs::BoxCurve::shape_count> fallback_{};
   };
 
 }

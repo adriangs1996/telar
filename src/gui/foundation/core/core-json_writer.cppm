@@ -7,6 +7,7 @@ import std;
 import telar.tbc;
 import telar.base.text.json;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: core/json_writer.cppm
 export {
@@ -91,7 +92,7 @@ export {
       void write(std::nullptr_t);
 
       template <typename Value>
-      TBC_GENERIC void write(const std::optional<Value>& value) {
+      TBC_GENERIC void write(const ds::Option<Value>& value) {
         if (value) {
           write(*value);
         } else {

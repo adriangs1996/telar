@@ -8,6 +8,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/progress_animation.cppm
 export {
@@ -48,7 +49,7 @@ export {
       std::uint64_t pane_id = 0;
       std::uint64_t attachment = 0;
       PaneProgressState state = PaneProgressState::remove;
-      std::optional<Byte> percent = std::nullopt;
+      ds::Option<Byte> percent = ds::none;
 
       [[nodiscard]] float reported() const noexcept;
 
@@ -60,7 +61,7 @@ export {
       static constexpr std::uint64_t duration_ns = 240'000'000;
 
       [[nodiscard]] float sample(ProgressSample report, std::uint64_t now_ns) noexcept;
-      [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
 
     private:
       [[nodiscard]] float value(std::uint64_t now_ns) const noexcept;

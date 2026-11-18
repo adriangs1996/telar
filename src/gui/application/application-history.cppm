@@ -7,6 +7,7 @@ import std;
 import :session;
 import telar.gui.features.history;
 import telar.wire.history;
+import telar.base.ds;
 
 export namespace telar::gui::application::history {
 
@@ -131,6 +132,6 @@ namespace telar::gui::application::history {
   Change receive(Session& session, const HistoryPruned& pruned);
 
   // A failed request: none when it is not one of the history's.
-  std::optional<Change> fail(Session& session, std::uint64_t request_id, std::string_view message);
+  ds::Option<Change> fail(Session& session, std::uint64_t request_id, std::string_view message);
 
 }

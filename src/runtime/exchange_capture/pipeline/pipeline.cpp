@@ -1,6 +1,7 @@
 module telar.runtime.exchange_capture.pipeline;
 
 import telar.platform.thread;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -16,7 +17,7 @@ namespace telar::runtime {
     Result result{State::pending, CapturedExchange{memory_}};
     const auto existing = find(half->key);
     if (existing) {
-      auto& entry = *slots_[*existing];
+      auto& entry = slots_[*existing].getMut();
       if (entry.half->side == half->side) {
         result.state = State::partial;
       } else {
@@ -45,8 +46,8 @@ namespace telar::runtime {
     return result;
   }
 
-  tbc::view<std::optional<CapturedExchange>, tbc::lt::a> CaptureJoiner::expire(std::int64_t now_ms) noexcept {
-    std::optional<std::size_t> expired;
+  tbc::view<ds::Option<CapturedExchange>, tbc::lt::a> CaptureJoiner::expire(std::int64_t now_ms) noexcept {
+    ds::Option<std::size_t> expired;
 
     occupied_.forEach([&](std::size_t index) {
       if (!expired && slots_[index]->expires_at_ms <= now_ms) {
@@ -55,19 +56,19 @@ namespace telar::runtime {
     });
 
     if (!expired) {
-      return std::nullopt;
+      return ds::none;
     }
 
     CapturedExchange result{memory_};
 
-    result.include(std::move(slots_[*expired]->half));
+    result.include(std::move(slots_[*expired].getMut().half));
     slots_[*expired].reset();
     occupied_.erase(*expired);
     return result;
   }
 
-  std::optional<std::size_t> CaptureJoiner::find(CaptureKey key) const noexcept {
-    std::optional<std::size_t> found;
+  ds::Option<std::size_t> CaptureJoiner::find(CaptureKey key) const noexcept {
+    ds::Option<std::size_t> found;
 
     occupied_.forEach([&](std::size_t index) {
       if (slots_[index]->half->key == key) {
@@ -89,7 +90,7 @@ namespace telar::runtime {
 
     auto half = producer_.receive();
     if (half && request.decode) {
-      producer_.decodeBody(**half);
+      producer_.decodeBody(*half.getMut());
     }
 
     return half;

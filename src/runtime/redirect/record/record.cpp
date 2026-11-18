@@ -4,6 +4,7 @@ import telar.native.pcap;
 import telar.sys.socket;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif
@@ -100,10 +101,10 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  std::optional<String<Memory>> RecordFile<Memory>::load() {
+  ds::Option<String<Memory>> RecordFile<Memory>::load() {
     FileDescriptor file{::openat(directory_.get(), name_.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
     if (!file && sys::lastError() == ENOENT) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (!file) {
@@ -229,10 +230,10 @@ namespace telar::runtime::redirect {
         file_(memory, identity.label) {}
 
   template <Allocator Memory>
-  std::optional<std::uint64_t> Record<Memory>::load() {
+  ds::Option<std::uint64_t> Record<Memory>::load() {
     const auto content = file_.load();
     if (!content) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto newline = content->find('\n');
@@ -244,7 +245,7 @@ namespace telar::runtime::redirect {
     const auto log = value.find('\n');
     if (log != std::string_view::npos) {
       const auto name = value.substr(log + 1);
-      const auto index = parseExact<unsigned>(name).value_or(LogInterface::maximum);
+      const auto index = parseExact<unsigned>(name).valueOr(LogInterface::maximum);
       if (index >= LogInterface::maximum) {
         throw std::runtime_error{"Invalid redirect log recovery record"};
       }
@@ -304,7 +305,7 @@ namespace telar::runtime::redirect {
     if (log_index_) {
       LogInterface::remove(*log_index_);
       log_index_.reset();
-      save(last_token_.value_or(0));
+      save(last_token_.valueOr(0));
     }
 
     file_.clear();

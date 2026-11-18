@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -47,7 +48,7 @@ namespace telar::runtime {
 
   }
 
-  std::optional<IntegratedShell> integrableShellProgram(std::string_view program) noexcept {
+  ds::Option<IntegratedShell> integrableShellProgram(std::string_view program) noexcept {
     program = program.substr(program.rfind('/') + 1);
     if (program == "zsh") {
       return IntegratedShell::zsh;
@@ -61,7 +62,7 @@ namespace telar::runtime {
       return IntegratedShell::fish;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool integrableShellOption(std::string_view option) noexcept {
@@ -102,14 +103,14 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<ShellLaunch> ShellIntegration<Memory>::apply(Command<Memory>& command, bool bare_prompt) const {
+  ds::Option<ShellLaunch> ShellIntegration<Memory>::apply(Command<Memory>& command, bool bare_prompt) const {
     for (const auto name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
       command.removeEnvironment(name);
     }
 
     const auto shell = integrableShell(command.arguments());
     if (directory_.empty() || !shell || !present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto token = ShellToken::generate();

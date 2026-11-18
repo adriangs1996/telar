@@ -8,6 +8,7 @@ import telar.cli.server;
 import telar.platform.error;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::runtime::cli::repository {
 
@@ -205,7 +206,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  void single(tbc::view<std::optional<std::string_view>&, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char* error) {
+  void single(tbc::view<ds::Option<std::string_view>&, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char* error) {
     if (field) {
       usage(error);
     }
@@ -253,7 +254,7 @@ namespace telar::runtime::cli::sessions {
   }
 
   ClientDescriptor chooseClient(std::span<const ClientDescriptor> clients, std::uint64_t wanted) {
-    std::optional<ClientDescriptor> chosen;
+    ds::Option<ClientDescriptor> chosen;
 
     for (const auto& client : clients) {
       if (wanted != 0) {
@@ -292,7 +293,7 @@ namespace telar::runtime::cli::sessions {
       if (options.action == Action::create) {
         const auto directory = realDirectory(*options.directory);
         const auto default_name = std::filesystem::path{directory}.filename().string();
-        const auto name = options.name.value_or(default_name);
+        const auto name = options.name.valueOr(default_name);
         if (name.empty()) {
           throw Failure{"MissingWorkspaceName"};
         }
@@ -315,7 +316,7 @@ namespace telar::runtime::cli::sessions {
 
         auto size = workspace_size;
 
-        size.cols = options.columns.value_or(size.cols);
+        size.cols = options.columns.valueOr(size.cols);
         Channel session{memory, options.socket, true};
 
         wireTabLabel(name);
@@ -342,7 +343,7 @@ namespace telar::runtime::cli::sessions {
           output.text("workspace ").number(id).text(" renamed to ").text(reply.name).text("\n");
         }
       } else {
-        const auto wanted = options.action == Action::get ? std::optional{options.target.resolve("TELAR_WORKSPACE_ID")} : std::nullopt;
+        const auto wanted = options.action == Action::get ? ds::Option{options.target.resolve("TELAR_WORKSPACE_ID")} : ds::none;
         Channel session{memory, options.socket, false};
         const auto catalog = session.catalog();
 
@@ -514,7 +515,7 @@ namespace telar::runtime::cli::repository {
 namespace telar::runtime::cli::sessions {
 
   Target Target::parse(std::string_view value) {
-    return {.id = value == "--current" ? std::nullopt : std::optional{positive(value, "InvalidIdentity")}};
+    return {.id = value == "--current" ? ds::none : ds::Option{positive(value, "InvalidIdentity")}};
   }
 
   std::uint64_t Target::resolve(const char* variable) const {
@@ -719,9 +720,9 @@ namespace telar::runtime::cli::sessions {
     return self;
   }
 
-  Channel::Channel(Memory& memory, std::optional<std::string_view> socket, bool start)
+  Channel::Channel(Memory& memory, ds::Option<std::string_view> socket, bool start)
       : paths_(memory, socketOptions(socket), process_environment) {
-    std::optional<RuntimeConnection> probe;
+    ds::Option<RuntimeConnection> probe;
     if (start && !connectExisting(probe, paths_.socket.c_str()) && startRuntime(memory, socketOptions(socket), paths_) != RuntimeStart::listening) {
       throw Failure{"the local runtime is not reachable"};
     }
@@ -732,13 +733,13 @@ namespace telar::runtime::cli::sessions {
       throw Failure{connectionFailure(error.code())};
     }
 
-    session_->receiveTimeout(reply_timeout_seconds);
+    session_.getMut().receiveTimeout(reply_timeout_seconds);
   }
 
   WorkspaceList Channel::catalog() {
     try {
-      session_->send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false});
-      return session_->template receive<WorkspaceList>();
+      session_.getMut().send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false});
+      return session_.getMut().template receive<WorkspaceList>();
     } catch (...) {
       rethrowTranslated();
     }
@@ -749,13 +750,13 @@ namespace telar::runtime::cli::sessions {
   }
 
   ControlSession& Channel::control() noexcept {
-    return *session_;
+    return session_.getMut();
   }
 
-  ServerOptions Channel::socketOptions(std::optional<std::string_view> socket) {
+  ServerOptions Channel::socketOptions(ds::Option<std::string_view> socket) {
     ServerOptions options;
 
-    options.socket = socket.value_or("");
+    options.socket = socket.valueOr("");
     return options;
   }
 

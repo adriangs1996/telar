@@ -139,7 +139,7 @@ namespace telar::gui::qt {
   }
 
   void WindowDisplay::setSidebarWidth(qreal width) {
-    store_.session().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
+    store_.sessionMut().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
     publish();
   }
 
@@ -164,7 +164,7 @@ namespace telar::gui::qt {
 
     const Viewport next{.width = static_cast<std::uint32_t>(std::clamp(width, 0.0, maximum_dimension)), .height = static_cast<std::uint32_t>(std::clamp(height, 0.0, maximum_dimension)), .scale = 1};
     if (viewport_ != next) {
-      store_.session().invalidateView();
+      store_.sessionMut().invalidateView();
       viewport_ = next;
 
       return true;

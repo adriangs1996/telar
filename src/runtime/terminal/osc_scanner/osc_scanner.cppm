@@ -8,6 +8,7 @@ import telar.wire.vocabulary;
 import telar.wire.content;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.kitty;
+import telar.base.ds;
 
 // Interface: terminal/frame_pacer.cppm
 export {
@@ -22,9 +23,9 @@ export {
 
       void noteInput(Time time) noexcept;
 
-      std::optional<Time> deadline(Time now) const noexcept;
+      ds::Option<Time> deadline(Time now) const noexcept;
 
-      void record(Time now, std::optional<Time> scheduled) noexcept;
+      void record(Time now, ds::Option<Time> scheduled) noexcept;
 
     private:
       unsigned available(Time now) const noexcept;
@@ -33,8 +34,8 @@ export {
       static constexpr unsigned input_burst = 16;
       static constexpr auto input_grace = std::chrono::milliseconds{30};
       std::chrono::nanoseconds interval_{1'000'000'000 / 60};
-      std::optional<Time> anchor_;
-      std::optional<Time> last_input_;
+      ds::Option<Time> anchor_;
+      ds::Option<Time> last_input_;
       unsigned credits_ = idle_burst;
       unsigned input_frames_left_ = 0;
     };
@@ -70,7 +71,7 @@ export {
 
       void clearSensitive() noexcept;
 
-      std::optional<std::string_view> typedText() const noexcept;
+      ds::Option<std::string_view> typedText() const noexcept;
 
     private:
       enum class State {

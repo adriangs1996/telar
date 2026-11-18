@@ -20,6 +20,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.model;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -90,7 +91,7 @@ namespace telar::gui::qt {
     Store& store_;
     AttachmentShelf shelf_;
     bool modal_open_ = false;
-    std::optional<Inputs> published_;
+    ds::Option<Inputs> published_;
     application::window::DisplayMetrics display_{};
   };
 

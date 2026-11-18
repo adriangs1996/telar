@@ -16,6 +16,7 @@ import telar.runtime.exchange_capture.producer;
 import telar.runtime.platform.request_worker;
 import telar.platform.primitives;
 import telar.config.runtime;
+import telar.base.ds;
 
 // Interface: exchange_capture/clock.cppm
 export {
@@ -57,7 +58,7 @@ export {
 
       tbc::view<Result, tbc::lt::a> push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept;
 
-      tbc::view<std::optional<CapturedExchange>, tbc::lt::a> expire(std::int64_t now_ms) noexcept;
+      tbc::view<ds::Option<CapturedExchange>, tbc::lt::a> expire(std::int64_t now_ms) noexcept;
 
       static constexpr std::size_t capacity = 256;
 
@@ -67,11 +68,11 @@ export {
         std::int64_t expires_at_ms;
       };
 
-      std::optional<std::size_t> find(CaptureKey key) const noexcept;
+      ds::Option<std::size_t> find(CaptureKey key) const noexcept;
 
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       std::int64_t timeout_ms_;
-      tbc::view<std::array<std::optional<Entry>, capacity>, tbc::lt::a> slots_;
+      tbc::view<std::array<ds::Option<Entry>, capacity>, tbc::lt::a> slots_;
       SlotIndexes<capacity> occupied_;
     };
 
@@ -88,7 +89,7 @@ export {
         bool decode;
       };
 
-      using Result = std::optional<CaptureProducer::Half>;
+      using Result = ds::Option<CaptureProducer::Half>;
 
       explicit CaptureReceiver(CaptureProducer& producer) noexcept;
 
@@ -150,7 +151,7 @@ export {
         const auto now = Clock::now();
 
         while (auto expired = joiner_.expire(now)) {
-          tap_.submit(*expired);
+          tap_.submit(expired.getMut());
         }
 
         bool full = false;
@@ -161,7 +162,7 @@ export {
           }
 
           worker_.submit({tap_.listening()});
-          auto joined = joiner_.push(now, std::move(*half));
+          auto joined = joiner_.push(now, std::move(half.getMut()));
           using State = CaptureJoiner::State;
 
           if (joined.state != State::pending) {

@@ -7,6 +7,7 @@ import std;
 import :roster;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: presentation/machine_facts.cppm
 export {
@@ -34,7 +35,7 @@ export {
       [[nodiscard]] static std::string_view glyph(MachinePhase phase, bool attention) noexcept;
       [[nodiscard]] static PaletteRole glyphInk(MachinePhase phase, bool attention) noexcept;
       [[nodiscard]] static std::string_view phaseName(MachinePhase phase) noexcept;
-      [[nodiscard]] static CpuText cpu(MachinePhase phase, std::optional<std::uint8_t> percent);
+      [[nodiscard]] static CpuText cpu(MachinePhase phase, ds::Option<std::uint8_t> percent);
       [[nodiscard]] static float width(const ChromeMetrics& chrome, Widths parts) noexcept;
       [[nodiscard]] static Geometry geometry(Rect area, const ChromeMetrics& chrome, Widths parts) noexcept;
     };

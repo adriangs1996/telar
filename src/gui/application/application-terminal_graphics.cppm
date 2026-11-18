@@ -7,6 +7,7 @@ import std;
 import :session;
 import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
+import telar.base.ds;
 
 export namespace telar::gui::application::terminal::graphics {
 
@@ -38,7 +39,7 @@ export namespace telar::gui::application::terminal::graphics {
   [[nodiscard]] std::uint64_t recoveryRevision(const Session& session) noexcept;
 
   // When the next paused pane asks the runtime again; none while none waits.
-  [[nodiscard]] std::optional<std::uint64_t> resumeDeadline(const Session& session) noexcept;
+  [[nodiscard]] ds::Option<std::uint64_t> resumeDeadline(const Session& session) noexcept;
 
   // The paused panes whose wait ended ask the runtime for their images again.
   void resume(Session& session);

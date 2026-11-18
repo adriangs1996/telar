@@ -12,6 +12,7 @@ import telar.gui.features.history;
 import telar.gui.foundation.actions;
 import telar.gui.features.bindings;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace {
 
@@ -83,11 +84,11 @@ namespace {
 
     require(expired.outcome == Outcome::replay && expired.held_count == 1 && !expired.has_current && !router.deadline(), "expiration must replay only the captured sequence once");
     static_cast<void>(router.route({.chord = character('g')}, 0));
-    const auto capture = router.route({.chord = character('x')}, 1, {.captures_keys = true, .repeat = std::nullopt});
+    const auto capture = router.route({.chord = character('x')}, 1, {.captures_keys = true, .repeat = telar::ds::none});
 
     require(capture.outcome == Outcome::replay && capture.has_current, "an exclusive input owner must receive an interrupted global sequence and its current key");
     static_cast<void>(router.route({.chord = prefix}, 0));
-    require(router.route({.chord = character('x')}, 1, {.captures_keys = true, .repeat = std::nullopt}).outcome == Outcome::forward, "exclusive capture must discard an unfinished application prefix");
+    require(router.route({.chord = character('x')}, 1, {.captures_keys = true, .repeat = telar::ds::none}).outcome == Outcome::forward, "exclusive capture must discard an unfinished application prefix");
     static_cast<void>(router.route({.chord = character('g')}, 0));
     router.cancelSequence();
     require(router.interrupt().outcome == Outcome::discard, "semantic focus changes must discard partial sequences");
@@ -178,15 +179,15 @@ namespace {
     features::history::HistoryActionCapture capture;
 
     require(capture.begin(surface, position, true), "a visible history action must consume its press");
-    ++surface.choice->revision;
+    ++surface.choice.getMut().revision;
     require(!capture.release(surface, position), "replaced results must cancel a held action without an intermediate disabled frame");
     require(capture.begin(surface, position, true), "a new result must accept a fresh press");
     require(capture.release(surface, position) == features::history::HistoryCardAction::copy, "a fresh press must act on the new result");
 
     require(capture.begin(surface, position, true), "selection test must capture the action");
-    ++surface.choice->index;
+    ++surface.choice.getMut().index;
     capture.present(surface);
-    --surface.choice->index;
+    --surface.choice.getMut().index;
     require(!capture.release(surface, position), "returning to the original selection must not revive a cancelled press");
 
     surface.targets[0].enabled = false;

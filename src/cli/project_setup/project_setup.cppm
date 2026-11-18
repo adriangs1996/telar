@@ -18,6 +18,7 @@ import telar.cli.plugin;
 import telar.cli.runtime_observer;
 import telar.cli.control_session;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: pane_agent_options.cppm
 export {
@@ -29,8 +30,8 @@ export {
       std::string_view action{};
       std::string_view target{};
       std::string_view text{};
-      std::optional<std::string_view> workspace{};
-      std::optional<std::string_view> tab{};
+      ds::Option<std::string_view> workspace{};
+      ds::Option<std::string_view> tab{};
       tbc::view<const char*, tbc::lt::a> socket = nullptr;
       bool json = false;
       bool stdin_text = false;
@@ -42,8 +43,8 @@ export {
       std::uint32_t timeout = 30;
       std::uint16_t lines = 40;
       PaneTextSource source = PaneTextSource::recent;
-      std::optional<PaneDirection> direction{};
-      std::optional<std::uint32_t> count{};
+      ds::Option<PaneDirection> direction{};
+      ds::Option<std::uint32_t> count{};
       std::uint32_t interval = default_interval_ms;
       ReportAgent report{};
       ReportAgentCommand command{};
@@ -62,7 +63,7 @@ export {
 
     void writeText(Output& out, const PaneText& reply, bool json, bool agent);
 
-    tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, std::optional<std::uint64_t> worktree = std::nullopt);
+    tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, ds::Option<std::uint64_t> worktree = ds::none);
 
   }
 }
@@ -148,10 +149,10 @@ export {
     };
 
     // `project setup` and `worktree create --setup` share the authorization gate and execution semantics.
-    std::optional<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
+    ds::Option<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
 
     // Starts the runtime only when the checkout declares a recipe.
-    std::optional<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
+    ds::Option<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
 
     int run(Memory& memory, const Options& options);
 

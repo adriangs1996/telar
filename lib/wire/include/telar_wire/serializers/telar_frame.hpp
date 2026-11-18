@@ -2,6 +2,7 @@
 
 #include "../codecs/telar_cells.hpp"
 #include "telar_messages.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar {
 
@@ -154,7 +155,7 @@ namespace telar {
   };
 
   struct FrameMetadataCodec {
-    using value_type = std::optional<TextMetadata>;
+    using value_type = ds::Option<TextMetadata>;
     static constexpr std::size_t min_width = 4;
 
     static std::size_t encodedSize(const value_type& value);
@@ -181,7 +182,7 @@ namespace telar {
     InputModes input_modes{};
     PointerShape pointer_shape{};
     Scroll scroll{};
-    std::optional<TextMetadata> text_metadata{};
+    ds::Option<TextMetadata> text_metadata{};
     std::span<const FrameSpan> spans{};
 
     void validate() const;

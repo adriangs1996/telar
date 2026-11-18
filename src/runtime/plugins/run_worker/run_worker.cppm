@@ -22,6 +22,7 @@ import telar.wire.vocabulary;
 import telar.base.text;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.exchange;
+import telar.base.ds;
 
 // Interface: plugins/lua_effects.cppm
 export {
@@ -69,7 +70,7 @@ export {
 
       static std::string_view outcomeName(CaptureOutcome outcome) noexcept;
 
-      static void pushHalf(lua_State* state, const std::optional<HalfView>& half, bool traffic);
+      static void pushHalf(lua_State* state, const ds::Option<HalfView>& half, bool traffic);
 
       static void pushHead(lua_State* state, std::span<const std::uint8_t> bytes, bool traffic);
     };
@@ -258,9 +259,9 @@ export {
       MemoryAdapter<SensitiveMemory> erased_{memory_};
       lua::Vm<ErasingMemory> vm_;
       FixedText<PATH_MAX> package_root_;
-      std::optional<lua::LocalModules<lua::ModuleDomain::package>> modules_;
+      ds::Option<lua::LocalModules<lua::ModuleDomain::package>> modules_;
       int callback_reference_ = LUA_NOREF;
-      std::optional<LuaTraffic<SensitiveMemory>> traffic_;
+      ds::Option<LuaTraffic<SensitiveMemory>> traffic_;
     };
 
   }

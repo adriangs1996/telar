@@ -40,6 +40,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -76,11 +77,11 @@ namespace telar::gui::qt {
     QRectF bounds;
     qreal scale = 1;
     std::uint64_t appearance = 0;
-    std::optional<float> box_stroke = std::nullopt;
+    ds::Option<float> box_stroke = ds::none;
     bool pane_focused = false;
     bool keyboard = false;
     bool cursor_on = true;
-    std::optional<Cursor> cursor_override = std::nullopt;
+    ds::Option<Cursor> cursor_override = ds::none;
     const application::terminal::links::LinkMatch* hovered_link = nullptr;
     QQuickItem* owner = nullptr;
     bool background_provided = false;
@@ -141,20 +142,20 @@ namespace telar::gui::qt {
     }
 
     // The screen row drawn at `index`, if it is one of the screen's.
-    [[nodiscard]] std::optional<std::size_t> screenRow(std::size_t index) const noexcept {
+    [[nodiscard]] ds::Option<std::size_t> screenRow(std::size_t index) const noexcept {
       if (rows.empty()) {
         return index;
       }
 
       if (index >= rows.size() || rows[index].screen_row < 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return static_cast<std::size_t>(rows[index].screen_row);
     }
 
     // Where the screen's row `screen_row` is drawn, if it is.
-    [[nodiscard]] std::optional<std::size_t> drawnRow(std::size_t screen_row) const noexcept {
+    [[nodiscard]] ds::Option<std::size_t> drawnRow(std::size_t screen_row) const noexcept {
       if (rows.empty()) {
         return screen_row;
       }
@@ -165,7 +166,7 @@ namespace telar::gui::qt {
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     // Whether the cell at `cell.x` of drawn row `cell.y` is selected.
@@ -214,7 +215,7 @@ namespace telar::gui::qt {
       std::uint64_t revision = 0;
       std::uint64_t appearance = 0;
       CellSelection selection{};
-      std::optional<std::size_t> cursor = std::nullopt;
+      ds::Option<std::size_t> cursor = ds::none;
       std::uint64_t source = 0;
       bool hidden = false;
     };

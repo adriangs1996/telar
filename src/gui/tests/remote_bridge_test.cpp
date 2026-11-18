@@ -35,6 +35,7 @@ static_assert(true);
 import telar.gui.features.machines;
 import telar.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -100,8 +101,8 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
   };
 
   struct Observer {
-    std::optional<RemoteDiscovery> discovery;
-    std::optional<MachineError> failure;
+    telar::ds::Option<RemoteDiscovery> discovery;
+    telar::ds::Option<MachineError> failure;
     QString detail;
     QLocalSocket channel;
     std::function<void()> on_discovery;
@@ -225,7 +226,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
 
         bridge.open(target(directory, QString::fromLatin1(destination)));
         QTRY_VERIFY(observer.failure);
-        QCOMPARE(observer.failure, std::optional{expected});
+        QCOMPARE(observer.failure, telar::ds::Option{expected});
         QCOMPARE(observer.failures, std::size_t{1});
         QVERIFY(!bridge.active());
       }
@@ -238,7 +239,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
 
       bridge.open(target(directory, QStringLiteral("timeout")));
       QTRY_VERIFY(observer.failure);
-      QCOMPARE(observer.failure, std::optional{MachineError::endpoint_unavailable});
+      QCOMPARE(observer.failure, telar::ds::Option{MachineError::endpoint_unavailable});
       observer.failure.reset();
       bridge.open(target(directory, QStringLiteral("timeout")));
       QTRY_COMPARE(TestSshHost::requests.size(), std::size_t{2});

@@ -66,7 +66,7 @@ namespace {
   void auditedSchema87Negotiation() {
     const auto legacy_accept = HandshakeCodec::encode(ServerAccept{application::RuntimeProtocol::schema87});
 
-    check(application::RuntimeHandshake::inspect(legacy_accept).error.has_value(), "An unsolicited legacy selection must not adopt an unrequested schema");
+    check(application::RuntimeHandshake::inspect(legacy_accept).error.hasValue(), "An unsolicited legacy selection must not adopt an unrequested schema");
     check(!application::RuntimeHandshake::inspect(legacy_accept, application::RuntimeProtocol::schema87).error, "An explicitly requested audited schema may be accepted");
     const auto legacy_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87});
 
@@ -78,7 +78,7 @@ namespace {
     constexpr SchemaId unknown{'8', '6', '6', 'b', '4', '8', '0', 'd'};
     const auto unknown_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = unknown});
 
-    check(!application::RuntimeProtocol::retry(unknown_refusal, handshake::schema_id) && application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{unknown}), unknown).error.has_value(), "A matching suffix alone must not enable an unknown protocol generation");
+    check(!application::RuntimeProtocol::retry(unknown_refusal, handshake::schema_id) && application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{unknown}), unknown).error.hasValue(), "A matching suffix alone must not enable an unknown protocol generation");
     const auto full = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = application::RuntimeProtocol::schema87});
 
     check(!application::RuntimeProtocol::retry(full, handshake::schema_id) && !application::RuntimeProtocol::retry(legacy_accept, handshake::schema_id), "Capacity and unsolicited acceptance must never trigger a fallback");

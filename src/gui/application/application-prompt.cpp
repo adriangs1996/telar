@@ -12,6 +12,7 @@ import telar.shell.syntax;
 import telar.wire.editor;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::application::prompt {
 
@@ -106,7 +107,7 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      auto plan = features::prompt::plan(state, line, std::move(*context), specified, session.ready() && !pane->shell.remote, std::string_view{pane->cwd}, dialect);
+      auto plan = features::prompt::plan(state, line, std::move(context.getMut()), specified, session.ready() && !pane->shell.remote, std::string_view{pane->cwd}, dialect);
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = Access::nextRequest(session);
@@ -219,7 +220,7 @@ namespace telar::gui::application::prompt {
     return false;
   }
 
-  std::optional<LineView> line(const Session& session, std::uint64_t pane_id) noexcept {
+  ds::Option<LineView> line(const Session& session, std::uint64_t pane_id) noexcept {
     return features::prompt::line(Access::prompt(session), pane_id);
   }
 
@@ -305,7 +306,7 @@ namespace telar::gui::application::prompt {
     return CommandPresence::pending;
   }
 
-  std::optional<std::uint64_t> takeWrite(Session& session) noexcept {
+  ds::Option<std::uint64_t> takeWrite(Session& session) noexcept {
     return features::prompt::takeWrite(Access::prompt(session));
   }
 
@@ -366,26 +367,26 @@ namespace telar::gui::application::prompt {
       return settle(session, *settled);
     }
 
-    return changed(session, features::prompt::receive(Access::prompt(session), message).value_or(0));
+    return changed(session, features::prompt::receive(Access::prompt(session), message).valueOr(0));
   }
 
-  std::optional<Change> receive(Session& session, const PathResults& message) {
+  ds::Option<Change> receive(Session& session, const PathResults& message) {
     if (const auto settled = features::prompt::settles(Access::prompt(session), message)) {
       return settle(session, *settled);
     }
 
     const auto pane_id = features::prompt::receive(Access::prompt(session), message);
     if (!pane_id) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return changed(session, *pane_id);
   }
 
-  std::optional<Change> fail(Session& session, std::uint64_t request_id) {
+  ds::Option<Change> fail(Session& session, std::uint64_t request_id) {
     const auto pane_id = features::prompt::fail(Access::prompt(session), request_id);
     if (!pane_id) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return changed(session, *pane_id);

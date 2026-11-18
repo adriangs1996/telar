@@ -14,6 +14,7 @@ import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
 import :graphics_payload;
 import :reply;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -30,11 +31,11 @@ export namespace telar::runtime::control {
     char medium = 'd';
     bool compressed = false;
 
-    static std::optional<GraphicsQuery> parse(std::string_view header, bool has_payload) noexcept;
+    static ds::Option<GraphicsQuery> parse(std::string_view header, bool has_payload) noexcept;
 
     // Recognition survives invalid non-action fields, so malformed native
     // queries remain intercepted without a second scan or foreign response.
-    static std::optional<GraphicsQuery> parse(std::string_view header, bool has_payload, bool& query) noexcept;
+    static ds::Option<GraphicsQuery> parse(std::string_view header, bool has_payload, bool& query) noexcept;
 
   private:
     enum class Field {
@@ -198,7 +199,7 @@ export namespace telar::runtime::control {
       }
 
       if (request.medium != 'd') {
-        std::optional<GraphicsChildFile> file;
+        ds::Option<GraphicsChildFile> file;
         std::array<std::uint8_t, PATH_MAX + 1> name;
 
         if (request.medium == 'f' || request.medium == 't') {

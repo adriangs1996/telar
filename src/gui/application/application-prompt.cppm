@@ -8,6 +8,7 @@ import :session;
 import telar.gui.features.prompt;
 import telar.wire.editor;
 import telar.wire.pane_io;
+import telar.base.ds;
 
 export namespace telar::gui::application::prompt {
 
@@ -44,7 +45,7 @@ export namespace telar::gui::application::prompt {
   // there flashes a block for a frame or two under every quick command's output.
   [[nodiscard]] bool hidesTerminalCursor(const Session& session, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] std::optional<LineView> line(const Session& session, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] ds::Option<LineView> line(const Session& session, std::uint64_t pane_id) noexcept;
 
   // The rest of a command the pane's line starts, from what it sent and the history.
   [[nodiscard]] std::string_view suggestion(const Session& session, std::uint64_t pane_id) noexcept;
@@ -66,7 +67,7 @@ export namespace telar::gui::application::prompt {
 
   // The pane whose editor took text from outside the keyboard (a paste, a history entry, a
   // suggestion, a path) since the last call, for its view to show it.
-  [[nodiscard]] std::optional<std::uint64_t> takeWrite(Session& session) noexcept;
+  [[nodiscard]] ds::Option<std::uint64_t> takeWrite(Session& session) noexcept;
 
 }
 
@@ -96,8 +97,8 @@ namespace telar::gui::application::prompt {
   Change receive(Session& session, const CompletionWords& message);
 
   // None when the paths are not the line's.
-  std::optional<Change> receive(Session& session, const PathResults& message);
+  ds::Option<Change> receive(Session& session, const PathResults& message);
 
-  std::optional<Change> fail(Session& session, std::uint64_t request_id);
+  ds::Option<Change> fail(Session& session, std::uint64_t request_id);
 
 }

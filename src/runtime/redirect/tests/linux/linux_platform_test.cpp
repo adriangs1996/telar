@@ -63,6 +63,7 @@ import telar.config.runtime;
 import telar.platform.net;
 import telar.runtime.redirect.ingress;
 import telar.runtime.redirect.pf_rules;
+import telar.base.ds;
 
 namespace {
 
@@ -134,7 +135,7 @@ namespace {
       check(static_cast<bool>(accepted));
       const redirect::FlowKey flow{socketEndpoint(client.get(), false), socketEndpoint(client.get(), true)};
       const auto identity = ProcessInspector{}.identity(::getpid());
-      check(identity.has_value());
+      check(identity.hasValue());
       const std::array selected{*identity};
       redirect::SocketOwners owners{::geteuid(), selected};
       const auto owner = owners.find(flow);
@@ -180,7 +181,7 @@ namespace {
 
       const auto* variable = X509_get_default_cert_file_env();
       const auto* previous = std::getenv(variable);
-      const auto saved = previous ? std::optional{std::string{previous}} : std::nullopt;
+      const auto saved = previous ? ds::Option{std::string{previous}} : ds::none;
       check(::setenv(variable, path.c_str(), 1) == 0);
       std::size_t count = 0;
       SystemCertificates::read([&](std::span<const std::uint8_t> certificate) {

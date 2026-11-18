@@ -34,6 +34,7 @@ static_assert(true);
 
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -110,7 +111,7 @@ namespace telar::gui::qt {
     }
 
     std::ranges::sort(drawn_runs_, {}, &MetadataRun::start);
-    drawn_screen_->compose(screen.columns(), drawn_spans_, drawn_flags_, TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_, .links = drawn_links_, .runs = drawn_runs_, .uris = drawn_uris_});
+    drawn_screen_.getMut().compose(screen.columns(), drawn_spans_, drawn_flags_, TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_, .links = drawn_links_, .runs = drawn_runs_, .uris = drawn_uris_});
     drawn_screen_key_ = key;
     return &*drawn_screen_;
   }
@@ -145,7 +146,7 @@ namespace telar::gui::qt {
     }
 
     const auto stable = current->scrollback_trimmed + view.row;
-    if (const auto kept = view.exists ? current->rows.find(stable) : std::nullopt) {
+    if (const auto kept = view.exists ? current->rows.find(stable) : ds::none) {
       drawn_spans_.push_back(kept->cells);
       drawn_flags_.push_back(kept->flags);
       current->rows.links(stable, [&](const auto& kept_link) {
@@ -159,7 +160,7 @@ namespace telar::gui::qt {
     drawn_flags_.push_back(0);
   }
 
-  std::optional<CellPosition> TerminalItem::visibleCellAt(QPointF position) const noexcept {
+  ds::Option<CellPosition> TerminalItem::visibleCellAt(QPointF position) const noexcept {
     const auto* current = pane();
     if (current == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0 || !std::isfinite(position.x()) || !std::isfinite(position.y()) || !boundingRect().contains(position)) {
       return {};
@@ -293,14 +294,14 @@ namespace telar::gui::qt {
     link_gesture_.validate(link_hover_.current(), stamp.version);
     setCursor(resolved.affordance == application::terminal::links::LinkAffordance::text ? Qt::IBeamCursor : Qt::PointingHandCursor);
     if (changed || rebuild_preview) {
-      link_preview_ = link_hover_.current() ? LinkPreview::layout(*link_hover_.current(), surface, font_.faces.front(), controller_->chromeRatio()) : std::nullopt;
+      link_preview_ = link_hover_.current() ? LinkPreview::layout(*link_hover_.current(), surface, font_.faces.front(), controller_->chromeRatio()) : ds::none;
       emit linkHoverChanged();
       update();
     }
   }
 
   void TerminalItem::clearLinkHover() {
-    const auto changed = link_hover_.current().has_value() || link_preview_.has_value();
+    const auto changed = link_hover_.current().hasValue() || link_preview_.hasValue();
 
     link_hover_.clear();
     shared_link_.reset();
@@ -343,7 +344,7 @@ namespace telar::gui::qt {
     update();
   }
 
-  std::optional<application::terminal::links::PresentedLink> TerminalItem::prepareLinkPresentation() const {
+  ds::Option<application::terminal::links::PresentedLink> TerminalItem::prepareLinkPresentation() const {
     const auto surface = terminalSurface();
     if (!link_hover_.needsPresentation(surface, preview_cover_)) {
       return {};
@@ -364,7 +365,7 @@ namespace telar::gui::qt {
 
     presented_frame_id_ = preparation.pane.frame_id;
     if (const auto& presentation = preparation.links) {
-      link_hover_.present({.surface = presentation->surface, .link = presentation->link ? std::optional{*presentation->link} : std::nullopt, .cover = presentation->cover});
+      link_hover_.present({.surface = presentation->surface, .link = presentation->link ? ds::Option{*presentation->link} : ds::none, .cover = presentation->cover});
       ++link_presentation_revision_;
     }
 
@@ -386,7 +387,7 @@ namespace telar::gui::qt {
       button = application::terminal::links::LinkButton::left;
     }
 
-    const auto plan = application::terminal::links::LinkPointerPolicy::press({.button = button, .modifiers = linkModifiers(event.modifiers()), .child_tracking = current != nullptr && current->screen.mouse().tracking != MouseTracking::none, .has_link = hit.has_value(), .openable = link_hover_.openable(surface), .frame_presented = current != nullptr && presented_frame_id_ == current->screen.frameId() && link_hover_.surfaceVisible(surface)});
+    const auto plan = application::terminal::links::LinkPointerPolicy::press({.button = button, .modifiers = linkModifiers(event.modifiers()), .child_tracking = current != nullptr && current->screen.mouse().tracking != MouseTracking::none, .has_link = hit.hasValue(), .openable = link_hover_.openable(surface), .frame_presented = current != nullptr && presented_frame_id_ == current->screen.frameId() && link_hover_.surfaceVisible(surface)});
     if (plan == application::terminal::links::LinkPress::arm_shared || plan == application::terminal::links::LinkPress::arm_exclusive) {
       if (hit && controller_ != nullptr) {
         link_gesture_.begin(*hit, controller_->viewVersion());
@@ -412,7 +413,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto current = link_hover_.openable(terminalSurface()) ? link_hover_.current() : std::nullopt;
+    const auto current = link_hover_.openable(terminalSurface()) ? link_hover_.current() : ds::none;
     const auto opened = link_gesture_.finish(current, controller_->viewVersion());
     if (opened) {
       controller_->host().openLink(opened->match.target, opened->pane_id);

@@ -44,6 +44,7 @@ import telar.gui.features.machines;
 import telar.client;
 import telar.gui.application;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace {
 
@@ -310,7 +311,7 @@ namespace {
 
       QVERIFY(sendHandshake(*peer, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = other_schema}));
       QTRY_COMPARE(connection.link().phase, MachinePhase::failed);
-      QCOMPARE(connection.remoteError(), std::optional{MachineError::incompatible_schema});
+      QCOMPARE(connection.remoteError(), ds::Option{MachineError::incompatible_schema});
       const auto schema = QString::fromLatin1(textView(handshake::schema_id).data(), static_cast<qsizetype>(handshake::schema_id.size()));
 
       QCOMPARE(connection.error(), QStringLiteral("the runtime speaks wire schema 00000000; this telar speaks %1. Update telar on one side").arg(schema));
@@ -412,7 +413,7 @@ namespace {
       QTRY_VERIFY(second->bytesAvailable() > 0);
       QVERIFY(sendHandshake(*second, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id}));
       QTRY_COMPARE(connection.link().phase, MachinePhase::failed);
-      QCOMPARE(connection.remoteError(), std::optional{MachineError::incompatible_schema});
+      QCOMPARE(connection.remoteError(), ds::Option{MachineError::incompatible_schema});
       constexpr int observe_retry_ms = application::RuntimeLink::first_retry_ms * 2;
 
       QTest::qWait(observe_retry_ms);
@@ -601,7 +602,7 @@ namespace {
       QCOMPARE(failures, std::size_t{1});
       QCOMPARE(connection.link().phase, MachinePhase::connecting);
       QCOMPARE(connection.link().attempt, 0);
-      QCOMPARE(connection.link().failure(), std::optional<std::string_view>{"fixture failure"});
+      QCOMPARE(connection.link().failure(), ds::Option<std::string_view>{"fixture failure"});
       QVERIFY(!listener.hasPendingConnections());
     }
 
@@ -697,8 +698,8 @@ namespace {
       connection.close();
       QVERIFY(!connection.ready());
       connection.openRemote({.destination = QStringLiteral("denied"), .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))});
-      QTRY_VERIFY(connection.remoteError().has_value());
-      QCOMPARE(connection.remoteError(), std::optional{MachineError::authentication_failed});
+      QTRY_VERIFY(connection.remoteError().hasValue());
+      QCOMPARE(connection.remoteError(), ds::Option{MachineError::authentication_failed});
       QVERIFY(connection.error().contains(QStringLiteral("Permission denied")));
       QCOMPARE(disconnects, std::size_t{1});
       constexpr int beyond_retry_ms = (application::RuntimeLink::first_retry_ms * 2) + 100;

@@ -5,6 +5,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.agents;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::features::activity {
 
@@ -52,9 +53,9 @@ namespace telar::gui::features::activity {
     return AgentStatusPresentation::pulse(static_cast<std::uint8_t>(now_ns / pulse_interval_ns));
   }
 
-  std::optional<std::uint64_t> AgentAnimation::deadline(AgentStatus status, bool connected, std::uint64_t now_ns) noexcept {
+  ds::Option<std::uint64_t> AgentAnimation::deadline(AgentStatus status, bool connected, std::uint64_t now_ns) noexcept {
     if (!connected || status == AgentStatus::unknown) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto interval = status == AgentStatus::working ? pulse_interval_ns : StatusAgeInterval::nanoseconds_per_second;

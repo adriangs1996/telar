@@ -13,6 +13,7 @@ import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
 import telar.tls;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -36,7 +37,7 @@ namespace {
     };
 
     struct ClientStatus {
-      std::optional<std::uint16_t> port;
+      ds::Option<std::uint16_t> port;
     };
 
     struct Client {

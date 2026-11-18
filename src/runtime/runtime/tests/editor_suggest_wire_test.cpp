@@ -6,6 +6,7 @@ import telar.runtime.runtime.tests.wire_session;
 import telar.wire.editor;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -61,10 +62,10 @@ namespace {
     const auto file = host.directory() + "/file.txt";
 
     std::ofstream{file} << "text\n";
-    const auto open = [&](std::uint64_t request, std::uint64_t pane, std::uint64_t generation) -> std::optional<FailureCode> {
+    const auto open = [&](std::uint64_t request, std::uint64_t pane, std::uint64_t generation) -> ds::Option<FailureCode> {
       try {
         control.exchange<EditorOpened>(OpenEditor{.request_id = request, .pane_id = pane, .pane_generation = generation, .editor = "nvim", .path = file, .line = 1, .column = 1});
-        return std::nullopt;
+        return ds::none;
       } catch (const ProtocolFailure& failure) {
         return failure.code;
       }

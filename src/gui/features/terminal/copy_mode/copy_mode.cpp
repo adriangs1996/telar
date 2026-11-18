@@ -5,6 +5,7 @@ import std;
 import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
@@ -17,7 +18,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return entered;
   }
 
-  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, std::optional<CopyPoint> anchor, bool linewise) noexcept {
+  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept {
     const auto entered = Access::mode(state).enterAt(pane_id, grid, cursor, anchor, linewise);
     if (entered) {
       Access::search(state).request = 0;
@@ -28,7 +29,7 @@ namespace telar::gui::features::terminal::copy_mode {
 
   bool searchOutput(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopySearchRows rows, bool scoped) noexcept {
     const CopyPoint first{.x = 0, .y = rows.first};
-    if (!Access::mode(state).enterAt(pane_id, grid, first, std::nullopt, false)) {
+    if (!Access::mode(state).enterAt(pane_id, grid, first, ds::none, false)) {
       return false;
     }
 
@@ -61,7 +62,7 @@ namespace telar::gui::features::terminal::copy_mode {
     search.query.clear();
   }
 
-  std::optional<CopyPlan> type(State& state, std::string_view needle, const CopyGrid& grid) {
+  ds::Option<CopyPlan> type(State& state, std::string_view needle, const CopyGrid& grid) {
     const auto& mode = Access::mode(state);
     auto& search = Access::search(state);
 
@@ -72,7 +73,7 @@ namespace telar::gui::features::terminal::copy_mode {
 
     search.query.assign(needle);
     if (!needle.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     // Nothing to look for: no matches, and the cursor back where the search began.
@@ -107,7 +108,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return message.request_id == Access::search(state).request && current && !current->pointer && message.pane_id == current->pane_id;
   }
 
-  std::optional<CopyPlan> receive(State& state, const PaneMatches& message, const CopyGrid& grid) {
+  ds::Option<CopyPlan> receive(State& state, const PaneMatches& message, const CopyGrid& grid) {
     auto& search = Access::search(state);
     auto plan = Access::mode(state).search(message.matches, grid, search.origin);
 
@@ -129,14 +130,14 @@ namespace telar::gui::features::terminal::copy_mode {
     return {.query = search.query, .searching = search.request != 0, .count = mode.matches().size(), .index = current ? std::size_t{current->match_index} : std::size_t{0}, .truncated = search.truncated};
   }
 
-  std::optional<std::size_t> searchBlock(const State& state) noexcept {
+  ds::Option<std::size_t> searchBlock(const State& state) noexcept {
     const auto& search = Access::search(state);
 
-    return search.rows && search.scoped ? std::optional{search.rows->block} : std::nullopt;
+    return search.rows && search.scoped ? ds::Option{search.rows->block} : ds::none;
   }
 
   bool searchScopes(const State& state, bool reads_rows) noexcept {
-    return Access::search(state).rows.has_value() && reads_rows;
+    return Access::search(state).rows.hasValue() && reads_rows;
   }
 
   void toggleSearchScope(State& state, bool reads_rows) noexcept {

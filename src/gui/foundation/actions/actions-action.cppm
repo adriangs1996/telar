@@ -1,6 +1,7 @@
 export module telar.gui.foundation.actions:action;
 
 import std;
+import telar.base.ds;
 
 // Interface: input/action.cppm
 export {
@@ -120,7 +121,7 @@ export {
         {"add-machine", BindingActionKind::add_machine},
     });
 
-    std::optional<BindingAction> builtinBindingAction(std::string_view name) noexcept;
+    ds::Option<BindingAction> builtinBindingAction(std::string_view name) noexcept;
 
   }
 }

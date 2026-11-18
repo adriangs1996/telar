@@ -18,6 +18,7 @@ import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.base.memory.allocators;
 import telar.runtime.terminal.graphics_storage;
+import telar.base.ds;
 
 // Interface: graphics/credit.cppm
 export {
@@ -185,7 +186,7 @@ export {
       tbc::view<GraphicsCreditLedger, tbc::lt::a> credit_;
       std::uint64_t pane_;
       // Keeps the media media_ owns.
-      tbc::view<std::optional<Transfer>, tbc::lt::self> transfer_;
+      tbc::view<ds::Option<Transfer>, tbc::lt::self> transfer_;
       std::array<ImageKey, graphics_image_count * 2> known_images_{};
       std::array<GraphicsPlacement, graphics_placement_count * 2> known_placements_{};
       std::uint64_t observed_revision_ = 0;

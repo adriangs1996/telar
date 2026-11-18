@@ -125,8 +125,8 @@ namespace {
       const auto* item = statuses.front();
       const auto recovered = statusAgeInterval(item->property("record").toMap().value(QStringLiteral("statusClock")));
 
-      QVERIFY(recovered.has_value());
-      QVERIFY(recovered.value_or(StatusAgeInterval{}) == interval);
+      QVERIFY(recovered.hasValue());
+      QVERIFY(recovered.valueOr(StatusAgeInterval{}) == interval);
       QCOMPARE(item->property("statusText").toString(), QStringLiteral("Working 3s"));
     }
 
@@ -345,7 +345,7 @@ namespace {
       });
 
       publish();
-      QTRY_VERIFY_WITH_TIMEOUT(statusAgeInterval(status->record().value(QStringLiteral("statusClock"))).value_or(StatusAgeInterval{}) == expected_interval, wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(statusAgeInterval(status->record().value(QStringLiteral("statusClock"))).valueOr(StatusAgeInterval{}) == expected_interval, wait_ms);
       QCOMPARE(status->statusText(), QStringLiteral("Working 1m"));
       QVERIFY(!published_text.contains(QStringLiteral("Working 58s")));
       QVERIFY(!published_text.contains(QStringLiteral("Working 59s")));

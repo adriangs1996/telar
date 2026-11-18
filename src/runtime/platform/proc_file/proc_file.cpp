@@ -1,4 +1,5 @@
 module telar.runtime.platform.proc_file;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -15,10 +16,10 @@ namespace telar::runtime {
     return directory_ && ::fstat(directory_.get(), &status) == 0 && status.st_uid == user;
   }
 
-  std::optional<std::string_view> ProcDirectory::read(const char* name, std::span<char> buffer) const noexcept {
+  ds::Option<std::string_view> ProcDirectory::read(const char* name, std::span<char> buffer) const noexcept {
     FileDescriptor file{::openat(directory_.get(), name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)};
     if (!file) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t used = 0;
@@ -28,29 +29,29 @@ namespace telar::runtime {
         continue;
       }
       if (count < 0) {
-        return std::nullopt;
+        return ds::none;
       }
       if (count == 0) {
         return std::string_view{buffer.data(), used};
       }
       used += static_cast<std::size_t>(count);
     }
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<std::string_view> ProcDirectory::link(const char* name, std::span<char> buffer) const noexcept {
+  ds::Option<std::string_view> ProcDirectory::link(const char* name, std::span<char> buffer) const noexcept {
     const auto count = ::readlinkat(directory_.get(), name, buffer.data(), buffer.size());
     if (count <= 0 || static_cast<std::size_t>(count) >= buffer.size()) {
-      return std::nullopt;
+      return ds::none;
     }
     return std::string_view{buffer.data(), static_cast<std::size_t>(count)};
   }
 
-  std::optional<ProcStat> ProcStat::parse(std::string_view input) noexcept {
+  ds::Option<ProcStat> ProcStat::parse(std::string_view input) noexcept {
     const auto begin = input.find('(');
     const auto end = input.rfind(')');
     if (begin == std::string_view::npos || end == std::string_view::npos || end <= begin || input.size() < end + 4) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ProcStat result;
@@ -69,7 +70,7 @@ namespace telar::runtime {
       if (selected == Field::parent || selected == Field::group || selected == Field::foreground || selected == Field::started) {
         const auto parsed = parseExact<std::int64_t>(word);
         if (!parsed) {
-          return std::nullopt;
+          return ds::none;
         }
         const auto value = *parsed;
         switch (selected) {
@@ -84,14 +85,14 @@ namespace telar::runtime {
           break;
         case Field::started:
           if (value < 0) {
-            return std::nullopt;
+            return ds::none;
           }
           result.started_ticks = static_cast<std::uint64_t>(value);
           break;
         }
       }
       if (separator == std::string_view::npos) {
-        return field == static_cast<unsigned>(Field::started) ? std::optional{result} : std::nullopt;
+        return field == static_cast<unsigned>(Field::started) ? ds::Option{result} : ds::none;
       }
       input.remove_prefix(separator + 1);
     }

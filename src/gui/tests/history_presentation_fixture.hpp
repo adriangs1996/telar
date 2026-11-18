@@ -14,12 +14,13 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
   struct HistoryPresentation {
     static void renameTab(qt::ApplicationController& application, std::string_view label) {
-      application::workbench::renameTab(application.session(), label);
+      application::workbench::renameTab(application.sessionMut(), label);
     }
 
     [[nodiscard]] static bool current(qt::ApplicationController& application) {
@@ -29,17 +30,17 @@ namespace telar::gui::test {
       return !history.loading() && surface.delivered && surface.generation == application.store_.dialog().generation && surface.revision == application::history::view(application.session()).revision();
     }
 
-    [[nodiscard]] static std::optional<QPointF> actionCenter(qt::ApplicationController& application, application::history::HistoryCardAction action) {
+    [[nodiscard]] static ds::Option<QPointF> actionCenter(qt::ApplicationController& application, application::history::HistoryCardAction action) {
       const auto& surface = application.history()->presented_actions_;
       const auto browser = application::history::view(application.session());
       const application::history::HistoryChoice expected{.index = browser.state().selection, .revision = browser.revision()};
       if (!current(application) || surface.generation != application.store_.dialog().generation || surface.choice != expected || surface.scale <= 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto* target = surface.find(action);
       if (target == nullptr || !target->enabled) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return QPointF{(target->bounds.x + target->bounds.width / 2) / surface.scale, (target->bounds.y + target->bounds.height / 2) / surface.scale};

@@ -5,13 +5,14 @@ import std;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::attachments {
 
   ClipboardCaptureState::ClipboardCaptureState(std::uint64_t next_id) noexcept
       : next_id_(next_id) {}
 
-  const std::optional<ClipboardCapture>& ClipboardCaptureState::current() const noexcept {
+  const ds::Option<ClipboardCapture>& ClipboardCaptureState::current() const noexcept {
     return capture_;
   }
 
@@ -19,9 +20,9 @@ namespace telar::gui::features::terminal::attachments {
     return next_id_;
   }
 
-  std::optional<ClipboardCapture> ClipboardCaptureState::reserve(AttachmentTarget target) {
+  ds::Option<ClipboardCapture> ClipboardCaptureState::reserve(AttachmentTarget target) {
     if (capture_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (next_id_ == ClipboardCapture::invalid_id) {
@@ -35,9 +36,9 @@ namespace telar::gui::features::terminal::attachments {
     return capture_;
   }
 
-  std::optional<ClipboardCapture> ClipboardCaptureState::finish(std::uint64_t id) noexcept {
+  ds::Option<ClipboardCapture> ClipboardCaptureState::finish(std::uint64_t id) noexcept {
     if (!capture_ || capture_->id != id) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto completed = capture_;

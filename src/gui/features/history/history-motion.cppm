@@ -8,6 +8,7 @@ export module telar.gui.features.history:motion;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 // Interface: presentation/history_command_line.cppm
 export {
@@ -45,7 +46,7 @@ export {
       static constexpr float thickness = 2;
       static constexpr float span_divisor = 3;
 
-      [[nodiscard]] static Rect line(Rect area, ChromeMetrics chrome, std::optional<std::uint64_t> now_ns) noexcept;
+      [[nodiscard]] static Rect line(Rect area, ChromeMetrics chrome, ds::Option<std::uint64_t> now_ns) noexcept;
     };
 
   }
@@ -64,7 +65,7 @@ export {
 
     struct HistoryExpansion {
       float open = 1;
-      std::optional<HistoryPosition> leaving;
+      ds::Option<HistoryPosition> leaving;
       float leaving_open = 0;
     };
 
@@ -72,17 +73,17 @@ export {
     public:
       static constexpr std::uint64_t duration_ns = 140'000'000;
 
-      [[nodiscard]] HistoryExpansion sample(std::optional<std::uint64_t> generation, std::optional<HistoryPosition> selected, std::optional<std::uint64_t> timestamp) noexcept;
-      [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept;
+      [[nodiscard]] HistoryExpansion sample(ds::Option<std::uint64_t> generation, ds::Option<HistoryPosition> selected, ds::Option<std::uint64_t> timestamp) noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept;
 
     private:
       [[nodiscard]] static std::uint64_t add(std::uint64_t left, std::uint64_t right) noexcept;
       [[nodiscard]] static float eased(float progress) noexcept;
       [[nodiscard]] float value(std::uint64_t now_ns) const noexcept;
 
-      std::optional<std::uint64_t> generation_;
+      ds::Option<std::uint64_t> generation_;
       HistoryPosition selected_;
-      std::optional<HistoryPosition> leaving_;
+      ds::Option<HistoryPosition> leaving_;
       float leaving_from_ = 1;
       std::uint64_t started_ns_ = 0;
       bool transitioning_ = false;

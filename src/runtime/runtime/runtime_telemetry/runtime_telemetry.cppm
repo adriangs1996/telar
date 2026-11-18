@@ -21,6 +21,7 @@ import telar.runtime.proxy.http2_capture_streams;
 
 import telar.runtime.model.client_layouts;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 #if (TELAR_DIAGNOSTICS)
 
@@ -62,7 +63,7 @@ export {
       std::uint32_t process;
       bool rotated;
 
-      static std::optional<LogName> parse(std::string_view name) noexcept;
+      static ds::Option<LogName> parse(std::string_view name) noexcept;
     };
 
   }
@@ -141,7 +142,7 @@ export {
           return;
         }
 
-        worker_->collect([this](bool written) {
+        worker_.getMut().collect([this](bool written) {
           pending_ = false;
           failed_ = !written;
         });
@@ -153,7 +154,7 @@ export {
         try {
           line_.reset();
           format(line_);
-          pending_ = worker_->submit(line_.finish());
+          pending_ = worker_.getMut().submit(line_.finish());
         } catch (...) {
         }
       }
@@ -163,7 +164,7 @@ export {
 
       Line line_;
       // The worker writes the line above until its result is collected, so the session stays put.
-      tbc::view<std::optional<ObservationWorker<LogWriter>>, tbc::lt::self> worker_;
+      tbc::view<ds::Option<ObservationWorker<LogWriter>>, tbc::lt::self> worker_;
       bool pending_ = false;
       bool failed_ = false;
     };
@@ -239,8 +240,8 @@ export {
           writeRuntimeSample(line, model, clients);
           model.metrics.write(line);
           line.field("proxy_active", proxy_.active);
-          line.field("proxy_port", std::optional<std::uint64_t>{proxy_.port});
-          line.field("proxy_preferred_port", std::optional<std::uint64_t>{proxy_.preferred_port});
+          line.field("proxy_port", ds::Option<std::uint64_t>{proxy_.port});
+          line.field("proxy_preferred_port", ds::Option<std::uint64_t>{proxy_.preferred_port});
           if constexpr (requires { captures.captureMetrics(); }) {
             writeCaptureSample(line, captures.captureMetrics());
           }
@@ -255,7 +256,7 @@ export {
 
           line.field("rss_bytes", residentBytes());
           if constexpr (requires { memory.statistics(); }) {
-            if (const std::optional<AllocationStatistics> statistics = memory.statistics()) {
+            if (const ds::Option<AllocationStatistics> statistics = memory.statistics()) {
               writeMemorySample(line, *statistics);
             }
           }

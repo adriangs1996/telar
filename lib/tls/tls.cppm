@@ -21,6 +21,7 @@ import telar.base.text;
 import telar.base.text.json;
 import telar.platform.primitives;
 import telar.sys.posix;
+import telar.base.ds;
 
 // Interface: telar_tls/handle.cppm
 export {
@@ -190,7 +191,7 @@ export {
 
       // An authority allocates from its allocator in region `a`; the library only checks that it is configured.
       static tbc::view<CertificateAuthority, tbc::lt::a> loadOrCreate(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
-      static tbc::view<std::optional<CertificateAuthority>, tbc::lt::a> loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
+      static tbc::view<ds::Option<CertificateAuthority>, tbc::lt::a> loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
       static tbc::view<CertificateAuthority, tbc::lt::a> create(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind);
 
       CertificatePair mint(std::string_view hostname) const;
@@ -286,7 +287,7 @@ export {
 
       static Record parse(ConcurrentMemory& memory, std::string_view source);
 
-      static std::optional<Record> read(ConcurrentMemory& memory, int directory);
+      static ds::Option<Record> read(ConcurrentMemory& memory, int directory);
 
       void write(ConcurrentMemory& memory, int directory) const;
     };
@@ -342,7 +343,7 @@ export {
 
       // Generic over the caller's environment, so it stays here and hands the lookup to nativeDestinationFrom.
       template <EnvironmentLookup Environment>
-      TBC_GENERIC Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, std::optional<Backend> selected = std::nullopt) const {
+      TBC_GENERIC Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, ds::Option<Backend> selected = ds::none) const {
         return nativeDestinationFrom(memory, selected, std::addressof(environment), [](const void* target, const char* name) {
           return static_cast<const Environment*>(target)->lookup(name);
         });
@@ -352,7 +353,7 @@ export {
       using Lookup = std::string_view (*)(const void*, const char*);
 
       static String<ConcurrentMemory> keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup);
-      Destination nativeDestinationFrom(ConcurrentMemory& memory, std::optional<Backend> selected, const void* environment, Lookup lookup) const;
+      Destination nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const void* environment, Lookup lookup) const;
 
       String<ConcurrentMemory> directory_;
     };
@@ -374,7 +375,7 @@ export {
 
     struct Inspection {
       Status status = Status::absent;
-      std::optional<Record> record;
+      ds::Option<Record> record;
     };
 
     inline constexpr auto rotation_window = std::chrono::hours{24};
@@ -419,7 +420,7 @@ export {
 
       int directory_;
       AuthorityFiles canonical_;
-      std::optional<CertificateAuthority> authority_;
+      ds::Option<CertificateAuthority> authority_;
       Filename key_;
       Filename certificate_;
       Filename previous_key_;
@@ -449,9 +450,9 @@ export {
       explicit Service(ConcurrentMemory& memory, const TlsLibrary& library, const Paths& paths, TrustCommandRunner& executor, Destination destination) noexcept;
 
       Inspection inspect() const noexcept;
-      Record install(const std::optional<Record>& previous, bool force_rotation = false);
+      Record install(const ds::Option<Record>& previous, bool force_rotation = false);
       void uninstall(const Record& record);
-      std::optional<Record> rotateIfNeeded();
+      ds::Option<Record> rotateIfNeeded();
 
     private:
       void installAuthority(std::string_view certificate);

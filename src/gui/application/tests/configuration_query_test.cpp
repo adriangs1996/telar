@@ -31,6 +31,7 @@ import telar.gui.foundation.core;
 import telar.gui.features.status_bar;
 import telar.base.text.json;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace {
 
@@ -62,7 +63,7 @@ namespace {
     writer.object([](JsonWriter& object) {
       object.member("literal", "value");
       object.member("boolean", false);
-      object.member("empty", std::optional<std::string_view>{});
+      object.member("empty", telar::ds::Option<std::string_view>{});
       object.member("number", std::numeric_limits<std::uint64_t>::max());
       object.member("nested", nestedJsonValues);
       object.member("after", true);

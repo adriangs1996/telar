@@ -15,6 +15,7 @@ import telar.gui.features.machines;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: transport/frame_stream.cppm
 export {
@@ -50,7 +51,7 @@ export {
     private:
       // Takes bytes from input until a frame completes, and returns that frame's payload; nothing
       // once input runs out first. The payload stays valid until the next call.
-      [[nodiscard]] std::optional<std::span<const Byte>> next(std::span<const Byte>& input);
+      [[nodiscard]] ds::Option<std::span<const Byte>> next(std::span<const Byte>& input);
 
       template <typename Consumer>
         requires std::invocable<Consumer&, std::span<const Byte>>
@@ -98,7 +99,7 @@ export {
       // Whether the runtime reads rows of a scrollback by their stable number.
       [[nodiscard]] static bool readsRows(const SchemaId& schema) noexcept;
 
-      [[nodiscard]] static std::optional<SchemaId> retry(std::span<const Byte> payload, const SchemaId& requested);
+      [[nodiscard]] static ds::Option<SchemaId> retry(std::span<const Byte> payload, const SchemaId& requested);
     };
 
   }
@@ -113,7 +114,7 @@ export {
       using Detail = BoundedText<detail_bytes>;
 
       struct Result {
-        std::optional<features::machines::MachineError> error;
+        ds::Option<features::machines::MachineError> error;
         Detail detail{};
       };
 
@@ -158,7 +159,7 @@ export {
 
       void fail(std::string_view text);
 
-      [[nodiscard]] std::optional<std::string_view> failure() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> failure() const noexcept;
 
       void clearFailure() noexcept;
 

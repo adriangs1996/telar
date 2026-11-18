@@ -68,6 +68,7 @@ import telar.runtime.platform.private_tunnel;
 import telar.runtime.traffic.capture_analysis;
 import telar.vocabulary;
 import telar.platform.error;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -130,7 +131,7 @@ static int run() {
   }
 
   const auto frame = packet();
-  std::optional<PrivateTunnel> tunnel;
+  ds::Option<PrivateTunnel> tunnel;
 
   std::printf("{\"ready\":true,\"token\":\"");
   for (const auto byte : std::span{frame}.last(payload_bytes)) {

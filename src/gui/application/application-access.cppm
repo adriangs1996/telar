@@ -16,6 +16,7 @@ import telar.gui.features.terminal.copy_mode;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.terminal.links;
 import telar.gui.features.workbench;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -139,7 +140,7 @@ namespace telar::gui::application {
     }
 
     // The tab the session shows, by location, whether or not its record arrived.
-    [[nodiscard]] static constexpr const std::optional<TabLocation>& activeTab(const Session& session) noexcept {
+    [[nodiscard]] static constexpr const ds::Option<TabLocation>& activeTab(const Session& session) noexcept {
       return session.active_tab_;
     }
 
@@ -161,7 +162,7 @@ namespace telar::gui::application {
 
     // The keys of the command blocks, ahead of the editor's: what a key did to them, none when it
     // goes on to the editor.
-    [[nodiscard]] static std::optional<features::prompt::Outcome> blockKey(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
+    [[nodiscard]] static ds::Option<features::prompt::Outcome> blockKey(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
       return session.blockKey(pane_id, line, key);
     }
 
@@ -175,7 +176,7 @@ namespace telar::gui::application {
       return session.workbench_;
     }
 
-    [[nodiscard]] static constexpr std::optional<TabLocation>& activeTab(Session& session) noexcept {
+    [[nodiscard]] static constexpr ds::Option<TabLocation>& activeTab(Session& session) noexcept {
       return session.active_tab_;
     }
 
@@ -211,12 +212,12 @@ namespace telar::gui::application {
     }
 
     // Leaves the active workspace for the one holding pane `pane_id`, else `fallback_workspace`.
-    static void handoffPane(Session& session, std::uint64_t pane_id, std::optional<std::uint64_t> fallback_workspace) {
+    static void handoffPane(Session& session, std::uint64_t pane_id, ds::Option<std::uint64_t> fallback_workspace) {
       session.handoffPane(pane_id, fallback_workspace);
     }
 
     // Leaves the active workspace for `target`, else `fallback_workspace`.
-    static void handoffWorkspace(Session& session, PaneTarget target, std::optional<std::uint64_t> fallback_workspace) {
+    static void handoffWorkspace(Session& session, PaneTarget target, ds::Option<std::uint64_t> fallback_workspace) {
       session.handoffWorkspace(target, fallback_workspace);
     }
 

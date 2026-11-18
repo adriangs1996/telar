@@ -35,6 +35,7 @@ import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.proxy.runtime;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace {
 
@@ -116,7 +117,7 @@ namespace {
 
   void testProxyListener() {
     const ProxyPortRange::Set reserved;
-    auto first = ProxyListener::bind(std::nullopt, reserved);
+    auto first = ProxyListener::bind(ds::none, reserved);
 
     check(ProxyPortRange::contains(first.port()));
     sockaddr_in address{};
@@ -148,7 +149,7 @@ namespace {
 
     check(child && (::fcntl(child.get(), F_GETFD) & FD_CLOEXEC) != 0 && (::fcntl(child.get(), F_GETFL) & O_NONBLOCK) != 0);
 
-    auto vacant = ProxyListener::bind(std::nullopt, reserved);
+    auto vacant = ProxyListener::bind(ds::none, reserved);
     const auto wildcard_port = vacant.port();
 
     vacant.close();

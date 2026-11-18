@@ -75,6 +75,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -565,17 +566,17 @@ namespace telar::gui::qt {
 
       const auto drawn = mapped ? view_rows_.size() : rows;
       const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
-      const auto absolute = [&](std::size_t index) -> std::optional<std::uint64_t> {
+      const auto absolute = [&](std::size_t index) -> ds::Option<std::uint64_t> {
         if (!mapped) {
           return top + index;
         }
 
-        return view_rows_[index].exists ? std::optional{view_rows_[index].row} : std::nullopt;
+        return view_rows_[index].exists ? ds::Option{view_rows_[index].row} : ds::none;
       };
 
-      const auto drawnRow = [&](std::size_t screen_row) -> std::optional<std::size_t> {
+      const auto drawnRow = [&](std::size_t screen_row) -> ds::Option<std::size_t> {
         if (!mapped) {
-          return screen_row < rows ? std::optional{screen_row} : std::nullopt;
+          return screen_row < rows ? ds::Option{screen_row} : ds::none;
         }
 
         for (std::size_t index = 0; index < view_rows_.size(); ++index) {
@@ -584,7 +585,7 @@ namespace telar::gui::qt {
           }
         }
 
-        return std::nullopt;
+        return ds::none;
       };
 
       hidden_rows_.assign(drawn, 0);
@@ -609,18 +610,18 @@ namespace telar::gui::qt {
 
       // The command's own row, where its separator will be, and the prompt's first.
       if (count != 0 && cursor) {
-        prompt_row = static_cast<int>(drawnRow(first + count - 1).value_or(static_cast<std::size_t>(-1)));
+        prompt_row = static_cast<int>(drawnRow(first + count - 1).valueOr(static_cast<std::size_t>(-1)));
       }
 
       if (count != 0) {
-        prompt_top = static_cast<int>(drawnRow(first).value_or(static_cast<std::size_t>(-1)));
+        prompt_top = static_cast<int>(drawnRow(first).valueOr(static_cast<std::size_t>(-1)));
       }
 
       // On the live screen the cursor is always in view, wherever the program hid it.
       const auto bottom = static_cast<std::uint64_t>(copyGrid(screen).maximumOffset());
       const auto& shown = screen.cursor();
       if (!screen.modes().alternate_screen && (top >= bottom || shown.visible) && shown.y < rows) {
-        cursor_row = static_cast<int>(drawnRow(shown.y).value_or(static_cast<std::size_t>(-1)));
+        cursor_row = static_cast<int>(drawnRow(shown.y).valueOr(static_cast<std::size_t>(-1)));
       }
 
       screen_rows = static_cast<int>(rows);
@@ -710,7 +711,7 @@ namespace telar::gui::qt {
       int run_first = -1;
 
       for (std::size_t index = 0; stretch_count != 0 && index <= drawn; ++index) {
-        const auto row = index < drawn ? absolute(index) : std::nullopt;
+        const auto row = index < drawn ? absolute(index) : ds::none;
         const bool inside = row && std::ranges::any_of(std::span{stretches}.first(stretch_count), [&](const auto& stretch) {
           return *row >= stretch.first && *row < stretch.second;
         });
@@ -840,7 +841,7 @@ namespace telar::gui::qt {
     }
 
     CellSelection selection;
-    std::optional<Cursor> cursor_override;
+    ds::Option<Cursor> cursor_override;
     const auto& copy = controller_->copy().state();
     if (copy && copy->pane_id == pane_id_) {
       selection = copy->selection(copyGrid(current->screen));
@@ -990,9 +991,9 @@ namespace telar::gui::qt {
     return !preedit_.isEmpty();
   }
 
-  std::optional<TerminalKey> TerminalItem::type(const QKeyEvent& event) {
+  ds::Option<TerminalKey> TerminalItem::type(const QKeyEvent& event) {
     const auto* current = pane();
-    std::optional<TerminalKey> typed;
+    ds::Option<TerminalKey> typed;
     if (current == nullptr || controller_ == nullptr) {
       return typed;
     }
@@ -1036,11 +1037,11 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<TerminalKey> TerminalItem::sendKeyPress(const QKeyEvent& event, const InputModes& modes) {
+  ds::Option<TerminalKey> TerminalItem::sendKeyPress(const QKeyEvent& event, const InputModes& modes) {
     const auto semantic = NativeKeyAdapter::terminalKey(event);
     const auto bytes = semantic ? encodeKey(*semantic, modes) : encodeKey(event, modes);
     if (bytes.isEmpty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto* entry = std::ranges::find_if(pressed_keys_, [&](const auto& key) {
@@ -1053,7 +1054,7 @@ namespace telar::gui::qt {
     }
 
     if (entry == pressed_keys_.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     *entry = {
@@ -1066,7 +1067,7 @@ namespace telar::gui::qt {
         .semantic = semantic,
     };
 
-    return send(bytes) ? semantic : std::nullopt;
+    return send(bytes) ? semantic : ds::none;
   }
 
   void TerminalItem::keyReleaseEvent(QKeyEvent* event) {

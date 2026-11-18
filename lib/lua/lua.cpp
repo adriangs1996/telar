@@ -9,6 +9,7 @@ import std;
 import telar.tbc;
 import telar.sys.posix;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 // The parentheses keep each name from expanding as the macro the body calls.
 void(lua_call)(lua_State* state, int arguments, int results) {
@@ -721,11 +722,11 @@ namespace telar::runtime::lua {
     return result;
   }
 
-  std::optional<lua_Integer> Value::asInteger() const noexcept {
+  ds::Option<lua_Integer> Value::asInteger() const noexcept {
     int valid = 0;
     const auto result = lua_tointegerx(state_, index_, &valid);
 
-    return valid ? std::optional{result} : std::nullopt;
+    return valid ? ds::Option{result} : ds::none;
   }
 
   std::uint64_t Value::boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const {

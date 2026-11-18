@@ -45,6 +45,7 @@ static_assert(true);
 #include <xcb/xproto.h>
 
 import telar.gui.platform;
+import telar.base.ds;
 
 namespace telar::gui::platform {
 
@@ -415,11 +416,11 @@ namespace telar::gui::platform {
         xcb_delete_property(connection_, window_, atom(Atom::property));
         xcb_flush(connection_);
       } else {
-        finish(std::nullopt);
+        finish(ds::none);
       }
     }
 
-    void finish(std::optional<ClipboardImageError> failure) noexcept {
+    void finish(ds::Option<ClipboardImageError> failure) noexcept {
       if (status_ && failure) {
         status_->fail(*failure);
       }

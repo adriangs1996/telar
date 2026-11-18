@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::palette {
 
@@ -13,7 +14,7 @@ namespace telar::gui::features::palette {
     const auto row_height = std::max(chrome.px(row_minimum), ChromeMetrics::lineHeight(chrome.body) + chrome.px(row_padding));
     const auto agent_height = std::max(chrome.px(agent_minimum), ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.px(agent_padding));
     const auto group_height = std::max(chrome.px(group_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(group_padding));
-    const bool nested = options.pick_rows.has_value() || options.suggest;
+    const bool nested = options.pick_rows.hasValue() || options.suggest;
     const auto heading_height = nested ? std::max(chrome.px(heading_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(heading_padding)) : 0;
     const auto search_height = std::max(chrome.px(search_minimum), ChromeMetrics::lineHeight(chrome.title) + chrome.px(search_padding));
     const auto tabs_height = nested ? 0 : std::max(chrome.px(tabs_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(tabs_padding));
@@ -81,7 +82,7 @@ namespace telar::gui::features::palette {
 
     result.first = start;
     auto y = bounds.y;
-    std::optional<PaletteRowKind> previous;
+    ds::Option<PaletteRowKind> previous;
 
     for (auto index = start; index < kinds.size() && result.count < capacity; ++index) {
       const auto height = rowHeight(kinds[index], geometry);

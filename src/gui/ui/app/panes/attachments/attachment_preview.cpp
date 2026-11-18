@@ -85,7 +85,7 @@ namespace telar::gui::qt {
       auto pixels = makeOwned<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
 
       pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(application::terminal::attachments::AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
-      const auto view = pixels->bytes.unsignedBytes();
+      const auto view = pixels->bytes.unsignedBytesMut();
       auto* const rgba = view.data();
       const application::terminal::graphics::RgbaImageView input{
           .pixels = std::as_bytes(std::span{source.constBits(), static_cast<std::size_t>(source.sizeInBytes())}),

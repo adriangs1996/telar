@@ -43,7 +43,7 @@ namespace {
       const telar::runtime::lua::Value root{machine.state(), -1, "fixture"};
 
       application::PickItemsReader::read(root.field("valid"), items, limits);
-      check(items.size() == 2 && items.at(1).selected && items.at(1).swatch.has_value(), "a pick must retain selection and swatch metadata");
+      check(items.size() == 2 && items.at(1).selected && items.at(1).swatch.hasValue(), "a pick must retain selection and swatch metadata");
 
       struct Failure {
         const char* name;

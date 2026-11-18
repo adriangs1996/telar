@@ -27,6 +27,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -109,7 +110,7 @@ namespace telar::gui::qt {
     return application::window::FramePacer::resolveInterval(display_interval_ns, maximum_fps_);
   }
 
-  void WindowAnimationClock::setMaximumFrameRate(std::optional<std::uint16_t> maximum_fps) {
+  void WindowAnimationClock::setMaximumFrameRate(ds::Option<std::uint16_t> maximum_fps) {
     if (maximum_fps_ == maximum_fps) {
       return;
     }
@@ -169,7 +170,7 @@ namespace telar::gui::qt {
     }
 
     const auto timestamp = now();
-    std::optional<std::uint64_t> earliest;
+    ds::Option<std::uint64_t> earliest;
 
     for (const auto& lane : lanes_) {
       const auto deadline = lane.deadline(lane.items.get(), timestamp);

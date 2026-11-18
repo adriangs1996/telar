@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QHash>
 #include <QtCore/qtenvironmentvariables.h>
@@ -11,7 +12,7 @@ namespace telar::gui::qt {
 
   class ProcessEnvironment {
   public:
-    [[nodiscard]] std::optional<std::string_view> operator()(const char* name) const {
+    [[nodiscard]] ds::Option<std::string_view> operator()(const char* name) const {
       const QByteArray key{name};
       if (const auto found = values_.constFind(key); found != values_.cend()) {
         return view(found.value());

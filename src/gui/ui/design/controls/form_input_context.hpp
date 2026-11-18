@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QString>
 #include <algorithm>
 #include <optional>
@@ -17,7 +18,7 @@ namespace telar::gui::qt {
     int cursor = 0;
     int anchor = 0;
 
-    [[nodiscard]] static FormInputContext capture(QString text, int cursor, int anchor, std::optional<Replacement> replacement = std::nullopt) {
+    [[nodiscard]] static FormInputContext capture(QString text, int cursor, int anchor, ds::Option<Replacement> replacement = ds::none) {
       FormInputContext result{.text = std::move(text), .cursor = cursor, .anchor = anchor};
 
       if (replacement) {

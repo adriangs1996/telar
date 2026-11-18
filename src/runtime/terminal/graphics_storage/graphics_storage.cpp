@@ -4,6 +4,7 @@ module;
 module telar.runtime.terminal.graphics_storage;
 
 import telar.ghostty.vt;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -109,7 +110,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<std::uint32_t> GraphicsStorageLimits<Memory>::oldestImage(GhosttyKittyGraphics storage, bool placed) {
+  ds::Option<std::uint32_t> GraphicsStorageLimits<Memory>::oldestImage(GhosttyKittyGraphics storage, bool placed) {
     if (images_.get() == nullptr) {
       checkGhostty(ghostty_kitty_graphics_image_iterator_new(allocator_.get(), images_.output()));
     }
@@ -117,7 +118,7 @@ namespace telar::runtime {
     auto iterator = images_.get();
 
     checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_ITERATOR, &iterator));
-    std::optional<std::uint32_t> oldest;
+    ds::Option<std::uint32_t> oldest;
     std::uint64_t oldest_generation = std::numeric_limits<std::uint64_t>::max();
 
     while (const auto image = ghostty_kitty_graphics_image_next(iterator)) {
@@ -325,7 +326,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  tbc::view<std::optional<GraphicsImageView>, tbc::lt::a> GraphicsStorage<Memory>::readImage(tbc::view<Memory&, tbc::lt::a> memory, GhosttyKittyGraphicsImage image) {
+  tbc::view<ds::Option<GraphicsImageView>, tbc::lt::a> GraphicsStorage<Memory>::readImage(tbc::view<Memory&, tbc::lt::a> memory, GhosttyKittyGraphicsImage image) {
     GraphicsImageView view{};
     GhosttyKittyImageFormat format{};
     const Byte* pixels = nullptr;
@@ -335,7 +336,7 @@ namespace telar::runtime {
 
     checkGhostty(ghostty_kitty_graphics_image_get_multi(image, std::size(keys), keys, values, nullptr));
     if (format != GHOSTTY_KITTY_IMAGE_FORMAT_RGB && format != GHOSTTY_KITTY_IMAGE_FORMAT_RGBA) {
-      return std::nullopt;
+      return ds::none;
     }
 
     view.description.format = format == GHOSTTY_KITTY_IMAGE_FORMAT_RGB ? ImageFormat::rgb : ImageFormat::rgba;
@@ -349,7 +350,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::optional<GraphicsPlacement> GraphicsStorage<Memory>::readPlacement(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyKittyGraphics storage, GhosttyTerminal terminal) {
+  ds::Option<GraphicsPlacement> GraphicsStorage<Memory>::readPlacement(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyKittyGraphics storage, GhosttyTerminal terminal) {
     GraphicsPlacement placement{};
     bool internal = false;
     bool placeholders = false;
@@ -360,7 +361,7 @@ namespace telar::runtime {
     if (std::ranges::none_of(images(), [&](const auto& image) {
           return image.description.key.image_id == placement.key.image_id;
         })) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto image = ghostty_kitty_graphics_image(storage, placement.key.image_id);
@@ -374,7 +375,7 @@ namespace telar::runtime {
       placement.offset_x = 0;
       placement.offset_y = 0;
     } else if (ghostty_kitty_graphics_placement_anchor(iterator, terminal, &placement.x, &placement.y) == GHOSTTY_NO_VALUE) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return placement;

@@ -6,6 +6,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/tab_strip_geometry.cppm
 export {
@@ -84,7 +85,7 @@ export {
 
         [[nodiscard]] bool shows(std::size_t index) const noexcept;
 
-        [[nodiscard]] std::optional<std::size_t> nearestHidden() const noexcept;
+        [[nodiscard]] ds::Option<std::size_t> nearestHidden() const noexcept;
 
         [[nodiscard]] float footprint(const Metrics& metrics) const noexcept;
       };
@@ -111,14 +112,14 @@ export {
   namespace telar::gui::features::workbench {
 
     struct TabDropTarget {
-      std::optional<std::uint64_t> relative_to;
+      ds::Option<std::uint64_t> relative_to;
       TabMoveDirection direction = TabMoveDirection::previous;
     };
 
     struct TabDragMove {
       TabLocation location;
       TabMoveDirection direction = TabMoveDirection::previous;
-      std::optional<std::uint64_t> relative_to;
+      ds::Option<std::uint64_t> relative_to;
     };
 
     class TabDrag {
@@ -128,21 +129,21 @@ export {
 
       void begin(TabLocation source, Position point) noexcept;
       void cancel() noexcept;
-      void validate(std::optional<WorkspaceLocation> workspace, std::span<const std::uint64_t> tabs, bool naming) noexcept;
-      void update(Position point, std::optional<TabDropTarget> destination) noexcept;
-      [[nodiscard]] std::optional<TabDragMove> preview() const noexcept;
-      [[nodiscard]] std::optional<TabDragMove> finish() noexcept;
+      void validate(ds::Option<WorkspaceLocation> workspace, std::span<const std::uint64_t> tabs, bool naming) noexcept;
+      void update(Position point, ds::Option<TabDropTarget> destination) noexcept;
+      [[nodiscard]] ds::Option<TabDragMove> preview() const noexcept;
+      [[nodiscard]] ds::Option<TabDragMove> finish() noexcept;
       [[nodiscard]] bool captured() const noexcept;
       [[nodiscard]] bool dragging() const noexcept;
-      [[nodiscard]] const std::optional<TabLocation>& source() const noexcept;
-      [[nodiscard]] const std::optional<TabDropTarget>& destination() const noexcept;
+      [[nodiscard]] const ds::Option<TabLocation>& source() const noexcept;
+      [[nodiscard]] const ds::Option<TabDropTarget>& destination() const noexcept;
 
     private:
       bool captured_ = false;
-      std::optional<TabLocation> source_;
+      ds::Option<TabLocation> source_;
       Position origin_{};
       bool dragging_ = false;
-      std::optional<TabDropTarget> destination_;
+      ds::Option<TabDropTarget> destination_;
     };
 
   }
@@ -162,7 +163,7 @@ export {
       static constexpr std::size_t capacity = TabStripGeometry::maximum_tabs;
 
       void capture(std::span<const TabDropSlot> delivered) noexcept;
-      [[nodiscard]] std::optional<TabDropTarget> at(TabDrag::Position point) const noexcept;
+      [[nodiscard]] ds::Option<TabDropTarget> at(TabDrag::Position point) const noexcept;
       [[nodiscard]] std::span<const TabDropSlot> view() const noexcept;
 
     private:

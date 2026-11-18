@@ -9,6 +9,7 @@ import telar.runtime.model.slot_store;
 import telar.runtime.platform.stream_read_buffer;
 import telar.platform.error;
 import telar.wire.agents;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -211,12 +212,12 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<DescriptionRequest> DescriptionQueue::nextDescription(AgentRegistry<ConcurrentMemory>& agents) {
+  ds::Option<DescriptionRequest> DescriptionQueue::nextDescription(AgentRegistry<ConcurrentMemory>& agents) {
     std::size_t pending = 0;
 
     for (const auto& agent : agents.records()) {
       if (agent->description_phase == DescriptionPhase::running) {
-        return std::nullopt;
+        return ds::none;
       }
 
       pending += agent->hasPendingDescription();
@@ -249,13 +250,13 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<HistorySessionTitle> DescriptionQueue::completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result) {
+  ds::Option<HistorySessionTitle> DescriptionQueue::completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result) {
     auto* agent = agents.find(result.identity.pane, result.identity.generation);
     if (agent == nullptr || agent->description_phase != DescriptionPhase::running || agent->session_id != result.identity.session || agent->description_revision != result.identity.revision) {
-      return std::nullopt;
+      return ds::none;
     }
 
     HistorySessionTitle finished{.session = agent->session_id};

@@ -10,6 +10,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.features.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -22,7 +23,7 @@ namespace {
     MachineProfiles profiles;
 
     profiles.add(MachineProfile::create(MachineId::fromRaw(1), {.label = "Saved", .destination = "user@host", .enabled = false}));
-    check(MachineOpening::saved(profiles, "Saved", "host") == std::optional<std::string_view>{"user@host"}, "Disabled saved labels must resolve");
+    check(MachineOpening::saved(profiles, "Saved", "host") == telar::ds::Option<std::string_view>{"user@host"}, "Disabled saved labels must resolve");
     check(!MachineOpening::saved(profiles, "host", "host"), "Hostname must select local without a saved local label");
     profiles.relabelLocal("Local");
     check(!MachineOpening::saved(profiles, "Local", "host"), "Explicit local label must select local");

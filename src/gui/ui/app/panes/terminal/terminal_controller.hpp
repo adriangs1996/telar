@@ -28,6 +28,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -55,7 +56,7 @@ namespace telar::gui::qt {
     // What a terminal reads: the active session and its panes, the dialog over the workbench, and
     // what it asks of the controllers it holds.
     [[nodiscard]] GuiSession& session() const noexcept {
-      return store_.session();
+      return store_.sessionMut();
     }
 
     [[nodiscard]] application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept {
@@ -116,7 +117,7 @@ namespace telar::gui::qt {
     void scrollToRow(std::uint64_t pane_id, std::uint32_t row);
     // Selects a command block of the pane, by index among its blocks, or none to go back to the
     // live end.
-    void selectBlock(std::uint64_t pane_id, std::optional<std::size_t> index);
+    void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index);
     // The modifiers held over the terminals, from the pointer or the keyboard.
     void observePointerModifiers(Qt::KeyboardModifiers modifiers);
     [[nodiscard]] std::shared_ptr<const application::terminal::links::LinkHit> shareLinkHit(const application::terminal::links::LinkHit& hit);
@@ -177,7 +178,7 @@ namespace telar::gui::qt {
     [[nodiscard]] Recipients recipients() const;
     [[nodiscard]] application::terminal::input::ChildMouseView view(const Capture& lease) const;
     [[nodiscard]] static application::terminal::input::ChildMouseSample sample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button);
-    void report(std::uint64_t pane_id, const std::optional<application::terminal::input::ChildMouseReport>& report);
+    void report(std::uint64_t pane_id, const ds::Option<application::terminal::input::ChildMouseReport>& report);
     void cancelPane(std::uint64_t pane_id);
     static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 

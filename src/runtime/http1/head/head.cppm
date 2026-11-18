@@ -3,6 +3,7 @@ export module telar.runtime.http1.head;
 import std;
 
 import telar.base.text;
+import telar.base.ds;
 
 // Interface: http1/framing.cppm
 export {
@@ -30,12 +31,12 @@ export {
   namespace telar::runtime {
 
     template <unsigned Base>
-    std::optional<std::size_t> parseHttpNumber(std::string_view text) noexcept;
-    extern template std::optional<std::size_t> parseHttpNumber<10>(std::string_view text) noexcept;
-    extern template std::optional<std::size_t> parseHttpNumber<16>(std::string_view text) noexcept;
+    ds::Option<std::size_t> parseHttpNumber(std::string_view text) noexcept;
+    extern template ds::Option<std::size_t> parseHttpNumber<10>(std::string_view text) noexcept;
+    extern template ds::Option<std::size_t> parseHttpNumber<16>(std::string_view text) noexcept;
 
     // A status code as both HTTP versions write it: three digits, 100 to 599.
-    std::optional<std::uint16_t> parseHttpStatus(std::string_view text) noexcept;
+    ds::Option<std::uint16_t> parseHttpStatus(std::string_view text) noexcept;
 
     // Whether a response with `status` carries no body (RFC 9110 6.4.1), as one to HEAD never does.
     constexpr bool bodylessResponse(std::uint16_t status, bool to_head) noexcept {
@@ -62,16 +63,16 @@ export {
       bool upgrade = false;
       bool closes = false;
 
-      static std::optional<Http1Head> analyze(std::string_view bytes, bool response, bool response_to_head = false) noexcept;
+      static ds::Option<Http1Head> analyze(std::string_view bytes, bool response, bool response_to_head = false) noexcept;
 
     private:
-      static std::optional<Http1Framing> bodyFraming(std::string_view bytes, bool response, bool bodyless) noexcept;
+      static ds::Option<Http1Framing> bodyFraming(std::string_view bytes, bool response, bool bodyless) noexcept;
 
       static bool connectionCloses(std::string_view bytes) noexcept;
 
       static bool endsWithChunked(std::string_view value) noexcept;
 
-      static std::optional<std::uint16_t> parseStatus(std::string_view line) noexcept;
+      static ds::Option<std::uint16_t> parseStatus(std::string_view line) noexcept;
 
       static bool equals(std::string_view actual, std::string_view lower) noexcept;
     };

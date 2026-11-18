@@ -7,6 +7,7 @@ import telar.cli.command_limit;
 import telar.base.text;
 import telar.platform.paths;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: api_schema.cppm
 export {
@@ -22,7 +23,7 @@ export {
   namespace telar::runtime::cli::runtime_clipboard {
 
     struct Options {
-      std::optional<std::string_view> socket;
+      ds::Option<std::string_view> socket;
 
       static Options parse(Arguments words);
     };
@@ -45,8 +46,8 @@ export {
       Action action;
       bool json = false;
       bool proxy_only = false;
-      std::optional<std::uint32_t> count = std::nullopt;
-      std::optional<std::string_view> socket = std::nullopt;
+      ds::Option<std::uint32_t> count = ds::none;
+      ds::Option<std::string_view> socket = ds::none;
 
       static RuntimeOptions parse(Arguments words);
     };

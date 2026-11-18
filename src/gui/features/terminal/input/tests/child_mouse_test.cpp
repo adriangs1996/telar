@@ -92,7 +92,7 @@ namespace {
         const auto released = gesture.cancel(current);
         const auto retainable = sgr && tracking != MouseTracking::none && tracking != MouseTracking::x10;
 
-        check(released.has_value() == retainable && !gesture.owned(), "only matching SGR modes may retain and finish a press");
+        check(released.hasValue() == retainable && !gesture.owned(), "only matching SGR modes may retain and finish a press");
       }
     }
   }
@@ -121,7 +121,7 @@ namespace {
 
     normal.protocol.tracking = MouseTracking::normal;
     check(!gesture.deliver(normal, drag) && gesture.owned(), "normal tracking must suppress motion without releasing ownership");
-    check(gesture.cancel(normal).has_value(), "a mode-suppressed drag must still retain its final release");
+    check(gesture.cancel(normal).hasValue(), "a mode-suppressed drag must still retain its final release");
   }
 
   void pixelsAndInvalidGeometry() {

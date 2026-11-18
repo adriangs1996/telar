@@ -13,6 +13,7 @@ import telar.base.memory.containers;
 import telar.base.text;
 import telar.client;
 import telar.sys.posix;
+import telar.base.ds;
 
 // Interface: telar_machines/number_radix.cppm
 export {
@@ -143,10 +144,10 @@ export {
       [[nodiscard]] static const char* name(MachineError code);
 
       // The error a name() spells, for an error that crossed a boundary as its text.
-      [[nodiscard]] static std::optional<MachineError> named(std::string_view text) noexcept;
+      [[nodiscard]] static ds::Option<MachineError> named(std::string_view text) noexcept;
 
       // What a person reads for an error a saved machine's profile caused; none for the others.
-      [[nodiscard]] static std::optional<std::string_view> description(MachineError code) noexcept;
+      [[nodiscard]] static ds::Option<std::string_view> description(MachineError code) noexcept;
 
       // machines.json refused for its owner or mode.
       static constexpr std::string_view insecure_file = "machines.json must be a regular file only its owner can read and write (chmod 600)";
@@ -389,9 +390,9 @@ export {
     struct MachineProfileFields {
       std::string_view label;
       std::string_view destination;
-      std::optional<std::string_view> color = std::nullopt;
+      ds::Option<std::string_view> color = ds::none;
       bool enabled = true;
-      std::optional<std::string_view> program = std::nullopt;
+      ds::Option<std::string_view> program = ds::none;
     };
 
     class MachineProfile {
@@ -401,25 +402,25 @@ export {
       [[nodiscard]] MachineId identity() const noexcept;
       [[nodiscard]] std::string_view label() const noexcept;
       [[nodiscard]] std::string_view destination() const noexcept;
-      [[nodiscard]] std::optional<std::string_view> color() const noexcept;
-      [[nodiscard]] std::optional<std::string_view> program() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> color() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> program() const noexcept;
       [[nodiscard]] bool enabled() const noexcept;
 
       void enable(bool enabled) noexcept;
       void relabel(std::string_view label);
       void placeProgram(std::string_view path);
-      void recordLogin(MachineAgent agent, std::optional<MachineLogin> login);
-      [[nodiscard]] std::optional<MachineLogin> login(MachineAgent agent) const;
+      void recordLogin(MachineAgent agent, ds::Option<MachineLogin> login);
+      [[nodiscard]] ds::Option<MachineLogin> login(MachineAgent agent) const;
 
     private:
-      static std::optional<std::string_view> optional(std::string_view value) noexcept;
+      static ds::Option<std::string_view> optional(std::string_view value) noexcept;
 
       MachineId identity_;
       runtime::FixedText<MachineLimits::label_bytes> label_;
       runtime::FixedText<MachineLimits::destination_bytes> destination_;
       runtime::FixedText<MachineLimits::color_bytes> color_;
       runtime::FixedText<MachineLimits::program_bytes> program_;
-      std::array<std::optional<MachineLogin>, machine_agents.size()> logins_{};
+      std::array<ds::Option<MachineLogin>, machine_agents.size()> logins_{};
       bool enabled_ = true;
     };
 
@@ -436,10 +437,10 @@ export {
       static constexpr std::uint16_t extended_format_version = 2;
 
       [[nodiscard]] std::span<const MachineProfile> rows() const noexcept;
-      [[nodiscard]] std::optional<std::string_view> localLabel() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> localLabel() const noexcept;
       void relabelLocal(std::string_view label);
-      [[nodiscard]] std::optional<std::size_t> find(std::string_view label) const noexcept;
-      [[nodiscard]] std::optional<std::size_t> findDestination(std::string_view destination) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> find(std::string_view label) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> findDestination(std::string_view destination) const noexcept;
       void add(const MachineProfile& profile);
       void remove(std::string_view label);
       void rename(std::string_view label, std::string_view replacement);
@@ -481,7 +482,7 @@ export {
       static std::uint16_t readVersion(Memory& memory, const runtime::JsonValue& value, String<Memory>& scratch);
 
       template <Allocator Memory>
-      static void validateOptionalString(const std::optional<runtime::JsonValue>& value, String<Memory>& scratch);
+      static void validateOptionalString(const ds::Option<runtime::JsonValue>& value, String<Memory>& scratch);
 
       template <Allocator Memory>
       static MachineLogin readLogin(const runtime::JsonValue& value, String<Memory>& scratch);
@@ -524,11 +525,11 @@ export {
       static constexpr std::size_t max_bytes = discovery_prefix.size() + MachineLimits::program_bytes + discovery_suffix.size();
       using Text = BoundedText<max_bytes>;
 
-      [[nodiscard]] static Text discovery(std::optional<std::string_view> program = std::nullopt);
-      [[nodiscard]] static Text bridge(std::optional<std::string_view> program = std::nullopt);
+      [[nodiscard]] static Text discovery(ds::Option<std::string_view> program = ds::none);
+      [[nodiscard]] static Text bridge(ds::Option<std::string_view> program = ds::none);
 
     private:
-      static Text format(std::string_view prefix, std::optional<std::string_view> program, std::string_view suffix);
+      static Text format(std::string_view prefix, ds::Option<std::string_view> program, std::string_view suffix);
     };
 
   }

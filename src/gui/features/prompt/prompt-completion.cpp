@@ -4,21 +4,22 @@ import std;
 
 import telar.ebnf.matcher;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
-  std::optional<CompletionContext> completionContext(std::string_view text, std::size_t cursor, shell::Syntax syntax) {
+  ds::Option<CompletionContext> completionContext(std::string_view text, std::size_t cursor, shell::Syntax syntax) {
     std::vector<shell::Token> tokens(text.size() + 1);
     const auto lexed = shell::lex(text, syntax, tokens, cursor);
     if (!lexed.cursor_completable) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::vector<shell::Word> words(text.size() + 1);
     std::vector<char> unquoted(2 * text.size() + 2);
     const auto at = shell::commandAt(text, syntax, std::span{tokens}.first(lexed.tokens), lexed, words, unquoted);
     if (at.overflow || at.current == shell::no_word) {
-      return std::nullopt;
+      return ds::none;
     }
 
     CompletionContext context;

@@ -26,7 +26,7 @@ namespace telar::gui::qt {
     const auto activity = application::activity::ProjectActivity::derive(workspaces, agents, workspace.location.id);
     application::activity::ProjectActivity::Text summary;
 
-    record.insert(QStringLiteral("detail"), toQString(activity.summary(summary).value_or(workspace.path)));
+    record.insert(QStringLiteral("detail"), toQString(activity.summary(summary).valueOr(workspace.path)));
     record.insert(QStringLiteral("attention"), toQString(activity.attentionLabel().view()));
     const auto color = activity.urgent ? AgentStatusPresentation::color(agents[*activity.urgent].status) : PaletteRole::overlay1;
 

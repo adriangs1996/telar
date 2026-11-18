@@ -7,6 +7,7 @@ import std;
 import :target;
 import telar.base.memory.allocators;
 import telar.wire.content;
+import telar.base.ds;
 
 namespace telar::gui::features::peek {
 
@@ -18,17 +19,17 @@ namespace telar::gui::features::peek {
     void show(PeekTarget target) noexcept;
     void close() noexcept;
 
-    [[nodiscard]] const std::optional<PeekTarget>& target() const noexcept;
+    [[nodiscard]] const ds::Option<PeekTarget>& target() const noexcept;
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] bool reading() const noexcept;
     [[nodiscard]] bool owns(std::uint64_t request) const noexcept;
-    [[nodiscard]] std::optional<ReadPane> request(std::uint64_t identity);
+    [[nodiscard]] ds::Option<ReadPane> request(std::uint64_t identity);
     bool fail(std::uint64_t identity) noexcept;
-    [[nodiscard]] std::optional<std::size_t> store(const PaneText& reply);
+    [[nodiscard]] ds::Option<std::size_t> store(const PaneText& reply);
 
   private:
     String<Memory> text_;
-    std::optional<PeekTarget> target_;
+    ds::Option<PeekTarget> target_;
     std::uint64_t request_id_ = 0;
   };
 

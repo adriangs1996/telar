@@ -42,6 +42,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -181,7 +182,7 @@ namespace telar::gui::qt {
 
     struct OptionsResult {
       QStringList arguments;
-      std::optional<application::machines::MachineError> error = std::nullopt;
+      ds::Option<application::machines::MachineError> error = ds::none;
       std::uint64_t generation = 0;
     };
 
@@ -250,10 +251,10 @@ namespace telar::gui::qt {
       launch(application::machines::MachineRemoteCommand::discovery(program()).view());
     }
 
-    [[nodiscard]] std::optional<std::string_view> program() {
+    [[nodiscard]] ds::Option<std::string_view> program() {
       program_bytes_ = target_.program.toUtf8();
 
-      return program_bytes_.isEmpty() ? std::nullopt : std::optional{view(program_bytes_)};
+      return program_bytes_.isEmpty() ? ds::none : ds::Option{view(program_bytes_)};
     }
 
     void launch(std::string_view command) {
@@ -317,7 +318,7 @@ namespace telar::gui::qt {
         constexpr int maximum_exit_status = 255;
         const auto exited = outcome == QProcess::NormalExit && status >= 0 && status <= maximum_exit_status;
 
-        fail(application::machines::MachineConnectionPolicy::failure({.exit_status = exited ? std::optional{static_cast<std::uint8_t>(status)} : std::nullopt, .standard_error = view(errors_)}));
+        fail(application::machines::MachineConnectionPolicy::failure({.exit_status = exited ? ds::Option{static_cast<std::uint8_t>(status)} : ds::none, .standard_error = view(errors_)}));
 
         return;
       }
@@ -398,7 +399,7 @@ namespace telar::gui::qt {
     QByteArray output_;
     QByteArray errors_;
     QByteArray program_bytes_;
-    std::optional<RemoteDiscovery> discovery_;
+    ds::Option<RemoteDiscovery> discovery_;
     system::StdioSocket sockets_;
     std::uint64_t generation_ = 0;
     Phase phase_ = Phase::discovery;

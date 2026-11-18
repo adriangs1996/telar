@@ -9,6 +9,7 @@ import telar.gui.features.workbench;
 import telar.gui.foundation.text;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::application::terminal::graphics {
 
@@ -119,7 +120,7 @@ namespace telar::gui::application::terminal::graphics {
     return feature::revision(Access::graphics(session));
   }
 
-  std::optional<std::uint64_t> resumeDeadline(const Session& session) noexcept {
+  ds::Option<std::uint64_t> resumeDeadline(const Session& session) noexcept {
     return feature::deadline(Access::graphics(session));
   }
 

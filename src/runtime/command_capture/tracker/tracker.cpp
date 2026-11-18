@@ -10,6 +10,7 @@ import telar.base.text.utf8;
 import telar.ghostty.vt;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.grid;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -46,23 +47,23 @@ namespace telar::runtime {
     }
 
     // Decodes %XX escapes into `output`; nothing when the text is malformed or does not fit.
-    std::optional<std::size_t> percentDecode(std::string_view encoded, std::span<char> output) noexcept {
+    ds::Option<std::size_t> percentDecode(std::string_view encoded, std::span<char> output) noexcept {
       std::size_t count = 0;
 
       for (std::size_t index = 0; index < encoded.size(); ++index) {
         if (count == output.size()) {
-          return std::nullopt;
+          return ds::none;
         }
 
         if (encoded[index] == '%') {
           if (encoded.size() - index < 3) {
-            return std::nullopt;
+            return ds::none;
           }
 
           unsigned byte = 0;
           const auto converted = std::from_chars(encoded.data() + index + 1, encoded.data() + index + 3, byte, 16);
           if (converted.ec != std::errc{} || converted.ptr != encoded.data() + index + 3) {
-            return std::nullopt;
+            return ds::none;
           }
 
           output[count++] = static_cast<char>(byte);
@@ -75,7 +76,7 @@ namespace telar::runtime {
       return count;
     }
 
-    std::optional<int> parseExitCode(std::string_view options) noexcept {
+    ds::Option<int> parseExitCode(std::string_view options) noexcept {
       auto value = options.substr(0, options.find(';'));
       const bool negative = value.starts_with('-');
       if (negative || value.starts_with('+')) {
@@ -85,7 +86,7 @@ namespace telar::runtime {
       const auto limit = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()) + negative;
       const auto parsed = unsignedNumber<std::uint32_t>(value, limit);
       if (!parsed) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto magnitude = *parsed;
@@ -138,8 +139,8 @@ namespace telar::runtime {
     typed_exact_ = true;
   }
 
-  std::optional<std::string_view> CommandInputScanner::typedText() const noexcept {
-    return typed_exact_ ? std::optional<std::string_view>{{typed_.data(), typed_count_}} : std::nullopt;
+  ds::Option<std::string_view> CommandInputScanner::typedText() const noexcept {
+    return typed_exact_ ? ds::Option<std::string_view>{{typed_.data(), typed_count_}} : ds::none;
   }
 
   void CommandInputScanner::ground(Byte byte, Event& event) noexcept {
@@ -206,17 +207,17 @@ namespace telar::runtime {
 
   // CommandZones
 
-  CommandZones::CommandZones(std::string_view directory, std::optional<ShellToken> token)
+  CommandZones::CommandZones(std::string_view directory, ds::Option<ShellToken> token)
       : token_(token) {
     setDirectory(directory);
   }
 
-  std::optional<ShellToken> CommandZones::token() const noexcept {
+  ds::Option<ShellToken> CommandZones::token() const noexcept {
     return token_;
   }
 
   bool CommandZones::remote() const noexcept {
-    return remote_.has_value();
+    return remote_.hasValue();
   }
 
   IntegratedShell CommandZones::remoteShell() const noexcept {
@@ -438,7 +439,7 @@ namespace telar::runtime {
     if (action == "A" || action == "P") {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.prompt_markers));
       if (running_) {
-        sink.complete({time, std::nullopt, HistoryStatus::interrupted});
+        sink.complete({time, ds::none, HistoryStatus::interrupted});
       }
 
       running_ = false;
@@ -555,9 +556,9 @@ namespace telar::runtime {
     return GhosttyWriter{.write = receive, .userdata = this};
   }
 
-  std::optional<bool> CommandTextWriter::finish() noexcept {
+  ds::Option<bool> CommandTextWriter::finish() noexcept {
     if (length_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const bool truncated = overflow_ || length_ > CommandSelection::maximum_bytes;
@@ -600,11 +601,11 @@ namespace telar::runtime {
       return {.tag = tag, .value = {.coordinate = coordinate}};
     }
 
-    std::optional<GhosttyGridRef> snapshot(const SelectionReference& tracked) {
+    ds::Option<GhosttyGridRef> snapshot(const SelectionReference& tracked) {
       auto result = ghosttySized<GhosttyGridRef>();
       const auto status = ghostty_tracked_grid_ref_snapshot(tracked.get(), &result);
       if (status == GHOSTTY_NO_VALUE) {
-        return std::nullopt;
+        return ds::none;
       }
 
       checkGhostty(status);
@@ -691,7 +692,7 @@ namespace telar::runtime {
     findRightPrompt(screen);
   }
 
-  void CommandSelection::rebase(CommandScreen screen, std::optional<std::string_view> typed) {
+  void CommandSelection::rebase(CommandScreen screen, ds::Option<std::string_view> typed) {
     const auto anchor = snapshot(anchor_);
     if (!anchor) {
       return;
@@ -720,16 +721,16 @@ namespace telar::runtime {
     findRightPrompt(screen);
   }
 
-  std::optional<GhosttySelection> CommandSelection::select(CommandScreen screen) const {
+  ds::Option<GhosttySelection> CommandSelection::select(CommandScreen screen) const {
     const auto anchor = snapshot(anchor_);
     if (!primary(screen) || !anchor || erased_ || blank(*anchor, 0, screen.columns)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto start = coordinates(screen.terminal, *anchor);
     auto finish = coordinates(screen.terminal, gridReference(screen.terminal, GHOSTTY_POINT_TAG_ACTIVE, cursor(screen.terminal)));
     if (before(finish, start)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto maximum_rows = maximum_bytes / screen.columns + 2;
@@ -770,7 +771,7 @@ namespace telar::runtime {
   }
 
   GhosttyPointCoordinate CommandSelection::selectionFinish(CommandScreen screen, GhosttyPointCoordinate start, GhosttyPointCoordinate fallback) const {
-    const auto right_prompt = right_prompt_active_ ? snapshot(right_prompt_) : std::nullopt;
+    const auto right_prompt = right_prompt_active_ ? snapshot(right_prompt_) : ds::none;
     if (!right_prompt || right_prompt->x == 0) {
       return fallback;
     }
@@ -832,7 +833,7 @@ namespace telar::runtime {
         closeSession(CommandBlockState::interrupted, 0, now);
       }
 
-      prompt_ = selection_.primary(screen()) ? track() : std::nullopt;
+      prompt_ = selection_.primary(screen()) ? track() : ds::none;
       break;
     case 'B':
       selection_.begin(screen());
@@ -849,8 +850,8 @@ namespace telar::runtime {
     case 'N':
       // The running command, ssh, now hosts the remote shell, whose commands follow it.
       if (running_ && count_ != 0) {
-        entry(count_ - 1).state = CommandBlockState::session;
-        entry(count_ - 1).nest = CommandBlockNest::opens;
+        entryMut(count_ - 1).state = CommandBlockState::session;
+        entryMut(count_ - 1).nest = CommandBlockNest::opens;
         ++revision_;
       }
 
@@ -873,8 +874,8 @@ namespace telar::runtime {
     }
   }
 
-  void CommandBlockRing::finished(std::optional<int> status, std::chrono::steady_clock::time_point now) {
-    const auto code = status.value_or(0);
+  void CommandBlockRing::finished(ds::Option<int> status, std::chrono::steady_clock::time_point now) {
+    const auto code = status.valueOr(0);
     const auto state = code == 0 ? CommandBlockState::succeeded : CommandBlockState::failed;
 
     if (closing_) {
@@ -899,7 +900,7 @@ namespace telar::runtime {
     std::size_t kept = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
-      auto& current = entry(index);
+      auto& current = entryMut(index);
       const auto position = row(current.anchor);
       if (!position) {
         continue;
@@ -907,7 +908,7 @@ namespace telar::runtime {
 
       current.row = *position;
       if (kept != index) {
-        std::swap(entry(kept), current);
+        std::swap(entryMut(kept), current);
       }
 
       ++kept;
@@ -931,7 +932,7 @@ namespace telar::runtime {
     return PaneBlocks{.pane_id = pane_id, .blocks = std::span<const CommandBlock>{storage}.first(count_)};
   }
 
-  CommandBlockRing::Entry& CommandBlockRing::entry(std::size_t index) noexcept {
+  CommandBlockRing::Entry& CommandBlockRing::entryMut(std::size_t index) noexcept {
     return entries_[(first_ + index) % capacity];
   }
 
@@ -940,7 +941,7 @@ namespace telar::runtime {
   }
 
   // A reference that follows the cursor's row as the terminal scrolls.
-  std::optional<CommandBlockRing::TrackedReference> CommandBlockRing::track() {
+  ds::Option<CommandBlockRing::TrackedReference> CommandBlockRing::track() {
     const auto terminal = screen().terminal;
     std::uint16_t row = 0;
 
@@ -948,22 +949,22 @@ namespace telar::runtime {
     TrackedReference tracked;
     const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, row}}};
     if (ghostty_terminal_grid_ref_track(terminal, point, tracked.output()) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return tracked;
   }
 
   // The row `tracked` is on, from the top of the scrollback; nothing once it was dropped.
-  std::optional<std::uint32_t> CommandBlockRing::row(const TrackedReference& tracked) const {
+  ds::Option<std::uint32_t> CommandBlockRing::row(const TrackedReference& tracked) const {
     auto reference = ghosttySized<GhosttyGridRef>();
     if (ghostty_tracked_grid_ref_snapshot(tracked.get(), &reference) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     GhosttyPointCoordinate coordinate{};
     if (ghostty_terminal_point_from_grid_ref(screen().terminal, &reference, GHOSTTY_POINT_TAG_SCREEN, &coordinate) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return coordinate.y;
@@ -971,14 +972,14 @@ namespace telar::runtime {
 
   // The command starts: its block takes the rows from its prompt down to the output.
   void CommandBlockRing::start(std::chrono::steady_clock::time_point now) {
-    auto prompt = std::exchange(prompt_, std::nullopt);
+    auto prompt = std::exchange(prompt_, ds::none);
     if (!prompt || !selection_.primary(screen())) {
       return;
     }
 
     const auto first = row(*prompt);
     const auto output = track();
-    const auto last = output ? row(*output) : std::nullopt;
+    const auto last = output ? row(*output) : ds::none;
     if (!first || !last || *last <= *first) {
       return;
     }
@@ -1017,9 +1018,9 @@ namespace telar::runtime {
       --count_;
     }
 
-    auto& added = entry(count_++);
+    auto& added = entryMut(count_++);
 
-    added.anchor = std::move(*prompt);
+    added.anchor = std::move(prompt.getMut());
     added.row = *first;
     added.rows = static_cast<std::uint16_t>(std::min<std::uint32_t>(*last - *first, std::numeric_limits<std::uint16_t>::max()));
     added.lines = static_cast<std::uint16_t>(std::min<std::size_t>(lines, std::numeric_limits<std::uint16_t>::max()));
@@ -1036,7 +1037,7 @@ namespace telar::runtime {
   void CommandBlockRing::finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
     running_ = false;
     if (count_ != 0) {
-      end(entry(count_ - 1), state, status, now);
+      end(entryMut(count_ - 1), state, status, now);
     }
   }
 
@@ -1044,7 +1045,7 @@ namespace telar::runtime {
   void CommandBlockRing::closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
     closing_ = false;
     for (auto index = count_; index > 0; --index) {
-      if (auto& current = entry(index - 1); current.state == CommandBlockState::session) {
+      if (auto& current = entryMut(index - 1); current.state == CommandBlockState::session) {
         end(current, state, status, now);
         return;
       }
@@ -1083,13 +1084,13 @@ namespace telar::runtime {
     tbc::view<CapturedCommandEmitter&, tbc::lt::a> emitter_;
   };
 
-  CommandTrackerCore::CommandTrackerCore(GhosttyTerminal terminal, std::string_view directory, std::optional<ShellToken> shell_token)
+  CommandTrackerCore::CommandTrackerCore(GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token)
       : selection_(terminal),
         zones_(directory, shell_token) {}
 
   std::size_t CommandTrackerCore::input(const CommandByteObservation& observation, CapturedCommandEmitter& emitter) {
     TELAR_TRACE("history.captureInput");
-    const bool shell_foreground = observation.shell_foreground.value_or(zones_.editing());
+    const bool shell_foreground = observation.shell_foreground.valueOr(zones_.editing());
 
     zones_.input(observation.bytes);
     if (observation.bytes.empty()) {
@@ -1109,7 +1110,7 @@ namespace telar::runtime {
         finished.nanoseconds = last_output_ns_;
       }
 
-      complete({finished, std::nullopt, HistoryStatus::completed}, emitter);
+      complete({finished, ds::none, HistoryStatus::completed}, emitter);
     }
 
     if (phase_ == Phase::awaiting_commit) {
@@ -1151,13 +1152,13 @@ namespace telar::runtime {
 
       feedTerminal(part);
       if (committed) {
-        std::optional<bool> captured{false};
+        ds::Option<bool> captured{false};
 
         if (!adoptSubmitted()) {
           TELAR_TRACE("history.captureSelection");
           const auto selection = selection_.select(screen());
 
-          captured = selection ? capture(*selection) : std::nullopt;
+          captured = selection ? capture(*selection) : ds::none;
         }
 
         if (captured) {
@@ -1264,7 +1265,7 @@ namespace telar::runtime {
       saw_foreground_child_ = true;
     } else if (saw_foreground_child_) {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.foreground_completions));
-      complete({observation.time, std::nullopt, HistoryStatus::completed}, emitter);
+      complete({observation.time, ds::none, HistoryStatus::completed}, emitter);
     }
   }
 
@@ -1307,7 +1308,7 @@ namespace telar::runtime {
     return {terminal.handle(), terminal.screen.cols};
   }
 
-  std::optional<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination) {
+  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination) {
     destination.resize(CommandSelection::buffer_bytes);
     CommandTextWriter writer{destination};
 
@@ -1327,7 +1328,7 @@ namespace telar::runtime {
     return commandScreen(terminal_);
   }
 
-  std::optional<bool> CommandBlocks::capture(const GhosttySelection& selection) {
+  ds::Option<bool> CommandBlocks::capture(const GhosttySelection& selection) {
     return captureCommandText(terminal_, selection, text_);
   }
 
@@ -1335,7 +1336,7 @@ namespace telar::runtime {
     return text_;
   }
 
-  CommandTracker::CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output, std::optional<ShellToken> shell_token)
+  CommandTracker::CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
       : CommandTrackerCore(terminal.handle(), directory, shell_token),
         terminal_(terminal),
         output_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
@@ -1363,7 +1364,7 @@ namespace telar::runtime {
     terminal_.discardResponses();
   }
 
-  std::optional<bool> CommandTracker::capture(const GhosttySelection& selection) {
+  ds::Option<bool> CommandTracker::capture(const GhosttySelection& selection) {
     return captureCommandText(terminal_, selection, command_);
   }
 

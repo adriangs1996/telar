@@ -14,12 +14,13 @@ import std;
 
 import telar.base.memory.allocators;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 export namespace telar::gui::features::activity {
 
   // The agent the runtime reports in pane `pane_id`, at `generation` when one is given: the one a
   // card the user chose shows, if it still does.
-  [[nodiscard]] const Agent<Memory>* find(std::span<const Agent<Memory>> agents, std::uint64_t pane_id, std::optional<std::uint64_t> generation = std::nullopt) noexcept;
+  [[nodiscard]] const Agent<Memory>* find(std::span<const Agent<Memory>> agents, std::uint64_t pane_id, ds::Option<std::uint64_t> generation = ds::none) noexcept;
 
   // The agent in the pane `tab` focuses, if one runs there.
   [[nodiscard]] const Agent<Memory>* focused(std::span<const Agent<Memory>> agents, const Tab<Memory>& tab) noexcept;
@@ -27,6 +28,6 @@ export namespace telar::gui::features::activity {
   // The workspace the pane the user chose lives in, by what the runtime reports of it as an agent
   // or else lists of it: where to go when the pane is gone. None when neither knows it at
   // `generation`, or it lives in no workspace.
-  [[nodiscard]] std::optional<std::uint64_t> workspaceOf(std::span<const Agent<Memory>> agents, std::span<const ListedPane> listed, std::uint64_t pane_id, std::optional<std::uint64_t> generation) noexcept;
+  [[nodiscard]] ds::Option<std::uint64_t> workspaceOf(std::span<const Agent<Memory>> agents, std::span<const ListedPane> listed, std::uint64_t pane_id, ds::Option<std::uint64_t> generation) noexcept;
 
 }

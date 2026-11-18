@@ -44,11 +44,11 @@ namespace {
     NumericAttachmentMarkers scan{screen};
     const auto first_value = scan.next();
 
-    check(first_value.has_value(), "the first marker must be present");
+    check(first_value.hasValue(), "the first marker must be present");
     const auto first = *first_value;
     const auto second_value = scan.next();
 
-    check(second_value.has_value(), "the wrapped marker must be present");
+    check(second_value.hasValue(), "the wrapped marker must be present");
     const auto second = *second_value;
 
     check(first.start.y == 0 && second.start.y == prompt_row && !scan.next(), "scanning must preserve row-major order across wrapped placeholders");
@@ -67,7 +67,7 @@ namespace {
     constexpr std::uint16_t valid_start = 26;
     const auto valid_value = NumericAttachmentMarkers::parse(screen, {.x = valid_start});
 
-    check(valid_value.has_value(), "the final marker must parse");
+    check(valid_value.hasValue(), "the final marker must parse");
     const auto valid = *valid_value;
 
     check(valid.number == 3, "an invalid earlier marker must not hide later valid placeholders");
@@ -87,7 +87,7 @@ namespace {
 
     check(PathAttachmentMarkers::collect(screen, found) == 1, "a UUID image path must be recognized");
     check(found[0].start == CellPosition{} && found[0].end.x == path.size() && found[0].cells == path.size(), "the marker must include the complete path before its file name");
-    check(PathAttachmentMarkers::find(screen, found[0].uuid).has_value() && PathAttachmentMarkers::cursorAt(screen, found[0].end), "path identity and cursor boundary must agree");
+    check(PathAttachmentMarkers::find(screen, found[0].uuid).hasValue() && PathAttachmentMarkers::cursorAt(screen, found[0].end), "path identity and cursor boundary must agree");
   }
 
   const telar::testing::Case case_wrapped_placeholders_and_nearest_prompt{"attachment_marker.wrapped_placeholders_and_nearest_prompt", wrappedPlaceholdersAndNearestPrompt};

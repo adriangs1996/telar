@@ -16,6 +16,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct MachineWindow;
@@ -87,7 +88,7 @@ namespace telar::gui::qt {
     Dialogs& dialogs_;
     NotificationsController& notifications_;
     QByteArray hostname_;
-    std::optional<RemoteLaunch> remote_launch_;
+    ds::Option<RemoteLaunch> remote_launch_;
     QTimer retry_;
     QString control_endpoint_;
     bool prepare_directory_ = false;

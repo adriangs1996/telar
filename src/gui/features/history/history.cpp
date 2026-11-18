@@ -4,6 +4,7 @@ import std;
 
 import telar.base.memory.allocators;
 import telar.wire.history;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -19,7 +20,7 @@ namespace telar::gui::features::history {
     return Access::browser(state).begin(request);
   }
 
-  std::optional<QueryHistory> page(State& state, HistoryPage direction, std::uint64_t request_id) {
+  ds::Option<QueryHistory> page(State& state, HistoryPage direction, std::uint64_t request_id) {
     return Access::browser(state).page(direction, request_id);
   }
 
@@ -35,11 +36,11 @@ namespace telar::gui::features::history {
     Access::browser(state).setInspecting(enabled);
   }
 
-  std::optional<QueryHistory> readCommand(State& state, std::uint64_t request_id) {
+  ds::Option<QueryHistory> readCommand(State& state, std::uint64_t request_id) {
     return Access::browser(state).readCommand(request_id);
   }
 
-  std::optional<ReadHistoryOutput> readOutput(State& state, std::uint64_t request_id) {
+  ds::Option<ReadHistoryOutput> readOutput(State& state, std::uint64_t request_id) {
     return Access::browser(state).readOutput(request_id);
   }
 

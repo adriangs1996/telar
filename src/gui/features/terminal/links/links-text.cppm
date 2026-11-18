@@ -12,6 +12,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: links/link_text.cppm
 export {
@@ -81,11 +82,11 @@ export {
       Scroll scroll{};
       std::span<const Byte> row_flags;
 
-      [[nodiscard]] std::optional<std::size_t> cellIndex(CellPosition point) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> cellIndex(CellPosition point) const noexcept;
 
-      [[nodiscard]] std::optional<std::size_t> previous(std::size_t index) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> previous(std::size_t index) const noexcept;
 
-      [[nodiscard]] std::optional<std::size_t> next(std::size_t index) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> next(std::size_t index) const noexcept;
 
       [[nodiscard]] CellPosition position(std::size_t index) const noexcept;
 
@@ -112,17 +113,17 @@ export {
     struct UriView {
       tbc::view<std::string_view, tbc::lt::a> scheme;
       tbc::view<std::string_view, tbc::lt::a> path;
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> host = std::nullopt;
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> user = std::nullopt;
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> password = std::nullopt;
-      std::optional<std::uint16_t> port = std::nullopt;
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> query = std::nullopt;
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> fragment = std::nullopt;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> host = ds::none;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> user = ds::none;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> password = ds::none;
+      ds::Option<std::uint16_t> port = ds::none;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> query = ds::none;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> fragment = ds::none;
 
-      [[nodiscard]] static std::optional<UriView> parse(std::string_view text);
+      [[nodiscard]] static ds::Option<UriView> parse(std::string_view text);
 
     private:
-      [[nodiscard]] static std::optional<std::uint16_t> parsePort(std::string_view text) noexcept;
+      [[nodiscard]] static ds::Option<std::uint16_t> parsePort(std::string_view text) noexcept;
 
       bool authority(tbc::view<std::string_view, tbc::lt::a> text, bool empty_authority_has_path);
     };
@@ -136,9 +137,9 @@ export {
 
     class UriRecognizer {
     public:
-      [[nodiscard]] static std::optional<LinkScheme> classify(std::string_view text);
+      [[nodiscard]] static ds::Option<LinkScheme> classify(std::string_view text);
 
-      [[nodiscard]] static std::optional<LinkTextMatch> extract(std::string_view line, std::size_t byte_offset);
+      [[nodiscard]] static ds::Option<LinkTextMatch> extract(std::string_view line, std::size_t byte_offset);
 
     private:
       struct Prefix {
@@ -163,7 +164,7 @@ export {
           {.text = "news:", .scheme = LinkScheme::external},
       });
 
-      [[nodiscard]] static std::optional<Prefix> prefixAt(std::string_view text);
+      [[nodiscard]] static ds::Option<Prefix> prefixAt(std::string_view text);
 
       [[nodiscard]] static bool validStart(std::string_view line, std::size_t index) noexcept;
 
@@ -179,9 +180,9 @@ export {
 
     class LinkTarget {
     public:
-      [[nodiscard]] static std::optional<LinkTarget> fromUri(std::string_view text);
+      [[nodiscard]] static ds::Option<LinkTarget> fromUri(std::string_view text);
 
-      [[nodiscard]] static std::optional<LinkTarget> fromPath(std::string_view text);
+      [[nodiscard]] static ds::Option<LinkTarget> fromPath(std::string_view text);
 
       [[nodiscard]] LinkScheme scheme() const noexcept;
 
@@ -207,7 +208,7 @@ export {
       LinkTarget target;
       CellPosition start;
       CellPosition end;
-      std::optional<std::uint16_t> metadata_index = std::nullopt;
+      ds::Option<std::uint16_t> metadata_index = ds::none;
 
       bool operator==(const LinkMatch&) const = default;
     };
@@ -221,10 +222,10 @@ export {
 
     class MarkdownLinks {
     public:
-      [[nodiscard]] static std::optional<LinkTextMatch> extract(std::string_view line, std::size_t byte_offset);
+      [[nodiscard]] static ds::Option<LinkTextMatch> extract(std::string_view line, std::size_t byte_offset);
 
     private:
-      [[nodiscard]] static std::optional<LinkTextMatch> parseAt(std::string_view line, std::size_t start);
+      [[nodiscard]] static ds::Option<LinkTextMatch> parseAt(std::string_view line, std::size_t start);
     };
 
   }
@@ -242,11 +243,11 @@ export {
 
     class PathRecognizer {
     public:
-      [[nodiscard]] static std::optional<LinkTextMatch> extract(std::string_view line, std::size_t byte_offset);
+      [[nodiscard]] static ds::Option<LinkTextMatch> extract(std::string_view line, std::size_t byte_offset);
 
       [[nodiscard]] static PathLocation locate(std::string_view text);
 
-      [[nodiscard]] static std::optional<PathLocation> fragment(std::string_view text);
+      [[nodiscard]] static ds::Option<PathLocation> fragment(std::string_view text);
 
     private:
       static constexpr std::size_t maximum_number_digits = 9;
@@ -279,12 +280,12 @@ export {
       static constexpr std::size_t maximum_walk_cells = window_bytes * 2;
 
       template <Allocator Memory>
-      [[nodiscard]] static std::optional<LinkMatch> text(const Screen<Memory>& screen, CellPosition point);
+      [[nodiscard]] static ds::Option<LinkMatch> text(const Screen<Memory>& screen, CellPosition point);
 
       template <Allocator Memory>
-      [[nodiscard]] static std::optional<LinkMatch> resolve(const Screen<Memory>& screen, CellPosition point);
+      [[nodiscard]] static ds::Option<LinkMatch> resolve(const Screen<Memory>& screen, CellPosition point);
 
-      [[nodiscard]] static std::optional<LinkMatch> match(const LinkGrid& grid, CellPosition point);
+      [[nodiscard]] static ds::Option<LinkMatch> match(const LinkGrid& grid, CellPosition point);
 
     private:
       struct Window {
@@ -292,17 +293,17 @@ export {
         std::size_t cursor = 0;
       };
 
-      [[nodiscard]] static std::optional<std::size_t> windowStart(const LinkGrid& grid, std::size_t index) noexcept;
+      [[nodiscard]] static ds::Option<std::size_t> windowStart(const LinkGrid& grid, std::size_t index) noexcept;
 
-      [[nodiscard]] static std::optional<Window> readWindow(const LinkGrid& grid, std::size_t index, std::size_t cursor, std::span<char> storage) noexcept;
+      [[nodiscard]] static ds::Option<Window> readWindow(const LinkGrid& grid, std::size_t index, std::size_t cursor, std::span<char> storage) noexcept;
 
-      [[nodiscard]] static std::optional<std::pair<CellPosition, CellPosition>> positions(const LinkGrid& grid, std::size_t index, TextRange extent) noexcept;
+      [[nodiscard]] static ds::Option<std::pair<CellPosition, CellPosition>> positions(const LinkGrid& grid, std::size_t index, TextRange extent) noexcept;
     };
 
-    extern template std::optional<LinkMatch> CellLinks::text<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
-    extern template std::optional<LinkMatch> CellLinks::text<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
-    extern template std::optional<LinkMatch> CellLinks::resolve<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
-    extern template std::optional<LinkMatch> CellLinks::resolve<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
+    extern template ds::Option<LinkMatch> CellLinks::text<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
+    extern template ds::Option<LinkMatch> CellLinks::text<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
+    extern template ds::Option<LinkMatch> CellLinks::resolve<telar::Memory>(const Screen<telar::Memory>& screen, CellPosition point);
+    extern template ds::Option<LinkMatch> CellLinks::resolve<telar::ConcurrentMemory>(const Screen<telar::ConcurrentMemory>& screen, CellPosition point);
 
   }
 }
@@ -335,7 +336,7 @@ export {
 
       [[nodiscard]] static FilePath fromProse(std::string_view text);
 
-      [[nodiscard]] static std::optional<char> escapedByte(std::string_view text, EscapePolicy policy) noexcept;
+      [[nodiscard]] static ds::Option<char> escapedByte(std::string_view text, EscapePolicy policy) noexcept;
 
       template <std::size_t Capacity>
       [[nodiscard]] static BoundedText<Capacity> decode(std::string_view text, EscapePolicy policy = EscapePolicy::strict);

@@ -88,12 +88,12 @@ namespace telar::gui::qt {
       if (pending.peek) {
         openPeek(pending.target, ActivityController::identity(pending.target), pending.pointer_revision);
       } else {
-        static_cast<void>(application::activity::chooseAgent(store_.session(), agent->key.pane_id, agent->key.pane_generation));
+        static_cast<void>(application::activity::chooseAgent(store_.sessionMut(), agent->key.pane_id, agent->key.pane_generation));
       }
     } else if (const auto* process = std::get_if<application::machines::MachineActivityTarget::Process>(&pending.target.owner)) {
-      static_cast<void>(application::activity::choosePane(store_.session(), process->pane_id, process->pane_generation));
+      static_cast<void>(application::activity::choosePane(store_.sessionMut(), process->pane_id, process->pane_generation));
     } else {
-      static_cast<void>(application::workbench::openWorktree(store_.session(), std::get<application::machines::MachineActivityTarget::Command>(pending.target.owner).worktree));
+      static_cast<void>(application::workbench::openWorktree(store_.sessionMut(), std::get<application::machines::MachineActivityTarget::Command>(pending.target.owner).worktree));
     }
   }
 

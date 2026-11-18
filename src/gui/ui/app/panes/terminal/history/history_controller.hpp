@@ -34,6 +34,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::test {
   struct HistoryPresentation;
@@ -108,10 +109,10 @@ namespace telar::gui::qt {
 
     // What the dialog contributes to one prepared frame.
     struct Frame {
-      std::optional<Presented> history;
+      ds::Option<Presented> history;
       application::history::HistoryScrollSurface surface;
       application::history::HistoryActionSurface actions;
-      std::optional<HoverFrame> hover;
+      ds::Option<HoverFrame> hover;
     };
 
     explicit HistoryController(Store& store, QObject* parent = nullptr);
@@ -245,7 +246,7 @@ namespace telar::gui::qt {
     application::history::HistoryFilters filters_;
     std::uint64_t search_version_ = 0;
     CalendarSample calendar_;
-    std::optional<Inputs> synchronized_;
+    ds::Option<Inputs> synchronized_;
     std::uint64_t rows_version_ = 0;
     QVariantMap state_;
     QVariantMap inspection_;
@@ -265,12 +266,12 @@ namespace telar::gui::qt {
     QPointer<QQuickItem> footer_;
     QPointer<QQuickItem> filter_layout_;
     QPointer<QQuickItem> inspector_;
-    std::optional<Presented> presented_;
+    ds::Option<Presented> presented_;
     application::history::HistoryScrollSurface presented_surface_;
     application::history::HistoryActionSurface presented_actions_;
-    std::optional<HoverFrame> presented_hover_;
+    ds::Option<HoverFrame> presented_hover_;
     application::history::HistoryHover hover_;
-    std::optional<std::uint64_t> hover_revision_value_;
+    ds::Option<std::uint64_t> hover_revision_value_;
     QString hover_revision_;
   };
 

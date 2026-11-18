@@ -6,6 +6,7 @@ export module telar.runtime.terminal.control:pty_response_queue;
 
 import std;
 import telar.tbc;
+import telar.base.ds;
 
 export namespace telar::runtime {
 
@@ -91,7 +92,7 @@ export namespace telar::runtime {
     void releaseWorkerPriority() noexcept;
 
     // A single consumer may borrow the head until consume or clear; producers only append behind it.
-    std::optional<std::span<const std::uint8_t>> peek() const noexcept;
+    ds::Option<std::span<const std::uint8_t>> peek() const noexcept;
 
     Batch peekBatch() const noexcept;
 

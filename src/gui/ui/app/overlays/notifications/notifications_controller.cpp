@@ -6,6 +6,7 @@ static_assert(true);
 #include "notifications_controller.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/timing/deadline_timer.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QLatin1Char>
 #include <QMetaObject>
 #include <exception>
@@ -39,7 +40,7 @@ namespace telar::gui::qt {
     timer_.setSingleShot(true);
     timer_.setTimerType(Qt::PreciseTimer);
     connect(&timer_, &QTimer::timeout, this, [this] {
-      application::notifications::advance(store_.session(), system::AwakeClock::nowNanoseconds());
+      application::notifications::advance(store_.sessionMut(), system::AwakeClock::nowNanoseconds());
       refresh();
     });
   }
@@ -52,10 +53,10 @@ namespace telar::gui::qt {
     return QString::number(store_.machineView()) + QLatin1Char(':') + QString::number(identity.value);
   }
 
-  std::optional<application::notifications::NotificationId> NotificationsController::resolve(const QString& identity) const {
+  ds::Option<application::notifications::NotificationId> NotificationsController::resolve(const QString& identity) const {
     const auto separator = identity.indexOf(QLatin1Char(':'));
     if (separator < 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     bool valid_view = false;
@@ -63,7 +64,7 @@ namespace telar::gui::qt {
     const auto view = identity.first(separator).toULongLong(&valid_view);
     const auto raw_id = identity.sliced(separator + 1).toULongLong(&valid_id);
 
-    return valid_view && valid_id && view == store_.machineView() ? std::optional{application::notifications::NotificationId{raw_id}} : std::nullopt;
+    return valid_view && valid_id && view == store_.machineView() ? ds::Option{application::notifications::NotificationId{raw_id}} : ds::none;
   }
 
   bool NotificationsController::targetVisible(NotificationTarget target) const noexcept {
@@ -95,7 +96,7 @@ namespace telar::gui::qt {
   }
 
   void NotificationsController::publish(application::notifications::NotificationInput input) {
-    application::notifications::publish(store_.session(), input);
+    application::notifications::publish(store_.sessionMut(), input);
     refresh();
   }
 
@@ -123,7 +124,7 @@ namespace telar::gui::qt {
 
   void NotificationsController::dismiss(const QString& identity) {
     const auto id = resolve(identity);
-    if (id && application::notifications::dismiss(store_.session(), *id)) {
+    if (id && application::notifications::dismiss(store_.sessionMut(), *id)) {
       refresh();
       emit focusRestoreRequested();
     }
@@ -140,7 +141,7 @@ namespace telar::gui::qt {
 
     store_.interact(
         [&] {
-          if (application::notifications::activate(store_.session(), *id)) {
+          if (application::notifications::activate(store_.sessionMut(), *id)) {
             if (!link.isEmpty()) {
               emit linkRequested(link);
             }

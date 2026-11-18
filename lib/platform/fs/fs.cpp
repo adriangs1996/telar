@@ -4,6 +4,7 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 import telar.platform.error;
+import telar.base.ds;
 #if defined(__linux__)
 import telar.sys.linux_api;
 #endif
@@ -150,10 +151,10 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     std::array<char, PATH_MAX> terminated;
     if (path.size() >= terminated.size() || path.contains('\0')) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::memcpy(terminated.data(), path.data(), path.size());
@@ -161,7 +162,7 @@ namespace telar::runtime {
     FileDescriptor file{::open(terminated.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOCTTY)};
     struct stat status{};
     if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t length = 0;
@@ -173,7 +174,7 @@ namespace telar::runtime {
       } else if (count == 0) {
         break;
       } else if (sys::lastError() != EINTR) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 

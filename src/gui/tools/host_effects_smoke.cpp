@@ -25,6 +25,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace {
 
@@ -45,7 +46,7 @@ namespace {
     count,
   };
 
-  QString failureText(std::optional<CommandFailure> failure) {
+  QString failureText(telar::ds::Option<CommandFailure> failure) {
     if (!failure) {
       return QStringLiteral("none");
     }
@@ -71,7 +72,7 @@ namespace {
       elapsed_.start();
     }
 
-    void commandFinished(std::optional<CommandFailure> failure) const {
+    void commandFinished(telar::ds::Option<CommandFailure> failure) const {
       const QJsonObject result{
           {QStringLiteral("mode"), mode_},
           {QStringLiteral("succeeded"), !failure},
@@ -85,7 +86,7 @@ namespace {
       QCoreApplication::exit(static_cast<int>(failure ? ExitStatus::failed : ExitStatus::success));
     }
 
-    void soundPlaybackFinished(std::optional<CommandFailure> failure) const {
+    void soundPlaybackFinished(telar::ds::Option<CommandFailure> failure) const {
       commandFinished(failure);
     }
 

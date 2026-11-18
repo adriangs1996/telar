@@ -13,6 +13,7 @@ import telar.base.memory.allocators;
 import telar.cli.worktree_git;
 import telar.base.text;
 import telar.base.text.json;
+import telar.base.ds;
 
 // Interface: hooks/input.cppm
 export {
@@ -58,13 +59,13 @@ export {
 
     private:
       template <EnvironmentLookup Environment>
-      std::optional<std::string_view> cursorRoot(const Environment& environment);
+      ds::Option<std::string_view> cursorRoot(const Environment& environment);
 
-      std::optional<std::string_view> cursorPath(std::string_view root, std::string_view digest, std::string_view chat);
+      ds::Option<std::string_view> cursorPath(std::string_view root, std::string_view digest, std::string_view chat);
 
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> copy(std::string_view value, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> copy(std::string_view value, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
 
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
 
       std::array<char, PATH_MAX> root_;
       std::array<char, PATH_MAX> path_;

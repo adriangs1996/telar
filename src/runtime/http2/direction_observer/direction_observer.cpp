@@ -2,12 +2,13 @@ module telar.runtime.http2.direction_observer;
 
 import telar.native.nghttp2;
 import telar.runtime.http1.head;
+import telar.base.ds;
 
 namespace telar::runtime {
 
   void Http2HeaderMetadata::observe(std::string_view name, std::string_view value) noexcept {
     if (name == ":status") {
-      status_ = parseHttpStatus(value).value_or(0);
+      status_ = parseHttpStatus(value).valueOr(0);
     }
 
     if (name == ":method") {
@@ -62,11 +63,11 @@ namespace telar::runtime {
     padding_ = 0;
   }
 
-  tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
+  tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
     return extract(event, 0);
   }
 
-  tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
+  tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
     std::size_t prefix = 0;
 
     if (event.frame.kind == Http2FrameKind::headers && event.frame.has(Http2Flag::priority)) {
@@ -78,7 +79,7 @@ namespace telar::runtime {
     return extract(event, prefix);
   }
 
-  tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept {
+  tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept {
     if (event.frame.has(Http2Flag::padded)) {
       ++prefix;
       if (event.offset == 0 && !event.bytes.empty()) {
@@ -87,7 +88,7 @@ namespace telar::runtime {
     }
 
     if (prefix > event.frame.length || padding_ > event.frame.length - prefix) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto start = std::max(event.offset, prefix);

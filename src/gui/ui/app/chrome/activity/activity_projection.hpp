@@ -72,7 +72,7 @@ namespace telar::gui::qt {
         {QStringLiteral("facts"), toQString(facts)},
         {QStringLiteral("title"), toQString(task.displayName())},
         {QStringLiteral("detail"), toQString(task.command_label)},
-        {QStringLiteral("enabled"), context.connected && task.workspace.has_value()},
+        {QStringLiteral("enabled"), context.connected && task.workspace.hasValue()},
         {QStringLiteral("selected"), false},
         {QStringLiteral("startsProject"), context.starts_project},
         {QStringLiteral("depth"), static_cast<qulonglong>(context.depth)},

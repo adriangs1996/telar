@@ -4,6 +4,7 @@ import std;
 
 import telar.shell.syntax;
 import telar.ebnf.matcher;
+import telar.base.ds;
 
 // Tab completion for telar's command editor: the shell lexer finds the command and the word
 // under the cursor, and the command's EBNF spec says what may come there. Literal choices are
@@ -29,7 +30,7 @@ export namespace telar::gui::features::prompt {
     bool command_position = false;
   };
 
-  std::optional<CompletionContext> completionContext(std::string_view text, std::size_t cursor, shell::Syntax syntax);
+  ds::Option<CompletionContext> completionContext(std::string_view text, std::size_t cursor, shell::Syntax syntax);
 
   struct Completion {
     std::vector<Choice> choices;

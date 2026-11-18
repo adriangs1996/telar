@@ -22,6 +22,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -65,7 +66,7 @@ namespace telar::gui::qt {
 
     struct Entry {
       qreal scale = 0;
-      std::optional<ResolvedFont> font;
+      ds::Option<ResolvedFont> font;
     };
 
     static bool sameGeometry(const FontConfiguration& first, const FontConfiguration& second) noexcept {

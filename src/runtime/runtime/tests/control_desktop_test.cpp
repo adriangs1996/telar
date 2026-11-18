@@ -174,7 +174,7 @@ namespace {
       ptyReports(pane, panes, "");
 
       desktop.palette = std::array<Byte, 48>{};
-      (*desktop.palette)[0] = 17;
+      (desktop.palette.getMut())[0] = 17;
       panes.configureDesktop(model, clients, client.session().id, desktop);
       ptyReports(pane, panes, "\x1b[?997;2n");
       check(query(pane.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\", *pane.media).empty());

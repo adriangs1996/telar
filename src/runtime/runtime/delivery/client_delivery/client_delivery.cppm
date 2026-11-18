@@ -25,6 +25,7 @@ import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 // Interface: runtime/clipboard_service.cppm
 export {
@@ -72,7 +73,7 @@ export {
       // The parts of the client and the model a delivery writes, lent apart from the attachment and its pane.
       struct Output {
         Connection<ConcurrentMemory>& connection;
-        std::optional<std::uint64_t>& completing_exit;
+        ds::Option<std::uint64_t>& completing_exit;
         std::chrono::nanoseconds frame_interval;
         [[maybe_unused]] diagnostics::RuntimeCounters& metrics;
       };
@@ -242,7 +243,7 @@ export {
 
       struct Result {
         std::chrono::nanoseconds timeout = std::chrono::nanoseconds::max();
-        std::optional<std::uint64_t> detach_pane;
+        ds::Option<std::uint64_t> detach_pane;
       };
 
       explicit ClientDelivery(ConcurrentMemory& memory, RuntimeModel& model);
@@ -264,7 +265,7 @@ export {
         client.connection.write(ResponseProjection{memory_, model_});
         if (!client.connection.writing()) {
           result.timeout = std::chrono::nanoseconds::zero();
-          result.detach_pane = std::exchange(client.completing_exit, std::nullopt);
+          result.detach_pane = std::exchange(client.completing_exit, ds::none);
         }
 
         return result;

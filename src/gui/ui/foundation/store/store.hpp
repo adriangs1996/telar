@@ -65,17 +65,17 @@ namespace telar::gui::qt {
     Store(Store&&) = delete;
     Store& operator=(Store&&) = delete;
 
-    [[nodiscard]] application::machines::Machines& machines() noexcept;
+    [[nodiscard]] application::machines::Machines& machinesMut() noexcept;
     [[nodiscard]] const application::machines::Machines& machines() const noexcept;
-    [[nodiscard]] Clients& clients() noexcept;
+    [[nodiscard]] Clients& clientsMut() noexcept;
     [[nodiscard]] const Clients& clients() const noexcept;
     // The client of an occupied slot; an empty slot is a broken invariant and terminates.
     [[nodiscard]] MachineClient& client(application::machines::Machines::Slot slot) const noexcept;
     // The client the key names, or null once its slot holds another client or none.
     [[nodiscard]] MachineClient* find(application::machines::MachineClientKey key) const noexcept;
-    [[nodiscard]] GuiSession& session() noexcept;
+    [[nodiscard]] GuiSession& sessionMut() noexcept;
     [[nodiscard]] const GuiSession& session() const noexcept;
-    [[nodiscard]] RuntimeConnection& connection() noexcept;
+    [[nodiscard]] RuntimeConnection& connectionMut() noexcept;
     [[nodiscard]] const RuntimeConnection& connection() const noexcept;
     // The key for the next client admitted to the slot; each one gets a new generation.
     [[nodiscard]] application::machines::MachineClientKey admission(application::machines::Machines::Slot slot) noexcept;

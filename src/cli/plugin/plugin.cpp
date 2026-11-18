@@ -8,6 +8,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -26,7 +27,7 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"UnknownCliAction"};
     }
 
-    std::optional<std::string_view> directory;
+    ds::Option<std::string_view> directory;
     Cursor cursor{args.subspan(1)};
 
     while (const auto word = cursor.next()) {
@@ -49,7 +50,7 @@ namespace telar::runtime::cli {
     const auto action = options.action;
     const auto directory = options.directory;
 
-    const auto path = std::string{directory.value_or("/usr/local/bin")} + "/telar";
+    const auto path = std::string{directory.valueOr("/usr/local/bin")} + "/telar";
     const ExecutablePath target;
     std::array<char, PATH_MAX> buffer;
     const auto count = ::readlink(path.c_str(), buffer.data(), buffer.size());
@@ -176,7 +177,7 @@ namespace telar::runtime::cli {
     }
 
     const proxy_trust::Paths paths{memory, directory};
-    std::optional<proxy_trust::Backend> selected;
+    ds::Option<proxy_trust::Backend> selected;
 
     if (!options.linux_backend.empty()) {
       selected = options.linux_backend == "trust" ? proxy_trust::Backend::trust : proxy_trust::Backend::update_ca_certificates;
@@ -359,9 +360,9 @@ namespace telar::runtime::cli {
     return options;
   }
 
-  std::optional<RoutedOptions> RoutedOptions::parse(Arguments words) {
+  ds::Option<RoutedOptions> RoutedOptions::parse(Arguments words) {
     if (words.size() < 2) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const std::string_view group = words[0];
@@ -374,7 +375,7 @@ namespace telar::runtime::cli {
 
     const auto action = parseAction(group, verb, nested ? std::string_view{words[2]} : std::string_view{});
     if (!action || excluded(*action, words.subspan(2))) {
-      return std::nullopt;
+      return ds::none;
     }
 
     RoutedOptions self{.action = *action};
@@ -389,7 +390,7 @@ namespace telar::runtime::cli {
     return self;
   }
 
-  auto RoutedOptions::parseAction(std::string_view group, std::string_view verb, std::string_view nested) -> std::optional<ClientAction> {
+  auto RoutedOptions::parseAction(std::string_view group, std::string_view verb, std::string_view nested) -> ds::Option<ClientAction> {
     constexpr std::size_t name_limit = 64;
     std::string name{group};
 
@@ -401,13 +402,13 @@ namespace telar::runtime::cli {
     }
 
     if (name.size() > name_limit) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::ranges::replace(name, '-', '_');
     const auto found = std::ranges::find(client_action_names, name);
     if (found == client_action_names.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return static_cast<ClientAction>(found - client_action_names.begin());

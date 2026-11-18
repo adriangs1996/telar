@@ -16,6 +16,7 @@ import telar.platform.process;
 import telar.vocabulary;
 import telar.base.memory.allocators;
 import telar.runtime.redirect.direction;
+import telar.base.ds;
 
 // Interface: redirect/log_interface.cppm
 export {
@@ -132,7 +133,7 @@ export {
     public:
       explicit RecordFile(Memory& memory, std::string_view name, RecordLock mode = RecordLock::owner);
 
-      std::optional<String<Memory>> load();
+      ds::Option<String<Memory>> load();
 
       void save(std::string_view content);
 
@@ -411,7 +412,7 @@ export {
     public:
       explicit Record(Memory& memory, const PfIdentity<Memory>& identity, std::string_view endpoint);
 
-      std::optional<std::uint64_t> load();
+      ds::Option<std::uint64_t> load();
 
       void save(std::uint64_t token);
 
@@ -423,8 +424,8 @@ export {
       Memory& memory_;
       String<Memory> endpoint_;
       RecordFile<Memory> file_;
-      std::optional<unsigned> log_index_;
-      std::optional<std::uint64_t> last_token_;
+      ds::Option<unsigned> log_index_;
+      ds::Option<std::uint64_t> last_token_;
     };
 
     extern template class Record<Memory>;

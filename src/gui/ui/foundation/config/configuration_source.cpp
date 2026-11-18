@@ -49,14 +49,15 @@ static_assert(true);
 import telar.gui.application;
 import telar.config.client;
 import telar.plugins;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   namespace {
 
-    std::optional<std::string_view> optionalText(const QByteArray& bytes) noexcept {
+    ds::Option<std::string_view> optionalText(const QByteArray& bytes) noexcept {
       if (bytes.isEmpty()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return std::string_view{bytes.constData(), static_cast<std::size_t>(bytes.size())};
@@ -117,12 +118,12 @@ namespace telar::gui::qt {
           : context(source),
             output(source.output ? QByteArray{source.output->data(), static_cast<qsizetype>(source.output->size())} : QByteArray{}),
             pane_title(source.pane_title.data(), static_cast<qsizetype>(source.pane_title.size())),
-            has_output(source.output.has_value()) {}
+            has_output(source.output.hasValue()) {}
 
       [[nodiscard]] application::components::Context view() const {
         auto result = context;
 
-        result.output = has_output ? std::optional{std::string_view{output.constData(), static_cast<std::size_t>(output.size())}} : std::nullopt;
+        result.output = has_output ? ds::Option{std::string_view{output.constData(), static_cast<std::size_t>(output.size())}} : ds::none;
         result.pane_title = {pane_title.constData(), static_cast<std::size_t>(pane_title.size())};
 
         return result;
@@ -142,7 +143,7 @@ namespace telar::gui::qt {
     // right after the call is already watched.
     template <typename Value>
     struct TrackedResult {
-      std::optional<Value> value;
+      ds::Option<Value> value;
       QString error;
       QStringList modules;
     };
@@ -190,8 +191,8 @@ namespace telar::gui::qt {
 
           outcome.stale = configurationGeneration() != number;
           if (tracked.value) {
-            outcome.value = std::move(tracked.value->value);
-            outcome.error = std::move(tracked.value->error);
+            outcome.value = std::move(tracked.value.getMut().value);
+            outcome.error = std::move(tracked.value.getMut().error);
             if (!outcome.stale) {
               ConfigurationLoader::trackModuleNames(tracked.value->modules, module_root_, watch_.modules);
             }
@@ -291,9 +292,9 @@ namespace telar::gui::qt {
     return *found;
   }
 
-  std::optional<ExtendedActionDescription> ConfigurationSource::extendedAction(BindingAction action, const Actions* resolved) const {
+  ds::Option<ExtendedActionDescription> ConfigurationSource::extendedAction(BindingAction action, const Actions* resolved) const {
     if (!generation_ || action.kind != BindingActionKind::extended) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (auto configured = generation_->configuredAction(action)) {
@@ -302,20 +303,20 @@ namespace telar::gui::qt {
 
     const auto* entry = resolved == nullptr ? nullptr : resolved->find(action);
 
-    return entry == nullptr ? std::nullopt : entry->description;
+    return entry == nullptr ? ds::none : entry->description;
   }
 
-  std::optional<DefinitionActionDescription> ConfigurationSource::definitionAction(BindingAction action, const Actions* resolved) const {
+  ds::Option<DefinitionActionDescription> ConfigurationSource::definitionAction(BindingAction action, const Actions* resolved) const {
     const auto description = extendedAction(action, resolved);
     const auto* definition = description ? std::get_if<DefinitionActionDescription>(&*description) : nullptr;
 
-    return definition == nullptr ? std::nullopt : std::optional{*definition};
+    return definition == nullptr ? ds::none : ds::Option{*definition};
   }
 
-  std::optional<NamedActionDescription> ConfigurationSource::namedAction(BindingAction action, const Actions* resolved) const {
+  ds::Option<NamedActionDescription> ConfigurationSource::namedAction(BindingAction action, const Actions* resolved) const {
     const auto description = extendedAction(action, resolved);
     if (!description) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (const auto* definition = std::get_if<DefinitionActionDescription>(&*description)) {
@@ -326,7 +327,7 @@ namespace telar::gui::qt {
       return *plugin;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool ConfigurationSource::luaIdle() const noexcept {
@@ -337,11 +338,11 @@ namespace telar::gui::qt {
     return generation_ ? generation_->number() : 0;
   }
 
-  std::optional<PluginActionDescription> ConfigurationSource::pluginAction(BindingAction action, const Actions* resolved) const {
+  ds::Option<PluginActionDescription> ConfigurationSource::pluginAction(BindingAction action, const Actions* resolved) const {
     const auto description = extendedAction(action, resolved);
     const auto* plugin = description ? std::get_if<PluginActionDescription>(&*description) : nullptr;
 
-    return plugin == nullptr ? std::nullopt : std::optional{*plugin};
+    return plugin == nullptr ? ds::none : ds::Option{*plugin};
   }
 
   application::plugins::PluginInvocation ConfigurationSource::pluginInvocation(const ClientCommand& request, BindingContext context) const {
@@ -419,7 +420,7 @@ namespace telar::gui::qt {
         std::move(done));
   }
 
-  std::optional<runtime::config::CommandTabView> ConfigurationSource::commandTab(BindingAction action, const Actions* resolved) const {
+  ds::Option<runtime::config::CommandTabView> ConfigurationSource::commandTab(BindingAction action, const Actions* resolved) const {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
@@ -430,20 +431,20 @@ namespace telar::gui::qt {
 
     const auto reference = application::configuration::commandTabReference(action);
     if (!reference) {
-      return std::nullopt;
+      return ds::none;
     }
 
     // Configured rows never change; rows a render added travel with that render's result.
     if (reference->epoch == 0) {
-      return commands_ ? commands_->load(*reference) : std::nullopt;
+      return commands_ ? commands_->load(*reference) : ds::none;
     }
 
     const auto* entry = resolved == nullptr ? nullptr : resolved->find(action);
 
-    return entry == nullptr || !entry->command ? std::nullopt : std::optional{entry->command->view()};
+    return entry == nullptr || !entry->command ? ds::none : ds::Option{entry->command->view()};
   }
 
-  std::optional<NotificationActionDescription> ConfigurationSource::notificationAction(BindingAction action, const Actions* resolved) const {
+  ds::Option<NotificationActionDescription> ConfigurationSource::notificationAction(BindingAction action, const Actions* resolved) const {
     if (!generation_) {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
@@ -451,7 +452,7 @@ namespace telar::gui::qt {
     const auto description = extendedAction(action, resolved);
     const auto* notification = description ? std::get_if<NotificationActionDescription>(&*description) : nullptr;
 
-    return notification == nullptr ? std::nullopt : std::optional{*notification};
+    return notification == nullptr ? ds::none : ds::Option{*notification};
   }
 
   void ConfigurationSource::open(const ConfigurationSelection& selection) {
@@ -555,7 +556,7 @@ namespace telar::gui::qt {
     specification.enabled = enabled;
     const auto* package = catalog.package(index);
 
-    plugin_overrides_.set(specification, package == nullptr ? std::nullopt : std::optional{runtime::plugins::stableId(package->manifest.id.view())});
+    plugin_overrides_.set(specification, package == nullptr ? ds::none : ds::Option{runtime::plugins::stableId(package->manifest.id.view())});
     requestReload();
   }
 

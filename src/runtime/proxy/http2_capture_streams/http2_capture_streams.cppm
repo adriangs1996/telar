@@ -32,6 +32,7 @@ import telar.base.text;
 import telar.platform.net;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.platform.name_resolutions;
+import telar.base.ds;
 
 // Interface: proxy/responses.cppm
 export {
@@ -313,12 +314,12 @@ export {
         return state_;
       }
 
-      inline std::optional<Time> deadline() const noexcept {
+      inline ds::Option<Time> deadline() const noexcept {
         if (state_ == State::probing && probe_until_ != Time{}) {
           return std::min(probe_until_, probe_after_);
         }
 
-        return state_ == State::draining ? std::optional{drain_until_} : std::nullopt;
+        return state_ == State::draining ? ds::Option{drain_until_} : ds::none;
       }
 
       inline int childDescriptor() const noexcept {
@@ -484,7 +485,7 @@ export {
       }
 
       inline void connectOrigin(bool writable) noexcept {
-        switch (origin_->advance(writable)) {
+        switch (origin_.getMut().advance(writable)) {
         case Origin::State::resolving:
         case Origin::State::connecting:
           return;
@@ -559,7 +560,7 @@ export {
       std::string_view failure_ = "connection_failed";
       bool inspected_ = false;
       FixedText<ProxyHostname::maximum_bytes> hostname_;
-      std::optional<Origin> origin_;
+      ds::Option<Origin> origin_;
       StaticReply response_;
       Time drain_until_{};
       State state_ = State::reading;
@@ -641,7 +642,7 @@ export {
             half->setTarget(event.value);
           }
         } else if (event.name == ":status") {
-          half->status_code = parseHttpStatus(event.value).value_or(0);
+          half->status_code = parseHttpStatus(event.value).valueOr(0);
           if (half->status_code >= 100 && half->status_code < 200) {
             half->head.reset();
           }
@@ -654,7 +655,7 @@ export {
 
       inline void body(const Http2Event& event) noexcept {
         if (const auto index = find(event.stream)) {
-          auto& half = *slots_[*index];
+          auto& half = slots_[*index].getMut();
 
           half->append(half->bodyPart(), event.bytes);
         }
@@ -702,8 +703,8 @@ export {
         return slots_[*index]->get();
       }
 
-      inline std::optional<std::size_t> find(std::uint32_t stream) const noexcept {
-        std::optional<std::size_t> found;
+      inline ds::Option<std::size_t> find(std::uint32_t stream) const noexcept {
+        ds::Option<std::size_t> found;
 
         occupied_.forEach([&](std::size_t index) {
           if ((*slots_[index])->key.stream == stream) {
@@ -715,7 +716,7 @@ export {
       }
 
       inline void publish(std::size_t index, CaptureOutcome outcome) noexcept {
-        auto half = std::move(*slots_[index]);
+        auto half = std::move(slots_[index].getMut());
 
         slots_[index].reset();
         occupied_.erase(index);
@@ -726,7 +727,7 @@ export {
       CaptureProducer* producer_;
       ProxyCounters& counters_;
       CaptureStart context_;
-      std::array<std::optional<CaptureProducer::Half>, capacity> slots_;
+      std::array<ds::Option<CaptureProducer::Half>, capacity> slots_;
       SlotIndexes<capacity> occupied_;
     };
 

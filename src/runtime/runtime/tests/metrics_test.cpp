@@ -32,6 +32,7 @@ import telar.runtime.metrics.host_sampler;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.host_metrics;
+import telar.base.ds;
 
 namespace {
 
@@ -44,18 +45,18 @@ namespace {
 
   class FakeHostMetrics {
   public:
-    std::optional<HostCounters> read() noexcept {
+    ds::Option<HostCounters> read() noexcept {
       return next;
     }
 
-    std::optional<HostCounters> next;
+    ds::Option<HostCounters> next;
   };
 
   void testProjection() {
     HostSampler sampler;
 
     check(!sampler.latest() && sampler.revision() == 1);
-    HostCounters counters{.busy_ticks = 100, .total_ticks = 200, .memory_used_bytes = 3 * gib / 2, .memory_total_bytes = 16 * gib, .cpu_count = 8, .battery_percent = std::nullopt};
+    HostCounters counters{.busy_ticks = 100, .total_ticks = 200, .memory_used_bytes = 3 * gib / 2, .memory_total_bytes = 16 * gib, .cpu_count = 8, .battery_percent = ds::none};
 
     sampler.apply(counters);
     check(sampler.latest()->cpu_percent == 0 && sampler.revision() == 2);
@@ -140,7 +141,7 @@ namespace {
     NativeHostMetrics probe;
     const auto counters = probe.read();
 
-    check(counters.has_value());
+    check(counters.hasValue());
     check(counters->total_ticks >= counters->busy_ticks && counters->memory_used_bytes > 0 && counters->memory_total_bytes > 0 && counters->cpu_count > 0);
     check(!counters->battery_percent || *counters->battery_percent <= 100);
   }

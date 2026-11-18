@@ -3,6 +3,7 @@
 #include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "telar_base/memory/allocator.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QFuture>
 #include <QObject>
 #include <QString>
@@ -61,8 +62,8 @@ namespace telar::gui::qt {
     start(job);
   }
 
-  tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> ClipboardImages::takeResult() {
-    return std::exchange(result_, std::nullopt);
+  tbc::view<ds::Option<ClipboardImageResult>, tbc::lt::a> ClipboardImages::takeResult() {
+    return std::exchange(result_, ds::none);
   }
 
   ClipboardImageResult ClipboardImages::prepare(ApplicationAllocator& memory, ClipboardImageJob job, platform::ClipboardImageSource source) {
@@ -128,7 +129,7 @@ namespace telar::gui::qt {
   }
 
   void ClipboardImages::startQueued() {
-    const auto pending = std::exchange(queued_, std::nullopt);
+    const auto pending = std::exchange(queued_, ds::none);
     if (pending) {
       start(*pending);
     } else {

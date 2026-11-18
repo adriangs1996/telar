@@ -6,6 +6,7 @@ static_assert(true);
 #include "prompt_controller.hpp"
 #include "prompt_editor_item.hpp"
 #include "ui/foundation/models/projection.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <algorithm>
@@ -29,7 +30,7 @@ namespace telar::gui::qt {
     return application::prompt::hidesTerminalCursor(store_.session(), pane_id);
   }
 
-  std::optional<application::prompt::LineView> PromptController::line(std::uint64_t pane_id) const noexcept {
+  ds::Option<application::prompt::LineView> PromptController::line(std::uint64_t pane_id) const noexcept {
     return application::prompt::line(store_.session(), pane_id);
   }
 
@@ -39,13 +40,13 @@ namespace telar::gui::qt {
 
   application::prompt::CommandPresence PromptController::commandPresence(std::uint64_t pane_id, std::string_view word) {
     try {
-      return application::prompt::commandPresence(store_.session(), pane_id, word);
+      return application::prompt::commandPresence(store_.sessionMut(), pane_id, word);
     } catch (const std::exception&) {
       return application::prompt::CommandPresence::unknown;
     }
   }
 
-  std::optional<std::size_t> PromptController::selectedBlock(std::uint64_t pane_id) const noexcept {
+  ds::Option<std::size_t> PromptController::selectedBlock(std::uint64_t pane_id) const noexcept {
     return store_.session().selectedBlock(pane_id);
   }
 
@@ -57,13 +58,13 @@ namespace telar::gui::qt {
     return store_.session().configuration();
   }
 
-  const std::optional<application::terminal::copy_mode::CopyState>& PromptController::copy() const noexcept {
+  const ds::Option<application::terminal::copy_mode::CopyState>& PromptController::copy() const noexcept {
     return application::terminal::copy_mode::view(store_.session()).state();
   }
 
   bool PromptController::key(std::uint64_t pane_id, const application::prompt::KeyPress& key) {
     using application::prompt::Outcome;
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
 
     try {
       const auto outcome = application::prompt::key(session, pane_id, key);
@@ -97,7 +98,7 @@ namespace telar::gui::qt {
   }
 
   bool PromptController::text(std::uint64_t pane_id, const QString& text) {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     if (!application::prompt::edits(session, pane_id)) {
       return false;
     }
@@ -115,7 +116,7 @@ namespace telar::gui::qt {
   }
 
   void PromptController::publishWrite() {
-    if (const auto pane_id = application::prompt::takeWrite(store_.session())) {
+    if (const auto pane_id = application::prompt::takeWrite(store_.sessionMut())) {
       publish(*pane_id);
     }
   }

@@ -16,6 +16,7 @@ import telar.gui.features.components;
 import telar.config.client;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -34,7 +35,7 @@ namespace telar::gui::application {
   public:
     explicit BindingActionReader(lua_State& state, const runtime::config::RetainedActionValidator& validator, runtime::config::RetainedCommandTabRegistry& commands, std::uint64_t generation);
 
-    [[nodiscard]] std::optional<BindingAction> read(const runtime::lua::Value& value, bool expression = false) const;
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) const;
 
   private:
     [[nodiscard]] BindingAction command(const runtime::config::CommandTabView& command) const;
@@ -52,7 +53,7 @@ namespace telar::gui::application {
 
   template <typename Reader>
   concept BindingActionSource = requires(const Reader& reader, const runtime::lua::Value& value) {
-    { reader.read(value, false) } -> std::same_as<std::optional<BindingAction>>;
+    { reader.read(value, false) } -> std::same_as<ds::Option<BindingAction>>;
   };
 
   class BindingReader {
@@ -128,7 +129,7 @@ namespace telar::gui::application {
   // What reads a component's click action from its configuration value.
   class ComponentActions {
   public:
-    [[nodiscard]] virtual std::optional<BindingAction> read(const runtime::lua::Value& value) const = 0;
+    [[nodiscard]] virtual ds::Option<BindingAction> read(const runtime::lua::Value& value) const = 0;
 
   protected:
     ComponentActions() noexcept = default;
@@ -144,7 +145,7 @@ namespace telar::gui::application {
     explicit ComponentActionsOf(const Reader& reader) noexcept
         : reader_(reader) {}
 
-    [[nodiscard]] std::optional<BindingAction> read(const runtime::lua::Value& value) const override {
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value) const override {
       return reader_.read(value);
     }
 
@@ -164,7 +165,7 @@ namespace telar::gui::application {
   public:
     explicit ComponentActionReader(const ComponentActions& reader, StagedActionReferences& references, std::uint32_t& next_reference) noexcept;
 
-    [[nodiscard]] std::optional<BindingAction> read(const runtime::lua::Value& value) const override;
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value) const override;
 
   private:
     const ComponentActions& reader_;
@@ -195,9 +196,9 @@ namespace telar::gui::application {
   private:
     // What the walk builds from each component it places.
     struct Builder {
-      std::optional<Parent> node(const runtime::lua::Value& value, const Shape& shape, const Position& position);
+      ds::Option<Parent> node(const runtime::lua::Value& value, const Shape& shape, const Position& position);
 
-      std::optional<Parent> append(const runtime::lua::Value& value, const Shape& shape, features::components::Input& input, const Position& position);
+      ds::Option<Parent> append(const runtime::lua::Value& value, const Shape& shape, features::components::Input& input, const Position& position);
 
       static runtime::config::ComponentBudget::Usage usage(const Shape& shape) noexcept;
 
@@ -250,7 +251,7 @@ namespace telar::gui::application {
   public:
     // `field` names the function inside the referenced table; without it the reference is the
     // function. `item`, a JSON document, becomes the call's second argument.
-    explicit ComponentInvocation(int reference, const features::components::Context& context, const char* field = "render", std::optional<std::string_view> item = std::nullopt) noexcept;
+    explicit ComponentInvocation(int reference, const features::components::Context& context, const char* field = "render", ds::Option<std::string_view> item = ds::none) noexcept;
 
     static int invoke(lua_State* state);
 
@@ -260,7 +261,7 @@ namespace telar::gui::application {
     int reference_;
     const features::components::Context& context_;
     const char* field_;
-    std::optional<std::string_view> item_;
+    ds::Option<std::string_view> item_;
   };
 
 }

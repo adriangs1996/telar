@@ -13,6 +13,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -57,7 +58,7 @@ namespace telar::gui::qt {
   private:
     friend class WindowAnimationItems<HistoryLoadingLayout>;
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);
     void synchronize();
     void bindClock();

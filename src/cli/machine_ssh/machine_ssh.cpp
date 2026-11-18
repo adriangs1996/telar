@@ -14,6 +14,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime::cli::config_receive {
 
@@ -513,7 +514,7 @@ namespace telar::runtime::cli::machine {
     }
 
     const auto code = MachineFailure::named(error);
-    const auto description = code ? MachineFailure::description(*code) : std::nullopt;
+    const auto description = code ? MachineFailure::description(*code) : ds::none;
 
     return description ? description->data() : nullptr;
   }
@@ -685,7 +686,7 @@ namespace telar::runtime::cli::machine {
 
   template <typename Words>
   std::string remoteCommand(const MachineProfile& profile, const Words& words) {
-    std::string command = std::string{profile.program().value_or("telar")} + " dispatch-argv";
+    std::string command = std::string{profile.program().valueOr("telar")} + " dispatch-argv";
 
     for (const std::string_view word : words) {
       const auto encoded = encode(word);
@@ -723,7 +724,7 @@ namespace telar::runtime::cli::machine {
     return result.out;
   }
 
-  std::optional<MachineProfile> resolve(Memory& memory, std::string_view label) {
+  ds::Option<MachineProfile> resolve(Memory& memory, std::string_view label) {
     const auto profiles = load(memory, profilesPath());
     if (const auto index = profiles.find(label)) {
       return profiles.rows()[*index];
@@ -733,7 +734,7 @@ namespace telar::runtime::cli::machine {
       throw CommandError{"UnknownMachine"};
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   MachineError sshFailure(const launch::Output& output) {
@@ -815,7 +816,7 @@ namespace telar::runtime::cli::machine {
 
   int check(Memory& memory, const MachineProfile& profile, bool json) {
     std::string detail;
-    std::optional<Discovery> found;
+    ds::Option<Discovery> found;
 
     try {
       found = discover(memory, profile, detail);
@@ -1093,7 +1094,7 @@ namespace telar::runtime::cli::machine::filter {
     }
   };
 
-  std::optional<std::string> tomlSecret(std::string_view path, Kind last) {
+  ds::Option<std::string> tomlSecret(std::string_view path, Kind last) {
     constexpr std::size_t max_components = 16;
     std::vector<std::string_view> components;
     std::size_t start = 0;
@@ -1122,7 +1123,7 @@ namespace telar::runtime::cli::machine::filter {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::string toml(std::string_view bytes, std::vector<std::string>& dropped) {
@@ -1157,7 +1158,7 @@ namespace telar::runtime::cli::machine::filter {
 
           const auto offending = tomlSecret(inner.substr(0, std::min(index, inner.size())), Kind::container);
 
-          skipping_table = offending.has_value();
+          skipping_table = offending.hasValue();
           keep = !skipping_table;
           if (offending) {
             noteOnce(dropped, *offending);
@@ -1175,7 +1176,7 @@ namespace telar::runtime::cli::machine::filter {
                                                                                                                                                     : Kind::scalar;
             const auto offending = tomlSecret(text.substr(0, equals), kind);
 
-            dropping_value = offending.has_value();
+            dropping_value = offending.hasValue();
             value.scan(rest);
             if (offending) {
               keep = false;
@@ -1232,14 +1233,14 @@ namespace telar::runtime::cli::machine::filter {
            text.starts_with("auth-");
   }
 
-  std::optional<std::string_view> nextWord(std::string_view& rest) {
+  ds::Option<std::string_view> nextWord(std::string_view& rest) {
     rest = trimText(rest, " \t");
     if (!rest.empty() && (rest.front() == '"' || rest.front() == '\'')) {
       rest.remove_prefix(1);
     }
 
     if (rest.empty() || placeholder(rest.front())) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto end = rest.find_first_of(" \t\r\n\v\f\"',;");
@@ -1274,7 +1275,7 @@ namespace telar::runtime::cli::machine::filter {
     });
   }
 
-  std::optional<std::string_view> finding(std::string_view line) {
+  ds::Option<std::string_view> finding(std::string_view line) {
     const auto lowered = asciiLowerCopy(line);
 
     if (line.contains("PRIVATE KEY-----")) {
@@ -1428,10 +1429,10 @@ namespace telar::runtime::cli::machine::filter {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<std::pair<std::size_t, std::string_view>> findSecret(std::string_view bytes) {
+  ds::Option<std::pair<std::size_t, std::string_view>> findSecret(std::string_view bytes) {
     std::size_t number = 1;
 
     for (;;) {
@@ -1441,7 +1442,7 @@ namespace telar::runtime::cli::machine::filter {
       }
 
       if (end == std::string_view::npos) {
-        return std::nullopt;
+        return ds::none;
       }
 
       bytes.remove_prefix(end + 1);
@@ -1517,7 +1518,7 @@ namespace telar::runtime::cli {
     server.profile = options.profile ? std::string_view{*options.profile} : std::string_view{};
     server.fresh = options.fresh;
     const RuntimePaths paths{memory, server, process_environment};
-    std::optional<RuntimeConnection> connection;
+    ds::Option<RuntimeConnection> connection;
     if (connectExisting(connection, paths.socket.c_str()) && options.fresh) {
       std::fprintf(stderr, "telar: a runtime is already running; stop it first (telar server stop) or drop --fresh\n");
       throw CommandError{"RuntimeAlreadyRunning"};
@@ -1543,7 +1544,7 @@ namespace telar::runtime::cli {
     connection.reset();
     std::vector<std::string> arguments{guiProgram(), "--socket", std::string{paths.socket}, "--cwd", std::filesystem::current_path().string()};
 
-    for (const auto& [flag, value] : std::array<std::pair<std::string_view, const std::optional<std::string>*>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
+    for (const auto& [flag, value] : std::array<std::pair<std::string_view, const ds::Option<std::string>*>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
       if (*value) {
         arguments.emplace_back(flag);
         arguments.push_back(**value);
@@ -1784,7 +1785,7 @@ namespace telar::runtime::cli {
 
       const auto equals = word.find('=');
       const auto flag = word.substr(0, equals);
-      std::optional<std::string>* value = nullptr;
+      ds::Option<std::string>* value = nullptr;
       const char* missing = nullptr;
       const char* duplicate = nullptr;
 

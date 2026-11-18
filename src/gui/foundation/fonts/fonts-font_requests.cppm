@@ -7,6 +7,7 @@ import std;
 
 import :face_views;
 import :face;
+import telar.base.ds;
 
 // Interface: fonts/font_coverage.cppm
 export {
@@ -28,7 +29,7 @@ export {
     struct FontCascade {
       // Generic over the caller's font provider; asked once per text run that needs a face.
       template <FontProvider Fonts>
-      TBC_GENERIC [[nodiscard]] static std::optional<FontRole> source(Fonts& fonts, std::string_view text, FontRole preferred) {
+      TBC_GENERIC [[nodiscard]] static ds::Option<FontRole> source(Fonts& fonts, std::string_view text, FontRole preferred) {
         if (FontCoverage::covers(fonts.face(preferred), text)) {
           return preferred;
         }
@@ -50,7 +51,7 @@ export {
           }
         }
 
-        return std::nullopt;
+        return ds::none;
       }
     };
 
@@ -65,7 +66,7 @@ export {
     public:
       static constexpr std::size_t maximum_bytes = 64;
 
-      [[nodiscard]] static std::optional<FontQuery> create(std::string_view text);
+      [[nodiscard]] static ds::Option<FontQuery> create(std::string_view text);
 
       [[nodiscard]] std::string_view text() const noexcept;
 
@@ -92,7 +93,7 @@ export {
 
       void request(std::string_view text);
 
-      [[nodiscard]] std::optional<FontQuery> take();
+      [[nodiscard]] ds::Option<FontQuery> take();
 
       [[nodiscard]] bool finish(const FontQuery& query, bool changed);
 
@@ -110,7 +111,7 @@ export {
 
         static std::uint64_t digest(std::string_view text);
 
-        [[nodiscard]] std::span<std::uint64_t> bucket(std::uint64_t hash) noexcept;
+        [[nodiscard]] std::span<std::uint64_t> bucketMut(std::uint64_t hash) noexcept;
 
         [[nodiscard]] std::span<const std::uint64_t> bucket(std::uint64_t hash) const noexcept;
 
@@ -121,7 +122,7 @@ export {
       [[nodiscard]] bool queued(std::string_view text) const;
 
       std::array<FontQuery, pending_capacity> pending_{};
-      std::optional<FontQuery> in_flight_;
+      ds::Option<FontQuery> in_flight_;
       Misses misses_;
       std::size_t head_ = 0;
       std::size_t count_ = 0;

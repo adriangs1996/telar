@@ -16,6 +16,7 @@ import telar.base.text.utf8;
 import telar.runtime.platform.launch_program;
 import telar.runtime.suggestions.engine;
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -125,12 +126,12 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  std::optional<DescriptionRequest> AgentService<Poller, History>::nextDescription() {
+  ds::Option<DescriptionRequest> AgentService<Poller, History>::nextDescription() {
     return descriptions_.nextDescription(agents_);
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  std::optional<HistorySessionTitle> AgentService<Poller, History>::completeDescription(const DescriptionResult& result) {
+  ds::Option<HistorySessionTitle> AgentService<Poller, History>::completeDescription(const DescriptionResult& result) {
     return descriptions_.completeDescription(agents_, result);
   }
 
@@ -191,9 +192,9 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  std::optional<SessionFileRequest> AgentService<Poller, History>::nextSessionFile(std::chrono::steady_clock::time_point now) const {
+  ds::Option<SessionFileRequest> AgentService<Poller, History>::nextSessionFile(std::chrono::steady_clock::time_point now) const {
     if (!has_session_files_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const Agent* selected = nullptr;
@@ -209,7 +210,7 @@ namespace telar::runtime {
       }
     }
 
-    return selected == nullptr ? std::nullopt : std::optional{SessionFileRequest{selected->pane, selected->generation, selected->file_watch}};
+    return selected == nullptr ? ds::none : ds::Option{SessionFileRequest{selected->pane, selected->generation, selected->file_watch}};
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -405,7 +406,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void AgentService<Poller, History>::observeProcess(Pane& pane, std::optional<ProcessIdentity> identity, AgentProvider provider) {
+  void AgentService<Poller, History>::observeProcess(Pane& pane, ds::Option<ProcessIdentity> identity, AgentProvider provider) {
     auto* agent = agents_.find(pane.id, pane.generation);
     if (agent != nullptr && agent->process_identity && provider == AgentProvider::unknown) {
       agents_.removeIf([&](const Agent& record) {
@@ -762,7 +763,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   Tab& WorkspaceService<Poller, History>::requireTab(WorkspaceStore& workspaces, TabLocation location) {
-    auto* tab = require(workspaces, location.workspace).tab(location.tab_id);
+    auto* tab = require(workspaces, location.workspace).tabMut(location.tab_id);
     if (tab == nullptr) {
       throw RequestError{FailureCode::tab_not_found, "Tab does not exist"};
     }
@@ -788,7 +789,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::open(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const OpenPane& request) {
-    std::optional<std::uint64_t> pane;
+    ds::Option<std::uint64_t> pane;
     bool created = false;
 
     if (request.target.kind == PaneTarget::Kind::pane) {
@@ -1036,7 +1037,7 @@ namespace telar::runtime {
 
       panes.remove(model, clients, identity);
       auto* workspace = model.workspaces.find(location.workspace.id);
-      auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+      auto* tab = workspace == nullptr ? nullptr : workspace->tabMut(location.tab_id);
       if (tab == nullptr) {
         leaveEmptyViews(model, panes, clients, location.workspace.id);
         continue;
@@ -1178,7 +1179,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::notify(std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept {
+  void WorkspaceService<Poller, History>::notify(std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous) noexcept {
     if (notice_count_ == notices_.size()) {
       overflowed_ = true;
       return;
@@ -1232,7 +1233,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::tab_not_found, "tab not found"};
     }
 
-    const auto previous = workspace->tabs.size() == 1 ? previousWorkspace(model.workspaces, workspace->id) : std::nullopt;
+    const auto previous = workspace->tabs.size() == 1 ? previousWorkspace(model.workspaces, workspace->id) : ds::none;
 
     for (const auto identity : tab->panes) {
       if (auto* pane = model.panes.find(identity)) {
@@ -1307,7 +1308,7 @@ namespace telar::runtime {
 
     workspace->tabs.emplace_back(memory_, tab_id, std::string_view{});
     model.workspaces.insertProvisional(workspace_id, std::move(workspace));
-    std::optional<std::uint64_t> pane;
+    ds::Option<std::uint64_t> pane;
 
     try {
       const TabLocation location{.workspace = {.id = workspace_id}, .tab_id = tab_id};
@@ -1380,19 +1381,19 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  std::optional<std::uint64_t> WorkspaceService<Poller, History>::firstPane(const PaneStore& panes, const Workspace& workspace) noexcept {
-    return workspace.tabs.empty() ? std::nullopt : firstPane(panes, workspace.tabs.front());
+  ds::Option<std::uint64_t> WorkspaceService<Poller, History>::firstPane(const PaneStore& panes, const Workspace& workspace) noexcept {
+    return workspace.tabs.empty() ? ds::none : firstPane(panes, workspace.tabs.front());
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  std::optional<std::uint64_t> WorkspaceService<Poller, History>::firstPane(const PaneStore& panes, const Tab& tab) noexcept {
+  ds::Option<std::uint64_t> WorkspaceService<Poller, History>::firstPane(const PaneStore& panes, const Tab& tab) noexcept {
     for (const auto identity : tab.panes) {
       if (const auto* pane = panes.find(identity); pane != nullptr && !pane->close_requested && !pane->exit_status) {
         return identity;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -2231,7 +2232,7 @@ namespace telar::runtime {
         }
 
         const auto group = ::tcgetpgrp(pane->process->descriptor());
-        const auto process = group > 0 ? process_inspector_.identity(group) : std::nullopt;
+        const auto process = group > 0 ? process_inspector_.identity(group) : ds::none;
         if (process && context.editor_candidate_count < context.editor_candidates.size()) {
           context.editor_candidates[context.editor_candidate_count++] = {pane->id, pane->generation, *process};
         }
@@ -2483,7 +2484,7 @@ namespace telar::runtime {
         bottom = screen.scroll.total_rows - std::min<std::uint32_t>(screen.scroll.total_rows, screen.rows);
       }
 
-      attachment->viewport = message.offset >= bottom ? std::nullopt : std::optional{message.offset};
+      attachment->viewport = message.offset >= bottom ? ds::none : ds::Option{message.offset};
       attachment->frames.requestSnapshot();
     }
   }
@@ -2812,8 +2813,8 @@ namespace telar::runtime {
       // SIGCHLD says a child exited; a closed output usually means it did. The beat catches a
       // child whose signal went to no one, such as one reaped while a test drives the loop.
       if (pane != nullptr && !pane->exit_status && (reap || pane->output_closed)) {
-        pane->exit_status = pane->process->reap();
-        model_.pane_revision += pane->exit_status.has_value();
+        pane->exit_status = pane->process.getMut().reap();
+        model_.pane_revision += pane->exit_status.hasValue();
       }
 
       // A program can change the terminal without printing, as `read -s` does; one that

@@ -2,6 +2,7 @@ module telar.gui.features.machines;
 
 import std;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::machines {
 
@@ -63,7 +64,7 @@ namespace telar::gui::features::machines {
     return {};
   }
 
-  MachineFacts::CpuText MachineFacts::cpu(MachinePhase phase, std::optional<std::uint8_t> percent) {
+  MachineFacts::CpuText MachineFacts::cpu(MachinePhase phase, ds::Option<std::uint8_t> percent) {
     CpuText value;
 
     if (phase == MachinePhase::connected && percent) {

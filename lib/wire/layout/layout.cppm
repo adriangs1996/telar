@@ -4,6 +4,7 @@ export module telar.wire.layout;
 
 import std;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // The schemas specialize `MessageSchema`, which telar.wire.vocabulary declares in its global
 // fragment; naming the template here keeps it reachable from importers.
@@ -80,7 +81,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       TabLocation location{};
       TabMoveDirection direction{};
-      std::optional<std::uint64_t> relative_to{};
+      ds::Option<std::uint64_t> relative_to{};
     };
 
     template <>
@@ -213,7 +214,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       TabLocation location{};
       bool workspace_closed{};
-      std::optional<std::uint64_t> previous_workspace{};
+      ds::Option<std::uint64_t> previous_workspace{};
 
       void validate() const;
     };
@@ -235,7 +236,7 @@ export extern "C++" {
     struct ResyncRequired {
       WorkspaceLocation workspace{};
       bool workspace_closed{};
-      std::optional<std::uint64_t> previous_workspace{};
+      ds::Option<std::uint64_t> previous_workspace{};
 
       void validate() const;
     };
@@ -267,7 +268,7 @@ export extern "C++" {
       bool sidebar_visible{};
       std::uint16_t sidebar_width{};
       bool workspace_list_collapsed{};
-      std::optional<TabLocation> active_tab{};
+      ds::Option<TabLocation> active_tab{};
       std::span<const ClientTabLayout> tabs{};
 
       void validate() const;

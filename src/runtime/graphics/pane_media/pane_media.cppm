@@ -25,6 +25,7 @@ import telar.runtime.terminal.text_reader;
 import telar.base.memory.allocators;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.graphics_storage;
+import telar.base.ds;
 
 // Interface: graphics/atomic_frame_filter.cppm
 export {
@@ -77,12 +78,12 @@ export {
         AtomicFrameKey key;
         std::array<std::size_t, recent_frames> recent;
         std::size_t recent_count;
-        std::optional<std::size_t> selected;
+        ds::Option<std::size_t> selected;
       };
 
       static bool record(std::span<SelectedFrame> entries, std::size_t& count, const AtomicFrame& frame) noexcept;
 
-      static std::optional<std::size_t> selectedStart(std::span<const SelectedFrame> entries, AtomicFrameKey key) noexcept;
+      static ds::Option<std::size_t> selectedStart(std::span<const SelectedFrame> entries, AtomicFrameKey key) noexcept;
 
       static AtomicFrameResource resource(const AtomicFrame& frame, std::size_t storage_limit) noexcept;
 
@@ -101,12 +102,12 @@ export {
       // Where a child's upload lies once it checks out: a non-empty upload within its limit, in a file
       // or a shared memory object that holds at least its bytes.
       struct Handle {
-        std::optional<GraphicsChildFile> file;
+        ds::Option<GraphicsChildFile> file;
         FileDescriptor shared;
       };
 
       // The upload's handle, or none; a shared memory object's name comes back in `name`.
-      static std::optional<Handle> validate(const AtomicFrameResource& resource, std::array<std::uint8_t, PATH_MAX + 1>& name) noexcept;
+      static ds::Option<Handle> validate(const AtomicFrameResource& resource, std::array<std::uint8_t, PATH_MAX + 1>& name) noexcept;
 
       static bool available(const AtomicFrameResource& resource) noexcept;
 
@@ -122,12 +123,12 @@ export {
 
     class GraphicsFramePixels {
     public:
-      static std::optional<GraphicsFramePixels> open(const AtomicFrameResource& resource) noexcept;
+      static ds::Option<GraphicsFramePixels> open(const AtomicFrameResource& resource) noexcept;
 
       bool copyTo(std::span<std::uint8_t> destination) const noexcept;
 
     private:
-      std::optional<GraphicsChildFile> file_;
+      ds::Option<GraphicsChildFile> file_;
       FileDescriptor shared_;
       std::size_t shared_bytes_ = 0;
     };
@@ -142,7 +143,7 @@ export {
     class GraphicsUploadLimits {
     public:
       struct Observation {
-        std::optional<std::uint32_t> loading_image;
+        ds::Option<std::uint32_t> loading_image;
         std::size_t completed_commands = 0;
       };
 
@@ -157,14 +158,14 @@ export {
 
       Observation observeEncodedChunk(GhosttyTerminal terminal);
 
-      std::optional<std::uint32_t> enforce(GhosttyTerminal terminal, const Observation& observation);
+      ds::Option<std::uint32_t> enforce(GhosttyTerminal terminal, const Observation& observation);
 
       Reached takeReached() noexcept;
 
     private:
       static GhosttyKittyGraphics storage(GhosttyTerminal terminal);
 
-      static std::optional<std::uint32_t> loadingImage(GhosttyKittyGraphics graphics);
+      static ds::Option<std::uint32_t> loadingImage(GhosttyKittyGraphics graphics);
 
       KittyFraming framing_;
       std::size_t byte_limit_;
@@ -366,7 +367,7 @@ export {
 
       void noteSharedTransport(bool added) noexcept;
 
-      std::optional<FrozenImage> takeTransfer(ImageKey key, bool shared);
+      ds::Option<FrozenImage> takeTransfer(ImageKey key, bool shared);
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
@@ -397,7 +398,7 @@ export {
       TransferRequests requests_;
       std::shared_ptr<PtyResponseQueue> responses_;
       GraphicsLimits limits_;
-      std::optional<MediaTerminal> terminal_;
+      ds::Option<MediaTerminal> terminal_;
       std::array<MediaBatch, 2> batches_;
       KittyFraming framing_;
       TerminalSize current_size_;

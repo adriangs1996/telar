@@ -1,4 +1,5 @@
 module telar.runtime.proxy.intercepted_relay;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -19,7 +20,7 @@ namespace telar::runtime {
     return state_;
   }
 
-  const std::optional<Http1Head>& Http1MessageRelay::head() const noexcept {
+  const ds::Option<Http1Head>& Http1MessageRelay::head() const noexcept {
     return head_;
   }
 
@@ -155,8 +156,8 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto HttpInterceptionSlot<Memory>::deadline(traffic::HttpControl* control) const noexcept -> std::optional<Time> {
-    return ticket_ ? control->httpDeadline(ticket_) : std::nullopt;
+  auto HttpInterceptionSlot<Memory>::deadline(traffic::HttpControl* control) const noexcept -> ds::Option<Time> {
+    return ticket_ ? control->httpDeadline(ticket_) : ds::none;
   }
 
   template <Allocator Memory>
@@ -237,7 +238,7 @@ namespace telar::runtime {
     return parser_.state();
   }
 
-  auto Http1InterceptedRelay::head() const noexcept -> const std::optional<Http1Head>& {
+  auto Http1InterceptedRelay::head() const noexcept -> const ds::Option<Http1Head>& {
     return mode_ == Mode::streaming && !hasPrefix() ? parser_.head() : forwarded_head_;
   }
 
@@ -246,7 +247,7 @@ namespace telar::runtime {
   }
 
   bool Http1InterceptedRelay::originalHead() const noexcept {
-    return original_head_.value_or(parser_.head() && parser_.head()->head_request);
+    return original_head_.valueOr(parser_.head() && parser_.head()->head_request);
   }
 
   void Http1InterceptedRelay::destinationHead(bool head) noexcept {
@@ -277,15 +278,15 @@ namespace telar::runtime {
     return hasPrefix() ? waiting_ : parser_.destinationInterest();
   }
 
-  auto Http1InterceptedRelay::deadline() const noexcept -> std::optional<Time> {
+  auto Http1InterceptedRelay::deadline() const noexcept -> ds::Option<Time> {
     if (interception_.waiting()) {
       return interception_.deadline(control_);
     }
 
-    return mode_ == Mode::buffering ? std::optional{interception_.collectUntil()} : std::nullopt;
+    return mode_ == Mode::buffering ? ds::Option{interception_.collectUntil()} : ds::none;
   }
 
-  StaticReply& Http1InterceptedRelay::continueReply() noexcept {
+  StaticReply& Http1InterceptedRelay::continueReplyMut() noexcept {
     return continue_;
   }
 

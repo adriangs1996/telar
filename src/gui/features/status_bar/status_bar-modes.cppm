@@ -11,6 +11,7 @@ import telar.tbc;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: presentation/mode_hints.cppm
 export {
@@ -29,7 +30,7 @@ export {
 
     template <typename Router>
     concept PrefixHintRouter = requires(const Router& router, const BindingAction& action) {
-      { router.prefixedKeyForAction(action) } -> std::same_as<std::optional<KeyChord>>;
+      { router.prefixedKeyForAction(action) } -> std::same_as<ds::Option<KeyChord>>;
     };
 
     class ModeHints {

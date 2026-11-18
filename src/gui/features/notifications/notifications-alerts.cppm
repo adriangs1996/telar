@@ -12,6 +12,7 @@ import :center;
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: application/agent_alerts.cppm
 export {
@@ -38,7 +39,7 @@ export {
       }
 
       // The input's message is written into the message, region `a`; its title is a literal.
-      [[nodiscard]] static tbc::view<std::optional<NotificationInput>, tbc::lt::a> input(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message);
+      [[nodiscard]] static tbc::view<ds::Option<NotificationInput>, tbc::lt::a> input(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message);
 
       // Generic over the caller's label and publisher, so it stays here.
       template <AgentAlertLabel Resolve, NotificationPublisher Publish>
@@ -120,7 +121,7 @@ export {
 
       [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> formatMessage(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message);
       void add(AgentStatus status) noexcept;
-      [[nodiscard]] tbc::view<std::optional<NotificationInput>, tbc::lt::a> summary(tbc::view<Message&, tbc::lt::a> message) const;
+      [[nodiscard]] tbc::view<ds::Option<NotificationInput>, tbc::lt::a> summary(tbc::view<Message&, tbc::lt::a> message) const;
       static void appendCount(Message& message, std::size_t count, AgentStatus status, bool separated);
 
       std::size_t blocked_ = 0;

@@ -1,5 +1,6 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
+#include "telar_base/ds/values.hpp"
 
 module telar.runtime.metrics.host_sampler;
 
@@ -27,7 +28,7 @@ namespace telar::runtime {
     }
   }
 
-  const std::optional<HostValues>& HostSampler::latest() const noexcept {
+  const ds::Option<HostValues>& HostSampler::latest() const noexcept {
     return latest_;
   }
 

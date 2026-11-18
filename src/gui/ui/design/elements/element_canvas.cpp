@@ -1,4 +1,5 @@
 #include "element_canvas.hpp"
+#include "telar_base/ds/values.hpp"
 
 #include <QPainter>
 #include <QPen>
@@ -25,13 +26,13 @@ namespace telar::gui::qt {
         return index_ >= data_.size();
       }
 
-      [[nodiscard]] std::optional<QChar> command() {
+      [[nodiscard]] ds::Option<QChar> command() {
         skip();
         if (index_ < data_.size() && data_[index_].isLetter()) {
           return data_[index_++];
         }
 
-        return std::nullopt;
+        return ds::none;
       }
 
       [[nodiscard]] bool numberNext() {
@@ -40,7 +41,7 @@ namespace telar::gui::qt {
         return index_ < data_.size() && (data_[index_].isDigit() || data_[index_] == u'-' || data_[index_] == u'+' || data_[index_] == u'.');
       }
 
-      [[nodiscard]] std::optional<qreal> number() {
+      [[nodiscard]] ds::Option<qreal> number() {
         skip();
         const auto start = index_;
 
@@ -71,7 +72,7 @@ namespace telar::gui::qt {
         bool valid = false;
         const auto value = QStringView{data_}.sliced(start, index_ - start).toDouble(&valid);
         if (!digits || !valid || !std::isfinite(value)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         return value;

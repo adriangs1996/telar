@@ -30,6 +30,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -98,7 +99,7 @@ namespace telar::gui::qt {
       bool attention = false;
       bool live = false;
       application::machines::MachinePhase phase = application::machines::MachinePhase::connecting;
-      std::optional<std::uint8_t> cpu_percent = std::nullopt;
+      ds::Option<std::uint8_t> cpu_percent = ds::none;
       std::array<StackCard, stack_cards> cards{};
       std::size_t card_count = 0;
       // Every agent that works or waits there, past the cards the stack shows.
@@ -130,7 +131,7 @@ namespace telar::gui::qt {
     QPointer<WindowFontCatalog> catalog_;
     QMetaObject::Connection font_connection_;
     std::shared_ptr<ResidentFonts> fonts_;
-    std::array<std::optional<Source>, application::machines::MachineLimits::window_slots> sources_;
+    std::array<ds::Option<Source>, application::machines::MachineLimits::window_slots> sources_;
     ListModel items_{this};
     QVariantMap style_;
     ChromeMetrics chrome_;

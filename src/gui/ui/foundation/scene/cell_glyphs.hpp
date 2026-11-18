@@ -32,6 +32,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -40,11 +41,11 @@ namespace telar::gui::qt {
     explicit CellGlyphs(QQuickWindow& window) noexcept
         : curves_(window) {}
 
-    [[nodiscard]] static std::optional<glyphs::Symbol> parse(std::string_view text) noexcept {
+    [[nodiscard]] static ds::Option<glyphs::Symbol> parse(std::string_view text) noexcept {
       return glyphs::Symbol::parse(text);
     }
 
-    void configure(const QFont& regular, qreal scale, std::optional<float> physical_stroke = std::nullopt) {
+    void configure(const QFont& regular, qreal scale, ds::Option<float> physical_stroke = ds::none) {
       thickness_ = physical_stroke ? *physical_stroke : BoxFont::thickness(regular, scale);
       curves_.reset();
     }

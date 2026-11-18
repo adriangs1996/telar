@@ -3,6 +3,7 @@ export module telar.platform.graphics;
 import std;
 
 import telar.platform.primitives;
+import telar.base.ds;
 
 // Interface: telar_platform/graphics/shared_image_storage.cppm
 export {
@@ -12,7 +13,7 @@ export {
     public:
       using Name = std::array<char, 32>;
 
-      static std::optional<SharedImageStorage> create(std::size_t length) noexcept;
+      static ds::Option<SharedImageStorage> create(std::size_t length) noexcept;
 
       ~SharedImageStorage();
 

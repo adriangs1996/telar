@@ -15,6 +15,7 @@ import telar.gui.foundation.core;
 import telar.gui.features.history;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -50,7 +51,7 @@ namespace {
       return search(history, query);
     }
 
-    std::optional<QueryHistory> page(HistoryPage direction, std::uint64_t request_id) {
+    ds::Option<QueryHistory> page(HistoryPage direction, std::uint64_t request_id) {
       return features::history::page(history, direction, request_id);
     }
 
@@ -71,11 +72,11 @@ namespace {
       inspect(history, enabled);
     }
 
-    std::optional<QueryHistory> readCommand(std::uint64_t request_id) {
+    ds::Option<QueryHistory> readCommand(std::uint64_t request_id) {
       return features::history::readCommand(history, request_id);
     }
 
-    std::optional<ReadHistoryOutput> readOutput(std::uint64_t request_id) {
+    ds::Option<ReadHistoryOutput> readOutput(std::uint64_t request_id) {
       return features::history::readOutput(history, request_id);
     }
 

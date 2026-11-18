@@ -19,6 +19,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -42,7 +43,7 @@ namespace telar::gui::qt {
     static constexpr std::size_t bar_slots = application::components::Definitions::positions;
     std::array<ComponentSlotState, bar_slots> bars;
     ComponentSlotState panel;
-    std::optional<std::size_t> open_panel = std::nullopt;
+    ds::Option<std::size_t> open_panel = ds::none;
     QString last_render;
     std::uint64_t generation = 0;
     // Changes on every reset, so a render started before it is dropped.

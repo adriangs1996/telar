@@ -17,6 +17,7 @@ import telar.runtime.traffic.control_protocol;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.platform.net;
+import telar.base.ds;
 
 // Interface: http1/observer.cppm
 export {
@@ -120,7 +121,7 @@ export {
 
       State state() const noexcept;
 
-      const std::optional<Http1Head>& head() const noexcept;
+      const ds::Option<Http1Head>& head() const noexcept;
 
       bool started() const noexcept;
 
@@ -312,7 +313,7 @@ export {
       static constexpr std::size_t maximum_rounds = 32;
       SensitiveBuffer<Http1Head::capacity> storage_;
       DelimitedRead reader_;
-      std::optional<Http1Head> head_;
+      ds::Option<Http1Head> head_;
       std::size_t remaining_ = 0;
       std::size_t write_length_ = 0;
       std::size_t write_offset_ = 0;
@@ -363,7 +364,7 @@ export {
       template <typename Message>
       TBC_GENERIC bool begin(tbc::view<Memory&, tbc::lt::a> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
         decision_.emplace(memory, HttpMessageLimits::message_bytes);
-        event.bytes = HttpMessageCodec::encodeMessage(decision_->bytes(), message);
+        event.bytes = HttpMessageCodec::encodeMessage(decision_.getMut().bytesMut(), message);
         ticket_ = control.interceptHttp(event);
         return ticket_ != 0;
       }
@@ -372,7 +373,7 @@ export {
       // the hook's bytes are no message.
       template <typename Message>
       TBC_GENERIC Outcome poll(traffic::HttpControl& control, Message& message) {
-        const auto decision = control.pollHttp(ticket_, decision_->bytes());
+        const auto decision = control.pollHttp(ticket_, decision_.getMut().bytesMut());
         if (decision.verdict == traffic::Verdict::pending) {
           return Outcome::pending;
         }
@@ -390,7 +391,7 @@ export {
         return Outcome::replaced;
       }
 
-      std::optional<Time> deadline(traffic::HttpControl* control) const noexcept;
+      ds::Option<Time> deadline(traffic::HttpControl* control) const noexcept;
 
       // Frees the decision once the message went on.
       void release() noexcept;
@@ -404,7 +405,7 @@ export {
       traffic::HttpPolicy policy_;
       Time collect_until_{};
       std::uint64_t ticket_ = 0;
-      tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> decision_;
+      tbc::view<ds::Option<SensitiveAllocation<Memory>>, tbc::lt::a> decision_;
     };
 
     extern template class HttpInterceptionSlot<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;
@@ -633,7 +634,7 @@ export {
 
       auto state() const noexcept -> State;
 
-      auto head() const noexcept -> const std::optional<Http1Head>&;
+      auto head() const noexcept -> const ds::Option<Http1Head>&;
 
       bool started() const noexcept;
 
@@ -647,10 +648,10 @@ export {
 
       auto destinationInterest() const noexcept -> StreamReadiness;
 
-      auto deadline() const noexcept -> std::optional<Time>;
+      auto deadline() const noexcept -> ds::Option<Time>;
 
       // The 100 Continue the child waits for before it sends a body; empty unless it asked.
-      StaticReply& continueReply() noexcept;
+      StaticReply& continueReplyMut() noexcept;
 
       const StaticReply& continueReply() const noexcept;
 
@@ -695,7 +696,7 @@ export {
         if (!forwarded_head_ && write_offset_ >= head_bytes_) {
           forwarded_head_ = Http1Head::analyze({reinterpret_cast<const char*>(wire_.data()), head_bytes_}, message_.response, message_.response ? destination_head_ : message_.response_to_head);
           if (forwarded_head_ && parser_.head() && parser_.head()->closes) {
-            forwarded_head_->closes = true;
+            forwarded_head_.getMut().closes = true;
           }
         }
 
@@ -722,8 +723,8 @@ export {
       using Slot = HttpInterceptionSlot<ConcurrentMemory>;
       Slot interception_;
       Http1MessageRelay parser_;
-      std::optional<Http1Head> forwarded_head_;
-      std::optional<bool> original_head_;
+      ds::Option<Http1Head> forwarded_head_;
+      ds::Option<bool> original_head_;
       std::size_t write_offset_ = 0, head_bytes_ = 0;
       StaticReply continue_;
       StreamReadiness waiting_ = StreamReadiness::writable;

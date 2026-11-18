@@ -28,6 +28,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -65,10 +66,10 @@ namespace telar::gui::qt {
     std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
     const auto count = collectPacingPanes(panes);
 
-    return frame_pacer_->defer(std::span{panes}.first(count));
+    return frame_pacer_.getMut().defer(std::span{panes}.first(count));
   }
 
-  std::optional<WindowFramePacer<>>& FramePresenter::pacer() noexcept {
+  ds::Option<WindowFramePacer<>>& FramePresenter::pacer() noexcept {
     return frame_pacer_;
   }
 
@@ -192,7 +193,7 @@ namespace telar::gui::qt {
       panes[index] = frame.panes[index].frame.pane;
     }
 
-    frame_pacer_->record(std::span{panes}.first(frame.pane_count), frame.preparation_ns);
+    frame_pacer_.getMut().record(std::span{panes}.first(frame.pane_count), frame.preparation_ns);
   }
 
   void FramePresenter::reconsider() {
@@ -203,7 +204,7 @@ namespace telar::gui::qt {
     std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
     const auto count = collectPacingPanes(panes);
 
-    frame_pacer_->reconsider(std::span{panes}.first(count));
+    frame_pacer_.getMut().reconsider(std::span{panes}.first(count));
   }
 
   void FramePresenter::request() {
@@ -230,13 +231,13 @@ namespace telar::gui::qt {
     }
 
     if (const auto* pane = store_.session().findPane(pane_id); pane != nullptr && pane->attached && frame_pacer_) {
-      frame_pacer_->requestInputFrame({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()});
+      frame_pacer_.getMut().requestInputFrame({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()});
     }
   }
 
   void FramePresenter::configure() {
     if (frame_pacer_ && window_ != nullptr) {
-      frame_pacer_->configure(WindowAnimationClock::forWindow(*window_).frameInterval(), std::nullopt);
+      frame_pacer_.getMut().configure(WindowAnimationClock::forWindow(*window_).frameInterval(), ds::none);
     }
   }
 
@@ -262,7 +263,7 @@ namespace telar::gui::qt {
           terminal->presentFrame(pane.frame);
         }
 
-        store_.session().presented(identity.pane_id, identity.frame_id);
+        store_.sessionMut().presented(identity.pane_id, identity.frame_id);
       }
     } catch (const std::exception& error) {
       status_.fail(error);

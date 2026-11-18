@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.sys.process;
 import telar.sys.socket;
 import telar.platform.error;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif
@@ -44,11 +45,11 @@ namespace telar::runtime {
 #endif
   }
 
-  std::optional<PeerCredentials> peerCredentials(int socket) noexcept {
+  ds::Option<PeerCredentials> peerCredentials(int socket) noexcept {
 #if defined(__APPLE__)
     PeerCredentials credentials{};
     if (::getpeereid(socket, &credentials.user, &credentials.group) != 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return credentials;
@@ -56,7 +57,7 @@ namespace telar::runtime {
     ucred credentials{};
     socklen_t length = sizeof(credentials);
     if (::getsockopt(socket, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0 || length != sizeof(credentials)) {
-      return std::nullopt;
+      return ds::none;
     }
     return PeerCredentials{credentials.uid, credentials.gid};
 #endif
@@ -86,14 +87,14 @@ namespace telar::runtime {
     return addressOf(address);
   }
 
-  std::optional<NetworkAddress> NetworkAddress::copy(const sockaddr* source, socklen_t size) noexcept {
+  ds::Option<NetworkAddress> NetworkAddress::copy(const sockaddr* source, socklen_t size) noexcept {
     if (source == nullptr || (source->sa_family != AF_INET && source->sa_family != AF_INET6)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto expected = source->sa_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
     if (size < expected) {
-      return std::nullopt;
+      return ds::none;
     }
 
     NetworkAddress address;

@@ -6,6 +6,7 @@ export module telar.base.diagnostics;
 
 import std;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
@@ -54,10 +55,10 @@ export {
         FixedText<32> noun;
         FixedText<32> route;
         std::uint64_t value = 0;
-        std::optional<std::uint64_t> requested;
+        ds::Option<std::uint64_t> requested;
         std::uint64_t hits = 0;
         std::int64_t last_ms = 0;
-        std::optional<std::chrono::steady_clock::time_point> shown;
+        ds::Option<std::chrono::steady_clock::time_point> shown;
 
         LimitReach reach() const noexcept;
       };

@@ -164,7 +164,7 @@ namespace telar::gui::test {
     }
 
     static bool pendingPlugin(const qt::ApplicationController& application) {
-      return application.plugins_.owner_.has_value();
+      return application.plugins_.owner_.hasValue();
     }
 
     static void completePluginFailure(qt::ApplicationController& application, std::uint64_t execution) {
@@ -178,7 +178,7 @@ namespace telar::gui::test {
     }
 
     static MachineClientKey add(qt::ApplicationController& application, const QString& endpoint) {
-      const auto slot = application.store_.machines().add({.label = "Build", .destination = "dev@build"});
+      const auto slot = application.store_.machinesMut().add({.label = "Build", .destination = "dev@build"});
       auto& client = application.machines_.createClient(slot);
 
       application.display_.layoutWorkbench();
@@ -204,7 +204,7 @@ namespace telar::gui::test {
     }
 
     static bool pendingActivity(const qt::ApplicationController& application) {
-      return application.activity_selection_.pending_.has_value();
+      return application.activity_selection_.pending_.hasValue();
     }
 
     static void pointerMoved(qt::ApplicationController& application) {
@@ -218,22 +218,22 @@ namespace telar::gui::test {
     static void rename(qt::ApplicationController& application, Machines::Slot slot, std::string_view label) {
       const auto& row = application.store_.machines().row(slot);
 
-      application.store_.machines().update(slot, {.label = label, .destination = row.destination.view()});
+      application.store_.machinesMut().update(slot, {.label = label, .destination = row.destination.view()});
       application.machines_.publishList();
     }
 
     static void recolor(qt::ApplicationController& application, Machines::Slot slot, std::string_view color) {
       const auto& row = application.store_.machines().row(slot);
 
-      application.store_.machines().update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
+      application.store_.machinesMut().update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
       application.machines_.publishList();
     }
 
     static MachineClientKey reuse(qt::ApplicationController& application, Machines::Slot slot) {
       application.roster_.retire(slot, qt::MachineRoster::Retirement::removed);
-      application.store_.clients()[slot].reset();
-      application.store_.machines().remove(slot);
-      const auto added = application.store_.machines().add({.label = "Replacement", .destination = "dev@replacement"}, slot);
+      application.store_.clientsMut()[slot].reset();
+      application.store_.machinesMut().remove(slot);
+      const auto added = application.store_.machinesMut().add({.label = "Replacement", .destination = "dev@replacement"}, slot);
       const auto key = application.machines_.createClient(added).key;
 
       application.machines_.publishList();
@@ -591,7 +591,7 @@ namespace {
       const std::array agents{agent};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->prompt().has_value(), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->prompt().hasValue(), wait_ms);
       const auto before = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
 
       QImage image{2, 3, QImage::Format_RGBA8888};
@@ -1548,7 +1548,7 @@ namespace {
       QCOMPARE(application::workbench::geometry(session).area.height, terminal.height() * window->effectiveDevicePixelRatio());
       const auto expected = application::workbench::geometry(session).launchSize();
 
-      QVERIFY(expected.has_value());
+      QVERIFY(expected.hasValue());
       QVERIFY(expected->cols != opening.size.cols || expected->rows != opening.size.rows);
       QVERIFY(finishOpening(runtime));
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);

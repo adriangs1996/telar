@@ -3,13 +3,14 @@ module telar.gui.features.bindings;
 import std;
 
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace telar::gui::features::bindings {
 
-  std::optional<KeyLeases::Owner> KeyLeases::owner(std::uint64_t physical) const noexcept {
+  ds::Option<KeyLeases::Owner> KeyLeases::owner(std::uint64_t physical) const noexcept {
     const auto index = find(physical);
     if (index == count_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return leases_[index].owner;
@@ -39,10 +40,10 @@ namespace telar::gui::features::bindings {
     }
   }
 
-  std::optional<KeyLeases::Owner> KeyLeases::release(std::uint64_t physical) noexcept {
+  ds::Option<KeyLeases::Owner> KeyLeases::release(std::uint64_t physical) noexcept {
     const auto index = find(physical);
     if (index == count_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto owner = leases_[index].owner;

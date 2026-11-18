@@ -8,6 +8,7 @@ import :tabs;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/attention_fades.cppm
 export {
@@ -22,7 +23,7 @@ export {
 
     struct AttentionFrame {
       float alpha = 1;
-      std::optional<std::uint64_t> deadline_ns = std::nullopt;
+      ds::Option<std::uint64_t> deadline_ns = ds::none;
     };
 
     class AttentionFades {
@@ -46,7 +47,7 @@ export {
 
       [[nodiscard]] static std::uint64_t after(std::uint64_t now_ns, std::uint64_t interval_ns) noexcept;
 
-      [[nodiscard]] std::optional<std::size_t> find(PaneAttentionKey key) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> find(PaneAttentionKey key) const noexcept;
 
       std::array<Entry, capacity> entries_{};
       std::array<bool, capacity> seen_{};
@@ -63,7 +64,7 @@ export {
       static constexpr std::uint64_t default_interval_ns = 16'666'667;
       std::uint64_t now_ns = 0;
       std::uint64_t interval_ns = default_interval_ns;
-      std::optional<std::uint64_t> deadline_ns;
+      ds::Option<std::uint64_t> deadline_ns;
 
       void begin(std::uint64_t timestamp) noexcept;
 
@@ -216,7 +217,7 @@ export {
     public:
       static constexpr std::uint64_t duration_ns = TabMotion::duration_ns;
 
-      void begin(std::optional<WorkspaceLocation> workspace) noexcept;
+      void begin(ds::Option<WorkspaceLocation> workspace) noexcept;
 
       [[nodiscard, gnu::always_inline]] Rect place(TabMotionSlot slot, TabMotionFrame& frame) noexcept;
 
@@ -227,7 +228,7 @@ export {
     private:
       std::array<TabMotion, TabStripGeometry::maximum_tabs> entries_{};
       std::size_t count_ = 0;
-      std::optional<WorkspaceLocation> workspace_;
+      ds::Option<WorkspaceLocation> workspace_;
     };
 
   }

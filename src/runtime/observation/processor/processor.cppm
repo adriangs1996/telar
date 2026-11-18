@@ -31,6 +31,7 @@ import telar.platform.events;
 import telar.runtime.history.command;
 import telar.runtime.shell_integration.token;
 import telar.runtime.terminal.text_reader;
+import telar.base.ds;
 
 // Interface: observation/batch.cppm
 export {
@@ -51,7 +52,7 @@ export {
       ObservationTime time;
       std::uint32_t offset = 0;
       std::uint32_t length = 0;
-      std::optional<bool> shell_foreground = std::nullopt;
+      ds::Option<bool> shell_foreground = ds::none;
       TerminalSize size{};
       int exit_code = 0;
     };
@@ -78,7 +79,7 @@ export {
   namespace telar::runtime {
 
     struct ScreenObservationResult {
-      std::optional<AgentSignal> signal;
+      ds::Option<AgentSignal> signal;
       ObservationTime time;
       bool failed = false;
       bool shell_markers = false;
@@ -90,7 +91,7 @@ export {
 
     class PaneObserver {
     public:
-      explicit PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt);
+      explicit PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
 
       void configureHistory(const HistorySession& session, bool capture_output = false);
 
@@ -100,7 +101,7 @@ export {
 
       void noteInjectedSubmission() noexcept;
 
-      void bytes(ObservationKind kind, std::span<const Byte> bytes, std::optional<bool> shell_foreground) noexcept;
+      void bytes(ObservationKind kind, std::span<const Byte> bytes, ds::Option<bool> shell_foreground) noexcept;
 
       void resize(TerminalSize size) noexcept;
 
@@ -114,7 +115,7 @@ export {
 
       void complete() noexcept;
 
-      std::optional<LimitReach> takeDrop() noexcept;
+      ds::Option<LimitReach> takeDrop() noexcept;
 
       // Generic over the caller's history sink, so it stays here.
       template <HistoryEventSink History>
@@ -167,7 +168,7 @@ export {
               tracker_.complete({event.time, event.exit_code}, commands);
               break;
             case ObservationKind::session_end:
-              tracker_.complete({event.time, std::nullopt, HistoryStatus::interrupted}, commands);
+              tracker_.complete({event.time, ds::none, HistoryStatus::interrupted}, commands);
               if (session_.pane != 0) {
                 history.recordHistory({.kind = HistoryEventKind::session_finished, .session = session_, .finished_at_ms = event.time.milliseconds});
               }
@@ -229,8 +230,8 @@ export {
 
       std::array<ObservationBatch, 2> batches_;
       unsigned active_ = 0;
-      std::optional<unsigned> sealed_;
-      std::optional<LimitReach> drop_;
+      ds::Option<unsigned> sealed_;
+      ds::Option<LimitReach> drop_;
       Terminal terminal_;
       // Reads terminal_.
       tbc::view<CommandTracker, tbc::lt::self> tracker_;
@@ -283,7 +284,7 @@ export {
         std::uint64_t input_revision = 0;
         std::shared_ptr<PaneObserver> observer;
         ScreenObservationResult screen{};
-        std::optional<ProcessProbeResult> process_result;
+        ds::Option<ProcessProbeResult> process_result;
         bool process_recheck = false;
       };
 
@@ -308,7 +309,7 @@ export {
           }
         }
 
-        std::optional<typename Probe::Result> processes;
+        ds::Option<typename Probe::Result> processes;
 
         if (process_request.count != 0) {
           processes = probe_.observe(process_request);
@@ -334,7 +335,7 @@ export {
               observed.process_result = process;
               provider = process.provider;
               if (const auto* manifest = manifests_.find(provider)) {
-                observed.process_result->name.assign(manifest->displayName());
+                observed.process_result.getMut().name.assign(manifest->displayName());
               }
 
               break;

@@ -30,6 +30,7 @@ import std;
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.platform.paths;
+import telar.base.ds;
 
 namespace {
 
@@ -114,7 +115,7 @@ namespace {
     return endpoint;
   }
 
-  std::optional<QString> initialMachine(const QCommandLineParser& parser, telar::gui::ApplicationAllocator& memory) {
+  telar::ds::Option<QString> initialMachine(const QCommandLineParser& parser, telar::gui::ApplicationAllocator& memory) {
     const auto remote = parser.isSet(QStringLiteral("remote"));
     const auto saved = parser.isSet(QStringLiteral("machine"));
     if (remote && saved) {
@@ -136,7 +137,7 @@ namespace {
     }
 
     if (!saved) {
-      return std::nullopt;
+      return telar::ds::none;
     }
 
     const auto path = machineProfilesPath().toUtf8();
@@ -157,7 +158,7 @@ namespace {
         }
     );
 
-    return destination ? std::optional{QString::fromUtf8(destination->data(), static_cast<qsizetype>(destination->size()))} : std::nullopt;
+    return destination ? telar::ds::Option{QString::fromUtf8(destination->data(), static_cast<qsizetype>(destination->size()))} : telar::ds::none;
   }
 
   void scheduleSmokeTest(const QCommandLineParser& parser, telar::gui::qt::ApplicationController& client, QQuickWindow& window) {

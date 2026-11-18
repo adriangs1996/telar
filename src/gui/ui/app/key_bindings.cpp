@@ -46,6 +46,7 @@ static_assert(true);
 #include <cstring>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -186,7 +187,7 @@ namespace telar::gui::qt {
 
     try {
       const auto repeating = router_.repeatAction();
-      const auto policy = repeating ? repeat(*repeating) : std::nullopt;
+      const auto policy = repeating ? repeat(*repeating) : ds::none;
       const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || copy_.active() || store_.dialog().kind != Store::Dialog::none || components_.pickOpen(), .repeat = policy});
       const auto consumed = apply(decision);
 
@@ -449,7 +450,7 @@ namespace telar::gui::qt {
     return false;
   }
 
-  std::optional<BindingRepeat> KeyBindings::repeat(BindingAction action) const {
+  ds::Option<BindingRepeat> KeyBindings::repeat(BindingAction action) const {
     if (store_.dialog().kind != Store::Dialog::none || components_.pickOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
       return {};
     }
@@ -464,7 +465,7 @@ namespace telar::gui::qt {
     return BindingRepeat{.interval_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(interval).count()), .owner = pane->id};
   }
 
-  std::optional<KeyChord> KeyBindings::prefixedKeyForAction(const BindingAction& action) const noexcept {
+  ds::Option<KeyChord> KeyBindings::prefixedKeyForAction(const BindingAction& action) const noexcept {
     return router_.prefixedKeyForAction(action);
   }
 

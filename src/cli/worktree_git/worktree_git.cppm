@@ -22,6 +22,7 @@ import telar.git.checkout;
 import telar.platform.primitives;
 import telar.cli.runtime_observer;
 import telar.cli.control_session;
+import telar.base.ds;
 
 // Interface: repository_identity.cppm
 export {
@@ -94,10 +95,10 @@ export {
 
     void branch(std::string_view value);
 
-    void single(tbc::view<std::optional<std::string_view>&, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char* error);
+    void single(tbc::view<ds::Option<std::string_view>&, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char* error);
 
     struct Target {
-      std::optional<std::uint64_t> id{};
+      ds::Option<std::uint64_t> id{};
 
       static Target parse(std::string_view value);
 
@@ -114,9 +115,9 @@ export {
       };
       Action action{};
       Target target{};
-      std::optional<std::string_view> name{}, directory{}, worktree{}, socket{};
+      ds::Option<std::string_view> name{}, directory{}, worktree{}, socket{};
       Arguments command{};
-      std::optional<std::uint16_t> columns{};
+      ds::Option<std::uint16_t> columns{};
       bool json = false;
 
       static WorkspaceOptions parse(Arguments words);
@@ -133,9 +134,9 @@ export {
       };
       Action action{};
       Target workspace{}, target{};
-      std::optional<std::string_view> label{}, socket{};
+      ds::Option<std::string_view> label{}, socket{};
       TabMoveDirection direction{};
-      std::optional<std::uint64_t> relative{};
+      ds::Option<std::uint64_t> relative{};
       bool background = false, json = false;
 
       static TabOptions parse(Arguments words);
@@ -157,7 +158,7 @@ export {
     // the sessions commands' runtime start and their descriptions of failures.
     class Channel {
     public:
-      Channel(Memory& memory, std::optional<std::string_view> socket, bool start);
+      Channel(Memory& memory, ds::Option<std::string_view> socket, bool start);
 
       // `reason` reports the runtime's own words for a refusal; otherwise the
       // refusal's generic description. Generic over the protocol's messages, an
@@ -165,7 +166,7 @@ export {
       template <typename Reply, typename Request>
       TBC_GENERIC inline Reply exchange(Request request, bool reason = true) {
         try {
-          return session_->template exchange<Reply>(request);
+          return session_.getMut().template exchange<Reply>(request);
         } catch (...) {
           rethrowTranslated(reason);
         }
@@ -179,7 +180,7 @@ export {
       ControlSession& control() noexcept;
 
     private:
-      static ServerOptions socketOptions(std::optional<std::string_view> socket);
+      static ServerOptions socketOptions(ds::Option<std::string_view> socket);
 
       // An errno a connection can meet is named as everywhere; anything else is described.
       static const char* connectionFailure(int code) noexcept;
@@ -189,7 +190,7 @@ export {
 
       static constexpr unsigned reply_timeout_seconds = 30;
       RuntimePaths<Memory> paths_;
-      std::optional<ControlSession> session_;
+      ds::Option<ControlSession> session_;
     };
 
     void checkLocation(TabLocation actual, TabLocation expected);
@@ -281,8 +282,8 @@ export {
         resolve,
       };
       Action action{};
-      std::optional<std::string_view> branch{}, title{}, from{}, label{}, workspace{}, directory{}, machine{}, dispatched_from{}, repository{}, socket{};
-      std::optional<CoordinatorReference> coordinator{};
+      ds::Option<std::string_view> branch{}, title{}, from{}, label{}, workspace{}, directory{}, machine{}, dispatched_from{}, repository{}, socket{};
+      ds::Option<CoordinatorReference> coordinator{};
       Arguments command{};
       std::uint64_t client = 0;
       unsigned timeout = default_wait_seconds;

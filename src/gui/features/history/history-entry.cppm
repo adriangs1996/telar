@@ -10,6 +10,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: history/choice.cppm
 export {
@@ -75,7 +76,7 @@ export {
       std::size_t full_length = 0;
       std::int64_t started_at_ms = 0;
       std::int64_t duration_ns = 0;
-      std::optional<std::int32_t> exit_code;
+      ds::Option<std::int32_t> exit_code;
       HistoryStatus status = HistoryStatus::completed;
       HistoryAuthor author = HistoryAuthor::human;
       HistoryOrigin origin = HistoryOrigin::pane;

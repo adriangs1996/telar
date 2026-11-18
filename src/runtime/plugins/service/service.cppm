@@ -17,6 +17,7 @@ import telar.runtime.platform.signals;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.vocabulary.exchange;
+import telar.base.ds;
 
 // Interface: plugins/event_source.cppm
 export {
@@ -99,7 +100,7 @@ export {
       ConcurrentMemory& memory_;
       TapBudget budget_;
       ResultQueue<ConcurrentMemory> results_;
-      std::optional<CancellationSignal> cancellation_;
+      ds::Option<CancellationSignal> cancellation_;
       // Workers report to the queue, budget and cancellation above, so the service is pinned.
       tbc::view<Vector<Owned<Worker<>, ConcurrentMemory>, ConcurrentMemory>, tbc::lt::self> workers_;
       FixedText<PATH_MAX> trust_path_;

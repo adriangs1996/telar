@@ -3,6 +3,7 @@ module telar.runtime.vocabulary.traffic;
 import telar.sys.socket;
 import telar.platform.error;
 import telar.platform.net;
+import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
@@ -157,9 +158,9 @@ namespace telar::runtime::plugins {
     writer.timestamp(half->finished_at_ms);
   }
 
-  tbc::view<std::optional<HalfView>, tbc::lt::a> Protocol::readHalf(FrameReader& reader) {
+  tbc::view<ds::Option<HalfView>, tbc::lt::a> Protocol::readHalf(FrameReader& reader) {
     if (!reader.boolean()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     HalfView half;

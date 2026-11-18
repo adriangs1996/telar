@@ -42,6 +42,7 @@ import telar.runtime.terminal.control;
 import telar.platform.net;
 import telar.config.core;
 import telar.runtime.command_capture.tracker;
+import telar.base.ds;
 
 // Interface: model/pending_clipboard.cppm
 export {
@@ -110,8 +111,8 @@ export {
       std::size_t slot = 0;
       FrameSync frames;
       GraphicsSynchronizer graphics;
-      std::optional<std::uint32_t> viewport;
-      std::optional<ConfigurePaneDesktop> desktop;
+      ds::Option<std::uint32_t> viewport;
+      ds::Option<ConfigurePaneDesktop> desktop;
       bool exit_sent = false;
       std::uint64_t title_revision = 1;
       std::uint64_t cwd_revision = 0;
@@ -171,13 +172,13 @@ export {
       ClientRole role = ClientRole::undecided;
       std::uint64_t last_input_pane = 0;
       std::uint64_t last_input_sequence = 0;
-      std::optional<PendingClientCommand> pending_command;
-      std::optional<PendingPaneFocus> pending_focus;
+      ds::Option<PendingClientCommand> pending_command;
+      ds::Option<PendingPaneFocus> pending_focus;
       Connection<ConcurrentMemory> connection;
       Vector<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory> attachments;
       PendingClipboard clipboard;
       std::size_t next_attachment = 0;
-      std::optional<std::uint64_t> completing_exit;
+      ds::Option<std::uint64_t> completing_exit;
       bool layout_sent = false;
       bool proxy_status_sent = false;
       bool agent_snapshot_requested = false;
@@ -185,26 +186,26 @@ export {
       bool shared_graphics = false;
       std::uint64_t editor_source = 0;
       std::uint64_t editor_generation = 0;
-      std::optional<ProcessIdentity> peer_identity;
+      ds::Option<ProcessIdentity> peer_identity;
       std::uint64_t agent_revision = 0;
       std::uint64_t metrics_revision = 0;
       std::uint64_t verified_pane = 0;
       std::uint64_t verified_generation = 0;
       ProcessLineage verified_lineage;
-      std::optional<DescentCheck> pending_descent;
+      ds::Option<DescentCheck> pending_descent;
       bool descent_running = false;
       DeferredReport<ConcurrentMemory> deferred_report;
       unsigned limit_reports = 0;
       std::chrono::steady_clock::time_point limit_report_window{};
-      std::optional<std::uint64_t> workspace;
+      ds::Option<std::uint64_t> workspace;
       std::chrono::nanoseconds frame_interval{1'000'000'000 / 60};
       std::uint64_t workspace_revision = 0;
       std::uint64_t agent_workspace_revision = 0;
       std::uint64_t pane_revision = 0;
       std::uint64_t pane_workspace_revision = 0;
-      std::optional<ResyncRequired> workspace_resync;
+      ds::Option<ResyncRequired> workspace_resync;
       std::array<ForegroundStamp, 256> foregrounds;
-      std::optional<TextSearch> search;
+      ds::Option<TextSearch> search;
       ConfigureTerminalColors colors{};
       // The client draws telar's editor in place of the shell's prompt: shells it starts print none.
       bool bare_prompt = false;
@@ -313,9 +314,9 @@ export {
 
       void resize(TerminalSize size);
 
-      std::optional<bool> shellForeground() const noexcept;
+      ds::Option<bool> shellForeground() const noexcept;
 
-      std::optional<std::int32_t> exitCode() const noexcept;
+      ds::Option<std::int32_t> exitCode() const noexcept;
 
       static constexpr std::size_t input_limit = 128 * 1024;
       static constexpr std::size_t read_buffer_size = 16 * 1024;
@@ -325,12 +326,12 @@ export {
 #endif
       std::uint64_t id;
       std::uint64_t event_identity = 0;
-      std::optional<ConfigurePaneDesktop> desktop_theme;
+      ds::Option<ConfigurePaneDesktop> desktop_theme;
       std::uint64_t generation = 1;
       std::array<Byte, 16> history_session;
       TabLocation location;
       LaunchRecord<ConcurrentMemory> launch;
-      std::optional<AgentResume> restored_agent;
+      ds::Option<AgentResume> restored_agent;
       std::shared_ptr<PtyResponseQueue> pty_responses;
       std::shared_ptr<PaneObserver> observer;
       std::shared_ptr<PaneMedia> media;
@@ -340,10 +341,10 @@ export {
       // Reads rows of `terminal`'s scrollback for clients that ask for them.
       ScrollbackRows scrollback_rows;
       String<ConcurrentMemory> cwd;
-      std::optional<PtyProcess> process;
+      ds::Option<PtyProcess> process;
       std::uint32_t observers = 0;
       std::uint64_t cwd_revision = 0;
-      std::optional<std::uint64_t> worktree_checked_cwd;
+      ds::Option<std::uint64_t> worktree_checked_cwd;
       std::uint64_t input_revision = 0;
       FixedText<48> foreground;
       std::uint64_t foreground_revision = 1;
@@ -360,12 +361,12 @@ export {
       bool needs_foreground_observation = false;
       // The integrated shell's own reading of its signed marks, on the runtime's thread so its
       // state reaches clients with the output that changed it.
-      std::optional<CommandZones> shell_zones;
+      ds::Option<CommandZones> shell_zones;
       // The commands it ran, anchored in `terminal`, which outlives them.
-      std::optional<CommandBlocks> blocks;
+      ds::Option<CommandBlocks> blocks;
       // When input last reached a remote shell's line editor, until its echo arrives, and the
       // link's round trip so far, smoothed.
-      std::optional<std::chrono::steady_clock::time_point> echo_sent;
+      ds::Option<std::chrono::steady_clock::time_point> echo_sent;
       double link_average_ms = 0;
       PaneShell shell_state{};
       // The shell the pane started, which an `ssh` session it nests stands in for.
@@ -379,15 +380,15 @@ export {
       FixedText<PATH_MAX> git_directory;
       bool write_interest = false;
       bool read_paused = false;
-      std::optional<int> exit_status;
+      ds::Option<int> exit_status;
       std::chrono::steady_clock::time_point sync_started{};
-      std::optional<std::chrono::steady_clock::time_point> last_input;
+      ds::Option<std::chrono::steady_clock::time_point> last_input;
       bool close_requested = false;
       ProcessCache process_cache;
       std::uint32_t process_rechecks = 0;
       bool process_recheck_requested = false;
       bool process_recheck_running = false;
-      std::optional<RejectedReporter> rejected_reporter;
+      ds::Option<RejectedReporter> rejected_reporter;
 
     private:
       // Counts the commands the integrated shell finished, for its clients, and keeps the marks
@@ -396,7 +397,7 @@ export {
         struct Mark {
           char action = 0;
           std::size_t end = 0;
-          std::optional<int> status;
+          ds::Option<int> status;
         };
 
         PaneShell& state;
@@ -413,7 +414,7 @@ export {
       // Folds one round trip into the link's; clients hear of it when it moves by a tenth.
       void timeLink(std::chrono::steady_clock::duration elapsed) noexcept;
 
-      void expireProgress(std::optional<bool> shell_foreground) noexcept;
+      void expireProgress(ds::Option<bool> shell_foreground) noexcept;
 
 #if TELAR_DIAGNOSTICS
       void recordRead(std::size_t size, bool folded) noexcept;
@@ -452,7 +453,7 @@ export {
     public:
       explicit Workspace(ConcurrentMemory& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
 
-      Tab* tab(std::uint64_t tab_id) noexcept;
+      Tab* tabMut(std::uint64_t tab_id) noexcept;
 
       const Tab* tab(std::uint64_t tab_id) const noexcept;
 
@@ -462,7 +463,7 @@ export {
       String<ConcurrentMemory> path;
       String<ConcurrentMemory> name;
       Vector<Tab, ConcurrentMemory> tabs;
-      std::optional<std::uint64_t> geometry_client;
+      ds::Option<std::uint64_t> geometry_client;
       FixedText<200> git_branch;
       std::chrono::steady_clock::time_point git_checked_at{};
       bool git_dirty = false;
@@ -483,9 +484,9 @@ export {
 
       std::uint64_t id;
       std::uint64_t source;
-      std::optional<std::uint64_t> workspace;
-      std::optional<std::uint64_t> created_by;
-      std::optional<CoordinatorReference> coordinator;
+      ds::Option<std::uint64_t> workspace;
+      ds::Option<std::uint64_t> created_by;
+      ds::Option<CoordinatorReference> coordinator;
       WorktreeOrigin origin;
       WorktreeState state = WorktreeState::active;
       String<ConcurrentMemory> path;
@@ -504,7 +505,7 @@ export {
       std::chrono::steady_clock::time_point checked_at{};
       CommandState command_state = CommandState::none;
       std::int32_t command_exit = 0;
-      std::optional<std::uint64_t> command_pane;
+      ds::Option<std::uint64_t> command_pane;
     };
 
     class Worktrees {
@@ -640,7 +641,7 @@ export {
 
       void publish(const RuntimeModel& model, ClientSession& client);
 
-      std::optional<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
+      ds::Option<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
 
       std::uint64_t revision() const noexcept;
 

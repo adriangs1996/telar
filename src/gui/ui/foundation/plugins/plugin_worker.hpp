@@ -60,6 +60,7 @@ import telar.plugins;
 import telar.gui.foundation.actions;
 import telar.config.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -119,7 +120,7 @@ namespace telar::gui::qt {
   };
 
   struct PluginWorkerResult {
-    std::optional<application::plugins::PluginEffects> effects;
+    ds::Option<application::plugins::PluginEffects> effects;
     QString error;
   };
 
@@ -158,7 +159,7 @@ namespace telar::gui::qt {
     PluginWorker& operator=(PluginWorker&&) = delete;
 
     [[nodiscard]] bool active() const noexcept {
-      return invocation_.has_value();
+      return invocation_.hasValue();
     }
 
     void start(const application::plugins::PluginInvocation& invocation, std::uint64_t execution, const QString& program) {
@@ -197,7 +198,7 @@ namespace telar::gui::qt {
       output_length_ += bytes.size();
     }
 
-    void commandFinished(std::optional<CommandFailure> failure) {
+    void commandFinished(ds::Option<CommandFailure> failure) {
       PluginWorkerResult result;
 
       if (failure) {
@@ -218,7 +219,7 @@ namespace telar::gui::qt {
       try {
         auto prepared = preparation_.future().takeResult();
         if (!prepared.error.isEmpty()) {
-          deliver({.effects = std::nullopt, .error = prepared.error});
+          deliver({.effects = ds::none, .error = prepared.error});
 
           return;
         }
@@ -226,12 +227,12 @@ namespace telar::gui::qt {
         snapshot_ = std::move(prepared.snapshot);
         process_.start(snapshot_->command);
       } catch (const std::exception& error) {
-        deliver({.effects = std::nullopt, .error = QString::fromUtf8(error.what())});
+        deliver({.effects = ds::none, .error = QString::fromUtf8(error.what())});
       }
     }
 
     void deliver(const PluginWorkerResult& result) {
-      auto invocation = std::exchange(invocation_, std::nullopt);
+      auto invocation = std::exchange(invocation_, ds::none);
       const auto execution = std::exchange(execution_, 0);
 
       snapshot_.reset();
@@ -244,7 +245,7 @@ namespace telar::gui::qt {
     Observer& observer_;
     QFutureWatcher<PluginWorkerPreparation> preparation_;
     PreparedPluginWorker snapshot_;
-    std::optional<application::plugins::PluginInvocation> invocation_;
+    ds::Option<application::plugins::PluginInvocation> invocation_;
     std::array<Byte, application::plugins::PluginEffects::maximum_bytes> output_{};
     std::size_t output_length_ = 0;
     std::uint64_t execution_ = 0;

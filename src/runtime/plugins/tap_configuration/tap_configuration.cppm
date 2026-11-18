@@ -21,6 +21,7 @@ import telar.platform.error;
 import telar.base.text;
 import telar.base.memory.allocators;
 import telar.platform.net;
+import telar.base.ds;
 
 // Interface: plugins/action_encoder.cppm
 export {
@@ -67,7 +68,7 @@ export {
 
     private:
       Memory& memory_;
-      std::optional<TemporaryDirectory> directory_;
+      ds::Option<TemporaryDirectory> directory_;
     };
 
     extern template class PackageSnapshots<Memory>;
@@ -105,7 +106,7 @@ export {
             output_(output),
             wait_(std::move(wait)) {}
 
-      inline Wait& wait() noexcept {
+      inline Wait& waitMut() noexcept {
         return wait_;
       }
 
@@ -230,7 +231,7 @@ export {
 
       explicit TapBudget(std::size_t limit = Limits::held_bytes) noexcept;
 
-      std::optional<Charge> charge(std::size_t bytes) noexcept;
+      ds::Option<Charge> charge(std::size_t bytes) noexcept;
 
       std::size_t used() const noexcept;
 

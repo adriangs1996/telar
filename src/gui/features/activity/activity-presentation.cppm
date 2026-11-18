@@ -6,6 +6,7 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/agent_card_geometry.cppm
 export {
@@ -71,7 +72,7 @@ export {
       static constexpr std::uint64_t pulse_interval_ns = 120'000'000;
 
       [[nodiscard]] static float alpha(std::uint64_t now_ns) noexcept;
-      [[nodiscard]] static std::optional<std::uint64_t> deadline(AgentStatus status, bool connected, std::uint64_t now_ns) noexcept;
+      [[nodiscard]] static ds::Option<std::uint64_t> deadline(AgentStatus status, bool connected, std::uint64_t now_ns) noexcept;
     };
 
   }

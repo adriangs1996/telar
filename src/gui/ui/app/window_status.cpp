@@ -86,8 +86,8 @@ namespace telar::gui::qt {
 
   void WindowStatus::dismiss() {
     error_.clear();
-    store_.session().dismissDiagnostic();
-    store_.connection().dismissError();
+    store_.sessionMut().dismissDiagnostic();
+    store_.connectionMut().dismissError();
     publish();
   }
 

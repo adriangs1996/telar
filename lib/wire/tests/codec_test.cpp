@@ -18,6 +18,7 @@ import telar.wire.graphics;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -105,7 +106,7 @@ namespace {
   // The one byte where two encodings of the same size differ.
   std::size_t differingByte(const Bytes& left, const Bytes& right) {
     check(left.size() == right.size());
-    std::optional<std::size_t> found;
+    ds::Option<std::size_t> found;
 
     for (std::size_t index = 0; index < left.size(); ++index) {
       if (left[index] != right[index]) {
@@ -114,7 +115,7 @@ namespace {
       }
     }
 
-    check(found.has_value());
+    check(found.hasValue());
     return *found;
   }
 
@@ -301,7 +302,7 @@ namespace {
     Storage storage{64 * 1024};
 
     check(decodes<PaneFrame>(encoded(fixture.snapshot()), storage, [&](const PaneFrame& frame) {
-      check(frame.text_metadata.has_value());
+      check(frame.text_metadata.hasValue());
       const auto& metadata = *frame.text_metadata;
 
       check(std::ranges::equal(metadata.row_flags, fixture.row_flags) && std::ranges::equal(metadata.uris, fixture.uris));
@@ -441,11 +442,11 @@ namespace {
           ++read;
         }
       } catch (const EncodingError&) {
-        return std::optional<std::size_t>{};
+        return ds::Option<std::size_t>{};
       }
 
       static_cast<void>(sum);
-      return std::optional<std::size_t>{read};
+      return ds::Option<std::size_t>{read};
     };
 
     constexpr Byte single = 1 << 5;

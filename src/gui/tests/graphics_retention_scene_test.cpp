@@ -53,6 +53,7 @@ static_assert(true);
 import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace {
 
@@ -104,7 +105,7 @@ namespace {
 
   class ImageItem final : public QQuickItem {
   public:
-    ImageItem(const std::optional<GraphicsStore<Memory>>& store, const Screen<Memory>& screen, QQuickItem& parent)
+    ImageItem(const ds::Option<GraphicsStore<Memory>>& store, const Screen<Memory>& screen, QQuickItem& parent)
         : QQuickItem(&parent),
           store_(store),
           screen_(screen) {
@@ -117,9 +118,9 @@ namespace {
       update();
     }
 
-    [[nodiscard]] std::optional<ImagePlacementSource> source() noexcept {
+    [[nodiscard]] ds::Option<ImagePlacementSource> source() noexcept {
       if (!store_) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return ImagePlacementSource{.owner = this, .store = &*store_, .cell = cell_};
@@ -146,7 +147,7 @@ namespace {
     }
 
   private:
-    const std::optional<GraphicsStore<Memory>>& store_;
+    const ds::Option<GraphicsStore<Memory>>& store_;
     const Screen<Memory>& screen_;
     QSizeF cell_{cell_side, cell_side};
   };
@@ -198,7 +199,7 @@ namespace {
         throw std::logic_error{"The image fixture requires its catalog"};
       }
 
-      return *catalog_;
+      return catalog_.getMut();
     }
 
     [[nodiscard]] QQuickWindow& window() noexcept {
@@ -221,7 +222,7 @@ namespace {
       return statistics_;
     }
 
-    [[nodiscard]] const std::optional<GraphicsStore<Memory>>& catalog() const noexcept {
+    [[nodiscard]] const ds::Option<GraphicsStore<Memory>>& catalog() const noexcept {
       return catalog_;
     }
 
@@ -332,7 +333,7 @@ namespace {
     ApplicationMemory application_memory_;
     ApplicationAllocator& memory_ = application_memory_.memory();
     GraphicsBudget budget_;
-    std::optional<GraphicsStore<Memory>> catalog_;
+    ds::Option<GraphicsStore<Memory>> catalog_;
     Screen<Memory> screen_;
     WindowImageStatistics statistics_;
     std::vector<LimitReach> placement_limits_;
@@ -399,13 +400,13 @@ namespace {
       folds.assign(spans);
       const ImageRows plain{.top = top};
 
-      QCOMPARE(plain.drawn(below), std::optional<std::int64_t>{below - static_cast<std::int64_t>(top)});
+      QCOMPARE(plain.drawn(below), ds::Option<std::int64_t>{below - static_cast<std::int64_t>(top)});
       const ImageRows folded{.top = top, .folds = &folds};
 
-      QCOMPARE(folded.drawn(above), std::optional<std::int64_t>{above - static_cast<std::int64_t>(top)});
-      QCOMPARE(folded.drawn(below), std::optional<std::int64_t>{below - fold_rows - static_cast<std::int64_t>(top)});
+      QCOMPARE(folded.drawn(above), ds::Option<std::int64_t>{above - static_cast<std::int64_t>(top)});
+      QCOMPARE(folded.drawn(below), ds::Option<std::int64_t>{below - fold_rows - static_cast<std::int64_t>(top)});
       QVERIFY(!folded.drawn(fold_first + 1));
-      QCOMPARE(folded.drawn(-1), std::optional<std::int64_t>{-1 - static_cast<std::int64_t>(top)});
+      QCOMPARE(folded.drawn(-1), ds::Option<std::int64_t>{-1 - static_cast<std::int64_t>(top)});
     }
 
     Q_SLOT static void highestPlacementsAreSelectedBeforeAnyUpload() {
@@ -422,17 +423,17 @@ namespace {
         fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index + 1, .columns = 2, .rows = 2, .z_index = std::numeric_limits<std::int32_t>::max(), .location = PlacementLocation::placeholders}});
       }
 
-      std::array<std::optional<GraphicsStore<Memory>>, view_count - 1> catalogs;
+      std::array<ds::Option<GraphicsStore<Memory>>, view_count - 1> catalogs;
       std::vector<std::unique_ptr<ImageItem>> views;
 
       for (std::size_t index = 1; index < view_count; ++index) {
         auto& catalog = catalogs[index - 1];
 
         catalog.emplace(fixture.memory_, fixture.budget_);
-        catalog->image({.header = header, .image = image});
-        catalog->chunk({.header = header, .key = image.key, .bytes = fixture.graphics().findImage(image.key)->pixels()});
+        catalog.getMut().image({.header = header, .image = image});
+        catalog.getMut().chunk({.header = header, .key = image.key, .bytes = fixture.graphics().findImage(image.key)->pixels()});
         for (std::size_t placement_index = 0; placement_index < placements_per_view; ++placement_index) {
-          catalog->placement({.header = header, .placement = {.key = image.key, .virtual_id = placement_index + 1, .columns = 2, .rows = 2, .z_index = static_cast<std::int32_t>(index)}});
+          catalog.getMut().placement({.header = header, .placement = {.key = image.key, .virtual_id = placement_index + 1, .columns = 2, .rows = 2, .z_index = static_cast<std::int32_t>(index)}});
         }
 
         auto view = std::make_unique<ImageItem>(catalog, fixture.screen_, *fixture.window().contentItem());
@@ -451,7 +452,7 @@ namespace {
       QCOMPARE(fixture.statistics().resources.allocations, view_count - 1);
       QCOMPARE(fixture.placement_limits_.size(), std::size_t{1});
       QCOMPARE(fixture.placement_limits_.front().name, ImagePlacementSelection::limit_name);
-      QCOMPARE(fixture.placement_limits_.front().requested, std::optional<std::uint64_t>{view_count * placements_per_view});
+      QCOMPARE(fixture.placement_limits_.front().requested, ds::Option<std::uint64_t>{view_count * placements_per_view});
       fixture.setCapturePhase(QStringLiteral("placeholder-admitted"));
       views.back()->setVisible(false);
       QTRY_COMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -747,14 +748,14 @@ namespace {
         const GraphicsStore temporary{memory, fixture.budget()};
       }
 
-      std::optional<GraphicsStore<Memory>> catalog{std::in_place, memory, fixture.budget()};
+      ds::Option<GraphicsStore<Memory>> catalog{std::in_place, memory, fixture.budget()};
       constexpr std::size_t texture_bytes = 16;
       constexpr Byte full_channel = 255;
       const std::array<Byte, texture_bytes> pixels{0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel};
 
-      catalog->image({.header = header, .image = image});
-      catalog->chunk({.header = header, .key = image.key, .bytes = pixels});
-      catalog->placement({.header = header, .placement = {.key = image.key, .virtual_id = 1, .columns = 2, .rows = 2}});
+      catalog.getMut().image({.header = header, .image = image});
+      catalog.getMut().chunk({.header = header, .key = image.key, .bytes = pixels});
+      catalog.getMut().placement({.header = header, .placement = {.key = image.key, .virtual_id = 1, .columns = 2, .rows = 2}});
       const Screen<Memory> screen{memory};
       ImageItem other{catalog, screen, *fixture.window().contentItem()};
 

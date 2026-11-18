@@ -54,14 +54,14 @@ namespace telar::gui::platform {
 
   void ClipboardImageMonitor::cancel() noexcept {
     if (xcb_) {
-      xcb_->cancel();
+      xcb_.getMut().cancel();
     }
   }
 
   ClipboardImageSource ClipboardImageMonitor::snapshot() {
     const auto* const board = QGuiApplication::clipboard();
     if (xcb_ && board != nullptr && !board->ownsClipboard()) {
-      return xcb_->capture();
+      return xcb_.getMut().capture();
     }
 
     if (native_.available()) {

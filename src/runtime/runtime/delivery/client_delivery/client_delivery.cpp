@@ -12,6 +12,7 @@ import telar.runtime.terminal.control;
 import telar.render.document;
 import telar.wire.pane_io;
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -41,7 +42,7 @@ namespace telar::runtime {
       }
     }
 
-    pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? std::optional{control::ClipboardRoute{preferred->id, preferred->generation}} : std::nullopt);
+    pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? ds::Option{control::ClipboardRoute{preferred->id, preferred->generation}} : ds::none);
   }
 
   bool ClipboardService::advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now) {
@@ -449,7 +450,7 @@ namespace telar::runtime {
     }
 
     TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.client_resyncs));
-    auto& change = *client.workspace_resync;
+    auto& change = client.workspace_resync.getMut();
 
     change.workspace_closed = model_.workspaces.find(change.workspace.id) == nullptr;
     client.connection.send(change);

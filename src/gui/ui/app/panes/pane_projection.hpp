@@ -118,7 +118,7 @@ namespace telar::gui::qt {
         {QStringLiteral("activityKind"), static_cast<int>(pane.progress_state == PaneProgressState::remove ? application::activity::TabActivity::Kind::none : application::activity::TabActivity::Kind::progress)},
         {QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(progress_color)])},
         {QStringLiteral("progressSample"), progressValue({.pane_id = pane.id, .attachment = pane.attachment_generation, .state = pane.progress_state, .percent = pane.progress_percent})},
-        {QStringLiteral("progressText"), toQString(application::workbench::PaneProgressPresentation::text(pane.progress_state, pane.progress_percent.value_or(0)).view())},
+        {QStringLiteral("progressText"), toQString(application::workbench::PaneProgressPresentation::text(pane.progress_state, pane.progress_percent.valueOr(0)).view())},
     };
   }
 

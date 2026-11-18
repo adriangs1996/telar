@@ -11,6 +11,7 @@ import telar.config.client;
 import telar.config.core;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 // Interface: components/node.cppm
 export {
@@ -35,8 +36,8 @@ export {
     };
 
     struct Style {
-      std::optional<ColorName::Value> foreground = std::nullopt;
-      std::optional<ColorName::Value> background = std::nullopt;
+      ds::Option<ColorName::Value> foreground = ds::none;
+      ds::Option<ColorName::Value> background = ds::none;
       bool bold = false;
       bool italic = false;
       bool faint = false;
@@ -68,13 +69,13 @@ export {
       Range detail{};
       Range url{};
       Range samples{};
-      std::optional<runtime::FixedText<maximum_icon_bytes>> icon = std::nullopt;
-      std::optional<Mark> mark = std::nullopt;
+      ds::Option<runtime::FixedText<maximum_icon_bytes>> icon = ds::none;
+      ds::Option<Mark> mark = ds::none;
       BarMetric metric = BarMetric::cpu;
       Tone tone = Tone::neutral;
       Style style{};
       std::uint16_t value = 0;
-      std::optional<std::uint16_t> marker = std::nullopt;
+      ds::Option<std::uint16_t> marker = ds::none;
       std::uint8_t priority = default_priority;
       bool primary = false;
       std::uint8_t action = no_action;
@@ -90,7 +91,7 @@ export {
       std::string_view detail;
       std::string_view url;
       std::span<const std::uint8_t> samples;
-      std::optional<BindingAction> action = std::nullopt;
+      ds::Option<BindingAction> action = ds::none;
     };
 
   }
@@ -129,7 +130,7 @@ export {
 
       [[nodiscard]] std::span<const std::uint8_t> samples(const Node& node) const;
 
-      [[nodiscard]] std::optional<BindingAction> action(const Node& node) const;
+      [[nodiscard]] ds::Option<BindingAction> action(const Node& node) const;
 
       [[nodiscard]] Input inputAt(std::size_t index) const;
 
@@ -197,7 +198,7 @@ export {
 
       [[nodiscard]] Color index(std::uint8_t index) const noexcept;
 
-      [[nodiscard]] std::optional<Color> name(std::string_view name) const noexcept;
+      [[nodiscard]] ds::Option<Color> name(std::string_view name) const noexcept;
     };
 
     // Maps what the configuration's readers read onto the GUI's nodes.
@@ -206,9 +207,9 @@ export {
       // An icon name as the GUI keys it: lowercase, with underscores for hyphens.
       static runtime::FixedText<Node::maximum_icon_bytes> iconName(std::string_view name);
 
-      static std::optional<runtime::FixedText<Node::maximum_icon_bytes>> icon(const std::optional<std::string_view>& name);
+      static ds::Option<runtime::FixedText<Node::maximum_icon_bytes>> icon(const ds::Option<std::string_view>& name);
 
-      static std::optional<Mark> mark(std::optional<runtime::config::UiMark> mark) noexcept;
+      static ds::Option<Mark> mark(ds::Option<runtime::config::UiMark> mark) noexcept;
 
       static Tone tone(runtime::config::ComponentTone tone) noexcept;
 

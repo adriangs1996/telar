@@ -21,6 +21,7 @@ import telar.base.text.json;
 import telar.client;
 import telar.platform.thread;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: platform/observation_worker.cppm
 export {
@@ -99,7 +100,7 @@ export {
           return;
         }
 
-        std::optional<Result> result;
+        ds::Option<Result> result;
 
         {
           const std::unique_lock lock{mutex_, std::try_to_lock};
@@ -114,7 +115,7 @@ export {
         }
 
         signal_.drain();
-        consume(*result);
+        consume(result.getMut());
       }
 
       inline int descriptor() const noexcept {
@@ -123,7 +124,7 @@ export {
 
       template <typename Consumer>
       inline void wait(Consumer&& consume) {
-        std::optional<Result> result;
+        ds::Option<Result> result;
 
         {
           std::unique_lock lock{mutex_};
@@ -133,7 +134,7 @@ export {
           }
 
           completed_.wait(lock, [&] {
-            return result_.has_value();
+            return result_.hasValue();
           });
 
           result = std::move(result_);
@@ -153,7 +154,7 @@ export {
             std::unique_lock lock{mutex_};
 
             ready_.wait(lock, [&] {
-              return stopping_ || request_.has_value();
+              return stopping_ || request_.hasValue();
             });
 
             if (stopping_) {
@@ -190,10 +191,10 @@ export {
       std::mutex mutex_;
       std::condition_variable ready_;
       std::condition_variable completed_;
-      tbc::view<std::optional<Request>, tbc::lt::a> request_;
+      tbc::view<ds::Option<Request>, tbc::lt::a> request_;
       // Only the worker's thread touches the request it is answering.
-      tbc::view<std::optional<Request>, tbc::lt::a> processing_;
-      std::optional<Result> result_;
+      tbc::view<ds::Option<Request>, tbc::lt::a> processing_;
+      ds::Option<Result> result_;
       bool busy_ = false;
       std::atomic<bool> result_ready_{false};
       bool stopping_ = false;
@@ -267,7 +268,7 @@ export {
 
     public:
       inline explicit RequestQueue(Memory& memory)
-          : slots_(Capacity, AllocatorRef<std::optional<Value>, Memory>{memory}) {}
+          : slots_(Capacity, AllocatorRef<ds::Option<Value>, Memory>{memory}) {}
 
       inline bool empty() const noexcept {
         return count_ == 0;
@@ -281,9 +282,9 @@ export {
         return count_;
       }
 
-      inline Value& operator[](std::size_t offset) noexcept {
+      inline Value& atMut(std::size_t offset) noexcept {
         TELAR_ASSERT(offset < count_);
-        return *slots_[(head_ + offset) % Capacity];
+        return slots_[(head_ + offset) % Capacity].getMut();
       }
 
       inline const Value& operator[](std::size_t offset) const noexcept {
@@ -324,7 +325,7 @@ export {
       }
 
     private:
-      Vector<std::optional<Value>, Memory> slots_;
+      Vector<ds::Option<Value>, Memory> slots_;
       std::size_t head_ = 0;
       std::size_t count_ = 0;
     };
@@ -472,7 +473,7 @@ export {
         signal_.drain();
 
         for (;;) {
-          std::optional<Completion> completed;
+          ds::Option<Completion> completed;
 
           {
             const std::lock_guard lock{mutex_};
@@ -574,7 +575,7 @@ export {
 
         bool cancelled = false;
         bool superseded = false;
-        std::optional<HistoryQueryOrder> history_query;
+        ds::Option<HistoryQueryOrder> history_query;
 
         inline bool durable() const noexcept {
           if (internal) {
@@ -597,7 +598,7 @@ export {
         RequestContext context;
         String<Memory> workspace_path;
         String<Memory> prompt;
-        std::optional<typename InternalRequestType<Service>::Type> internal;
+        ds::Option<typename InternalRequestType<Service>::Type> internal;
       };
 
       struct Completion {
@@ -623,7 +624,7 @@ export {
       inline void cancelQueued(Predicate&& matches) noexcept {
         for (auto* queue : {&batch_, &requests_}) {
           for (std::size_t index = 0; index < queue->size(); ++index) {
-            auto& job = (*queue)[index];
+            auto& job = queue->atMut(index);
             if (matches(job) && !job.durable()) {
               job.cancelled = true;
             }
@@ -633,7 +634,7 @@ export {
 
       inline void run() noexcept {
         for (;;) {
-          std::optional<Job> job;
+          ds::Option<Job> job;
 
           {
             std::unique_lock lock{mutex_};
@@ -665,13 +666,13 @@ export {
               continue;
             }
 
-            job->superseded = historySuperseded(*job);
+            job.getMut().superseded = historySuperseded(*job);
             active_client_ = job->client;
             active_cancelled_ = false;
           }
 
-          execute(*job);
-          complete(*job);
+          execute(job.getMut());
+          complete(job.getMut());
         }
       }
 

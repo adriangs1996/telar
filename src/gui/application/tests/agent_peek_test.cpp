@@ -38,6 +38,7 @@ import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace {
 
@@ -140,13 +141,13 @@ namespace {
       }
 
       check(refused && features::peek::text(screen).empty() && features::peek::target(screen) && !features::peek::reading(screen), "allocation failure keeps the source identity and releases read admission for a later retry");
-      memory.permit(std::nullopt);
+      memory.permit(ds::none);
       const auto retry = features::peek::read(screen, first_request + 1);
       if (!retry) {
         throw std::runtime_error{"A failed text allocation must admit a fresh retry request"};
       }
 
-      const auto dropped = features::peek::receive(screen, {.request_id = retry.value().request_id, .pane_id = target.agent.pane_id, .text = text, .exit_code = {}});
+      const auto dropped = features::peek::receive(screen, {.request_id = retry.get().request_id, .pane_id = target.agent.pane_id, .text = text, .exit_code = {}});
 
       check(dropped && *dropped == symbol.size() && features::peek::text(screen).size() == text.size() - symbol.size(), "a bounded peek drops a complete leading UTF-8 character at its tail boundary");
       const auto copied = std::string{features::peek::text(screen)};
@@ -161,7 +162,7 @@ namespace {
         throw std::runtime_error{"A completed read must admit a later refresh"};
       }
 
-      check(features::peek::receive(screen, {.request_id = next.value().request_id, .pane_id = target.agent.pane_id, .text = copied, .exit_code = {}}) == 0 && budget.allocations() == allocations, "steady-state recent reads reuse their injected storage");
+      check(features::peek::receive(screen, {.request_id = next.get().request_id, .pane_id = target.agent.pane_id, .text = copied, .exit_code = {}}) == 0 && budget.allocations() == allocations, "steady-state recent reads reuse their injected storage");
       features::peek::close(screen);
       features::peek::open(screen, target);
       const auto current = features::peek::read(screen, first_request + 3);
@@ -170,7 +171,7 @@ namespace {
       }
 
       check(!features::peek::receive(screen, {.request_id = first_request, .pane_id = target.agent.pane_id, .text = "old", .exit_code = {}}) && features::peek::reading(screen), "a retired reply cannot complete a later peek's read");
-      check(!features::peek::fail(screen, first_request) && features::peek::fail(screen, current.value().request_id) && !features::peek::reading(screen), "failed reads release only their own request ownership");
+      check(!features::peek::fail(screen, first_request) && features::peek::fail(screen, current.get().request_id) && !features::peek::reading(screen), "failed reads release only their own request ownership");
     }
 
     check(budget.liveBytes() == 0, "peek buffers must release all injected memory");

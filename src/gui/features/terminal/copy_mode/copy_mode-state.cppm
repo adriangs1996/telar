@@ -7,6 +7,7 @@ import std;
 import telar.gui.foundation.terminal;
 import telar.wire.clipboard;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: terminal/copy_state.cppm
 export {
@@ -25,8 +26,8 @@ export {
     struct CopyState {
       std::uint64_t pane_id = 0;
       CopyPoint cursor;
-      std::optional<CopyPointer> pointer = std::nullopt;
-      std::optional<CopyPoint> anchor = std::nullopt;
+      ds::Option<CopyPointer> pointer = ds::none;
+      ds::Option<CopyPoint> anchor = ds::none;
       bool linewise = false;
       std::uint32_t entry_offset = 0;
       std::uint32_t viewport_offset = 0;
@@ -35,7 +36,7 @@ export {
 
       bool operator==(const CopyState&) const = default;
 
-      [[nodiscard]] std::optional<CopySelection> selectionRequest() const noexcept;
+      [[nodiscard]] ds::Option<CopySelection> selectionRequest() const noexcept;
 
       void horizontal(const CopyGrid& grid, std::int32_t delta) noexcept;
 

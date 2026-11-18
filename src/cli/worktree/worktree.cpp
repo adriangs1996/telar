@@ -18,6 +18,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace telar::runtime::cli::repository {
 
@@ -109,9 +110,9 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  std::optional<std::string> matching(Memory& memory, std::string_view path, std::string_view identity) {
+  ds::Option<std::string> matching(Memory& memory, std::string_view path, std::string_view identity) {
     if (path.contains('\0') || path.size() >= PATH_MAX) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::string root;
@@ -119,7 +120,7 @@ namespace telar::runtime::cli::repository {
     try {
       root = mainRoot(memory, path);
     } catch (const std::exception&) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto directory = file_transfer::openDirectory(root);
@@ -127,10 +128,10 @@ namespace telar::runtime::cli::repository {
     try {
       Git git{memory, root};
       if (normalize(git.read({"config", "--get", "remote.origin.url"})) != identity) {
-        return std::nullopt;
+        return ds::none;
       }
     } catch (const std::exception&) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return root;
@@ -140,7 +141,7 @@ namespace telar::runtime::cli::repository {
   // `identity` among the runtime's workspaces and worktrees, the workspaces
   // history recorded and the managed clone. It starts the runtime if needed.
   template <Allocator Memory>
-  std::optional<std::string> find(Memory& memory, std::string_view identity, std::optional<std::string_view> selected, std::optional<std::string_view> socket = std::nullopt) {
+  ds::Option<std::string> find(Memory& memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
     const ProcessEnvironment environment;
     ServerOptions server;
 
@@ -193,7 +194,7 @@ namespace telar::runtime::cli::repository {
         result = candidate;
       }
 
-      std::optional<std::string> result;
+      ds::Option<std::string> result;
 
     private:
       Memory& memory_;
@@ -354,7 +355,7 @@ namespace telar::runtime::cli::repository {
     receiveBundle(bundle.get(), options.bytes);
     const auto bundle_path = stage + "/history.bundle";
     const auto staged_repository = stage + "/repository";
-    const auto root = existing.value_or(staged_repository);
+    const auto root = existing.valueOr(staged_repository);
 
     if (!existing && ::mkdirat(directory.get(), "repository", 0700) != 0) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
@@ -385,7 +386,7 @@ namespace telar::runtime::cli::repository {
       }
     }
 
-    return {.path = existing.value_or(managed), .commit = std::string{options.commit}, .repository = std::string{options.identity}, .reused = existing.has_value()};
+    return {.path = existing.valueOr(managed), .commit = std::string{options.commit}, .repository = std::string{options.identity}, .reused = existing.hasValue()};
   }
 
   constexpr std::size_t max_transfer_tips = 256;
@@ -588,7 +589,7 @@ namespace telar::runtime::cli::repository {
   PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, const machines::MachineProfile& profile) {
     ProfileCapture capture{memory, profile};
 
-    return prepare(memory, options, profile.program().value_or("telar"), capture);
+    return prepare(memory, options, profile.program().valueOr("telar"), capture);
   }
 
   int run(Memory& memory, const RepositoryOptions& options) {
@@ -656,7 +657,7 @@ namespace telar::runtime::cli::sessions {
     int create() {
       const auto branch = *options_.branch;
       const bool continued = git_.succeeds({"git", "-C", root_, "rev-parse", "--verify", "--quiet", "refs/heads/" + std::string{branch}});
-      const auto source = continued ? branch : options_.from.value_or("HEAD");
+      const auto source = continued ? branch : options_.from.valueOr("HEAD");
       const auto commit = commitOf(source);
       const RepositoryOptions prepare_options{
           .action = RepositoryOptions::Action::prepare,
@@ -671,17 +672,17 @@ namespace telar::runtime::cli::sessions {
       const auto local = machine::localLabel(profiles).substr(0, machines::MachineLimits::label_bytes);
       const auto coordinator = options_.coordinator ? options_.coordinator : sourceCoordinator();
       std::vector<std::string> words{"worktree", "create", std::string{branch}, "--workspace", clone, "--dispatched-from", std::string{local}};
-      const auto optional = [&](std::string_view flag, std::optional<std::string> value) {
+      const auto optional = [&](std::string_view flag, ds::Option<std::string> value) {
         if (value) {
           words.emplace_back(flag);
-          words.push_back(std::move(*value));
+          words.push_back(std::move(value.getMut()));
         }
       };
 
-      optional("--title", options_.title ? std::optional<std::string>{*options_.title} : std::nullopt);
-      optional("--label", options_.label ? std::optional<std::string>{*options_.label} : std::nullopt);
-      optional("--coordinator", coordinator ? std::optional{formatCoordinator(*coordinator)} : std::nullopt);
-      optional("--from", continued ? std::nullopt : std::optional{commit});
+      optional("--title", options_.title ? ds::Option<std::string>{*options_.title} : ds::none);
+      optional("--label", options_.label ? ds::Option<std::string>{*options_.label} : ds::none);
+      optional("--coordinator", coordinator ? ds::Option{formatCoordinator(*coordinator)} : ds::none);
+      optional("--from", continued ? ds::none : ds::Option{commit});
       if (options_.setup) {
         words.emplace_back("--setup");
       }
@@ -781,15 +782,15 @@ namespace telar::runtime::cli::sessions {
 
     // The agent session of the pane this command runs in, when the runtime
     // confirms the process descends from it.
-    std::optional<CoordinatorReference> sourceCoordinator() {
+    ds::Option<CoordinatorReference> sourceCoordinator() {
       const auto id = maybeUnsigned(process_environment.lookup("TELAR_PANE_ID"));
       const auto generation = maybeUnsigned(process_environment.lookup("TELAR_PANE_GENERATION"));
       if (!id || !generation || *id == 0 || *generation == 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       try {
-        Channel session{memory_, std::nullopt, false};
+        Channel session{memory_, ds::none, false};
 
         session.template exchange<RequestCompleted>(VerifyPaneDescent{.pane_id = *id, .pane_generation = *generation});
         const auto agents = session.template exchange<AgentSnapshot>(QueryAgents{});
@@ -804,7 +805,7 @@ namespace telar::runtime::cli::sessions {
       } catch (const std::exception&) {
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     static std::string formatCoordinator(const CoordinatorReference& reference) {
@@ -940,7 +941,7 @@ namespace telar::runtime::cli::sessions {
   }
 
   struct WorktreeLaunch {
-    std::optional<std::uint64_t> setup{};
+    ds::Option<std::uint64_t> setup{};
     std::uint64_t worktree{};
     std::string_view path{}, branch{}, base{};
     PaneOpened opened{};
@@ -961,10 +962,10 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  std::optional<std::uint64_t> currentWorkspace() {
+  ds::Option<std::uint64_t> currentWorkspace() {
     const auto value = std::getenv("TELAR_WORKSPACE_ID");
 
-    return value ? maybeUnsigned(value) : std::nullopt;
+    return value ? maybeUnsigned(value) : ds::none;
   }
 
   bool confirmRemoval(const char* question) {
@@ -1143,14 +1144,14 @@ namespace telar::runtime::cli::sessions {
       return opened.location.workspace.id;
     }
 
-    std::optional<std::uint64_t> attributedPane() {
+    ds::Option<std::uint64_t> attributedPane() {
       // Each value is parsed before the next getenv, which may overwrite the storage it returned.
       const auto* id_text = std::getenv("TELAR_PANE_ID");
-      const auto id = id_text ? maybeUnsigned(id_text) : std::nullopt;
+      const auto id = id_text ? maybeUnsigned(id_text) : ds::none;
       const auto* generation_text = std::getenv("TELAR_PANE_GENERATION");
-      const auto generation = generation_text ? maybeUnsigned(generation_text) : std::nullopt;
+      const auto generation = generation_text ? maybeUnsigned(generation_text) : ds::none;
       if (!id || !generation || *id == 0 || *generation == 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       try {
@@ -1158,17 +1159,17 @@ namespace telar::runtime::cli::sessions {
         verified_generation_ = *generation;
         return id;
       } catch (const std::exception&) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
-    std::optional<CoordinatorReference> coordinator(std::optional<std::uint64_t> pane) {
+    ds::Option<CoordinatorReference> coordinator(ds::Option<std::uint64_t> pane) {
       if (options_.coordinator) {
         return options_.coordinator;
       }
 
       if (!pane) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto agents = session_.template exchange<AgentSnapshot>(QueryAgents{});
@@ -1181,7 +1182,7 @@ namespace telar::runtime::cli::sessions {
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     std::string brief() const {
@@ -1233,7 +1234,7 @@ namespace telar::runtime::cli::sessions {
         }
       }
 
-      return session_.template exchange<PaneOpened>(LaunchWorktree{.worktree = id, .label = options_.label.value_or(""), .size = launch_size, .launch = {.cwd = directory, .arguments = argv}});
+      return session_.template exchange<PaneOpened>(LaunchWorktree{.worktree = id, .label = options_.label.valueOr(""), .size = launch_size, .launch = {.cwd = directory, .arguments = argv}});
     }
 
     void create() {
@@ -1273,7 +1274,7 @@ namespace telar::runtime::cli::sessions {
       const auto pane = attributedPane();
       const auto reference = coordinator(pane);
       const auto description = brief();
-      const auto registered = session_.template exchange<WorktreeRegistered>(RegisterWorktree{.source = source, .created_by = pane, .path = checkout, .branch = branch, .base = base, .title = options_.title.value_or(""), .brief = description, .dispatched_from = options_.dispatched_from.value_or(""), .coordinator = reference});
+      const auto registered = session_.template exchange<WorktreeRegistered>(RegisterWorktree{.source = source, .created_by = pane, .path = checkout, .branch = branch, .base = base, .title = options_.title.valueOr(""), .brief = description, .dispatched_from = options_.dispatched_from.valueOr(""), .coordinator = reference});
       const auto setup = project_setup::prepare(memory_, session_.control(), checkout, options_.setup);
       const auto opened = launch(registered.worktree, checkout);
 
@@ -1384,7 +1385,7 @@ namespace telar::runtime::cli::sessions {
     void list() {
       Channel agents_channel{memory_, options_.socket, false};
       const auto agents = agents_channel.template exchange<AgentSnapshot>(QueryAgents{});
-      std::optional<std::uint64_t> source;
+      ds::Option<std::uint64_t> source;
 
       if (options_.workspace) {
         source = maybeUnsigned(*options_.workspace);
@@ -1488,7 +1489,7 @@ namespace telar::runtime::cli::sessions {
         throw Failure{"no tracked worktree matches that branch or title", 2};
       }
 
-      std::optional<std::string> root;
+      ds::Option<std::string> root;
 
       try {
         root = git_.root(entry->path);
@@ -1538,7 +1539,7 @@ namespace telar::runtime::cli::sessions {
           {"NotARepository", "not inside a git repository"},
       }};
 
-      std::optional<std::string> found;
+      ds::Option<std::string> found;
 
       try {
         found = repository::find(memory_, *options_.repository, options_.workspace, options_.socket);

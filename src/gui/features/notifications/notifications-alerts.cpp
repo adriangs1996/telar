@@ -4,12 +4,13 @@ import std;
 import telar.tbc;
 import telar.gui.foundation.model;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
-  tbc::view<std::optional<NotificationInput>, tbc::lt::a> AgentAlerts::input(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message) {
+  tbc::view<ds::Option<NotificationInput>, tbc::lt::a> AgentAlerts::input(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message) {
     if (!alertable(change)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto text = formatMessage(change, label, message);
@@ -48,10 +49,10 @@ namespace telar::gui::features::notifications {
     }
   }
 
-  tbc::view<std::optional<NotificationInput>, tbc::lt::a> AgentAlerts::summary(tbc::view<Message&, tbc::lt::a> message) const {
+  tbc::view<ds::Option<NotificationInput>, tbc::lt::a> AgentAlerts::summary(tbc::view<Message&, tbc::lt::a> message) const {
     const auto total = blocked_ + done_ + failed_;
     if (total == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     message.appendDecimal(total);

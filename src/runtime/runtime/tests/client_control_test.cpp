@@ -166,7 +166,7 @@ namespace {
     check(!owner.session().connection.closing);
     check(owner.session().connection.responseDepth() == 128);
     check(owner.session().connection.droppedResponses() == 1);
-    check(owner.session().workspace_resync.has_value());
+    check(owner.session().workspace_resync.hasValue());
     check(owner.session().workspace_resync->workspace.id == opened.location.workspace.id);
     check(owner.session().workspace_resync->workspace_closed);
 #if TELAR_DIAGNOSTICS
@@ -218,10 +218,10 @@ namespace {
     static_cast<ClientCommand&>(completion) = forwarded;
     completion.status = ClientCommandStatus::applied;
     ClientControl::completeCommand(clients, impostor.session().id, completion);
-    check(requester.session().pending_command.has_value());
+    check(requester.session().pending_command.hasValue());
     completion.action = ClientAction::sidebar_hide;
     ClientControl::completeCommand(clients, target.session().id, completion);
-    check(requester.session().pending_command.has_value());
+    check(requester.session().pending_command.hasValue());
 
     completion.action = request.action;
     ClientControl::completeCommand(clients, target.session().id, completion);
@@ -301,7 +301,7 @@ namespace {
     CompletePaneFocus completion{.requester = forwarded.requester, .request_id = 1, .pane_id = pane_id, .pane_generation = pane_generation + 1, .outcome = PaneFocusOutcome::focused, .focused_pane_id = pane_id};
 
     ClientControl::completeFocus(clients, target.session().id, completion);
-    check(requester.session().pending_focus.has_value());
+    check(requester.session().pending_focus.hasValue());
     completion.pane_generation = pane_generation;
     ClientControl::completeFocus(clients, target.session().id, completion);
     check(requester.receive<PaneFocusResult>().focused_pane_id == pane_id);

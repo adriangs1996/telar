@@ -3,8 +3,10 @@
 static_assert(true);
 #endif
 
-#include "history_loading_layout.hpp"
+// projection.hpp declares telar::String textually; it comes before the header that imports
+// telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
 #include "ui/foundation/models/projection.hpp"
+#include "history_loading_layout.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
 #include <QPointer>
 #include <QQuickItem>
@@ -18,6 +20,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -80,8 +83,8 @@ namespace telar::gui::qt {
     return waiting_ && isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> HistoryLoadingLayout::deadline(std::uint64_t now_ns) const noexcept {
-    return cue_visible_ ? std::optional{application::workbench::ProgressAnimation::nextStep(now_ns, application::history::HistoryLoading::step_ns)} : cue_.deadline();
+  ds::Option<std::uint64_t> HistoryLoadingLayout::deadline(std::uint64_t now_ns) const noexcept {
+    return cue_visible_ ? ds::Option{application::workbench::ProgressAnimation::nextStep(now_ns, application::history::HistoryLoading::step_ns)} : cue_.deadline();
   }
 
   void HistoryLoadingLayout::sample(std::uint64_t now_ns) {

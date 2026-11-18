@@ -7,6 +7,7 @@ import telar.sys.process;
 import telar.base.text;
 import telar.platform.fs;
 import telar.runtime.diagnostics.operation;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #else
@@ -32,35 +33,35 @@ namespace telar::runtime::diagnostics {
     line.timing("sqlite_query_avg_us", "sqlite_query_max_us", metrics.queries.timing);
   }
 
-  std::optional<LogName> LogName::parse(std::string_view name) noexcept {
+  ds::Option<LogName> LogName::parse(std::string_view name) noexcept {
     const bool rotated = name.ends_with(".log.1");
     if (rotated) {
       name.remove_suffix(2);
     }
 
     if (!name.ends_with(".log")) {
-      return std::nullopt;
+      return ds::none;
     }
 
     name.remove_suffix(4);
     const auto dash = name.rfind('-');
     if (dash == std::string_view::npos) {
-      return std::nullopt;
+      return ds::none;
     }
 
-    const auto process = unsignedDecimal<std::uint32_t>(name.substr(dash + 1)).value_or(0);
+    const auto process = unsignedDecimal<std::uint32_t>(name.substr(dash + 1)).valueOr(0);
     if (process == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto dot = name.substr(0, dash).rfind('.');
     if (dot == std::string_view::npos) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto role = name.substr(dot + 1, dash - dot - 1);
     if (role != "runtime" && role != "client") {
-      return std::nullopt;
+      return ds::none;
     }
 
     return LogName{name.substr(0, dot), role == "runtime" ? Role::runtime : Role::client, process, rotated};
@@ -211,7 +212,7 @@ namespace telar::runtime::diagnostics {
 
   LogSession::~LogSession() {
     if (worker_) {
-      worker_->wait([](bool) {});
+      worker_.getMut().wait([](bool) {});
     }
   }
 

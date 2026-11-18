@@ -144,7 +144,7 @@ export {
         return *this;
       }
 
-      inline std::span<std::uint8_t> bytes() noexcept {
+      inline std::span<std::uint8_t> bytesMut() noexcept {
         return {storage_, size_};
       }
 

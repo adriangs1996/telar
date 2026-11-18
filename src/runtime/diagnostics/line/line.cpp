@@ -1,4 +1,5 @@
 module telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime::diagnostics {
 
@@ -18,7 +19,7 @@ namespace telar::runtime::diagnostics {
     length_ = static_cast<std::size_t>(result.ptr - bytes_.data());
   }
 
-  void Line::field(std::string_view name, std::optional<std::uint64_t> value) {
+  void Line::field(std::string_view name, ds::Option<std::uint64_t> value) {
     if (value) {
       field(name, *value);
     } else {

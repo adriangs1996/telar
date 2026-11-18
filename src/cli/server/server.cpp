@@ -10,6 +10,7 @@ import telar.platform.daemon;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -28,14 +29,14 @@ namespace telar::runtime::cli {
 
   }
 
-  std::optional<std::string_view> helpText(HelpTopic topic) noexcept {
+  ds::Option<std::string_view> helpText(HelpTopic topic) noexcept {
     for (const auto& entry : help_texts) {
       if (entry.family == topic.family && entry.command == topic.command) {
         return entry.text;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   // The command a family's second word names, when its help lists it.
@@ -49,9 +50,9 @@ namespace telar::runtime::cli {
     return word == "--help" || word == "-h";
   }
 
-  std::optional<HelpTopic> findHelp(std::span<char* const> words) noexcept {
+  ds::Option<HelpTopic> findHelp(std::span<char* const> words) noexcept {
     if (words.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (isHelpFlag(words.front())) {
@@ -60,7 +61,7 @@ namespace telar::runtime::cli {
 
     const auto family = parseFamily(words.front());
     if (!family) {
-      return std::nullopt;
+      return ds::none;
     }
 
     bool asked = false;
@@ -77,7 +78,7 @@ namespace telar::runtime::cli {
     }
 
     if (!asked) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const std::string_view second = words.size() > 1 ? words[1] : "";
@@ -86,7 +87,7 @@ namespace telar::runtime::cli {
   }
 
   std::string helpReference(std::span<char* const> words) {
-    const auto family = words.empty() ? std::nullopt : parseFamily(words.front());
+    const auto family = words.empty() ? ds::none : parseFamily(words.front());
     if (!family) {
       return "telar --help";
     }
@@ -104,7 +105,7 @@ namespace telar::runtime::cli {
     return reference;
   }
 
-  bool connectExisting(std::optional<RuntimeConnection>& connection, const char* path) {
+  bool connectExisting(ds::Option<RuntimeConnection>& connection, const char* path) {
     try {
       connection.emplace(path);
       return true;
@@ -124,7 +125,7 @@ namespace telar::runtime::cli {
     paths.prepareSocket();
     const auto child = launchDaemon(memory, options, paths, ExecutablePath{runtime_program});
     const auto deadline = std::chrono::steady_clock::now() + start_window;
-    std::optional<RuntimeConnection> connection;
+    ds::Option<RuntimeConnection> connection;
 
     while (!connectExisting(connection, paths.socket.c_str())) {
       int status = 0;
@@ -144,7 +145,7 @@ namespace telar::runtime::cli {
 
   template <Allocator Memory>
   void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
-    std::optional<RuntimeConnection> connection;
+    ds::Option<RuntimeConnection> connection;
     if (!connectExisting(connection, paths.socket.c_str())) {
       const auto started = startRuntime(memory, options, paths);
       if (started == RuntimeStart::exited) {
@@ -162,13 +163,13 @@ namespace telar::runtime::cli {
   }
 
   void stopRuntime(const char* socket) {
-    std::optional<RuntimeConnection> connection;
+    ds::Option<RuntimeConnection> connection;
     if (!connectExisting(connection, socket)) {
       std::puts("telar runtime is not running");
       return;
     }
 
-    connection->requestStop();
+    connection.getMut().requestStop();
     std::puts("telar runtime is stopping");
   }
 

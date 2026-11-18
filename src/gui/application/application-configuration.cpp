@@ -19,6 +19,7 @@ import telar.config.snapshot;
 import telar.gui.features.configuration;
 import telar.gui.features.notifications;
 import :access;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
@@ -65,17 +66,17 @@ namespace telar::gui::application {
       configuration.cursor = cursorShape(*cursor.style);
     }
 
-    configuration.cursor_blink = cursor.blink.value_or(configuration.cursor_blink);
+    configuration.cursor_blink = cursor.blink.valueOr(configuration.cursor_blink);
     if (cursor.blink_interval_ms) {
       configuration.blink_interval = std::chrono::milliseconds{*cursor.blink_interval_ms};
     }
 
     auto& scroll = configuration.scroll;
 
-    scroll.smooth = gui.scroll.smooth.value_or(scroll.smooth);
-    scroll.wheel_ms = gui.scroll.wheel_ms.value_or(scroll.wheel_ms);
-    scroll.overscan = static_cast<float>(gui.scroll.overscan.value_or(scroll.overscan));
-    scroll.sticky_headers = gui.scroll.sticky_headers.value_or(scroll.sticky_headers);
+    scroll.smooth = gui.scroll.smooth.valueOr(scroll.smooth);
+    scroll.wheel_ms = gui.scroll.wheel_ms.valueOr(scroll.wheel_ms);
+    scroll.overscan = static_cast<float>(gui.scroll.overscan.valueOr(scroll.overscan));
+    scroll.sticky_headers = gui.scroll.sticky_headers.valueOr(scroll.sticky_headers);
 
     window(gui.window, configuration);
     for (std::size_t index = 0; index < gui.opacity.size(); ++index) {
@@ -84,7 +85,7 @@ namespace telar::gui::application {
       }
     }
 
-    configuration.chrome_scale = static_cast<float>(gui.chrome_scale.value_or(configuration.chrome_scale));
+    configuration.chrome_scale = static_cast<float>(gui.chrome_scale.valueOr(configuration.chrome_scale));
     if (gui.sidebar.automatic) {
       configuration.sidebar_width_auto = true;
     } else if (gui.sidebar.width) {
@@ -92,12 +93,12 @@ namespace telar::gui::application {
       configuration.sidebar_width_auto = false;
     }
 
-    configuration.max_fps = gui.max_fps.value_or(configuration.max_fps);
+    configuration.max_fps = gui.max_fps.valueOr(configuration.max_fps);
   }
 
   void ConfigurationReader::client(const ClientSettings& settings, Configuration& configuration) {
-    configuration.sidebar_visible = settings.sidebar_visible.value_or(configuration.sidebar_visible);
-    configuration.pane_gaps = settings.pane_gaps.value_or(configuration.pane_gaps);
+    configuration.sidebar_visible = settings.sidebar_visible.valueOr(configuration.sidebar_visible);
+    configuration.pane_gaps = settings.pane_gaps.valueOr(configuration.pane_gaps);
     if (settings.editor) {
       DisplayText16<Configuration::maximum_editor_bytes, false>::validate(*settings.editor);
       configuration.editor.assign(*settings.editor);
@@ -117,9 +118,9 @@ namespace telar::gui::application {
   }
 
   void ConfigurationReader::sound(const ClientSettings::Sound& settings, SoundPolicy& policy) noexcept {
-    policy.enabled = settings.enabled.value_or(policy.enabled);
-    policy.ready = settings.ready.value_or(policy.ready);
-    policy.needs_input = settings.needs_input.value_or(policy.needs_input);
+    policy.enabled = settings.enabled.valueOr(policy.enabled);
+    policy.ready = settings.ready.valueOr(policy.ready);
+    policy.needs_input = settings.needs_input.valueOr(policy.needs_input);
   }
 
   void ConfigurationReader::prompt(const runtime::config::PromptSettings& settings, std::vector<PromptBinding> bindings, PromptConfiguration& prompt) {
@@ -139,12 +140,12 @@ namespace telar::gui::application {
       prompt.keymap = mapped<PromptKeymap>(*settings.keymap);
     }
 
-    prompt.ghost = settings.ghost.value_or(prompt.ghost);
-    prompt.max_lines = settings.max_lines.value_or(prompt.max_lines);
+    prompt.ghost = settings.ghost.valueOr(prompt.ghost);
+    prompt.max_lines = settings.max_lines.valueOr(prompt.max_lines);
   }
 
   void ConfigurationReader::history(const ClientSettings::History& settings, HistoryConfiguration& history) noexcept {
-    history.show_agent_commands = settings.show_agent_commands.value_or(history.show_agent_commands);
+    history.show_agent_commands = settings.show_agent_commands.valueOr(history.show_agent_commands);
     if (settings.enter) {
       history.enter_runs = *settings.enter == ClientSettings::HistoryEnter::run;
     }
@@ -163,18 +164,18 @@ namespace telar::gui::application {
       font.style.assign(settings.style->view());
     }
 
-    font.size = static_cast<float>(settings.size.value_or(font.size));
-    font.line_height = static_cast<float>(settings.line_height.value_or(font.line_height));
-    font.letter_spacing = static_cast<float>(settings.letter_spacing.value_or(font.letter_spacing));
-    font.thicken = settings.thicken.value_or(font.thicken);
-    font.thicken_strength = settings.thicken_strength.value_or(font.thicken_strength);
+    font.size = static_cast<float>(settings.size.valueOr(font.size));
+    font.line_height = static_cast<float>(settings.line_height.valueOr(font.line_height));
+    font.letter_spacing = static_cast<float>(settings.letter_spacing.valueOr(font.letter_spacing));
+    font.thicken = settings.thicken.valueOr(font.thicken);
+    font.thicken_strength = settings.thicken_strength.valueOr(font.thicken_strength);
     if (settings.hinting) {
       font.hinting = mapped<FontHinting>(*settings.hinting);
     }
   }
 
   void ConfigurationReader::window(const runtime::config::GuiSettings::Window& settings, Configuration& configuration) {
-    configuration.background_opacity = static_cast<float>(settings.background_opacity.value_or(configuration.background_opacity));
+    configuration.background_opacity = static_cast<float>(settings.background_opacity.valueOr(configuration.background_opacity));
     if (settings.titlebar) {
       configuration.titlebar = settings.titlebar;
     }
@@ -185,8 +186,8 @@ namespace telar::gui::application {
       configuration.background_blur = *settings.blur_radius;
     }
 
-    configuration.padding_x = static_cast<float>(settings.padding_x.value_or(configuration.padding_x));
-    configuration.padding_y = static_cast<float>(settings.padding_y.value_or(configuration.padding_y));
+    configuration.padding_x = static_cast<float>(settings.padding_x.valueOr(configuration.padding_x));
+    configuration.padding_y = static_cast<float>(settings.padding_y.valueOr(configuration.padding_y));
   }
 
   CursorShape ConfigurationReader::cursorShape(runtime::config::CursorStyle style) noexcept {
@@ -203,16 +204,16 @@ namespace telar::gui::application {
           descriptions_(descriptions),
           definitions_(definitions) {}
 
-    [[nodiscard]] std::optional<BindingAction> read(const runtime::lua::Value& value, bool expression = false) const {
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) const {
       auto action = reader_.read(value, expression);
       if (!action) {
         return {};
       }
 
       if (action->kind == BindingActionKind::callback || action->kind == BindingActionKind::expression) {
-        action->parameter = descriptions_.registerCallback();
+        action.getMut().parameter = descriptions_.registerCallback();
       } else if (action->kind == BindingActionKind::extended) {
-        action->parameter = descriptions_.retain(ActionDescriptionReader::read(value, definitions_));
+        action.getMut().parameter = descriptions_.retain(ActionDescriptionReader::read(value, definitions_));
       }
 
       return action;
@@ -300,7 +301,7 @@ namespace telar::gui::application {
       output_.steps.push_back({.op = setting.op, .count = setting.count, .values = setting.values, .color = color(setting.color), .text = store(setting.text)});
     }
 
-    [[nodiscard]] std::optional<features::components::ResolvedAction> resolve(const runtime::lua::Value& action) const {
+    [[nodiscard]] ds::Option<features::components::ResolvedAction> resolve(const runtime::lua::Value& action) const {
       return resolve_(action);
     }
 
@@ -380,7 +381,7 @@ namespace telar::gui::application {
 
         machine_.invoke(&ComponentInvocation::invoke, &invocation, 1);
       } else {
-        const auto output = context.output.value_or(std::string_view{});
+        const auto output = context.output.valueOr(std::string_view{});
 
         lua_pushlstring(machine_.state(), output.data(), output.size());
       }
@@ -629,14 +630,14 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  std::optional<ExtendedActionDescription> ConfigurationGeneration<Memory>::configuredAction(BindingAction action) const {
+  ds::Option<ExtendedActionDescription> ConfigurationGeneration<Memory>::configuredAction(BindingAction action) const {
     if (action.kind != BindingActionKind::extended || action.generation != number_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto configured = std::span{input_.configured}.first(input_.length);
     if (std::ranges::find(configured, action, &KeyBinding<BindingAction>::action) == configured.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return descriptions_.at(action.parameter);
@@ -651,7 +652,7 @@ namespace telar::gui::application {
 
     const auto& pick = picks[index];
     if (pick.command && !pick.render) {
-      PickItemsReader::lines(context.output.value_or(std::string_view{}), items, notices_);
+      PickItemsReader::lines(context.output.valueOr(std::string_view{}), items, notices_);
 
       return;
     }
@@ -699,22 +700,22 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  std::optional<runtime::config::CommandTabView> ConfigurationGeneration<Memory>::commandTab(BindingAction action) const {
+  ds::Option<runtime::config::CommandTabView> ConfigurationGeneration<Memory>::commandTab(BindingAction action) const {
     if (action.generation != number_ || action.kind != BindingActionKind::command_tab) {
       throw std::invalid_argument{"Command belongs to an obsolete configuration or a different binding kind"};
     }
 
     const auto reference = features::configuration::commandTabReference(action);
 
-    return reference ? client_state_.commands.load(*reference) : std::nullopt;
+    return reference ? client_state_.commands.load(*reference) : ds::none;
   }
 
   template <Allocator Memory>
-  std::optional<NotificationActionDescription> ConfigurationGeneration<Memory>::notificationAction(BindingAction action) const {
+  ds::Option<NotificationActionDescription> ConfigurationGeneration<Memory>::notificationAction(BindingAction action) const {
     const auto description = extendedAction(action);
     const auto* notification = description ? std::get_if<NotificationActionDescription>(&*description) : nullptr;
 
-    return notification == nullptr ? std::nullopt : std::optional{*notification};
+    return notification == nullptr ? ds::none : ds::Option{*notification};
   }
 
   template <Allocator Memory>
@@ -723,26 +724,26 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  std::optional<PluginActionDescription> ConfigurationGeneration<Memory>::pluginAction(BindingAction action) const {
+  ds::Option<PluginActionDescription> ConfigurationGeneration<Memory>::pluginAction(BindingAction action) const {
     const auto description = extendedAction(action);
     const auto* plugin = description ? std::get_if<PluginActionDescription>(&*description) : nullptr;
 
-    return plugin == nullptr ? std::nullopt : std::optional{*plugin};
+    return plugin == nullptr ? ds::none : ds::Option{*plugin};
   }
 
   template <Allocator Memory>
-  std::optional<DefinitionActionDescription> ConfigurationGeneration<Memory>::definitionAction(BindingAction action) const {
+  ds::Option<DefinitionActionDescription> ConfigurationGeneration<Memory>::definitionAction(BindingAction action) const {
     const auto description = extendedAction(action);
     const auto* definition = description ? std::get_if<DefinitionActionDescription>(&*description) : nullptr;
 
-    return definition == nullptr ? std::nullopt : std::optional{*definition};
+    return definition == nullptr ? ds::none : ds::Option{*definition};
   }
 
   template <Allocator Memory>
-  std::optional<NamedActionDescription> ConfigurationGeneration<Memory>::namedAction(BindingAction action) const {
+  ds::Option<NamedActionDescription> ConfigurationGeneration<Memory>::namedAction(BindingAction action) const {
     const auto description = extendedAction(action);
     if (!description) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (const auto* definition = std::get_if<DefinitionActionDescription>(&*description)) {
@@ -753,7 +754,7 @@ namespace telar::gui::application {
       return *plugin;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -815,14 +816,14 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  std::optional<features::components::ResolvedAction> ConfigurationGeneration<Memory>::elementAction(const runtime::lua::Value& value, std::uint32_t index) {
+  ds::Option<features::components::ResolvedAction> ConfigurationGeneration<Memory>::elementAction(const runtime::lua::Value& value, std::uint32_t index) {
     const auto action = withActions([&](const auto& reader) {
       return reader.read(value);
     });
 
     lua_pop(machine_.state(), 1);
     if (!action) {
-      return std::nullopt;
+      return ds::none;
     }
 
     features::components::ResolvedAction resolved;
@@ -849,9 +850,9 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  std::optional<ExtendedActionDescription> ConfigurationGeneration<Memory>::extendedAction(BindingAction action) const {
+  ds::Option<ExtendedActionDescription> ConfigurationGeneration<Memory>::extendedAction(BindingAction action) const {
     if (action.kind != BindingActionKind::extended) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (action.generation != number_) {
@@ -1051,7 +1052,7 @@ namespace telar::gui::application {
     return writer.view();
   }
 
-  void ClientQuery::writeOptionalBytes(JsonWriter& writer, std::optional<std::string_view> text) {
+  void ClientQuery::writeOptionalBytes(JsonWriter& writer, ds::Option<std::string_view> text) {
     if (text) {
       writer.bytes(byteView(*text));
     } else {

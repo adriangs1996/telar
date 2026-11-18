@@ -9,6 +9,7 @@ import telar.base.memory.allocators;
 import telar.gui.foundation.model;
 import telar.wire.layout;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: application/layout_token.cppm
 export {
@@ -65,7 +66,7 @@ export {
       struct Bookmark {
         TabLocation location{};
         std::uint64_t pane_id = 0;
-        std::optional<Layout> layout = std::nullopt;
+        ds::Option<Layout> layout = ds::none;
         bool fullscreen = false;
       };
 
@@ -75,7 +76,7 @@ export {
       void forget(WorkspaceLocation workspace) noexcept;
 
     private:
-      std::array<std::optional<Bookmark>, capacity> entries_{};
+      std::array<ds::Option<Bookmark>, capacity> entries_{};
     };
 
   }
@@ -103,7 +104,7 @@ export {
       [[nodiscard]] std::size_t nodeCount() const noexcept;
       void clear() noexcept;
       [[nodiscard]] View at(std::size_t index) const;
-      [[nodiscard]] std::optional<View> find(TabLocation location) const;
+      [[nodiscard]] ds::Option<View> find(TabLocation location) const;
       bool remember(View saved) noexcept;
       void retain(View saved) noexcept;
       void forget(TabLocation location) noexcept;
@@ -119,7 +120,7 @@ export {
         std::size_t count = 0;
       };
 
-      [[nodiscard]] std::optional<std::size_t> row(TabLocation location) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> row(TabLocation location) const noexcept;
       void remove(std::size_t index) noexcept;
 
       std::array<Row, capacity> rows_{};

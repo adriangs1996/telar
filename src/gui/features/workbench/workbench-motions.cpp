@@ -3,6 +3,7 @@ module telar.gui.features.workbench;
 import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::features::workbench {
 
@@ -57,7 +58,7 @@ namespace telar::gui::features::workbench {
     return now_ns + std::min(std::numeric_limits<std::uint64_t>::max() - now_ns, interval_ns);
   }
 
-  std::optional<std::size_t> AttentionFades::find(PaneAttentionKey key) const noexcept {
+  ds::Option<std::size_t> AttentionFades::find(PaneAttentionKey key) const noexcept {
     const auto entries = std::span{entries_}.first(count_);
 
     for (std::size_t index = 0; index < entries.size(); ++index) {
@@ -66,7 +67,7 @@ namespace telar::gui::features::workbench {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void TabMotionFrame::begin(std::uint64_t timestamp) noexcept {
@@ -356,8 +357,8 @@ namespace telar::gui::features::workbench {
     return value(frame.now_ns);
   }
 
-  void TabMotions::begin(std::optional<WorkspaceLocation> workspace) noexcept {
-    if (workspace_.has_value() != workspace.has_value() || (workspace_ && (workspace_->kind != workspace->kind || workspace_->id != workspace->id))) {
+  void TabMotions::begin(ds::Option<WorkspaceLocation> workspace) noexcept {
+    if (workspace_.hasValue() != workspace.hasValue() || (workspace_ && (workspace_->kind != workspace->kind || workspace_->id != workspace->id))) {
       count_ = 0;
       workspace_ = workspace;
     }

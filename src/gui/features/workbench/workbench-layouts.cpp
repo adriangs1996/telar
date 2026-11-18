@@ -7,6 +7,7 @@ import telar.base.text;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::features::workbench {
 
@@ -102,7 +103,7 @@ namespace telar::gui::features::workbench {
   }
 
   void NavigationHistory::remember(const Bookmark& bookmark) noexcept {
-    std::optional<Bookmark>* free = nullptr;
+    ds::Option<Bookmark>* free = nullptr;
 
     for (auto& entry : entries_) {
       if (entry) {
@@ -164,10 +165,10 @@ namespace telar::gui::features::workbench {
     return {.location = row.location, .pane_id = row.pane_id, .focused_pane = row.focused_pane, .workspace_active = row.workspace_active, .fullscreen = row.fullscreen, .nodes = std::span{nodes_}.subspan(row.start, row.count)};
   }
 
-  std::optional<SavedLayouts::View> SavedLayouts::find(TabLocation location) const {
+  ds::Option<SavedLayouts::View> SavedLayouts::find(TabLocation location) const {
     const auto index = row(location);
 
-    return index && rows_[*index].count != 0 ? std::optional{at(*index)} : std::nullopt;
+    return index && rows_[*index].count != 0 ? ds::Option{at(*index)} : ds::none;
   }
 
   bool SavedLayouts::remember(View saved) noexcept {
@@ -217,14 +218,14 @@ namespace telar::gui::features::workbench {
     }
   }
 
-  std::optional<std::size_t> SavedLayouts::row(TabLocation location) const noexcept {
+  ds::Option<std::size_t> SavedLayouts::row(TabLocation location) const noexcept {
     for (std::size_t index = 0; index < count_; ++index) {
       if (sameTab(rows_[index].location, location)) {
         return index;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void SavedLayouts::remove(std::size_t index) noexcept {

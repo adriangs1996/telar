@@ -6,6 +6,7 @@ import telar.base.memory.containers;
 import telar.base.text;
 import telar.wire.vocabulary;
 import :theme;
+import telar.base.ds;
 
 // Interface: core/configuration.cppm
 export {
@@ -158,7 +159,7 @@ export {
       std::uint16_t max_fps = 0;
       bool sidebar_visible = true;
       bool pane_gaps = true;
-      std::optional<bool> titlebar;
+      ds::Option<bool> titlebar;
     };
 
   }

@@ -2,10 +2,11 @@ module telar.gui.foundation.system;
 
 import std;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline system {
 
-  std::optional<PrivateFileStamp> PrivateFileStamp::read(const char* path) noexcept {
+  ds::Option<PrivateFileStamp> PrivateFileStamp::read(const char* path) noexcept {
     struct stat status{};
     if (::lstat(path, &status) != 0) {
       return {};

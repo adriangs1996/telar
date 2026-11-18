@@ -33,6 +33,7 @@ import telar.platform.process;
 import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
 import telar.runtime.platform.process_probe;
+import telar.base.ds;
 
 namespace {
 
@@ -234,7 +235,7 @@ namespace {
 
     std::ofstream{filename} << "first\nsecond line\nthird\n";
     const char* previous = std::getenv("XDG_RUNTIME_DIR");
-    const std::optional<std::string> original = previous == nullptr ? std::nullopt : std::optional{std::string{previous}};
+    const ds::Option<std::string> original = previous == nullptr ? ds::none : ds::Option{std::string{previous}};
 
     check(::setenv("XDG_RUNTIME_DIR", directory.data(), 1) == 0);
     {
@@ -251,7 +252,7 @@ namespace {
       RequestContext context;
       const auto identity = ProcessInspector{}.identity(process.processId());
 
-      check(identity.has_value());
+      check(identity.hasValue());
       context.editor_candidates[0] = {.pane = 7, .generation = 9, .process = *identity};
       context.editor_candidate_count = 1;
       RemoteEditor editor{memory};

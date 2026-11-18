@@ -185,7 +185,7 @@ namespace {
       for (const auto& item : cases) {
         const auto parsed = Parameters::parse(item.body);
 
-        check(parsed.has_value());
+        check(parsed.hasValue());
         check(parsed->count == item.count && parsed->modifiers() == item.modifiers);
         check(parsed->colon == item.colon && parsed->final == 'n');
         check(parsed->values[0] == 1234);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "foundation/core/wheel_accumulator.hpp"
+#include "telar_base/ds/values.hpp"
 #include <optional>
 #include <string_view>
 
@@ -17,11 +18,11 @@ namespace telar::gui::platform {
 
 #ifdef __APPLE__
   inline constexpr bool native_scroll_events = true;
-  [[nodiscard]] std::optional<NativeScrollInput> nativeScrollInput(std::string_view event_type, const void* message, const QWindow& window) noexcept;
+  [[nodiscard]] ds::Option<NativeScrollInput> nativeScrollInput(std::string_view event_type, const void* message, const QWindow& window) noexcept;
 #else
   inline constexpr bool native_scroll_events = false;
 
-  [[nodiscard]] inline std::optional<NativeScrollInput> nativeScrollInput([[maybe_unused]] std::string_view event_type, [[maybe_unused]] const void* message, [[maybe_unused]] const QWindow& window) noexcept {
+  [[nodiscard]] inline ds::Option<NativeScrollInput> nativeScrollInput([[maybe_unused]] std::string_view event_type, [[maybe_unused]] const void* message, [[maybe_unused]] const QWindow& window) noexcept {
     return {};
   }
 #endif

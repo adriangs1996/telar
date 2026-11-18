@@ -102,7 +102,7 @@ namespace {
       auto first = SensitiveAllocation{memory, 127};
       auto second = SensitiveAllocation{memory, 63};
 
-      std::fill(first.bytes().begin(), first.bytes().end(), 72);
+      std::fill(first.bytesMut().begin(), first.bytesMut().end(), 72);
       second = std::move(first);
       check(first.bytes().empty() && second.bytes().size() == 127 && memory.liveBytes() == 127);
       auto moved = std::move(second);

@@ -4,6 +4,7 @@ export module telar.gui.features.components:picks;
 import std;
 
 import telar.config.core;
+import telar.base.ds;
 
 // Interface: components/pick_items.cppm
 export {
@@ -14,8 +15,8 @@ export {
     struct PickInput {
       std::string_view label;
       std::string_view detail;
-      std::optional<std::string_view> value = std::nullopt;
-      std::optional<PickSwatch> swatch = std::nullopt;
+      ds::Option<std::string_view> value = ds::none;
+      ds::Option<PickSwatch> swatch = ds::none;
       bool selected = false;
     };
 
@@ -23,7 +24,7 @@ export {
       std::string_view label;
       std::string_view value;
       std::string_view detail;
-      std::optional<PickSwatch> swatch;
+      ds::Option<PickSwatch> swatch;
       bool selected;
     };
 
@@ -56,7 +57,7 @@ export {
         Range label;
         Range value;
         Range detail;
-        std::optional<PickSwatch> swatch = std::nullopt;
+        ds::Option<PickSwatch> swatch = ds::none;
         bool selected = false;
       };
 

@@ -155,7 +155,7 @@ namespace telar::runtime::cli {
 
     int run(std::span<char* const> words) {
       if (const auto topic = findHelp(words)) {
-        const auto text = helpText(*topic).value_or(helpText({}).value_or(""));
+        const auto text = helpText(*topic).valueOr(helpText({}).valueOr(""));
 
         std::fwrite(text.data(), 1, text.size(), stdout);
         return 0;

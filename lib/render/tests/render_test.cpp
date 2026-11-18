@@ -322,7 +322,7 @@ Footnote[^1].
       std::vector<std::uint8_t> bytes(body.size());
       const auto size = runtime::base64::decode(body, bytes);
 
-      check(size.has_value(), "base64 body");
+      check(size.hasValue(), "base64 body");
       if (size) {
         bytes.resize(*size);
         Doc decoded{memory};

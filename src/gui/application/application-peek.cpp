@@ -11,6 +11,7 @@ import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace telar::gui::application::peek {
 
@@ -109,7 +110,7 @@ namespace telar::gui::application::peek {
     return true;
   }
 
-  const std::optional<PeekTarget>& target(const Session& session) noexcept {
+  const ds::Option<PeekTarget>& target(const Session& session) noexcept {
     return features::peek::target(Access::peek(session));
   }
 

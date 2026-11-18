@@ -5,6 +5,7 @@ import telar.base.text;
 import telar.base.memory.containers;
 import telar.config.core;
 import telar.lua;
+import telar.base.ds;
 
 // Interface: telar_config/gui_reader.cppm
 export {
@@ -50,41 +51,41 @@ export {
       using FontName = FixedText<GuiBounds::font_name_bytes>;
 
       struct Font {
-        std::optional<FontName> family;
-        std::optional<FontName> style;
-        std::optional<double> size;
-        std::optional<double> line_height;
-        std::optional<double> letter_spacing;
-        std::optional<bool> thicken;
-        std::optional<std::uint8_t> thicken_strength;
-        std::optional<FontHinting> hinting;
+        ds::Option<FontName> family;
+        ds::Option<FontName> style;
+        ds::Option<double> size;
+        ds::Option<double> line_height;
+        ds::Option<double> letter_spacing;
+        ds::Option<bool> thicken;
+        ds::Option<std::uint8_t> thicken_strength;
+        ds::Option<FontHinting> hinting;
       };
 
       struct Cursor {
-        std::optional<CursorStyle> style;
-        std::optional<bool> blink;
-        std::optional<std::uint16_t> blink_interval_ms;
+        ds::Option<CursorStyle> style;
+        ds::Option<bool> blink;
+        ds::Option<std::uint16_t> blink_interval_ms;
       };
 
       struct Scroll {
-        std::optional<bool> smooth;
-        std::optional<std::uint16_t> wheel_ms;
-        std::optional<double> overscan;
-        std::optional<bool> sticky_headers;
+        ds::Option<bool> smooth;
+        ds::Option<std::uint16_t> wheel_ms;
+        ds::Option<double> overscan;
+        ds::Option<bool> sticky_headers;
       };
 
       struct Window {
-        std::optional<double> background_opacity;
-        std::optional<bool> titlebar;
+        ds::Option<double> background_opacity;
+        ds::Option<bool> titlebar;
         // `background_blur = true` or false, or a radius.
-        std::optional<bool> blur;
-        std::optional<std::uint8_t> blur_radius;
-        std::optional<double> padding_x;
-        std::optional<double> padding_y;
+        ds::Option<bool> blur;
+        ds::Option<std::uint8_t> blur_radius;
+        ds::Option<double> padding_x;
+        ds::Option<double> padding_y;
       };
 
       struct Sidebar {
-        std::optional<double> width;
+        ds::Option<double> width;
         bool automatic = false;
       };
 
@@ -93,9 +94,9 @@ export {
       Scroll scroll;
       Window window;
       Sidebar sidebar;
-      std::optional<double> chrome_scale;
-      std::optional<std::uint16_t> max_fps;
-      std::array<std::optional<double>, surface_names.size()> opacity{};
+      ds::Option<double> chrome_scale;
+      ds::Option<std::uint16_t> max_fps;
+      std::array<ds::Option<double>, surface_names.size()> opacity{};
     };
 
     class GuiReader {
@@ -104,12 +105,12 @@ export {
 
     private:
       static void font(const lua::Value& table, GuiSettings::Font& font);
-      static std::optional<GuiSettings::FontName> text(const lua::Value& value);
+      static ds::Option<GuiSettings::FontName> text(const lua::Value& value);
       static void cursor(const lua::Value& table, GuiSettings::Cursor& cursor);
       static void scroll(const lua::Value& table, GuiSettings::Scroll& scroll);
       static void window(const lua::Value& table, GuiSettings::Window& window);
       static void chrome(const lua::Value& table, GuiSettings& settings);
-      static void opacity(const lua::Value& table, std::array<std::optional<double>, surface_names.size()>& opacity);
+      static void opacity(const lua::Value& table, std::array<ds::Option<double>, surface_names.size()>& opacity);
       static void sidebar(const lua::Value& table, GuiSettings::Sidebar& sidebar);
     };
 
@@ -129,45 +130,45 @@ export {
 
     // A theme color as configured: an RGB value, or the terminal's own color for "default".
     struct ThemeColor {
-      std::optional<ThemeRgb> rgb;
+      ds::Option<ThemeRgb> rgb;
     };
 
     // One theme table as read: the preset it starts from and each value it sets.
     struct ThemeSettings {
       struct Terminal {
         static constexpr std::size_t palette_size = 16;
-        std::optional<ThemeRgb> foreground;
-        std::optional<ThemeRgb> background;
-        std::optional<ThemeRgb> cursor_color;
-        std::optional<ThemeRgb> cursor_text_color;
-        std::optional<std::array<ThemeRgb, palette_size>> palette;
+        ds::Option<ThemeRgb> foreground;
+        ds::Option<ThemeRgb> background;
+        ds::Option<ThemeRgb> cursor_color;
+        ds::Option<ThemeRgb> cursor_text_color;
+        ds::Option<std::array<ThemeRgb, palette_size>> palette;
       };
 
       struct Syntax {
-        std::optional<ThemeColor> color;
-        std::optional<bool> italic;
-        std::optional<bool> bold;
+        ds::Option<ThemeColor> color;
+        ds::Option<bool> italic;
+        ds::Option<bool> bold;
       };
 
       // The preset's canonical name, which outlives the configuration.
-      std::optional<std::string_view> preset;
-      std::array<std::optional<ThemeColor>, theme_color_names.size()> colors{};
+      ds::Option<std::string_view> preset;
+      std::array<ds::Option<ThemeColor>, theme_color_names.size()> colors{};
       Terminal terminal;
-      std::array<std::optional<Syntax>, theme_syntax_names.size()> syntax{};
+      std::array<ds::Option<Syntax>, theme_syntax_names.size()> syntax{};
     };
 
     // `theme` (or its alias `client.theme`) and the `client.appearance` variants of a
     // configuration or a profile.
     struct ThemeSelectionSettings {
-      std::optional<ThemeSettings> base;
-      std::optional<ThemeSettings> light;
-      std::optional<ThemeSettings> dark;
+      ds::Option<ThemeSettings> base;
+      ds::Option<ThemeSettings> light;
+      ds::Option<ThemeSettings> dark;
     };
 
     class ThemeReader {
     public:
       [[nodiscard]] static ThemeSelectionSettings selection(const lua::Value& configuration);
-      [[nodiscard]] static std::optional<ThemeSettings> read(const lua::Value& theme);
+      [[nodiscard]] static ds::Option<ThemeSettings> read(const lua::Value& theme);
 
     private:
       // Each name a theme may give, with the preset it selects.
@@ -193,12 +194,12 @@ export {
           {"zenburn", "zenburn"},
       }};
 
-      static std::optional<std::string_view> preset(const lua::Value& value);
+      static ds::Option<std::string_view> preset(const lua::Value& value);
       static ThemeColor color(const lua::Value& value, bool allow_default);
-      static std::optional<ThemeRgb> rgb(const lua::Value& value);
-      static void colors(const lua::Value& table, std::array<std::optional<ThemeColor>, theme_color_names.size()>& colors);
+      static ds::Option<ThemeRgb> rgb(const lua::Value& value);
+      static void colors(const lua::Value& table, std::array<ds::Option<ThemeColor>, theme_color_names.size()>& colors);
       static void terminal(const lua::Value& table, ThemeSettings::Terminal& terminal);
-      static void syntax(const lua::Value& table, std::array<std::optional<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax);
+      static void syntax(const lua::Value& table, std::array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax);
       static void appearance(const lua::Value& table, ThemeSelectionSettings& selection);
     };
 

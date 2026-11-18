@@ -17,6 +17,7 @@ import telar.platform.error;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -57,14 +58,14 @@ namespace {
   }
 
   template <typename Exception, typename Operation>
-  std::optional<Exception> failure(Operation&& operation) {
+  ds::Option<Exception> failure(Operation&& operation) {
     try {
       operation();
     } catch (const Exception& error) {
       return error;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   // The root redirect helper and the CLI connect through this to the runtime: an endpoint another
@@ -74,10 +75,10 @@ namespace {
 
     check(failure<std::invalid_argument>([] {
       traffic::connect("relative/traffic.sock");
-    }).has_value());
+    }).hasValue());
     check(failure<std::invalid_argument>([&] {
       traffic::connect(directory.file(std::string{"traffic\0.sock", 13}));
-    }).has_value());
+    }).hasValue());
 
     const auto regular = directory.file("regular");
 
@@ -101,7 +102,7 @@ namespace {
     listening(stale, 0600).reset();
     check(failure<SystemError>([&] {
       traffic::connect(stale);
-    }).has_value());
+    }).hasValue());
 
     const auto owned = directory.file("owned.sock");
     const auto listener = listening(owned, 0600);
@@ -127,7 +128,7 @@ namespace {
 
     check(failure<SystemError>([&] {
       traffic::sendAll(connected.get(), frame);
-    }).has_value());
+    }).hasValue());
     check(::unlink(path.c_str()) == 0);
   }
 

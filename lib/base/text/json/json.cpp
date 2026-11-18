@@ -3,6 +3,7 @@ module telar.base.text.json;
 import std;
 import telar.tbc;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar {
 
@@ -217,7 +218,7 @@ namespace telar::runtime {
     return bytes_;
   }
 
-  tbc::view<std::optional<JsonValue>, tbc::lt::b> JsonValue::field(std::string_view name) const {
+  tbc::view<ds::Option<JsonValue>, tbc::lt::b> JsonValue::field(std::string_view name) const {
     auto input = bytes_;
 
     whitespace(input);
@@ -225,7 +226,7 @@ namespace telar::runtime {
     while (true) {
       whitespace(input);
       if (input.starts_with('}')) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto key = stringToken(input);
@@ -244,7 +245,7 @@ namespace telar::runtime {
 
       whitespace(input);
       if (input.starts_with('}')) {
-        return std::nullopt;
+        return ds::none;
       }
 
       take(input, ',');
@@ -406,7 +407,7 @@ namespace telar::runtime {
     return static_cast<std::size_t>(found - names.begin());
   }
 
-  std::size_t unsetJsonFieldPosition(std::span<const std::string_view> names, std::span<const std::optional<JsonValue>> values, std::string_view name) {
+  std::size_t unsetJsonFieldPosition(std::span<const std::string_view> names, std::span<const ds::Option<JsonValue>> values, std::string_view name) {
     const auto position = jsonFieldPosition(names, name);
     if (values[position]) {
       throw std::invalid_argument{"Duplicate JSON field"};
@@ -415,7 +416,7 @@ namespace telar::runtime {
     return position;
   }
 
-  const JsonValue& requiredJsonField(const std::optional<JsonValue>& value) {
+  const JsonValue& requiredJsonField(const ds::Option<JsonValue>& value) {
     if (!value) {
       throw std::invalid_argument{"Missing JSON field"};
     }
@@ -450,7 +451,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::span<JsonNode<Memory>> JsonNode<Memory>::children() noexcept {
+  std::span<JsonNode<Memory>> JsonNode<Memory>::childrenMut() noexcept {
     return children_;
   }
 
@@ -460,7 +461,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  JsonNode<Memory>* JsonNode<Memory>::find(std::string_view name) noexcept {
+  JsonNode<Memory>* JsonNode<Memory>::findMut(std::string_view name) noexcept {
     if (kind_ != JsonKind::object) {
       return nullptr;
     }
@@ -474,7 +475,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   const JsonNode<Memory>* JsonNode<Memory>::find(std::string_view name) const noexcept {
-    return const_cast<JsonNode*>(this)->find(name);
+    return const_cast<JsonNode*>(this)->findMut(name);
   }
 
   template <Allocator Memory>
@@ -488,7 +489,7 @@ namespace telar::runtime {
       throw std::invalid_argument{"Expected JSON object"};
     }
 
-    if (auto* existing = find(name)) {
+    if (auto* existing = findMut(name)) {
       if (existing->kind_ != kind) {
         throw std::invalid_argument{"Unexpected JSON field type"};
       }

@@ -3,6 +3,7 @@ module telar.base.text;
 import std;
 import telar.tbc;
 import telar.sys.socket;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -34,9 +35,9 @@ namespace telar::runtime {
       : remaining_(text),
         delimiter_(delimiter) {}
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> TextFields::next() noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> TextFields::next() noexcept {
     if (finished_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto boundary = remaining_.find(delimiter_);
@@ -321,7 +322,7 @@ namespace telar::runtime {
     }
 
     if (pattern.contains(':')) {
-      return ipv6(pattern).has_value();
+      return ipv6(pattern).hasValue();
     }
 
     if (pattern == "*") {
@@ -341,7 +342,7 @@ namespace telar::runtime {
     }
 
     if (hostname.contains(':')) {
-      return ipv6(hostname).has_value();
+      return ipv6(hostname).hasValue();
     }
 
     if (hostname.ends_with('.')) {
@@ -351,7 +352,7 @@ namespace telar::runtime {
     return validLabels(hostname);
   }
 
-  std::optional<in6_addr> ProxyHostname::ipv6(std::string_view host) noexcept {
+  ds::Option<in6_addr> ProxyHostname::ipv6(std::string_view host) noexcept {
     if (host.empty() || host.size() >= INET6_ADDRSTRLEN || host.contains('\0')) {
       return {};
     }
@@ -361,7 +362,7 @@ namespace telar::runtime {
     std::ranges::copy(host, text.begin());
     in6_addr address{};
 
-    return ::inet_pton(AF_INET6, text.data(), &address) == 1 ? std::optional{address} : std::nullopt;
+    return ::inet_pton(AF_INET6, text.data(), &address) == 1 ? ds::Option{address} : ds::none;
   }
 
   bool ProxyHostname::validLabels(std::string_view pattern) noexcept {
@@ -396,34 +397,34 @@ namespace telar::runtime {
     return label_length != 0 && label_length <= maximum_label_bytes && previous != '-';
   }
 
-  std::optional<ProxyTarget> ProxyTarget::parse(std::string_view head) noexcept {
+  ds::Option<ProxyTarget> ProxyTarget::parse(std::string_view head) noexcept {
     constexpr std::string_view method = "CONNECT ";
     constexpr std::string_view version = " HTTP/1.1";
     const auto line_end = head.find("\r\n");
     if (line_end == std::string_view::npos) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto line = head.substr(0, line_end);
     if (!line.starts_with(method) || !line.ends_with(version) || line.size() <= method.size() + version.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto authority = line.substr(method.size(), line.size() - method.size() - version.size());
     const auto colon = authority.rfind(':');
     if (colon == std::string_view::npos || colon == 0 || colon > ProxyHostname::maximum_bytes) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto hostname = authority.substr(0, colon);
     if (!ProxyHostname::validTarget(hostname)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto port_text = authority.substr(colon + 1);
-    const auto port = parseExact<std::uint16_t>(port_text).value_or(0);
+    const auto port = parseExact<std::uint16_t>(port_text).valueOr(0);
     if (port == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return ProxyTarget{hostname, port};
@@ -434,10 +435,10 @@ namespace telar::runtime {
 namespace telar::runtime::base64 {
 
   template <Padding Rule>
-  std::optional<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept {
+  ds::Option<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept {
     const auto remainder = encoded.size() % 4;
     if (remainder != 0 && (Rule != Padding::optional || remainder == 1)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t written = 0;
@@ -457,7 +458,7 @@ namespace telar::runtime::base64 {
           (double_padding && (!padding || (Rule == Padding::canonical && (second & 15) != 0))) ||
           (Rule == Padding::canonical && padding && !double_padding && (third & 3) != 0) ||
           (padding && offset + 4 != encoded.size()) || static_cast<std::size_t>(count) > destination.size() - written) {
-        return std::nullopt;
+        return ds::none;
       }
 
       destination[written++] = static_cast<std::uint8_t>((first << 2) | (second >> 4));
@@ -475,7 +476,7 @@ namespace telar::runtime::base64 {
       const auto second = alphabet.find(encoded[complete + 1]);
       const auto third = remainder == 3 ? alphabet.find(encoded[complete + 2]) : 0;
       if (first == std::string_view::npos || second == std::string_view::npos || third == std::string_view::npos || remainder - 1 > destination.size() - written) {
-        return std::nullopt;
+        return ds::none;
       }
 
       destination[written++] = static_cast<std::uint8_t>((first << 2) | (second >> 4));
@@ -487,8 +488,8 @@ namespace telar::runtime::base64 {
     return written;
   }
 
-  template std::optional<std::size_t> decode<Padding::canonical>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
-  template std::optional<std::size_t> decode<Padding::required>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
-  template std::optional<std::size_t> decode<Padding::optional>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  template ds::Option<std::size_t> decode<Padding::canonical>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  template ds::Option<std::size_t> decode<Padding::required>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  template ds::Option<std::size_t> decode<Padding::optional>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
 
 }

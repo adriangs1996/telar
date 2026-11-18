@@ -11,6 +11,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -19,14 +20,14 @@ namespace telar::gui::qt {
         store_(store),
         opener_(*this) {}
 
-  bool LinksController::open(const application::terminal::links::LinkTarget& target, std::optional<std::uint64_t> source_id) {
+  bool LinksController::open(const application::terminal::links::LinkTarget& target, ds::Option<std::uint64_t> source_id) {
     try {
       if (target.scheme() == application::terminal::links::LinkScheme::file || target.scheme() == application::terminal::links::LinkScheme::path) {
         const ProcessEnvironment environment;
         const auto configured = store_.session().configuration().editor.view();
-        const auto executable = configured.empty() ? environment("EDITOR").value_or(std::string_view{}) : configured;
+        const auto executable = configured.empty() ? environment("EDITOR").valueOr(std::string_view{}) : configured;
 
-        application::terminal::links::openFile(store_.session(), application::terminal::links::FilePath::parse(target), executable, environment, source_id);
+        application::terminal::links::openFile(store_.sessionMut(), application::terminal::links::FilePath::parse(target), executable, environment, source_id);
       } else {
         opener_.request(target, store_.client(store_.machines().active()).key);
       }
@@ -51,7 +52,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void LinksController::linkOpeningFinished(application::machines::MachineClientKey source, std::optional<LinkOpeningFailure> failure) {
+  void LinksController::linkOpeningFinished(application::machines::MachineClientKey source, ds::Option<LinkOpeningFailure> failure) {
     auto* client = store_.find(source);
     if (client == nullptr || !failure) {
       return;

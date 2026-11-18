@@ -24,7 +24,7 @@ namespace telar::runtime::plugins {
     workers_.reserve(specifications.size());
     try {
       for (const auto& specification : specifications) {
-        workers_.push_back(makeOwned<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = *cancellation_, .trace_prefix = trace_prefix, .traffic = traffic}));
+        workers_.push_back(makeOwned<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = cancellation_.getMut(), .trace_prefix = trace_prefix, .traffic = traffic}));
       }
     } catch (...) {
       stop();
@@ -71,7 +71,7 @@ namespace telar::runtime::plugins {
     }
 
     if (cancellation_) {
-      cancellation_->request();
+      cancellation_.getMut().request();
     }
 
     if (trust_monitor_.joinable()) {
@@ -111,7 +111,7 @@ namespace telar::runtime::plugins {
     const auto event_id = next_event_.fetch_add(1, std::memory_order_relaxed);
 
     try {
-      auto shared = std::allocate_shared<SharedExchange>(AllocatorRef<SharedExchange, ConcurrentMemory>{memory_}, std::move(*charged), event_id, std::move(owned));
+      auto shared = std::allocate_shared<SharedExchange>(AllocatorRef<SharedExchange, ConcurrentMemory>{memory_}, std::move(charged.getMut()), event_id, std::move(owned));
 
       for (const auto& worker : workers_) {
         worker->submit(shared);

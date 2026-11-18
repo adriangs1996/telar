@@ -5,6 +5,7 @@ import telar.sys.posix;
 
 import telar.base.text;
 import telar.platform.primitives;
+import telar.base.ds;
 
 // Linux only (LINUX_SOURCES of runtime-platform).
 // Interface: platform/linux/proc_file.cppm
@@ -17,9 +18,9 @@ export {
 
       bool belongsTo(uid_t user) const noexcept;
 
-      std::optional<std::string_view> read(const char* name, std::span<char> buffer) const noexcept;
+      ds::Option<std::string_view> read(const char* name, std::span<char> buffer) const noexcept;
 
-      std::optional<std::string_view> link(const char* name, std::span<char> buffer) const noexcept;
+      ds::Option<std::string_view> link(const char* name, std::span<char> buffer) const noexcept;
 
     private:
       FileDescriptor directory_;
@@ -32,7 +33,7 @@ export {
       std::uint64_t started_ticks = 0;
       std::string_view name;
 
-      static std::optional<ProcStat> parse(std::string_view input) noexcept;
+      static ds::Option<ProcStat> parse(std::string_view input) noexcept;
     };
 
   }

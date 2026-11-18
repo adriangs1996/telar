@@ -3,6 +3,7 @@ module telar.gui.features.notifications;
 import std;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -17,7 +18,7 @@ namespace telar::gui::features::notifications {
     return active_;
   }
 
-  std::optional<AgentSound> SoundPlayback::queued() const noexcept {
+  ds::Option<AgentSound> SoundPlayback::queued() const noexcept {
     return queued_;
   }
 
@@ -37,15 +38,15 @@ namespace telar::gui::features::notifications {
     return {.state = SoundRequestOutcome::State::start, .sound = kind};
   }
 
-  std::optional<AgentSound> SoundPlayback::complete() {
+  ds::Option<AgentSound> SoundPlayback::complete() {
     if (!active_) {
       throw std::logic_error{"NoActiveSoundPlayback"};
     }
 
     active_ = false;
-    const auto next = std::exchange(queued_, std::nullopt);
+    const auto next = std::exchange(queued_, ds::none);
     if (!next || !allows(*next)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     active_ = true;

@@ -3,6 +3,7 @@ module telar.gui.foundation.fonts;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts::glyphs {
 
@@ -26,7 +27,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     return std::max(1.0F, std::ceil(thickness));
   }
 
-  std::optional<Symbol> Symbol::parse(std::string_view text) noexcept {
+  ds::Option<Symbol> Symbol::parse(std::string_view text) noexcept {
     // Lead bytes of U+2000..U+2FFF (box, block, Braille) and U+E000..U+EFFF (Powerline).
     constexpr std::uint8_t symbol_prefix = 0xe2;
     constexpr std::uint8_t private_use_prefix = 0xee;

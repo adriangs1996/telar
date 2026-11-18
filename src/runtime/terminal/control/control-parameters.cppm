@@ -1,6 +1,7 @@
 export module telar.runtime.terminal.control:parameters;
 
 import std;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -23,7 +24,7 @@ export namespace telar::runtime::control {
       return {intermediate.data(), intermediate_count};
     }
 
-    static std::optional<Parameters> parse(std::string_view body) noexcept;
+    static ds::Option<Parameters> parse(std::string_view body) noexcept;
   };
 
 }

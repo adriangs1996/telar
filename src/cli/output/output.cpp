@@ -1,6 +1,7 @@
 module telar.cli.output;
 
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -43,17 +44,17 @@ namespace telar::runtime::cli {
     return family_names.at(static_cast<std::size_t>(family));
   }
 
-  std::optional<Family> parseFamily(std::string_view word) noexcept {
+  ds::Option<Family> parseFamily(std::string_view word) noexcept {
     for (std::size_t index = 0; index < family_names.size(); ++index) {
       if (family_names.at(index) == word) {
         return static_cast<Family>(index);
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  Failure::Failure(std::string_view message, int status, std::optional<FailureCode> code)
+  Failure::Failure(std::string_view message, int status, ds::Option<FailureCode> code)
       : std::runtime_error{std::string{message}},
         status_(status),
         code_(code) {}
@@ -62,7 +63,7 @@ namespace telar::runtime::cli {
     return status_;
   }
 
-  std::optional<FailureCode> Failure::code() const noexcept {
+  ds::Option<FailureCode> Failure::code() const noexcept {
     return code_;
   }
 

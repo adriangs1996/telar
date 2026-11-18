@@ -13,6 +13,7 @@ import telar.base.text;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: paths/insertion.cppm
 export {
@@ -41,11 +42,11 @@ export {
       [[nodiscard]] static AbsolutePath join(JoinParts parts);
 
       // The relative path is a suffix of the path, region `a`.
-      [[nodiscard]] static tbc::view<std::optional<std::string_view>, tbc::lt::a> relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept;
+      [[nodiscard]] static tbc::view<ds::Option<std::string_view>, tbc::lt::a> relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept;
 
-      [[nodiscard]] static std::optional<Quoted> quote(std::string_view word);
+      [[nodiscard]] static ds::Option<Quoted> quote(std::string_view word);
 
-      [[nodiscard]] static std::optional<Text> prepare(const PathPickerPage& page, Choice choice);
+      [[nodiscard]] static ds::Option<Text> prepare(const PathPickerPage& page, Choice choice);
 
       // A word the shell reads as written, with nothing to quote or expand.
       [[nodiscard]] static bool plain(std::string_view word) noexcept;
@@ -209,8 +210,8 @@ export {
       CellRectangle area;
       bool flipped = false;
 
-      [[nodiscard]] static PathPickerPlacement forPage(CellRectangle host, std::optional<CellPosition> cursor, std::uint16_t count) noexcept;
-      [[nodiscard]] static PathPickerPlacement place(CellRectangle host, std::optional<CellPosition> cursor, std::uint16_t requested_width, std::uint16_t requested_height) noexcept;
+      [[nodiscard]] static PathPickerPlacement forPage(CellRectangle host, ds::Option<CellPosition> cursor, std::uint16_t count) noexcept;
+      [[nodiscard]] static PathPickerPlacement place(CellRectangle host, ds::Option<CellPosition> cursor, std::uint16_t requested_width, std::uint16_t requested_height) noexcept;
     };
 
   }

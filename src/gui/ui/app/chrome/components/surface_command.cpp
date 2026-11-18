@@ -27,6 +27,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -162,7 +163,7 @@ namespace telar::gui::qt {
     stop(SurfaceCommandFailure::cancelled);
   }
 
-  void SurfaceCommand::stop(std::optional<SurfaceCommandFailure> failure) {
+  void SurfaceCommand::stop(ds::Option<SurfaceCommandFailure> failure) {
     if (!running_ || grace_.isActive()) {
       return;
     }
@@ -214,7 +215,7 @@ namespace telar::gui::qt {
       result_.output.append(buffer.data(), static_cast<qsizetype>(kept));
       if (std::cmp_not_equal(kept, count)) {
         result_.truncated = true;
-        stop(std::nullopt);
+        stop(ds::none);
       }
     }
 

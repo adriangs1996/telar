@@ -13,6 +13,7 @@ import telar.base.memory.sensitive;
 import telar.runtime.http2.frame_reader;
 import telar.runtime.http.content;
 import telar.base.text;
+import telar.base.ds;
 
 // Interface: http2/event.cppm
 export {
@@ -155,12 +156,12 @@ export {
     public:
       void reset() noexcept;
 
-      tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
+      tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
 
-      tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
+      tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
 
     private:
-      tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept;
+      tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept;
 
       static constexpr std::size_t priority_bytes = 5;
       static constexpr std::size_t promised_stream_bytes = 4;

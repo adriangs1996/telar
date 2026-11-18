@@ -8,6 +8,7 @@ import :content;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: components/elements.cppm
 export {
@@ -38,7 +39,7 @@ export {
     };
 
     struct ElementColor {
-      std::optional<ColorName::Value> value = std::nullopt;
+      ds::Option<ColorName::Value> value = ds::none;
       std::uint8_t alpha = std::numeric_limits<std::uint8_t>::max();
     };
 
@@ -83,7 +84,7 @@ export {
       Tone tone = Tone::neutral;
       std::uint8_t align = 0;
       std::uint8_t justify = 0;
-      std::optional<std::uint8_t> align_self = std::nullopt;
+      ds::Option<std::uint8_t> align_self = ds::none;
       std::uint8_t easing = 0;
       std::uint8_t size_role = 1;
       std::uint8_t max_lines = 1;

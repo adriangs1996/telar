@@ -9,6 +9,7 @@ import telar.platform.error;
 import telar.platform.net;
 import telar.wire.clients;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -183,23 +184,23 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller>
-  std::optional<FileDescriptor> ClientAdmission<Poller>::advance(const Event& event) {
+  ds::Option<FileDescriptor> ClientAdmission<Poller>::advance(const Event& event) {
     const auto slot = eventIdentity(event.token) % capacity;
     auto& pending = pending_[slot];
     if (!pending || event.token != token(slot) || event.descriptor != pending->descriptor()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     try {
       if (event.kind == EventKind::readable) {
-        pending->read();
+        pending.getMut().read();
       }
 
-      pending->write();
+      pending.getMut().write();
       switch (pending->stage()) {
       case ClientHandshake::Stage::accepted: {
         poller_.remove(pending->descriptor());
-        auto descriptor = pending->takeDescriptor();
+        auto descriptor = pending.getMut().takeDescriptor();
 
         pending.reset();
         --count_;
@@ -222,7 +223,7 @@ namespace telar::runtime {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <EventLoop Poller>
@@ -239,7 +240,7 @@ namespace telar::runtime {
 
   template class ClientAdmission<NativeEventLoop<ConcurrentMemory>>;
 
-  void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept {
+  void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous) noexcept {
     for (auto* client : clients.items()) {
       if (client != nullptr && client->id != origin && client->connection.negotiated && !client->connection.closing && client->workspace == workspace) {
         client->workspace_resync = ResyncRequired{.workspace = {.id = workspace}, .previous_workspace = previous};
@@ -247,7 +248,7 @@ namespace telar::runtime {
     }
   }
 
-  std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore& workspaces, std::uint64_t identity) noexcept {
+  ds::Option<std::uint64_t> previousWorkspace(const WorkspaceStore& workspaces, std::uint64_t identity) noexcept {
     const auto items = workspaces.items();
 
     for (std::size_t index = 0; index < items.size(); ++index) {
@@ -265,7 +266,7 @@ namespace telar::runtime {
       break;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool acquireGeometry(PaneStore& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession& client, Workspace& workspace) {
@@ -394,7 +395,7 @@ namespace telar::runtime {
       return;
     }
 
-    auto& process = *execution->process;
+    auto& process = execution->process.getMut();
 
     if (eventSource(event.token) == EventSource::execution_input) {
       if (event.descriptor == process.input()) {
@@ -438,7 +439,7 @@ namespace telar::runtime {
         continue;
       }
 
-      auto& process = *execution->process;
+      auto& process = execution->process.getMut();
       if (process.output() >= 0 || process.error() >= 0) {
         running = true;
         continue;
@@ -500,7 +501,7 @@ namespace telar::runtime {
     const std::string_view cwd = request.cwd.empty() ? std::string_view{workspace->path} : request.cwd;
     auto execution = makeOwned<Execution<ConcurrentMemory>>(memory_, memory_, token, request, workspace_id, cwd);
 
-    execution->input_owner = request.stdin_open ? std::optional{client_id} : std::nullopt;
+    execution->input_owner = request.stdin_open ? ds::Option{client_id} : ds::none;
     try {
       if (execution->process) {
         poller_.watch(execution->process->output(), eventToken(EventSource::execution_output, token));
@@ -619,7 +620,7 @@ namespace telar::runtime {
   void ExecutionService<Poller>::closeInput(Poller& poller, Execution<ConcurrentMemory>& execution) noexcept {
     if (execution.process && execution.process->input() >= 0) {
       poller.remove(execution.process->input());
-      execution.process->closeInput();
+      execution.process.getMut().closeInput();
       execution.write_interest = false;
     }
   }

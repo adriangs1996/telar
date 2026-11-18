@@ -4,6 +4,7 @@ import telar.cli.base.command_error;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime::cli::integration::assets {
 
@@ -13,7 +14,7 @@ namespace telar::runtime::cli::integration::assets {
 
 namespace telar::runtime::cli::integration {
 
-  std::optional<std::string_view> skillText(std::string_view name) noexcept {
+  ds::Option<std::string_view> skillText(std::string_view name) noexcept {
     if (name == "telar") {
       return assets::telar_skill;
     }
@@ -22,7 +23,7 @@ namespace telar::runtime::cli::integration {
       return assets::coordinator_skill;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>
@@ -38,11 +39,11 @@ namespace telar::runtime::cli::integration {
     return path;
   }
 
-  std::optional<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes) {
+  ds::Option<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes) {
     FileDescriptor file{::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
     if (!file) {
       if (sys::lastError() == ENOENT) {
-        return std::nullopt;
+        return ds::none;
       }
 
       throw SystemError{"Read integration file"};
@@ -80,7 +81,7 @@ namespace telar::runtime::cli::integration {
   template <Allocator Memory>
   void write(Memory& memory, const String<Memory>& path, std::string_view source, bool preserve_settings) {
     String<Memory> target{path, AllocatorRef<char, Memory>{memory}};
-    std::optional<mode_t> permissions;
+    ds::Option<mode_t> permissions;
 
     if (preserve_settings) {
       std::array<char, PATH_MAX> resolved;
@@ -320,9 +321,9 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   constexpr std::size_t maximum_settings_bytes = 4 * 1024 * 1024;
 
   template <Allocator Memory, EnvironmentLookup Environment>
-  std::optional<String<Memory>> legacySettings(Memory& memory, Provider provider, const Environment& environment) {
+  ds::Option<String<Memory>> legacySettings(Memory& memory, Provider provider, const Environment& environment) {
     if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto current = joinPath(memory, provider.root(memory, environment), provider.file);
@@ -331,11 +332,11 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     std::array<char, PATH_MAX> current_path;
 
     if (::realpath(legacy.c_str(), legacy_path.data()) == nullptr) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (::realpath(current.c_str(), current_path.data()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return legacy;
@@ -347,7 +348,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
       return false;
     }
 
-    std::optional<JsonNode<Memory>> settings;
+    ds::Option<JsonNode<Memory>> settings;
 
     try {
       settings.emplace(JsonNode<Memory>::parse(memory, *source));
@@ -387,7 +388,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
     const HookSettings hooks{memory, provider, executable};
     const auto source = read(memory, path, maximum_settings_bytes);
-    std::optional<JsonNode<Memory>> settings;
+    ds::Option<JsonNode<Memory>> settings;
 
     try {
       settings.emplace(JsonNode<Memory>::parse(memory, source ? std::string_view{*source} : "{}"));
@@ -425,7 +426,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     }
 
     const bool installing = options.action == IntegrationAction::install;
-    const bool changed = installing ? hooks.install(*settings) : hooks.uninstall(*settings);
+    const bool changed = installing ? hooks.install(settings.getMut()) : hooks.uninstall(settings.getMut());
     if (changed) {
       write(memory, path, settings->format(), true);
     }
@@ -552,7 +553,7 @@ namespace telar::runtime::cli::integration {
   }
 
   bool HookSettings::uninstall(JsonNode<Memory>& settings) const {
-    auto* hooks = settings.find("hooks");
+    auto* hooks = settings.findMut("hooks");
     if (hooks == nullptr || hooks->kind() != JsonKind::object) {
       return false;
     }
@@ -575,12 +576,27 @@ namespace telar::runtime::cli::integration {
       return isOwnCommand(entry) ? &entry : nullptr;
     }
 
-    auto* hooks = entry.find("hooks");
+    // A const entry is searched through its const accessors, a mutable one through its mutable ones.
+    auto* hooks = [&] {
+      if constexpr (std::is_const_v<Node>) {
+        return entry.find("hooks");
+      } else {
+        return entry.findMut("hooks");
+      }
+    }();
     if (hooks == nullptr || hooks->kind() != JsonKind::array) {
       return nullptr;
     }
 
-    for (auto& hook : hooks->children()) {
+    const auto candidates = [&] {
+      if constexpr (std::is_const_v<Node>) {
+        return hooks->children();
+      } else {
+        return hooks->childrenMut();
+      }
+    }();
+
+    for (auto& hook : candidates) {
       if (isOwnCommand(hook)) {
         return &hook;
       }
@@ -600,7 +616,7 @@ namespace telar::runtime::cli::integration {
       auto& entries = hooks.ensure(event, JsonKind::array);
       bool present = false;
 
-      for (auto& entry : entries.children()) {
+      for (auto& entry : entries.childrenMut()) {
         auto* hook = findHook(entry);
         if (hook == nullptr) {
           continue;
@@ -645,19 +661,19 @@ namespace telar::runtime::cli::integration {
     bool changed = false;
 
     for (const auto event : events) {
-      auto* entries = hooks.find(event);
+      auto* entries = hooks.findMut(event);
       if (entries == nullptr || entries->kind() != JsonKind::array) {
         continue;
       }
 
       for (std::size_t index = 0; index < entries->children().size();) {
-        auto& entry = entries->children()[index];
+        auto& entry = entries->childrenMut()[index];
         bool empty = false;
 
         if (provider_.flat_hooks) {
           empty = isOwnCommand(entry);
           changed = empty || changed;
-        } else if (auto* commands = entry.find("hooks"); commands != nullptr && commands->kind() == JsonKind::array) {
+        } else if (auto* commands = entry.findMut("hooks"); commands != nullptr && commands->kind() == JsonKind::array) {
           for (std::size_t command = 0; command < commands->children().size();) {
             if (isOwnCommand(commands->children()[command])) {
               commands->erase(command);

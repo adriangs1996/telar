@@ -16,6 +16,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.features.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -111,7 +112,7 @@ namespace {
       check(MachineFacts::cpu(item.phase, cpu).view() == expected_cpu, "retained CPU must only paint for a connected machine");
     }
 
-    check(MachineFacts::cpu(MachinePhase::connected, std::nullopt).view().empty(), "missing CPU must remain absent");
+    check(MachineFacts::cpu(MachinePhase::connected, ds::none).view().empty(), "missing CPU must remain absent");
     check(MachineFacts::cpu(MachinePhase::connected, 0).view() == "0%", "a valid zero CPU sample must be visible");
     const ChromeMetrics chrome;
     constexpr MachineFacts::Widths parts{.glyph = 8, .label = 30, .cpu = 20};

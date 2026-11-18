@@ -17,6 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -74,7 +75,7 @@ namespace telar::gui::qt {
     void failed(const QString& message);
 
   private:
-    [[nodiscard]] std::optional<application::notifications::NotificationId> resolve(const QString& identity) const;
+    [[nodiscard]] ds::Option<application::notifications::NotificationId> resolve(const QString& identity) const;
     void schedule();
 
     Store& store_;

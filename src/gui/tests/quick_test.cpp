@@ -147,6 +147,7 @@ import telar.plugins;
 import telar.gui.features.notifications;
 import telar.wire.history;
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
@@ -157,21 +158,21 @@ namespace telar::gui::test {
       std::shared_ptr<const qt::ComponentSlotState::Panel> rendered;
     };
 
-    [[nodiscard]] static std::optional<Action> retain(const qt::ApplicationController& application) {
+    [[nodiscard]] static ds::Option<Action> retain(const qt::ApplicationController& application) {
       const auto& rendered = application.components_.surfaces_.panel.panel;
       if (!rendered || rendered->content.nodes().empty()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto& content = rendered->content;
       const auto action = content.action(content.nodes().front());
       if (!action) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto destination = application.configuration_source_.namedAction(*action, &rendered->actions);
 
-      return destination ? std::optional{Action{.action = *action, .destination = *destination, .rendered = rendered}} : std::nullopt;
+      return destination ? ds::Option{Action{.action = *action, .destination = *destination, .rendered = rendered}} : ds::none;
     }
 
     static bool run(qt::ApplicationController& application, const Action& action) {
@@ -308,7 +309,7 @@ return {api_version = 2, client = {
     }
   }
 
-  std::optional<std::uint32_t> logicalRowStart(const Screen<telar::Memory>& screen, std::size_t requested_line) {
+  telar::ds::Option<std::uint32_t> logicalRowStart(const Screen<telar::Memory>& screen, std::size_t requested_line) {
     const auto grid = screenGrid(screen);
     std::size_t line = 0;
 
@@ -323,7 +324,7 @@ return {api_version = 2, client = {
       }
     }
 
-    return std::nullopt;
+    return telar::ds::none;
   }
 
   QString shellLiteral(QString text) {
@@ -1260,7 +1261,7 @@ return {api_version = 2, client = {
       const auto osc_row = logicalRowStart(pane->screen, 2);
       const auto blank_row = logicalRowStart(pane->screen, 4);
 
-      QVERIFY(path_row.has_value() && osc_row.has_value() && blank_row.has_value());
+      QVERIFY(path_row.hasValue() && osc_row.hasValue() && blank_row.hasValue());
       terminal->forceActiveFocus();
       QTest::mouseMove(window_, cellCenter(*terminal, {.x = 2}));
       QTRY_VERIFY2(terminal->hoveredLink() == QStringLiteral("https://plain.test/x"), qPrintable(QStringLiteral("hover=%1 active=%2 itemFocus=%3 copy=%4 modifiers=%5 frame=%6/%7 cursor=%8,%9").arg(terminal->hoveredLink()).arg(window_->isActive()).arg(terminal->hasActiveFocus()).arg(client_->copy()->active()).arg(client_->terminals()->pointerModifiers().toInt()).arg(pane->acknowledged_frame).arg(pane->screen.frameId()).arg(QCursor::pos().x()).arg(QCursor::pos().y())));
@@ -1565,7 +1566,7 @@ return {api_version = 2, client = {
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::copy_search);
       client_->commands()->submitDialog({{QStringLiteral("text"), QStringLiteral("COPY_MODE_WORD_1")}});
       // The match found holds the cursor, nothing selected; y copies the match.
-      QTRY_VERIFY_WITH_TIMEOUT(client_->copy()->state() && !client_->copy()->state()->anchor.has_value() && client_->copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->copy()->state() && !client_->copy()->state()->anchor.hasValue() && client_->copy()->searchState().value(QStringLiteral("count")).toInt() > 0, runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Y);
       QVERIFY(!client_->copy()->active());
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("COPY_MODE_WORD_1"), runtime_wait_ms);
@@ -2805,7 +2806,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void staleTabHitsDoNotCaptureConfiguredWidgets() {
-      std::optional<QPoint> held;
+      telar::ds::Option<QPoint> held;
       const auto cleanup = qScopeGuard([this, &held] {
         if (held) {
           sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, *held);
@@ -2849,7 +2850,7 @@ return {api_version=2, client={keybindings={
       client_->tabs()->present(stale);
       held = point;
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, point);
-      QVERIFY2(!client_->tabs()->capturedTab().has_value(), "A stale tab hit must not capture a different configured widget");
+      QVERIFY2(!client_->tabs()->capturedTab().hasValue(), "A stale tab hit must not capture a different configured widget");
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, point);
       held.reset();
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
@@ -2981,7 +2982,7 @@ return {api_version=2, client={keybindings={
 
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
       sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
-      QVERIFY(client_->tabs()->capturedTab().has_value());
+      QVERIFY(client_->tabs()->capturedTab().hasValue());
       client_->commands()->execute(window_actions::Action::close_tab, created.front());
       expected.removeOne(created.front());
       QVERIFY(test::waitForGuiCondition([&] {
@@ -2989,7 +2990,7 @@ return {api_version=2, client={keybindings={
       },
           runtime_wait_ms));
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QVERIFY(!client_->tabs()->capturedTab().has_value());
+      QVERIFY(!client_->tabs()->capturedTab().hasValue());
       const auto* layout = window_->findChild<QQuickItem*>(QStringLiteral("tabStripLayout"));
 
       QVERIFY(layout != nullptr);
@@ -3408,10 +3409,10 @@ return {api_version=2, client={keybindings={
         clipboard->setMimeData(saved.release());
       });
 
-      QTRY_VERIFY_WITH_TIMEOUT(test::HistoryPresentation::actionCenter(*client_, application::history::HistoryCardAction::copy).has_value(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(test::HistoryPresentation::actionCenter(*client_, application::history::HistoryCardAction::copy).hasValue(), runtime_wait_ms);
       const auto copy_position = test::HistoryPresentation::actionCenter(*client_, application::history::HistoryCardAction::copy);
 
-      QVERIFY(copy_position.has_value());
+      QVERIFY(copy_position.hasValue());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, copy_position->toPoint());
       QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_POINTER_FIRST"));
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
@@ -5289,7 +5290,7 @@ return {api_version=2, client={keybindings={
       const TerminalGrid grid{.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = window_->devicePixelRatio()};
       const auto full = grid.fit(bounds.width(), bounds.height());
 
-      QVERIFY(full.has_value());
+      QVERIFY(full.hasValue());
       constexpr std::uint16_t border_cells = 2;
       const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * window_->devicePixelRatio() / resolved.grid.height));
       const auto vertical_chrome = header_cells + 1;
@@ -5431,7 +5432,7 @@ return {api_version=2, client={keybindings={
       };
 
       QTRY_VERIFY2_WITH_TIMEOUT(rings().size() == 1, qPrintable(screenText(client_->pane(source_id)->screen)), runtime_wait_ms);
-      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::features::workbench::PaneAttentionKey{}), attachment);
+      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).valueOr(telar::gui::features::workbench::PaneAttentionKey{}), attachment);
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("chrome-attention"));
       const QPointer<QQuickItem> retired{rings().front()};
@@ -5443,7 +5444,7 @@ return {api_version=2, client={keybindings={
       captureArtifact(QStringLiteral("question-focused"));
       client_->commands()->execute(window_actions::Action::focus_pane, QString::number(other_id));
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
-      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).value_or(telar::gui::features::workbench::PaneAttentionKey{}), attachment);
+      QCOMPARE(telar::gui::qt::paneAttentionKey(rings().front()->property("attachment")).valueOr(telar::gui::features::workbench::PaneAttentionKey{}), attachment);
 
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("question-unfocused"));
@@ -5610,7 +5611,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
       QString metadata;
       const auto wait_enabled = [&](bool expected) {
-        std::optional<std::uint64_t> pending;
+        telar::ds::Option<std::uint64_t> pending;
 
         return QTest::qWaitFor([&] {
           if (!pending) {
@@ -5777,7 +5778,7 @@ return {api_version=2, client={keybindings={
         client_->loadConfiguration({}, {}, {});
       });
 
-      QVERIFY(!application::terminal::links::LinkTarget::fromUri("https://").has_value());
+      QVERIFY(!application::terminal::links::LinkTarget::fromUri("https://").hasValue());
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -6232,7 +6233,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The component has no validated plugin action");
       }
 
-      const auto saved = retained.value();
+      const auto saved = retained.get();
       const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
@@ -6242,7 +6243,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The mutated component has no named action");
       }
 
-      const auto mutated = current.value();
+      const auto mutated = current.get();
 
       QVERIFY(saved.action == mutated.action);
       QVERIFY(std::holds_alternative<PluginActionDescription>(saved.destination));
@@ -6340,7 +6341,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The component has no validated definition action");
       }
 
-      const auto validated_definition = validated.value();
+      const auto validated_definition = validated.get();
       const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
@@ -6351,7 +6352,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The mutated component has no current definition action");
       }
 
-      const auto current_definition = current.value();
+      const auto current_definition = current.get();
 
       QVERIFY(validated_definition.action == current_definition.action);
       QVERIFY(std::holds_alternative<DefinitionActionDescription>(validated_definition.destination));
@@ -6768,7 +6769,7 @@ return {api_version=2, client={keybindings={
         client_->loadConfiguration({}, {}, {});
       });
 
-      QVERIFY(!application::terminal::links::LinkTarget::fromUri("https://").has_value());
+      QVERIFY(!application::terminal::links::LinkTarget::fromUri("https://").hasValue());
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -7963,7 +7964,7 @@ return {api_version=2, client={keybindings={
 
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
       sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
-      QVERIFY(client_->tabs()->capturedTab().has_value());
+      QVERIFY(client_->tabs()->capturedTab().hasValue());
       switch (interruption) {
       case TabDragInterruption::viewport:
         window_->resize(size.width() + 1, size.height());
@@ -7981,7 +7982,7 @@ return {api_version=2, client={keybindings={
       }
 
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QVERIFY(!client_->tabs()->capturedTab().has_value());
+      QVERIFY(!client_->tabs()->capturedTab().hasValue());
       sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
       QCOMPARE(tabKeys(), before);
       QCOMPARE(client_->status()->error(), QString{});
@@ -8606,9 +8607,9 @@ return {api_version=2, client={keybindings={
 
     void verifyGroupPaneHeaderFocus() {
       QCOMPARE(client_->panes()->rows()->rowCount(), 1);
-      std::optional<std::uint64_t> created;
+      telar::ds::Option<std::uint64_t> created;
       const auto cleanup = qScopeGuard([this, &created] {
-        if (created.has_value() && client_->panes()->rows()->rowCount() > 1) {
+        if (created.hasValue() && client_->panes()->rows()->rowCount() > 1) {
           client_->commands()->execute(window_actions::Action::close_pane, QString::number(*created));
           static_cast<void>(test::waitForGuiCondition([this] {
             return client_->panes()->rows()->rowCount() == 1;

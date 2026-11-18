@@ -11,6 +11,7 @@ import telar.base.text.json;
 import telar.plugins;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: machines/setup_report.cppm
 export {
@@ -45,7 +46,7 @@ export {
       static constexpr auto statuses = std::to_array<const char*>({"ok", "changed", "skipped", "failed", "pending"});
 
       struct Result {
-        std::optional<Status> status;
+        ds::Option<Status> status;
         std::string detail;
         std::vector<std::string> notes;
       };

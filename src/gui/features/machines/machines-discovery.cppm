@@ -10,6 +10,7 @@ import std;
 import telar.machines;
 
 import telar.platform.paths;
+import telar.base.ds;
 
 // Interface: machines/failure.cppm
 // Shared with the CLI: telar.machines defines it.
@@ -23,7 +24,7 @@ export {
   namespace telar::gui::features::machines {
 
     struct MachineSshResult {
-      std::optional<std::uint8_t> exit_status;
+      ds::Option<std::uint8_t> exit_status;
       std::string_view standard_error;
     };
 
@@ -77,7 +78,7 @@ export {
 
     template <typename Environment>
     concept MachineRuntimeEnvironment = requires(const Environment& environment, const char* name) {
-      { environment(name) } -> std::same_as<std::optional<std::string_view>>;
+      { environment(name) } -> std::same_as<ds::Option<std::string_view>>;
     };
 
     // Where this machine's runtime listens, found as the runtime and the CLI find it.
@@ -94,7 +95,7 @@ export {
 
       [[nodiscard]] std::string_view endpoint() const noexcept;
 
-      [[nodiscard]] std::optional<std::string_view> managedDirectory() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> managedDirectory() const noexcept;
 
     private:
       // The caller's environment behind the source SocketLocation reads.
@@ -105,7 +106,7 @@ export {
             : source_(source) {}
 
         [[nodiscard]] std::string_view lookup(const char* name) const override {
-          return source_(name).value_or(std::string_view{});
+          return source_(name).valueOr(std::string_view{});
         }
 
       private:

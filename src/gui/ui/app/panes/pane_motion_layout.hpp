@@ -17,6 +17,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -64,7 +65,7 @@ namespace telar::gui::qt {
   private:
     friend class WindowAnimationItems<PaneMotionLayout>;
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);
     void bindClock();
 
@@ -75,7 +76,7 @@ namespace telar::gui::qt {
     QString context_;
     QPointer<WindowAnimationClock> clock_;
     QMetaObject::Connection frame_connection_;
-    std::optional<std::uint64_t> next_sample_ns_;
+    ds::Option<std::uint64_t> next_sample_ns_;
     bool frame_requested_ = false;
     bool immediate_ = true;
     bool enabled_ = true;

@@ -14,6 +14,7 @@ import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
+import telar.base.ds;
 
 // Interface: graphics/frozen_image.cppm
 export {
@@ -75,7 +76,7 @@ export {
 
       void prepare(std::span<const GraphicsImageView> images) noexcept;
 
-      std::optional<FrozenImage> take(ImageKey key) noexcept;
+      ds::Option<FrozenImage> take(ImageKey key) noexcept;
 
       bool put(ImageKey key, FrozenImage&& image) noexcept;
 
@@ -107,14 +108,14 @@ export {
 
       bool covered(ImageKey key) const noexcept;
 
-      std::optional<Entry>* availableSlot(std::uint32_t identity) noexcept;
+      ds::Option<Entry>* availableSlot(std::uint32_t identity) noexcept;
 
       void remember(ImageKey key) noexcept;
 
       static constexpr std::size_t prepared_capacity = 4;
       ConcurrentMemory& memory_;
       MediaAllocator<ConcurrentMemory>& budget_;
-      std::array<std::optional<Entry>, prepared_capacity> entries_;
+      std::array<ds::Option<Entry>, prepared_capacity> entries_;
       std::array<ImageKey, graphics_image_count * 2> frozen_{};
 #if TELAR_DIAGNOSTICS
       std::uint64_t prepared_count_ = 0;
@@ -134,7 +135,7 @@ export {
 
       bool request(ImageKey key, bool shared) noexcept;
 
-      std::optional<FrozenImage> take(ImageKey key, bool shared);
+      ds::Option<FrozenImage> take(ImageKey key, bool shared);
 
       void process(std::span<const GraphicsImageView> images) noexcept;
 
@@ -165,12 +166,12 @@ export {
         ImageKey key;
         bool shared;
         State state = State::pending;
-        std::optional<FrozenImage> frozen{};
+        ds::Option<FrozenImage> frozen{};
       };
 
       ConcurrentMemory& memory_;
       MediaAllocator<ConcurrentMemory>& budget_;
-      std::array<std::optional<Entry>, 8> entries_;
+      std::array<ds::Option<Entry>, 8> entries_;
     };
 
   }

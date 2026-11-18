@@ -8,6 +8,7 @@ import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.sys.socket;
+import telar.base.ds;
 
 export namespace telar::runtime {
 
@@ -52,21 +53,21 @@ export namespace telar::runtime {
   // A decimal number with optional '_' separators between its digits; none when it holds anything
   // else or exceeds Integer.
   template <std::unsigned_integral Integer>
-  constexpr std::optional<Integer> unsignedDecimal(std::string_view text) noexcept {
+  constexpr ds::Option<Integer> unsignedDecimal(std::string_view text) noexcept {
     const auto value = unsignedNumber<Integer>(text);
 
-    return value ? std::optional{*value} : std::nullopt;
+    return value ? ds::Option{*value} : ds::none;
   }
 
   // `text` read whole as an Integer in `base`, as std::from_chars reads it; none when any byte is
   // left over or the value does not fit.
   template <std::integral Integer>
-  constexpr std::optional<Integer> parseExact(std::string_view text, int base = 10) noexcept {
+  constexpr ds::Option<Integer> parseExact(std::string_view text, int base = 10) noexcept {
     Integer value{};
     const auto* const end = text.data() + text.size();
     const auto [ptr, error] = std::from_chars(text.data(), end, value, base);
     if (error != std::errc{} || ptr != end || text.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return value;
@@ -98,17 +99,17 @@ export namespace telar::runtime::base64 {
   // The bytes `encoded` stands for, written to the front of `destination`; none when it is not
   // base64 under `Rule` or does not fit. Built in text.cpp for the three rules.
   template <Padding Rule = Padding::canonical>
-  std::optional<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  ds::Option<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
 
-  extern template std::optional<std::size_t> decode<Padding::canonical>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
-  extern template std::optional<std::size_t> decode<Padding::required>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
-  extern template std::optional<std::size_t> decode<Padding::optional>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  extern template ds::Option<std::size_t> decode<Padding::canonical>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  extern template ds::Option<std::size_t> decode<Padding::required>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  extern template ds::Option<std::size_t> decode<Padding::optional>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
 
-  inline constexpr std::optional<std::size_t> encode(std::span<const std::uint8_t> bytes, std::span<char> destination) noexcept {
+  inline constexpr ds::Option<std::size_t> encode(std::span<const std::uint8_t> bytes, std::span<char> destination) noexcept {
     const auto complete_groups = bytes.size() / 3;
     const auto remaining = bytes.size() % 3;
     if (complete_groups > destination.size() / 4 || (remaining != 0 && destination.size() - complete_groups * 4 < 4)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     constexpr unsigned pair_bits = 12;
@@ -292,7 +293,7 @@ export {
     public:
       explicit TextFields(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<std::string_view, tbc::lt::b> delimiter) noexcept;
 
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> next() noexcept;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> next() noexcept;
 
     private:
       tbc::view<std::string_view, tbc::lt::a> remaining_;
@@ -387,7 +388,7 @@ export {
 
       static bool validPattern(std::string_view pattern) noexcept;
       static bool validTarget(std::string_view hostname) noexcept;
-      static std::optional<in6_addr> ipv6(std::string_view host) noexcept;
+      static ds::Option<in6_addr> ipv6(std::string_view host) noexcept;
 
     private:
       static bool validLabels(std::string_view pattern) noexcept;
@@ -406,7 +407,7 @@ export {
       std::string_view hostname;
       std::uint16_t port;
 
-      static std::optional<ProxyTarget> parse(std::string_view head) noexcept;
+      static ds::Option<ProxyTarget> parse(std::string_view head) noexcept;
     };
 
   }

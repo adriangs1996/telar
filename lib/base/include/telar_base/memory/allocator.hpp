@@ -2,6 +2,7 @@
 
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocation_statistics.hpp"
+#include "telar_base/ds/values.hpp"
 #include <concepts>
 #include <cstddef>
 #include <cstdlib>
@@ -181,8 +182,8 @@ namespace telar {
 
 #if TELAR_DIAGNOSTICS
     // What the allocator underneath counts, for the runtime's memory samples; nothing if it does not count.
-    virtual std::optional<AllocationStatistics> statistics() const noexcept {
-      return std::nullopt;
+    virtual ds::Option<AllocationStatistics> statistics() const noexcept {
+      return ds::none;
     }
 #endif
 
@@ -239,11 +240,11 @@ namespace telar {
     }
 
 #if TELAR_DIAGNOSTICS
-    std::optional<AllocationStatistics> statistics() const noexcept override {
+    ds::Option<AllocationStatistics> statistics() const noexcept override {
       if constexpr (requires(const Upstream& upstream) { upstream.statistics(); }) {
         return upstream_.statistics();
       } else {
-        return std::nullopt;
+        return ds::none;
       }
     }
 #endif

@@ -6,6 +6,7 @@ import :access;
 import telar.gui.features.terminal.links;
 import telar.wire.editor;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::application::terminal::links {
 
@@ -33,7 +34,7 @@ namespace telar::gui::application::terminal::links {
 
   }
 
-  std::optional<std::string_view> base(const Session& session, const FilePath& path, std::string_view executable, std::optional<std::uint64_t> source_id) {
+  ds::Option<std::string_view> base(const Session& session, const FilePath& path, std::string_view executable, ds::Option<std::uint64_t> source_id) {
     if (executable.empty()) {
       throw std::runtime_error{"EditorUnavailable"};
     }
@@ -43,7 +44,7 @@ namespace telar::gui::application::terminal::links {
         throw std::invalid_argument{"RelativeFileLink"};
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto* source = session.findPane(*source_id);
@@ -53,13 +54,13 @@ namespace telar::gui::application::terminal::links {
     }
 
     if (path.text().starts_with('/')) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return std::string_view{source->cwd};
   }
 
-  void openAnchored(Session& session, const FilePath& path, std::string_view executable, std::string_view anchored, std::optional<std::uint64_t> source_id) {
+  void openAnchored(Session& session, const FilePath& path, std::string_view executable, std::string_view anchored, ds::Option<std::uint64_t> source_id) {
     if (!source_id) {
       launch(features::terminal::links::EditorTarget{executable, path.text(), path.line(), path.column()}, [&](std::span<const std::string_view> arguments) {
         workbench::launchTab(session, arguments);
@@ -133,9 +134,9 @@ namespace telar::gui::application::terminal::links {
     return Change::none;
   }
 
-  std::optional<Change> fail(Session& session, std::uint64_t request_id, std::string_view message) {
+  ds::Option<Change> fail(Session& session, std::uint64_t request_id, std::string_view message) {
     if (!features::terminal::links::complete(Access::links(session), request_id)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return report(session, message);

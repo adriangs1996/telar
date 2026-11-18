@@ -68,12 +68,12 @@ namespace {
     }
 
     source.back() = 'y';
-    check(target.value().text() == "http://x", "link targets must own the exact validated bytes");
-    const std::array copies{target.value()};
+    check(target.get().text() == "http://x", "link targets must own the exact validated bytes");
+    const std::array copies{target.get()};
 
     target.reset();
     check(copies.front() == *expected, "owned targets must preserve scheme and byte identity after the original is destroyed");
-    check(!LinkTarget::fromUri("src/main.cpp:12") && LinkTarget::fromPath("src/main.cpp:12").has_value(), "local paths must remain distinct from URI schemes");
+    check(!LinkTarget::fromUri("src/main.cpp:12") && LinkTarget::fromPath("src/main.cpp:12").hasValue(), "local paths must remain distinct from URI schemes");
     check(!LinkTarget::fromPath("a\nb") && !LinkTarget::fromPath("\xff"), "local targets must reject controls and malformed UTF-8");
   }
 

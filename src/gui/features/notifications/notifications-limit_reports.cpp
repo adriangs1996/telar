@@ -3,6 +3,7 @@ module telar.gui.features.notifications;
 import std;
 import telar.base.diagnostics;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
@@ -34,10 +35,10 @@ namespace telar::gui::features::notifications {
     return {.slot = {slot}, .show = show};
   }
 
-  std::optional<std::uint32_t> LimitReports::takeReport(Slot slot, std::int64_t awake_ms) noexcept {
+  ds::Option<std::uint32_t> LimitReports::takeReport(Slot slot, std::int64_t awake_ms) noexcept {
     auto& row = rows_[slot.value];
     if (row.unreported == 0 || (row.reported_ms && !elapsed(awake_ms, *row.reported_ms, report_interval_ms))) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto hits = std::exchange(row.unreported, 0);
@@ -110,14 +111,14 @@ namespace telar::gui::features::notifications {
     }
   }
 
-  std::optional<std::size_t> LimitReports::find(std::string_view name) const noexcept {
+  ds::Option<std::size_t> LimitReports::find(std::string_view name) const noexcept {
     for (std::size_t slot = 0; slot < count_; ++slot) {
       if (rows_[slot].name.view() == name) {
         return slot;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::size_t LimitReports::insert(std::string_view name) {

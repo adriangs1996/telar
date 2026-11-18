@@ -36,6 +36,7 @@ static_assert(true);
 #include "tbc/view.hpp"
 
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -47,7 +48,7 @@ namespace telar::gui::qt {
     explicit ResidentFonts(std::shared_ptr<const FontCollection> collection);
     [[nodiscard]] fonts::Face& face(fonts::FontRole role);
     [[nodiscard]] const FontAsset& asset(fonts::FontRole role) const;
-    [[nodiscard]] std::optional<fonts::FontRole> source(std::string_view text, fonts::FontRole preferred);
+    [[nodiscard]] ds::Option<fonts::FontRole> source(std::string_view text, fonts::FontRole preferred);
     [[nodiscard]] std::size_t fallbackCount() const noexcept;
     [[nodiscard]] static std::shared_ptr<const FontAsset> resolveSource(const QString& family, const QString& style);
     // The fonts come from a process-wide cache, which keeps its own share of the source.
@@ -63,7 +64,7 @@ namespace telar::gui::qt {
     fonts::Face primary_;
     fonts::Face text_;
     fonts::Face symbols_;
-    std::array<std::optional<fonts::Face>, fonts::maximum_fallback_faces> fallbacks_;
+    std::array<ds::Option<fonts::Face>, fonts::maximum_fallback_faces> fallbacks_;
   };
 
 }

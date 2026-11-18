@@ -1,6 +1,7 @@
 #include "element_layout.hpp"
 
 #include "ui/foundation/scene/window_animation_clock.hpp"
+#include "telar_base/ds/values.hpp"
 
 #include <QQuickWindow>
 #include <QVariantMap>
@@ -145,8 +146,8 @@ namespace telar::gui::qt {
     return isVisible() && window() != nullptr;
   }
 
-  std::optional<std::uint64_t> ElementLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
-    return frame_requested_ ? std::nullopt : next_sample_ns_;
+  ds::Option<std::uint64_t> ElementLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
+    return frame_requested_ ? ds::none : next_sample_ns_;
   }
 
   void ElementLayout::sample(std::uint64_t now_ns) {

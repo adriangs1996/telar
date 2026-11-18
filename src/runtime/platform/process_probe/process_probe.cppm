@@ -13,6 +13,7 @@ import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: platform/process_arguments.cppm
 export {
@@ -31,7 +32,7 @@ export {
       SessionHost sessionHost(AgentProvider provider) const noexcept;
 
     private:
-      static std::optional<std::string_view> next(std::string_view& remaining) noexcept;
+      static ds::Option<std::string_view> next(std::string_view& remaining) noexcept;
 
       static bool genericRuntime(std::string_view command) noexcept;
 
@@ -72,7 +73,7 @@ export {
     };
 
     struct IdentifiedProcess {
-      std::optional<ProcessIdentity> identity{};
+      ds::Option<ProcessIdentity> identity{};
       AgentProvider provider = AgentProvider::unknown;
       SessionHost session_host = SessionHost::unknown;
       FixedText<48> name{};
@@ -101,9 +102,9 @@ export {
     public:
       explicit ProcessInspector(const AgentManifests& manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept;
 
-      std::optional<ProcessIdentity> identity(pid_t process) const noexcept;
-      std::optional<ProcessSnapshot> snapshot(pid_t process) const noexcept;
-      std::optional<ProcessIdentity> peer(int socket) const noexcept;
+      ds::Option<ProcessIdentity> identity(pid_t process) const noexcept;
+      ds::Option<ProcessSnapshot> snapshot(pid_t process) const noexcept;
+      ds::Option<ProcessIdentity> peer(int socket) const noexcept;
       bool descendsFrom(const ProcessIdentity& process, pid_t root) const noexcept;
       ProcessLineage lineage(const ProcessIdentity& process, pid_t root) const noexcept;
       AgentProvider provider(pid_t process) const noexcept;
@@ -227,12 +228,12 @@ export {
 
     struct ProcessProbeResult {
       ProcessProbeRequest request;
-      std::optional<ProcessIdentity> identity;
+      ds::Option<ProcessIdentity> identity;
       AgentProvider provider = AgentProvider::unknown;
       FixedText<48> name;
       FixedText<4096> cwd;
       bool shell_foreground = false;
-      std::optional<ProcessIdentity> agent_identity;
+      ds::Option<ProcessIdentity> agent_identity;
       SessionHost session_host = SessionHost::unknown;
       bool hooks_installed = false;
       ProcessCache cache{};
@@ -243,8 +244,8 @@ export {
 
     template <typename Inspector>
     concept ProcessProbeInspector = requires(const Inspector& inspector, pid_t process) {
-      { inspector.identity(process) } noexcept -> std::same_as<std::optional<ProcessIdentity>>;
-      { inspector.snapshot(process) } noexcept -> std::same_as<std::optional<ProcessSnapshot>>;
+      { inspector.identity(process) } noexcept -> std::same_as<ds::Option<ProcessIdentity>>;
+      { inspector.snapshot(process) } noexcept -> std::same_as<ds::Option<ProcessSnapshot>>;
       { inspector.directory(process) } noexcept -> std::same_as<FixedText<4096>>;
       { inspector.identifyGroup(process, AgentProvider::unknown) } noexcept -> std::same_as<IdentifiedProcess>;
       { inspector.listeningPorts(process) } noexcept -> std::same_as<ListeningPorts>;
@@ -282,12 +283,12 @@ export {
             continue;
           }
 
-          const auto foreground = foreground_group == pane.root ? std::optional{root->identity} : inspector_.identity(foreground_group);
+          const auto foreground = foreground_group == pane.root ? ds::Option{root->identity} : inspector_.identity(foreground_group);
           auto& observation = result.panes[result.count];
 
           observation.request = pane;
           observation.request.foreground = foreground_group;
-          observation.identity = foreground.value_or(ProcessIdentity{.pid = foreground_group, .process_group = foreground_group});
+          observation.identity = foreground.valueOr(ProcessIdentity{.pid = foreground_group, .process_group = foreground_group});
           observation.cache = pane.cache;
           observation.inspected = pane.cache.needsIdentification(foreground_group, pane.recheck);
           if (observation.inspected) {

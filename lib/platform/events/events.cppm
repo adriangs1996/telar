@@ -1,6 +1,7 @@
 export module telar.platform.events;
 
 import std;
+import telar.base.ds;
 
 // Interface: telar_platform/observation_time.cppm
 export {
@@ -23,8 +24,8 @@ export {
 
     // The sooner of two optional deadlines; none only when neither is set.
     template <typename Time>
-    constexpr std::optional<Time> earliest(const std::optional<Time>& left, const std::optional<Time>& right) noexcept {
-      return left && right ? std::optional{std::min(*left, *right)} : left ? left
+    constexpr ds::Option<Time> earliest(const ds::Option<Time>& left, const ds::Option<Time>& right) noexcept {
+      return left && right ? ds::Option{std::min(*left, *right)} : left ? left
                                                                            : right;
     }
 

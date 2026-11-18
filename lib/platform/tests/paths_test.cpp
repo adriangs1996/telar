@@ -7,6 +7,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.platform.paths;
+import telar.base.ds;
 
 namespace {
 
@@ -142,7 +143,7 @@ namespace {
 
   // Parses `words` as `telar server` does, or returns nothing when it refuses them. What it
   // returns views `words`.
-  std::optional<ServerOptions> serverOptions(std::vector<std::string>& words) {
+  ds::Option<ServerOptions> serverOptions(std::vector<std::string>& words) {
     std::vector<char*> arguments;
 
     arguments.reserve(words.size());
@@ -153,7 +154,7 @@ namespace {
     try {
       return ServerOptions::parse(arguments);
     } catch (const std::invalid_argument&) {
-      return std::nullopt;
+      return ds::none;
     }
   }
 
@@ -173,7 +174,7 @@ namespace {
     };
 
     for (auto words : refused) {
-      check(!serverOptions(words).has_value(), words.front());
+      check(!serverOptions(words).hasValue(), words.front());
     }
 
     std::vector<std::string> engine;
@@ -182,14 +183,14 @@ namespace {
       engine.insert(engine.end(), {"--engine-arg", "e"});
     }
 
-    check(!serverOptions(engine).has_value());
+    check(!serverOptions(engine).hasValue());
     engine.resize(engine.size() - 2);
-    check(serverOptions(engine).has_value());
+    check(serverOptions(engine).hasValue());
 
     std::vector<std::string> words{"server", "--history", "h", "--session", "s", "--trace", "t", "--config", "c", "--profile", "p", "--engine-arg", "e", "--no-session", "--no-resume", "--help"};
     const auto options = serverOptions(words);
 
-    check(options.has_value());
+    check(options.hasValue());
     check(options->action == ServerAction::help && options->mode == ServerMode::foreground);
     check(options->history == "h" && options->session == "s" && options->trace == "t");
     check(options->config == "c" && options->profile == "p" && !options->no_config);

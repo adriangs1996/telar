@@ -38,6 +38,7 @@ import telar.tls;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.paths;
+import telar.base.ds;
 
 namespace {
 
@@ -115,7 +116,7 @@ namespace {
       check(service.inspect().status == proxy_trust::Status::absent);
       check(!service.rotateIfNeeded() && commands.commands.empty() && fileCount(path) == 0);
 
-      const auto record = service.install(std::nullopt);
+      const auto record = service.install(ds::none);
 
       check(record.backend == proxy_trust::Backend::macos && record.store.view() == keychain);
       check(commands.commands.size() == 1);
@@ -156,7 +157,7 @@ namespace {
       check(service.inspect().status == proxy_trust::Status::absent && fileCount(path) == 2);
       check(commands.commands.size() == 4 && !service.rotateIfNeeded());
 
-      const auto reinstalled = service.install(std::nullopt);
+      const auto reinstalled = service.install(ds::none);
 
       check(reinstalled.fingerprint == replacement->fingerprint);
       check(commands.commands.back().back() == path + "/ca-system-cert.pem");
@@ -181,13 +182,13 @@ namespace {
 
       commands.fail_at = 1;
       rejects([&] {
-        service.install(std::nullopt);
+        service.install(ds::none);
       });
 
       check(fileCount(path) == 0 && service.inspect().status == proxy_trust::Status::absent);
 
       commands.fail_at = 0;
-      const auto record = service.install(std::nullopt);
+      const auto record = service.install(ds::none);
       auto wrong_target = record;
 
       wrong_target.store.assign("/another/keychain");
@@ -300,7 +301,7 @@ namespace {
         const proxy_trust::Destination destination{backend, backend == proxy_trust::Backend::trust ? std::string_view{certificate} : proxy_trust::linux_certificate_path};
         TrustCommands commands;
         proxy_trust::Service service{memory, library, paths, commands, destination};
-        const auto installed = service.install(std::nullopt);
+        const auto installed = service.install(ds::none);
 
         check(installed.backend == backend && installed.store.view() == destination.store.view());
         check(service.inspect().status == proxy_trust::Status::installed);

@@ -24,6 +24,7 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -133,7 +134,7 @@ namespace telar::gui::qt {
     return active_ && key_ && key_->pane_id != 0 && key_->attachment_generation != 0 && isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> NativePaneAttention::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
+  ds::Option<std::uint64_t> NativePaneAttention::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
     return deadline_ns_;
   }
 

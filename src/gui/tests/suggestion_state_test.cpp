@@ -33,6 +33,7 @@ import telar.gui.foundation.forms;
 import telar.gui.features.palette;
 import telar.gui.foundation.model;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace {
 
@@ -99,7 +100,7 @@ namespace {
     require(command == "abcdefghijkl", "preview clipping must leave the eventual paste unchanged");
     SuggestionPreview exact{"abcdefgh", bounds, grid};
 
-    require(exact.next().has_value(), "an exact preview must have its first line");
+    require(exact.next().hasValue(), "an exact preview must have its first line");
     const auto ending = exact.next();
 
     require(ending && ending->text == "efgh" && !ending->shortened && !exact.next(), "an exact final line must remain visible without a shortening notice");
@@ -108,7 +109,7 @@ namespace {
   void geometrySharesTheExistingPaletteFrame() {
     constexpr Rect viewport{.width = 1180, .height = 720};
     const ChromeMetrics chrome;
-    const auto palette = PaletteGeometry::measure(viewport, chrome, {.pick_rows = std::nullopt, .suggest = true});
+    const auto palette = PaletteGeometry::measure(viewport, chrome, {.pick_rows = ds::none, .suggest = true});
     const auto geometry = SuggestionGeometry::measure(palette, chrome, false);
     const auto nested = SuggestionGeometry::measure(palette, chrome, true);
 

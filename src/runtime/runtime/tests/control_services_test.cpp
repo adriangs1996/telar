@@ -57,6 +57,7 @@ import telar.testing;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
+import telar.base.ds;
 
 namespace {
 
@@ -227,11 +228,11 @@ namespace {
 
   // The code a request was refused with, and its message, or nothing when it was accepted.
   template <typename Service, typename Model>
-  std::optional<std::pair<FailureCode, std::string>> refusal(Service& executions, Model& model, ClientPeer& owner, const ExecutionRequest& request) {
+  ds::Option<std::pair<FailureCode, std::string>> refusal(Service& executions, Model& model, ClientPeer& owner, const ExecutionRequest& request) {
     try {
       executions.request(model, owner.session(), request);
       owner.receive<ExecutionReply>();
-      return std::nullopt;
+      return ds::none;
     } catch (const RequestError& error) {
       return std::pair{error.code(), std::string{error.what()}};
     }
@@ -269,7 +270,7 @@ namespace {
     // Finished executions stay until their client forgets them, up to the service's capacity.
     std::uint64_t identity = 1;
 
-    for (std::optional<std::pair<FailureCode, std::string>> refused; identity <= 64 && !(refused = start(identity)); ++identity) {
+    for (ds::Option<std::pair<FailureCode, std::string>> refused; identity <= 64 && !(refused = start(identity)); ++identity) {
     }
 
     const auto retained = identity - 1;
@@ -369,7 +370,7 @@ namespace {
     owner.receive<ExecutionReply>();
     const std::string chunk(4096, 'x');
     std::uint64_t offset = 0;
-    std::optional<std::pair<FailureCode, std::string>> busy;
+    ds::Option<std::pair<FailureCode, std::string>> busy;
 
     for (std::uint64_t request = 10; !busy && request < 10'000; ++request) {
       busy = refusal(executions, model, owner, ExecutionRequest{.request_id = request, .action = ExecutionAction::input, .execution_id = 82, .input_offset = offset, .bytes = {reinterpret_cast<const Byte*>(chunk.data()), chunk.size()}});

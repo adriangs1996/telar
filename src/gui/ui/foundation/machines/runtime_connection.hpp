@@ -39,6 +39,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.client;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -62,7 +63,7 @@ namespace telar::gui::qt {
     void remoteDiscovered(const RemoteDiscovery& discovery);
     void remoteChannelReady(runtime::FileDescriptor channel);
     void remoteFailed(application::machines::MachineError error, std::string_view detail);
-    [[nodiscard]] std::optional<application::machines::MachineError> remoteError() const noexcept;
+    [[nodiscard]] ds::Option<application::machines::MachineError> remoteError() const noexcept;
     void close();
     void retryNow();
     void finishSession() noexcept;
@@ -138,7 +139,7 @@ namespace telar::gui::qt {
     std::uint64_t read_generation_ = 0;
     QString path_;
     QString error_;
-    std::optional<QString> pending_failure_;
+    ds::Option<QString> pending_failure_;
     bool dispatching_payload_ = false;
     bool accepted_ = false;
     bool connecting_ = false;
@@ -149,9 +150,9 @@ namespace telar::gui::qt {
     SchemaId schema_ = handshake::schema_id;
     bool schema_retried_ = false;
     bool schema_retry_pending_ = false;
-    std::optional<RemoteTarget> remote_target_;
-    std::optional<application::machines::MachineError> remote_error_;
-    std::optional<RemoteBridge<NativeSshHost, RuntimeConnection>> remote_;
+    ds::Option<RemoteTarget> remote_target_;
+    ds::Option<application::machines::MachineError> remote_error_;
+    ds::Option<RemoteBridge<NativeSshHost, RuntimeConnection>> remote_;
   };
 
 }

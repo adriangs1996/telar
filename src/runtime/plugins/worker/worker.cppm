@@ -29,6 +29,7 @@ import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.base.text;
 import telar.runtime.vocabulary.frames;
+import telar.base.ds;
 
 // Interface: plugins/frame_channel.cppm
 export {
@@ -48,10 +49,10 @@ export {
           : stream_(stream) {}
 
       template <Allocator Memory>
-      inline tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> receive(tbc::view<Memory&, tbc::lt::a> memory, std::size_t maximum_bytes) {
+      inline tbc::view<ds::Option<SensitiveAllocation<Memory>>, tbc::lt::a> receive(tbc::view<Memory&, tbc::lt::a> memory, std::size_t maximum_bytes) {
         std::array<Byte, Protocol::prefix_bytes> prefix;
         if (!readExact(prefix)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         std::span<const Byte> remaining{prefix};
@@ -61,7 +62,7 @@ export {
         }
 
         SensitiveAllocation frame{memory, length};
-        if (!readExact(frame.bytes())) {
+        if (!readExact(frame.bytesMut())) {
           throw SystemError{"Incomplete tap frame", EPIPE};
         }
 
@@ -185,7 +186,7 @@ export {
       // Generic over the caller's consumer.
       template <typename Consumer>
       TBC_GENERIC void collect(Consumer&& consumer) {
-        if (!ready_ || !ready_->consume()) {
+        if (!ready_ || !ready_.getMut().consume()) {
           return;
         }
 
@@ -201,7 +202,7 @@ export {
 
     private:
       tbc::view<DropChannel<OwnedResult<Memory>, Limits::queue_depth, ChannelPolicy::keep_oldest>, tbc::lt::a> results_;
-      std::optional<CompletionSignal> ready_;
+      ds::Option<CompletionSignal> ready_;
     };
 
     extern template class ResultQueue<Memory>;
@@ -428,7 +429,7 @@ export {
         std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
         std::size_t prefix_bytes = 0;
         std::uint64_t dropped = 0;
-        tbc::view<std::optional<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> input;
+        tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> input;
         std::size_t received = 0;
         bool registration_ack;
         bool ready = false;
@@ -460,18 +461,18 @@ export {
           }
 
           if (std::chrono::steady_clock::now() >= connection->deadline) {
-            connection->error.assign("Network control deadline exceeded");
+            connection.getMut().error.assign("Network control deadline exceeded");
           }
 
           if (!connection->socket && connection->error.view().empty()) {
             try {
-              connection->socket = port_.openControl(specification_);
+              connection.getMut().socket = port_.openControl(specification_);
             } catch (const SystemError& failure) {
               if (failure.code() != EAGAIN) {
-                connection->error.assign(std::string_view{failure.what()}.substr(0, 1024));
+                connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, 1024));
               }
             } catch (const std::exception& failure) {
-              connection->error.assign(std::string_view{failure.what()}.substr(0, 1024));
+              connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, 1024));
             }
           }
 
@@ -486,7 +487,7 @@ export {
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           auto& connection = connections_[index];
           if (connection && connection->notify_ready) {
-            connection->notify_ready = false;
+            connection.getMut().notify_ready = false;
             constexpr std::string_view reason = "worker_restarted";
             std::array<Byte, 128> output;
             const auto ready = traffic::Protocol::encode(output, {.kind = traffic::Kind::ready, .bytes = {reinterpret_cast<const Byte*>(reason.data()), reason.size()}});
@@ -551,7 +552,7 @@ export {
             const auto readiness = descriptors[index + 3].revents;
 
             if (stage == TrafficStage::control) {
-              std::optional<SensitiveAllocation<ConcurrentMemory>> frame;
+              ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
 
               try {
                 if (readiness & (POLLERR | POLLNVAL)) {
@@ -559,14 +560,14 @@ export {
                 }
 
                 if (readiness & POLLOUT) {
-                  write(*connection);
+                  write(connection.getMut());
                 }
 
                 if (readiness & (POLLIN | POLLHUP)) {
-                  frame = read(memory_, *connection);
+                  frame = read(memory_, connection.getMut());
                 }
               } catch (const std::exception& failure) {
-                connection->error.assign(std::string_view{failure.what()}.substr(0, 1024));
+                connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, 1024));
               }
 
               if (!connection->error.view().empty()) {
@@ -588,7 +589,7 @@ export {
 
             try {
               if (readiness & POLLOUT) {
-                write(*connection);
+                write(connection.getMut());
               }
             } catch (...) {
               transport_failed_ = true;
@@ -596,10 +597,10 @@ export {
             }
 
             if (readiness & (POLLIN | POLLHUP)) {
-              std::optional<SensitiveAllocation<ConcurrentMemory>> frame;
+              ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
 
               try {
-                frame = read(memory_, *connection);
+                frame = read(memory_, connection.getMut());
               } catch (...) {
                 transport_failed_ = true;
                 throw;
@@ -611,12 +612,12 @@ export {
 
               const auto kind = traffic::Protocol::decode(frame->bytes()).kind;
               if (connection->registration_ack && kind == traffic::Kind::ready) {
-                connection->registration_ack = false;
+                connection.getMut().registration_ack = false;
                 continue;
               }
 
               if (kind == traffic::Kind::ready) {
-                connection->ready = true;
+                connection.getMut().ready = true;
               }
 
               dispatch(session, index, frame->bytes(), connection->dropped, consume);
@@ -638,7 +639,7 @@ export {
 
         SensitiveAllocation request{memory_, frame.size() + error.size() + 128};
         const auto event_id = ++next_event_;
-        const auto encoded = TrafficProtocol::controlEvent(request.bytes(), event_id, connection->registration.id, frame, error);
+        const auto encoded = TrafficProtocol::controlEvent(request.bytesMut(), event_id, connection->registration.id, frame, error);
 
         connection.reset();
         auto response = session->request(encoded, TrafficLimits::reply_bytes);
@@ -677,10 +678,10 @@ export {
       // The connection is named by its slot, as the callback's reply may change the table it lives in.
       template <typename Consumer>
       TBC_GENERIC void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
-        auto& connection = *connections_[index];
+        auto& connection = connections_[index].getMut();
         const auto event = traffic::Protocol::decode(frame);
         const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
-        std::optional<traffic::FlowEvent> flow;
+        ds::Option<traffic::FlowEvent> flow;
 
         if (control) {
           flow = traffic::FlowCodec::decode(event.bytes);
@@ -691,7 +692,7 @@ export {
 
         if (!session) {
           if (control) {
-            fail(connection, *flow);
+            fail(connection, flow.getMut());
           } else {
             ++dropped_observations_;
           }
@@ -701,7 +702,7 @@ export {
 
         SensitiveAllocation request{memory_, frame.size() + 64};
         const auto event_id = ++next_event_;
-        auto response = session->request(TrafficProtocol::event(request.bytes(), event_id, connection.registration.id, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
+        auto response = session->request(TrafficProtocol::event(request.bytesMut(), event_id, connection.registration.id, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
         if (response.bytes().front() == static_cast<Byte>(FrameKind::error)) {
           const auto error = Protocol::decodeError(response.bytes());
           if (error.event_id != event_id) {
@@ -710,7 +711,7 @@ export {
 
           ++errors_;
           if (control) {
-            fail(*connections_[index], *flow);
+            fail(connections_[index].getMut(), *flow);
             port_.packageFailure(specification_, *flow);
           }
 
@@ -734,13 +735,13 @@ export {
       static void write(Connection& connection);
 
       // A complete frame leaves the connection; it borrows only the allocator.
-      static tbc::view<std::optional<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection);
+      static tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection);
 
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       tbc::view<Secure, tbc::lt::a> secure_;
       ServiceSpec specification_;
       tbc::view<traffic::PackagePort&, tbc::lt::a> port_;
-      tbc::view<std::array<std::optional<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
+      tbc::view<std::array<ds::Option<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
       tbc::view<Owned<TrafficReply, ConcurrentMemory>, tbc::lt::a> reply_;
       std::uint64_t next_event_ = 0;
       std::uint64_t errors_ = 0;
@@ -830,7 +831,7 @@ export {
       [[maybe_unused]] std::uint64_t session_number_ = 0;
       tbc::view<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>, tbc::lt::a> requests_;
       CancellationSignal cancellation_;
-      std::optional<Session<ConcurrentMemory>> session_;
+      ds::Option<Session<ConcurrentMemory>> session_;
       Owned<TrafficBridge, ConcurrentMemory> bridge_{nullptr, AllocationDeleter<TrafficBridge, ConcurrentMemory>{memory_}};
       CompletionSignal wake_;
       std::uint64_t callback_errors_base_ = 0;

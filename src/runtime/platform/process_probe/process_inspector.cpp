@@ -4,6 +4,7 @@ import std;
 import telar.sys.posix;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime {
   namespace {
@@ -107,10 +108,10 @@ namespace telar::runtime {
     return host;
   }
 
-  std::optional<std::string_view> ProcessArguments::next(std::string_view& remaining) noexcept {
+  ds::Option<std::string_view> ProcessArguments::next(std::string_view& remaining) noexcept {
     const auto first = remaining.find_first_not_of('\0');
     if (first == std::string_view::npos) {
-      return std::nullopt;
+      return ds::none;
     }
 
     remaining.remove_prefix(first);
@@ -173,10 +174,10 @@ namespace telar::runtime {
       : manifests_(manifests),
         uid_(uid) {}
 
-  std::optional<ProcessIdentity> ProcessInspector::identity(pid_t process) const noexcept {
+  ds::Option<ProcessIdentity> ProcessInspector::identity(pid_t process) const noexcept {
     const auto observed = snapshot(process);
 
-    return observed ? std::optional{observed->identity} : std::nullopt;
+    return observed ? ds::Option{observed->identity} : ds::none;
   }
 
   bool ProcessInspector::descendsFrom(const ProcessIdentity& process, pid_t root) const noexcept {
@@ -254,7 +255,7 @@ namespace telar::runtime {
       return leader;
     }
 
-    std::optional<IdentifiedProcess> selected;
+    ds::Option<IdentifiedProcess> selected;
 
     for (const auto member : std::span{members}.first(count)) {
       if (member <= 0 || member == group) {
@@ -283,7 +284,7 @@ namespace telar::runtime {
       }
     }
 
-    return selected.value_or(leader);
+    return selected.valueOr(leader);
   }
 
   bool ProcessCache::needsIdentification(pid_t foreground, bool recheck) const noexcept {

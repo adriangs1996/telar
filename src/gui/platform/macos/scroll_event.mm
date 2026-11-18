@@ -1,5 +1,6 @@
 #include "platform/scroll_event.hpp"
 #include "foundation/core/wheel_accumulator.hpp"
+#include "telar_base/ds/values.hpp"
 #include <AppKit/AppKit.h>
 #include <QWindow>
 #include <bit>
@@ -32,7 +33,7 @@ namespace telar::gui::platform {
 
   }
 
-  std::optional<NativeScrollInput> nativeScrollInput(std::string_view event_type, const void* message, const QWindow& window) noexcept {
+  ds::Option<NativeScrollInput> nativeScrollInput(std::string_view event_type, const void* message, const QWindow& window) noexcept {
     if ((event_type != "mac_generic_NSEvent" && event_type != "NSEvent") || message == nullptr || window.handle() == nullptr) {
       return {};
     }

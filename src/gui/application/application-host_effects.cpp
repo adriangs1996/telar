@@ -8,12 +8,13 @@ import telar.gui.features.window;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::application {
 
-  std::optional<AcknowledgeAgent> AgentAcknowledgement::take(std::optional<FocusedAgent> agent) noexcept {
+  ds::Option<AcknowledgeAgent> AgentAcknowledgement::take(ds::Option<FocusedAgent> agent) noexcept {
     if (!agent) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const bool already = acknowledged_ && acknowledged_->pane_id == agent->pane_id && acknowledged_->pane_generation == agent->pane_generation;
@@ -23,11 +24,11 @@ namespace telar::gui::application {
         acknowledged_.reset();
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     if (already) {
-      return std::nullopt;
+      return ds::none;
     }
 
     acknowledged_ = AcknowledgeAgent{agent->pane_id, agent->pane_generation};

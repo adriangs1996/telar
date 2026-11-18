@@ -9,6 +9,7 @@ import telar.tbc;
 import telar.vocabulary;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -83,9 +84,9 @@ export namespace telar::runtime::control {
 
     GhosttyRenderStateCursor visualCursor() const;
 
-    std::optional<GhosttyColorRgb> color(unsigned selector);
+    ds::Option<GhosttyColorRgb> color(unsigned selector);
 
-    std::optional<GhosttyGridRef> reference(Position position) const;
+    ds::Option<GhosttyGridRef> reference(Position position) const;
 
     std::string_view title() const;
 
@@ -157,7 +158,7 @@ export namespace telar::runtime::control {
     Cached<GhosttyStyle> style_cache_;
     Cached<GhosttyRenderStateCursor> visual_cursor_cache_;
     mutable std::array<ModeCache, 64> modes_;
-    std::array<std::optional<GhosttyColorRgb>, 3> colors_;
+    std::array<ds::Option<GhosttyColorRgb>, 3> colors_;
     std::array<bool, 3> color_valid_{};
     tbc::view<GhosttyTerminal, tbc::lt::a> terminal_ = nullptr;
     tbc::view<GhosttyRenderState, tbc::lt::a> render_ = nullptr;

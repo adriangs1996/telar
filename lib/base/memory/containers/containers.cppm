@@ -8,6 +8,7 @@ export module telar.base.memory.containers;
 import std;
 import telar.tbc;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
@@ -189,7 +190,7 @@ export {
       ByteStorage(const ByteStorage&) = delete;
       ByteStorage& operator=(const ByteStorage&) = delete;
 
-      std::span<std::uint8_t> bytes() noexcept;
+      std::span<std::uint8_t> bytesMut() noexcept;
       std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
@@ -316,7 +317,7 @@ export {
 
     public:
       inline bool publish(Value value) noexcept {
-        std::optional<Value> discarded;
+        ds::Option<Value> discarded;
         const auto lock = acquire();
         if (!lock.owns_lock() || closed_) {
           dropped_.fetch_add(1, std::memory_order_relaxed);
@@ -340,7 +341,7 @@ export {
         return true;
       }
 
-      inline std::optional<Value> receive() {
+      inline ds::Option<Value> receive() {
         std::unique_lock lock{mutex_};
 
         ready_.wait(lock, [&] {
@@ -350,14 +351,14 @@ export {
         return take();
       }
 
-      inline std::optional<Value> tryReceive() noexcept {
+      inline ds::Option<Value> tryReceive() noexcept {
         const auto lock = acquire();
 
-        return lock.owns_lock() ? take() : std::nullopt;
+        return lock.owns_lock() ? take() : ds::none;
       }
 
       inline void close() noexcept {
-        std::array<std::optional<Value>, Capacity> discarded;
+        std::array<ds::Option<Value>, Capacity> discarded;
 
         {
           const std::lock_guard lock{mutex_};
@@ -385,9 +386,9 @@ export {
         }
       }
 
-      inline std::optional<Value> take() noexcept {
+      inline ds::Option<Value> take() noexcept {
         if (count_ == 0) {
-          return std::nullopt;
+          return ds::none;
         }
 
         auto value = std::move(slots_[head_]);
@@ -401,7 +402,7 @@ export {
 
       std::mutex mutex_;
       std::condition_variable ready_;
-      std::array<std::optional<Value>, Capacity> slots_;
+      std::array<ds::Option<Value>, Capacity> slots_;
       std::size_t head_ = 0;
       std::size_t count_ = 0;
       bool closed_ = false;
@@ -473,16 +474,16 @@ export {
         words_[index / word_bits] &= ~(std::uint64_t{1} << (index % word_bits));
       }
 
-      inline std::optional<std::size_t> firstUnused() const noexcept {
+      inline ds::Option<std::size_t> firstUnused() const noexcept {
         for (std::size_t word = 0; word < words_.size(); ++word) {
           if (const auto available = ~words_[word]; available != 0) {
             const auto index = word * word_bits + std::countr_zero(available);
 
-            return index < Capacity ? std::optional{index} : std::nullopt;
+            return index < Capacity ? ds::Option{index} : ds::none;
           }
         }
 
-        return std::nullopt;
+        return ds::none;
       }
 
       template <typename Visitor>

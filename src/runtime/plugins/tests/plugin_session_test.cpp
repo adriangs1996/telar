@@ -237,7 +237,7 @@ namespace {
         if (std::string_view{mode} == "blocked-write") {
           SensitiveAllocation large{memory, 1024 * 1024};
 
-          std::ranges::fill(large.bytes(), 0);
+          std::ranges::fill(large.bytesMut(), 0);
           session.exchange(specification, 73, large.bytes());
         } else {
           session.exchange(specification, 73, frame);

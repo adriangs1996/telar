@@ -2,6 +2,7 @@ module telar.config.gui;
 
 import std;
 import telar.lua;
+import telar.base.ds;
 
 namespace telar::runtime::config {
 
@@ -40,10 +41,10 @@ namespace telar::runtime::config {
     font.hinting = optionalChoice<FontHinting>(table.field("hinting"), font_hinting_names);
   }
 
-  std::optional<GuiSettings::FontName> GuiReader::text(const lua::Value& value) {
+  ds::Option<GuiSettings::FontName> GuiReader::text(const lua::Value& value) {
     optionalUtf8Text(value, GuiBounds::font_name_bytes);
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     GuiSettings::FontName name;
@@ -105,7 +106,7 @@ namespace telar::runtime::config {
     }
   }
 
-  void GuiReader::opacity(const lua::Value& table, std::array<std::optional<double>, surface_names.size()>& opacity) {
+  void GuiReader::opacity(const lua::Value& table, std::array<ds::Option<double>, surface_names.size()>& opacity) {
     if (!table.present()) {
       return;
     }
@@ -153,9 +154,9 @@ namespace telar::runtime::config {
     return result;
   }
 
-  std::optional<ThemeSettings> ThemeReader::read(const lua::Value& theme) {
+  ds::Option<ThemeSettings> ThemeReader::read(const lua::Value& theme) {
     if (!theme.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ThemeSettings result;
@@ -173,9 +174,9 @@ namespace telar::runtime::config {
     return result;
   }
 
-  std::optional<std::string_view> ThemeReader::preset(const lua::Value& value) {
+  ds::Option<std::string_view> ThemeReader::preset(const lua::Value& value) {
     if (!value.present()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto text = value.string();
@@ -218,11 +219,11 @@ namespace telar::runtime::config {
     return {.rgb = rgb};
   }
 
-  std::optional<ThemeRgb> ThemeReader::rgb(const lua::Value& value) {
-    return value.present() ? color(value, false).rgb : std::nullopt;
+  ds::Option<ThemeRgb> ThemeReader::rgb(const lua::Value& value) {
+    return value.present() ? color(value, false).rgb : ds::none;
   }
 
-  void ThemeReader::colors(const lua::Value& table, std::array<std::optional<ThemeColor>, theme_color_names.size()>& colors) {
+  void ThemeReader::colors(const lua::Value& table, std::array<ds::Option<ThemeColor>, theme_color_names.size()>& colors) {
     if (!table.present()) {
       return;
     }
@@ -262,7 +263,7 @@ namespace telar::runtime::config {
     }
   }
 
-  void ThemeReader::syntax(const lua::Value& table, std::array<std::optional<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax) {
+  void ThemeReader::syntax(const lua::Value& table, std::array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax) {
     if (!table.present()) {
       return;
     }

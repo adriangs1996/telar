@@ -7,6 +7,7 @@ import telar.ghostty.vt;
 import telar.runtime.terminal.grid;
 import telar.runtime.terminal.ghostty;
 import telar.base.memory.sensitive;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -21,16 +22,16 @@ namespace telar::runtime {
     }
   }
 
-  auto FramePacer::deadline(Time now) const noexcept -> std::optional<Time> {
+  auto FramePacer::deadline(Time now) const noexcept -> ds::Option<Time> {
     const bool input_recent = last_input_ && input_frames_left_ != 0 && now - *last_input_ < input_grace;
     if (available(now) != 0 || input_recent) {
-      return std::nullopt;
+      return ds::none;
     }
 
-    return anchor_.value_or(now) + interval_;
+    return anchor_.valueOr(now) + interval_;
   }
 
-  void FramePacer::record(Time now, std::optional<Time> scheduled) noexcept {
+  void FramePacer::record(Time now, ds::Option<Time> scheduled) noexcept {
     const auto credits = available(now);
     if (credits == 0 && !scheduled && input_frames_left_ != 0) {
       --input_frames_left_;
@@ -73,9 +74,9 @@ namespace telar::runtime {
     reset();
   }
 
-  std::optional<std::string_view> InputScanner::typedText() const noexcept {
+  ds::Option<std::string_view> InputScanner::typedText() const noexcept {
     if (!typed_exact_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return std::string_view{typed_.data(), typed_length_};

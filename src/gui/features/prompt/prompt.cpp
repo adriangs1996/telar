@@ -12,6 +12,7 @@ import telar.wire.editor;
 import telar.wire.history;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
@@ -96,10 +97,10 @@ namespace telar::gui::features::prompt {
 
   static_assert(runtime::config::prompt_action_names.size() == static_cast<std::size_t>(Action::insert_mode) + 1);
 
-  std::optional<Action> bound(const KeyPress& key, const Editor& editor, const PromptConfiguration& configuration) {
+  ds::Option<Action> bound(const KeyPress& key, const Editor& editor, const PromptConfiguration& configuration) {
     using Chord = runtime::config::KeyChord;
     const bool normal = editor.keymap() == Keymap::vim && editor.mode() != Mode::insert;
-    const auto named = [&]() -> std::optional<Chord::Key> {
+    const auto named = [&]() -> ds::Option<Chord::Key> {
       switch (key.key) {
       case Key::character:
         return Chord::Key::character;
@@ -129,10 +130,10 @@ namespace telar::gui::features::prompt {
         return Chord::Key::escape;
       }
 
-      return std::nullopt;
+      return ds::none;
     }();
     if (!named) {
-      return std::nullopt;
+      return ds::none;
     }
 
     unsigned modifiers = (key.modifiers.control ? static_cast<unsigned>(Chord::Modifier::control) : 0U) | (key.modifiers.alt ? static_cast<unsigned>(Chord::Modifier::alt) : 0U);
@@ -150,7 +151,7 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void remember(State& state, std::string_view command) {
@@ -179,7 +180,7 @@ namespace telar::gui::features::prompt {
   }
 
   void write(State& state, PaneLine& line, std::string_view command) {
-    auto& text = Access::line(line).editor().text();
+    auto& text = Access::line(line).editorMut().textMut();
 
     text.assign(command);
     text.moveTo(text.size());
@@ -204,13 +205,13 @@ namespace telar::gui::features::prompt {
     return true;
   }
 
-  std::optional<std::uint64_t> takeWrite(State& state) noexcept {
+  ds::Option<std::uint64_t> takeWrite(State& state) noexcept {
     const auto written = std::exchange(Access::written(state), 0);
 
-    return written == 0 ? std::nullopt : std::optional{written};
+    return written == 0 ? ds::none : ds::Option{written};
   }
 
-  std::optional<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current) {
+  ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current) {
     auto& typed = Access::line(line);
 
     if (current.phase != ShellPhase::running || current.echo) {
@@ -218,19 +219,19 @@ namespace telar::gui::features::prompt {
     }
 
     if (previous.phase != ShellPhase::running || current.phase != ShellPhase::prompt) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return typed.promptReturned(current.commands != previous.commands && current.status == 0);
   }
 
   void useClipboard(PaneLine& line, Clipboard clipboard) {
-    Access::line(line).editor().setClipboard(std::move(clipboard));
+    Access::line(line).editorMut().setClipboard(std::move(clipboard));
   }
 
   // ---- the commands the shell runs --------------------------------------------------------------
 
-  std::optional<CommandPresence> presence(State& state, const Commands& commands, std::string_view word) {
+  ds::Option<CommandPresence> presence(State& state, const Commands& commands, std::string_view word) {
     if (word.empty() || word.size() > 256) {
       return CommandPresence::unknown;
     }
@@ -255,10 +256,10 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<CommandQuery> ask(State& state, const Commands& commands, std::string_view word, std::uint64_t request_id) {
+  ds::Option<CommandQuery> ask(State& state, const Commands& commands, std::string_view word, std::uint64_t request_id) {
     const auto slash = word.rfind('/');
     if (slash == std::string_view::npos) {
       return CompleteWords{.request_id = request_id, .pane_id = commands.pane_id, .provider = CompletionProvider::command, .prefix = word};
@@ -279,7 +280,7 @@ namespace telar::gui::features::prompt {
 
     const auto name = word.substr(slash + 1);
     if (name.empty() || name.size() > 64 || !root.starts_with('/')) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return FindPaths{.request_id = request_id, .root = root, .query = name, .kind = PathKindFilter::any, .limit = 50};
@@ -327,11 +328,11 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  std::optional<Settled> settles(State& state, const CompletionWords& message) {
+  ds::Option<Settled> settles(State& state, const CompletionWords& message) {
     auto& requests = Access::commandRequests(state);
     const auto checked = requests.find(message.request_id);
     if (checked == requests.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto found = std::ranges::any_of(message.words, [&](const CompletionWord& word) {
@@ -346,11 +347,11 @@ namespace telar::gui::features::prompt {
                                                                                    : CommandPresence::missing);
   }
 
-  std::optional<Settled> settles(State& state, const PathResults& message) {
+  ds::Option<Settled> settles(State& state, const PathResults& message) {
     auto& requests = Access::commandRequests(state);
     const auto checked = requests.find(message.request_id);
     if (checked == requests.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto name = std::string_view{checked->second.word}.substr(checked->second.word.rfind('/') + 1);
@@ -380,7 +381,7 @@ namespace telar::gui::features::prompt {
 
   // ---- completion specs -------------------------------------------------------------------------
 
-  std::optional<SpecState> spec(State& state, const Commands& commands, std::string_view command) {
+  ds::Option<SpecState> spec(State& state, const Commands& commands, std::string_view command) {
     if (command.empty() || command.size() > 64) {
       return SpecState::unavailable;
     }
@@ -390,7 +391,7 @@ namespace telar::gui::features::prompt {
       return known->second;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   RequestCommandSpec askSpec(const State& state, std::uint64_t pane_id, std::string_view command, std::uint64_t request_id) noexcept {
@@ -419,11 +420,11 @@ namespace telar::gui::features::prompt {
     Access::specRequests(state).emplace(request_id, CommandRequest{pane_id, std::string{command}});
   }
 
-  std::optional<std::uint64_t> receive(State& state, const CommandSpec& message) {
+  ds::Option<std::uint64_t> receive(State& state, const CommandSpec& message) {
     auto& requests = Access::specRequests(state);
     const auto request = requests.find(message.request_id);
     if (request == requests.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto [pane_id, command] = std::move(request->second);
@@ -474,7 +475,7 @@ namespace telar::gui::features::prompt {
 
   // ---- completion -------------------------------------------------------------------------------
 
-  std::optional<CompletionContext> completing(const PaneLine& line, shell::Dialect dialect) {
+  ds::Option<CompletionContext> completing(const PaneLine& line, shell::Dialect dialect) {
     const auto& text = Access::line(line).editor().text();
 
     return completionContext(text.view(), text.cursor(), shell::Syntax{.dialect = dialect});
@@ -631,11 +632,11 @@ namespace telar::gui::features::prompt {
     Access::line(line).offer(std::move(Access::completion(plan).choices), context.replace_begin, context.replace_end, std::move(requests), Access::dialect(plan), std::move(Access::label(plan)));
   }
 
-  std::optional<std::uint64_t> receive(State& state, const CompletionWords& message) {
+  ds::Option<std::uint64_t> receive(State& state, const CompletionWords& message) {
     auto& completions = Access::completions(state);
     const auto pending = completions.find(message.request_id);
     if (pending == completions.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto [pane_id, base, query] = std::move(pending->second);
@@ -656,11 +657,11 @@ namespace telar::gui::features::prompt {
     return pane_id;
   }
 
-  std::optional<std::uint64_t> receive(State& state, const PathResults& message) {
+  ds::Option<std::uint64_t> receive(State& state, const PathResults& message) {
     auto& completions = Access::completions(state);
     const auto pending = completions.find(message.request_id);
     if (pending == completions.end()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto [pane_id, base, query] = std::move(pending->second);
@@ -690,7 +691,7 @@ namespace telar::gui::features::prompt {
 
   // ---- requests that fail -----------------------------------------------------------------------
 
-  std::optional<std::uint64_t> fail(State& state, std::uint64_t request_id) {
+  ds::Option<std::uint64_t> fail(State& state, std::uint64_t request_id) {
     auto& commands = Access::commandRequests(state);
     if (const auto checked = commands.find(request_id); checked != commands.end()) {
       const auto settled = take(state, checked, CommandPresence::unknown);
@@ -727,7 +728,7 @@ namespace telar::gui::features::prompt {
       return pane_id;
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   void failAll(State& state) noexcept {
@@ -791,18 +792,18 @@ namespace telar::gui::features::prompt {
 
   // ---- the command block selected from the line -------------------------------------------------
 
-  std::optional<std::size_t> selectedBlock(const State& state, std::uint64_t pane_id) noexcept {
+  ds::Option<std::size_t> selectedBlock(const State& state, std::uint64_t pane_id) noexcept {
     const auto& lines = Access::lines(state);
     const auto found = lines.find(pane_id);
 
-    return found == lines.end() ? std::nullopt : Access::block(found->second);
+    return found == lines.end() ? ds::none : Access::block(found->second);
   }
 
-  std::optional<std::size_t> selectedBlock(const PaneLine& line) noexcept {
+  ds::Option<std::size_t> selectedBlock(const PaneLine& line) noexcept {
     return Access::block(line);
   }
 
-  void selectBlock(PaneLine& line, std::optional<std::size_t> index, std::optional<std::uint32_t> live_prompt) noexcept {
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt) noexcept {
     auto& block = Access::block(line);
 
     Access::chord(line) = 0;
@@ -818,11 +819,11 @@ namespace telar::gui::features::prompt {
     block = index;
   }
 
-  std::optional<std::uint32_t> livePrompt(const State& state, std::uint64_t pane_id) noexcept {
+  ds::Option<std::uint32_t> livePrompt(const State& state, std::uint64_t pane_id) noexcept {
     const auto& lines = Access::lines(state);
     const auto found = lines.find(pane_id);
 
-    return found == lines.end() ? std::nullopt : Access::livePrompt(found->second);
+    return found == lines.end() ? ds::none : Access::livePrompt(found->second);
   }
 
   void beginChord(PaneLine& line, char first) noexcept {
@@ -850,13 +851,13 @@ namespace telar::gui::features::prompt {
     jump = jumps.size();
   }
 
-  std::optional<std::uint64_t> jump(PaneLine& line, std::uint64_t here, bool back) {
+  ds::Option<std::uint64_t> jump(PaneLine& line, std::uint64_t here, bool back) {
     auto& jumps = Access::jumps(line);
     auto& at = Access::jump(line);
 
     if (back) {
       if (at == 0 || jumps.empty()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       if (at == jumps.size()) {
@@ -871,7 +872,7 @@ namespace telar::gui::features::prompt {
       --at;
     } else {
       if (at + 1 >= jumps.size()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       ++at;

@@ -6,6 +6,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: input/child_mouse.cppm
 export {
@@ -60,7 +61,7 @@ export {
 
       [[nodiscard]] static bool tracked(const Mouse& protocol, MousePhase phase) noexcept;
 
-      [[nodiscard]] static std::optional<ChildMouseReport> project(const ChildMouseView& view, const ChildMouseSample& sample) noexcept;
+      [[nodiscard]] static ds::Option<ChildMouseReport> project(const ChildMouseView& view, const ChildMouseSample& sample) noexcept;
 
       [[nodiscard]] static bool valid(const TerminalSurface& surface) noexcept;
 
@@ -74,13 +75,13 @@ export {
 
       [[nodiscard]] bool owned() const noexcept;
 
-      [[nodiscard]] std::optional<ChildMouseReport> deliver(const ChildMouseView& view, ChildMouseSample sample) noexcept;
+      [[nodiscard]] ds::Option<ChildMouseReport> deliver(const ChildMouseView& view, ChildMouseSample sample) noexcept;
 
-      [[nodiscard]] std::optional<ChildMouseReport> cancel(const ChildMouseView& view) noexcept;
+      [[nodiscard]] ds::Option<ChildMouseReport> cancel(const ChildMouseView& view) noexcept;
 
     private:
       bool owned_ = false;
-      std::optional<ChildMouseView> capture_;
+      ds::Option<ChildMouseView> capture_;
       ChildMouseSample last_;
     };
 

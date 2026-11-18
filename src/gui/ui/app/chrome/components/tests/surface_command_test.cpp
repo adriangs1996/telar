@@ -23,6 +23,7 @@
 #include <utility>
 
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -49,7 +50,7 @@ namespace {
     QTimer watchdog;
 
     watchdog.setSingleShot(true);
-    std::optional<SurfaceCommandResult> result;
+    telar::ds::Option<SurfaceCommandResult> result;
 
     QObject::connect(&watchdog, &QTimer::timeout, &loop, &QEventLoop::quit);
     worker.start(command, [&](SurfaceCommandResult value) {
@@ -73,7 +74,7 @@ namespace {
 
     check(!worker.active(), "completion must release the worker before notifying its observer");
 
-    return std::move(*result);
+    return std::move(result.getMut());
   }
 
   void literalArgumentsAndInput(SurfaceCommand& worker) {

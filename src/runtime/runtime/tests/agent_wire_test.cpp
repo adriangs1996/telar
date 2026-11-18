@@ -16,6 +16,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace {
 
@@ -269,7 +270,7 @@ namespace {
     ProtocolPeer control{host.socket()};
     const Recorder target{host, control};
     const auto sender = control.exchange<PaneOpened>(CreatePane{.request_id = 2, .location = target.opened.location, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
-    std::optional<FailureCode> ninth;
+    ds::Option<FailureCode> ninth;
 
     // An agent in one pane prompts another in a loop.
     for (std::uint64_t index = 1; index <= 9; ++index) {
@@ -286,9 +287,9 @@ namespace {
   }
 
   // The session and title the checkpoint holds for `pane`.
-  std::optional<std::pair<std::string, std::string>> checkpointedAgent(const RuntimeHost& host, std::uint64_t pane) {
+  ds::Option<std::pair<std::string, std::string>> checkpointedAgent(const RuntimeHost& host, std::uint64_t pane) {
     const auto bytes = readFile(host.directory() + "/session.ckpt");
-    std::optional<std::pair<std::string, std::string>> found;
+    ds::Option<std::pair<std::string, std::string>> found;
     telar::runtime::checkpoint::Reader reader{std::span{reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}};
 
     reader.read([&]<typename Record>(const Record& record) {

@@ -31,6 +31,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.actions;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -77,7 +78,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"MissingClipboardPreview"};
     }
 
-    SlotState slot{.preview = std::move(*landing)};
+    SlotState slot{.preview = std::move(landing.getMut())};
 
     landing.reset();
 
@@ -106,10 +107,10 @@ namespace telar::gui::qt {
     emit changed();
   }
 
-  void AttachmentShelf::setPrompt(std::optional<AttachmentPrompt> prompt, bool presented) {
+  void AttachmentShelf::setPrompt(ds::Option<AttachmentPrompt> prompt, bool presented) {
     capture_prompt_ = prompt;
-    prompt_ = presented ? prompt : std::nullopt;
-    if (catalog_.setTarget(prompt_ ? std::optional{prompt_->target} : std::nullopt)) {
+    prompt_ = presented ? prompt : ds::none;
+    if (catalog_.setTarget(prompt_ ? ds::Option{prompt_->target} : ds::none)) {
       emit changed();
     }
   }
@@ -169,7 +170,7 @@ namespace telar::gui::qt {
     }
 
     try {
-      adopt(*result);
+      adopt(result.getMut());
     } catch (const std::exception& error) {
       delivery_.landing.reset();
       emit failed(QString::fromUtf8(error.what()));
@@ -183,7 +184,7 @@ namespace telar::gui::qt {
 
     delivery_.landing = std::move(result.preview);
     const auto requested = catalog_.retainedBytes() + result.capture->png.size();
-    const auto evicted = catalog_.adopt(*result.capture);
+    const auto evicted = catalog_.adopt(result.capture.getMut());
     if (evicted) {
       emit this->evicted(*evicted, *evicted == application::terminal::attachments::AttachmentEviction::items ? AttachmentLimits::maximum_items + 1 : requested);
     }
@@ -292,11 +293,11 @@ namespace telar::gui::qt {
     return {{QStringLiteral("id"), QString::number(*snapshot.modal)}, {QStringLiteral("width"), slot->capture.width}, {QStringLiteral("height"), slot->capture.height}};
   }
 
-  const std::optional<AttachmentPrompt>& AttachmentShelf::prompt() const noexcept {
+  const ds::Option<AttachmentPrompt>& AttachmentShelf::prompt() const noexcept {
     return prompt_;
   }
 
-  const std::optional<AttachmentPrompt>& AttachmentShelf::capturePrompt() const noexcept {
+  const ds::Option<AttachmentPrompt>& AttachmentShelf::capturePrompt() const noexcept {
     return capture_prompt_;
   }
 
@@ -320,14 +321,14 @@ namespace telar::gui::qt {
   }
 
   bool AttachmentShelf::hoverKnown() const noexcept {
-    return hover_recovery_.has_value();
+    return hover_recovery_.hasValue();
   }
 
   QPointF AttachmentShelf::hoverPosition() const noexcept {
-    return hover_recovery_.value_or(QPointF{});
+    return hover_recovery_.valueOr(QPointF{});
   }
 
-  void AttachmentShelf::observePointer(std::optional<QPointF> position) {
+  void AttachmentShelf::observePointer(ds::Option<QPointF> position) {
     hover_pointer_ = position;
     if (!position) {
       hover_recovery_.reset();

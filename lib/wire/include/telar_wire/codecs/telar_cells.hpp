@@ -2,6 +2,7 @@
 
 #include "../serializers/telar_cells.hpp"
 #include "tbc/view.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar {
 
@@ -10,12 +11,12 @@ namespace telar {
   public:
     CellReader(std::span<const Byte> bytes, std::uint32_t count);
 
-    std::optional<Cell> next();
+    ds::Option<Cell> next();
 
   private:
     std::span<const Byte> input{};
     std::uint32_t remaining = 0;
-    std::optional<CellStyle> previous_style{};
+    ds::Option<CellStyle> previous_style{};
   };
 
   struct CellRunCodec {

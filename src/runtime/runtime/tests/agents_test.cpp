@@ -187,13 +187,13 @@ namespace {
     reporter.receive<RequestCompleted>();
     const auto first_probe = agents.nextSessionFile(now);
 
-    check(first_probe.has_value());
+    check(first_probe.hasValue());
     file_report.session_file = "/tmp/second-transcript";
     agents.report(model, reporter.session(), file_report);
     reporter.receive<RequestCompleted>();
     SessionFileResult obsolete{.request = *first_probe, .offset = 10, .title = FixedText<96>{}};
 
-    obsolete.title->assign("Obsolete title");
+    obsolete.title.getMut().assign("Obsolete title");
     agents.completeSessionFile(obsolete, now);
     check(agents.find(pane.id, pane.generation)->title.view().empty());
     const auto second_probe = agents.nextSessionFile(now);
@@ -202,13 +202,13 @@ namespace {
     auto completed = obsolete;
 
     completed.request = *second_probe;
-    completed.title->assign("Current title");
+    completed.title.getMut().assign("Current title");
     agents.completeSessionFile(completed, now);
     check(agents.find(pane.id, pane.generation)->title.view() == "Current title");
     check(!agents.nextSessionFile(now + std::chrono::milliseconds{999}));
-    check(agents.nextSessionFile(now + std::chrono::seconds{1}).has_value());
+    check(agents.nextSessionFile(now + std::chrono::seconds{1}).hasValue());
     completed.request.generation += 1;
-    completed.title->assign("Wrong generation");
+    completed.title.getMut().assign("Wrong generation");
     agents.completeSessionFile(completed, now);
     check(agents.find(pane.id, pane.generation)->title.view() == "Current title");
     agents.reportTitle(model, reporter.session(), ReportAgentTitle{.request_id = 31, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude});
@@ -506,7 +506,7 @@ namespace {
     check(agents.find(request->identity.pane, request->identity.generation)->title_source == AgentTitleSource::generated);
 
     request = agents.nextDescription();
-    check(request.has_value());
+    check(request.hasValue());
     check(agents.find(identities.back(), panes.require(model.panes, identities.back()).generation)->title_state == AgentTitleState::pending);
     agents.reportTitle(model, reporter.session(), ReportAgentTitle{.request_id = 1, .pane_id = request->identity.pane, .pane_generation = request->identity.generation, .title = "Agent title"});
     reporter.receive<RequestCompleted>();
@@ -518,7 +518,7 @@ namespace {
     check(agents.find(request->identity.pane, request->identity.generation)->description_phase == DescriptionPhase::finished);
 
     request = agents.nextDescription();
-    check(request.has_value());
+    check(request.hasValue());
     result.identity = request->identity;
     result.status = DescriptionStatus::timeout;
     const auto failed = agents.completeDescription(result);

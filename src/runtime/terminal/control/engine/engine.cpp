@@ -7,6 +7,7 @@ import telar.ghostty.vt;
 import telar.render.document;
 import telar.base.text.utf8;
 import telar.runtime.terminal.control.glyph;
+import telar.base.ds;
 
 namespace telar::runtime::control {
 
@@ -287,12 +288,12 @@ namespace telar::runtime::control {
     return clipboard_;
   }
 
-  auto Engine::takeZone() noexcept -> std::optional<Zone> {
+  auto Engine::takeZone() noexcept -> ds::Option<Zone> {
     if (zones_.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
-    std::optional<Zone> zone{std::move(zones_.front())};
+    ds::Option<Zone> zone{std::move(zones_.front())};
 
     zones_.erase(zones_.begin());
     return zone;
@@ -342,7 +343,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    auto zone = std::move(*open_zone_);
+    auto zone = std::move(open_zone_.getMut());
 
     open_zone_.reset();
     zone.end_inclusive = state_.cursor().column != 0;

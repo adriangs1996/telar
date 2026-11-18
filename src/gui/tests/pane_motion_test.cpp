@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.gui.features.workbench;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
@@ -36,7 +37,7 @@ namespace {
   constexpr std::array vertical{PaneMotionSlot{.id = 1, .bounds = {.width = 800, .height = 290}}, PaneMotionSlot{.id = 2, .bounds = {.y = 310, .width = 800, .height = 290}}};
 
   Rect sample(const PaneMotions& motions, std::size_t index, std::uint64_t now) {
-    TabMotionFrame frame{.now_ns = now, .deadline_ns = std::nullopt};
+    TabMotionFrame frame{.now_ns = now, .deadline_ns = telar::ds::none};
 
     return motions.place(index, frame);
   }
@@ -72,7 +73,7 @@ namespace {
         QVERIFY(middle.width > 0 && middle.height > 0);
         QCOMPARE(sample(motions, 0, 10 + PaneMotions::opening_ns), split[0].bounds);
         QCOMPARE(sample(motions, 1, 10 + PaneMotions::opening_ns), split[1].bounds);
-        TabMotionFrame frame{.now_ns = 10 + PaneMotions::opening_ns, .deadline_ns = std::nullopt};
+        TabMotionFrame frame{.now_ns = 10 + PaneMotions::opening_ns, .deadline_ns = telar::ds::none};
 
         (void)motions.place(0, frame);
         (void)motions.place(1, frame);

@@ -31,6 +31,7 @@ static_assert(true);
 #include "tbc/view.hpp"
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -207,7 +208,7 @@ namespace telar::gui::qt {
     ElementSlots& element_slots_;
     CommandsHost& host_;
     // Where the pressed component action that is running was pressed, for a panel it opens.
-    std::optional<QPointF> component_action_anchor_;
+    ds::Option<QPointF> component_action_anchor_;
   };
 
 }

@@ -24,6 +24,7 @@ import telar.runtime.vocabulary.frames;
 import telar.base.text;
 import telar.base.memory.containers;
 import telar.runtime.platform.signals;
+import telar.base.ds;
 
 // Interface: redirect/target.cppm
 export {
@@ -241,7 +242,7 @@ export {
           bool close = readiness & (POLLERR | POLLNVAL);
 
           try {
-            if (!peer->monitor && (readiness & (POLLIN | POLLHUP)) && peer->incoming.receive(peer->socket.get())) {
+            if (!peer->monitor && (readiness & (POLLIN | POLLHUP)) && peer.getMut().incoming.receive(peer->socket.get())) {
               if (peer->incoming.kind() == Kind::monitor) {
                 peer->incoming.validateMonitor();
                 if (std::ranges::any_of(peers_, [](const auto& candidate) {
@@ -250,7 +251,7 @@ export {
                   throw EncodingError{"A redirect helper already owns this endpoint"};
                 }
 
-                peer->monitor = true;
+                peer.getMut().monitor = true;
                 status_.store(MonitorState::starting, std::memory_order_release);
                 std::array<Byte, sizeof(std::uint32_t)> reply;
                 plugins::FrameWriter writer{reply};
@@ -258,7 +259,7 @@ export {
                 writer.integer(static_cast<std::uint32_t>(::geteuid()));
                 close = ::send(peer->socket.get(), reply.data(), reply.size(), 0) != static_cast<ssize_t>(reply.size());
               } else {
-                auto connection = peer->incoming.take();
+                auto connection = peer.getMut().incoming.take();
 
                 connection.lifetime.reset(::fcntl(peer->socket.get(), F_DUPFD_CLOEXEC, 0));
                 if (!connection.lifetime) {
@@ -271,7 +272,7 @@ export {
                 close = true;
               }
             } else if (peer->monitor && (readiness & (POLLIN | POLLHUP))) {
-              close = advanceMonitor(*peer, status_);
+              close = advanceMonitor(peer.getMut(), status_);
             }
           } catch (const std::exception&) {
             close = true;
@@ -329,7 +330,7 @@ export {
         for (auto& peer : peers_) {
           if (!peer) {
             peer.emplace();
-            peer->socket = std::move(socket);
+            peer.getMut().socket = std::move(socket);
             return;
           }
         }
@@ -339,7 +340,7 @@ export {
       LocalListener listener_;
       Sink& sink_;
       CompletionSignal wake_;
-      std::array<std::optional<Peer>, maximum_peers> peers_;
+      std::array<ds::Option<Peer>, maximum_peers> peers_;
       std::atomic<bool> stopping_{false};
       std::atomic<bool> stop_requested_{false};
       std::atomic<MonitorState> status_{MonitorState::idle};
@@ -360,7 +361,7 @@ export {
       using Clock = std::chrono::steady_clock;
 
       struct Pending {
-        std::optional<typename Resolutions::Ticket> ticket;
+        ds::Option<typename Resolutions::Ticket> ticket;
         std::uint16_t port = 0;
       };
 
@@ -373,7 +374,7 @@ export {
         }
 
         std::array<Pending, Target::maximum_targets> pending;
-        std::array<std::optional<Target>, Target::maximum_targets> numeric_targets;
+        std::array<ds::Option<Target>, Target::maximum_targets> numeric_targets;
         CompletionSignal signal;
         typename Resolutions::Notifications notifications{signal};
         std::size_t remaining = 0;

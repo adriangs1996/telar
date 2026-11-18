@@ -29,6 +29,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -52,7 +53,7 @@ namespace telar::gui::qt {
   concept ExternalLinkHost = CommandHost<Host, application::terminal::links::LinkTarget>;
 
   template <typename Observer, typename Context>
-  concept LinkOpeningObserver = requires(Observer& observer, Context context, std::optional<LinkOpeningFailure> failure) {
+  concept LinkOpeningObserver = requires(Observer& observer, Context context, ds::Option<LinkOpeningFailure> failure) {
     { observer.linkOpeningFinished(context, failure) } -> std::same_as<void>;
   };
 
@@ -90,7 +91,7 @@ namespace telar::gui::qt {
       return opening_.active();
     }
 
-    void commandFinished(std::optional<CommandFailure> failure) {
+    void commandFinished(ds::Option<CommandFailure> failure) {
       const auto completed = current_context_;
 
       if (const auto next = opening_.complete()) {

@@ -17,6 +17,7 @@ import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.features.paths;
+import telar.base.ds;
 
 namespace {
 
@@ -46,11 +47,11 @@ namespace {
     check(features::paths::page(state).pendingRequest() == 2 && !features::paths::page(state).complete() && !features::paths::search(state, {}, 1).refresh, "partial results must retain the current request without another rebuild");
     check(features::paths::receive(state, {.request_id = 2, .root = "/work", .scanned = completed_scanned, .complete = true, .truncated = true}), "the completed page must retire the current correlation");
     check(features::paths::page(state).matches().empty() && features::paths::page(state).pendingRequest() == 0 && features::paths::page(state).scanned() == completed_scanned && features::paths::page(state).truncated(), "a final empty result must replace the preceding page and its metadata");
-    check(features::paths::fail(state, {.request_id = 1, .message = "old failure"}).has_value() && features::paths::page(state).phase() == PathPickerPhase::ready, "tracked obsolete failures must be consumed without replacing the displayed state");
+    check(features::paths::fail(state, {.request_id = 1, .message = "old failure"}).hasValue() && features::paths::page(state).phase() == PathPickerPhase::ready, "tracked obsolete failures must be consumed without replacing the displayed state");
     features::paths::wait(state, 3);
     features::paths::close(state);
     check(!features::paths::receive(state, {.request_id = 3, .root = "/work", .complete = true}), "closing must reject late pages");
-    check(features::paths::fail(state, {.request_id = 3, .message = "late failure"}).has_value() && features::paths::page(state).phase() == PathPickerPhase::idle, "closing must still recognize late failures without reopening the picker");
+    check(features::paths::fail(state, {.request_id = 3, .message = "late failure"}).hasValue() && features::paths::page(state).phase() == PathPickerPhase::idle, "closing must still recognize late failures without reopening the picker");
   }
 
   void failuresKeepOnlyBoundedUtf8AndTrackedIdentities() {
@@ -61,11 +62,11 @@ namespace {
       features::paths::wait(state, index);
     }
 
-    check(!features::paths::fail(state, {.request_id = 1, .message = "untracked"}).has_value(), "an evicted request must not claim another failure");
+    check(!features::paths::fail(state, {.request_id = 1, .message = "untracked"}).hasValue(), "an evicted request must not claim another failure");
     const std::string leading(PathPickerLimits::error_bytes - 1, 'x');
     const auto message = leading + "🧵";
 
-    check(features::paths::fail(state, {.request_id = PathPickerLimits::tracked_requests + 1, .message = message}).has_value(), "the current request must own its failure");
+    check(features::paths::fail(state, {.request_id = PathPickerLimits::tracked_requests + 1, .message = message}).hasValue(), "the current request must own its failure");
     check(features::paths::page(state).phase() == PathPickerPhase::failed && features::paths::page(state).error() == leading && features::paths::page(state).pendingRequest() == 0, "failure text must stop at a complete UTF-8 scalar and retire the pending request");
   }
 
@@ -78,7 +79,7 @@ namespace {
     check(option && option->view() == "./'-a b'", "option-like names must remain paths after quoting");
     check(plain && plain->view() == "file.cpp", "plain paths must not acquire unnecessary quotes");
     check(!PathInsertion::relativeTo("/work", "/worktree/file"), "a path sharing a name prefix must not become relative");
-    check(PathInsertion::relativeTo("/", "/file") == std::optional<std::string_view>{"file"}, "the filesystem root must not require a second separator");
+    check(PathInsertion::relativeTo("/", "/file") == ds::Option<std::string_view>{"file"}, "the filesystem root must not require a second separator");
     features::paths::State state;
     const std::array directories{PathMatch{.path = "sub/", .kind = PathKind::directory}};
 

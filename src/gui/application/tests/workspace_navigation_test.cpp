@@ -276,7 +276,7 @@ namespace {
     const auto rejected = historyLocation(rows_that_fit + 1);
 
     check(!layouts.remember({.location = rejected, .pane_id = first_identity, .focused_pane = first_identity, .nodes = tree.view()}), "Node exhaustion must reject an atomic saved-layout insertion");
-    check(layouts.size() == rows_that_fit && layouts.nodeCount() == before_nodes && layouts.find(historyLocation(1)).has_value(), "A refused insertion must preserve every admitted row and node");
+    check(layouts.size() == rows_that_fit && layouts.nodeCount() == before_nodes && layouts.find(historyLocation(1)).hasValue(), "A refused insertion must preserve every admitted row and node");
     layouts.retain({.location = rejected, .pane_id = first_identity, .focused_pane = first_identity, .nodes = tree.view()});
     check(layouts.size() == rows_that_fit && layouts.nodeCount() == before_nodes && !layouts.find(historyLocation(1)) && layouts.find(rejected), "Navigation retention must evict only the oldest required complete tree");
     constexpr std::uint64_t replacement_identity = 700;

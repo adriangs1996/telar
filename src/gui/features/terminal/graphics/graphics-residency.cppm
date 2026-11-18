@@ -10,6 +10,7 @@ import std;
 import :store;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: graphics/image_draw_budget.cppm
 export {
@@ -156,9 +157,9 @@ export {
       [[nodiscard]] static bool validHandle(ImageTextureHandle handle) noexcept;
       [[nodiscard]] ImageTextureState* findState(ImageTextureHandle handle) noexcept;
       [[nodiscard]] static std::size_t byteSize(ImageTextureSize size) noexcept;
-      [[nodiscard]] static std::optional<std::uint64_t> expiry(const ImageTextureState& state) noexcept;
+      [[nodiscard]] static ds::Option<std::uint64_t> expiry(const ImageTextureState& state) noexcept;
       [[nodiscard]] std::size_t uploadsOf(ImageTextureIdentity identity) const noexcept;
-      [[nodiscard]] std::optional<Row> takeRow(ImageTextureIdentity identity, ImageTextureSize size, std::size_t retained_bytes) noexcept;
+      [[nodiscard]] ds::Option<Row> takeRow(ImageTextureIdentity identity, ImageTextureSize size, std::size_t retained_bytes) noexcept;
       void assign(Row row, ImageTextureIdentity identity) noexcept;
       [[nodiscard]] bool reserve(std::size_t bytes, std::size_t retained_bytes) noexcept;
       [[nodiscard]] bool evictOne() noexcept;

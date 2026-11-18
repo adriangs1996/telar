@@ -19,6 +19,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -58,16 +59,16 @@ namespace telar::gui::qt {
     struct Request {
       QByteArray path;
       QByteArray local_label;
-      std::optional<system::FileStamp> known;
-      std::optional<application::machines::OwnedMachineEdit> edit;
+      ds::Option<system::FileStamp> known;
+      ds::Option<application::machines::OwnedMachineEdit> edit;
       std::stop_token stop;
       std::uint64_t generation = 0;
       bool force = false;
     };
 
     struct Result {
-      std::optional<application::machines::MachineProfiles> profiles;
-      std::optional<system::FileStamp> observed;
+      ds::Option<application::machines::MachineProfiles> profiles;
+      ds::Option<system::FileStamp> observed;
       QString error;
       std::uint64_t generation = 0;
       bool cancelled = false;
@@ -84,8 +85,8 @@ namespace telar::gui::qt {
     std::stop_source cancellation_;
     QByteArray path_;
     QByteArray local_label_;
-    std::optional<system::FileStamp> known_;
-    std::optional<application::machines::OwnedMachineEdit> pending_edit_;
+    ds::Option<system::FileStamp> known_;
+    ds::Option<application::machines::OwnedMachineEdit> pending_edit_;
     application::machines::MachineProfiles profiles_;
     QString error_;
     std::uint64_t generation_ = 0;

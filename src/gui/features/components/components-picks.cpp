@@ -9,6 +9,7 @@ import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.config.core;
+import telar.base.ds;
 
 namespace telar::gui::features::components {
 
@@ -19,7 +20,7 @@ namespace telar::gui::features::components {
   }
 
   void PickItems::keep(const PickInput& input) {
-    const auto value = input.value.value_or(input.label);
+    const auto value = input.value.valueOr(input.label);
 
     offer(offered_.items, 1);
     for (const auto text : {input.label, value, input.detail}) {
@@ -77,14 +78,14 @@ namespace telar::gui::features::components {
   void PickItems::report(runtime::config::LimitNotices& limits) const noexcept {
     const auto reaches = std::to_array<LimitReach>({
         {.name = "picks.max_items", .noun = "options", .value = maximum_items, .requested = offered_.items, .route = {}},
-        {.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_.text_full ? std::optional<std::size_t>{offered_.text} : std::nullopt, .route = {}},
+        {.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_.text_full ? ds::Option<std::size_t>{offered_.text} : ds::none, .route = {}},
         {.name = "picks.max_label_bytes", .noun = "label bytes", .value = maximum_label_bytes, .requested = offered_.label, .route = {}},
         {.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = offered_.value, .route = {}},
         {.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = offered_.detail, .route = {}},
     });
 
     for (const auto& reach : reaches) {
-      if (reach.requested.value_or(0) > reach.value) {
+      if (reach.requested.valueOr(0) > reach.value) {
         limits.add(reach);
       }
     }

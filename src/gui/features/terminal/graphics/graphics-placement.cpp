@@ -6,6 +6,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
 import :placeholder_diacritics;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -148,7 +149,7 @@ namespace telar::gui::features::terminal::graphics {
     return left.virtual_id < right.virtual_id;
   }
 
-  std::optional<std::uint32_t> placeholderMark(std::string_view& text) noexcept {
+  ds::Option<std::uint32_t> placeholderMark(std::string_view& text) noexcept {
     if (text.empty()) {
       return {};
     }
@@ -195,7 +196,7 @@ namespace telar::gui::features::terminal::graphics {
     text.remove_prefix(length);
     const auto* const found = std::ranges::lower_bound(placeholder_diacritics, codepoint);
 
-    return found == placeholder_diacritics.end() || *found != codepoint ? std::nullopt : std::optional{static_cast<std::uint32_t>(found - placeholder_diacritics.begin())};
+    return found == placeholder_diacritics.end() || *found != codepoint ? ds::none : ds::Option{static_cast<std::uint32_t>(found - placeholder_diacritics.begin())};
   }
 
   std::uint32_t placeholderColor(const CellColor& color) noexcept {
@@ -208,7 +209,7 @@ namespace telar::gui::features::terminal::graphics {
     return color.kind == CellColor::Kind::indexed ? color.channels[0] : (static_cast<std::uint32_t>(color.channels[0]) << (channel_bits * 2)) | (static_cast<std::uint32_t>(color.channels[1]) << channel_bits) | color.channels[2];
   }
 
-  std::optional<PlaceholderCell> parsePlaceholder(const CellValue& cell) noexcept {
+  ds::Option<PlaceholderCell> parsePlaceholder(const CellValue& cell) noexcept {
     auto text = cell.utf8();
     if (!text.starts_with(placeholder_prefix)) {
       return {};
@@ -233,7 +234,7 @@ namespace telar::gui::features::terminal::graphics {
   PlaceholderRun PlaceholderRun::begin(const PlaceholderCell& cell, std::uint32_t screen_column) noexcept {
     constexpr unsigned high_shift = 24;
 
-    return {.screen_column = screen_column, .image_id = cell.image_low | (cell.image_high.value_or(0) << high_shift), .placement_id = cell.placement, .row = cell.row.value_or(0), .column = cell.column.value_or(0), .width = 1, .image_low = cell.image_low, .image_high = cell.image_high};
+    return {.screen_column = screen_column, .image_id = cell.image_low | (cell.image_high.valueOr(0) << high_shift), .placement_id = cell.placement, .row = cell.row.valueOr(0), .column = cell.column.valueOr(0), .width = 1, .image_low = cell.image_low, .image_high = cell.image_high};
   }
 
   bool PlaceholderRun::extend(const PlaceholderCell& cell) noexcept {

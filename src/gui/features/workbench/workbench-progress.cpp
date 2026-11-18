@@ -3,6 +3,7 @@ module telar.gui.features.workbench;
 import std;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::workbench {
 
@@ -13,7 +14,7 @@ namespace telar::gui::features::workbench {
   }
 
   float ProgressSample::reported() const noexcept {
-    return static_cast<float>(std::min(percent.value_or(0), maximum_percent)) / maximum_percent;
+    return static_cast<float>(std::min(percent.valueOr(0), maximum_percent)) / maximum_percent;
   }
 
   float ProgressMotion::sample(ProgressSample report, std::uint64_t now_ns) noexcept {
@@ -33,7 +34,7 @@ namespace telar::gui::features::workbench {
     if (report.state != PaneProgressState::set || !report.percent || !known_) {
       from_ = target;
       to_ = target;
-      known_ = report.percent.has_value() && report.state != PaneProgressState::indeterminate;
+      known_ = report.percent.hasValue() && report.state != PaneProgressState::indeterminate;
       duration_ = 0;
 
       return target;
@@ -49,12 +50,12 @@ namespace telar::gui::features::workbench {
     return value(now_ns);
   }
 
-  std::optional<std::uint64_t> ProgressMotion::deadline(std::uint64_t now_ns) const noexcept {
+  ds::Option<std::uint64_t> ProgressMotion::deadline(std::uint64_t now_ns) const noexcept {
     if (now_ns < started_ns_) {
       return started_ns_;
     }
 
-    return now_ns - started_ns_ < duration_ ? std::optional{started_ns_ + std::min(std::numeric_limits<std::uint64_t>::max() - started_ns_, duration_)} : std::nullopt;
+    return now_ns - started_ns_ < duration_ ? ds::Option{started_ns_ + std::min(std::numeric_limits<std::uint64_t>::max() - started_ns_, duration_)} : ds::none;
   }
 
   float ProgressMotion::value(std::uint64_t now_ns) const noexcept {

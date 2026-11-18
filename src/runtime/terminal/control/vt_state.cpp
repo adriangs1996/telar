@@ -1,5 +1,6 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
+#include "telar_base/ds/values.hpp"
 
 #if defined(__aarch64__) && defined(__AARCH64EL__)
 #include <arm_neon.h>
@@ -476,7 +477,7 @@ namespace telar::runtime::control {
     });
   }
 
-  std::optional<GhosttyColorRgb> VtState::color(unsigned selector) {
+  ds::Option<GhosttyColorRgb> VtState::color(unsigned selector) {
     if (selector < palette_.size()) {
       if (!palette_valid_) {
         checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE, palette_.data()));
@@ -487,7 +488,7 @@ namespace telar::runtime::control {
     }
 
     if (selector > cursor_color) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = selector - foreground;
@@ -496,18 +497,18 @@ namespace telar::runtime::control {
                                                                                                                 : GHOSTTY_TERMINAL_DATA_COLOR_CURSOR;
       GhosttyColorRgb result{};
 
-      colors_[index] = ghostty_terminal_get(terminal_, key, &result) == GHOSTTY_SUCCESS ? std::optional{result} : std::nullopt;
+      colors_[index] = ghostty_terminal_get(terminal_, key, &result) == GHOSTTY_SUCCESS ? ds::Option{result} : ds::none;
       color_valid_[index] = true;
     }
 
     return colors_[index];
   }
 
-  std::optional<GhosttyGridRef> VtState::reference(Position position) const {
+  ds::Option<GhosttyGridRef> VtState::reference(Position position) const {
     auto result = ghosttySized<GhosttyGridRef>();
     const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {position.column, position.row}}};
     if (ghostty_terminal_grid_ref(terminal_, point, &result) != GHOSTTY_SUCCESS) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return result;

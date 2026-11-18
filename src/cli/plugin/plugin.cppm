@@ -12,6 +12,7 @@ import telar.wire.vocabulary;
 import telar.tls;
 import telar.cli.base.command_error;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: cli_install.cppm
 export {
@@ -21,7 +22,7 @@ export {
 
     struct CliInstallOptions {
       std::string_view action;
-      std::optional<std::string_view> directory;
+      ds::Option<std::string_view> directory;
     };
 
     CliInstallOptions parseCliInstall(std::span<char* const> args);
@@ -167,10 +168,10 @@ export {
 
       // `words` starts at the family. Not a routed command: nullopt, so the
       // family's own parser reads it.
-      static std::optional<RoutedOptions> parse(Arguments words);
+      static ds::Option<RoutedOptions> parse(Arguments words);
 
     private:
-      static std::optional<ClientAction> parseAction(std::string_view group, std::string_view verb, std::string_view nested);
+      static ds::Option<ClientAction> parseAction(std::string_view group, std::string_view verb, std::string_view nested);
 
       // A tab created in the background never reaches a UI: the runtime opens it.
       // Focusing the current pane or a neighbor is the runtime's, too.

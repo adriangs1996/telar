@@ -8,6 +8,7 @@ static_assert(true);
 #include "font_asset.hpp"
 #include "font_collection.hpp"
 #include "font_source.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QHash>
 #include <QString>
 #include <QtCore/qstringliteral.h>
@@ -96,7 +97,7 @@ namespace telar::gui::qt {
       if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
         auto& face = fallbacks_[*index];
         if (face) {
-          return *face;
+          return face.getMut();
         }
       }
     }
@@ -125,7 +126,7 @@ namespace telar::gui::qt {
     throw std::invalid_argument{"MissingNativeFontAsset"};
   }
 
-  std::optional<fonts::FontRole> ResidentFonts::source(std::string_view text, fonts::FontRole preferred) {
+  ds::Option<fonts::FontRole> ResidentFonts::source(std::string_view text, fonts::FontRole preferred) {
     return fonts::FontCascade::source(*this, text, preferred);
   }
 

@@ -18,6 +18,7 @@ import telar.runtime.http1.head;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: http/content_codec.cppm
 export {
@@ -43,7 +44,7 @@ export {
       // An entity in the coding asked for: storage of the allocator when a coding changed it, else the
       // input itself, which the caller keeps alive while it reads the result.
       struct Coded {
-        tbc::view<std::optional<DecodedBody<Memory>>, tbc::lt::a> storage;
+        tbc::view<ds::Option<DecodedBody<Memory>>, tbc::lt::a> storage;
         std::span<const std::uint8_t> input;
 
         std::span<const std::uint8_t> bytes() const noexcept;
@@ -127,7 +128,7 @@ export {
 
       void remove(std::string_view name) noexcept;
 
-      auto get(std::string_view name) const noexcept -> std::optional<std::string_view>;
+      auto get(std::string_view name) const noexcept -> ds::Option<std::string_view>;
 
       auto fields() const noexcept -> std::span<const Field>;
 

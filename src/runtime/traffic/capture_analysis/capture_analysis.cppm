@@ -13,6 +13,7 @@ import telar.runtime.traffic.control_protocol;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 import telar.vocabulary;
+import telar.base.ds;
 
 // Interface: traffic/network_packet.cppm
 export {
@@ -44,7 +45,7 @@ export {
 
       static std::array<char, INET6_ADDRSTRLEN> addressText(const std::array<Byte, 16>& address, bool ipv6) noexcept;
 
-      static std::optional<IpPayload> decode(std::span<const Byte> bytes) noexcept;
+      static ds::Option<IpPayload> decode(std::span<const Byte> bytes) noexcept;
     };
 
   }
@@ -84,7 +85,7 @@ export {
 
       static DatagramEvent decode(std::span<const Byte> input);
 
-      static std::optional<DatagramEvent> parse(const IpPayload& ip) noexcept;
+      static ds::Option<DatagramEvent> parse(const IpPayload& ip) noexcept;
 
     private:
       static void validate(const DatagramEvent& event);
@@ -133,13 +134,13 @@ export {
         Key key;
         Event event;
         Clock::time_point created;
-        std::optional<SensitiveAllocation<ConcurrentMemory>> storage;
+        ds::Option<SensitiveAllocation<ConcurrentMemory>> storage;
         std::array<Range, 128> ranges;
         std::size_t count = 0;
         std::size_t received = 0;
         std::size_t prefix = 0;
         Byte next_header = 0;
-        std::optional<std::size_t> length;
+        ds::Option<std::size_t> length;
       };
 
     public:
@@ -160,7 +161,7 @@ export {
           return;
         }
 
-        auto& part = *fragment;
+        auto& part = fragment.getMut();
 
         part.key.session = event.session;
         part.key.interface = event.interface_index;
@@ -187,7 +188,7 @@ export {
         }
 
         const auto now = Clock::now();
-        std::optional<Entry>* slot = nullptr;
+        ds::Option<Entry>* slot = nullptr;
 
         for (auto& entry : entries_) {
           if (entry && entry->key == part.key) {
@@ -198,7 +199,7 @@ export {
 
         if (slot && now - (*slot)->created >= lifetime) {
           if ((*slot)->storage) {
-            failure(**slot, "ip_fragment_timeout", report);
+            failure(slot->getMut(), "ip_fragment_timeout", report);
           }
 
           slot->reset();
@@ -214,7 +215,7 @@ export {
           })
                                         : &*free;
           if (*slot && (*slot)->storage) {
-            failure(**slot, "ip_fragment_capacity", report);
+            failure(slot->getMut(), "ip_fragment_capacity", report);
           }
 
           slot->reset();
@@ -228,7 +229,7 @@ export {
           slot->emplace(std::move(entry));
         }
 
-        auto& entry = **slot;
+        auto& entry = slot->getMut();
         if (!entry.storage) {
           return;
         }
@@ -243,7 +244,7 @@ export {
           auto completed = std::move(*slot);
 
           slot->reset();
-          consume(assembled(*completed));
+          consume(assembled(completed.getMut()));
         }
       }
 
@@ -252,7 +253,7 @@ export {
         for (auto& entry : entries_) {
           if (entry && (stop || now - entry->created >= lifetime)) {
             if (entry->storage) {
-              failure(*entry, stop ? "ip_fragment_capture_stopped" : "ip_fragment_timeout", report);
+              failure(entry.getMut(), stop ? "ip_fragment_capture_stopped" : "ip_fragment_timeout", report);
             }
 
             entry.reset();
@@ -261,7 +262,7 @@ export {
       }
 
     private:
-      static std::optional<Fragment> parse(std::span<const Byte> bytes) noexcept;
+      static ds::Option<Fragment> parse(std::span<const Byte> bytes) noexcept;
 
       static void initialize(Entry& entry, Event event, const Key& key) noexcept;
 
@@ -280,7 +281,7 @@ export {
       }
 
       ConcurrentMemory& memory_;
-      std::array<std::optional<Entry>, maximum_datagrams> entries_;
+      std::array<ds::Option<Entry>, maximum_datagrams> entries_;
     };
 
   }
@@ -312,11 +313,11 @@ export {
     public:
       static std::uint16_t word(std::span<const Byte> bytes, std::size_t offset) noexcept;
 
-      static std::optional<TcpPacket> decode(const Event& event) noexcept;
+      static ds::Option<TcpPacket> decode(const Event& event) noexcept;
 
-      static std::optional<TcpPacket> decodeNetwork(std::span<const Byte> bytes) noexcept;
+      static ds::Option<TcpPacket> decodeNetwork(std::span<const Byte> bytes) noexcept;
 
-      static tbc::view<std::optional<TcpPacket>, tbc::lt::a> decodePayload(const IpPayload& ip) noexcept;
+      static tbc::view<ds::Option<TcpPacket>, tbc::lt::a> decodePayload(const IpPayload& ip) noexcept;
     };
 
   }
@@ -355,9 +356,9 @@ export {
         Vector<Segment, Secure> pending;
         std::uint32_t next = 0;
         std::uint32_t initial = 0;
-        std::optional<std::uint32_t> fin;
+        ds::Option<std::uint32_t> fin;
         std::uint64_t offset = 0;
-        std::optional<Clock::time_point> gap;
+        ds::Option<Clock::time_point> gap;
         bool started = false;
         bool closed = false;
       };
@@ -672,7 +673,7 @@ export {
           auto publication = event;
 
           publication.kind = Kind::datagram;
-          publication.bytes = DatagramCodec::encode(storage.bytes(), *datagram);
+          publication.bytes = DatagramCodec::encode(storage.bytesMut(), *datagram);
           emit(publication);
         },
             [&](const Event& source, std::string_view reason) {

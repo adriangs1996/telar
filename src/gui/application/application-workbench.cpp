@@ -16,6 +16,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace telar::gui::application::workbench {
 
@@ -126,7 +127,7 @@ namespace telar::gui::application::workbench {
     }
   }
 
-  void reserveBottom(Session& session, std::optional<PaneBottomReservation> reservation) {
+  void reserveBottom(Session& session, ds::Option<PaneBottomReservation> reservation) {
     auto& state = Access::workbench(session);
     const auto reserved = feature::reserve(state, reservation, session.tabs());
 
@@ -214,7 +215,7 @@ namespace telar::gui::application::workbench {
     }
   }
 
-  void moveTab(Session& session, TabMoveDirection direction, std::optional<std::uint64_t> relative_to) {
+  void moveTab(Session& session, TabMoveDirection direction, ds::Option<std::uint64_t> relative_to) {
     if (const auto location = Access::activeTab(session)) {
       static_cast<void>(dropTab(session, {.location = *location, .direction = direction, .relative_to = relative_to}));
     }
@@ -474,7 +475,7 @@ namespace telar::gui::application::workbench {
 
   // ---- what the session and the other use cases hand the workbench --------------------------
 
-  void visit(Session& session, std::uint64_t pane_id, std::optional<std::uint64_t> generation) {
+  void visit(Session& session, std::uint64_t pane_id, ds::Option<std::uint64_t> generation) {
     if (!session.ready() || !session.presented()) {
       return;
     }

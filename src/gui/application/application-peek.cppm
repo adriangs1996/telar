@@ -9,6 +9,7 @@ import telar.base.memory.allocators;
 import telar.gui.features.peek;
 import telar.gui.foundation.model;
 import telar.wire.content;
+import telar.base.ds;
 
 export namespace telar::gui::application::peek {
 
@@ -27,7 +28,7 @@ export namespace telar::gui::application::peek {
   // false, with the peek closed, once the agent is gone.
   bool submit(Session& session, std::string_view text);
 
-  [[nodiscard]] const std::optional<PeekTarget>& target(const Session& session) noexcept;
+  [[nodiscard]] const ds::Option<PeekTarget>& target(const Session& session) noexcept;
 
   // The peeked agent, while it lives.
   [[nodiscard]] const Agent<Memory>* agent(const Session& session) noexcept;

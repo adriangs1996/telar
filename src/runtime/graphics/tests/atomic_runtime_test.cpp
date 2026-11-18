@@ -50,9 +50,9 @@ namespace {
       if (medium_ == GraphicsInputMedium::shared_memory) {
         auto shared = SharedImageStorage::create(pixels.size());
 
-        check(shared.has_value());
-        std::ranges::copy(pixels, shared->mapping().bytes().begin());
-        name_ = shared->takeName().data();
+        check(shared.hasValue());
+        std::ranges::copy(pixels, shared.getMut().mapping().bytes().begin());
+        name_ = shared.getMut().takeName().data();
       } else {
         std::array<char, 64> path;
 
@@ -233,10 +233,10 @@ namespace {
       ImageAllocation allocation{allocator, 24};
       auto storage = SharedImageStorage::create(24);
 
-      check(storage.has_value());
-      std::ranges::fill(storage->mapping().bytes(), 42);
-      check(storage->mapping().protect(PROT_READ));
-      check(allocation.adopt(storage->mapping()) && !storage->mapping());
+      check(storage.hasValue());
+      std::ranges::fill(storage.getMut().mapping().bytes(), 42);
+      check(storage.getMut().mapping().protect(PROT_READ));
+      check(allocation.adopt(storage.getMut().mapping()) && !storage.getMut().mapping());
       placeholder = allocation.placeholder().data();
       check(allocator.imagePixels(allocation.placeholder()).size() == 24);
       check(allocator.imagePixels(allocation.placeholder())[0] == 42);
@@ -247,7 +247,7 @@ namespace {
       ImageAllocation overflow{allocator, 24};
       auto storage = SharedImageStorage::create(24);
 
-      check(storage && !overflow.adopt(storage->mapping()) && storage->mapping());
+      check(storage && !overflow.adopt(storage.getMut().mapping()) && storage.getMut().mapping());
     }
 
     for (const auto* placeholder : placeholders) {

@@ -38,6 +38,7 @@ import telar.runtime.platform.process_probe;
 import telar.runtime.redirect.direction;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
+import telar.base.ds;
 
 // Interface: traffic/control_access.cppm
 export {
@@ -135,7 +136,7 @@ export {
         bool delivered = false;
       };
 
-      using Registrations = std::array<std::optional<Registration>, Limits::subscribers>;
+      using Registrations = std::array<ds::Option<Registration>, Limits::subscribers>;
 
     public:
       explicit Interception(ConcurrentMemory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr);
@@ -173,18 +174,18 @@ export {
           }
 
           if (std::chrono::steady_clock::now() >= slot->deadline) {
-            advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
+            advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
             continue;
           }
 
           try {
             if (consumer(slot->event())) {
-              slot->delivered = true;
+              slot.getMut().delivered = true;
             } else {
-              advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
+              advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
             }
           } catch (...) {
-            advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
+            advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
           }
         }
       }
@@ -199,7 +200,7 @@ export {
 
       void cancel(std::uint64_t ticket) noexcept;
 
-      std::optional<FlowControl::Time> deadline(std::uint64_t ticket) noexcept;
+      ds::Option<FlowControl::Time> deadline(std::uint64_t ticket) noexcept;
 
       int descriptor() const noexcept;
 
@@ -222,7 +223,7 @@ export {
       Secure memory_;
       std::mutex mutex_;
       Registrations registrations_;
-      std::array<std::optional<Pending>, 64> pending_;
+      std::array<ds::Option<Pending>, 64> pending_;
       CompletionSignal wake_;
       CompletionSignal requests_;
       CompletionSignal& completion_;
@@ -316,21 +317,21 @@ export {
               selection(request.selection),
               filter(request.filter),
               host(memory),
-              entries(AllocatorRef<std::optional<Entry>, ConcurrentMemory>{memory}) {
+              entries(AllocatorRef<ds::Option<Entry>, ConcurrentMemory>{memory}) {
           if (!request.host.empty() && !host.append(request.host)) {
             throw EncodingError{"Invalid recording host scope"};
           }
 
           host.finish();
           entries.resize(request.max_events);
-          bytes = entries.capacity() * sizeof(std::optional<Entry>);
+          bytes = entries.capacity() * sizeof(ds::Option<Entry>);
           if (bytes >= budget) {
             throw EncodingError{"Recording budget cannot hold its event index"};
           }
         }
 
         inline Entry& at(std::size_t index) {
-          return *entries[(head + index) % entries.size()];
+          return entries[(head + index) % entries.size()].getMut();
         }
 
         inline void evict() noexcept {
@@ -354,7 +355,7 @@ export {
         Selection selection;
         Filter filter;
         ProxyHostPolicy<ConcurrentMemory> host;
-        Vector<std::optional<Entry>, ConcurrentMemory> entries;
+        Vector<ds::Option<Entry>, ConcurrentMemory> entries;
         std::size_t bytes = 0;
         std::size_t head = 0;
         std::size_t count = 0;
@@ -394,7 +395,7 @@ export {
             continue;
           }
 
-          auto& session = *slot;
+          auto& session = slot.getMut();
 
           session.expire(now);
           try {
@@ -403,7 +404,7 @@ export {
             }
 
             const auto size = Protocol::encodedSize(event);
-            const auto index_bytes = session.entries.capacity() * sizeof(std::optional<Entry>);
+            const auto index_bytes = session.entries.capacity() * sizeof(ds::Option<Entry>);
             if (size > session.budget - index_bytes || session.next == std::numeric_limits<std::uint64_t>::max()) {
               ++session.dropped;
               continue;
@@ -415,7 +416,7 @@ export {
 
             if (!shared) {
               shared = std::allocate_shared<EventFrame>(AllocatorRef<EventFrame, ConcurrentMemory>{memory_}, memory_, size);
-              Protocol::encode(shared->bytes.bytes(), event);
+              Protocol::encode(shared->bytes.bytesMut(), event);
             }
 
             session.entries[(session.head + session.count) % session.entries.size()].emplace(Entry{session.next++, now, shared});
@@ -437,7 +438,7 @@ export {
 
         for (auto& session : sessions_) {
           if (session) {
-            session->expire(Clock::now());
+            session.getMut().expire(Clock::now());
           }
         }
       }
@@ -447,7 +448,7 @@ export {
 
         for (auto& session : sessions_) {
           if (session && owner.matches(session->owner)) {
-            session->active = false;
+            session.getMut().active = false;
           }
         }
 
@@ -486,11 +487,11 @@ export {
               continue;
             }
 
-            slot->expire(Clock::now());
+            slot.getMut().expire(Clock::now());
             std::array<Byte, recording::Protocol::page_header_bytes> bytes;
             plugins::FrameWriter child{bytes};
 
-            recording::Protocol::header(child, describe(*slot, contention_drops_.load(std::memory_order_relaxed)));
+            recording::Protocol::header(child, describe(slot.getMut(), contention_drops_.load(std::memory_order_relaxed)));
             rows.bytes(child.finish());
             ++page.count;
           }
@@ -526,7 +527,7 @@ export {
             }
 
             slot.emplace(memory_, request, next_id_, owner);
-            session = &*slot;
+            session = &slot.getMut();
             break;
           }
 
@@ -538,7 +539,7 @@ export {
         } else {
           for (auto& slot : sessions_) {
             if (slot && slot->id == request.id && owner.canRead(slot->owner)) {
-              session = &*slot;
+              session = &slot.getMut();
               break;
             }
           }
@@ -679,7 +680,7 @@ export {
       }
 
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<std::array<std::optional<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
+      tbc::view<std::array<ds::Option<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
       std::uint64_t next_id_;
       std::mutex mutex_;
       std::atomic<Byte> interest_{0};
@@ -713,9 +714,9 @@ export {
         FileDescriptor socket;
         uid_t uid;
         Bytes input;
-        std::optional<Role> role;
+        ds::Option<Role> role;
         Selection selection = Selection::both;
-        std::optional<Filter> filter;
+        ds::Option<Filter> filter;
         std::array<Delivery, Limits::pending_frames> queue;
         std::size_t head = 0;
         std::size_t count = 0;
@@ -736,7 +737,7 @@ export {
           std::shared_ptr<std::atomic<bool>> permission;
         };
 
-        std::optional<PackageIdentity> package;
+        ds::Option<PackageIdentity> package;
         std::chrono::steady_clock::time_point connected = std::chrono::steady_clock::now();
       };
 
@@ -801,7 +802,7 @@ export {
 
       void cancel(std::uint64_t ticket) noexcept override;
 
-      std::optional<Time> deadline(std::uint64_t ticket) noexcept override;
+      ds::Option<Time> deadline(std::uint64_t ticket) noexcept override;
 
       int descriptor() const noexcept override;
 
@@ -817,7 +818,7 @@ export {
 
       void cancelHttp(std::uint64_t ticket) noexcept override;
 
-      std::optional<Time> httpDeadline(std::uint64_t ticket) noexcept override;
+      ds::Option<Time> httpDeadline(std::uint64_t ticket) noexcept override;
 
       void httpUnavailable(const FlowEvent& event) noexcept override;
 
@@ -849,7 +850,7 @@ export {
       LocalListener listener_;
       CompletionSignal wake_;
       std::atomic<bool> stopping_{false};
-      std::array<std::optional<Peer>, maximum_peers> peers_{};
+      std::array<ds::Option<Peer>, maximum_peers> peers_{};
       std::jthread thread_;
       std::chrono::steady_clock::time_point heartbeat_ = std::chrono::steady_clock::now();
       bool producer_ = false;
@@ -951,7 +952,7 @@ export {
 
       inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, const std::atomic<bool>& cancelled, const plugins::ServiceSpec* package = nullptr) {
         Reply reply;
-        std::optional<SensitiveAllocation<ConcurrentMemory>> recording_output;
+        ds::Option<SensitiveAllocation<ConcurrentMemory>> recording_output;
         std::array<char, 1025> error{};
 
         try {
@@ -1027,7 +1028,7 @@ export {
                 reply.result = Result::disabled;
               } else {
                 recording_output.emplace(memory_, recording::Limits::page_bytes);
-                reply.recording = capture_->recording(*request.recording, recording_output->bytes(), package ? recording::Owner::package(*package) : recording::Owner{});
+                reply.recording = capture_->recording(*request.recording, recording_output.getMut().bytesMut(), package ? recording::Owner::package(*package) : recording::Owner{});
               }
 
               break;
@@ -1066,7 +1067,7 @@ export {
         Status status{.proxy = configuration_.proxy, .transparent_tls = configuration_.transparent_tls, .interception = configuration_.interception, .administration = configuration_.administration};
         const auto proxy = proxy_.clientConfiguration().status();
 
-        status.port = proxy.port.value_or(0);
+        status.port = proxy.port.valueOr(0);
         if (capture_) {
           const auto capture = capture_->captureStatus();
 
@@ -1278,7 +1279,7 @@ export {
       tbc::view<Configuration, tbc::lt::a> configuration_;
       static_assert(Limits::processes == redirect::SocketOwners::maximum_processes);
       static_assert(Limits::targets == redirect::Target::maximum_targets);
-      tbc::view<std::optional<redirect::Selection<>>, tbc::lt::a> selection_;
+      tbc::view<ds::Option<redirect::Selection<>>, tbc::lt::a> selection_;
       tbc::view<std::array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes>, tbc::lt::a> process_arguments_;
       pid_t capture_child_ = -1;
       pid_t redirect_child_ = -1;
@@ -1315,7 +1316,7 @@ export {
         std::size_t received = 0;
         std::size_t reply_bytes = 0;
         std::size_t sent = 0;
-        std::optional<plugins::ServiceSpec> package;
+        ds::Option<plugins::ServiceSpec> package;
       };
 
       struct Attachment {
@@ -1400,8 +1401,8 @@ export {
           while (auto attachment = attachments_.tryReceive()) {
             for (auto& peer : peers_) {
               if (!peer) {
-                peer.emplace(memory_, std::move(attachment->socket));
-                peer->package = std::move(attachment->package);
+                peer.emplace(memory_, std::move(attachment.getMut().socket));
+                peer.getMut().package = std::move(attachment.getMut().package);
                 break;
               }
             }
@@ -1419,7 +1420,7 @@ export {
 
           try {
             if (!close && (readiness & (POLLIN | POLLOUT | POLLHUP))) {
-              close = advance(*peer, handler_, stopping_);
+              close = advance(peer.getMut(), handler_, stopping_);
             }
           } catch (const std::exception&) {
             close = true;
@@ -1462,7 +1463,7 @@ export {
         }
 
         for (std::size_t round = 0; round < 2; ++round) {
-          const auto count = ::recv(peer.socket.get(), peer.input.bytes().data() + peer.received, peer.expected - peer.received, 0);
+          const auto count = ::recv(peer.socket.get(), peer.input.bytesMut().data() + peer.received, peer.expected - peer.received, 0);
           if (count < 0 && socketWouldBlock(sys::lastError())) {
             return false;
           }
@@ -1487,8 +1488,8 @@ export {
             continue;
           }
 
-          const auto request = Protocol::request(peer.input.bytes().subspan(Protocol::prefix_bytes, peer.expected - Protocol::prefix_bytes));
-          const auto output = peer.output.bytes().subspan(Protocol::prefix_bytes);
+          const auto request = Protocol::request(peer.input.bytesMut().subspan(Protocol::prefix_bytes, peer.expected - Protocol::prefix_bytes));
+          const auto output = peer.output.bytesMut().subspan(Protocol::prefix_bytes);
           std::span<const Byte> reply;
 
           try {
@@ -1499,7 +1500,7 @@ export {
 
           const auto prefix = Protocol::prefix(reply.size());
 
-          std::ranges::copy(prefix, peer.output.bytes().begin());
+          std::ranges::copy(prefix, peer.output.bytesMut().begin());
           peer.reply_bytes = prefix.size() + reply.size();
           peer.deadline = Clock::now() + std::chrono::seconds{5};
           return false;
@@ -1512,7 +1513,7 @@ export {
       LocalListener listener_;
       Handler& handler_;
       CompletionSignal wake_;
-      std::array<std::optional<Peer>, Limits::peers> peers_;
+      std::array<ds::Option<Peer>, Limits::peers> peers_;
       std::atomic<bool> stopping_{false};
       DropChannel<Attachment, Limits::peers, ChannelPolicy::keep_oldest> attachments_;
       std::thread worker_;

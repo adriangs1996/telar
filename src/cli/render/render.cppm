@@ -3,6 +3,7 @@ export module telar.cli.render;
 import std;
 import telar.base.memory.allocators;
 import telar.base.text;
+import telar.base.ds;
 
 // `telar render KIND [FILE]`: renders content into a document. Inside a Telar
 // pane it prints styled terminal text that the window shows natively in place,
@@ -23,7 +24,7 @@ export namespace telar::runtime::cli::render_command {
     Kind kind = Kind::markdown;
     std::string_view path; // empty or "-" reads standard input
     Format format = Format::automatic;
-    std::optional<std::uint16_t> width;
+    ds::Option<std::uint16_t> width;
     bool pager = false;
 
     static RenderOptions parse(std::span<char* const> words);

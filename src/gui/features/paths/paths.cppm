@@ -12,6 +12,7 @@ import std;
 import telar.base.memory.containers;
 import telar.wire.editor;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::gui::features::paths {
 
@@ -77,14 +78,14 @@ export namespace telar::gui::features::paths {
   bool insertable(State& state);
 
   // The text that inserts the chosen match, quoted for the shell; none when it does not fit.
-  [[nodiscard]] std::optional<PathInsertion::Text> insertion(const State& state, PathInsertion::Choice choice);
+  [[nodiscard]] ds::Option<PathInsertion::Text> insertion(const State& state, PathInsertion::Choice choice);
 
   // A page of matches: false when it is not the awaited search's.
   bool receive(State& state, const PathResults& results);
 
   // A failed request: none when it is not one of the picker's, otherwise whether what the picker
   // shows changed.
-  [[nodiscard]] std::optional<bool> fail(State& state, const RequestFailed& failure);
+  [[nodiscard]] ds::Option<bool> fail(State& state, const RequestFailed& failure);
 
 }
 

@@ -6,6 +6,7 @@ import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline terminal {
 
@@ -76,15 +77,15 @@ namespace telar::gui::inline foundation::inline terminal {
   }
 
   template <Allocator Memory>
-  auto RowCache<Memory>::find(std::uint64_t stable) const noexcept -> std::optional<Row> {
+  auto RowCache<Memory>::find(std::uint64_t stable) const noexcept -> ds::Option<Row> {
     if (slots_.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = stable % slot_count;
     const auto& slot = slots_[index];
     if (!slot.held || slot.stable != stable) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return Row{.cells = std::span<const CellValue>{cells_}.subspan(index * columns_, columns_), .flags = slot.flags, .revision = slot.revision};
@@ -92,18 +93,18 @@ namespace telar::gui::inline foundation::inline terminal {
 
   template <Allocator Memory>
   bool RowCache<Memory>::holds(std::uint64_t stable) const noexcept {
-    return find(stable).has_value();
+    return find(stable).hasValue();
   }
 
   template <Allocator Memory>
-  std::optional<std::uint64_t> RowCache<Memory>::missing(std::uint64_t first, std::uint64_t last) const noexcept {
+  ds::Option<std::uint64_t> RowCache<Memory>::missing(std::uint64_t first, std::uint64_t last) const noexcept {
     for (auto stable = first; stable <= last; ++stable) {
       if (!holds(stable) && !asked(stable)) {
         return stable;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   template <Allocator Memory>

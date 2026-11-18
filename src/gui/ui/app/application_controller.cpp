@@ -53,6 +53,7 @@ static_assert(true);
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -275,16 +276,16 @@ namespace telar::gui::qt {
     refresh_timer_.start();
   }
 
-  GuiSession& ApplicationController::session() noexcept {
-    return store_.session();
+  GuiSession& ApplicationController::sessionMut() noexcept {
+    return store_.sessionMut();
   }
 
   const GuiSession& ApplicationController::session() const noexcept {
     return store_.session();
   }
 
-  RuntimeConnection& ApplicationController::connection() noexcept {
-    return store_.connection();
+  RuntimeConnection& ApplicationController::connectionMut() noexcept {
+    return store_.connectionMut();
   }
 
   const RuntimeConnection& ApplicationController::connection() const noexcept {
@@ -354,7 +355,7 @@ namespace telar::gui::qt {
     restoreTerminalFocus();
   }
 
-  void ApplicationController::soundPlaybackFinished(std::optional<CommandFailure> failure) {
+  void ApplicationController::soundPlaybackFinished(ds::Option<CommandFailure> failure) {
     machines_.soundFinished(failure);
   }
 
@@ -489,7 +490,7 @@ namespace telar::gui::qt {
 
     const auto& configuration = session().configuration();
 
-    WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? std::nullopt : std::optional{configuration.max_fps});
+    WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? ds::none : ds::Option{configuration.max_fps});
     frames_.configure();
     const QPointer<ApplicationController> lifetime{this};
     const auto owner = window_;
@@ -499,7 +500,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    platform::configureWindow(*window_, {.titlebar = configuration.titlebar.value_or(platform::defaultTitlebar()), .navigation_height = display_.metrics(window_->effectiveDevicePixelRatio()).chrome.top_bar / static_cast<float>(window_->effectiveDevicePixelRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
+    platform::configureWindow(*window_, {.titlebar = configuration.titlebar.valueOr(platform::defaultTitlebar()), .navigation_height = display_.metrics(window_->effectiveDevicePixelRatio()).chrome.top_bar / static_cast<float>(window_->effectiveDevicePixelRatio()), .background_opacity = configuration.opacity.minimum(configuration.background_opacity), .background_blur = configuration.background_blur});
     display_.publish();
   }
 
@@ -575,7 +576,7 @@ namespace telar::gui::qt {
     case application::Change::terminal:
       attachments_.reconcileFrame(session().changedPane());
       emit terminals_.terminalChanged(session().changedPane());
-      if (session().takeChromeChange() && !refresh_timer_.isActive()) {
+      if (sessionMut().takeChromeChange() && !refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
 
@@ -663,7 +664,7 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::scheduleGraphicsRecovery() {
-    scheduleDeadline(graphics_resume_timer_, session().ready() ? application::terminal::graphics::resumeDeadline(session()) : std::nullopt, system::AwakeClock::nowNanoseconds());
+    scheduleDeadline(graphics_resume_timer_, session().ready() ? application::terminal::graphics::resumeDeadline(session()) : ds::none, system::AwakeClock::nowNanoseconds());
   }
 
   void ApplicationController::refresh() {

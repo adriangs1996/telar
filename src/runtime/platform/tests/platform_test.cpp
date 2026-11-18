@@ -74,6 +74,7 @@ import telar.runtime.transport.connection;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.client;
+import telar.base.ds;
 
 namespace {
 
@@ -533,7 +534,7 @@ namespace {
 
   void testLoginShell(SystemAllocator& memory) {
     const char* saved = std::getenv("SHELL");
-    const std::optional<std::string> previous = saved != nullptr ? std::optional<std::string>{saved} : std::nullopt;
+    const ds::Option<std::string> previous = saved != nullptr ? ds::Option<std::string>{saved} : ds::none;
     const auto* account = ::getpwuid(::getuid());
     const std::string_view fallback = account != nullptr && account->pw_shell[0] == '/' ? account->pw_shell : "/bin/sh";
 

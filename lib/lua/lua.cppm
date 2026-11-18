@@ -14,6 +14,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.sys.posix;
+import telar.base.ds;
 
 // Interface: telar_lua/vm.cppm
 export {
@@ -210,7 +211,7 @@ export {
 
       bool boolean(bool fallback) const;
       lua_Integer integer() const;
-      std::optional<lua_Integer> asInteger() const noexcept;
+      ds::Option<lua_Integer> asInteger() const noexcept;
       std::uint64_t boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const;
       double boundedNumber(double fallback, double minimum, double maximum) const;
       void onlyFields(std::initializer_list<std::string_view> allowed, bool allow_children = false) const;

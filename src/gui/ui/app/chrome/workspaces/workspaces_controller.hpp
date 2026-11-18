@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/store/store.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QAbstractItemModel>
 #include <QObject>
 #include <QVariantMap>
@@ -65,7 +66,7 @@ namespace telar::gui::qt {
     Store& store_;
     ListModel rows_;
     QVariantMap context_;
-    std::optional<Inputs> synchronized_;
+    ds::Option<Inputs> synchronized_;
     std::uint64_t rebuilds_ = 0;
   };
 

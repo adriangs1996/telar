@@ -42,6 +42,7 @@ import telar.runtime.history.event;
 import telar.runtime.platform.host_metrics;
 import telar.platform.process;
 import telar.runtime.diagnostics.runtime_counters;
+import telar.base.ds;
 
 // Interface: runtime/agent_file_service.cppm
 export {
@@ -49,7 +50,7 @@ export {
 
     template <typename Agents>
     concept SessionFileObserver = requires(Agents& agents, const SessionFileResult& result, std::chrono::steady_clock::time_point now) {
-      { agents.nextSessionFile(now) } -> std::same_as<std::optional<SessionFileRequest>>;
+      { agents.nextSessionFile(now) } -> std::same_as<ds::Option<SessionFileRequest>>;
       { agents.completeSessionFile(result, now) } -> std::same_as<void>;
     };
 
@@ -153,13 +154,13 @@ export {
 
     // Kept here: the message is any of the protocol's, an open set no unit can instantiate ahead.
     template <typename Message>
-    TBC_GENERIC std::optional<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
+    TBC_GENERIC ds::Option<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
       if constexpr (std::same_as<Message, ReportAgent> || std::same_as<Message, ReportAgentTitle> || std::same_as<Message, ReportAgentProgress>) {
         return ReporterIdentity{message.pane_id, message.pane_generation, message.provider};
       } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
         return ReporterIdentity{message.pane_id, message.pane_generation, manifests.named(message.provider)};
       } else {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -293,10 +294,10 @@ export {
         return agent == nullptr || agent->evidence.accepts(reporter.provider);
       }
 
-      inline static std::optional<RejectedReporter> reportingRejection(const Agents& agents, const ClientSession& client, const Pane& pane) noexcept {
+      inline static ds::Option<RejectedReporter> reportingRejection(const Agents& agents, const ClientSession& client, const Pane& pane) noexcept {
         const auto* agent = agents.find(pane.id, pane.generation);
         if (agent == nullptr || !agent->agent_identity || !agent->process_identity) {
-          return std::nullopt;
+          return ds::none;
         }
 
         const auto group = agent->process_identity->pid;
@@ -310,13 +311,13 @@ export {
           }
 
           if (index == 0 || lineage[index - 1] == member || lineage[index - 1] == group) {
-            return std::nullopt;
+            return ds::none;
           }
 
           return RejectedReporter{group, member, lineage[index - 1]};
         }
 
-        return std::nullopt;
+        return ds::none;
       }
 
       static constexpr std::chrono::nanoseconds report_timeout = std::chrono::seconds{2};
@@ -519,8 +520,8 @@ export {
               .revision = sampler_.revision(),
               .cpu_percent = values->cpu_percent,
               .memory_used_decigib = values->memory_used_decigib,
-              .has_battery = values->battery_percent.has_value(),
-              .battery_percent = values->battery_percent.value_or(0),
+              .has_battery = values->battery_percent.hasValue(),
+              .battery_percent = values->battery_percent.valueOr(0),
               .cpu_count = values->cpu_count,
               .memory_total_decigib = values->memory_total_decigib,
           });
@@ -772,7 +773,7 @@ export {
         if (probe_process) {
           entry.process_request.discover_foreground = sole;
           if (!entry.process_request.discover_foreground) {
-            entry.process_request.foreground = pane.process->foregroundProcessGroup().value_or(0);
+            entry.process_request.foreground = pane.process->foregroundProcessGroup().valueOr(0);
           }
 
           entry.process_request.recheck = pane.process_recheck_requested;
@@ -786,7 +787,7 @@ export {
       }
 
       inline static bool observes(const Pane& pane, const ProcessProbeResult& observation) {
-        return pane.generation == observation.request.generation && !pane.exit_status && pane.process->processId() == observation.request.root && pane.process->foregroundProcessGroup().value_or(0) == observation.request.foreground;
+        return pane.generation == observation.request.generation && !pane.exit_status && pane.process->processId() == observation.request.root && pane.process->foregroundProcessGroup().valueOr(0) == observation.request.foreground;
       }
 
       // Whether the pane list changed, for an observation of the pane's current process.

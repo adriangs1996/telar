@@ -164,9 +164,9 @@ namespace {
       const auto working = values.manifests.detect("~ pondering deeply (3s)");
       const auto blocked = values.manifests.detect("~ pondering deeply (3s)\napprove this step? [y/n]");
 
-      check(working.has_value() && working->status == AgentStatus::working);
-      check(blocked.has_value() && blocked->status == AgentStatus::blocked);
-      check(!values.manifests.detect("an idle shell prompt $").has_value());
+      check(working.hasValue() && working->status == AgentStatus::working);
+      check(blocked.hasValue() && blocked->status == AgentStatus::blocked);
+      check(!values.manifests.detect("an idle shell prompt $").hasValue());
     });
 
     check(read);
@@ -206,10 +206,10 @@ namespace {
 
     const auto on = window("true");
 
-    check(on.blur == true && !on.blur_radius.has_value());
+    check(on.blur == true && !on.blur_radius.hasValue());
     const auto radius = window("12");
 
-    check(radius.blur_radius == std::uint8_t{12} && !radius.blur.has_value());
+    check(radius.blur_radius == std::uint8_t{12} && !radius.blur.hasValue());
     check(!accepted("return {api_version = 2, gui = {window = {background_blur = 300}}}"));
     check(accepted("return {api_version = 2, gui = {window = {background_blur = 255}}}"));
   }

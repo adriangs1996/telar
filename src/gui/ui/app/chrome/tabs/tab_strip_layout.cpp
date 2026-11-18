@@ -40,6 +40,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 import telar.gui.foundation.model;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -123,20 +124,20 @@ namespace telar::gui::qt {
     return hovered_tab_ ? QString::number(*hovered_tab_) : QString{};
   }
 
-  void TabStripLayout::setPointerHover(std::optional<std::uint64_t> tab) {
+  void TabStripLayout::setPointerHover(ds::Option<std::uint64_t> tab) {
     if (hovered_tab_ != tab) {
       hovered_tab_ = tab;
       emit pointerHoverChanged();
     }
   }
 
-  void TabStripLayout::setContext(std::uint64_t machine_view, std::optional<WorkspaceLocation> workspace) {
-    const auto same_workspace = workspace_.has_value() == workspace.has_value() && (!workspace_ || (workspace_->kind == workspace->kind && workspace_->id == workspace->id));
+  void TabStripLayout::setContext(std::uint64_t machine_view, ds::Option<WorkspaceLocation> workspace) {
+    const auto same_workspace = workspace_.hasValue() == workspace.hasValue() && (!workspace_ || (workspace_->kind == workspace->kind && workspace_->id == workspace->id));
     if (machine_view_ == machine_view && same_workspace) {
       return;
     }
 
-    setPointerHover(std::nullopt);
+    setPointerHover(ds::none);
     machine_view_ = machine_view;
     workspace_ = workspace;
     anchor_.clear();
@@ -154,8 +155,8 @@ namespace telar::gui::qt {
     return isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> TabStripLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
-    return frame_requested_ ? std::nullopt : next_sample_ns_;
+  ds::Option<std::uint64_t> TabStripLayout::deadline([[maybe_unused]] std::uint64_t now_ns) const noexcept {
+    return frame_requested_ ? ds::none : next_sample_ns_;
   }
 
   void TabStripLayout::sample(std::uint64_t now_ns) {
@@ -238,7 +239,7 @@ namespace telar::gui::qt {
     return count;
   }
 
-  void TabStripLayout::setDrag(std::optional<application::workbench::TabDragMove> preview, std::optional<std::uint64_t> dragged, QPointF pointer, qreal grab_offset) {
+  void TabStripLayout::setDrag(ds::Option<application::workbench::TabDragMove> preview, ds::Option<std::uint64_t> dragged, QPointF pointer, qreal grab_offset) {
     if (preview && (!workspace_ || workspace_->kind != preview->location.workspace.kind || workspace_->id != preview->location.workspace.id)) {
       preview.reset();
     }
@@ -537,7 +538,7 @@ namespace telar::gui::qt {
   void TabStripLayout::raiseDraggedSlot() {
     const auto delivered = std::span{drop_slots_}.first(drop_slot_count_);
     const auto lifted = std::ranges::find(delivered, dragged_, [](const application::workbench::TabDropSlot& slot) {
-      return std::optional{slot.id};
+      return ds::Option{slot.id};
     });
     if (lifted != delivered.end()) {
       std::rotate(lifted, lifted + 1, delivered.end());
@@ -562,7 +563,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    application::workbench::TabMotionFrame frame{.now_ns = clock_.isNull() ? 0 : clock_->now(), .interval_ns = clock_.isNull() ? application::workbench::TabMotionFrame::default_interval_ns : clock_->frameInterval(), .deadline_ns = std::nullopt};
+    application::workbench::TabMotionFrame frame{.now_ns = clock_.isNull() ? 0 : clock_->now(), .interval_ns = clock_.isNull() ? application::workbench::TabMotionFrame::default_interval_ns : clock_->frameInterval(), .deadline_ns = ds::none};
 
     motions_.begin(workspace_);
     card_motions_.begin();
@@ -594,7 +595,7 @@ namespace telar::gui::qt {
     drop_slot_count_ = 0;
     drop_marker_ = {};
     dragged_bounds_ = {};
-    std::optional<Rect> selection;
+    ds::Option<Rect> selection;
     bool selection_dragging = false;
     float left = 0;
 
@@ -657,7 +658,7 @@ namespace telar::gui::qt {
         selection_motion_ = application::workbench::TabMotion{.from = *selection, .to = *selection};
       }
 
-      const auto visible = selection_motion_->place(*selection, frame, selection_dragging || !workspace_);
+      const auto visible = selection_motion_.getMut().place(*selection, frame, selection_dragging || !workspace_);
 
       selection_bounds_ = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
     } else {
@@ -670,7 +671,7 @@ namespace telar::gui::qt {
 
     motions_.finish();
     card_motions_.finish();
-    next_sample_ns_ = clock_.isNull() ? std::nullopt : frame.deadline_ns;
+    next_sample_ns_ = clock_.isNull() ? ds::none : frame.deadline_ns;
     frame_requested_ = false;
     if (!clock_.isNull()) {
       clock_->requestSynchronization();

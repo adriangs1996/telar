@@ -7,6 +7,7 @@ import telar.platform.process;
 import telar.wire.editor;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: suggestions/engine.cppm
 export {
@@ -42,7 +43,7 @@ export {
       static constexpr std::size_t maximum_record = 64 * 1024;
       ConcurrentMemory& memory_;
       SuggestionOptions options_;
-      std::optional<PipeProcess> process_;
+      ds::Option<PipeProcess> process_;
       ByteQueue<ConcurrentMemory> input_;
       String<ConcurrentMemory> line_;
       String<ConcurrentMemory> text_;

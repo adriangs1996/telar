@@ -3,6 +3,7 @@ module telar.git;
 import std;
 import telar.sys.posix;
 import telar.base.text;
+import telar.base.ds;
 
 namespace telar::git {
 
@@ -389,7 +390,7 @@ namespace telar::git {
       : trees_(AllocatorRef<String<Memory>, Memory>{memory}),
         memory_(memory) {}
 
-  bool StagedComparison::compare(ObjectDatabase& objects, const Index& index, std::optional<ObjectId> tree, const Limits& limits, ChangeCounts& counts) {
+  bool StagedComparison::compare(ObjectDatabase& objects, const Index& index, ds::Option<ObjectId> tree, const Limits& limits, ChangeCounts& counts) {
     objects_ = &objects;
     index_ = &index;
     limits_ = &limits;
@@ -803,7 +804,7 @@ namespace telar::git {
     }
 
     const auto started = currentSeconds();
-    std::optional<ObjectId> content = type == S_IFLNK ? hashLink(parent, name, status) : hashFile(parent, name, status);
+    ds::Option<ObjectId> content = type == S_IFLNK ? hashLink(parent, name, status) : hashFile(parent, name, status);
     if (!content) {
       return Verdict::unknown;
     }
@@ -815,11 +816,11 @@ namespace telar::git {
     return modified ? Verdict::modified : Verdict::clean;
   }
 
-  std::optional<ObjectId> UnstagedComparison::hashLink(int parent, const char* name, const struct stat& status) {
+  ds::Option<ObjectId> UnstagedComparison::hashLink(int parent, const char* name, const struct stat& status) {
     std::array<char, 4096> target;
     const auto length = ::readlinkat(parent, name, target.data(), target.size());
     if (length < 0 || static_cast<std::size_t>(length) >= target.size() || length != status.st_size) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ++files_hashed;
@@ -830,16 +831,16 @@ namespace telar::git {
     return hasher.finish();
   }
 
-  std::optional<ObjectId> UnstagedComparison::hashFile(int parent, const char* name, const struct stat& expected) {
+  ds::Option<ObjectId> UnstagedComparison::hashFile(int parent, const char* name, const struct stat& expected) {
     const auto size = static_cast<std::uint64_t>(expected.st_size);
     if (size > limits_->hashed_bytes - hashed_bytes_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     FileDescriptor file;
     struct stat status{};
     if (openRegular(parent, name, file, status) != ReadStatus::ok || !sameFile(status, expected) || status.st_size != expected.st_size) {
-      return std::nullopt;
+      return ds::none;
     }
 
     ++files_hashed;
@@ -862,7 +863,7 @@ namespace telar::git {
       }
 
       if (count <= 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       hasher.update(asBytes({buffer_.data(), static_cast<std::size_t>(count)}));

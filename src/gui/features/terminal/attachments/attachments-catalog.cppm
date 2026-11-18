@@ -10,6 +10,7 @@ export module telar.gui.features.terminal.attachments:catalog;
 import std;
 import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // The capture types stay textual because the Objective-C++ clipboard source
 // shares them, in telar::gui; importers reach their names through these
@@ -45,7 +46,7 @@ export namespace telar::gui::features::terminal::attachments {
 
     [[nodiscard]] bool isolatedInverse(CellPosition point) const noexcept;
 
-    [[nodiscard]] std::optional<CellPosition> editorCursor() const noexcept;
+    [[nodiscard]] ds::Option<CellPosition> editorCursor() const noexcept;
 
     [[nodiscard]] bool promptContinues() const noexcept;
 
@@ -66,26 +67,26 @@ export namespace telar::gui::features::terminal::attachments {
   public:
     explicit NumericAttachmentMarkers(AttachmentMarkerScreen screen) noexcept;
 
-    [[nodiscard]] std::optional<NumericAttachmentMarker> next() noexcept;
+    [[nodiscard]] ds::Option<NumericAttachmentMarker> next() noexcept;
 
-    [[nodiscard]] static std::optional<NumericAttachmentMarker> parse(AttachmentMarkerScreen screen, CellPosition point) noexcept;
+    [[nodiscard]] static ds::Option<NumericAttachmentMarker> parse(AttachmentMarkerScreen screen, CellPosition point) noexcept;
 
-    [[nodiscard]] static std::optional<NumericAttachmentMarker> closest(AttachmentMarkerScreen screen, std::uint16_t number) noexcept;
+    [[nodiscard]] static ds::Option<NumericAttachmentMarker> closest(AttachmentMarkerScreen screen, std::uint16_t number) noexcept;
 
     [[nodiscard]] static bool present(AttachmentMarkerScreen screen, std::uint16_t number) noexcept;
 
-    [[nodiscard]] static std::optional<std::uint16_t> steps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept;
+    [[nodiscard]] static ds::Option<std::uint16_t> steps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept;
 
   private:
     static constexpr std::string_view head = "[Image";
     static constexpr std::string_view separator = " #";
     static constexpr std::uint16_t decimal_base = 10;
 
-    [[nodiscard]] static std::optional<NumericAttachmentMarker> tail(AttachmentMarkerScreen screen, CellPosition start, CellPosition point) noexcept;
+    [[nodiscard]] static ds::Option<NumericAttachmentMarker> tail(AttachmentMarkerScreen screen, CellPosition start, CellPosition point) noexcept;
 
     [[nodiscard]] static bool blankTail(AttachmentMarkerScreen screen, CellPosition point) noexcept;
 
-    [[nodiscard]] static std::optional<CellPosition> firstInk(AttachmentMarkerScreen screen, std::uint32_t row) noexcept;
+    [[nodiscard]] static ds::Option<CellPosition> firstInk(AttachmentMarkerScreen screen, std::uint32_t row) noexcept;
 
     AttachmentMarkerScreen screen_;
     CellPosition position_;
@@ -98,18 +99,18 @@ export namespace telar::gui::features::terminal::attachments {
     AttachmentPathUuid uuid{};
     CellPosition start;
     CellPosition end;
-    std::optional<std::uint16_t> cells;
+    ds::Option<std::uint16_t> cells;
   };
 
   class PathAttachmentMarkers {
   public:
     static constexpr std::uint16_t maximum_cells = 512;
 
-    [[nodiscard]] static std::optional<PathAttachmentMarker> find(AttachmentMarkerScreen screen, const AttachmentPathUuid& uuid) noexcept;
+    [[nodiscard]] static ds::Option<PathAttachmentMarker> find(AttachmentMarkerScreen screen, const AttachmentPathUuid& uuid) noexcept;
 
     [[nodiscard]] static std::size_t collect(AttachmentMarkerScreen screen, std::span<PathAttachmentMarker> output) noexcept;
 
-    [[nodiscard]] static std::optional<std::uint16_t> cursorOnRow(AttachmentMarkerScreen screen, std::uint16_t row) noexcept;
+    [[nodiscard]] static ds::Option<std::uint16_t> cursorOnRow(AttachmentMarkerScreen screen, std::uint16_t row) noexcept;
 
     [[nodiscard]] static bool cursorAt(AttachmentMarkerScreen screen, CellPosition point) noexcept;
 
@@ -122,7 +123,7 @@ export namespace telar::gui::features::terminal::attachments {
     public:
       explicit Scan(AttachmentMarkerScreen screen, CellPosition point = {}) noexcept;
 
-      [[nodiscard]] std::optional<CellPosition> position() noexcept;
+      [[nodiscard]] ds::Option<CellPosition> position() noexcept;
 
       [[nodiscard]] CellPosition rawPosition() const noexcept;
 
@@ -143,15 +144,15 @@ export namespace telar::gui::features::terminal::attachments {
 
     [[nodiscard]] static bool alphanumeric(std::uint8_t byte) noexcept;
 
-    [[nodiscard]] static std::optional<CellPosition> matchExtension(Scan scan) noexcept;
+    [[nodiscard]] static ds::Option<CellPosition> matchExtension(Scan scan) noexcept;
 
-    [[nodiscard]] static std::optional<PathAttachmentMarker> parseHead(AttachmentMarkerScreen screen, CellPosition start) noexcept;
+    [[nodiscard]] static ds::Option<PathAttachmentMarker> parseHead(AttachmentMarkerScreen screen, CellPosition start) noexcept;
 
     [[nodiscard]] static bool rowForceWrapped(AttachmentMarkerScreen screen, std::uint32_t row) noexcept;
 
     [[nodiscard]] static CellPosition pathStart(AttachmentMarkerScreen screen, CellPosition marker) noexcept;
 
-    [[nodiscard]] static std::optional<std::uint16_t> countCells(AttachmentMarkerScreen screen, CellPosition start, CellPosition end) noexcept;
+    [[nodiscard]] static ds::Option<std::uint16_t> countCells(AttachmentMarkerScreen screen, CellPosition start, CellPosition end) noexcept;
 
     [[nodiscard]] static PathAttachmentMarker extend(AttachmentMarkerScreen screen, PathAttachmentMarker head) noexcept;
   };
@@ -180,9 +181,9 @@ export namespace telar::gui::features::terminal::attachments {
   };
 
   struct AttachmentMarkerPlan {
-    std::optional<AttachmentMarkerRemoval> removal;
-    std::optional<AttachmentMarkerReach> limit;
-    std::optional<std::uint32_t> requested;
+    ds::Option<AttachmentMarkerRemoval> removal;
+    ds::Option<AttachmentMarkerReach> limit;
+    ds::Option<std::uint32_t> requested;
   };
 
   class AttachmentMarkerPlanning {
@@ -192,7 +193,7 @@ export namespace telar::gui::features::terminal::attachments {
     [[nodiscard]] static AttachmentMarkerPlan path(AttachmentMarkerScreen screen, const AttachmentPathUuid& uuid) noexcept;
 
   private:
-    [[nodiscard]] static std::optional<std::uint16_t> plainSteps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept;
+    [[nodiscard]] static ds::Option<std::uint16_t> plainSteps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept;
   };
 
   enum class AttachmentEviction : std::uint8_t {
@@ -209,7 +210,7 @@ export namespace telar::gui::features::terminal::attachments {
   struct AttachmentSnapshot {
     std::array<AttachmentItem, AttachmentLimits::maximum_items> items{};
     std::size_t count = 0;
-    std::optional<std::uint64_t> modal;
+    ds::Option<std::uint64_t> modal;
   };
 
   // Delivery owns presentation resources. A retired slot remains charged until
@@ -222,7 +223,7 @@ export namespace telar::gui::features::terminal::attachments {
       AttachmentCapture<Memory> capture;
       Delivery::SlotState delivery;
       bool retired = false;
-      std::optional<std::variant<std::uint16_t, AttachmentPathUuid>> marker = std::nullopt;
+      ds::Option<std::variant<std::uint16_t, AttachmentPathUuid>> marker = ds::none;
 
       [[nodiscard]] bool owns(AttachmentTarget target) const noexcept {
         return !retired && capture.request.capture.target == target;
@@ -251,11 +252,11 @@ export namespace telar::gui::features::terminal::attachments {
       return ingress_version_;
     }
 
-    [[nodiscard]] const std::optional<AttachmentTarget>& target() const noexcept {
+    [[nodiscard]] const ds::Option<AttachmentTarget>& target() const noexcept {
       return target_;
     }
 
-    bool setTarget(std::optional<AttachmentTarget> target) noexcept {
+    bool setTarget(ds::Option<AttachmentTarget> target) noexcept {
       if (target_ == target) {
         return false;
       }
@@ -299,9 +300,9 @@ export namespace telar::gui::features::terminal::attachments {
       return nullptr;
     }
 
-    [[nodiscard]] std::optional<AttachmentEviction> adopt(AttachmentCapture<Memory>& capture) {
+    [[nodiscard]] ds::Option<AttachmentEviction> adopt(AttachmentCapture<Memory>& capture) {
       validate(capture);
-      std::optional<AttachmentEviction> evicted;
+      ds::Option<AttachmentEviction> evicted;
 
       while (const auto reach = evictionReach(capture.png.size())) {
         const auto oldest = oldestReleasable();
@@ -318,7 +319,7 @@ export namespace telar::gui::features::terminal::attachments {
           evicted = reach;
         }
 
-        delivery_.retire(slot->delivery);
+        delivery_.retire(slot.getMut().delivery);
         free(*oldest);
       }
 
@@ -386,13 +387,13 @@ export namespace telar::gui::features::terminal::attachments {
             plan = AttachmentMarkerPlanning::path(screen, *path);
           }
         } else {
-          const auto number = markerNumber(*slot).value_or(static_cast<std::uint16_t>(index + 1));
+          const auto number = markerNumber(*slot).valueOr(static_cast<std::uint16_t>(index + 1));
 
           plan = AttachmentMarkerPlanning::placeholder(screen, number);
         }
 
         if (plan.removal && plan.removal->keyCount() > AttachmentLimits::maximum_removal_keys) {
-          return {.removal = std::nullopt, .limit = AttachmentMarkerReach::keys, .requested = plan.removal->keyCount()};
+          return {.removal = ds::none, .limit = AttachmentMarkerReach::keys, .requested = plan.removal->keyCount()};
         }
 
         return plan;
@@ -401,7 +402,7 @@ export namespace telar::gui::features::terminal::attachments {
       return {};
     }
 
-    [[nodiscard]] std::optional<std::uint64_t> markerAtDeletion(AttachmentMarkerScreen screen, AttachmentMarkerDeletion deletion) const noexcept {
+    [[nodiscard]] ds::Option<std::uint64_t> markerAtDeletion(AttachmentMarkerScreen screen, AttachmentMarkerDeletion deletion) const noexcept {
       const auto visible = snapshot();
 
       for (std::size_t index = 0; index < visible.count; ++index) {
@@ -415,7 +416,7 @@ export namespace telar::gui::features::terminal::attachments {
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     void expectMarkerDeletion(AttachmentTarget target) noexcept {
@@ -445,7 +446,7 @@ export namespace telar::gui::features::terminal::attachments {
       }
 
       if (deletion_pending_) {
-        --deletion_pending_->frames;
+        --deletion_pending_.getMut().frames;
         if (removed != 0 || deletion_pending_->frames == 0) {
           deletion_pending_.reset();
         }
@@ -514,7 +515,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     bool closeModal() noexcept {
-      return std::exchange(modal_, std::nullopt).has_value();
+      return std::exchange(modal_, ds::none).hasValue();
     }
 
   private:
@@ -528,10 +529,10 @@ export namespace telar::gui::features::terminal::attachments {
       AttachmentMarkerDeletion deletion;
     };
 
-    [[nodiscard]] static std::optional<std::uint16_t> markerNumber(const Slot& slot) noexcept {
+    [[nodiscard]] static ds::Option<std::uint16_t> markerNumber(const Slot& slot) noexcept {
       const auto* const value = slot.marker ? std::get_if<std::uint16_t>(&*slot.marker) : nullptr;
 
-      return value != nullptr ? std::optional{*value} : std::nullopt;
+      return value != nullptr ? ds::Option{*value} : ds::none;
     }
 
     [[nodiscard]] static const AttachmentPathUuid* markerPath(const Slot& slot) noexcept {
@@ -557,11 +558,11 @@ export namespace telar::gui::features::terminal::attachments {
 
     [[nodiscard]] static bool touches(const Slot& slot, AttachmentMarkerScreen screen, MarkerBoundary boundary) noexcept {
       if (slot.capture.request.marker_policy != AttachmentMarkerPolicy::pasted_path) {
-        return numericTouches(screen, markerNumber(slot).value_or(boundary.ordinal), boundary.deletion);
+        return numericTouches(screen, markerNumber(slot).valueOr(boundary.ordinal), boundary.deletion);
       }
 
       const auto* const uuid = markerPath(slot);
-      const auto path = uuid != nullptr ? PathAttachmentMarkers::find(screen, *uuid) : std::nullopt;
+      const auto path = uuid != nullptr ? PathAttachmentMarkers::find(screen, *uuid) : ds::none;
 
       return path && PathAttachmentMarkers::cursorAt(screen, boundary.deletion == AttachmentMarkerDeletion::backward ? path->end : path->start);
     }
@@ -573,7 +574,7 @@ export namespace telar::gui::features::terminal::attachments {
 
       const auto* const path = markerPath(slot);
 
-      return path != nullptr && PathAttachmentMarkers::find(screen, *path).has_value();
+      return path != nullptr && PathAttachmentMarkers::find(screen, *path).hasValue();
     }
 
     [[nodiscard]] bool numberClaimed(AttachmentTarget target, std::uint16_t number) const noexcept {
@@ -596,7 +597,7 @@ export namespace telar::gui::features::terminal::attachments {
       }));
     }
 
-    [[nodiscard]] std::optional<std::uint16_t> nextNumber(AttachmentTarget target, AttachmentMarkerScreen screen) const noexcept {
+    [[nodiscard]] ds::Option<std::uint16_t> nextNumber(AttachmentTarget target, AttachmentMarkerScreen screen) const noexcept {
       std::array<std::uint16_t, AttachmentLimits::maximum_items> candidates{};
       std::size_t count = 0;
       NumericAttachmentMarkers scan{screen};
@@ -630,10 +631,10 @@ export namespace telar::gui::features::terminal::attachments {
 
       const auto needed = unpaired(target, AttachmentMarkerPolicy::stable_number);
 
-      return needed != 0 && count >= needed ? std::optional{candidates[needed - 1]} : std::nullopt;
+      return needed != 0 && count >= needed ? ds::Option{candidates[needed - 1]} : ds::none;
     }
 
-    [[nodiscard]] std::optional<AttachmentPathUuid> nextPath(AttachmentTarget target, AttachmentMarkerScreen screen) const noexcept {
+    [[nodiscard]] ds::Option<AttachmentPathUuid> nextPath(AttachmentTarget target, AttachmentMarkerScreen screen) const noexcept {
       std::array<PathAttachmentMarker, AttachmentLimits::maximum_items * 2> paths{};
       const auto count = PathAttachmentMarkers::collect(screen, paths);
       std::array<AttachmentPathUuid, paths.size()> candidates{};
@@ -647,13 +648,13 @@ export namespace telar::gui::features::terminal::attachments {
 
       const auto needed = unpaired(target, AttachmentMarkerPolicy::pasted_path);
 
-      return needed != 0 && available >= needed ? std::optional{candidates[available - needed]} : std::nullopt;
+      return needed != 0 && available >= needed ? ds::Option{candidates[available - needed]} : ds::none;
     }
 
     [[nodiscard]] Slot* findMutable(std::uint64_t id) noexcept {
       for (auto& slot : slots_) {
         if (slot && slot->capture.request.capture.id == id) {
-          return &*slot;
+          return &slot.getMut();
         }
       }
 
@@ -693,26 +694,26 @@ export namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    [[nodiscard]] std::optional<std::size_t> freeIndex() const noexcept {
+    [[nodiscard]] ds::Option<std::size_t> freeIndex() const noexcept {
       for (std::size_t index = 0; index < slots_.size(); ++index) {
         if (!slots_[index]) {
           return index;
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
-    [[nodiscard]] std::optional<AttachmentEviction> evictionReach(std::size_t bytes) const noexcept {
+    [[nodiscard]] ds::Option<AttachmentEviction> evictionReach(std::size_t bytes) const noexcept {
       if (!freeIndex()) {
         return AttachmentEviction::items;
       }
 
-      return bytes > AttachmentLimits::maximum_retained_bytes - total_bytes_ ? std::optional{AttachmentEviction::retained_bytes} : std::nullopt;
+      return bytes > AttachmentLimits::maximum_retained_bytes - total_bytes_ ? ds::Option{AttachmentEviction::retained_bytes} : ds::none;
     }
 
-    [[nodiscard]] std::optional<std::size_t> oldestReleasable() const noexcept {
-      std::optional<std::size_t> oldest;
+    [[nodiscard]] ds::Option<std::size_t> oldestReleasable() const noexcept {
+      ds::Option<std::size_t> oldest;
       auto oldest_id = std::numeric_limits<std::uint64_t>::max();
 
       for (std::size_t index = 0; index < slots_.size(); ++index) {
@@ -727,7 +728,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     void retire(std::size_t index) noexcept {
-      auto& slot = *slots_[index];
+      auto& slot = slots_[index].getMut();
 
       delivery_.retire(slot.delivery);
       slot.retired = true;
@@ -747,10 +748,10 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     Delivery& delivery_;
-    std::array<std::optional<Slot>, AttachmentLimits::maximum_items> slots_;
-    std::optional<AttachmentTarget> target_;
-    std::optional<std::uint64_t> modal_;
-    std::optional<PendingDeletion> deletion_pending_;
+    std::array<ds::Option<Slot>, AttachmentLimits::maximum_items> slots_;
+    ds::Option<AttachmentTarget> target_;
+    ds::Option<std::uint64_t> modal_;
+    ds::Option<PendingDeletion> deletion_pending_;
     std::size_t total_bytes_ = 0;
     std::uint64_t ingress_version_ = 0;
   };

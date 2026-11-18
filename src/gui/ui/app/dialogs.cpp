@@ -17,6 +17,7 @@ static_assert(true);
 #include <optional>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -46,7 +47,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.dialog().kind == Dialog::paths && kind != Dialog::paths) {
-      application::paths::close(store_.session());
+      application::paths::close(store_.sessionMut());
     }
 
     keys_.cancelSequence();
@@ -99,7 +100,7 @@ namespace telar::gui::qt {
     show(Dialog::palette);
   }
 
-  void Dialogs::showMachinePrompt(std::optional<application::machines::MachineToken> renamed) {
+  void Dialogs::showMachinePrompt(ds::Option<application::machines::MachineToken> renamed) {
     if (machine_prompt_.open(renamed)) {
       show(Dialog::machine);
     }

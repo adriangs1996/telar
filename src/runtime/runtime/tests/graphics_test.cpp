@@ -120,7 +120,7 @@ namespace {
         const auto text = std::string{"\x1b_Gi=1;YWJj"} + std::string(64 + offset, 'A') + static_cast<char>(terminator);
         KittyCommandScanner scanner;
 
-        check(scanner.next(bytes(text)).has_value() == ends);
+        check(scanner.next(bytes(text)).hasValue() == ends);
       }
     }
 

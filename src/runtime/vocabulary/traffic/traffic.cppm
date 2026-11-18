@@ -11,6 +11,7 @@ import telar.runtime.vocabulary.frames;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: plugins/effects.cppm
 export {
@@ -69,8 +70,8 @@ export {
       std::string_view method{};
       std::string_view target{};
       std::int64_t started_at_ms = 0;
-      std::optional<HalfView> request;
-      std::optional<HalfView> response;
+      ds::Option<HalfView> request;
+      ds::Option<HalfView> response;
     };
 
   }
@@ -121,7 +122,7 @@ export {
       template <FrameOutput Output>
       static void writeHalf(Output& writer, const CaptureHalf* half, std::size_t part_limit);
 
-      static tbc::view<std::optional<HalfView>, tbc::lt::a> readHalf(FrameReader& reader);
+      static tbc::view<ds::Option<HalfView>, tbc::lt::a> readHalf(FrameReader& reader);
     };
 
   }

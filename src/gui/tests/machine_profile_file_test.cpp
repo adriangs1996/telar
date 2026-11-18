@@ -35,6 +35,7 @@ import telar.gui.features.machines;
 import telar.gui.foundation.system;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace {
 
@@ -243,7 +244,7 @@ namespace {
 
     require(profiles.rows().size() == writers, "independent concurrent writers must reload under one shared kernel lock without losing another edit");
     for (std::size_t index = 0; index < writers; ++index) {
-      require(profiles.find("machine" + std::to_string(index)).has_value(), "every concurrent machine addition must survive");
+      require(profiles.find("machine" + std::to_string(index)).hasValue(), "every concurrent machine addition must survive");
     }
   }
 
@@ -294,7 +295,7 @@ namespace {
     const auto directory = temporaryDirectory();
     const auto path = (std::filesystem::path{directory.path()} / "machines.json").string();
     ProfileFile first{path};
-    std::optional<system::ProfileFileTransaction> held{first.lock()};
+    telar::ds::Option<system::ProfileFileTransaction> held{first.lock()};
     std::stop_source cancellation;
     ProfileFile waiting{path, cancellation.get_token()};
     auto result = std::async(std::launch::async, [&] {

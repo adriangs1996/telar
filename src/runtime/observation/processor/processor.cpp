@@ -1,4 +1,5 @@
 module telar.runtime.observation.processor;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -12,7 +13,7 @@ namespace telar::runtime {
     return std::span{bytes}.subspan(event.offset, event.length);
   }
 
-  PaneObserver::PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory, bool capture_output, std::optional<ShellToken> shell_token)
+  PaneObserver::PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
       : terminal_(memory, size, TerminalPurpose::observation),
         tracker_(memory, terminal_, directory, capture_output, shell_token),
         workspace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
@@ -45,7 +46,7 @@ namespace telar::runtime {
     injected_submissions_.fetch_add(1, std::memory_order_relaxed);
   }
 
-  void PaneObserver::bytes(ObservationKind kind, std::span<const Byte> bytes, std::optional<bool> shell_foreground) noexcept {
+  void PaneObserver::bytes(ObservationKind kind, std::span<const Byte> bytes, ds::Option<bool> shell_foreground) noexcept {
     auto& batch = batches_[active_];
     if (batch.event_count == ObservationBatch::event_capacity || bytes.size() > ObservationBatch::byte_capacity - batch.byte_count) {
       drop(bytes.size());
@@ -93,8 +94,8 @@ namespace telar::runtime {
     sealed_.reset();
   }
 
-  std::optional<LimitReach> PaneObserver::takeDrop() noexcept {
-    return std::exchange(drop_, std::nullopt);
+  ds::Option<LimitReach> PaneObserver::takeDrop() noexcept {
+    return std::exchange(drop_, ds::none);
   }
 
   ScreenObservationResult PaneObserver::observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen) noexcept {

@@ -12,6 +12,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.platform.session_host;
 import telar.platform.events;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: agents/prompt_budget.cppm
 export {
@@ -63,7 +64,7 @@ export {
   namespace telar::runtime {
 
     struct AgentScreenObservation {
-      std::optional<AgentStatus> status;
+      ds::Option<AgentStatus> status;
       bool restored_draft = false;
       bool identity_confirmed = false;
     };
@@ -97,7 +98,7 @@ export {
       AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept;
 
       AgentScreenObservation observe(AgentProvider provider) const noexcept;
-      std::optional<AgentSignal> signal(AgentProvider provider) const noexcept;
+      ds::Option<AgentSignal> signal(AgentProvider provider) const noexcept;
 
     private:
       std::span<const ScreenCell> rowCells(std::size_t row) const noexcept;
@@ -137,16 +138,16 @@ export {
 
     class AgentScreenInference {
     public:
-      std::optional<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
+      ds::Option<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
 
       void reset() noexcept;
 
     private:
-      std::optional<AgentSignal> infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
+      ds::Option<AgentSignal> infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
 
       static constexpr std::chrono::milliseconds signal_refresh{15'000};
       AgentScreenSample sample_;
-      std::optional<AgentSignal> last_signal_;
+      ds::Option<AgentSignal> last_signal_;
       std::int64_t last_signal_time_ = 0;
       bool composer_lost_ = false;
     };

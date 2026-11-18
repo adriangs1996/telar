@@ -4,6 +4,7 @@ module;
 export module telar.gui.foundation.fonts:face_views;
 
 import std;
+import telar.base.ds;
 
 // Interface: fonts/font_role.cppm
 export {
@@ -33,9 +34,9 @@ export {
       return static_cast<FontRole>(std::to_underlying(FontRole::fallback_0) + index);
     }
 
-    [[nodiscard]] constexpr std::optional<std::size_t> fallbackIndex(FontRole role) noexcept {
+    [[nodiscard]] constexpr ds::Option<std::size_t> fallbackIndex(FontRole role) noexcept {
       if (role < FontRole::fallback_0 || role > FontRole::fallback_7) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return std::to_underlying(role) - std::to_underlying(FontRole::fallback_0);
@@ -47,7 +48,7 @@ export {
     };
 
     [[nodiscard]] constexpr bool fittedFont(FontRole role) noexcept {
-      return role == FontRole::text || role == FontRole::symbols || fallbackIndex(role).has_value();
+      return role == FontRole::text || role == FontRole::symbols || fallbackIndex(role).hasValue();
     }
 
   }

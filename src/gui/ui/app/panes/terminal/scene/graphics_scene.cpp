@@ -23,6 +23,7 @@ static_assert(true);
 
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -66,7 +67,7 @@ namespace telar::gui::qt {
 
     auto& entry = resolved_[resolved_count_++];
 
-    entry = {.image_id = key.image_id, .texture = std::nullopt};
+    entry = {.image_id = key.image_id, .texture = ds::none};
     entry.texture = images_->resolve(*this, store, key);
     return entry.texture ? &*entry.texture : nullptr;
   }
@@ -233,7 +234,7 @@ namespace telar::gui::qt {
   }
 
   void GraphicsScene::placeholderRow(const application::terminal::graphics::GraphicsStore<Memory>& store, std::span<const CellValue> row, std::uint16_t row_index) {
-    std::optional<application::terminal::graphics::PlaceholderRun> run;
+    ds::Option<application::terminal::graphics::PlaceholderRun> run;
 
     for (std::size_t column = 0; column < row.size(); ++column) {
       const auto placeholder = application::terminal::graphics::parsePlaceholder(row[column]);
@@ -246,7 +247,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      if (run && run->extend(*placeholder)) {
+      if (run && run.getMut().extend(*placeholder)) {
         continue;
       }
 

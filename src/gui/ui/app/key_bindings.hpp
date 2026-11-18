@@ -24,6 +24,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -47,7 +48,7 @@ namespace telar::gui::qt {
     void interrupt();
     void cancelSequence() noexcept;
     void synthetic(KeyChord chord, std::uint64_t pane_id, const InputModes& modes);
-    [[nodiscard]] std::optional<KeyChord> prefixedKeyForAction(const BindingAction& action) const noexcept;
+    [[nodiscard]] ds::Option<KeyChord> prefixedKeyForAction(const BindingAction& action) const noexcept;
     [[nodiscard]] std::uint64_t nowNanoseconds() const noexcept;
     [[nodiscard]] bool prefixPending() const noexcept;
     [[nodiscard]] tbc::view<application::status_bar::ModeHints, tbc::lt::static_storage> modeHints() const noexcept;
@@ -95,7 +96,7 @@ namespace telar::gui::qt {
     static std::uint64_t physicalIdentity(const QKeyEvent& event) noexcept;
     static RoutedKey capture(const QKeyEvent& event, QQuickItem& recipient);
     // Scrolling a pane repeats while its key is held, when no dialog takes the keys.
-    [[nodiscard]] std::optional<BindingRepeat> repeat(BindingAction action) const;
+    [[nodiscard]] ds::Option<BindingRepeat> repeat(BindingAction action) const;
     bool apply(const Decision& decision);
     bool forward(const RoutedKey& event);
     void replay(const RoutedKey& event);

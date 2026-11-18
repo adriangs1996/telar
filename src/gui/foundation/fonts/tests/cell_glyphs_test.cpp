@@ -11,6 +11,7 @@ import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace {
 
@@ -271,7 +272,7 @@ namespace {
     using Cache = CurveCache<unsigned>;
     Cache cache;
     unsigned builds = 0;
-    const auto build = [&] -> std::optional<unsigned> {
+    const auto build = [&] -> telar::ds::Option<unsigned> {
       return ++builds;
     };
 
@@ -299,10 +300,10 @@ namespace {
     unsigned attempts = 0;
     const auto metrics = BoxMetrics::resolve({.width = 9, .height = 17}, 1);
     constexpr BoxCurve::Shape shape = BoxCurve::Shape::diagonal_cross;
-    const auto failed = [&] -> std::optional<unsigned> {
+    const auto failed = [&] -> telar::ds::Option<unsigned> {
       ++attempts;
 
-      return std::nullopt;
+      return telar::ds::none;
     };
 
     check(cache.resolve(metrics, shape, failed) == nullptr, "a failed mask must request the reserved fallback");

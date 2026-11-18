@@ -1,10 +1,11 @@
 module telar.gui.foundation.drawing;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline drawing {
 
-  float ModalMotion::sample(std::optional<std::uint64_t> generation, std::optional<std::uint64_t> timestamp) noexcept {
+  float ModalMotion::sample(ds::Option<std::uint64_t> generation, ds::Option<std::uint64_t> timestamp) noexcept {
     if (!generation) {
       *this = {};
 
@@ -43,7 +44,7 @@ namespace telar::gui::inline foundation::inline drawing {
     return 1 - cube;
   }
 
-  std::optional<std::uint64_t> ModalMotion::deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
+  ds::Option<std::uint64_t> ModalMotion::deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
     if (!started_ns_ || (now_ns >= *started_ns_ && now_ns - *started_ns_ >= duration_ns)) {
       return {};
     }

@@ -5,6 +5,7 @@ export module telar.git:config;
 
 import std;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // A strict reader of git's config syntax. It only reports variables: nothing
 // it reads is executed, and include/includeIf are ordinary, ignored entries.
@@ -15,7 +16,7 @@ namespace telar::git {
     std::string_view section;    // as written; compare without case
     std::string_view subsection; // case preserved, except the legacy [section.sub] form
     std::string_view key;        // as written; compare without case
-    std::optional<std::string_view> value;
+    ds::Option<std::string_view> value;
   };
 
   bool parseConfigEntries(std::string_view text, String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&));
@@ -34,6 +35,6 @@ namespace telar::git {
   }
 
   // git's boolean spellings; anything else is not a boolean.
-  std::optional<bool> configBoolean(std::optional<std::string_view> value) noexcept;
+  ds::Option<bool> configBoolean(ds::Option<std::string_view> value) noexcept;
 
 }

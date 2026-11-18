@@ -2,12 +2,13 @@ module telar.platform.graphics;
 
 import std;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime {
 
-  std::optional<SharedImageStorage> SharedImageStorage::create(std::size_t length) noexcept {
+  ds::Option<SharedImageStorage> SharedImageStorage::create(std::size_t length) noexcept {
     if (length == 0 || length > static_cast<std::size_t>(std::numeric_limits<off_t>::max())) {
-      return std::nullopt;
+      return ds::none;
     }
 
     SharedImageStorage storage;
@@ -18,16 +19,16 @@ namespace telar::runtime {
     FileDescriptor descriptor{::shm_open(storage.name_.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
     if (!descriptor) {
       storage.name_[0] = '\0';
-      return std::nullopt;
+      return ds::none;
     }
 
     if (::ftruncate(descriptor.get(), static_cast<off_t>(length)) != 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     storage.mapping_ = MappedRegion{descriptor.get(), length, PROT_READ | PROT_WRITE};
     if (!storage.mapping_) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return storage;

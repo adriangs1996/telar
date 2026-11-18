@@ -60,7 +60,7 @@ namespace {
     }
 
     gesture.begin(hit(), original);
-    check(gesture.finish(hit(), original).has_value() && !gesture.active(), "an unchanged press and release must open exactly once");
+    check(gesture.finish(hit(), original).hasValue() && !gesture.active(), "an unchanged press and release must open exactly once");
     check(!gesture.finish(hit(), original), "a second release must not reopen a completed click");
     gesture.begin(hit(), original);
     gesture.cancel();

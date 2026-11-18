@@ -23,6 +23,7 @@ static_assert(true);
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -53,7 +54,7 @@ namespace telar::gui::qt {
       return event.isAutoRepeat() ? KeyPhase::repeat : KeyPhase::press;
     }
 
-    [[nodiscard]] static std::optional<TerminalKey> terminalKey(const QKeyEvent& event) {
+    [[nodiscard]] static ds::Option<TerminalKey> terminalKey(const QKeyEvent& event) {
       TerminalKey result{.modifiers = modifiers(event.modifiers()), .phase = phase(event)};
       const auto* const named = std::ranges::find(named_keys, event.key(), &decltype(named_keys)::value_type::first);
       if (named != named_keys.end()) {
@@ -163,7 +164,7 @@ namespace telar::gui::qt {
       }
     }
 
-    static std::optional<std::uint32_t> scalar(QStringView text) noexcept {
+    static ds::Option<std::uint32_t> scalar(QStringView text) noexcept {
       if (text.size() == 1 && !text.front().isSurrogate()) {
         return text.front().unicode();
       }

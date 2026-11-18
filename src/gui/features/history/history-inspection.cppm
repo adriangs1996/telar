@@ -13,6 +13,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 import telar.gui.foundation.forms;
+import telar.base.ds;
 
 // Interface: presentation/history_labels.cppm
 export {
@@ -56,7 +57,7 @@ export {
 
       [[nodiscard]] static Text dateLabel(std::int64_t milliseconds, CalendarSample sampled);
 
-      [[nodiscard]] static constexpr Status status(HistoryStatus status, std::optional<std::int32_t> exit_code) noexcept {
+      [[nodiscard]] static constexpr Status status(HistoryStatus status, ds::Option<std::int32_t> exit_code) noexcept {
         switch (status) {
         case HistoryStatus::running:
           return {.glyph = "◌", .color = PaletteRole::teal};
@@ -82,7 +83,7 @@ export {
 
       [[nodiscard]] static std::size_t weekday(std::int64_t day) noexcept;
 
-      [[nodiscard]] static std::optional<std::chrono::year_month_day> calendar(std::int64_t day) noexcept;
+      [[nodiscard]] static ds::Option<std::chrono::year_month_day> calendar(std::int64_t day) noexcept;
 
       static void appendClockPart(Text& text, std::uint64_t value);
     };
@@ -118,7 +119,7 @@ export {
       std::uint64_t pane_id = 0;
       std::int64_t started_at_ms = 0;
       std::int64_t duration_ns = 0;
-      std::optional<std::int32_t> exit_code;
+      ds::Option<std::int32_t> exit_code;
       HistoryStatus status = HistoryStatus::completed;
       HistoryAuthor author = HistoryAuthor::human;
       HistoryOrigin origin = HistoryOrigin::pane;
@@ -167,7 +168,7 @@ export {
     public:
       HistoryInspectionLines(HistoryInspectionDocument document, std::uint16_t columns) noexcept;
 
-      [[nodiscard]] std::optional<HistoryInspectionLine> next() noexcept;
+      [[nodiscard]] ds::Option<HistoryInspectionLine> next() noexcept;
 
       [[nodiscard]] std::uint32_t count() const noexcept;
 

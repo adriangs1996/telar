@@ -10,6 +10,7 @@ import telar.cli.window;
 import telar.cli.machine_ssh;
 import telar.machines;
 import telar.cli.output;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
   namespace {
@@ -101,7 +102,7 @@ namespace telar::runtime::cli {
       return 1;
     }
 
-    std::optional<machines::MachineProfile> target;
+    ds::Option<machines::MachineProfile> target;
 
     try {
       target = machine::resolve(memory, label);

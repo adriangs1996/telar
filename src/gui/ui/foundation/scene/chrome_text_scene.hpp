@@ -23,6 +23,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -36,7 +37,7 @@ namespace telar::gui::qt {
     std::span<const fonts::ShapedGlyph> glyphs;
     std::span<const fonts::TextSpan> spans;
     FontMetrics metrics;
-    std::optional<FontGrid> grid = std::nullopt;
+    ds::Option<FontGrid> grid = ds::none;
     QPointF scene_origin;
     QSizeF bounds;
     QColor color;
@@ -50,8 +51,8 @@ namespace telar::gui::qt {
     bool emphasized = false;
     fonts::FontRole role = fonts::FontRole::regular;
     fonts::GlyphStyle style{};
-    std::optional<TextInkPlacement> placement = std::nullopt;
-    std::optional<Color> foreground = std::nullopt;
+    ds::Option<TextInkPlacement> placement = ds::none;
+    ds::Option<Color> foreground = ds::none;
   };
 
   // Each result reuses the previous node or is a new one the caller adopts.

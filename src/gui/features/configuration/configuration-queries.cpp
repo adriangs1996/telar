@@ -12,6 +12,7 @@ import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
+import telar.base.ds;
 
 namespace telar::gui::features::configuration {
 
@@ -99,7 +100,7 @@ namespace telar::gui::features::configuration {
     writer.object([&](JsonWriter& window) {
       window.member("background_opacity", configuration.background_opacity);
       window.member("background_blur", configuration.background_blur);
-      window.member("titlebar", configuration.titlebar.value_or(default_titlebar));
+      window.member("titlebar", configuration.titlebar.valueOr(default_titlebar));
       window.member("padding", [&](JsonWriter& value) {
         value.object([&](JsonWriter& padding) {
           padding.member("x", configuration.padding_x);
@@ -179,7 +180,7 @@ namespace telar::gui::features::configuration {
     });
   }
 
-  void ThemeQuery::writeOptionalRgb(JsonWriter& writer, const std::optional<ThemeRgb>& color) {
+  void ThemeQuery::writeOptionalRgb(JsonWriter& writer, const ds::Option<ThemeRgb>& color) {
     if (color) {
       byteValue(writer, *color);
     } else {
@@ -256,7 +257,7 @@ namespace telar::gui::features::configuration {
     });
   }
 
-  void ThemeQuery::writeOptionalTheme(JsonWriter& writer, const std::optional<ThemeValues>& theme) {
+  void ThemeQuery::writeOptionalTheme(JsonWriter& writer, const ds::Option<ThemeValues>& theme) {
     if (theme) {
       writeTheme(writer, *theme);
     } else {
@@ -268,9 +269,9 @@ namespace telar::gui::features::configuration {
     return {.kind = BindingActionKind::command_tab, .parameter = std::bit_cast<std::int32_t>(reference.epoch), .reference = reference.id, .generation = generation};
   }
 
-  std::optional<runtime::config::CommandTabReference> commandTabReference(BindingAction action) noexcept {
+  ds::Option<runtime::config::CommandTabReference> commandTabReference(BindingAction action) noexcept {
     if (action.kind != BindingActionKind::command_tab || !std::in_range<std::uint16_t>(action.reference)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return runtime::config::CommandTabReference{.epoch = std::bit_cast<std::uint32_t>(action.parameter), .id = static_cast<std::uint16_t>(action.reference)};
@@ -628,8 +629,8 @@ namespace telar::gui::features::configuration {
     return writer.view();
   }
 
-  std::optional<std::string_view> RuntimeQuery::nullablePath(std::string_view path) noexcept {
-    return path.empty() ? std::nullopt : std::optional{path};
+  ds::Option<std::string_view> RuntimeQuery::nullablePath(std::string_view path) noexcept {
+    return path.empty() ? ds::none : ds::Option{path};
   }
 
   template <Allocator Memory>

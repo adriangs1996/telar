@@ -33,6 +33,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -252,7 +253,7 @@ namespace telar::gui::qt {
     }
 
     const auto viewport = viewport_->mapRectToScene(viewport_->boundingRect());
-    std::optional<float> row_height;
+    ds::Option<float> row_height;
 
     for (const auto* delegate : content_->childItems()) {
       for (const auto* item : delegate->childItems()) {
@@ -276,8 +277,8 @@ namespace telar::gui::qt {
       }
     }
 
-    surface.row_height = row_height.value_or(metrics_.cell_height);
-    surface.has_rows = row_height.has_value();
+    surface.row_height = row_height.valueOr(metrics_.cell_height);
+    surface.has_rows = row_height.hasValue();
 
     return surface;
   }
@@ -402,7 +403,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::moveRows(std::int32_t steps) {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     const auto browser = application::history::view(session);
 
     for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {

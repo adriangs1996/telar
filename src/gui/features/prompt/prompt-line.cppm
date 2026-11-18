@@ -15,6 +15,7 @@ import :routing;
 import :completion;
 import :menu;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
@@ -52,7 +53,7 @@ namespace telar::gui::features::prompt {
 
     explicit Line(Keymap keymap = Keymap::emacs);
 
-    Editor& editor() noexcept;
+    Editor& editorMut() noexcept;
 
     [[nodiscard]] const Editor& editor() const noexcept;
 
@@ -104,7 +105,7 @@ namespace telar::gui::features::prompt {
     // Writes `text` over [begin, end) of the line, as a path chosen for the word there does.
     void replaceText(std::size_t begin, std::size_t end, std::string_view text);
 
-    const std::optional<Menu>& menu() const noexcept;
+    const ds::Option<Menu>& menu() const noexcept;
 
     // Offers `choices` for the word in [begin, end): one is written at once, more open the
     // menu. While `requests` are still looking for more, even one choice waits for them.
@@ -141,7 +142,7 @@ namespace telar::gui::features::prompt {
 
     // While the menu is open, Tab and the arrows move through it, Enter takes the choice and
     // Escape closes it; any other key closes it and edits as usual.
-    std::optional<Outcome> menuKey(const KeyPress& key, bool& refining);
+    ds::Option<Outcome> menuKey(const KeyPress& key, bool& refining);
 
     // The word the menu completes, as typed so far.
     std::string_view typedWord() const noexcept;
@@ -160,8 +161,8 @@ namespace telar::gui::features::prompt {
     std::vector<std::string> recent_;
     std::string draft_;
     std::string delivery_;
-    std::optional<std::size_t> history_index_;
-    std::optional<Menu> menu_;
+    ds::Option<std::size_t> history_index_;
+    ds::Option<Menu> menu_;
     std::uint64_t revision_ = 0;
     // The next offer refines the menu typing reopened: one choice left is not written.
     bool refining_ = false;

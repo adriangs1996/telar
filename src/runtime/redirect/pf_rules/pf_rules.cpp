@@ -4,6 +4,7 @@ import telar.base.text.utf8;
 import telar.platform.error;
 import telar.platform.net;
 import telar.plugins;
+import telar.base.ds;
 
 #if defined(__APPLE__)
 import telar.sys.apple;
@@ -19,9 +20,9 @@ namespace telar::runtime::redirect {
     return left.port == right.port && left.host.view() == right.host.view();
   }
 
-  std::optional<FlowKey> FlowKey::syn(std::span<const Byte> frame) {
+  ds::Option<FlowKey> FlowKey::syn(std::span<const Byte> frame) {
     if (frame.size() < sizeof(std::uint32_t)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint32_t encoded_family;
@@ -36,14 +37,14 @@ namespace telar::runtime::redirect {
     if (family == AF_INET && packet.size() >= 20 && packet[0] >> 4 == 4) {
       offset = (packet[0] & 0x0f) * 4;
       if (offset < 20 || offset > packet.size() || number(packet, 2) != packet.size() || (number(packet, 6) & 0x3fff) != 0 || packet[9] != IPPROTO_TCP) {
-        return std::nullopt;
+        return ds::none;
       }
 
       source = 12;
       destination = 16;
     } else if (family == AF_INET6 && packet.size() >= 40 && packet[0] >> 4 == 6) {
       if (number(packet, 4) + 40 != packet.size()) {
-        return std::nullopt;
+        return ds::none;
       }
 
       offset = 40;
@@ -51,7 +52,7 @@ namespace telar::runtime::redirect {
 
       for (std::size_t count = 0; next != IPPROTO_TCP; ++count) {
         if (count == 8 || offset + 2 > packet.size() || (next != IPPROTO_HOPOPTS && next != IPPROTO_ROUTING && next != IPPROTO_DSTOPTS && next != IPPROTO_AH)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         const auto length = next == IPPROTO_AH ? (packet[offset + 1] + 2) * 4 : (packet[offset + 1] + 1) * 8;
@@ -63,22 +64,22 @@ namespace telar::runtime::redirect {
       source = 8;
       destination = 24;
     } else {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (offset + 20 > packet.size() || (packet[offset + 13] & 0x17) != 0x02) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto header = static_cast<std::size_t>(packet[offset + 12] >> 4) * 4;
     if (header < 20 || header > packet.size() - offset) {
-      return std::nullopt;
+      return ds::none;
     }
 
     try {
       return FlowKey{.source = endpoint(family, packet.subspan(source), number(packet, offset)), .destination = endpoint(family, packet.subspan(destination), number(packet, offset + 2))};
     } catch (const std::invalid_argument&) {
-      return std::nullopt;
+      return ds::none;
     }
   }
 

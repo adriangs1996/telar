@@ -21,6 +21,7 @@ import telar.gui.application;
 import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
 import telar.gui.features.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -107,7 +108,7 @@ namespace {
   void alertsDebouncePeaksAndReleaseWithAMargin() {
     telar::gui::test::HostMetricsState metrics;
     std::uint64_t revision = 0;
-    const auto cpu = [&](std::uint8_t percent, std::optional<std::uint8_t> battery = std::nullopt) {
+    const auto cpu = [&](std::uint8_t percent, ds::Option<std::uint8_t> battery = ds::none) {
       check(metrics.update(hostSample(++revision, percent, 0, battery)), "Each sample must be accepted");
       return metrics.severity(BarMetric::cpu);
     };

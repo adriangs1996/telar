@@ -15,6 +15,7 @@ import telar.platform.primitives;
 import telar.vocabulary;
 import telar.sys.posix;
 import telar.sys.process;
+import telar.base.ds;
 
 // Interface: telar_platform/child_descriptors.cppm
 export {
@@ -48,15 +49,15 @@ export {
       pid_t processId() const noexcept;
 
       void resize(TerminalSize size);
-      std::optional<pid_t> foregroundProcessGroup() const noexcept;
+      ds::Option<pid_t> foregroundProcessGroup() const noexcept;
       void signal(int signal_number) const noexcept;
       void shutdown() const noexcept;
-      std::optional<int> reap() noexcept;
+      ds::Option<int> reap() noexcept;
 
     private:
       FileDescriptor master_;
       pid_t process_id_ = -1;
-      std::optional<int> exit_status_;
+      ds::Option<int> exit_status_;
     };
 
   }
@@ -102,7 +103,7 @@ export {
       Command& operator=(const Command&) = delete;
 
       void removeEnvironmentPrefix(std::string_view prefix);
-      std::optional<std::string_view> environment(std::string_view name) const noexcept;
+      ds::Option<std::string_view> environment(std::string_view name) const noexcept;
       void removeEnvironment(std::string_view name);
 
       // The process starts with these after the program instead of the launch's own arguments,
@@ -167,14 +168,14 @@ export {
       void closeError() noexcept;
 
       void signal(int number) const noexcept;
-      std::optional<int> reap() noexcept;
+      ds::Option<int> reap() noexcept;
 
     private:
       FileDescriptor input_;
       FileDescriptor output_;
       FileDescriptor error_;
       pid_t process_id_ = -1;
-      std::optional<int> exit_status_;
+      ds::Option<int> exit_status_;
     };
 
   }
@@ -266,7 +267,7 @@ export {
       // file this process may execute and whose directory entry carries exactly its name: APFS and
       // HFS+ match names case-insensitively, so `telar` would otherwise find a bundle's `Telar`.
       // The path found is resolved to the file itself.
-      static std::optional<ExecutablePath> sibling(std::initializer_list<std::string_view> candidates);
+      static ds::Option<ExecutablePath> sibling(std::initializer_list<std::string_view> candidates);
 
       const char* c_str() const noexcept;
       std::string_view view() const noexcept;

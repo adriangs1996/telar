@@ -54,7 +54,7 @@ namespace {
     const auto half_shift = (card_height + NotificationMetrics::stack_gap) / 2;
 
     check(middle.items().front().bounds.y == host.y + NotificationMetrics::margin + half_shift, "stack movement must use the original smoothstep at the halfway point");
-    check(stack.nextDeadline((2 * second) + (NotificationStack::motion_duration_ns / 2), second).has_value(), "moving cards must request another frame");
+    check(stack.nextDeadline((2 * second) + (NotificationStack::motion_duration_ns / 2), second).hasValue(), "moving cards must request another frame");
     static_cast<void>(prepare(stack, center, 3 * second));
     check(!stack.nextDeadline(3 * second, second), "settled stack positions must not poll");
   }

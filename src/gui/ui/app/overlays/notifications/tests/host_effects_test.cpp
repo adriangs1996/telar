@@ -34,6 +34,7 @@ static_assert(true);
 import telar.gui.tests.allocation_gate;
 import telar.gui.application;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace {
 
@@ -83,10 +84,10 @@ namespace {
   };
 
   struct Observer {
-    std::vector<std::optional<CommandFailure>> results;
+    std::vector<telar::ds::Option<CommandFailure>> results;
     std::function<void()> completed;
 
-    void soundPlaybackFinished(std::optional<CommandFailure> failure) {
+    void soundPlaybackFinished(telar::ds::Option<CommandFailure> failure) {
       results.push_back(failure);
       if (completed) {
         completed();
@@ -161,7 +162,7 @@ namespace {
       player.start(AgentSound::ready);
       QTRY_COMPARE_WITH_TIMEOUT(observer.results.size(), std::size_t{1}, wait_ms);
       QCOMPARE(SoundHost::started.size(), SoundHost::attempts);
-      QCOMPARE(observer.results.front(), std::optional{CommandFailure::process});
+      QCOMPARE(observer.results.front(), telar::ds::Option{CommandFailure::process});
 
       SoundHost::successful_backend = 0;
       player.start(AgentSound::needs_input);

@@ -8,6 +8,7 @@ import std;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import :rounded_rectangle;
+import telar.base.ds;
 
 // Interface: graphics/progress_ring.cppm
 export {
@@ -25,7 +26,7 @@ export {
       // Zero derives the stroke from the side.
       float stroke_width = 0;
       // Without a track colour the track is the ring's colour at track_alpha; a transparent one draws no track.
-      std::optional<Color> track = std::nullopt;
+      ds::Option<Color> track = ds::none;
 
       template <typename Visitor>
       TBC_GENERIC void visit(Visitor visitor) const {

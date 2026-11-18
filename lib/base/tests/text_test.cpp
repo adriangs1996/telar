@@ -7,6 +7,7 @@ import std;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -23,16 +24,16 @@ namespace {
     check(utf8Prefix("\xc3\xa9", 0).empty());
   }
 
-  std::optional<std::string> decoded(std::optional<std::size_t> length, const std::array<std::uint8_t, 8>& bytes) {
+  telar::ds::Option<std::string> decoded(telar::ds::Option<std::size_t> length, const std::array<std::uint8_t, 8>& bytes) {
     if (!length) {
-      return std::nullopt;
+      return telar::ds::none;
     }
 
     return std::string{reinterpret_cast<const char*>(bytes.data()), *length};
   }
 
   template <base64::Padding Rule>
-  std::optional<std::string> decode(std::string_view encoded) {
+  telar::ds::Option<std::string> decode(std::string_view encoded) {
     std::array<std::uint8_t, 8> bytes{};
 
     return decoded(base64::decode<Rule>(encoded, bytes), bytes);
@@ -45,10 +46,10 @@ namespace {
 
     check(decode<optional>("YQ") == "a");
     check(decode<optional>("YQ==") == "a");
-    check(!decode<optional>("Y").has_value());
-    check(!decode<required>("YQ").has_value());
+    check(!decode<optional>("Y").hasValue());
+    check(!decode<required>("YQ").hasValue());
     check(decode<required>("YR==") == "a");
-    check(!decode<canonical>("YR==").has_value());
+    check(!decode<canonical>("YR==").hasValue());
     check(decode<canonical>("YQ==") == "a");
   }
 

@@ -11,6 +11,7 @@ import std;
 import telar.tbc;
 import telar.gui.foundation.terminal;
 import :face_views;
+import telar.base.ds;
 
 // Interface: fonts/glyph_bitmap_view.cppm
 export {
@@ -179,7 +180,7 @@ export {
       tbc::view<std::unique_ptr<std::remove_pointer_t<FT_Face>, FaceDeleter>, tbc::lt::a> face_;
       std::unique_ptr<hb_font_t, ShapingFontDeleter> shaping_font_;
       std::unique_ptr<hb_buffer_t, ShapingBufferDeleter> shaping_buffer_;
-      std::optional<LigatureCoverage> ligatures_;
+      ds::Option<LigatureCoverage> ligatures_;
       // The sizes are FreeType children of this face.
       tbc::view<std::array<SizeEntry, maximum_sizes>, tbc::lt::self> sizes_{};
       std::size_t next_size_slot_ = 0;

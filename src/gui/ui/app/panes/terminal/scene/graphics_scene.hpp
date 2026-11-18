@@ -32,6 +32,7 @@ static_assert(true);
 
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 class QQuickWindow;
 
@@ -62,13 +63,13 @@ namespace telar::gui::qt {
     }
 
     // The drawn row of `row`, counted from the top of the scrollback; nothing when a fold hides it.
-    [[nodiscard]] std::optional<std::int64_t> drawn(std::int64_t row) const noexcept {
+    [[nodiscard]] ds::Option<std::int64_t> drawn(std::int64_t row) const noexcept {
       if (folds == nullptr || row < 0) {
         return row - static_cast<std::int64_t>(top);
       }
 
       if (folds->hides(static_cast<std::uint64_t>(row))) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return static_cast<std::int64_t>(folds->display(static_cast<std::uint64_t>(row))) - static_cast<std::int64_t>(top);
@@ -99,7 +100,7 @@ namespace telar::gui::qt {
 
     struct ResolvedImage {
       std::uint32_t image_id = 0;
-      std::optional<WindowImage> texture;
+      ds::Option<WindowImage> texture;
     };
 
     [[nodiscard]] std::span<const ResolvedImage> resolvedImages() const noexcept;

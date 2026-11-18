@@ -218,11 +218,11 @@ namespace {
 
     const auto first_marker_value = first->marker;
 
-    check(first_marker_value.has_value(), "the first preview must learn a marker");
+    check(first_marker_value.hasValue(), "the first preview must learn a marker");
     const auto first_marker = *first_marker_value;
     const auto second_marker_value = second->marker;
 
-    check(second_marker_value.has_value(), "the second preview must learn a marker");
+    check(second_marker_value.hasValue(), "the second preview must learn a marker");
     const auto second_marker = *second_marker_value;
     constexpr std::uint16_t first_number = 11;
     constexpr std::uint16_t second_number = 12;

@@ -44,6 +44,7 @@ import telar.runtime.history.event;
 import telar.runtime.model.client_layouts;
 import telar.runtime.platform.process_probe;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 namespace {
 
@@ -492,7 +493,7 @@ namespace {
     feedObserver(observer, "\x1b]133;A\x07$ \x1b]133;B\x07");
     const std::string_view command = "echo value\r";
 
-    observer.bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(command.data()), command.size()}, std::nullopt);
+    observer.bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(command.data()), command.size()}, ds::none);
     feedObserver(observer, "echo value\r\n\x1b]133;C\x07value\r\n\x1b]133;D;0\x07");
     const auto first = observe(observer, AgentProvider::unknown);
 

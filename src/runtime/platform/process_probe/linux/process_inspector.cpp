@@ -10,6 +10,7 @@ import telar.runtime.platform.proc_file;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
   namespace {
@@ -28,13 +29,13 @@ namespace telar::runtime {
     }
 
     // One row of /proc/net/tcp or tcp6: `sl local remote st tx:rx tr:when retransmits uid timeout inode`.
-    std::optional<ListeningSocket> parseListening(std::string_view line, uid_t user) noexcept {
+    ds::Option<ListeningSocket> parseListening(std::string_view line, uid_t user) noexcept {
       constexpr unsigned listen_state = 0x0a;
       std::array<std::string_view, 10> fields;
       for (auto& field : fields) {
         const auto first = line.find_first_not_of(' ');
         if (first == std::string_view::npos) {
-          return std::nullopt;
+          return ds::none;
         }
 
         line.remove_prefix(first);
@@ -47,7 +48,7 @@ namespace telar::runtime {
       uid_t owner = 0;
       ListeningSocket socket;
       if (separator == std::string_view::npos || !parseNumber(fields[3], state, 16) || state != listen_state || !parseNumber(fields[7], owner, 10) || owner != user || !parseNumber(fields[1].substr(separator + 1), socket.port, 16) || !parseNumber(fields[9], socket.inode, 10) || socket.inode == 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       return socket;
@@ -99,19 +100,19 @@ namespace telar::runtime {
 
   }
 
-  std::optional<ProcessSnapshot> ProcessInspector::snapshot(pid_t process) const noexcept {
+  ds::Option<ProcessSnapshot> ProcessInspector::snapshot(pid_t process) const noexcept {
     ProcDirectory directory{process};
     std::array<char, process_stat_capacity> storage;
     const auto bytes = directory.read("stat", storage);
-    const auto status = bytes ? ProcStat::parse(*bytes) : std::nullopt;
+    const auto status = bytes ? ProcStat::parse(*bytes) : ds::none;
     if (!status || !directory.belongsTo(uid_)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     static const auto ticks_per_second = ::sysconf(_SC_CLK_TCK);
     constexpr std::uint64_t microseconds_per_second = 1'000'000;
     if (ticks_per_second <= 0) {
-      return std::nullopt;
+      return ds::none;
     }
     const auto frequency = static_cast<std::uint64_t>(ticks_per_second);
     return ProcessSnapshot{
@@ -120,18 +121,18 @@ namespace telar::runtime {
     };
   }
 
-  std::optional<ProcessIdentity> ProcessInspector::peer(int socket) const noexcept {
+  ds::Option<ProcessIdentity> ProcessInspector::peer(int socket) const noexcept {
     ucred credentials{};
     socklen_t length = sizeof(credentials);
     if (::getsockopt(socket, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0 || length != sizeof(credentials) || credentials.uid != uid_) {
-      return std::nullopt;
+      return ds::none;
     }
     return identity(credentials.pid);
   }
 
   ProcessArguments ProcessInspector::readArguments(pid_t process, std::span<char> buffer) noexcept {
     const auto bytes = ProcDirectory{process}.read("cmdline", buffer);
-    return ProcessArguments{bytes.value_or(std::string_view{})};
+    return ProcessArguments{bytes.valueOr(std::string_view{})};
   }
 
   FixedText<4096> ProcessInspector::executable(pid_t process) noexcept {
@@ -194,7 +195,7 @@ namespace telar::runtime {
     std::size_t count = 0;
     while (const auto* entry = ::readdir(directory)) {
       const std::string_view name{entry->d_name};
-      const auto process = parseExact<pid_t>(name).value_or(0);
+      const auto process = parseExact<pid_t>(name).valueOr(0);
       if (process <= 0) {
         continue;
       }
@@ -214,7 +215,7 @@ namespace telar::runtime {
     FixedText<48> result;
     std::array<char, process_stat_capacity> storage;
     const auto bytes = ProcDirectory{process}.read("stat", storage);
-    const auto status = bytes ? ProcStat::parse(*bytes) : std::nullopt;
+    const auto status = bytes ? ProcStat::parse(*bytes) : ds::none;
     if (status) {
       try {
         DisplayText16<48, false>::validate(status->name);

@@ -43,6 +43,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -51,7 +52,7 @@ namespace telar::gui::qt {
     struct CellRun {
       CellStyle style;
       QString text;
-      std::optional<glyphs::Symbol> symbol;
+      ds::Option<glyphs::Symbol> symbol;
       Color foreground;
       Color background;
       std::size_t consumed_cells = 1;
@@ -110,10 +111,10 @@ namespace telar::gui::qt {
       return {.width = std::min(fitted->cols, frame.screen.columns()), .height = static_cast<std::uint16_t>(std::min<std::size_t>(drawn, frame.rowCount()))};
     }
 
-    std::optional<std::size_t> cursorColumn(const TerminalPresentation& frame, std::size_t row, std::size_t columns) {
+    ds::Option<std::size_t> cursorColumn(const TerminalPresentation& frame, std::size_t row, std::size_t columns) {
       const auto& cursor = frame.cursor_override ? *frame.cursor_override : frame.screen.cursor();
-      if (!frame.pane_focused || !cursor.visible || frame.screenRow(row) != std::optional<std::size_t>{cursor.y} || cursor.x >= columns) {
-        return std::nullopt;
+      if (!frame.pane_focused || !cursor.visible || frame.screenRow(row) != ds::Option<std::size_t>{cursor.y} || cursor.x >= columns) {
+        return ds::none;
       }
 
       auto column = static_cast<std::size_t>(cursor.x);
@@ -297,7 +298,7 @@ namespace telar::gui::qt {
 
     const auto cells = frame.row(row_index).first(std::min<std::size_t>(columns_, frame.row(row_index).size()));
     const auto screen_row = frame.screenRow(row_index);
-    const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = screen_row ? frame.selection : CellSelection{}, .first_cell = screen_row.value_or(0) * frame.screen.columns()});
+    const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = screen_row ? frame.selection : CellSelection{}, .first_cell = screen_row.valueOr(0) * frame.screen.columns()});
     auto decorations = std::make_unique<QSGNode>();
 
     for (std::size_t column = 0; column < cells.size(); ++column) {
@@ -478,7 +479,7 @@ namespace telar::gui::qt {
 
     while (const auto area = regions.next()) {
       // On the drawn rows' own screen a row is where it is drawn.
-      const auto drawn = frame.link_screen != nullptr ? std::optional<std::size_t>{area->y} : frame.drawnRow(area->y);
+      const auto drawn = frame.link_screen != nullptr ? ds::Option<std::size_t>{area->y} : frame.drawnRow(area->y);
       if (!drawn) {
         continue;
       }
@@ -545,7 +546,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto foreground = theme.cursor_text.value_or(theme.background);
+    const auto foreground = theme.cursor_text.valueOr(theme.background);
 
     if (const auto symbol = CellGlyphs::parse(cell.utf8())) {
       glyphs_.paint(overlay_, *symbol, bounds, frame.scale, foreground);

@@ -5,6 +5,7 @@ export module telar.gui.features.notifications:sound;
 import std;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: application/sound_playback.cppm
 export {
@@ -24,7 +25,7 @@ export {
     // The agent sound playing, if any, and the one queued to follow it.
     struct SoundStatus {
       bool playing = false;
-      std::optional<AgentSound> queued = std::nullopt;
+      ds::Option<AgentSound> queued = ds::none;
     };
 
   }

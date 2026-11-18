@@ -16,6 +16,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -47,7 +48,7 @@ namespace telar::gui::qt {
     CopyController& operator=(CopyController&&) = delete;
 
     [[nodiscard]] bool active() const noexcept;
-    [[nodiscard]] const std::optional<application::terminal::copy_mode::CopyState>& state() const noexcept;
+    [[nodiscard]] const ds::Option<application::terminal::copy_mode::CopyState>& state() const noexcept;
     [[nodiscard]] QVariantMap searchState() const;
     [[nodiscard]] QString searchScope() const;
     [[nodiscard]] bool searchScopes() const;

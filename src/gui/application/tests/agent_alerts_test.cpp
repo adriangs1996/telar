@@ -48,7 +48,7 @@ namespace {
       AgentAlerts::Message message;
       const auto input = AgentAlerts::input(change, "Custom agent", message);
 
-      check(input.has_value() == AgentAlerts::alertable(change), "only blocked, done and failed transitions must alert");
+      check(input.hasValue() == AgentAlerts::alertable(change), "only blocked, done and failed transitions must alert");
       if (!input) {
         continue;
       }

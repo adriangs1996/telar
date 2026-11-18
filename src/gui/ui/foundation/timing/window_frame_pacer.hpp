@@ -26,6 +26,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -79,7 +80,7 @@ namespace telar::gui::qt {
     WindowFramePacer(WindowFramePacer&&) = delete;
     WindowFramePacer& operator=(WindowFramePacer&&) = delete;
 
-    void configure(std::uint64_t display_interval_ns, std::optional<std::uint16_t> maximum_fps) {
+    void configure(std::uint64_t display_interval_ns, ds::Option<std::uint16_t> maximum_fps) {
       const auto previous = pacer_.interval();
       const auto interval = pacer_.configure(display_interval_ns, maximum_fps);
       if (pending_ && interval != previous) {

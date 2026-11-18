@@ -13,6 +13,7 @@ import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
@@ -54,31 +55,31 @@ export {
     };
 
     // The position of the value in `names`, if the value is present.
-    [[nodiscard]] std::optional<std::size_t> optionalChoiceIndex(const lua::Value& value, std::span<const std::string_view> names);
+    [[nodiscard]] ds::Option<std::size_t> optionalChoiceIndex(const lua::Value& value, std::span<const std::string_view> names);
 
     // The value of `name` in `names` as an enum whose values follow the table. Stays in the
     // interface because it is a template over the caller's enum; the lookup is out of line.
     template <typename Enum, std::size_t Count>
-    [[nodiscard]] TBC_GENERIC std::optional<Enum> optionalChoice(const lua::Value& value, const std::array<std::string_view, Count>& names) {
+    [[nodiscard]] TBC_GENERIC ds::Option<Enum> optionalChoice(const lua::Value& value, const std::array<std::string_view, Count>& names) {
       const auto index = optionalChoiceIndex(value, names);
 
-      return index ? std::optional{static_cast<Enum>(*index)} : std::nullopt;
+      return index ? ds::Option{static_cast<Enum>(*index)} : ds::none;
     }
 
-    [[nodiscard]] std::optional<double> optionalNumber(const lua::Value& value, Bounds<double> bounds);
+    [[nodiscard]] ds::Option<double> optionalNumber(const lua::Value& value, Bounds<double> bounds);
 
     // A whole number within the bounds, if the value is present.
-    [[nodiscard]] std::optional<double> optionalWholeValue(const lua::Value& value, Bounds<double> bounds);
+    [[nodiscard]] ds::Option<double> optionalWholeValue(const lua::Value& value, Bounds<double> bounds);
 
     // Stays in the interface because it is a template over the caller's integer type.
     template <typename Integer>
-    [[nodiscard]] TBC_GENERIC std::optional<Integer> optionalWhole(const lua::Value& value, Bounds<double> bounds) {
+    [[nodiscard]] TBC_GENERIC ds::Option<Integer> optionalWhole(const lua::Value& value, Bounds<double> bounds) {
       const auto number = optionalWholeValue(value, bounds);
 
-      return number ? std::optional{static_cast<Integer>(*number)} : std::nullopt;
+      return number ? ds::Option{static_cast<Integer>(*number)} : ds::none;
     }
 
-    [[nodiscard]] std::optional<bool> optionalBoolean(const lua::Value& value);
+    [[nodiscard]] ds::Option<bool> optionalBoolean(const lua::Value& value);
 
   }
 }

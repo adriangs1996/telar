@@ -5,6 +5,7 @@ export module telar.gui.features.terminal.copy_mode:pointer;
 import std;
 
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 // Interface: input/click_tracker.cppm
 export {
@@ -71,7 +72,7 @@ export {
       Kind kind = Kind::unowned;
       bool dragging = false;
       bool inside = false;
-      std::optional<CopyPoint> position = std::nullopt;
+      ds::Option<CopyPoint> position = ds::none;
     };
 
     struct CopyPointerDecision {
@@ -85,8 +86,8 @@ export {
       Outcome outcome = Outcome::unowned;
       bool cancel = false;
       bool leave = false;
-      std::optional<CopyPoint> motion = std::nullopt;
-      std::optional<std::int32_t> vertical = std::nullopt;
+      ds::Option<CopyPoint> motion = ds::none;
+      ds::Option<std::int32_t> vertical = ds::none;
     };
 
     CopyPointerDecision routeCopyPointer(const CopyPointerInput& input, const CopyPointerAuthority& authority) noexcept;

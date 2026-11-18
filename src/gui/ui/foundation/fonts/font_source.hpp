@@ -15,6 +15,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -25,7 +26,7 @@ namespace telar::gui::qt {
 
   FontData loadFontData(const FontConfiguration& font);
   QByteArray loadFontBytes(const QString& path);
-  std::optional<FontData> loadFallbackFontData(const fonts::FontQuery& query);
+  ds::Option<FontData> loadFallbackFontData(const fonts::FontQuery& query);
 
   template <Allocator Memory>
   class FontSource {

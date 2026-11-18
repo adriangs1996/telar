@@ -24,6 +24,7 @@ static_assert(true);
 import telar.gui.foundation.system;
 import telar.gui.foundation.agents;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -78,7 +79,7 @@ namespace telar::gui::qt {
     record_ = record;
     const auto timestamp = clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds();
 
-    interval_ = statusAgeInterval(record.value(QStringLiteral("statusClock"))).value_or(StatusAgeInterval{.age_ns = static_cast<std::uint64_t>(record.value(QStringLiteral("age")).toUInt()) * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = timestamp});
+    interval_ = statusAgeInterval(record.value(QStringLiteral("statusClock"))).valueOr(StatusAgeInterval{.age_ns = static_cast<std::uint64_t>(record.value(QStringLiteral("age")).toUInt()) * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = timestamp});
     const auto state = record.value(QStringLiteral("statusCode")).toInt();
 
     status_ = state >= static_cast<int>(AgentStatus::unknown) && state <= static_cast<int>(AgentStatus::done) ? static_cast<AgentStatus>(state) : AgentStatus::unknown;
@@ -110,13 +111,13 @@ namespace telar::gui::qt {
     return running_ && isVisible() && width() > 0 && height() > 0;
   }
 
-  std::optional<std::uint64_t> NativeAgentStatus::deadline(std::uint64_t now_ns) const noexcept {
+  ds::Option<std::uint64_t> NativeAgentStatus::deadline(std::uint64_t now_ns) const noexcept {
     if (display_mode_ == DisplayMode::pane_chip) {
       if (connected_ && status_ == AgentStatus::working) {
         return application::workbench::ProgressAnimation::nextStep(now_ns, StatusAgeInterval::nanoseconds_per_second);
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     return application::activity::AgentAnimation::deadline(status_, connected_, now_ns);

@@ -5,6 +5,7 @@ import std;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -170,9 +171,9 @@ namespace telar::gui::features::history {
     return static_cast<std::size_t>((positiveRemainder(day, days_per_week) + epoch_weekday) % days_per_week);
   }
 
-  std::optional<std::chrono::year_month_day> HistoryLabels::calendar(std::int64_t day) noexcept {
+  ds::Option<std::chrono::year_month_day> HistoryLabels::calendar(std::int64_t day) noexcept {
     if (day < 0 || day > last_calendar_day) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return std::chrono::year_month_day{std::chrono::sys_days{std::chrono::days{day}}};
@@ -321,7 +322,7 @@ namespace telar::gui::features::history {
         wrapped_(document.command, columns, true),
         columns_(columns) {}
 
-  std::optional<HistoryInspectionLine> HistoryInspectionLines::next() noexcept {
+  ds::Option<HistoryInspectionLine> HistoryInspectionLines::next() noexcept {
     using Kind = HistoryInspectionLine::Kind;
 
     while (true) {
@@ -358,7 +359,7 @@ namespace telar::gui::features::history {
         phase_ = Phase::done;
         break;
       case Phase::done:
-        return std::nullopt;
+        return ds::none;
       }
     }
   }

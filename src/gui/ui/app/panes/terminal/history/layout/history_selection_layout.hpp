@@ -15,6 +15,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -56,7 +57,7 @@ namespace telar::gui::qt {
   private:
     friend class WindowAnimationItems<HistorySelectionLayout>;
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);
     void prepareFrame();
     void bindClock();
@@ -68,9 +69,9 @@ namespace telar::gui::qt {
     application::history::HistorySelectionMotion motion_;
     application::history::HistoryExpansion expansion_;
     QString leaving_key_;
-    std::optional<std::uint64_t> generation_;
-    std::optional<application::history::HistoryPosition> selected_;
-    std::optional<std::uint64_t> next_sample_ns_;
+    ds::Option<std::uint64_t> generation_;
+    ds::Option<application::history::HistoryPosition> selected_;
+    ds::Option<std::uint64_t> next_sample_ns_;
     bool dirty_ = true;
     bool frame_requested_ = false;
   };

@@ -3,6 +3,7 @@ export module telar.gui.foundation.core:terminal_size;
 import std;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 export namespace telar::gui::inline foundation::inline core {
 
@@ -23,15 +24,15 @@ export namespace telar::gui::inline foundation::inline core {
 
     bool operator==(const TerminalGrid&) const = default;
 
-    [[nodiscard]] inline std::optional<TerminalSize> fit(double width, double height) const noexcept {
+    [[nodiscard]] inline ds::Option<TerminalSize> fit(double width, double height) const noexcept {
       if (!std::isfinite(width) || !std::isfinite(height) || !std::isfinite(scale) || width <= 0 || height <= 0 || scale <= 0 || cell_width_px == 0 || cell_height_px == 0) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto available_columns = width * scale / cell_width_px;
       const auto available_rows = height * scale / cell_height_px;
       if (available_columns < 1 || available_rows < 1) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto columns = static_cast<std::uint16_t>(std::clamp(std::floor(available_columns), 1.0, static_cast<double>(maximum_dimension)));

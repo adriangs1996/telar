@@ -7,6 +7,7 @@ import telar.base.text;
 import telar.wire.clipboard;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline terminal {
 
@@ -64,7 +65,7 @@ namespace telar::gui::inline foundation::inline terminal {
     return byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' || byte == '\x0b' || byte == '\x0c';
   }
 
-  std::optional<CopyWordClass> CopyGrid::wordClass(CopyPoint point) const noexcept {
+  ds::Option<CopyWordClass> CopyGrid::wordClass(CopyPoint point) const noexcept {
     const auto* value = cell(point);
     if (value == nullptr) {
       return {};

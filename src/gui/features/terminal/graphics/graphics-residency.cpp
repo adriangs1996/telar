@@ -3,6 +3,7 @@ module telar.gui.features.terminal.graphics;
 import std;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -170,7 +171,7 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   ImageTextureHandle ImageResidencyTable::newestReady(ImageTextureIdentity identity) const noexcept {
-    std::optional<Row> best;
+    ds::Option<Row> best;
 
     for (const auto row : rows()) {
       const auto& state = states_[row];
@@ -187,7 +188,7 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   std::uint32_t ImageResidencyTable::wakeupAfter(std::uint64_t now_ns) const noexcept {
-    std::optional<std::uint64_t> earliest;
+    ds::Option<std::uint64_t> earliest;
 
     for (const auto row : rows()) {
       const auto deadline = expiry(states_[row]);
@@ -274,9 +275,9 @@ namespace telar::gui::features::terminal::graphics {
     return static_cast<std::size_t>(size.width) * size.height * rgba_channels;
   }
 
-  std::optional<std::uint64_t> ImageResidencyTable::expiry(const ImageTextureState& state) noexcept {
+  ds::Option<std::uint64_t> ImageResidencyTable::expiry(const ImageTextureState& state) noexcept {
     if (state.stage != ImageTextureStage::ready && state.stage != ImageTextureStage::spare) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto lifetime = state.stage == ImageTextureStage::spare ? spare_lifetime_ns : idle_lifetime_ns;
@@ -292,7 +293,7 @@ namespace telar::gui::features::terminal::graphics {
     }));
   }
 
-  std::optional<ImageResidencyTable::Row> ImageResidencyTable::takeRow(ImageTextureIdentity identity, ImageTextureSize size, std::size_t retained_bytes) noexcept {
+  ds::Option<ImageResidencyTable::Row> ImageResidencyTable::takeRow(ImageTextureIdentity identity, ImageTextureSize size, std::size_t retained_bytes) noexcept {
     if (spares_ != 0) {
       for (const auto row : rows()) {
         if (states_[row].stage == ImageTextureStage::spare && states_[row].size == size) {
@@ -304,11 +305,11 @@ namespace telar::gui::features::terminal::graphics {
     }
 
     if (size.width <= maximum_side && size.height <= maximum_side && !reserve(byteSize(size), retained_bytes)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (free_count_ == 0 && !evictOne()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto row = free_[--free_count_];
@@ -342,7 +343,7 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   bool ImageResidencyTable::evictOne() noexcept {
-    std::optional<Row> oldest;
+    ds::Option<Row> oldest;
 
     for (const auto row : rows()) {
       const auto& state = states_[row];

@@ -9,6 +9,7 @@ import telar.cli.output;
 import telar.platform.paths;
 import telar.cli.control_session;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: help.cppm
 export {
@@ -26,12 +27,12 @@ export {
       std::string_view command;
     };
 
-    std::optional<std::string_view> helpText(HelpTopic topic) noexcept;
+    ds::Option<std::string_view> helpText(HelpTopic topic) noexcept;
 
     // The help a command line asks for: a leading flag asks for
     // the root, and a flag anywhere after a family, but before `--`, for that family or
     // the command its second word names. Help never starts or contacts a runtime.
-    std::optional<HelpTopic> findHelp(std::span<char* const> words) noexcept;
+    ds::Option<HelpTopic> findHelp(std::span<char* const> words) noexcept;
 
     // The words a usage error points at, as in "see `telar pane read --help`".
     std::string helpReference(std::span<char* const> words);
@@ -45,7 +46,7 @@ export {
 
     inline constexpr const char* runtime_program = "telar-runtime";
 
-    bool connectExisting(std::optional<RuntimeConnection>& connection, const char* path);
+    bool connectExisting(ds::Option<RuntimeConnection>& connection, const char* path);
 
     enum class RuntimeStart : std::uint8_t {
       listening,

@@ -3,10 +3,11 @@ module telar.gui.foundation.actions;
 import std;
 
 import telar.base.text;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline actions {
 
-  std::optional<BindingAction> builtinBindingAction(std::string_view name) noexcept {
+  ds::Option<BindingAction> builtinBindingAction(std::string_view name) noexcept {
     for (const auto& [known, kind] : builtin_binding_actions) {
       if (name == known) {
         return BindingAction{.kind = kind};
@@ -24,7 +25,7 @@ namespace telar::gui::inline foundation::inline actions {
       constexpr unsigned maximum_index = 255;
       const auto index = runtime::unsignedNumber<unsigned>(digits, maximum_index).value_or(0);
 
-      return index == 0 ? std::nullopt : std::optional{BindingAction{.kind = kind, .parameter = static_cast<std::int32_t>(index) - 1}};
+      return index == 0 ? ds::none : ds::Option{BindingAction{.kind = kind, .parameter = static_cast<std::int32_t>(index) - 1}};
     }
 
     return {};

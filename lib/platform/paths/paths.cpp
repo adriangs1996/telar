@@ -4,6 +4,7 @@ import std;
 import telar.tbc;
 import telar.sys.posix;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -214,8 +215,8 @@ namespace telar::runtime::cli {
     return {bytes_.data(), length_};
   }
 
-  std::optional<std::string_view> SocketLocation::managedDirectory() const noexcept {
-    return directory_ == 0 ? std::nullopt : std::optional{path().substr(0, directory_)};
+  ds::Option<std::string_view> SocketLocation::managedDirectory() const noexcept {
+    return directory_ == 0 ? ds::none : ds::Option{path().substr(0, directory_)};
   }
 
   void SocketLocation::managed(std::string_view base, std::string_view name) {
@@ -333,7 +334,7 @@ namespace telar::runtime::cli {
     const auto location = SocketLocation::resolve(override, environment, ::getuid());
 
     socket = location.path();
-    socket_managed = location.managedDirectory().has_value();
+    socket_managed = location.managedDirectory().hasValue();
   }
 
   template class RuntimePaths<Memory>;

@@ -4,6 +4,7 @@ import std;
 import telar.sys.posix;
 import telar.base.text;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace telar::git {
 
@@ -612,25 +613,25 @@ namespace telar::git {
       return [&, worktree_file](const ConfigEntry& entry) {
         if (asciiEqualIgnoreCase(entry.section, "core") && entry.subsection.empty()) {
           if (asciiEqualIgnoreCase(entry.key, "repositoryformatversion") && !worktree_file) {
-            const auto version = entry.value ? telar::runtime::unsignedDecimal<unsigned>(*entry.value) : std::nullopt;
+            const auto version = entry.value ? telar::runtime::unsignedDecimal<unsigned>(*entry.value) : ds::none;
 
-            valid = valid && version.has_value();
-            config_.version = version.value_or(0);
+            valid = valid && version.hasValue();
+            config_.version = version.valueOr(0);
           } else if (asciiEqualIgnoreCase(entry.key, "bare")) {
             const auto value = configBoolean(entry.value);
 
-            valid = valid && value.has_value();
-            config_.bare = value.value_or(false);
+            valid = valid && value.hasValue();
+            config_.bare = value.valueOr(false);
           } else if (asciiEqualIgnoreCase(entry.key, "filemode")) {
             const auto value = configBoolean(entry.value);
 
-            valid = valid && value.has_value();
-            config_.file_mode = value.value_or(true);
+            valid = valid && value.hasValue();
+            config_.file_mode = value.valueOr(true);
           } else if (asciiEqualIgnoreCase(entry.key, "symlinks")) {
             const auto value = configBoolean(entry.value);
 
-            valid = valid && value.has_value();
-            config_.symlinks = value.value_or(true);
+            valid = valid && value.hasValue();
+            config_.symlinks = value.valueOr(true);
           } else if (asciiEqualIgnoreCase(entry.key, "worktree") && entry.value) {
             config_.has_worktree = true;
             configured_worktree_.assign(*entry.value);
@@ -672,7 +673,7 @@ namespace telar::git {
   }
 
   void StatusReader::extension(const ConfigEntry& entry) {
-    const auto value = entry.value.value_or("");
+    const auto value = entry.value.valueOr("");
 
     if (asciiEqualIgnoreCase(entry.key, "objectformat")) {
       if (asciiEqualIgnoreCase(value, "sha1")) {
@@ -685,7 +686,7 @@ namespace telar::git {
     } else if (asciiEqualIgnoreCase(entry.key, "refstorage")) {
       config_.unsupported = config_.unsupported || !asciiEqualIgnoreCase(value, "files");
     } else if (asciiEqualIgnoreCase(entry.key, "worktreeconfig")) {
-      config_.worktree_config = configBoolean(entry.value).value_or(false);
+      config_.worktree_config = configBoolean(entry.value).valueOr(false);
     } else {
       // Extensions that change nothing this reader reads; any other is unknown to it.
       bool known = false;
@@ -1035,7 +1036,7 @@ namespace telar::git {
   }
 
   bool StatusReader::compareStaged() {
-    std::optional<ObjectId> tree;
+    ds::Option<ObjectId> tree;
 
     if (status_.head_id) {
       ObjectType type = ObjectType::none;

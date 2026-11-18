@@ -4,6 +4,7 @@ import std;
 
 import telar.base.memory.allocators;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::attachments {
 
@@ -53,7 +54,7 @@ namespace telar::gui::features::terminal::attachments {
     return (left == nullptr || !inverse(*left)) && (right == nullptr || !inverse(*right));
   }
 
-  std::optional<CellPosition> AttachmentMarkerScreen::editorCursor() const noexcept {
+  ds::Option<CellPosition> AttachmentMarkerScreen::editorCursor() const noexcept {
     if (cursor.visible) {
       return CellPosition{.x = cursor.x, .y = cursor.y};
     }
@@ -67,7 +68,7 @@ namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool AttachmentMarkerScreen::promptContinues() const noexcept {
@@ -83,7 +84,7 @@ namespace telar::gui::features::terminal::attachments {
   NumericAttachmentMarkers::NumericAttachmentMarkers(AttachmentMarkerScreen screen) noexcept
       : screen_(screen) {}
 
-  std::optional<NumericAttachmentMarker> NumericAttachmentMarkers::next() noexcept {
+  ds::Option<NumericAttachmentMarker> NumericAttachmentMarkers::next() noexcept {
     while (position_.y < screen_.rows && static_cast<std::uint32_t>(position_.x) + head.size() <= screen_.columns) {
       const auto point = position_;
 
@@ -99,12 +100,12 @@ namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<NumericAttachmentMarker> NumericAttachmentMarkers::parse(AttachmentMarkerScreen screen, CellPosition point) noexcept {
+  ds::Option<NumericAttachmentMarker> NumericAttachmentMarkers::parse(AttachmentMarkerScreen screen, CellPosition point) noexcept {
     if (!screen.matches(point, head)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const CellPosition after_head{.x = static_cast<std::uint16_t>(point.x + head.size()), .y = point.y};
@@ -113,20 +114,20 @@ namespace telar::gui::features::terminal::attachments {
     }
 
     if (point.y + 1 >= screen.rows || !blankTail(screen, after_head)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto first = firstInk(screen, point.y + 1);
     if (!first || !screen.matches(*first, "#")) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return tail(screen, point, {.x = static_cast<std::uint16_t>(first->x + 1), .y = first->y});
   }
 
-  std::optional<NumericAttachmentMarker> NumericAttachmentMarkers::closest(AttachmentMarkerScreen screen, std::uint16_t number) noexcept {
+  ds::Option<NumericAttachmentMarker> NumericAttachmentMarkers::closest(AttachmentMarkerScreen screen, std::uint16_t number) noexcept {
     NumericAttachmentMarkers scan{screen};
-    std::optional<NumericAttachmentMarker> best;
+    ds::Option<NumericAttachmentMarker> best;
     auto best_distance = std::numeric_limits<std::uint32_t>::max();
 
     while (const auto candidate = scan.next()) {
@@ -158,9 +159,9 @@ namespace telar::gui::features::terminal::attachments {
     return false;
   }
 
-  std::optional<std::uint16_t> NumericAttachmentMarkers::steps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept {
+  ds::Option<std::uint16_t> NumericAttachmentMarkers::steps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept {
     if (first > last || last > screen.columns || row >= screen.rows) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint16_t count = 0;
@@ -182,28 +183,28 @@ namespace telar::gui::features::terminal::attachments {
     return count;
   }
 
-  std::optional<NumericAttachmentMarker> NumericAttachmentMarkers::tail(AttachmentMarkerScreen screen, CellPosition start, CellPosition point) noexcept {
+  ds::Option<NumericAttachmentMarker> NumericAttachmentMarkers::tail(AttachmentMarkerScreen screen, CellPosition start, CellPosition point) noexcept {
     std::uint16_t number = 0;
 
     for (auto column = point.x; column < screen.columns; ++column) {
       const auto* const cell = screen.cell({.x = column, .y = point.y});
       if (cell == nullptr || cell->width == CellWidth::continuation || cell->length != 1) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto byte = cell->text[0];
       if (byte == ']') {
-        return column != point.x && number != 0 ? std::optional{NumericAttachmentMarker{.number = number, .start = start, .end = {.x = static_cast<std::uint16_t>(column + 1), .y = point.y}}} : std::nullopt;
+        return column != point.x && number != 0 ? ds::Option{NumericAttachmentMarker{.number = number, .start = start, .end = {.x = static_cast<std::uint16_t>(column + 1), .y = point.y}}} : ds::none;
       }
 
       if (byte < '0' || byte > '9' || number > (std::numeric_limits<std::uint16_t>::max() - (byte - '0')) / decimal_base) {
-        return std::nullopt;
+        return ds::none;
       }
 
       number = static_cast<std::uint16_t>((number * decimal_base) + byte - '0');
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool NumericAttachmentMarkers::blankTail(AttachmentMarkerScreen screen, CellPosition point) noexcept {
@@ -217,7 +218,7 @@ namespace telar::gui::features::terminal::attachments {
     return true;
   }
 
-  std::optional<CellPosition> NumericAttachmentMarkers::firstInk(AttachmentMarkerScreen screen, std::uint32_t row) noexcept {
+  ds::Option<CellPosition> NumericAttachmentMarkers::firstInk(AttachmentMarkerScreen screen, std::uint32_t row) noexcept {
     for (std::uint16_t column = 0; column < screen.columns; ++column) {
       const auto* const cell = screen.cell({.x = column, .y = row});
       if (cell != nullptr && !AttachmentMarkerScreen::blank(*cell)) {
@@ -225,10 +226,10 @@ namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<PathAttachmentMarker> PathAttachmentMarkers::find(AttachmentMarkerScreen screen, const AttachmentPathUuid& uuid) noexcept {
+  ds::Option<PathAttachmentMarker> PathAttachmentMarkers::find(AttachmentMarkerScreen screen, const AttachmentPathUuid& uuid) noexcept {
     Scan scan{screen};
 
     while (const auto point = scan.position()) {
@@ -240,7 +241,7 @@ namespace telar::gui::features::terminal::attachments {
       scan.step();
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::size_t PathAttachmentMarkers::collect(AttachmentMarkerScreen screen, std::span<PathAttachmentMarker> output) noexcept {
@@ -272,9 +273,9 @@ namespace telar::gui::features::terminal::attachments {
     return count;
   }
 
-  std::optional<std::uint16_t> PathAttachmentMarkers::cursorOnRow(AttachmentMarkerScreen screen, std::uint16_t row) noexcept {
+  ds::Option<std::uint16_t> PathAttachmentMarkers::cursorOnRow(AttachmentMarkerScreen screen, std::uint16_t row) noexcept {
     if (screen.cursor.visible) {
-      return screen.cursor.y == row ? std::optional{screen.cursor.x} : std::nullopt;
+      return screen.cursor.y == row ? ds::Option{screen.cursor.x} : ds::none;
     }
 
     for (std::uint16_t column = 0; column < screen.columns; ++column) {
@@ -283,7 +284,7 @@ namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   bool PathAttachmentMarkers::cursorAt(AttachmentMarkerScreen screen, CellPosition point) noexcept {
@@ -306,7 +307,7 @@ namespace telar::gui::features::terminal::attachments {
     return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z');
   }
 
-  std::optional<CellPosition> PathAttachmentMarkers::matchExtension(Scan scan) noexcept {
+  ds::Option<CellPosition> PathAttachmentMarkers::matchExtension(Scan scan) noexcept {
     for (const auto extension : extensions) {
       auto attempt = scan;
       bool matched = true;
@@ -320,19 +321,19 @@ namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<PathAttachmentMarker> PathAttachmentMarkers::parseHead(AttachmentMarkerScreen screen, CellPosition start) noexcept {
+  ds::Option<PathAttachmentMarker> PathAttachmentMarkers::parseHead(AttachmentMarkerScreen screen, CellPosition start) noexcept {
     if (start.y >= screen.rows || start.x >= screen.columns || screen.columns < 2) {
-      return std::nullopt;
+      return ds::none;
     }
 
     Scan scan{screen, start};
 
     for (const auto byte : prefix) {
       if (!scan.expect(static_cast<std::uint8_t>(byte))) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
@@ -342,13 +343,13 @@ namespace telar::gui::features::terminal::attachments {
       const auto point = scan.position();
       const auto* const cell = point ? screen.cell(*point) : nullptr;
       if (cell == nullptr || !single(*cell)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto byte = cell->text[0];
       const bool dash = std::ranges::find(dash_positions, index) != dash_positions.end();
       if ((dash && byte != '-') || (!dash && !hex(byte))) {
-        return std::nullopt;
+        return ds::none;
       }
 
       uuid[index] = byte;
@@ -356,22 +357,22 @@ namespace telar::gui::features::terminal::attachments {
     }
 
     if (!scan.expect('.')) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto end = matchExtension(scan);
     if (!end) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (end->x < screen.columns - 1) {
       const auto* const following = screen.cell(*end);
       if (following != nullptr && single(*following) && alphanumeric(following->text[0])) {
-        return std::nullopt;
+        return ds::none;
       }
     }
 
-    return PathAttachmentMarker{.uuid = uuid, .start = start, .end = *end, .cells = std::nullopt};
+    return PathAttachmentMarker{.uuid = uuid, .start = start, .end = *end, .cells = ds::none};
   }
 
   bool PathAttachmentMarkers::rowForceWrapped(AttachmentMarkerScreen screen, std::uint32_t row) noexcept {
@@ -387,7 +388,7 @@ namespace telar::gui::features::terminal::attachments {
 
   CellPosition PathAttachmentMarkers::pathStart(AttachmentMarkerScreen screen, CellPosition marker) noexcept {
     auto point = marker;
-    std::optional<CellPosition> slash;
+    ds::Option<CellPosition> slash;
 
     for (;;) {
       if (point.x == 0) {
@@ -420,12 +421,12 @@ namespace telar::gui::features::terminal::attachments {
       }
     }
 
-    return slash.value_or(marker);
+    return slash.valueOr(marker);
   }
 
-  std::optional<std::uint16_t> PathAttachmentMarkers::countCells(AttachmentMarkerScreen screen, CellPosition start, CellPosition end) noexcept {
+  ds::Option<std::uint16_t> PathAttachmentMarkers::countCells(AttachmentMarkerScreen screen, CellPosition start, CellPosition end) noexcept {
     if (screen.columns < 2 || start.y >= screen.rows || start.x >= screen.columns) {
-      return std::nullopt;
+      return ds::none;
     }
 
     Scan scan{screen, start};
@@ -439,12 +440,12 @@ namespace telar::gui::features::terminal::attachments {
       const auto point = scan.position();
       const auto* const value = point ? screen.cell(*point) : nullptr;
       if (value == nullptr) {
-        return std::nullopt;
+        return ds::none;
       }
 
       count = static_cast<std::uint16_t>(count + (value->width != CellWidth::continuation ? 1 : 0));
       if (count > maximum_cells) {
-        return std::nullopt;
+        return ds::none;
       }
 
       scan.step();
@@ -462,9 +463,9 @@ namespace telar::gui::features::terminal::attachments {
       : screen_(screen),
         point_(point) {}
 
-  std::optional<CellPosition> PathAttachmentMarkers::Scan::position() noexcept {
+  ds::Option<CellPosition> PathAttachmentMarkers::Scan::position() noexcept {
     if (screen_.columns < 2) {
-      return std::nullopt;
+      return ds::none;
     }
 
     if (point_.x >= screen_.columns - 1) {
@@ -472,7 +473,7 @@ namespace telar::gui::features::terminal::attachments {
       ++point_.y;
     }
 
-    return point_.y < screen_.rows ? std::optional{point_} : std::nullopt;
+    return point_.y < screen_.rows ? ds::Option{point_} : ds::none;
   }
 
   CellPosition PathAttachmentMarkers::Scan::rawPosition() const noexcept {
@@ -509,7 +510,7 @@ namespace telar::gui::features::terminal::attachments {
       return {};
     }
 
-    std::optional<AttachmentMarkerRemoval> removal;
+    ds::Option<AttachmentMarkerRemoval> removal;
 
     if (screen.cursor.y == marker->end.y && screen.cursor.x >= marker->end.x) {
       const auto steps = NumericAttachmentMarkers::steps(screen, static_cast<std::uint16_t>(marker->end.y), marker->end.x, screen.cursor.x);
@@ -524,10 +525,10 @@ namespace telar::gui::features::terminal::attachments {
     }
 
     if (removal && removal->steps > AttachmentLimits::maximum_marker_navigation_steps) {
-      return {.removal = std::nullopt, .limit = AttachmentMarkerReach::navigation, .requested = removal->steps};
+      return {.removal = ds::none, .limit = AttachmentMarkerReach::navigation, .requested = removal->steps};
     }
 
-    return {.removal = removal, .limit = std::nullopt, .requested = std::nullopt};
+    return {.removal = removal, .limit = ds::none, .requested = ds::none};
   }
 
   AttachmentMarkerPlan AttachmentMarkerPlanning::path(AttachmentMarkerScreen screen, const AttachmentPathUuid& uuid) noexcept {
@@ -537,29 +538,29 @@ namespace telar::gui::features::terminal::attachments {
     }
 
     if (!marker->cells) {
-      return {.removal = std::nullopt, .limit = AttachmentMarkerReach::path_cells, .requested = std::nullopt};
+      return {.removal = ds::none, .limit = AttachmentMarkerReach::path_cells, .requested = ds::none};
     }
 
     if (const auto cursor = PathAttachmentMarkers::cursorOnRow(screen, static_cast<std::uint16_t>(marker->end.y)); cursor && *cursor >= marker->end.x) {
       const auto steps = plainSteps(screen, static_cast<std::uint16_t>(marker->end.y), marker->end.x, *cursor);
       if (steps) {
-        return {.removal = AttachmentMarkerRemoval{.direction = AttachmentMarkerDirection::left, .steps = *steps, .deletion = AttachmentMarkerDeletion::backward, .deletions = *marker->cells}, .limit = std::nullopt, .requested = std::nullopt};
+        return {.removal = AttachmentMarkerRemoval{.direction = AttachmentMarkerDirection::left, .steps = *steps, .deletion = AttachmentMarkerDeletion::backward, .deletions = *marker->cells}, .limit = ds::none, .requested = ds::none};
       }
     }
 
     if (const auto cursor = PathAttachmentMarkers::cursorOnRow(screen, static_cast<std::uint16_t>(marker->start.y)); cursor && *cursor <= marker->start.x) {
       const auto steps = plainSteps(screen, static_cast<std::uint16_t>(marker->start.y), *cursor, marker->start.x);
       if (steps) {
-        return {.removal = AttachmentMarkerRemoval{.direction = AttachmentMarkerDirection::right, .steps = *steps, .deletion = AttachmentMarkerDeletion::forward, .deletions = *marker->cells}, .limit = std::nullopt, .requested = std::nullopt};
+        return {.removal = AttachmentMarkerRemoval{.direction = AttachmentMarkerDirection::right, .steps = *steps, .deletion = AttachmentMarkerDeletion::forward, .deletions = *marker->cells}, .limit = ds::none, .requested = ds::none};
       }
     }
 
     return {};
   }
 
-  std::optional<std::uint16_t> AttachmentMarkerPlanning::plainSteps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept {
+  ds::Option<std::uint16_t> AttachmentMarkerPlanning::plainSteps(AttachmentMarkerScreen screen, std::uint16_t row, std::uint16_t first, std::uint16_t last) noexcept {
     if (first > last || last > screen.columns || row >= screen.rows) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint16_t count = 0;

@@ -2,6 +2,7 @@ module telar.gui.features.terminal.graphics;
 
 import std;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -24,9 +25,9 @@ namespace telar::gui::features::terminal::graphics {
     return revision_;
   }
 
-  std::optional<std::uint64_t> GraphicsPauses::nextDeadline() const noexcept {
+  ds::Option<std::uint64_t> GraphicsPauses::nextDeadline() const noexcept {
     if (waiting_count_ == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     auto earliest = std::numeric_limits<std::uint64_t>::max();
@@ -158,22 +159,22 @@ namespace telar::gui::features::terminal::graphics {
     }
   }
 
-  std::optional<std::size_t> GraphicsPauses::find(std::uint64_t pane_id) const noexcept {
+  ds::Option<std::size_t> GraphicsPauses::find(std::uint64_t pane_id) const noexcept {
     for (std::size_t slot = 0; slot < count_; ++slot) {
       if (rows_[slot].pane_id == pane_id) {
         return slot;
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
   std::size_t GraphicsPauses::oldest() const noexcept {
     std::size_t found = 0;
 
     for (std::size_t slot = 1; slot < count_; ++slot) {
-      const bool resumed = rows_[slot].resumed_ns.has_value();
-      const bool current_resumed = rows_[found].resumed_ns.has_value();
+      const bool resumed = rows_[slot].resumed_ns.hasValue();
+      const bool current_resumed = rows_[found].resumed_ns.hasValue();
       if ((resumed && !current_resumed) || (resumed == current_resumed && rows_[slot].since_ns < rows_[found].since_ns)) {
         found = slot;
       }

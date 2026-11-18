@@ -9,6 +9,7 @@ import telar.sys.posix;
 
 import telar.base.memory.allocators;
 import telar.platform.process;
+import telar.base.ds;
 
 // What telar reads from a checkout without the native reader in telar.git: the files under
 // .git, HEAD and linked worktrees, and the git command run hardened against the repository.
@@ -19,9 +20,9 @@ export {
 
     class GitFiles {
     public:
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> join(std::string_view directory, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> resolve(std::string_view directory, std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
-      static tbc::view<std::optional<std::string_view>, tbc::lt::a> directory(std::string_view root, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> join(std::string_view directory, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> resolve(std::string_view directory, std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> directory(std::string_view root, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
     };
 
   }
@@ -33,7 +34,7 @@ export {
 
     class GitHead {
     public:
-      std::optional<std::string_view> read(std::string_view root) noexcept;
+      ds::Option<std::string_view> read(std::string_view root) noexcept;
       static std::string_view parse(std::string_view contents) noexcept;
 
     private:
@@ -54,7 +55,7 @@ export {
       std::size_t driver_count = 0;
       bool may_fetch = false;
 
-      static std::optional<GitRepositoryFacts> parse(std::string_view listing) noexcept;
+      static ds::Option<GitRepositoryFacts> parse(std::string_view listing) noexcept;
     };
 
     inline constexpr auto git_observation_options = std::to_array<std::string_view>({
@@ -172,7 +173,7 @@ export {
     private:
       // Overrides each filter driver the `config` listing names and returns whether the repository
       // may fetch lazily; nullopt when the listing cannot be read.
-      std::optional<bool> overrideFilters(int status, std::string_view listing);
+      ds::Option<bool> overrideFilters(int status, std::string_view listing);
 
       // `git`, the hardening options and overrides, then `arguments`, run in the repository.
       Command<Memory> commandFor(std::span<const std::string_view> arguments) const;
@@ -199,11 +200,11 @@ export {
         std::string_view branch;
       };
 
-      std::optional<Found> find(std::string_view directory) noexcept;
-      std::optional<std::string_view> mainBranch(std::string_view root) noexcept;
+      ds::Option<Found> find(std::string_view directory) noexcept;
+      ds::Option<std::string_view> mainBranch(std::string_view root) noexcept;
 
     private:
-      std::optional<std::string_view> linkedBranch(std::string_view root) noexcept;
+      ds::Option<std::string_view> linkedBranch(std::string_view root) noexcept;
 
       std::array<char, PATH_MAX> path_;
       std::array<char, 256> head_;

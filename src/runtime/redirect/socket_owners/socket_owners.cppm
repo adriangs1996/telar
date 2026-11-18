@@ -20,6 +20,7 @@ import telar.platform.fs;
 import telar.platform.primitives;
 import telar.vocabulary;
 import telar.runtime.redirect.direction;
+import telar.base.ds;
 
 #if defined(__APPLE__)
 
@@ -169,7 +170,7 @@ export {
           if (line.starts_with("Token")) {
             const auto colon = line.find(':');
             if (colon != std::string_view::npos) {
-              const auto token = parseExact<std::uint64_t>(trimText(line.substr(colon + 1), " \t\r")).value_or(0);
+              const auto token = parseExact<std::uint64_t>(trimText(line.substr(colon + 1), " \t\r")).valueOr(0);
               if (token != 0) {
                 return token;
               }
@@ -203,7 +204,7 @@ export {
       State& state_;
       const PfIdentity<Memory>& identity_;
       Loopback& loopback_;
-      std::optional<std::uint64_t> token_;
+      ds::Option<std::uint64_t> token_;
     };
 
   }
@@ -241,9 +242,9 @@ export {
 
       void validate();
 
-      std::optional<uid_t> peer(int descriptor);
+      ds::Option<uid_t> peer(int descriptor);
 
-      static std::optional<uid_t> decode(std::span<const Byte> bytes, const sockaddr_storage& local, const sockaddr_storage& peer);
+      static ds::Option<uid_t> decode(std::span<const Byte> bytes, const sockaddr_storage& local, const sockaddr_storage& peer);
 
     private:
       void refresh();
@@ -252,7 +253,7 @@ export {
 
       static constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;
       Memory& memory_;
-      std::optional<SensitiveAllocation<Memory>> snapshot_;
+      ds::Option<SensitiveAllocation<Memory>> snapshot_;
       std::size_t size_ = 0;
     };
 
@@ -275,7 +276,7 @@ export {
 
       bool matches(const Target& source, const Target& destination) const noexcept;
 
-      static std::optional<LinuxTcpSocket> parse(std::string_view line, int family) noexcept;
+      static ds::Option<LinuxTcpSocket> parse(std::string_view line, int family) noexcept;
 
     private:
       template <typename Integer>
@@ -365,7 +366,7 @@ export {
       static constexpr std::size_t maximum_descriptors = 4096;
 
       struct Result {
-        std::optional<ProcessIdentity> process;
+        ds::Option<ProcessIdentity> process;
         bool complete = true;
       };
 
@@ -445,7 +446,7 @@ export {
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
         bool accepted = false;
         bool incoming = false;
-        std::optional<RoutePath> bypass;
+        ds::Option<RoutePath> bypass;
       };
 
     public:
@@ -460,7 +461,7 @@ export {
       template <typename Session>
       TBC_GENERIC void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
         std::array<Byte, 65540> bytes;
-        auto packet = discovery_->receive(bytes);
+        auto packet = discovery_.getMut().receive(bytes);
         if (packet.empty()) {
           return;
         }
@@ -501,7 +502,7 @@ export {
           Flow flow{.key = *key, .incoming = incoming};
 
           if (owners_) {
-            const auto owner = owners_->find(*key);
+            const auto owner = owners_.getMut().find(*key);
             if (!owner.process) {
               if (!metadata || metadata->interface_index == 0) {
                 throw SystemError{"Original process route is unavailable", ENXIO};
@@ -520,7 +521,7 @@ export {
           std::fprintf(stderr, "telar redirect: discovered TCP flow for destination port %u\n", key->destination.port);
         }
 
-        discovery_->inject(packet);
+        discovery_.getMut().inject(packet);
       }
 
       static void readAll(int socket, std::span<Byte> bytes);
@@ -536,15 +537,15 @@ export {
       static constexpr std::size_t pending_offset = 3 + Target::maximum_targets;
       Memory& memory_;
       String<Memory> endpoint_;
-      std::array<std::optional<Listener>, Target::maximum_targets> listeners_;
+      std::array<ds::Option<Listener>, Target::maximum_targets> listeners_;
       std::array<Mapping, Target::maximum_targets> mappings_;
-      std::array<std::optional<Pending>, maximum_pending> pending_;
-      std::array<std::optional<Flow>, maximum_flows> flows_;
-      std::optional<Discovery> discovery_;
-      std::optional<NatLookup> nat_;
-      std::optional<PacketLog> packet_log_;
-      std::optional<SocketOwners> owners_;
-      std::optional<SocketAccounts> accounts_;
+      std::array<ds::Option<Pending>, maximum_pending> pending_;
+      std::array<ds::Option<Flow>, maximum_flows> flows_;
+      ds::Option<Discovery> discovery_;
+      ds::Option<NatLookup> nat_;
+      ds::Option<PacketLog> packet_log_;
+      ds::Option<SocketOwners> owners_;
+      ds::Option<SocketAccounts> accounts_;
       std::array<ProcessIdentity, SocketOwners::maximum_processes> selected_processes_;
       std::size_t process_count_ = 0;
       std::size_t count_ = 0;

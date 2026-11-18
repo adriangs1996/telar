@@ -35,7 +35,7 @@ namespace telar::gui::qt {
   }
 
   bool PathPickerController::open() {
-    auto& session = store_.session();
+    auto& session = store_.sessionMut();
     if (!application::paths::open(session)) {
       return false;
     }
@@ -69,7 +69,7 @@ namespace telar::gui::qt {
     const auto query = query_.toUtf8();
 
     interact([&] {
-      application::paths::search(store_.session(), {query.constData(), static_cast<std::size_t>(query.size())});
+      application::paths::search(store_.sessionMut(), {query.constData(), static_cast<std::size_t>(query.size())});
       refresh();
     });
 
@@ -80,7 +80,7 @@ namespace telar::gui::qt {
 
   void PathPickerController::reportQueryLimit(qulonglong requested_bytes) {
     if (isOpen() && requested_bytes > application::paths::PathPickerLimits::query_bytes) {
-      application::notifications::reportLimit(store_.session(), {.name = "prompt.path_query_bytes", .noun = "bytes", .value = application::paths::PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
+      application::notifications::reportLimit(store_.sessionMut(), {.name = "prompt.path_query_bytes", .noun = "bytes", .value = application::paths::PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
       store_.commit();
     }
   }
@@ -103,7 +103,7 @@ namespace telar::gui::qt {
 
   void PathPickerController::descend() {
     interact([&] {
-      if (isOpen() && application::paths::descend(store_.session(), selection_)) {
+      if (isOpen() && application::paths::descend(store_.sessionMut(), selection_)) {
         query_.clear();
         selection_ = 0;
         refresh();
@@ -113,7 +113,7 @@ namespace telar::gui::qt {
 
   void PathPickerController::ascend() {
     interact([&] {
-      if (isOpen() && application::paths::ascend(store_.session())) {
+      if (isOpen() && application::paths::ascend(store_.sessionMut())) {
         query_.clear();
         selection_ = 0;
         refresh();
@@ -127,7 +127,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      if (application::paths::insert(store_.session(), selection_, absolute)) {
+      if (application::paths::insert(store_.sessionMut(), selection_, absolute)) {
         emit closeRequested();
       }
 

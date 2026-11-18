@@ -72,9 +72,9 @@ namespace telar::gui::test {
     }
 
     static Machines::Slot temporary(qt::ApplicationController& application) {
-      const auto slot = application.store_.machines().add({.label = "temporary", .destination = "window@fixture"});
+      const auto slot = application.store_.machinesMut().add({.label = "temporary", .destination = "window@fixture"});
 
-      application.store_.machines().pin(slot);
+      application.store_.machinesMut().pin(slot);
       application.roster_.admit(slot);
 
       return slot;
@@ -338,7 +338,7 @@ namespace {
       QVERIFY(openLocalPane(fixture));
       const auto opening = fixture.runtime->last<OpenPane>();
 
-      QVERIFY(opening.launch.has_value());
+      QVERIFY(opening.launch.hasValue());
       QCOMPARE(opening.launch->arguments.size(), static_cast<std::size_t>(reference_argument_limit));
       for (const auto argument : opening.launch->arguments) {
         QCOMPARE(argument, std::string_view{"argument"});
@@ -415,7 +415,7 @@ namespace {
       QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
       const auto& machines = MachineProfileWindow::machines(application);
 
-      QTRY_VERIFY(machines.findDestination("window-added@fixture").has_value());
+      QTRY_VERIFY(machines.findDestination("window-added@fixture").hasValue());
       const auto slot = requireValue(machines.findDestination("window-added@fixture"), "Expected newly saved destination");
 
       application.commands()->execute(window_actions::Action::machine_picker);

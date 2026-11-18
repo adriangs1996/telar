@@ -42,6 +42,7 @@ import telar.runtime.http2.direction_observer;
 import telar.runtime.http2.frame_reader;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.http2.tests.http2_fixture;
+import telar.base.ds;
 
 namespace {
 
@@ -83,7 +84,7 @@ namespace {
       broker.cancel(id);
     }
 
-    std::optional<Time> deadline(std::uint64_t id) noexcept override {
+    ds::Option<Time> deadline(std::uint64_t id) noexcept override {
       return broker.deadline(id);
     }
 
@@ -130,7 +131,7 @@ namespace {
       const std::array<Byte, 7> replacement{'c', 'h', 0, 'n', 'g', 'e', 'd'};
 
       check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked && stream.output.empty());
-      check(gate.deadline().has_value());
+      check(gate.deadline().hasValue());
       control.broker.decide(control.ticket, verdict, verdict == Verdict::replace ? std::span<const Byte>{replacement} : std::span<const Byte>{});
       StreamResult result{StreamResult::State::blocked};
 

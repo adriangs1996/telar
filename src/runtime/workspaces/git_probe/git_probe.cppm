@@ -5,6 +5,7 @@ import std;
 import telar.runtime.platform.git_status;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: workspaces/git_probe.cppm
 export {
@@ -18,7 +19,7 @@ export {
     struct WorkspaceGitResult {
       std::uint64_t identity = 0;
       FixedText<200> branch{};
-      std::optional<bool> dirty{};
+      ds::Option<bool> dirty{};
       bool present = false;
       bool timed_out = false;
     };

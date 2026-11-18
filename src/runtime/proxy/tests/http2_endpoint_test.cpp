@@ -23,6 +23,7 @@ import telar.vocabulary;
 import telar.runtime.http.message;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.proxy.http2_capture_streams;
+import telar.base.ds;
 
 namespace {
 
@@ -68,7 +69,7 @@ namespace {
         broker.cancel(ticket);
       }
 
-      std::optional<FlowControl::Time> httpDeadline(std::uint64_t ticket) noexcept override {
+      ds::Option<FlowControl::Time> httpDeadline(std::uint64_t ticket) noexcept override {
         return broker.deadline(ticket);
       }
 
@@ -115,7 +116,7 @@ namespace {
 
         SensitiveAllocation output{memory, HttpMessageLimits::message_bytes};
 
-        broker.decide(request.ticket, Verdict::replace, HttpMessageCodec::encode(output.bytes(), message));
+        broker.decide(request.ticket, Verdict::replace, HttpMessageCodec::encode(output.bytesMut(), message));
       }
     };
 
@@ -545,7 +546,7 @@ namespace {
 
         const auto pending = fixture.owner.requests.front().ticket;
 
-        check(fixture.connection.deadline().has_value());
+        check(fixture.connection.deadline().hasValue());
         std::this_thread::sleep_for(std::chrono::milliseconds{60});
         fixture.until([&] {
           fixture.automatic(0, false);
@@ -579,14 +580,14 @@ namespace {
     using Fields = Peer::Fields;
 
     // The origin's stream for the request whose path ends with `suffix`, once the request is complete.
-    auto originStream(Fixture& fixture, std::string_view suffix) -> std::optional<std::int32_t> {
+    auto originStream(Fixture& fixture, std::string_view suffix) -> ds::Option<std::int32_t> {
       for (const auto& [id, stream] : fixture.server.streams) {
         if (stream.complete && stream.field(":path").ends_with(suffix)) {
           return id;
         }
       }
 
-      return std::nullopt;
+      return ds::none;
     }
 
     bool settled(const Peer::Stream& stream) {
@@ -630,7 +631,7 @@ namespace {
 
           fixture.until([&] {
             fixture.automatic(0, false);
-            return originStream(fixture, "/events").has_value();
+            return originStream(fixture, "/events").hasValue();
           });
 
           fixture.server.respond(*originStream(fixture, "/events"), Fields{{":status", "200"}, {"content-type", "text/event-stream"}}, "data: x\n\n");
@@ -687,7 +688,7 @@ namespace {
 
       fixture.until([&] {
         fixture.automatic(0, false);
-        return originStream(fixture, "/status").has_value();
+        return originStream(fixture, "/status").hasValue();
       });
 
       fixture.server.respond(*originStream(fixture, "/status"), Fields{{":status", "600"}}, "out of range");
@@ -747,7 +748,7 @@ namespace {
 
       fixture.until([&] {
         fixture.automatic(0, false);
-        return originStream(fixture, "/grpc").has_value();
+        return originStream(fixture, "/grpc").hasValue();
       });
 
       fixture.server.respond(*originStream(fixture, "/grpc"), Fields{{":status", "200"}, {"content-type", "application/grpc"}}, "reply", Fields{{"grpc-status", "0"}, {"grpc-message", "done"}});
@@ -800,7 +801,7 @@ namespace {
 
         fixture.until([&] {
           fixture.automatic(0, false);
-          return originStream(fixture, "/hints").has_value();
+          return originStream(fixture, "/hints").hasValue();
         });
 
         const auto origin = *originStream(fixture, "/hints");
@@ -826,7 +827,7 @@ namespace {
 
         fixture.until([&] {
           fixture.automatic(0, false);
-          return originStream(fixture, "/chatty").has_value();
+          return originStream(fixture, "/chatty").hasValue();
         });
 
         const auto origin = *originStream(fixture, "/chatty");
@@ -874,7 +875,7 @@ namespace {
 
       fixture.until([&] {
         fixture.automatic(0, false);
-        return originStream(fixture, "/pending").has_value();
+        return originStream(fixture, "/pending").hasValue();
       });
 
       fixture.origin.ended = true;

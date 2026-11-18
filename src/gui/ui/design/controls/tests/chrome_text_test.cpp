@@ -340,7 +340,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && label.available(), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(catalog.collection()->count > 0, wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!catalog.busy(), wait_ms);
-      QVERIFY(ResidentFonts::shared(catalog.collection())->source("↵", fonts::FontRole::primary).has_value());
+      QVERIFY(ResidentFonts::shared(catalog.collection())->source("↵", fonts::FontRole::primary).hasValue());
       QVERIFY(test::waitForSynchronizedFrame(window, wait_ms));
       QVERIFY(label.available());
       QVERIFY(initial_width > 0);
@@ -377,7 +377,7 @@ namespace {
       auto& catalog = WindowFontCatalog::forWindow(window);
 
       catalog.configure(configuration);
-      QVERIFY(ResidentFonts::shared(catalog.collection())->source("↵", fonts::FontRole::primary).has_value());
+      QVERIFY(ResidentFonts::shared(catalog.collection())->source("↵", fonts::FontRole::primary).hasValue());
       const auto primary = ResidentFonts::resolveSource(QStringLiteral("JetBrains Mono"), {});
       const auto original = catalog.collectionFor(primary);
 
@@ -407,7 +407,7 @@ namespace {
       QVERIFY(updated != original);
       QCOMPARE(updated->primary, primary);
       QCOMPARE(catalog.collectionFor(primary), updated);
-      QVERIFY(ResidentFonts::shared(updated)->source("↵", fonts::FontRole::primary).has_value());
+      QVERIFY(ResidentFonts::shared(updated)->source("↵", fonts::FontRole::primary).hasValue());
       QVERIFY(!ResidentFonts::shared(original)->source("↵", fonts::FontRole::primary));
       QVERIFY(test::waitForSynchronizedFrame(window, wait_ms));
       QVERIFY(label.available());

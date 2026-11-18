@@ -5,6 +5,7 @@ module telar.runtime.tls.interception;
 
 import telar.sys.socket;
 import telar.tls;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -469,8 +470,8 @@ namespace telar::runtime {
     return state_ == State::origin ? origin_waiting_ : StreamReadiness::none;
   }
 
-  std::optional<std::chrono::steady_clock::time_point> TlsSession::deadline() const noexcept {
-    return state_ == State::offer && offer_after_ != std::chrono::steady_clock::time_point{} ? std::optional{offer_after_} : std::nullopt;
+  ds::Option<std::chrono::steady_clock::time_point> TlsSession::deadline() const noexcept {
+    return state_ == State::offer && offer_after_ != std::chrono::steady_clock::time_point{} ? ds::Option{offer_after_} : ds::none;
   }
 
   HttpProtocol TlsSession::protocol() const noexcept {

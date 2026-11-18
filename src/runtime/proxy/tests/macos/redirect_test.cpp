@@ -146,6 +146,7 @@ import telar.runtime.traffic.control_protocol;
 import telar.runtime.http.message;
 import telar.runtime.http2.direction_observer;
 import telar.runtime.http2.frame_reader;
+import telar.base.ds;
 
 namespace {
 
@@ -493,10 +494,10 @@ namespace {
   }
 
   struct FakeState {
-    std::optional<std::uint64_t> token;
+    ds::Option<std::uint64_t> token;
     bool fail_clear = false;
 
-    std::optional<std::uint64_t> load() {
+    ds::Option<std::uint64_t> load() {
       return token;
     }
 
@@ -699,11 +700,11 @@ namespace {
   }
 
   struct LeaseStore {
-    std::optional<std::string> content;
+    ds::Option<std::string> content;
     bool fail_save = false;
     bool fail_clear = false;
 
-    std::optional<std::string> load() {
+    ds::Option<std::string> load() {
       return content;
     }
 
@@ -765,11 +766,11 @@ namespace {
       redir::LoopbackLeases leases{memory};
 
       leases.acquire(store, interface, first);
-      check(!interface.skip && store.content.has_value());
+      check(!interface.skip && store.content.hasValue());
       leases.acquire(store, interface, first);
       leases.acquire(store, interface, second);
       leases.release(store, interface, first);
-      check(!interface.skip && store.content.has_value());
+      check(!interface.skip && store.content.hasValue());
       // A fresh object represents recovery in another helper after a crash.
       redir::LoopbackLeases recovered{memory};
 
@@ -844,7 +845,7 @@ namespace {
     check(options.intercept_hosts.append("*"));
     options.intercept_hosts.finish();
     const auto secret = ProxySecret::generate();
-    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
 
     {
       redir::Ingress<decltype(service), SameUser> ingress{path, service};
@@ -945,7 +946,7 @@ namespace {
     check(options.intercept_hosts.append("*"));
     options.intercept_hosts.finish();
     const auto secret = ProxySecret::generate();
-    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
     TcpPair downstream;
     TcpPair upstream;
 
@@ -1026,8 +1027,8 @@ namespace {
 
     void cancel(std::uint64_t) noexcept override {}
 
-    std::optional<Time> deadline(std::uint64_t) noexcept override {
-      return std::nullopt;
+    ds::Option<Time> deadline(std::uint64_t) noexcept override {
+      return ds::none;
     }
 
     int descriptor() const noexcept override {
@@ -1070,7 +1071,7 @@ namespace {
         message.target = "/edited-tls";
       }
 
-      size_ = HttpMessageCodec::encode(reply_.bytes(), message).size();
+      size_ = HttpMessageCodec::encode(reply_.bytesMut(), message).size();
       return calls.fetch_add(1, std::memory_order_relaxed) + 1;
     }
 
@@ -1082,7 +1083,7 @@ namespace {
 
     void cancelHttp(std::uint64_t) noexcept override {}
 
-    std::optional<Time> httpDeadline(std::uint64_t) noexcept override {
+    ds::Option<Time> httpDeadline(std::uint64_t) noexcept override {
       return std::chrono::steady_clock::now() + std::chrono::seconds{5};
     }
 
@@ -1209,15 +1210,15 @@ namespace {
     check(options.intercept_hosts.append(excluded ? "selected.other.test" : hostname));
     options.intercept_hosts.finish();
     const auto secret = ProxySecret::generate();
-    std::optional<TlsHttpOwner> owner;
+    ds::Option<TlsHttpOwner> owner;
     TlsFlowObserver observer;
 
     if (edit) {
       owner.emplace(memory);
     }
 
-    auto& flows = owner ? static_cast<TlsFlowObserver&>(*owner) : observer;
-    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}), &flows};
+    auto& flows = owner ? static_cast<TlsFlowObserver&>(owner.getMut()) : observer;
+    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {}), &flows};
     TcpPair downstream{numeric_ipv6};
     TcpPair upstream{numeric_ipv6};
 

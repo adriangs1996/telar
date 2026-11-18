@@ -5,6 +5,7 @@ import telar.native.zlib;
 import telar.sys.posix;
 import telar.base.text;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace telar::git {
 
@@ -212,10 +213,10 @@ namespace telar::git {
       return written == target_size;
     }
 
-    std::optional<ObjectId> headerId(std::string_view& content, std::string_view label, ObjectFormat format) noexcept {
+    ds::Option<ObjectId> headerId(std::string_view& content, std::string_view label, ObjectFormat format) noexcept {
       const auto digits = 2 * hashSize(format);
       if (!content.starts_with(label) || content.size() < label.size() + digits + 1 || content[label.size() + digits] != '\n') {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto id = ObjectId::fromHex(content.substr(label.size(), digits), format);
@@ -575,7 +576,7 @@ namespace telar::git {
     return std::memcmp(pack_header.data(), "PACK", 4) == 0 && (version == 2 || version == 3) && loadBig32(pack_header.data() + 8) == pack.count;
   }
 
-  std::optional<std::uint32_t> ObjectDatabase::findInPack(const Pack& pack, const ObjectId& id) noexcept {
+  ds::Option<std::uint32_t> ObjectDatabase::findInPack(const Pack& pack, const ObjectId& id) noexcept {
     const auto hash_size = std::size_t{id.size};
     const auto first = id.bytes[0];
     std::uint32_t low = first == 0 ? 0 : pack.fanout[first - 1];
@@ -586,7 +587,7 @@ namespace telar::git {
       const auto middle = low + (high - low) / 2;
       std::array<std::uint8_t, maximum_hash_size> name;
       if (!readAt(pack.index.get(), name.data(), hash_size, pack_index_header + std::uint64_t{middle} * hash_size)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       const auto order = compareBytes(key, {name.data(), hash_size});
@@ -602,12 +603,12 @@ namespace telar::git {
     }
 
     if (high <= low) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto count = std::size_t{high - low};
     if (!readAt(pack.index.get(), block_.data(), count * hash_size, pack_index_header + std::uint64_t{low} * hash_size)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::size_t begin = 0;
@@ -627,29 +628,29 @@ namespace telar::git {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<std::uint64_t> ObjectDatabase::packOffset(const Pack& pack, std::uint32_t position) noexcept {
+  ds::Option<std::uint64_t> ObjectDatabase::packOffset(const Pack& pack, std::uint32_t position) noexcept {
     const auto hash_size = hashSize(format_);
     const auto offsets = pack_index_header + std::uint64_t{pack.count} * (hash_size + 4);
     std::array<std::uint8_t, 8> bytes;
     if (!readAt(pack.index.get(), bytes.data(), 4, offsets + 4 * std::uint64_t{position})) {
-      return std::nullopt;
+      return ds::none;
     }
 
     std::uint64_t offset = loadBig32(bytes.data());
     if ((offset & 0x80000000u) != 0) {
       const auto large = offset & 0x7fffffffu;
       if (large >= pack.large_offsets || !readAt(pack.index.get(), bytes.data(), 8, offsets + 4 * std::uint64_t{pack.count} + 8 * large)) {
-        return std::nullopt;
+        return ds::none;
       }
 
       offset = loadBig64(bytes.data());
     }
 
     if (offset < 12 || offset >= pack.data_size - hash_size) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return offset;
@@ -1029,10 +1030,10 @@ namespace telar::git {
     return layers_.empty();
   }
 
-  std::optional<std::uint32_t> CommitGraph::find(const ObjectId& id) const noexcept {
+  ds::Option<std::uint32_t> CommitGraph::find(const ObjectId& id) const noexcept {
     const auto hash_size = hashSize(format_);
     if (id.size != hash_size) {
-      return std::nullopt;
+      return ds::none;
     }
 
     for (const auto& layer : layers_) {
@@ -1044,7 +1045,7 @@ namespace telar::git {
         const auto middle = low + (high - low) / 2;
         std::array<std::uint8_t, maximum_hash_size> name;
         if (!readAt(layer.file.get(), name.data(), hash_size, layer.names + std::uint64_t{middle} * hash_size)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         const auto order = compareBytes(id.view(), {name.data(), hash_size});
@@ -1060,26 +1061,26 @@ namespace telar::git {
       }
     }
 
-    return std::nullopt;
+    return ds::none;
   }
 
-  std::optional<ObjectId> CommitGraph::id(std::uint32_t position) const noexcept {
+  ds::Option<ObjectId> CommitGraph::id(std::uint32_t position) const noexcept {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
     std::array<std::uint8_t, maximum_hash_size> name;
     if (layer == nullptr || !readAt(layer->file.get(), name.data(), hash_size, layer->names + std::uint64_t{position - layer->base} * hash_size)) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return ObjectId::fromBytes({name.data(), hash_size});
   }
 
-  std::optional<CommitGraph::Commit> CommitGraph::commit(std::uint32_t position) const noexcept {
+  ds::Option<CommitGraph::Commit> CommitGraph::commit(std::uint32_t position) const noexcept {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
     std::array<std::uint8_t, maximum_hash_size + 16> record;
     if (layer == nullptr || !readAt(layer->file.get(), record.data(), hash_size + 16, layer->commits + std::uint64_t{position - layer->base} * (hash_size + 16))) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto upper = loadBig32(record.data() + hash_size + 8);
@@ -1091,7 +1092,7 @@ namespace telar::git {
         .layer = layer,
     };
     if (commit.generation == 0) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return commit;

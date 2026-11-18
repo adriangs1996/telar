@@ -33,7 +33,7 @@ namespace {
   std::string query(Terminal& terminal, std::string_view header, std::string_view path) {
     std::string payload((path.size() + 2) / 3 * 4, '\0');
 
-    check(base64::encode(bytes(path), payload).has_value());
+    check(base64::encode(bytes(path), payload).hasValue());
     return reply(terminal, header, payload);
   }
 

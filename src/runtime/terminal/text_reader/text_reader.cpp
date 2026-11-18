@@ -10,6 +10,7 @@ import telar.runtime.terminal.grid;
 import telar.render.document;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -61,7 +62,7 @@ namespace telar::runtime {
     return value;
   }
 
-  std::optional<std::uint16_t> TextMetadataCapture::intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity) {
+  ds::Option<std::uint16_t> TextMetadataCapture::intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity) {
     auto slot = hash(identity) % table.slots.size();
 
     while (table.slots[slot] != 0) {
@@ -75,7 +76,7 @@ namespace telar::runtime {
 
     if (links_.size() == maximum_links || identity.uri.size() > maximum_uri_length || identity.explicit_id.size() > maximum_uri_length || identity.uri.size() > maximum_uri_bytes - uris_.size()) {
       status_ = MetadataStatus::partial;
-      return std::nullopt;
+      return ds::none;
     }
 
     const auto index = static_cast<std::uint16_t>(links_.size());
@@ -243,7 +244,7 @@ namespace telar::runtime {
     return {cwd_.data(), cwd_length_};
   }
 
-  void TerminalEffects::setProgress(PaneProgressState state, std::optional<Byte> percent) noexcept {
+  void TerminalEffects::setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept {
     if (state == progress_state && percent == progress_percent) {
       return;
     }
@@ -743,7 +744,7 @@ namespace telar::runtime {
     force_ = true;
   }
 
-  void Terminal::configureCursorColor(std::optional<std::array<Byte, 3>> color) {
+  void Terminal::configureCursorColor(ds::Option<std::array<Byte, 3>> color) {
     const GhosttyColorRgb rgb = color ? GhosttyColorRgb{(*color)[0], (*color)[1], (*color)[2]} : GhosttyColorRgb{};
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, color ? &rgb : nullptr));
@@ -1021,7 +1022,7 @@ namespace telar::runtime {
     }
 
     while (auto zone = control_.takeZone()) {
-      effects.keepInline(std::move(zone->bytes), std::move(zone->first), std::move(zone->end), zone->end_inclusive);
+      effects.keepInline(std::move(zone.getMut().bytes), std::move(zone.getMut().first), std::move(zone.getMut().end), zone->end_inclusive);
     }
 
     if (media != nullptr && consumed != 0) {
@@ -1072,7 +1073,7 @@ namespace telar::runtime {
       return;
     }
 
-    const auto percent = report->progress >= 0 ? std::optional<Byte>{static_cast<Byte>(report->progress)} : std::nullopt;
+    const auto percent = report->progress >= 0 ? ds::Option<Byte>{static_cast<Byte>(report->progress)} : ds::none;
 
     static_cast<Terminal*>(context)->effects.setProgress(static_cast<PaneProgressState>(report->state), percent);
   }
@@ -1315,7 +1316,7 @@ namespace telar::runtime {
     scrollback_origin_row_ = *row;
   }
 
-  std::optional<std::uint32_t> Terminal::scrollbackOriginRow() const {
+  ds::Option<std::uint32_t> Terminal::scrollbackOriginRow() const {
     return scrollback_origin_.row(terminal_.get());
   }
 
@@ -1496,7 +1497,7 @@ namespace telar::runtime {
       return;
     }
 
-    const auto bytes = storage_.bytes();
+    const auto bytes = storage_.bytesMut();
 
     std::rotate(bytes.begin(), bytes.begin() + position_, bytes.end());
     const auto newline = std::find(bytes.begin(), bytes.end(), '\n');
@@ -1526,7 +1527,7 @@ namespace telar::runtime {
 
       const auto copied = std::min(count, self.storage_.bytes().size() - self.position_);
 
-      std::copy_n(bytes, copied, self.storage_.bytes().begin() + self.position_);
+      std::copy_n(bytes, copied, self.storage_.bytesMut().begin() + self.position_);
       bytes += copied;
       count -= copied;
       self.position_ += copied;

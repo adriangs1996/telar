@@ -15,6 +15,7 @@ import telar.platform.primitives;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
+import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
@@ -200,7 +201,7 @@ namespace telar::runtime::plugins {
     return "";
   }
 
-  void LuaExchange::pushHalf(lua_State* state, const std::optional<HalfView>& half, bool traffic) {
+  void LuaExchange::pushHalf(lua_State* state, const ds::Option<HalfView>& half, bool traffic) {
     if (!half) {
       lua_pushnil(state);
       return;
@@ -453,7 +454,7 @@ namespace telar::runtime::plugins {
     auto request = control::Protocol::action(options.field("action").string());
     if (request.recording) {
       options.onlyFields({"action", "id", "cursor", "max_bytes", "max_events", "max_age_ms", "limit", "events", "filter", "host"});
-      auto& recording = *request.recording;
+      auto& recording = request.recording.getMut();
 
       recording.id = identity(options.field("id"));
       recording.cursor = identity(options.field("cursor"));
@@ -696,7 +697,7 @@ namespace telar::runtime::plugins {
       lua_call(state, 2, 1);
       LuaEffects reader{state};
 
-      effect_bytes_ = Protocol::encodeEffects(effects_.bytes(), event.event_id, reader.read(-1)).size();
+      effect_bytes_ = Protocol::encodeEffects(effects_.bytesMut(), event.event_id, reader.read(-1)).size();
       return;
     }
 
@@ -713,7 +714,7 @@ namespace telar::runtime::plugins {
     if (stage == TrafficStage::observe) {
       LuaEffects reader{state};
 
-      effect_bytes_ = Protocol::encodeEffects(effects_.bytes(), event.event_id, reader.read(-1)).size();
+      effect_bytes_ = Protocol::encodeEffects(effects_.bytesMut(), event.event_id, reader.read(-1)).size();
     }
   }
 
@@ -826,7 +827,7 @@ namespace telar::runtime::plugins {
       throw lua::Error{"Traffic control request limit reached"};
     }
 
-    const auto encoded = traffic::control::Protocol::encode(scratch_.bytes(), request);
+    const auto encoded = traffic::control::Protocol::encode(scratch_.bytesMut(), request);
     TrafficRegistration registration;
 
     registration.stage = TrafficStage::control;
@@ -965,7 +966,7 @@ namespace telar::runtime::plugins {
 
     const lua::Value ticket_value{state, 2, "Interception ticket"};
     const auto text = ticket_value.string();
-    const auto ticket = parseExact<std::uint64_t>(text).value_or(0);
+    const auto ticket = parseExact<std::uint64_t>(text).valueOr(0);
     if (ticket == 0) {
       throw lua::Error{"Invalid interception ticket"};
     }
@@ -985,8 +986,8 @@ namespace telar::runtime::plugins {
       decision.onlyFields({"action", "message"});
       const auto message = LuaTrafficValue::message(decision.field("message"));
       constexpr auto header_bytes = 2 * sizeof(Byte) + sizeof(std::uint64_t) + sizeof(std::uint32_t);
-      const auto payload = HttpMessageCodec::encode(scratch_.bytes().subspan(header_bytes), message);
-      FrameWriter writer{scratch_.bytes().first(header_bytes)};
+      const auto payload = HttpMessageCodec::encode(scratch_.bytesMut().subspan(header_bytes), message);
+      FrameWriter writer{scratch_.bytesMut().first(header_bytes)};
 
       writer.tag(traffic::InterceptionCodec::Command::decision);
       writer.integer(ticket);
@@ -1000,7 +1001,7 @@ namespace telar::runtime::plugins {
         throw lua::Error{"Stream replacement exceeds its bound"};
       }
 
-      encoded = traffic::InterceptionCodec::decision(scratch_.bytes(), ticket, verdict, {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
+      encoded = traffic::InterceptionCodec::decision(scratch_.bytesMut(), ticket, verdict, {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
     }
 
     if (decision_count_ == queued_.size()) {
@@ -1047,7 +1048,7 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Traffic worker is not configured"};
     }
 
-    return traffic_->finish(0, output);
+    return traffic_.getMut().finish(0, output);
   }
 
   tbc::view<std::span<const Byte>, tbc::lt::a> Host::invokeTraffic(const TrafficEvent& event, tbc::view<std::span<Byte>, tbc::lt::a> output) {
@@ -1057,7 +1058,7 @@ namespace telar::runtime::plugins {
 
     lua_settop(vm_.state(), 0);
     vm_.resetBudget();
-    traffic_->begin();
+    traffic_.getMut().begin();
     TrafficInvocation invocation{*this, event};
 
     try {
@@ -1067,7 +1068,7 @@ namespace telar::runtime::plugins {
       return Protocol::encodeError(output, event.event_id, "unknown Lua error");
     }
 
-    return traffic_->finish(event.event_id, output);
+    return traffic_.getMut().finish(event.event_id, output);
   }
 
   tbc::view<std::span<const Byte>, tbc::lt::a> Host::invoke(const ExchangeView& exchange, tbc::view<std::span<Byte>, tbc::lt::a> output) {
@@ -1103,7 +1104,7 @@ namespace telar::runtime::plugins {
     std::array<char, 1024> error{};
 
     try {
-      invocation.host.traffic_->invoke(state, event);
+      invocation.host.traffic_.getMut().invoke(state, event);
       return 0;
     } catch (const std::exception& failure) {
       std::snprintf(error.data(), error.size(), "%s", failure.what());
@@ -1135,7 +1136,7 @@ namespace telar::runtime::plugins {
       lua::JsonDecoder<ErasingMemory>::install(state, host.erased_);
       host.modules_.emplace(state, host.package_root_.view());
       if (host.traffic_) {
-        host.traffic_->install(state);
+        host.traffic_.getMut().install(state);
       }
 
       return 0;
@@ -1210,7 +1211,7 @@ namespace telar::runtime::plugins {
   void runWorker(Memory& memory, const char* entry_path, bool traffic) {
     PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
     FrameChannel channel{stream};
-    std::optional<ServiceSpec> specification;
+    ds::Option<ServiceSpec> specification;
 
     if (traffic) {
       const auto frame = channel.receive(memory, 4096);
@@ -1225,7 +1226,7 @@ namespace telar::runtime::plugins {
     SensitiveAllocation output{memory, traffic ? TrafficLimits::reply_bytes : Limits::effect_bytes};
 
     if (traffic) {
-      channel.send(host.trafficSetup(output.bytes()));
+      channel.send(host.trafficSetup(output.bytesMut()));
     }
 
     while (auto frame = channel.receive(memory, Limits::frame_bytes)) {
@@ -1233,13 +1234,13 @@ namespace telar::runtime::plugins {
       std::span<const Byte> encoded;
 
       if (traffic && (bytes.front() == static_cast<Byte>(FrameKind::traffic_event) || bytes.front() == static_cast<Byte>(FrameKind::traffic_control_event))) {
-        encoded = host.invokeTraffic(TrafficProtocol::event(bytes), output.bytes());
+        encoded = host.invokeTraffic(TrafficProtocol::event(bytes), output.bytesMut());
       } else {
-        encoded = host.invoke(Protocol::decodeExchange(bytes), output.bytes().first(Limits::effect_bytes));
+        encoded = host.invoke(Protocol::decodeExchange(bytes), output.bytesMut().first(Limits::effect_bytes));
       }
 
       channel.send(encoded);
-      eraseSensitive(output.bytes().data(), encoded.size());
+      eraseSensitive(output.bytesMut().data(), encoded.size());
     }
   }
 

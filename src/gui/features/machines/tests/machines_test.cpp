@@ -14,6 +14,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.features.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -78,11 +79,11 @@ namespace {
 
     observation.now_ns = updated_time;
     observation.attention = false;
-    observation.metrics->cpu_percent = uncommitted_cpu;
+    observation.metrics.getMut().cpu_percent = uncommitted_cpu;
     check(!machines.summarize(remote, observation) && machines.revision() == revision, "unrelated pane events must not rescan or rewrite cached summaries");
     check(machines.row(remote).cpu_percent == sampled_cpu && machines.row(remote).sampled_ns == initial_time && machines.attentionElsewhere(), "unchanged revisions must preserve attention and the original metrics timestamp");
-    observation.metrics->cpu_percent = sampled_cpu;
-    observation.metrics->cpu_count = updated_cpu_count;
+    observation.metrics.getMut().cpu_percent = sampled_cpu;
+    observation.metrics.getMut().cpu_count = updated_cpu_count;
     observation.metrics_revision = 2;
     check(!machines.summarize(remote, observation), "a metrics sample with equal displayed CPU must not invalidate drawn surfaces");
     check(machines.row(remote).cpu_count == updated_cpu_count && machines.row(remote).sampled_ns == updated_time, "equal CPU samples must still refresh placement capacity and freshness");
@@ -111,7 +112,7 @@ namespace {
     check(MachinePicker::collect(machines, "missing").rows().empty(), "unmatched machines must leave only the adapter's Add row");
     using Intent = MachinePicker::Intent;
 
-    check(MachinePicker::choose(machines, std::nullopt, false) == Intent::add, "the final Add row must remain actionable even with no machine matches");
+    check(MachinePicker::choose(machines, telar::ds::none, false) == Intent::add, "the final Add row must remain actionable even with no machine matches");
     check(MachinePicker::choose(machines, machines.token(local), true) == Intent::none, "Shift-Enter must not disable the local machine");
     check(MachinePicker::choose(machines, machines.token(first), false) == Intent::enable, "Enter on a disabled remote must enable it before navigation");
     check(MachinePicker::choose(machines, machines.token(second), true) == Intent::disable, "Shift-Enter must disable an enabled remote");

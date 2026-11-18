@@ -11,6 +11,7 @@ import telar.testing;
 import telar.lua;
 import telar.config.client;
 import telar.config.core;
+import telar.base.ds;
 
 namespace {
 
@@ -108,10 +109,10 @@ namespace {
       const std::string_view label = "a label of exactly thirty-two by";
       const auto reference = commands->keepReference(arguments, label, limits);
 
-      check(reference.has_value());
+      check(reference.hasValue());
       const auto loaded = commands->load(*reference);
 
-      check(loaded.has_value());
+      check(loaded.hasValue());
       check(loaded->argv().size() == arguments.size());
       for (std::size_t index = 0; index < arguments.size(); ++index) {
         check(loaded->argv()[index] == arguments[index]);
@@ -137,8 +138,8 @@ namespace {
   }
 
   // The chord a binding's key names, or none when the reader refuses it.
-  std::optional<config::KeyChord> keyChord(std::string_view text) {
-    std::optional<config::KeyChord> chord;
+  ds::Option<config::KeyChord> keyChord(std::string_view text) {
+    ds::Option<config::KeyChord> chord;
 
     withResult(std::string{"return [["} + std::string{text} + "]]", [&](const lua::Value& result) {
       try {
@@ -164,13 +165,13 @@ namespace {
       const auto first = keyChord(left);
       const auto second = keyChord(right);
 
-      check(first.has_value() && second.has_value() && *first == *second, left);
+      check(first.hasValue() && second.hasValue() && *first == *second, left);
     }
 
     check(*keyChord("ctrl+a") != *keyChord("a"));
 
     for (const auto malformed : {"ctrl+ctrl+a", "ctrl+", "+a", "a+ctrl", "ctrl+shift+a", "shift+1", "ab", ""}) {
-      check(!keyChord(malformed).has_value(), malformed);
+      check(!keyChord(malformed).hasValue(), malformed);
     }
   }
 

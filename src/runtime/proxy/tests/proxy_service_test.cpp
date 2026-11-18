@@ -74,6 +74,7 @@ import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.tls.interception;
 import telar.runtime.vocabulary.exchange;
 import telar.tls;
+import telar.base.ds;
 
 namespace {
 
@@ -147,7 +148,7 @@ namespace {
     std::array<char, 128> encoded;
     const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
 
-    check(count.has_value());
+    check(count.hasValue());
     return "CONNECT " + std::string{hostname} + ":" + std::to_string(port) + " HTTP/1.1\r\nProxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n\r\n";
   }
 
@@ -300,8 +301,8 @@ namespace {
     }
 
     const auto secret = ProxySecret::generate();
-    auto origin_listener = ProxyListener::bind(std::nullopt, {});
-    ProxyService<Poller, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+    auto origin_listener = ProxyListener::bind(ds::none, {});
+    ProxyService<Poller, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
     auto child = connectLocal(service.port());
 
     writeText(child.get(), request(secret, origin_listener.port(), "origin.test"));
@@ -412,7 +413,7 @@ namespace {
     });
 
     for (std::size_t index = 0; index < expected; ++index) {
-      auto half = service.captures().tryReceive();
+      auto half = service.capturesMut().tryReceive();
 
       check(half && (*half)->host() == "origin.test" && (*half)->key.connection == 1);
       check((*half)->started_at_ms > 0 && (*half)->finished_at_ms >= (*half)->started_at_ms);
@@ -455,9 +456,9 @@ namespace {
     TlsInterception interception{contexts, authority};
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
-    std::optional<ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
+    ds::Option<ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
 
-    service.emplace(memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}));
+    service.emplace(memory, options, secret, interception, ProxyListener::bind(ds::none, {}));
     std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
     for (auto& socket : silent) {
@@ -513,8 +514,8 @@ namespace {
     TlsInterception interception{contexts, nullptr};
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
-    auto origin_listener = ProxyListener::bind(std::nullopt, {});
-    ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+    auto origin_listener = ProxyListener::bind(ds::none, {});
+    ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
     std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
     silent.front() = connectLocal(service.port());

@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.wire.vocabulary;
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -63,11 +64,11 @@ namespace telar::runtime::cli {
   }
 
   template <typename Integer>
-  std::optional<Integer> maybeUnsigned(std::string_view text) noexcept {
+  ds::Option<Integer> maybeUnsigned(std::string_view text) noexcept {
     try {
       return parseUnsigned<Integer>(text);
     } catch (const std::invalid_argument&) {
-      return std::nullopt;
+      return ds::none;
     }
   }
 
@@ -198,16 +199,16 @@ namespace telar::runtime::cli {
   template unsigned long long parseInt<unsigned long long>(std::string_view text);
 
   template unsigned short parseUnsigned<unsigned short>(std::string_view text);
-  template std::optional<unsigned short> maybeUnsigned<unsigned short>(std::string_view text) noexcept;
+  template ds::Option<unsigned short> maybeUnsigned<unsigned short>(std::string_view text) noexcept;
   template unsigned short number<unsigned short>(std::string_view text, const char* error);
   template unsigned int parseUnsigned<unsigned int>(std::string_view text);
-  template std::optional<unsigned int> maybeUnsigned<unsigned int>(std::string_view text) noexcept;
+  template ds::Option<unsigned int> maybeUnsigned<unsigned int>(std::string_view text) noexcept;
   template unsigned int number<unsigned int>(std::string_view text, const char* error);
   template unsigned long parseUnsigned<unsigned long>(std::string_view text);
-  template std::optional<unsigned long> maybeUnsigned<unsigned long>(std::string_view text) noexcept;
+  template ds::Option<unsigned long> maybeUnsigned<unsigned long>(std::string_view text) noexcept;
   template unsigned long number<unsigned long>(std::string_view text, const char* error);
   template unsigned long long parseUnsigned<unsigned long long>(std::string_view text);
-  template std::optional<unsigned long long> maybeUnsigned<unsigned long long>(std::string_view text) noexcept;
+  template ds::Option<unsigned long long> maybeUnsigned<unsigned long long>(std::string_view text) noexcept;
   template unsigned long long number<unsigned long long>(std::string_view text, const char* error);
 
   template int signedNumber<int>(std::string_view text, const char* error);
@@ -228,9 +229,9 @@ namespace telar::runtime::cli {
     return words_.empty();
   }
 
-  tbc::view<std::optional<std::string_view>, tbc::lt::a> Cursor::next() noexcept {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> Cursor::next() noexcept {
     if (words_.empty()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     const std::string_view word = words_.front();

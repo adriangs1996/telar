@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::input {
 
@@ -28,7 +29,7 @@ namespace telar::gui::features::terminal::input {
     return false;
   }
 
-  std::optional<ChildMouseReport> ChildMouseProjection::project(const ChildMouseView& view, const ChildMouseSample& sample) noexcept {
+  ds::Option<ChildMouseReport> ChildMouseProjection::project(const ChildMouseView& view, const ChildMouseSample& sample) noexcept {
     const auto& surface = view.surface;
     if (!view.attached || !tracked(view.protocol, sample.phase) || !valid(surface) || !std::isfinite(sample.position.x) || !std::isfinite(sample.position.y)) {
       return {};
@@ -84,7 +85,7 @@ namespace telar::gui::features::terminal::input {
     return owned_;
   }
 
-  std::optional<ChildMouseReport> ChildMouseGesture::deliver(const ChildMouseView& view, ChildMouseSample sample) noexcept {
+  ds::Option<ChildMouseReport> ChildMouseGesture::deliver(const ChildMouseView& view, ChildMouseSample sample) noexcept {
     if (!owned_ || sample.button != last_.button || (sample.phase != MousePhase::drag && sample.phase != MousePhase::release)) {
       return {};
     }
@@ -99,9 +100,9 @@ namespace telar::gui::features::terminal::input {
     }
 
     if (view.visible && ChildMouseProjection::valid(view.surface) && view.cell_width_px != 0 && view.cell_height_px != 0) {
-      capture_->surface = view.surface;
-      capture_->cell_width_px = view.cell_width_px;
-      capture_->cell_height_px = view.cell_height_px;
+      capture_.getMut().surface = view.surface;
+      capture_.getMut().cell_width_px = view.cell_width_px;
+      capture_.getMut().cell_height_px = view.cell_height_px;
     }
 
     auto projected = view;
@@ -113,7 +114,7 @@ namespace telar::gui::features::terminal::input {
     return ChildMouseProjection::project(projected, sample);
   }
 
-  std::optional<ChildMouseReport> ChildMouseGesture::cancel(const ChildMouseView& view) noexcept {
+  ds::Option<ChildMouseReport> ChildMouseGesture::cancel(const ChildMouseView& view) noexcept {
     auto release = last_;
 
     release.phase = MousePhase::release;

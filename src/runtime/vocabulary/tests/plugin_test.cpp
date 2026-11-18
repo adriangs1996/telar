@@ -83,7 +83,7 @@ namespace {
         check(decoded.key == CaptureKey{UINT64_MAX, UINT32_MAX} && decoded.host == "example.test");
         check(decoded.method == "POST" && decoded.target == "/resource" && decoded.started_at_ms == INT64_MIN);
         check(decoded.protocol == static_cast<tap::ExchangeProtocol>(protocol));
-        check(decoded.request.has_value() == ((present & 1) != 0) && decoded.response.has_value() == ((present & 2) != 0));
+        check(decoded.request.hasValue() == ((present & 1) != 0) && decoded.response.hasValue() == ((present & 2) != 0));
         const auto& half = decoded.request ? *decoded.request : *decoded.response;
 
         check(half.body.size() == 3 && half.body[1] == 0 && half.encoding == "gzip");

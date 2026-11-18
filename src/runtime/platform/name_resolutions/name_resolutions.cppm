@@ -15,6 +15,7 @@ import telar.base.text;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.platform.thread;
+import telar.base.ds;
 
 // Interface: proxy/system_resolver.cppm
 export {
@@ -177,13 +178,13 @@ export {
         std::size_t index_;
       };
 
-      inline static std::optional<Ticket> request(std::string_view hostname) noexcept {
+      inline static ds::Option<Ticket> request(std::string_view hostname) noexcept {
         if (!ProxyHostname::validTarget(hostname)) {
-          return std::nullopt;
+          return ds::none;
         }
 
         const Lock lock;
-        std::optional<std::size_t> available;
+        ds::Option<std::size_t> available;
 
         for (std::size_t index = 0; index < state_.rows.size(); ++index) {
           auto& row = state_.rows[index];
@@ -198,7 +199,7 @@ export {
         }
 
         if (!available) {
-          return std::nullopt;
+          return ds::none;
         }
 
         auto& row = state_.rows[*available];

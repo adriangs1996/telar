@@ -9,7 +9,7 @@ static_assert(true);
 
 namespace telar::gui::qt {
 
-  application::machines::Machines& Store::machines() noexcept {
+  application::machines::Machines& Store::machinesMut() noexcept {
     return machines_;
   }
 
@@ -17,7 +17,7 @@ namespace telar::gui::qt {
     return machines_;
   }
 
-  Store::Clients& Store::clients() noexcept {
+  Store::Clients& Store::clientsMut() noexcept {
     return clients_;
   }
 
@@ -38,7 +38,7 @@ namespace telar::gui::qt {
     return findMachineClient(machines_, clients_, key);
   }
 
-  GuiSession& Store::session() noexcept {
+  GuiSession& Store::sessionMut() noexcept {
     return client(machines_.active()).session;
   }
 
@@ -46,7 +46,7 @@ namespace telar::gui::qt {
     return client(machines_.active()).session;
   }
 
-  RuntimeConnection& Store::connection() noexcept {
+  RuntimeConnection& Store::connectionMut() noexcept {
     return client(machines_.active()).connection;
   }
 

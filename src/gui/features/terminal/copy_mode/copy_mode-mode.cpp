@@ -7,6 +7,7 @@ import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
@@ -258,7 +259,7 @@ namespace telar::gui::features::terminal::copy_mode {
       point = firstAfterClass(point, *initial, grid);
       point = firstAfterClass(point, CopyWordClass::space, grid);
       if (end) {
-        point = lastInClass(point, grid.wordClass(point).value_or(CopyWordClass::space), grid, CopyDirection::forward);
+        point = lastInClass(point, grid.wordClass(point).valueOr(CopyWordClass::space), grid, CopyDirection::forward);
       }
     }
 
@@ -319,7 +320,7 @@ namespace telar::gui::features::terminal::copy_mode {
     state.gotoMatch(static_cast<std::uint16_t>(index), matches, grid);
   }
 
-  const std::optional<CopyState>& CopyMode::state() const noexcept {
+  const ds::Option<CopyState>& CopyMode::state() const noexcept {
     return state_;
   }
 
@@ -331,7 +332,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return revision_;
   }
 
-  std::optional<CopyPointerOwner> CopyMode::pointerOwner() const noexcept {
+  ds::Option<CopyPointerOwner> CopyMode::pointerOwner() const noexcept {
     if (gesture_) {
       return CopyPointerOwner{.pane_id = *gesture_, .dragging = true};
     }
@@ -356,7 +357,7 @@ namespace telar::gui::features::terminal::copy_mode {
     const auto granularity = clicks_.press(press.position, press.now_ns);
 
     state_ = CopyState{.pane_id = press.pane_id, .cursor = {.x = press.position.x, .y = grid.scroll.offset + press.position.y}, .entry_offset = grid.scroll.offset, .viewport_offset = grid.scroll.offset};
-    state_->beginPointer(granularity, grid);
+    state_.getMut().beginPointer(granularity, grid);
     gesture_ = press.pane_id;
     match_count_ = 0;
     ++revision_;
@@ -364,7 +365,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  std::optional<CopyPlan> CopyMode::pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
+  ds::Option<CopyPlan> CopyMode::pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
     if (!state_ || !state_->pointer || gesture_ != state_->pane_id) {
       return {};
     }
@@ -382,7 +383,7 @@ namespace telar::gui::features::terminal::copy_mode {
       result.selection = next.selectionRequest();
     }
 
-    return next == *state_ && !released ? std::nullopt : std::optional{result};
+    return next == *state_ && !released ? ds::none : ds::Option{result};
   }
 
   bool CopyMode::clearPointer() noexcept {
@@ -421,7 +422,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  bool CopyMode::enterAt(std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, std::optional<CopyPoint> anchor, bool linewise) noexcept {
+  bool CopyMode::enterAt(std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept {
     if (active() || grid.columns == 0 || grid.rows == 0) {
       return false;
     }
@@ -433,7 +434,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  std::optional<CopyPlan> CopyMode::key(const TerminalKey& key, const CopyGrid& grid) const noexcept {
+  ds::Option<CopyPlan> CopyMode::key(const TerminalKey& key, const CopyGrid& grid) const noexcept {
     if (!state_ || state_->pointer) {
       return {};
     }
@@ -470,7 +471,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return plan(next, grid, effect);
   }
 
-  std::optional<CopyPlan> CopyMode::vertical(std::int32_t rows, const CopyGrid& grid) const noexcept {
+  ds::Option<CopyPlan> CopyMode::vertical(std::int32_t rows, const CopyGrid& grid) const noexcept {
     if (!state_) {
       return {};
     }
@@ -479,7 +480,7 @@ namespace telar::gui::features::terminal::copy_mode {
 
     next.vertical(rows, grid);
 
-    return next == *state_ ? std::nullopt : std::optional{plan(next, grid)};
+    return next == *state_ ? ds::none : ds::Option{plan(next, grid)};
   }
 
   CopyPlan CopyMode::leave(const CopyGrid& grid) const noexcept {
@@ -493,7 +494,7 @@ namespace telar::gui::features::terminal::copy_mode {
   }
 
   bool CopyMode::current(const CopyPlan& plan) const noexcept {
-    return state_.has_value() && plan.revision == revision_;
+    return state_.hasValue() && plan.revision == revision_;
   }
 
   bool CopyMode::commit(const CopyPlan& plan) noexcept {
@@ -512,7 +513,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  tbc::view<std::optional<CopyPlan>, tbc::lt::a> CopyMode::search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid& grid, std::optional<CopyPoint> origin) const {
+  tbc::view<ds::Option<CopyPlan>, tbc::lt::a> CopyMode::search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid& grid, ds::Option<CopyPoint> origin) const {
     if (!state_ || state_->pointer) {
       return {};
     }
@@ -532,7 +533,7 @@ namespace telar::gui::features::terminal::copy_mode {
       next.reveal(grid);
     }
 
-    next.applyMatches(results, grid, origin.has_value());
+    next.applyMatches(results, grid, origin.hasValue());
     auto result = plan(next, grid);
 
     result.replacement_matches = results;
@@ -566,7 +567,7 @@ namespace telar::gui::features::terminal::copy_mode {
     ++revision_;
   }
 
-  std::optional<SetPaneViewport> CopyMode::viewport(std::uint32_t offset, const CopyGrid& grid) const noexcept {
+  ds::Option<SetPaneViewport> CopyMode::viewport(std::uint32_t offset, const CopyGrid& grid) const noexcept {
     if (!state_ || offset == grid.scroll.offset) {
       return {};
     }

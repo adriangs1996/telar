@@ -370,8 +370,8 @@ namespace telar::runtime::cli::sessions {
         const auto login = loginShell();
         const std::array shell{login.view()};
 
-        wireTabLabel(options.label.value_or(""), true);
-        const auto opened = session.template exchange<PaneOpened>(LaunchTab{.workspace = workspace, .label = options.label.value_or(""), .size = launch_size, .launch = {.cwd = entry->path, .arguments = shell}});
+        wireTabLabel(options.label.valueOr(""), true);
+        const auto opened = session.template exchange<PaneOpened>(LaunchTab{.workspace = workspace, .label = options.label.valueOr(""), .size = launch_size, .launch = {.cwd = entry->path, .arguments = shell}});
 
         if (options.json) {
           output.text("{\"workspace_id\":").number(workspace).text(",\"tab_id\":").number(opened.location.tab_id).text(",\"pane_id\":").number(opened.pane_id).text(",\"pane_generation\":").number(opened.pane_generation).text("}\n");

@@ -45,6 +45,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
   class TerminalCursor;
@@ -225,7 +226,7 @@ namespace telar::gui::qt {
       return rail_height_;
     }
 
-    [[nodiscard]] std::optional<application::terminal::links::PresentedLink> prepareLinkPresentation() const;
+    [[nodiscard]] ds::Option<application::terminal::links::PresentedLink> prepareLinkPresentation() const;
 
     // What the window routes to the terminal, as its parent: the keys its bindings leave, the
     // frame it prepared and presents, and the pointer the window's dispatcher hands it.
@@ -235,7 +236,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool composing() const noexcept;
     // Types a key press the window left to the terminal: a clipboard shortcut, telar's command
     // editor, or the bytes the pane's program reads. The key, when the program received it.
-    std::optional<TerminalKey> type(const QKeyEvent& event);
+    ds::Option<TerminalKey> type(const QKeyEvent& event);
     // The cursor shows at once after a key, and blinks again from there.
     void wakeCursor();
 
@@ -306,7 +307,7 @@ namespace telar::gui::qt {
     bool send(const QByteArray& bytes, application::PaneInputSource source = application::PaneInputSource::keyboard);
     [[nodiscard]] application::terminal::input::ChildMouseSample childMouseSample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button) const;
     void mousePacket(unsigned button, QPointF position, bool released);
-    std::optional<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
+    ds::Option<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
     void sendCommittedText(const QString& text);
     void dispatchWheel(const QWheelEvent& event, std::int32_t lines);
 
@@ -346,7 +347,7 @@ namespace telar::gui::qt {
     [[nodiscard]] const application::FoldMap<>& viewFolds() const noexcept;
 
     [[nodiscard]] bool animating() const noexcept {
-      return motion_.moving() || fold_motion_.has_value();
+      return motion_.moving() || fold_motion_.hasValue();
     }
 
     [[nodiscard]] ScrollTime scrollTime() const;
@@ -360,14 +361,14 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap pinnedBlock() const;
     // The search's matches on the rows drawn, and on the rail.
     void markMatches();
-    [[nodiscard]] std::optional<std::size_t> drawnRowOf(std::uint64_t row, std::uint64_t first) const;
+    [[nodiscard]] ds::Option<std::size_t> drawnRowOf(std::uint64_t row, std::uint64_t first) const;
     Arrivals arrivalsSince(bool at_end, bool telar);
     [[nodiscard]] std::uint64_t scrollNow() const;
     [[nodiscard]] double rowHeight() const noexcept;
     [[nodiscard]] double scrollLimit() const;
     [[nodiscard]] std::uint32_t runtimeOffset(std::uint64_t top) const;
     // The screen row drawn at `drawn`, the row under a pointer counted from the view's top.
-    [[nodiscard]] std::optional<std::size_t> screenRowAt(double drawn) const noexcept;
+    [[nodiscard]] ds::Option<std::size_t> screenRowAt(double drawn) const noexcept;
     [[nodiscard]] std::uint64_t viewRevision(const application::Pane<Memory>& current) const noexcept;
     // The rows a scrolled or folded view draws, put together as a screen with their links, for
     // the links under the pointer; nothing while the view draws the screen's own rows.
@@ -390,11 +391,11 @@ namespace telar::gui::qt {
 
     struct ResolvedLink {
       application::terminal::links::LinkAffordance affordance = application::terminal::links::LinkAffordance::text;
-      std::optional<application::terminal::links::LinkHit> hit;
+      ds::Option<application::terminal::links::LinkHit> hit;
     };
 
     [[nodiscard]] ResolvedLink resolveLink(QPointF position, application::terminal::links::LinkModifiers modifiers) const;
-    [[nodiscard]] std::optional<CellPosition> visibleCellAt(QPointF position) const noexcept;
+    [[nodiscard]] ds::Option<CellPosition> visibleCellAt(QPointF position) const noexcept;
 
     struct LinkStamp {
       CellPosition cell;
@@ -428,7 +429,7 @@ namespace telar::gui::qt {
     ScrollMotion motion_;
     QMetaObject::Connection scroll_frame_connection_;
     // The runtime's view as this item last asked for it or saw it: another value moved the view.
-    std::optional<std::uint32_t> expected_offset_;
+    ds::Option<std::uint32_t> expected_offset_;
     std::uint64_t viewport_requests_ = 0;
     std::uint64_t top_row_ = 0;
     qreal shift_ = 0;
@@ -441,7 +442,7 @@ namespace telar::gui::qt {
     QTimer scroll_release_;
     // Since the view left the live end: the scrollback's stable rows then, and the commands
     // running then.
-    std::optional<std::uint64_t> away_rows_;
+    ds::Option<std::uint64_t> away_rows_;
     std::vector<std::uint64_t> away_running_;
     int rows_arrived_ = 0;
     QVariantList finished_below_;
@@ -462,7 +463,7 @@ namespace telar::gui::qt {
       ScrollTime start;
     };
 
-    std::optional<FoldMotion> fold_motion_;
+    ds::Option<FoldMotion> fold_motion_;
     // The folds as drawn while one moves: its output shown down to the moving edge.
     application::FoldMap<> transit_folds_;
     std::size_t fold_shown_ = 0;
@@ -472,13 +473,13 @@ namespace telar::gui::qt {
     std::vector<application::FoldMap<>::Span> shown_folds_;
     // The row at the view's top, counted from the top of the scrollback, as the view last placed
     // itself: what stays in place when folds change.
-    std::optional<std::uint64_t> top_anchor_;
+    ds::Option<std::uint64_t> top_anchor_;
     std::vector<float> row_offsets_;
     std::vector<MatchMark> match_marks_;
     QVariantList rail_matches_;
     int fold_from_ = -1;
     qreal fold_offset_ = 0;
-    mutable std::optional<Screen<Memory>> drawn_screen_;
+    mutable ds::Option<Screen<Memory>> drawn_screen_;
     mutable std::uint64_t drawn_screen_key_ = 0;
     mutable std::vector<std::span<const CellValue>> drawn_spans_;
     mutable std::vector<Byte> drawn_flags_;
@@ -511,7 +512,7 @@ namespace telar::gui::qt {
       quint32 native_key = 0;
       quint32 native_modifiers = 0;
       QString text;
-      std::optional<TerminalKey> semantic = std::nullopt;
+      ds::Option<TerminalKey> semantic = ds::none;
 
       [[nodiscard]] QByteArray release(const InputModes& modes) const;
 
@@ -528,10 +529,10 @@ namespace telar::gui::qt {
     application::terminal::links::LinkHover link_hover_;
     std::shared_ptr<const application::terminal::links::LinkHit> shared_link_;
     application::terminal::links::LinkGesture link_gesture_;
-    std::optional<QPointF> link_pointer_;
-    std::optional<LinkStamp> link_stamp_;
-    std::optional<LinkPreview> link_preview_;
-    std::optional<Rect> preview_cover_;
+    ds::Option<QPointF> link_pointer_;
+    ds::Option<LinkStamp> link_stamp_;
+    ds::Option<LinkPreview> link_preview_;
+    ds::Option<Rect> preview_cover_;
     Qt::MouseButtons captured_link_buttons_;
     std::uint64_t presented_frame_id_ = 0;
     std::uint64_t presented_revision_ = 0;

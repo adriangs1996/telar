@@ -48,6 +48,7 @@ import telar.runtime.http.content;
 import telar.runtime.http1.head;
 import telar.runtime.platform.name_resolutions;
 import telar.runtime.platform.signals;
+import telar.base.ds;
 
 // Interface: proxy/http1_capture_policy.cppm
 export {
@@ -403,7 +404,7 @@ export {
         return !finished_ && !upgraded_ && request_.started() ? 1 : 0;
       }
 
-      inline auto deadline() const noexcept -> std::optional<std::chrono::steady_clock::time_point> {
+      inline auto deadline() const noexcept -> ds::Option<std::chrono::steady_clock::time_point> {
         return earliest(request_.deadline(), response_.deadline());
       }
 
@@ -429,7 +430,7 @@ export {
           return false;
         }
 
-        auto& reply = request_.continueReply();
+        auto& reply = request_.continueReplyMut();
         if (reply.remaining().empty()) {
           return false;
         }
@@ -738,7 +739,7 @@ export {
 
       bool rejected() const noexcept;
 
-      std::optional<traffic::FlowControl::Time> deadline() const noexcept;
+      ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
 
       // A direction fails once; the reason is reported as the opposite direction's when it was reading.
       void fail(traffic::Direction direction, tbc::view<std::string_view, tbc::lt::static_storage> reason, bool reading = false) noexcept;
@@ -1331,7 +1332,7 @@ export {
         std::array<std::uint8_t, io_bytes> input;
         // What nghttp2 last produced, [output_offset, output_size) still unsent. The storage is kept
         // for the next batch, and erased once a batch is sent.
-        std::optional<SensitiveAllocation<Local>> output;
+        ds::Option<SensitiveAllocation<Local>> output;
         std::size_t output_size = 0;
         std::size_t output_offset = 0;
         StreamReadiness read_wait = StreamReadiness::readable, write_wait = StreamReadiness::writable;
@@ -1476,8 +1477,8 @@ export {
         return interest(origin_);
       }
 
-      inline auto deadline() const noexcept -> std::optional<Time> {
-        std::optional<Time> result;
+      inline auto deadline() const noexcept -> ds::Option<Time> {
+        ds::Option<Time> result;
 
         for (const auto& stream : streams_) {
           if (!stream || stream->rejected) {
@@ -1486,8 +1487,8 @@ export {
 
           for (const auto* half : {&stream->request, &stream->response}) {
             const auto& interception = half->interception;
-            const auto next = interception.waiting() ? interception.deadline(control_) : interception.policy().enabled && half->headers_complete && !half->ended && !half->streaming ? std::optional{interception.collectUntil()}
-                                                                                                                                                                                     : std::nullopt;
+            const auto next = interception.waiting() ? interception.deadline(control_) : interception.policy().enabled && half->headers_complete && !half->ended && !half->streaming ? ds::Option{interception.collectUntil()}
+                                                                                                                                                                                     : ds::none;
             if (next && (!result || *next < *result)) {
               result = next;
             }
@@ -2030,7 +2031,7 @@ export {
               endpoint.output.emplace(memory_, static_cast<std::size_t>(size));
             }
 
-            std::copy_n(bytes, size, endpoint.output->bytes().data());
+            std::copy_n(bytes, size, endpoint.output.getMut().bytesMut().data());
             endpoint.output_size = static_cast<std::size_t>(size);
             endpoint.output_offset = 0;
           }
@@ -2049,7 +2050,7 @@ export {
           endpoint.write_wait = StreamReadiness::writable;
           endpoint.output_offset += result.bytes;
           if (endpoint.output_offset == endpoint.output_size) {
-            eraseSensitive(endpoint.output->bytes().data(), endpoint.output_size);
+            eraseSensitive(endpoint.output.getMut().bytesMut().data(), endpoint.output_size);
             endpoint.output_size = 0;
           }
 
@@ -2221,7 +2222,7 @@ export {
           const auto origin = origin_stream.peek(banner);
 
           if (!protocol_ && prefix_.empty() && (origin.state == StreamResult::State::data || origin.state == StreamResult::State::ended || origin.state == StreamResult::State::failed)) {
-            std::optional<Http2Frame> initial;
+            ds::Option<Http2Frame> initial;
             Http2FrameReader reader;
 
             reader.feed(std::span{banner}.first(origin.bytes), [&](const Http2FrameEvent& event) noexcept -> auto {
@@ -2271,7 +2272,7 @@ export {
 
       [[nodiscard]] auto readsOrigin() const noexcept -> bool;
 
-      [[nodiscard]] auto deadline() const noexcept -> std::optional<traffic::FlowControl::Time>;
+      [[nodiscard]] auto deadline() const noexcept -> ds::Option<traffic::FlowControl::Time>;
 
       [[nodiscard]] auto interest(TlsSide side) const noexcept -> SocketInterest;
 
@@ -2352,7 +2353,7 @@ export {
 
       tbc::view<Relays, tbc::lt::a> relays_;
       StreamPrefix prefix_;
-      std::optional<HttpProtocol> protocol_;
+      ds::Option<HttpProtocol> protocol_;
       traffic::FlowControl::Time sniff_until_;
       bool selected_ = false;
     };
@@ -2481,7 +2482,7 @@ export {
 
       SocketInterest interest(TlsSide side) const noexcept;
 
-      std::optional<traffic::FlowControl::Time> deadline() const noexcept;
+      ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
 
       void reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept;
 
@@ -2660,7 +2661,7 @@ export {
         return transport_.buffered();
       }
 
-      inline std::optional<Time> deadline() const noexcept {
+      inline ds::Option<Time> deadline() const noexcept {
         const auto handshake = handshake_.deadline();
         const auto transport = transport_.deadline();
 
@@ -2687,7 +2688,7 @@ export {
       tbc::view<Handshake, tbc::lt::a> handshake_;
       tbc::view<ConnectionTransport, tbc::lt::a> transport_;
       ProxyConnectionPolicy policy_;
-      tbc::view<std::optional<ConnectionObservation>, tbc::lt::a> observation_;
+      tbc::view<ds::Option<ConnectionObservation>, tbc::lt::a> observation_;
       bool closed_ = false;
     };
 
@@ -2760,7 +2761,7 @@ export {
 
     class ProxyListener {
     public:
-      static ProxyListener bind(std::optional<std::uint16_t> preferred, const ProxyPortRange::Set& reserved);
+      static ProxyListener bind(ds::Option<std::uint16_t> preferred, const ProxyPortRange::Set& reserved);
 
       FileDescriptor accept() const;
 
@@ -2777,7 +2778,7 @@ export {
 
       static NetworkAddress address(std::uint16_t port) noexcept;
 
-      static std::optional<ProxyListener> tryPort(std::uint16_t port, bool reclaim);
+      static ds::Option<ProxyListener> tryPort(std::uint16_t port, bool reclaim);
 
       static FileDescriptor listen(std::uint16_t port, bool reuse_closed);
 
@@ -2801,7 +2802,7 @@ export {
     public:
       explicit ProxyPortMemory(Memory& memory, int directory, std::string_view endpoint, bool inherit_legacy);
 
-      std::optional<std::uint16_t> preferred() const noexcept;
+      ds::Option<std::uint16_t> preferred() const noexcept;
 
       const ProxyPortRange::Set& reserved() const noexcept;
 
@@ -2821,7 +2822,7 @@ export {
 
       void identify(std::string_view endpoint) noexcept;
 
-      tbc::view<std::optional<Record>, tbc::lt::a> recall(std::string_view name, tbc::view<Vector<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept;
+      tbc::view<ds::Option<Record>, tbc::lt::a> recall(std::string_view name, tbc::view<Vector<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept;
 
       // Generic over the caller's visitor.
       template <typename Visitor>
@@ -2878,8 +2879,8 @@ export {
       String<Memory> endpoint_;
       std::array<char, filename_bytes + 1> name_;
       ProxyPortRange::Set reserved_;
-      std::optional<std::uint16_t> own_;
-      std::optional<std::uint16_t> legacy_;
+      ds::Option<std::uint16_t> own_;
+      ds::Option<std::uint16_t> legacy_;
     };
 
     extern template class ProxyPortMemory<Memory>;
@@ -2968,7 +2969,7 @@ export {
         return observations_.counters;
       }
 
-      inline CaptureProducer& captures() noexcept {
+      inline CaptureProducer& capturesMut() noexcept {
         return observations_.captures;
       }
 
@@ -3046,7 +3047,7 @@ export {
               auto& slot = slots_[index];
 
               if (now >= reap_at) {
-                slot->connection->expire(now);
+                slot.getMut().connection->expire(now);
                 advance(index, {}, now);
               } else if (slot->connection->buffered() || (slot->connection->deadline() && now >= *slot->connection->deadline())) {
                 advance(index, TunnelReadiness::available(), now);
@@ -3123,7 +3124,7 @@ export {
             }
 
             try {
-              keep(makeOwned<Connection>(memory_, memory_, std::move(*connection), options_, secret_, observations_.counters), *index, now);
+              keep(makeOwned<Connection>(memory_, memory_, std::move(connection.getMut()), options_, secret_, observations_.counters), *index, now);
             } catch (...) {
               release(*index);
             }
@@ -3190,7 +3191,7 @@ export {
         advance(index, {}, now);
       }
 
-      inline std::optional<std::size_t> admit(Time now, bool authenticated = false) noexcept {
+      inline ds::Option<std::size_t> admit(Time now, bool authenticated = false) noexcept {
         std::size_t unauthenticated = 0;
 
         occupied_.forEach([&](std::size_t index) {
@@ -3203,7 +3204,7 @@ export {
             observations_.counters.record(ProxyCounter::unauthenticated_eviction);
           } else {
             observations_.counters.record(ProxyCounter::unauthenticated_refusal);
-            return std::nullopt;
+            return ds::none;
           }
         }
 
@@ -3220,11 +3221,11 @@ export {
         }
 
         limit_drops_.fetch_add(1, std::memory_order_relaxed);
-        return std::nullopt;
+        return ds::none;
       }
 
-      inline std::optional<std::size_t> oldest(Policy::Closure reason, Time now) const noexcept {
-        std::optional<std::size_t> found;
+      inline ds::Option<std::size_t> oldest(Policy::Closure reason, Time now) const noexcept {
+        ds::Option<std::size_t> found;
         auto since = Time::max();
 
         occupied_.forEach([&](std::size_t index) {
@@ -3240,7 +3241,7 @@ export {
       }
 
       inline void advance(std::size_t index, TunnelReadiness readiness, Time now) noexcept {
-        auto& slot = *slots_[index];
+        auto& slot = slots_[index].getMut();
 
         slot.connection->advance(interception_, observations_, readiness, now);
         if (slot.connection->closed()) {
@@ -3269,7 +3270,7 @@ export {
           return;
         }
 
-        if (refusal_->advance(now)) {
+        if (refusal_.getMut().advance(now)) {
           refusal_watch_.remove(poller_);
           refusal_.reset();
           poller_.readInterest(listener_.descriptor(), listener_token, true);
@@ -3281,8 +3282,8 @@ export {
       inline void release(std::size_t index) noexcept {
         auto& slot = slots_[index];
         if (slot) {
-          slot->child.remove(poller_);
-          slot->origin.remove(poller_);
+          slot.getMut().child.remove(poller_);
+          slot.getMut().origin.remove(poller_);
           slot.reset();
           occupied_.erase(index);
           active_.fetch_sub(1, std::memory_order_relaxed);
@@ -3329,9 +3330,9 @@ export {
       DropChannel<redirect::Connection, 32> adoptions_;
       typename NameResolutions<Resolver>::Notifications resolutions_;
       traffic::FlowControl* flows_;
-      std::array<std::optional<Slot>, Policy::capacity> slots_;
+      std::array<ds::Option<Slot>, Policy::capacity> slots_;
       SlotIndexes<Policy::capacity> occupied_;
-      std::optional<ProxyRefusal> refusal_;
+      ds::Option<ProxyRefusal> refusal_;
       SocketWatch refusal_watch_;
       Time accept_after_{};
       std::uint64_t generation_ = 0;
@@ -3400,7 +3401,7 @@ export {
         publishAuthority(*authority, directory.get());
         trust_.emplace(memory, *library_);
         SystemCertificates::read([this](std::span<const std::uint8_t> bytes) {
-          trust_->addDer(bytes);
+          trust_.getMut().addDer(bytes);
         });
 
         contexts_.emplace(memory, *library_, *trust_);
@@ -3436,11 +3437,11 @@ export {
           String<ConcurrentMemory> redirect_path{endpoint, AllocatorRef<char, ConcurrentMemory>{memory}};
 
           redirect_path += redirect::socket_suffix;
-          redirect_.emplace(redirect_path, *service_);
+          redirect_.emplace(redirect_path, service_.getMut());
         }
 
         if (options.capture.enabled) {
-          captures_.emplace(memory, service_->captures(), options.capture, tap);
+          captures_.emplace(memory, service_.getMut().capturesMut(), options.capture, tap);
         }
       }
 
@@ -3453,7 +3454,7 @@ export {
       }
 
       inline bool collect() noexcept {
-        return captures_ && captures_->collect();
+        return captures_ && captures_.getMut().collect();
       }
 
       inline CaptureMetrics captureMetrics() const noexcept {
@@ -3474,7 +3475,7 @@ export {
 
       inline void stopRedirect() noexcept {
         if (redirect_) {
-          redirect_->stop();
+          redirect_.getMut().stop();
         }
       }
 
@@ -3539,7 +3540,7 @@ export {
           throw std::invalid_argument{"Proxy trust record is invalid"};
         }
 
-        interception_->suspend(true);
+        interception_.getMut().suspend(true);
         const auto directory = paths.prepare();
         auto kind = AuthorityKind::private_local;
 
@@ -3560,8 +3561,8 @@ export {
         auto authority = std::allocate_shared<CertificateAuthority>(AllocatorRef<CertificateAuthority, ConcurrentMemory>{memory_}, CertificateAuthority::loadOrCreate(memory_, *library_, directory.get(), kind));
 
         publishAuthority(*authority, directory.get());
-        interception_->replace(std::move(authority));
-        interception_->suspend(false);
+        interception_.getMut().replace(std::move(authority));
+        interception_.getMut().suspend(false);
       }
 
     private:
@@ -3609,15 +3610,15 @@ export {
       String<ConcurrentMemory> certificate_path_;
       String<ConcurrentMemory> bundle_path_;
       ProxyStatus status_{};
-      std::optional<TlsLibrary> library_;
-      std::optional<TlsTrustStore> trust_;
-      std::optional<TlsContexts> contexts_;
-      std::optional<TlsInterception> interception_;
-      std::optional<ProxySecret> secret_;
+      ds::Option<TlsLibrary> library_;
+      ds::Option<TlsTrustStore> trust_;
+      ds::Option<TlsContexts> contexts_;
+      ds::Option<TlsInterception> interception_;
+      ds::Option<ProxySecret> secret_;
       std::shared_ptr<const ProxyClientConfiguration::Identity> client_;
-      std::optional<ProxyService<Poller, Resolver>> service_;
-      std::optional<CapturePipeline<Tap>> captures_;
-      std::optional<redirect::Ingress<ProxyService<Poller, Resolver>>> redirect_;
+      ds::Option<ProxyService<Poller, Resolver>> service_;
+      ds::Option<CapturePipeline<Tap>> captures_;
+      ds::Option<redirect::Ingress<ProxyService<Poller, Resolver>>> redirect_;
       inline static IgnoreCaptureTap ignored_tap_;
     };
 

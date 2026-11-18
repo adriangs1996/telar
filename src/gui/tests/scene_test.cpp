@@ -60,6 +60,7 @@ static_assert(true);
 import telar.gui.features.terminal.graphics;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -307,7 +308,7 @@ namespace {
       invalidateAppearance();
     }
 
-    void referenceBackgrounds(std::optional<std::vector<BackgroundRectangle>> rectangles) {
+    void referenceBackgrounds(ds::Option<std::vector<BackgroundRectangle>> rectangles) {
       reference_backgrounds_ = std::move(rectangles);
       update();
     }
@@ -346,7 +347,7 @@ namespace {
     TerminalPresentation frame_;
     std::vector<TerminalRow> rows_;
     std::vector<float> offsets_;
-    std::optional<std::vector<BackgroundRectangle>> reference_backgrounds_;
+    ds::Option<std::vector<BackgroundRectangle>> reference_backgrounds_;
     bool fresh_scene_ = false;
   };
 
@@ -577,7 +578,7 @@ namespace {
       item_.setOpacity(opacity);
     }
 
-    void referenceBackgrounds(std::optional<std::vector<BackgroundRectangle>> rectangles) {
+    void referenceBackgrounds(ds::Option<std::vector<BackgroundRectangle>> rectangles) {
       item_.referenceBackgrounds(std::move(rectangles));
     }
 
@@ -1565,7 +1566,7 @@ namespace {
         fixture.referenceBackgrounds(row.rectangles);
         const auto expected = fixture.capture();
 
-        fixture.referenceBackgrounds(std::nullopt);
+        fixture.referenceBackgrounds(ds::none);
         QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));
         fixture.invalidateAppearance();
         QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QHash>
 #include <QList>
 #include <QMetaObject>
@@ -58,7 +59,7 @@ namespace telar::gui::qt {
     void setRatio(qreal ratio);
 
     [[nodiscard]] bool eligible() const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
+    [[nodiscard]] ds::Option<std::uint64_t> deadline(std::uint64_t now_ns) const noexcept;
     void sample(std::uint64_t now_ns);
 
   signals:
@@ -103,7 +104,7 @@ namespace telar::gui::qt {
     qreal ratio_ = 1;
     QHash<QString, Motion> motions_;
     QPointer<WindowAnimationClock> clock_;
-    std::optional<std::uint64_t> next_sample_ns_;
+    ds::Option<std::uint64_t> next_sample_ns_;
     bool frame_requested_ = false;
   };
 

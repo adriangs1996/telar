@@ -9,6 +9,7 @@ import telar.base.text;
 import telar.base.text.json;
 import telar.vocabulary;
 import telar.cli.output;
+import telar.base.ds;
 
 // Interface: arguments.cppm
 export {
@@ -32,7 +33,7 @@ export {
 
     // `std.fmt.parseUnsigned(...) catch null`.
     template <typename Integer = std::uint64_t>
-    std::optional<Integer> maybeUnsigned(std::string_view text) noexcept;
+    ds::Option<Integer> maybeUnsigned(std::string_view text) noexcept;
 
     // `std.fmt.parseUnsigned(...) catch return error.X`.
     template <typename Integer = std::uint64_t>
@@ -51,16 +52,16 @@ export {
     extern template unsigned long long parseInt<unsigned long long>(std::string_view text);
 
     extern template unsigned short parseUnsigned<unsigned short>(std::string_view text);
-    extern template std::optional<unsigned short> maybeUnsigned<unsigned short>(std::string_view text) noexcept;
+    extern template ds::Option<unsigned short> maybeUnsigned<unsigned short>(std::string_view text) noexcept;
     extern template unsigned short number<unsigned short>(std::string_view text, const char* error);
     extern template unsigned int parseUnsigned<unsigned int>(std::string_view text);
-    extern template std::optional<unsigned int> maybeUnsigned<unsigned int>(std::string_view text) noexcept;
+    extern template ds::Option<unsigned int> maybeUnsigned<unsigned int>(std::string_view text) noexcept;
     extern template unsigned int number<unsigned int>(std::string_view text, const char* error);
     extern template unsigned long parseUnsigned<unsigned long>(std::string_view text);
-    extern template std::optional<unsigned long> maybeUnsigned<unsigned long>(std::string_view text) noexcept;
+    extern template ds::Option<unsigned long> maybeUnsigned<unsigned long>(std::string_view text) noexcept;
     extern template unsigned long number<unsigned long>(std::string_view text, const char* error);
     extern template unsigned long long parseUnsigned<unsigned long long>(std::string_view text);
-    extern template std::optional<unsigned long long> maybeUnsigned<unsigned long long>(std::string_view text) noexcept;
+    extern template ds::Option<unsigned long long> maybeUnsigned<unsigned long long>(std::string_view text) noexcept;
     extern template unsigned long long number<unsigned long long>(std::string_view text, const char* error);
 
     extern template int signedNumber<int>(std::string_view text, const char* error);
@@ -84,7 +85,7 @@ export {
 
       [[nodiscard]] bool empty() const noexcept;
 
-      tbc::view<std::optional<std::string_view>, tbc::lt::a> next() noexcept;
+      tbc::view<ds::Option<std::string_view>, tbc::lt::a> next() noexcept;
 
       tbc::view<std::string_view, tbc::lt::a> take(const char* missing);
 

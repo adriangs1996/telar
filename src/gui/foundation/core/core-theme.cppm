@@ -4,6 +4,7 @@ import std;
 
 import telar.base.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: core/background_opacity.cppm
 export {
@@ -18,7 +19,7 @@ export {
         pane,
       };
       static constexpr std::array<const char*, 5> names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
-      std::array<std::optional<float>, names.size()> overrides{};
+      std::array<ds::Option<float>, names.size()> overrides{};
 
       [[nodiscard]] float resolve(Surface surface, float fallback) const noexcept;
 
@@ -98,8 +99,8 @@ export {
     struct TerminalThemeValues {
       ThemeRgb foreground{};
       ThemeRgb background{};
-      std::optional<ThemeRgb> cursor_color;
-      std::optional<ThemeRgb> cursor_text_color;
+      ds::Option<ThemeRgb> cursor_color;
+      ds::Option<ThemeRgb> cursor_text_color;
       static constexpr std::size_t palette_size = 16;
       std::array<ThemeRgb, palette_size> palette{};
 
@@ -118,7 +119,7 @@ export {
       ThemeName base = ThemeName::terminal;
       std::array<CellColor, palette_names.size()> palette{};
       TerminalThemeValues terminal;
-      std::array<std::optional<SyntaxStyleValues>, syntax_names.size()> syntax_styles{};
+      std::array<ds::Option<SyntaxStyleValues>, syntax_names.size()> syntax_styles{};
 
       [[nodiscard]] CellColor color(PaletteRole role) const noexcept;
 
@@ -129,10 +130,10 @@ export {
 
     struct ThemeSelection {
       ThemeValues base;
-      std::optional<ThemeValues> light;
-      std::optional<ThemeValues> dark;
+      ds::Option<ThemeValues> light;
+      ds::Option<ThemeValues> dark;
 
-      [[nodiscard]] ThemeValues resolve(Appearance appearance, const std::optional<ThemeValues>& locked = {}) const noexcept;
+      [[nodiscard]] ThemeValues resolve(Appearance appearance, const ds::Option<ThemeValues>& locked = {}) const noexcept;
     };
 
   }
@@ -205,7 +206,7 @@ export {
       Color accent = DefaultTheme::accent;
       Color selection = DefaultTheme::selection;
       Color cursor = DefaultTheme::cursor;
-      std::optional<Color> cursor_text = DefaultTheme::background;
+      ds::Option<Color> cursor_text = DefaultTheme::background;
       Color success = DefaultTheme::success;
       Color warning = DefaultTheme::warning;
       Color failure = DefaultTheme::failure;
@@ -233,12 +234,12 @@ export {
     struct ColorName {
       using Value = std::variant<CellColor, PaletteRole>;
 
-      [[nodiscard]] static std::optional<Value> parse(std::string_view name) noexcept;
+      [[nodiscard]] static ds::Option<Value> parse(std::string_view name) noexcept;
 
     private:
       [[nodiscard]] static bool sameRole(std::string_view left, std::string_view right) noexcept;
 
-      [[nodiscard]] static std::optional<Value> literal(std::string_view name) noexcept;
+      [[nodiscard]] static ds::Option<Value> literal(std::string_view name) noexcept;
     };
 
   }

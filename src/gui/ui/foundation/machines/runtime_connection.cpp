@@ -42,6 +42,7 @@ static_assert(true);
 
 import telar.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -136,7 +137,7 @@ namespace telar::gui::qt {
       application::RuntimeLink bounded;
 
       bounded.fail(message);
-      const auto kept = bounded.failure().value_or(std::string_view{});
+      const auto kept = bounded.failure().valueOr(std::string_view{});
 
       pending_failure_ = QString::fromUtf8(kept.data(), static_cast<qsizetype>(kept.size()));
     } else {
@@ -144,7 +145,7 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<application::machines::MachineError> RuntimeConnection::remoteError() const noexcept {
+  ds::Option<application::machines::MachineError> RuntimeConnection::remoteError() const noexcept {
     return remote_error_;
   }
 
@@ -183,7 +184,7 @@ namespace telar::gui::qt {
       const QScopedValueRollback aborting{closed_, true};
 
       if (remote_) {
-        remote_->close();
+        remote_.getMut().close();
       }
 
       socket_.abort();
@@ -209,7 +210,7 @@ namespace telar::gui::qt {
     retry_.stop();
     deadline_.stop();
     if (remote_) {
-      remote_->close();
+      remote_.getMut().close();
     }
 
     remote_target_.reset();
@@ -309,7 +310,7 @@ namespace telar::gui::qt {
         throw std::logic_error{"Remote transport was not initialized"};
       }
 
-      remote_->open(*remote_target_);
+      remote_.getMut().open(*remote_target_);
       emit linkChanged();
 
       return;
@@ -490,7 +491,7 @@ namespace telar::gui::qt {
         static_cast<qsizetype>(payload.size()),
     });
 
-    if (const auto failure = std::exchange(pending_failure_, std::nullopt)) {
+    if (const auto failure = std::exchange(pending_failure_, ds::none)) {
       throw std::runtime_error{failure->toStdString()};
     }
   }
@@ -533,16 +534,16 @@ namespace telar::gui::qt {
     if (link_.phase == application::machines::MachinePhase::connected) {
       link_.lose(message, system::AwakeClock::nowNanoseconds());
     } else {
-      link_.connectionFailed(remote_error_.value_or(application::machines::MachineError::endpoint_unavailable), message);
+      link_.connectionFailed(remote_error_.valueOr(application::machines::MachineError::endpoint_unavailable), message);
     }
 
-    const auto detail = link_.failure().value_or(std::string_view{});
+    const auto detail = link_.failure().valueOr(std::string_view{});
 
     error_ = QString::fromUtf8(detail.data(), static_cast<qsizetype>(detail.size()));
     accepted_ = false;
     connecting_ = false;
     if (remote_) {
-      remote_->close();
+      remote_.getMut().close();
     }
 
     {

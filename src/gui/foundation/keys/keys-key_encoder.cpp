@@ -7,6 +7,7 @@ import telar.config.client;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline keys {
 
@@ -96,7 +97,7 @@ namespace telar::gui::inline foundation::inline keys {
       return true;
     }
 
-    return (key.code == Code::enter || key.code == Code::backspace || key.code == Code::tab) && (modifier != 1 || has(KittyKeyboardFlag::all_keys) || (has(KittyKeyboardFlag::report_events) && key.kitty.has_value()));
+    return (key.code == Code::enter || key.code == Code::backspace || key.code == Code::tab) && (modifier != 1 || has(KittyKeyboardFlag::all_keys) || (has(KittyKeyboardFlag::report_events) && key.kitty.hasValue()));
   }
 
   std::string_view KeyEncoder::view() const noexcept {
@@ -147,7 +148,7 @@ namespace telar::gui::inline foundation::inline keys {
     return true;
   }
 
-  std::optional<std::uint32_t> KeyEncoder::associatedText(const TerminalKey& key, const Encoding& encoding) {
+  ds::Option<std::uint32_t> KeyEncoder::associatedText(const TerminalKey& key, const Encoding& encoding) {
     if (!encoding.has(KittyKeyboardFlag::associated_text) || key.phase == KeyPhase::release || key.code != Code::character || key.has(Modifier::control) || key.has(Modifier::alt)) {
       return {};
     }
@@ -163,7 +164,7 @@ namespace telar::gui::inline foundation::inline keys {
     constexpr std::uint32_t first_c1_control = 127;
     constexpr std::uint32_t last_c1_control = 159;
 
-    return codepoint < first_printable || (codepoint >= first_c1_control && codepoint <= last_c1_control) ? std::nullopt : std::optional{codepoint};
+    return codepoint < first_printable || (codepoint >= first_c1_control && codepoint <= last_c1_control) ? ds::none : ds::Option{codepoint};
   }
 
   void KeyEncoder::kittyCodepoints(const TerminalKey& key, const Encoding& encoding) {
@@ -240,7 +241,7 @@ namespace telar::gui::inline foundation::inline keys {
     append(text);
   }
 
-  std::optional<char> KeyEncoder::controlByte(std::uint32_t codepoint) noexcept {
+  ds::Option<char> KeyEncoder::controlByte(std::uint32_t codepoint) noexcept {
     constexpr unsigned control_mask = 0x1f;
 
     if ((codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z')) {
@@ -281,7 +282,7 @@ namespace telar::gui::inline foundation::inline keys {
       byte(escape);
     }
 
-    const auto control = key.has(Modifier::control) ? controlByte(key.codepoint) : std::nullopt;
+    const auto control = key.has(Modifier::control) ? controlByte(key.codepoint) : ds::none;
     if (control) {
       byte(*control);
     } else {

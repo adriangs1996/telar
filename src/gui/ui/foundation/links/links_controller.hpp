@@ -16,6 +16,7 @@ static_assert(true);
 
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -37,11 +38,11 @@ namespace telar::gui::qt {
 
     // A file link opens relative to the pane `source_id` when one is given. False when it could
     // not be opened.
-    bool open(const application::terminal::links::LinkTarget& target, std::optional<std::uint64_t> source_id = {});
+    bool open(const application::terminal::links::LinkTarget& target, ds::Option<std::uint64_t> source_id = {});
     // Opens the link written at a cell of the pane's screen, if any.
     void openAt(std::uint64_t pane_id, CellPosition point);
     // The host's opener finished the link the client `source` asked for.
-    void linkOpeningFinished(application::machines::MachineClientKey source, std::optional<LinkOpeningFailure> failure);
+    void linkOpeningFinished(application::machines::MachineClientKey source, ds::Option<LinkOpeningFailure> failure);
 
   signals:
     void openingFailed(const QString& message);

@@ -16,6 +16,7 @@ import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.platform.net;
+import telar.base.ds;
 
 // Interface: tls/alpn_offer.cppm
 export {
@@ -225,7 +226,7 @@ export {
 
       StreamReadiness waiting(TlsSide side) const noexcept;
 
-      std::optional<std::chrono::steady_clock::time_point> deadline() const noexcept;
+      ds::Option<std::chrono::steady_clock::time_point> deadline() const noexcept;
 
       HttpProtocol protocol() const noexcept;
 

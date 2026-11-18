@@ -8,6 +8,7 @@ import telar.cli.window;
 
 import telar.base.memory.allocators;
 import telar.machines;
+import telar.base.ds;
 
 // Interface: machines/setup.cppm
 export {
@@ -16,7 +17,7 @@ export {
     struct Target {
       std::string label;
       std::string destination;
-      std::optional<MachineProfile> saved;
+      ds::Option<MachineProfile> saved;
     };
 
     Target resolve(const MachineProfiles& profiles, const MachineOptions& options);

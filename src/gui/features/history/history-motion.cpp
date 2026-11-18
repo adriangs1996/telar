@@ -3,6 +3,7 @@ module telar.gui.features.history;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -24,7 +25,7 @@ namespace telar::gui::features::history {
     return result;
   }
 
-  Rect HistoryLoading::line(Rect area, ChromeMetrics chrome, std::optional<std::uint64_t> now_ns) noexcept {
+  Rect HistoryLoading::line(Rect area, ChromeMetrics chrome, ds::Option<std::uint64_t> now_ns) noexcept {
     const auto step = now_ns ? (*now_ns / step_ns) % steps : steps / 3;
     const auto span = area.width / span_divisor;
     const auto travel = area.width + span;
@@ -33,7 +34,7 @@ namespace telar::gui::features::history {
     return {.x = x, .y = area.y, .width = span, .height = chrome.px(thickness)};
   }
 
-  HistoryExpansion HistorySelectionMotion::sample(std::optional<std::uint64_t> generation, std::optional<HistoryPosition> selected, std::optional<std::uint64_t> timestamp) noexcept {
+  HistoryExpansion HistorySelectionMotion::sample(ds::Option<std::uint64_t> generation, ds::Option<HistoryPosition> selected, ds::Option<std::uint64_t> timestamp) noexcept {
     if (!generation || !selected) {
       *this = {};
 
@@ -68,7 +69,7 @@ namespace telar::gui::features::history {
     return {.open = open, .leaving = leaving_, .leaving_open = leaving_from_ * (1 - open)};
   }
 
-  std::optional<std::uint64_t> HistorySelectionMotion::deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
+  ds::Option<std::uint64_t> HistorySelectionMotion::deadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
     if (!transitioning_) {
       return {};
     }

@@ -1,6 +1,7 @@
 export module telar.gui.foundation.core:unicode_scalar;
 
 import std;
+import telar.base.ds;
 
 // Interface: core/unicode_scalar.cppm
 export {
@@ -33,7 +34,7 @@ export {
 
       [[nodiscard]] static Utf8Scalar encode(std::uint32_t codepoint);
       [[nodiscard]] static std::uint32_t decode(std::string_view text);
-      [[nodiscard]] static std::optional<std::uint32_t> tryDecode(std::string_view text) noexcept;
+      [[nodiscard]] static ds::Option<std::uint32_t> tryDecode(std::string_view text) noexcept;
 
     private:
       enum class DecodeError : std::uint8_t {

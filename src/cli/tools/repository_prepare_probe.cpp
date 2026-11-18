@@ -51,6 +51,7 @@ import telar.vocabulary;
 import telar.cli.command_limit;
 import telar.platform.process;
 import telar.cli.worktree_git;
+import telar.base.ds;
 
 namespace {
 
@@ -99,7 +100,7 @@ namespace {
       using namespace telar::runtime;
       using namespace telar::runtime::cli;
 
-      std::optional<MappedBundle> bundle;
+      ds::Option<MappedBundle> bundle;
       std::vector<std::string_view> input;
 
       if (descriptor >= 0) {

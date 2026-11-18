@@ -6,6 +6,7 @@ module;
 module telar.platform.sha256;
 
 import std;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -32,11 +33,11 @@ namespace telar::runtime {
 
 #pragma clang diagnostic pop
 
-  std::optional<std::array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept {
+  ds::Option<std::array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept {
     std::array<std::uint8_t, MD5_DIGEST_LENGTH> digest;
     std::size_t length = 0;
     if (EVP_Q_digest(nullptr, "MD5", nullptr, bytes.data(), bytes.size(), digest.data(), &length) != 1 || length != digest.size()) {
-      return std::nullopt;
+      return ds::none;
     }
 
     return digest;

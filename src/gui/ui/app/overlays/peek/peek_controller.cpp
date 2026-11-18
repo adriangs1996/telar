@@ -32,7 +32,7 @@ namespace telar::gui::qt {
 
   bool PeekController::open(const application::machines::MachineActivityTarget& target) {
     const auto* agent = std::get_if<application::machines::MachineActivityTarget::Agent>(&target.owner);
-    if (agent == nullptr || !application::peek::open(store_.session(), application::peek::PeekTarget{.agent = agent->key, .session = agent->session})) {
+    if (agent == nullptr || !application::peek::open(store_.sessionMut(), application::peek::PeekTarget{.agent = agent->key, .session = agent->session})) {
       return false;
     }
 
@@ -43,7 +43,7 @@ namespace telar::gui::qt {
   }
 
   void PeekController::forget() {
-    application::peek::close(store_.session());
+    application::peek::close(store_.sessionMut());
     origin_.reset();
     editor_.clear();
   }
@@ -95,7 +95,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    application::notifications::reportLimit(store_.session(), {.name = "prompt.field_bytes", .noun = "bytes", .value = application::peek::PeekLimits::message_bytes, .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.sessionMut(), {.name = "prompt.field_bytes", .noun = "bytes", .value = application::peek::PeekLimits::message_bytes, .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 
@@ -108,7 +108,7 @@ namespace telar::gui::qt {
 
     store_.interact(
         [&] {
-          if (application::peek::submit(store_.session(), {text.constData(), static_cast<std::size_t>(text.size())})) {
+          if (application::peek::submit(store_.sessionMut(), {text.constData(), static_cast<std::size_t>(text.size())})) {
             emit closeRequested();
           }
         },

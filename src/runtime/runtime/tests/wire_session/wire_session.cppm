@@ -18,6 +18,7 @@ import telar.wire.content;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -92,10 +93,10 @@ export {
 
   // The code a request failed with, or nothing when the runtime completed it.
   template <typename Request>
-  std::optional<telar::FailureCode> refusal(ProtocolPeer& peer, const Request& request) {
+  telar::ds::Option<telar::FailureCode> refusal(ProtocolPeer& peer, const Request& request) {
     try {
       peer.exchange<telar::RequestCompleted>(request);
-      return std::nullopt;
+      return telar::ds::none;
     } catch (const ProtocolFailure& failure) {
       return failure.code;
     }

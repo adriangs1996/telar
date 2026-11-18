@@ -11,6 +11,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 Q_DECLARE_METATYPE(telar::gui::StatusAgeInterval)
 Q_DECLARE_TYPEINFO(telar::gui::StatusAgeInterval, Q_RELOCATABLE_TYPE);
@@ -21,8 +22,8 @@ namespace telar::gui::qt {
     return QVariant::fromValue(interval);
   }
 
-  inline std::optional<StatusAgeInterval> statusAgeInterval(const QVariant& value) {
-    return value.canConvert<StatusAgeInterval>() ? std::optional{value.value<StatusAgeInterval>()} : std::nullopt;
+  inline ds::Option<StatusAgeInterval> statusAgeInterval(const QVariant& value) {
+    return value.canConvert<StatusAgeInterval>() ? ds::Option{value.value<StatusAgeInterval>()} : ds::none;
   }
 
 }
