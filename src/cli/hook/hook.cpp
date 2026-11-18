@@ -312,7 +312,8 @@ namespace telar::runtime::cli::hooks {
     return report.cwd.empty() && report.plan_op == AgentPlanOp::none && report.final_message.empty() ? std::nullopt : std::optional{report};
   }
 
-  std::optional<ReportAgentTitle> titleReport(Payload& input) {
+  // The title an agent sets, on one line without control bytes, which the codec refuses in a title.
+  std::optional<ReportAgentTitle> titleReport(Payload& input, FixedText<96>& text) {
     std::optional<std::string_view> title;
 
     if (input.provider == AgentProvider::claude) {
@@ -332,7 +333,12 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
-    return title ? std::optional{ReportAgentTitle{.title = utf8Prefix(*title, 96)}} : std::nullopt;
+    if (!title) {
+      return std::nullopt;
+    }
+
+    displayText(text, *title, false);
+    return ReportAgentTitle{.title = text.view()};
   }
 
   template <EnvironmentLookup Environment>
@@ -340,7 +346,7 @@ namespace telar::runtime::cli::hooks {
   void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment) {
     TELAR_TRACE("hooks.mapReports");
     reports.command = commandReport(input);
-    reports.title = titleReport(input);
+    reports.title = titleReport(input, reports.title_text);
     reports.progress = progressReport(input, reports);
     switch (input.provider) {
     case AgentProvider::claude:
