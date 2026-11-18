@@ -28,19 +28,6 @@ namespace {
   constexpr TerminalSize size{80, 24, 8, 16};
   constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
 
-  // The process a pane runs under an agent's executable name: the test binary, copied as `name`
-  // into the host's directory, in the --pane-agent mode below.
-  std::string agentExecutable(const RuntimeHost& host, std::string_view name) {
-    const telar::runtime::ExecutablePath self;
-    const auto path = host.directory() + "/" + std::string{name};
-
-    if (!std::filesystem::exists(path)) {
-      std::filesystem::copy_file(self.c_str(), path);
-    }
-
-    return path;
-  }
-
   void testUnknownTagDropsOnlySender() {
     RuntimeHost host;
     ProtocolPeer bystander{host.socket()};
@@ -289,26 +276,6 @@ namespace {
     const auto resync = observer.receive<ResyncRequired>();
 
     check(resync.workspace.id == opened.location.workspace.id && !resync.workspace_closed);
-  }
-
-  // The fixture side runs in a pane, so the runtime names its agent by the executable.
-  void waitProvider(ProtocolPeer& peer, std::uint64_t pane, AgentProvider provider) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-
-    for (std::uint64_t request = 100;; ++request) {
-      const auto snapshot = peer.exchange<AgentSnapshot>(QueryAgents{request});
-      if (std::ranges::any_of(snapshot.entries, [&](const auto& entry) {
-            return entry.pane_id == pane && entry.provider == provider;
-          })) {
-        return;
-      }
-
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw std::runtime_error{"the runtime never named the pane's agent"};
-      }
-
-      std::this_thread::sleep_for(std::chrono::milliseconds{5});
-    }
   }
 
   std::string reportOutcome(ProtocolPeer& peer, const ReportAgent& report) {

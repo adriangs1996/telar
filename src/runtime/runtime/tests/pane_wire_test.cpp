@@ -1,12 +1,8 @@
-#include <fcntl.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <termios.h>
 #include <unistd.h>
 
 import std;
 import telar.testing;
-import telar.platform.process;
 import telar.runtime.runtime.tests.protocol_peer;
 import telar.runtime.runtime.tests.runtime_host;
 import telar.runtime.runtime.tests.wire_session;
@@ -30,73 +26,6 @@ namespace {
   std::span<const Byte> bytes(std::string_view text) {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
   }
-
-  // A pane's program that keeps every byte its terminal hands it, in RECORD, and the terminal's
-  // size at each read, in RECORD.size: argv is `--record-input RECORD [bracketed]`.
-  int recordInput(int argc, char** argv) {
-    if (argc < 3) {
-      return 2;
-    }
-
-    const std::string record = argv[2];
-    termios mode{};
-
-    ::tcgetattr(STDIN_FILENO, &mode);
-    ::cfmakeraw(&mode);
-    ::tcsetattr(STDIN_FILENO, TCSANOW, &mode);
-    if (argc > 3 && std::string_view{argv[3]} == "bracketed") {
-      constexpr std::string_view bracketed = "\x1b[?2004h";
-
-      static_cast<void>(::write(STDOUT_FILENO, bracketed.data(), bracketed.size()));
-    }
-
-    constexpr std::string_view ready = "recording\r\n";
-
-    static_cast<void>(::write(STDOUT_FILENO, ready.data(), ready.size()));
-    std::array<char, 4096> input;
-
-    for (;;) {
-      const auto count = ::read(STDIN_FILENO, input.data(), input.size());
-      if (count <= 0) {
-        return 0;
-      }
-
-      winsize window{};
-
-      ::ioctl(STDIN_FILENO, TIOCGWINSZ, &window);
-      std::ofstream{record, std::ios::app | std::ios::binary}.write(input.data(), count);
-      std::ofstream{record + ".size"} << window.ws_col << 'x' << window.ws_row;
-    }
-  }
-
-  const telar::testing::Mode record_input{"--record-input", recordInput};
-
-  // A pane running the recorder, opened by `owner`, which is attached to it.
-  struct Recorder {
-    Recorder(const RuntimeHost& host, ProtocolPeer& owner, bool bracketed = false)
-        : record(host.directory() + "/input") {
-      const telar::runtime::ExecutablePath self;
-      const std::array<std::string_view, 4> arguments{self.view(), "--record-input", record, bracketed ? "bracketed" : "plain"};
-
-      opened = owner.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      screenShowing(owner, opened.pane_id, "recording");
-    }
-
-    // What the program read once it read `marker`.
-    std::string received(std::string_view marker) const {
-      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-
-      for (auto text = readFile(record); !text.contains(marker); text = readFile(record)) {
-        check(std::chrono::steady_clock::now() < deadline, "the program never read the expected input");
-        std::this_thread::sleep_for(std::chrono::milliseconds{10});
-      }
-
-      return readFile(record);
-    }
-
-    std::string record;
-    PaneOpened opened;
-  };
 
   // Every request a client sent before this one was handled.
   void settle(ProtocolPeer& peer, std::uint64_t request) {
