@@ -681,7 +681,7 @@
     "lib/wire/include/telar_wire/serializers/telar_frame.hpp": "Qt adapters include it; module units import its owner module",
     "lib/wire/include/telar_wire/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
     "lib/wire/include/telar_wire/serializers/telar_serializer.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
+    "lib/clipboard/include/telar_clipboard/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
     "lib/config/include/telar_config/graphics/limits.hpp": "Qt adapters include it; module units import its owner module",
     "lib/config/include/telar_config/terminal/control/policy.hpp": "Qt adapters include it; module units import its owner module",
     "lib/ebnf/tests/parser_assertions.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
@@ -689,7 +689,6 @@
     "lib/ghostty/include/telar_ghostty/modes.hpp": "Project macro header: TELAR_GHOSTTY_MODES, the modes telar.ghostty.vt captures and the ghostty-modes test checks; includes nothing",
     "lib/platform/include/telar_platform/file_descriptor.hpp": "Objective-C++ ABI",
     "lib/platform/include/telar_platform/open_directory.h": "C ABI",
-    "lib/platform/include/telar_platform/process_environment.h": "C ABI for the process environment",
     "lib/platform/include/telar_platform/trace_macro.hpp": "Project macro header: TELAR_TRACE; includes nothing",
     "lib/tbc/include/tbc/annotations.hpp": "Project macro header: the TBC annotations tbc-lint reads on declarations; includes nothing",
     "lib/tbc/include/tbc/contracts.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
@@ -2907,7 +2906,7 @@
       "src/gui/foundation/core/wheel_accumulator.hpp"
     ],
     "lib/clipboard/clipboard.cppm": [
-      "lib/clipboard/includes/clipboard.hpp"
+      "lib/clipboard/include/telar_clipboard/clipboard.hpp"
     ],
     "lib/vocabulary/vocabulary.cppm": [
       "lib/vocabulary/include/telar_vocabulary/vocabulary.hpp"

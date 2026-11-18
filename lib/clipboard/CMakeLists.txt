@@ -10,7 +10,7 @@ option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" 
 # their libraries' headers, and the reader imports both.
 add_library(telar-clipboard STATIC)
 target_compile_features(telar-clipboard PUBLIC cxx_std_23)
-target_include_directories(telar-clipboard PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/includes")
+target_include_directories(telar-clipboard PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_sources(telar-clipboard PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}"
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/clipboard.cppm")
 # The header-only tbc annotations state the API's lifetime contracts.
@@ -72,7 +72,7 @@ if(BUILD_TESTING)
       cli.cpp
       "${clipboard_test_support}/platform/macos/private_clipboard.mm"
     )
-    target_include_directories(clipboard-test PRIVATE includes "${clipboard_test_support}")
+    target_include_directories(clipboard-test PRIVATE "${clipboard_test_support}")
     set_target_properties(clipboard-test PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES OBJCXX_EXTENSIONS NO)
     target_compile_options(clipboard-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>" -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
     target_link_libraries(clipboard-test PRIVATE telar-clipboard)

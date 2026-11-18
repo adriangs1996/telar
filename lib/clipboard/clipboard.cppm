@@ -1,5 +1,5 @@
 module;
-#include "clipboard.hpp"
+#include "telar_clipboard/clipboard.hpp"
 
 export module telar.clipboard;
 
